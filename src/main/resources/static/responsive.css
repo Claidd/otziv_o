@@ -1,0 +1,104 @@
+@media screen and (max-width: 992px) {
+	html {	
+	font-size: 90%
+	}
+		
+	}
+@media screen and (max-width: 768px) {
+	html {	
+	font-size: 85%
+	}
+	.slider__item {
+		padding-top: 30rem;
+	}
+	
+
+	.nav__list {
+		display: none;
+	}
+	.nav__list--open,
+	.nav__btn {
+		display: block;
+	}
+	.nav__link {
+		padding: 0.7rem;
+		display: inline-block;
+	}
+
+	.dws{
+		left: 20%;
+
+	}
+}
+@media screen and (max-width: 600px) {
+	html {	
+	font-size: 100%
+	}
+	.header__logo,
+	.header__contact {
+		float: none;
+		text-align: center;
+	}
+	.header__contact {
+		margin-top: 1rem;
+	}
+	.slider__item {
+		padding-top: 24rem;
+	}
+	
+	.grid__item {
+		float: none;
+		margin-bottom: 1rem;
+	}
+	.advantage {
+		display: block;
+	}
+	.advantage__item {
+		margin-bottom: 4rem;
+	}
+	.grid__item,
+	.advantage__item {
+		width: 96%;
+		margin-right: 0; 
+	}
+	.page__image{
+	
+		max-width: 100%;
+		display: block;
+
+	}
+	.dws{
+		
+		width: 80%;
+	}
+
+	.advantage__item {
+		width: 100%;
+		margin-right: 0%;
+		font-size: large;
+	}
+	.text{
+		padding: 5px;
+	}
+
+	
+}
+@media screen and (max-width: 370px) {
+	.butt {
+		width: 300px;
+		height: 60px;
+	}
+	
+}
+@media screen and (max-width: 340px) {
+	.grid__item,
+	.advantage__item {
+		width: 94%;
+		margin-right: 0; 
+	}
+	.dws{
+		
+		width: 80%;
+	}
+		
+	}
