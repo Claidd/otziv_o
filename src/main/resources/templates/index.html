@@ -17,9 +17,25 @@
     <script type="text/javascript" th:src="@{/js/script.js}"></script>
 </head>
 <body class="page">
-<!--    <header th:insert="fragments/header :: header"></header>-->
 <header th:replace="~{fragments/header :: header}"></header>
+
+
+            <div class="page__row">
+                <div class="page__cell">
+                    <div class="start">
+                        <img class="displayed" th:src="@{/images/TacoCloud.png}" alt="ocompany" src=""/>
+                    </div>
+                </div>
+            </div>
+
+
+
+
 <header th:replace="~{fragments/header2 :: header2}"></header>
+<header th:replace="~{fragments/footer :: footer}"></header>
+
+
+
 
 
 <!-- Optional JavaScript -->
