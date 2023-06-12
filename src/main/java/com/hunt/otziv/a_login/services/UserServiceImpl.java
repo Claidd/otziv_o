@@ -35,7 +35,10 @@ public class UserServiceImpl implements UserService {
 //                .password(passwordEncoder.encode(userDto.getPassword()))
                 .password(userDto.getPassword())
                 .email(userDto.getEmail())
-                .phoneNumber(userDto.getPhoneNumber().replaceFirst("8", "+7"))
+                .phoneNumber(
+                        changeNumberPhone(userDto.getPhoneNumber())
+//
+                )
                 .roles(Role.WORKER)
                 .active(true)
                 .activateCode(UUID.randomUUID().toString())
@@ -45,6 +48,16 @@ public class UserServiceImpl implements UserService {
 //        this.save(user);
         return true;
 
+    }
+
+    public String changeNumberPhone(String phone){
+        String[] a;
+        a = phone.split("9");
+        a[0] = "+79";
+        String b = a[0] + a[1];
+        System.out.println(b);
+        return b;
+//        userDto.getPhoneNumber().replaceFirst("8", "+7")
     }
 
     public User getUserByPrincipal(Principal principal) {

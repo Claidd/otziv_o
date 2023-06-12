@@ -68,7 +68,7 @@
                 </div>
                 <div class="form-group">
                     <label for="repeatPassword">Номер телефона</label>
-                    <input type="text" id="phoneNumber" th:field="*{phoneNumber}" class="form-control"
+                    <input type="number" id="phoneNumber" th:field="*{phoneNumber}" class="form-control"
                            placeholder="Введите номер телефона">
                     <small class="form-text text-danger" th:each="err : ${#fields.errors('phoneNumber')}"
                            th:text="${err}">Validation error</small>

@@ -2,6 +2,7 @@ package com.hunt.otziv.a_login.controller;
 
 import com.hunt.otziv.a_login.dto.UserDTO;
 import com.hunt.otziv.a_login.services.service.UserService;
+import com.hunt.otziv.a_login.util.UserValidation;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -12,17 +13,17 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-import java.security.Principal;
-
 @Controller
 @Slf4j
 @RequestMapping("/register")
 public class RegistrationController {
 
     private final UserService userService;
+    private final UserValidation userValidation;
 
-    public RegistrationController(UserService userService) {
+    public RegistrationController(UserService userService, UserValidation userValidation) {
         this.userService = userService;
+        this.userValidation = userValidation;
     }
 
     @ModelAttribute("newUser")
@@ -39,19 +40,12 @@ public class RegistrationController {
 
     @PostMapping
     public String createUser(Model model, @ModelAttribute("newUser") @Valid UserDTO userDto, BindingResult bindingResult){
+        log.info("0. Валидация на повторный мейл");
+        userValidation.validate(userDto, bindingResult);
         log.info("1. Валидация данных");
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("1.1 Вошли в ошибку");
-//            System.out.println(bindingResult.getAllErrors().toString());
-//            model.addAttribute("newUser", userDto);
-            return "1.Login_and_Register/register";
-        }
-
-        /*Проверяем на совпадение паролей*/
-        if (!userDto.getPassword().equals(userDto.getMatchingPassword())){
-            bindingResult.rejectValue("password", "", "Пароли не совпадают");
-            model.addAttribute("newUser", userDto);
             return "1.Login_and_Register/register";
         }
 
