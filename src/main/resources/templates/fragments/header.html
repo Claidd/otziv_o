@@ -1,5 +1,4 @@
-
-<section th:fragment="header">
+<section th:fragment="header" xmlns:th="http://www.w3.org/1999/xhtml">
 
 
     <div class="page__row">
@@ -31,28 +30,28 @@
                     </div>
                     <ul class="nav__list" id="nav-main">
                         <li class="mev__item">
-                            <a href="index.html" class="nav__link link" aria-label="Перейти на главную страницу">
+                            <a th:href="@{/}" class="nav__link link" aria-label="Перейти на главную страницу">
                                 Главная
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a href="dr-pod-kluch.html" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a th:href="@{/kvesty}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Услуги
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a href="gorod.html" class="nav__link  link" aria-label="Перейти на страницу квестов">
+                            <a th:href="@{/lasertag}" class="nav__link  link" aria-label="Перейти на страницу квестов">
                                 О нас
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a href="lasertag.html" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
+                            <a th:href="@{/nerf}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Персонал
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a href="nerf.html" class="nav__link  link" aria-label="Перейти на страницу нерф">
-                                Контакты
+                            <a th:href="@{/custom-logout}"  class="nav__link  link" aria-label="Перейти на страницу нерф">
+                                Выйти
                             </a>
                         </li>
 <!--                        <li class="mev__item">-->

@@ -1,8 +1,10 @@
 package com.hunt.otziv.a_login.controller;
 
-import com.hunt.otziv.a_login.dto.UserDTO;
-import com.hunt.otziv.a_login.services.service.UserService;
-import com.hunt.otziv.a_login.util.UserValidation;
+import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
+
+
+import com.hunt.otziv.a_login.services.UserServiceImpl;
+import com.hunt.otziv.a_login.utils.UserValidation;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -18,17 +20,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/register")
 public class RegistrationController {
 
-    private final UserService userService;
+    private final UserServiceImpl userService;
     private final UserValidation userValidation;
 
-    public RegistrationController(UserService userService, UserValidation userValidation) {
+    public RegistrationController(UserServiceImpl userService, UserValidation userValidation) {
         this.userService = userService;
         this.userValidation = userValidation;
     }
 
     @ModelAttribute("newUser")
-    public UserDTO userDTO(){
-        return new UserDTO();
+    public RegistrationUserDTO userDTO(){
+        return new RegistrationUserDTO();
     }
 
     @GetMapping
@@ -39,7 +41,7 @@ public class RegistrationController {
     }
 
     @PostMapping
-    public String createUser(Model model, @ModelAttribute("newUser") @Valid UserDTO userDto, BindingResult bindingResult){
+    public String createUser(Model model, @ModelAttribute("newUser") @Valid RegistrationUserDTO userDto, BindingResult bindingResult){
         log.info("0. Валидация на повторный мейл");
         userValidation.validate(userDto, bindingResult);
         log.info("1. Валидация данных");
@@ -50,7 +52,7 @@ public class RegistrationController {
         }
 
         log.info("2.Передаем дто в сервис");
-        if (!userService.create(userDto)) {
+        if (userService.create(userDto) == null) {
             model.addAttribute("newUser", userDto);
             return "1.Login_and_Register/register";
         }

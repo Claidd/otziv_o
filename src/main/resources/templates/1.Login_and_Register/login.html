@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" xmlns:th="http://www.w3.org/1999/xhtml">
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
 <head>
     <!-- Required meta tags -->
@@ -33,10 +33,11 @@
     </div>
 </nav>
 
+
 <div class="container">
     <div class="row py-2 pt-5 mt-5">
         <div class="col-12 mt-5 pt-5">
-            <form th:action="@{/auth}" method="post">
+            <form th:action="@{/process-login}" method="post">
                 <div class="form-group">
                     <label for="username">Имя пользователя</label>
                     <input type="text" class="form-control" id="username" name="username"
@@ -52,7 +53,11 @@
                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                 <button type="submit" class="btn btn-primary">Логин</button>
                 <a class="px-3" th:href="@{/register}">Зарегистрироваться</a>
+                <div th:if="${param.error}" class="form-text text-danger">
+                    Ошибка аутентификации
+                </div>
             </form>
+
         </div>
     </div>
 </div>

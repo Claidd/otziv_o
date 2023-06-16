@@ -1,7 +1,15 @@
+server:
+  port: 8080
+  #servlet:
+    #context-path: /api
+jwt:
+  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+  lifetime: 5m
+
 spring:
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: true
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
@@ -10,6 +18,10 @@ spring:
     password: 545321
   flyway:
     baseline-on-migrate: true
+
+#logging:
+ # level:
+  #  org.springframework.security: trace
 
 #  thymeleaf:
 ##    prefix: D:\Java\otziv\src\main\resources\templates

@@ -1,7 +1,6 @@
-package com.hunt.otziv.a_login.util;
+package com.hunt.otziv.a_login.utils;
 
-import com.hunt.otziv.a_login.dto.UserDTO;
-import com.hunt.otziv.a_login.model.User;
+import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
 import com.hunt.otziv.a_login.repository.UserRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
@@ -18,12 +17,17 @@ public class UserValidation implements Validator {
 
     @Override
     public boolean supports(Class<?> clazz) {
-        return UserDTO.class.equals(clazz);
+        return RegistrationUserDTO.class.equals(clazz);
     }
 
     @Override
     public void validate(Object target, Errors errors) {
-        UserDTO userDto = (UserDTO) target;
+        /*Проверяем на имеющийся username в базе*/
+        RegistrationUserDTO userDto = (RegistrationUserDTO) target;
+        if (userRepository.findByUsername(userDto.getUsername()).isPresent()){
+            errors.rejectValue("username", "", "Такой username уже занят другим пользователем");
+        }
+        /*Проверяем на имеющийся мейл в базе*/
         if (userRepository.findByEmail(userDto.getEmail()) != null){
             errors.rejectValue("email", "", "Такой email уже занят другим пользователем");
         }

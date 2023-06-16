@@ -1,30 +1,81 @@
 package com.hunt.otziv.a_login.services;
 
-import com.hunt.otziv.a_login.dto.UserDTO;
-import com.hunt.otziv.a_login.model.Role;
+
+import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
 import com.hunt.otziv.a_login.model.User;
+import com.hunt.otziv.a_login.repository.RoleRepository;
 import com.hunt.otziv.a_login.repository.UserRepository;
+
 import com.hunt.otziv.a_login.services.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.Principal;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class UserServiceImpl implements UserService {
+public class UserServiceImpl  implements UserService {
     private final UserRepository userRepository;
+    private final RoleService roleService;
+    private final PasswordEncoder passwordEncoder;
 
-
-    public UserServiceImpl(UserRepository userRepository) {
+    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.roleService = roleService;
+        this.passwordEncoder = passwordEncoder;
     }
 
+
+
+// INSERT INTO otziv_o.roles (name) values ('ROLE_WORKER');
+//      =====================================SECURITY=======================================================
+
+    public Optional<User> findByUserName(String username){
+        return userRepository.findByUsername(username);
+
+    }
+//    @Transactional
+//    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+//        Optional<User> user = findByUserName(username);
+//        if (user.isEmpty()){
+//            throw new UsernameNotFoundException("Пользователь не найден");
+//        }
+//
+//        UserDetails userDetailsImpl = new UserDetailsImpl(user.get());
+//        System.out.println(userDetailsImpl.getUsername() + "  " +  userDetailsImpl.getPassword() + "   " + userDetailsImpl.getAuthorities());
+//        return userDetailsImpl;
+//
+//    }
+
+    @Transactional
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
+        System.out.println(user.getUsername() + user.getPassword()
+                + user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).toList());
+//        return new UserDetailsImpl(user.get());
+        return new org.springframework.security.core.userdetails.User(
+                user.getUsername(),
+                user.getPassword(),
+                user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
+        );
+    }
+
+
+    //      =====================================SECURITY - END=======================================================
+
+
+
+
 // Создание нового пользователя "Клиент"
-    public boolean create(UserDTO userDto){
+    public User create(RegistrationUserDTO userDto){
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
         if(!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
             throw new RuntimeException("Password is not equal");
@@ -32,21 +83,20 @@ public class UserServiceImpl implements UserService {
         log.info("4. Создаем юзера");
         User user = User.builder()
                 .username(userDto.getUsername())
-//                .password(passwordEncoder.encode(userDto.getPassword()))
-                .password(userDto.getPassword())
+                .password(passwordEncoder.encode(userDto.getPassword()))
+//                .password(userDto.getPassword())
                 .email(userDto.getEmail())
                 .phoneNumber(
                         changeNumberPhone(userDto.getPhoneNumber())
 //
                 )
-                .roles(Role.WORKER)
+                .roles((List.of(roleService.getUserRole())))
                 .active(true)
                 .activateCode(UUID.randomUUID().toString())
                 .build();
-        userRepository.save(user);
         log.info("5. Юзер успешно создан");
 //        this.save(user);
-        return true;
+        return userRepository.save(user);
 
     }
 
@@ -60,10 +110,10 @@ public class UserServiceImpl implements UserService {
 //        userDto.getPhoneNumber().replaceFirst("8", "+7")
     }
 
-    public User getUserByPrincipal(Principal principal) {
-        if (principal == null) return new User();
-        return userRepository.findByEmail(principal.getName());
-    }
+//    public User getUserByPrincipal(Principal principal) {
+//        if (principal == null) return new User();
+//        return userRepository.findByEmail(principal.getName());
+//    }
 
 
 
