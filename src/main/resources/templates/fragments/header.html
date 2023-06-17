@@ -1,4 +1,4 @@
-<section th:fragment="header" xmlns:th="http://www.w3.org/1999/xhtml">
+<section th:fragment="header" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
 
 
     <div class="page__row">
@@ -30,28 +30,28 @@
                     </div>
                     <ul class="nav__list" id="nav-main">
                         <li class="mev__item">
-                            <a th:href="@{/}" class="nav__link link" aria-label="Перейти на главную страницу">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/}" class="nav__link link" aria-label="Перейти на главную страницу">
                                 Главная
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a th:href="@{/kvesty}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/kvesty}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Услуги
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a th:href="@{/lasertag}" class="nav__link  link" aria-label="Перейти на страницу квестов">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lasertag}" class="nav__link  link" aria-label="Перейти на страницу квестов">
                                 О нас
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a th:href="@{/nerf}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/nerf}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Персонал
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a th:href="@{/custom-logout}"  class="nav__link  link" aria-label="Перейти на страницу нерф">
-                                Выйти
+                            <a sec:authorize="isAuthenticated()" th:href="@{/custom-logout}"  class="nav__link  link" aria-label="Перейти на страницу нерф">
+                                Компании
                             </a>
                         </li>
 <!--                        <li class="mev__item">-->
@@ -68,20 +68,27 @@
                 </nav>
 
 
-                <div class="header__contact">
+                <div sec:authorize="!isAuthenticated()" class="header__contact">
                     <div class="header__phone-number">
                         <div class="dws">
                             <div class="info__item">
                                 <a href="/login" class="butt" aria-label="Перейти на страницу правил">Логин</a>
                             </div>
                         </div>
-<!--                        <a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a>-->
                     </div>
-
-
-<!--                    <div class="header__email-adress">-->
-<!--                        <a href="mailto:iquest38@mail.ru" class="email-address">iquest38@mail.ru</a>-->
-<!--                    </div>-->
+                </div>
+                <div sec:authorize="isAuthenticated()" class="header__contact">
+                    <div class="header__phone-number">
+                        <div class="dws">
+                            <div class="info__item">
+                                <a th:href="@{/custom-logout}" class="butt" aria-label="Перейти на страницу правил">Выйти</a>
+                            </div>
+                        </div>
+                        <!--                        <a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a>-->
+                    </div>
+                    <!--                    <div class="header__email-adress">-->
+                    <!--                        <a href="mailto:iquest38@mail.ru" class="email-address">iquest38@mail.ru</a>-->
+                    <!--                    </div>-->
                 </div>
             </header>
 
