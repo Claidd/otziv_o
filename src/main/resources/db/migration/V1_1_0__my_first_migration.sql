@@ -1,19 +1,19 @@
 create table IF NOT EXISTS users (
-    id bigint AUTO_INCREMENT,
+    id bigint PRIMARY KEY,
     username varchar(30) not null unique,
     password varchar(80) not null,
     email varchar(50) not null unique,
     phone_number varchar(50) not null,
     activate_code varchar(255),
-    active bit,
-    primary key (id)
-)engine=InnoDB;
+    active bit
+--    primary key (id)
+);
 
 create table IF NOT EXISTS roles(
-    id int AUTO_INCREMENT,
-    name varchar(50) not null,
-    primary key (id)
-)engine=InnoDB;
+    id  int PRIMARY KEY,
+    name varchar(50) not null
+--    primary key (id)
+);
 
 create table IF NOT EXISTS users_roles(
     user_id bigint not null,
@@ -21,11 +21,15 @@ create table IF NOT EXISTS users_roles(
     primary key(user_id, role_id),
     foreign key (user_id) references users(id),
     foreign key (role_id) references roles(id)
-)engine=InnoDB;
+);
 
 alter table users add constraint UK_6dotkott2kjsp8vw4d0m25fb7 unique (email);
 alter table users_roles add constraint FKj6m8fwv7oqv74fcehir1a9ffy foreign key (role_id) references roles (id);
 alter table users_roles add constraint FK2o0jvgh89lemvvo17cbqvdxaa foreign key (user_id) references users (id);
+
+
+create sequence user_seq start with 1 increment by 1;
+create sequence role_seq start with 1 increment by 1;
 
 insert into roles (name)
 values ('ROLE_ADMIN'), ('ROLE_CALLING'), ('ROLE_MANAGER'), ('ROLE_WORKER'), ('ROLE_USER'), ('ROLE_CLIENT');
