@@ -14,6 +14,7 @@ import java.util.*;
 @AllArgsConstructor
 @Builder
 public class RegistrationUserDTO {
+    private Long id;
     @NotEmpty(message = "Имя не может быть пустым")
     private String username;
     @NotEmpty (message = "Пароль не может быть пустым")

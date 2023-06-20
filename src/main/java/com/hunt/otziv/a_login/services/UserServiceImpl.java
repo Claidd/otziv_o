@@ -31,27 +31,12 @@ public class UserServiceImpl  implements UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-
-
 // INSERT INTO otziv_o.roles (name) values ('ROLE_WORKER');
 //      =====================================SECURITY=======================================================
 
     public Optional<User> findByUserName(String username){
         return userRepository.findByUsername(username);
-
     }
-//    @Transactional
-//    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-//        Optional<User> user = findByUserName(username);
-//        if (user.isEmpty()){
-//            throw new UsernameNotFoundException("Пользователь не найден");
-//        }
-//
-//        UserDetails userDetailsImpl = new UserDetailsImpl(user.get());
-//        System.out.println(userDetailsImpl.getUsername() + "  " +  userDetailsImpl.getPassword() + "   " + userDetailsImpl.getAuthorities());
-//        return userDetailsImpl;
-//
-//    }
 
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -67,18 +52,41 @@ public class UserServiceImpl  implements UserService {
                 user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
         );
     }
-
-
     //      =====================================SECURITY - END=======================================================
 
+    //      =====================================CREATE USERS - START=======================================================
+    // Взять всех юзеров - начало
+    @Override
+    public List<RegistrationUserDTO> getAllUsers() {
+        log.info("Берем все юзеров");
+        return userRepository.findAll().stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
 
+    }
+    // Взять всех юзеров - конец
 
+    // Перевод юзера в дто - начало
+    private RegistrationUserDTO toDto(User user){
+        log.info("Перевод юзера в дто");
+        return RegistrationUserDTO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .password(user.getPassword())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .roles(user.getRoles())
+                .active(user.isActive())
+//                .active(user.getActivateCode() == null)
+                .build();
+    }
+    // Перевод юзера в дто - конец
 
-// Создание нового пользователя "Клиент"
-    public User create(RegistrationUserDTO userDto){
+    // Создание нового пользователя "Клиент" - начало
+    public User save(RegistrationUserDTO userDto){
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
         if(!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
-            throw new RuntimeException("Password is not equal");
+            throw new RuntimeException("Пароли не совпадают");
         }
         log.info("4. Создаем юзера");
         User user = User.builder()
@@ -88,7 +96,6 @@ public class UserServiceImpl  implements UserService {
                 .email(userDto.getEmail())
                 .phoneNumber(
                         changeNumberPhone(userDto.getPhoneNumber())
-//
                 )
                 .roles((List.of(roleService.getUserRole())))
                 .active(true)
@@ -97,8 +104,8 @@ public class UserServiceImpl  implements UserService {
         log.info("5. Юзер успешно создан");
 //        this.save(user);
         return userRepository.save(user);
-
     }
+    // Создание нового пользователя "Клиент" - конец
 
     public String changeNumberPhone(String phone){
         String[] a;
@@ -109,6 +116,21 @@ public class UserServiceImpl  implements UserService {
         return b;
 //        userDto.getPhoneNumber().replaceFirst("8", "+7")
     }
+
+    // Взять одного юзера - начало
+    @Override
+    public RegistrationUserDTO findById(Long id) {
+        log.info("Начинается поиск пользователя по id - начало");
+//        return userRepository.findById(id);
+        log.info("Начинается поиск пользователя по id - конец");
+        return null;
+    }
+    // Взять одного юзера - конец
+
+
+
+
+
 
 //    public User getUserByPrincipal(Principal principal) {
 //        if (principal == null) return new User();
@@ -145,4 +167,20 @@ public class UserServiceImpl  implements UserService {
 //
 //        return true;
 //    }
+
+
+//      =====================================SECURITY=======================================================
+    //    @Transactional
+//    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+//        Optional<User> user = findByUserName(username);
+//        if (user.isEmpty()){
+//            throw new UsernameNotFoundException("Пользователь не найден");
+//        }
+//
+//        UserDetails userDetailsImpl = new UserDetailsImpl(user.get());
+//        System.out.println(userDetailsImpl.getUsername() + "  " +  userDetailsImpl.getPassword() + "   " + userDetailsImpl.getAuthorities());
+//        return userDetailsImpl;
+//
+//    }
+    //      =====================================SECURITY - END=======================================================
 }

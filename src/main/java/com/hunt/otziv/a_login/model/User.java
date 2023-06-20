@@ -31,7 +31,7 @@ public class User {
     @Column(name = "phone_number")
     private String phoneNumber;
 
-    @ManyToMany()
+    @ManyToMany(cascade = CascadeType.ALL)
     @JoinTable(
             name = "users_roles",
             joinColumns = @JoinColumn(name = "user_id"),

@@ -52,7 +52,7 @@ public class RegistrationController {
         }
 
         log.info("2.Передаем дто в сервис");
-        if (userService.create(userDto) == null) {
+        if (userService.save(userDto) == null) {
             model.addAttribute("newUser", userDto);
             return "1.Login_and_Register/register";
         }
