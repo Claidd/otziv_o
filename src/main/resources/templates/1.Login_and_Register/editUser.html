@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>O-otziv</title>
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+          integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"/>
+    <link rel="stylesheet" th:href="@{/css/style.css}"/>
+    <link rel="stylesheet" th:href="@{/css/normalize.css}"/>
+    <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
+    <script th:src="@{/webjars/jquery/3.6.4/jquery.min.js}" type="text/javascript"></script>
+    <script type="text/javascript" th:src="@{/js/script.js}"></script>
+</head>
+<body class="page">
+<header th:replace="~{fragments/header :: header}"></header>
+
+
+<!--Внесение новой компании-->
+
+<div  class="container mt-5" >
+    <form th:object="${editUserDto}" method="post">
+        <div class="mb-3" >
+            <label for="inputCompanyName" class="form-label">Логин</label>
+            <input type="text" name="username" th:field="*{username}" th:value="${editUserDto.getUsername()}" class="form-control" id="inputCompanyName" aria-describedby="emailHelp">
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('username')}" th:text="${err}">Validation error</small>
+        </div>
+        <div class="mb-3" >
+            <label for="inputFio" class="form-label">ФИО</label>
+            <input type="text" name="fio" th:field="*{fio}" th:value="${editUserDto.getFio()}" class="form-control" id="inputFio" aria-describedby="emailHelp">
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('fio')}" th:text="${err}">Validation error</small>
+        </div>
+        <div class="mb-3">
+            <label for="inputEmail" class="form-label">Email</label>
+            <input type="email" th:field="*{email}"  th:value="${editUserDto.getEmail()}" name="email" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+<!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('email')}" th:text="${err}">Validation error</small>
+        </div>
+        <div class="mb-3">
+            <label for="inputPhone" class="form-label">Телефон</label>
+            <input type="text" th:field="*{phoneNumber}" th:value="${editUserDto.getPhoneNumber()}" name="phoneNumber" class="form-control" id="inputPhone" placeholder="Введите номер телефона">
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('phoneNumber')}" th:text="${err}">Validation error</small>
+        </div>
+<!--        <div class="mb-3">-->
+<!--            <label for="inputPassword" class="form-label">Пароль</label>-->
+<!--            <input type="text" th:field="*{password}" th:value="${editUserDto.getPassword()}" name="password" class="form-control" id="inputPassword" placeholder="Введите номер телефона">-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('password')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+        <div class="mb-3">
+            <label for="inputRole" class="form-label">Роль</label> <br>
+            <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
+                <option th:each="role : ${editUserDto.roles}"  th:value="${role}" th:text="${role.name}"></option>
+                <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="inputLink" class="form-label">Активность</label>
+            <input type="checkbox" th:checked="${editUserDto.isActive()}" th:field="*{active}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
+        </div>
+
+
+
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+    </form>
+</div>
+
+<!--Внесение новой компании-->
+
+<header th:replace="~{fragments/footer :: footer}"></header>
+
+
+</body>
+</html>
+
+
+
+
+
+<!--        <div class="mb-3">-->
+<!--            <label for="inputRoles" class="form-label">Роль</label>-->
+<!--            <select id="inputRoles" name="roles" th:field="*{roles}" class="form-select" aria-label="Select Role">-->
+<!--                <option value="">Выберите роль</option>-->
+<!--                <option th:each="role : ${roles}" th:value="${role}" th:text="${role.name}"></option>-->
+<!--            </select>-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('roles')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+<!--        <div class="mb-3">-->
+<!--            <label for="inputRoles" class="form-label">Роль</label>-->
+<!--            <select id="inputRoles" name="roles" th:field="*{roles}" class="form-select" aria-label="Select Role">-->
+<!--                <option value="">Выберите роль</option>-->
+<!--                <option th:each="role : ${roles}" th:value="${role.id}" th:text="${role.name}"></option>-->
+<!--                <option value="newRole">Добавить новую роль</option>-->
+<!--            </select>-->
+<!--            <input type="text" id="inputNewRole" name="newRole" class="form-control mt-2" placeholder="Введите новую роль" th:if="${#fields.hasErrors('roles') and #fields.hasFieldErrors('roles')}">-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('roles')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+<!--        <div class="mb-3">-->
+<!--            <label for="inputRoles" class="form-label">Роль</label>-->
+<!--            <select id="inputRoles" name="roles" th:field="*{roles}" class="form-select" aria-label="Select Role">-->
+<!--                <option value="">Выберите роль</option>-->
+<!--                <option th:each="role : ${roles}" th:value="${role.id}" th:text="${role.name}"></option>-->
+<!--            </select>-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('roles')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+<!--        <div class="mb-3">-->
+<!--            <label for="inputRoles" class="form-label">Роль</label>-->
+<!--            <select id="inputRoles" name="roles" th:field="*{roles}" class="form-select" aria-label="Select Role">-->
+<!--                <option value="">Выберите роль</option>-->
+<!--                <option th:each="role : ${roles}" th:value="${role.name}" th:text="${role.name}"></option>-->
+<!--            </select>-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('roles')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+
+
+<!--        <div class="mb-3">-->
+<!--            <label for="inputLink" class="form-label">Активность</label>-->
+<!--            <input type="checkbox" th:value="${editUserDto.isActive()}" name="active" class="form-control form-check-input" id="inputLink" aria-describedby="emailHelp">-->
+<!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>-->
+<!--        </div>-->
+
+<!--        <div th:object="${editUserDto.getRoles()}" class="mb-3 mt-3">-->
+<!--            <select id="cat_id" required name="cat_id" th:field="*{roles}" class="form-select form-select-lg mb-3 mt-3" aria-label="Default select example">-->
+<!--                &lt;!&ndash;          <option  selected>Выберите категорию</option>&ndash;&gt;-->
+<!--                <option th:value="*{name}" name="roles">Роль</option>-->
+
+<!--                <option  th:each="categorys : ${category}"  th:text="${categorys.getCategoryTitle()}"-->
+<!--                         th:value="${categorys.getId()}"-->
+<!--                >Салон красоты</option>-->
+<!--                <small class="form-text text-danger" th:each="err : ${#fields.errors('categorys')}" th:text="${err}">Validation error</small>-->
+
+<!--            </select>-->
+<!--        </div>-->
+<!--        <div>-->
+<!--            <div class="form-check form-switch">-->
+<!--                <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckChecked" checked>-->
+<!--                <label class="form-check-label" for="flexSwitchCheckChecked">Компания активна</label>-->
+<!--            </div>-->
+<!--        </div>-->

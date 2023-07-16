@@ -28,18 +28,21 @@ public class RegistrationController {
         this.userValidation = userValidation;
     }
 
+    //Открываем страницу регистрации
+    @GetMapping
+    public String registration(Model model){
+        return "1.Login_and_Register/register";
+    }
+
+
+    //Добавляем на страницу регистрации модель, а именно дто, он будет автоматически добавляться ко всем гет запросам
     @ModelAttribute("newUser")
     public RegistrationUserDTO userDTO(){
         return new RegistrationUserDTO();
     }
 
-    @GetMapping
-    public String registration(Model model){
-//        model.addAttribute("newUser", userService.getUserByPrincipal(principal));
-//        model.addAttribute("newUser", new UserDTO());
-        return "1.Login_and_Register/register";
-    }
 
+    //Пост запрос на регистрацию нового пользователя, его валидация и сохранение в БД.
     @PostMapping
     public String createUser(Model model, @ModelAttribute("newUser") @Valid RegistrationUserDTO userDto, BindingResult bindingResult){
         log.info("0. Валидация на повторный мейл");

@@ -33,18 +33,22 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests((authorizeRequests) ->
                                 authorizeRequests
+                                        //    настройка доступа
                                         .requestMatchers("/auth","/login","/register").permitAll()
                                         .requestMatchers("/api/auth").permitAll()
 //                                        .requestMatchers("/api/index2").permitAll()
                                         .requestMatchers("/index2").hasRole("WORKER")
                                         .requestMatchers("/kvesty").hasRole("WORKER")
                                         .requestMatchers("/lasertag").authenticated()
+                                        .requestMatchers("/lead/new_lead").authenticated()
                                         .requestMatchers("/").authenticated()
                                         .requestMatchers("/kvesty").hasRole("ADMIN")
                                         .requestMatchers("/allUsers").hasRole("ADMIN")
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
+                                        .requestMatchers("/lead/**").hasRole("ADMIN")
 
                 )
+                //    настройка логирования
                 .formLogin((formLogin) ->
                                 formLogin
                                         .usernameParameter("username")
@@ -54,6 +58,7 @@ public class SecurityConfig {
                                         .defaultSuccessUrl("/",true)
                                         .failureUrl("/login?error")
                 )
+                //    настройка раз логирования
                 .logout((logout) ->
                         logout.deleteCookies("remove")
                                 .invalidateHttpSession(false)
@@ -75,7 +80,7 @@ public class SecurityConfig {
 
     }
 
-
+//    настройка доступа к внутренним файлам
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer(){
         return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));

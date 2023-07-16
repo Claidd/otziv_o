@@ -35,6 +35,11 @@
                             </a>
                         </li>
                         <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                                Лиды
+                            </a>
+                        </li>
+                        <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/kvesty}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Компании
                             </a>

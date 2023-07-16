@@ -9,8 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/login")
 public class LoginController {
 
-
-
+    //Открываем страницу логирования
     @GetMapping
     public String login(){
         return "1.Login_and_Register/login";

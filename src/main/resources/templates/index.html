@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
           integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"/>
+
+    <link rel="stylesheet" href="../static/css/style.css" th:href="@{../css/style.css}"/>
+
     <link rel="stylesheet" th:href="@{/css/style.css}"/>
     <link rel="stylesheet" th:href="@{/css/normalize.css}"/>
     <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
@@ -23,14 +26,14 @@
 
 
             <div class="page__row">
-                <div class="page__cell">
-                    <div class="start">
-                        <img class="displayed" th:src="@{/images/TacoCloud.png}" alt="ocompany" src=""/>
+                <div class="container">
+                    <div class="image__inner">
+                        <img class="image__start" th:src="@{/images/TacoCloud.png}" alt="ocompany" src="../static/images/TacoCloud.png"/>
                     </div>
                 </div>
-            </div>
+            </div> <!--  -->
 
-
+<!--  -->
 
 
 <!--<header th:replace="~{fragments/header2 :: header2}"></header>-->

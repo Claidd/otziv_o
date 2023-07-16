@@ -13,6 +13,8 @@ import java.util.Optional;
 
 public interface UserService extends UserDetailsService{
 
+    void updateProfile(RegistrationUserDTO userDTO, String role);
+
     User save(RegistrationUserDTO userDto);
     UserDetails loadUserByUsername(String username);
 

@@ -1,0 +1,943 @@
+/* ============== ОБЩИЕ НАСТРОЙКИ START ============ */
+
+/* подключаем шрифт */
+@font-face {
+    font-family: 'laptev_brush';
+    src:
+         url('../font/laptev_brush.otf');
+}
+
+
+/* ширина блока складывается из ширины контента (width), значений отступов (margin), полей (padding) и границ (border). Аналогично обстоит и с высотой блока. Свойство box-sizing позволяет изменить этот алгоритм, чтобы свойства width и height задавали размеры не контента, а размеры блока. устанавливаем наследование как у родителя */
+html {
+    box-sizing: border-box;
+}
+
+*, *::after, *::before {
+    box-sizing: inherit;
+    /* убираем отступы все отступы и стили */
+    margin: 0;
+    padding: 0;
+}
+
+/* задаем высоту страницы в 100% */
+html, body {
+    height: 100%;
+}
+
+ul {
+    /* всем спискам убираем точки впереди */
+    list-style: none;
+}
+
+a {
+    /* всем ссылкам убираем нижнее подчеркивание */
+    text-decoration: none;
+    /* меняем цвет ссылок на цвет родителя */
+    color: inherit;
+}
+
+body {
+    font-family: 'laptev_brush';
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.wrapper {
+    /* устанавливаем минимальную высоту обертки в 100% страницы */
+    min-height: 100%;
+    display: flex;
+    /* устанавливаем добавление дивов друг под другом */
+    flex-direction: column;
+}
+
+.container {
+    /* устанавливаем максимальную ширину */
+    max-width: 1220px;
+    /* выравниваем по середине. 1 верх и низ, 2 лево право */
+    margin: 0 auto;
+    /* устанавливаем отступы от краев */
+    padding: 0 10px;
+}
+
+/* настройки всеъ заголовков */
+.section-title {
+    margin-bottom: 50px;
+    font-size: 48px;
+    font-weight: 700;
+    text-align: center;
+}
+/* ============== ОБЩИЕ НАСТРОЙКИ END ============ */
+
+
+/* ================== HEADER START ================= */
+.header {
+    background-color: #151515;
+}
+
+.header-main {
+    background-color: transparent;
+    position: absolute;
+    z-index: 10;
+    /* растягиваем обратно после позиционирования */
+    left: 0;
+    right: 0;
+}
+
+.header__inner {
+    /* делаем отступ для меню сверху */
+    padding-top: 40px;
+    /* делаем отступ для меню снизу */
+    padding-bottom: 45px;
+    /* разделяем меню на две части */
+    display: flex;
+    /* разводим эти части по разные стороны/ расстояния между соседними элементами одинаковые, между элементами и краями флекс-контейнера отступов нет. */
+    justify-content: space-between;
+    /* выравниваем по нижнему краю дива */
+    align-items: flex-end;
+}
+
+.menu__list {
+    display: flex;
+    /* задаем расстрояние между элементами */
+    gap: 35px;
+}
+
+.menu__list-link {
+    color: #fff;
+    /* переводим все буквы в верхний регистр */
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+/* указываем настройки для нажатой ссылки */
+.menu__list-link--active {
+    color: #0066FF;
+}
+
+/* настраиваем кнопку меню */
+.menu__btn {
+    width: 30px;
+    height: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    /* убираем все декорации кнопки */
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    /* по умолчанию скрыт */
+    display: none;
+}
+
+/* делаем полосочки в спанах*/
+.menu__btn span {
+    height: 2px;
+    background-color: #fff;
+    width: 100%;
+}
+
+/* ================== HEADER START ================= */
+
+
+
+
+/* ================== FOOTER START ================= */
+
+.footer {
+    background-color: #151515;
+    /* отступы сверху и снизу */
+    padding: 50px 0 32px;
+    /* цвет текста в блоке */
+    color: #fff;
+}
+
+.footer__menu {
+    display: flex;
+    /* расстояния между соседними элементами одинаковые, между элементами и краями флекс-контейнера есть отступ, равный половине расстояния между соседними элементами */
+    justify-content: space-around;
+    margin-top: 50px;
+    padding-bottom: 50px;
+}
+
+.footer__menu-list {
+    /* задаем максимальную ширину, чтобы при превышении размера текста, текст переносился на ноую строку */
+    max-width: 250px;
+}
+
+/* данный селектор находит атрибут и применяет к соседу. Замена first child */
+.footer__menu-item + .footer__menu-item {
+    padding-top: 20px;
+
+}
+
+.footer__menu-title {
+    font-size: 24px;
+    font-weight: 700;
+    padding-bottom: 20px;
+}
+
+.app {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 50px;
+
+}
+
+.footer__copy {
+    /* задаем макимальный размер блока */
+    max-width: 800px;
+    /* выравниваем по середине и деллаем отступ снизу 30 */
+    margin: 0 auto 30px;
+    /* ставим текст по центру */
+    text-align: center;
+}
+
+.copy__nav-list {
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+}
+
+/* =================== FOOTER END ================== */
+
+
+
+
+
+/* =================== MAIN START ================== */
+.main {
+    /* ставим 1, чтобы контейнер растянулся во всю страницу */
+    flex-grow: 1;
+}
+
+/* =================== TOP START =================== */
+
+.top {
+    color: #fff;
+    /* выравниваем текст по середине */
+    text-align: center;
+    padding-top: 180px;
+    padding-bottom: 50px;
+    position: absolute;
+    z-index: 5;
+    /* растягиваем элементыпосле позиционирования */
+    left: 0;
+    right: 0;
+}
+
+.title {
+    padding-bottom: 40px;
+    font-size: 96px;
+    font-weight: 700;
+}
+
+.top__link {
+    /* задаем фон кнопки */
+    background-color: #151515;
+    /* задаем отступы кнопки */
+    padding: 10px;
+    /* задаем максимальную ширину */
+    max-width: 430px;
+    /* растягиваем на всю ширину указанную выше */
+    width: 100%;
+    /* означает элемент, который продолжает находиться в строке ( inline ), но при этом может иметь важные свойства блока */
+    display: inline-block;
+    text-transform: uppercase;
+    font-size: 36px;
+    font-weight: 700;
+}
+
+/* ==================== TOP END ==================== */
+
+
+/* ================== SLIDER START ================= */
+
+/* накладываем сверху полотно для тонировки */
+.swiper::after {
+    content: '';
+    background: rgba(21, 21, 21, .3);
+    position: absolute;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.swiper-slide {
+    /* задаем высоту слайда - 100% высоты экрана */
+    height: 100vh;
+    /* чтобы картинка полностью отображалась */
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center 0;
+}
+
+/* делаем прямоугольники вместо кругляшков внизу слайдера */
+.swiper-pagination-bullet {
+    width: 120px;
+    height: 3px;
+    background-color: #151515;
+    border-radius: 0;
+    opacity: 1;
+    margin: 0 15px
+}
+
+.swiper-pagination-horizontal.swiper-pagination-bullets
+.swiper-pagination-bullet {
+    margin: 0 15px;
+}
+
+.swiper-pagination-bullets.swiper-pagination-horizontal {
+    bottom: 50px;
+}
+
+/* делаем выделение активной картинки в слайдере */
+.swiper-pagination-bullet-active {
+    height: 6px;
+    background-color: #fff;
+}
+
+/* ================== SLIDER END =================== */
+
+
+/* =================== WHY START =================== */
+.why-lease {
+    margin: 150px 0;
+}
+
+.why-lease-list {
+    /* делаем не флекс, а сетку для адаптива */
+    display: grid;
+    /* количество в строке и размер каждой */
+    grid-template-columns: repeat(4, 1fr);
+    /* расстояние между */
+    gap: 40px;
+    text-align: center;
+}
+
+.why-lease__item {
+    max-width: 270px;
+}
+
+.why-lease__item-img {
+    margin-bottom: 30px;
+}
+
+.why-lease__item-title{
+    font-style: 24px;
+    font-weight: 700;
+    margin-bottom: 30px;
+}
+
+.why-lease__item-text {
+    tab-size: 16px;
+    text-align: left;
+}
+
+/* ==================== WHY END ==================== */
+
+
+/* =================== DOES START =================== */
+
+.how__does {
+    padding-bottom: 150px;
+}
+
+.how__does-inner {
+    /* ограничиваем ширину */
+    max-width: 600px;
+    /* выравниваем по середине */
+    margin: 0 auto;
+}
+
+.how__does-title {
+    font-size: 24px;
+    font-weight: 700;
+    padding-top: 50px;
+}
+
+.how__does-list {
+    padding: 50px 0 70px;
+    /* создаем счетчик */
+    counter-reset: myCounter;
+}
+
+.how__does-item {
+    list-style-type: none;
+    width: 270px;
+    position: relative;
+    margin-left: auto;
+    box-sizing: content-box;
+    padding: 19px 0 19px 240px;
+    min-height: 63px;
+}
+
+/* чтобы у первого не было, а у второго было */
+.how__does-item + .how__does-item {
+    margin-top: 40px;
+}
+
+/* настраиваем цифры */
+.how__does-item::before {
+    /* устанавливаем увеличение счетчика*/
+    counter-increment: myCounter;
+    content: counter(myCounter);
+    /* теперь можем работать с счетчиком */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 48px;
+    font-weight: 700;
+    background-color: #0066FF;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    color: #fff;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/* ==================== DOES END ==================== */
+
+
+/* =================== VIDEO START ================== */
+
+.video {
+    padding-bottom: 150px;
+}
+
+.video__title {
+    padding-bottom: 20;
+}
+
+.video__text {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 50px;
+    text-align: center;
+}
+
+.video__content {
+    margin: 0 auto;
+    display: block;
+}
+/* =================== VIDEO END ================== */
+
+
+/* ================ IMPORTANT START =============== */
+
+.important {
+    padding-bottom: 150px;
+}
+
+.important__title {
+    margin-bottom: 20px;
+}
+
+.important__text{
+    max-width: 580px;
+    margin: 0 auto 50px;
+}
+
+.important__list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.important__item-img {
+    margin-bottom: 20px;
+}
+/* ================= IMPORTANT END ================ */
+
+
+/* ================= CONTACTS START =============== */
+
+.contacts {
+    padding: 100px 0 150px;
+}
+
+.contacts__title {
+    margin-bottom: 20px;
+}
+
+.contact__text {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 50px;
+    padding: 0 100px;
+}
+
+.form {
+    max-width: 580px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.form__input {
+    width: 270px;
+    padding: 18px 20px;
+    display: inline-block;
+    font-family: 'Play', sans-serif;
+    border: 1px solid #0066FF;
+    margin-bottom: 50px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+}
+
+/* обращение к плейсхолдеру */
+.form__input::placeholder, 
+.form__textarea::placeholder  {
+    font-family: 'Play', sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+    opacity: .5;
+}
+
+.form__textarea {
+    width: 100%;
+    resize: none;
+    padding: 28px 20px;
+    height: 290px;
+    border: 1px solid #0066FF;
+    font-family: 'Play', sans-serif;
+    margin-bottom: 50px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+    margin-bottom: 50px;
+}
+
+.form__btn {
+    text-transform: uppercase;
+    color: #fff;
+    font-family: 'Play', sans-serif;
+    background-color: #151515;
+    font-size: 16px;
+    font-weight: 400;
+    padding: 13px 61px;
+    /* выравниваем так как это флекс элемент */
+    margin: 0 auto;
+    border: none;
+}
+
+/* ================= CONTACTS END =============== */
+
+
+/* ================== BLOG START ================ */
+
+.blog {
+    padding-bottom: 150px;
+}
+
+.blog__items {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 40px;
+    margin-bottom: 70px;
+}
+
+.blog__item {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.blog__item-img {
+    width: 100%;
+    margin-bottom: 30px;
+}
+
+.blog__item-title {
+    /* наподобие ширины */
+    flex-basis: 446px;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.blog__item-link {
+    color: #fff;
+    background-color: #0066FF;
+    padding: 4px 20px;
+}
+
+.showmore__link {
+    text-transform: uppercase;
+    background-color: #151515;
+    padding: 13px 80px;
+    color: #fff;
+    width: 300px;
+    margin: 0 auto;
+    text-align: center;
+    display: block;
+}
+
+/* ================== BLOG END ================ */
+
+
+/* ================== CHOOSE START ================ */
+
+.choose {
+    padding: 100px 0 150px;
+}
+
+.tabs {
+    margin-bottom: 70px;
+    
+}
+
+.tabs__btn {
+    padding: 0 150px 100px;
+    display: flex;
+    justify-content: space-between;
+    gap: 80px;
+}
+
+.tabs__btn-item {
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    padding: 0;
+}
+
+.tabs__btn-item--active {
+    color: #0066FF;
+}
+
+.tabs__content-item {
+    display: none;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 100px 40px;
+}
+
+.tabs__content-item.tabs__content-item--active {
+    display: grid;
+}
+
+.card {
+    text-align: center;
+}
+
+.card__content {
+    padding: 0 5px;
+    border: 1px solid #0066FF;
+    border-top: 0;
+}
+
+.card__title {
+    padding-top: 20px;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.card__text {
+    margin-bottom: 20px;
+}
+
+.card__price {
+    margin-bottom: 20px;
+    font-style: 24px;
+    font-weight: 700;
+}
+
+.card__link {
+    display: block;
+    color: #0066FF;
+    border: 1px solid #0066FF;
+    border-top: 0;
+}
+
+.card__img {
+    width: 100%;
+}
+
+/* =================== CHOOSE END ================= */
+
+/* ==================== MAIN END =================== */
+
+
+
+
+
+
+
+/* ==================== MEDIA START =================== */
+
+
+
+/* ==================== 1180 =================== */
+@media (max-width: 1180px) {
+
+    .important__list {
+        gap: 30px 20px;
+    }
+
+    .important__item-img {
+        width: 100%;
+    }
+
+    .tabs__content-item {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+}
+/* ==================== 1040 =================== */
+
+
+@media (max-width: 1040px) {
+
+    .video__content {
+        width: 100%;
+    }
+
+    .tabs__btn {
+        padding: 0 0 50px;
+        gap: 20px;
+    }
+
+}
+
+/* ==================== 860 =================== */
+
+
+@media (max-width: 860px) {
+
+    /* настраиваем бургер меню */
+    .menu__btn {
+        display: flex;
+    }
+
+    .menu__btn,
+    .logo {
+        position: relative;
+        z-index: 10;
+    }
+
+    .menu__list {
+        position: absolute;
+        z-index: 5;
+        background-color: #151515;
+        flex-direction: column;
+        height: 100vh;
+        padding-top: 200px;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        align-items: center;
+        transform: translateY(-100%);
+        transition: transform .3s ease;
+    }
+
+    .menu__list.menu__list--active {
+        transform: translateY(0%);
+    }
+
+    .why-lease-list {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        /* выравниваем содержимое по середине */
+        justify-items: center; 
+    }
+
+    .important__list {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .tabs__content-item {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ==================== 768 =================== */
+
+@media (max-width: 768px) {
+
+    .title {
+        font-size: 70px;
+    }
+
+    .top__link {
+        padding: 16px;
+        max-width: 360px;
+        font-style: 28px;
+    }
+
+    .swiper-pagination-bullet {
+        width: 60px;
+    }
+
+    .swiper-pagination-bullet--active {
+        height: 400px;
+    }
+
+    .footer__menu {
+        display: grid;
+        grid-template-columns: repeat(2,1fr);
+        gap: 40px;
+        margin-bottom: 50px;
+    }
+
+    .video__content {
+        height: 400px;
+    }
+
+}
+
+    /* ==================== 650 =================== */
+
+    @media (max-width: 650px) {
+
+        .tabs__content-item {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+        .tabs__btn-item {
+            tab-size: 18px;
+        }
+
+        .blog__items {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+        .contacts {
+            padding: 50px 0;
+        }
+
+        .form__input {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        .contact__text {
+            padding: 0;
+        }
+}
+
+
+    /* ==================== 540 =================== */
+
+@media (max-width: 540px) {
+
+    .title {
+        font-size: 60px;
+    }
+
+    .top__link {
+        max-width: 310px;
+        font-style: 24px;
+    }
+
+    .swiper-pagination-horizontal.swiper-pagination-bullets.swiper-pagination-bullet {
+        margin: 0 10px;
+    }
+
+    .swiper-pagination-bullet {
+        width: 35px;
+    }
+
+    .why-lease-list {
+        grid-template-columns: repeat(1, 1fr);
+    }
+
+    .why-lease {
+        margin: 30px 0;
+    }
+
+    .section-title {
+        font-size: 34px;
+    }
+
+    .how__does {
+        padding-bottom: 50px;
+    }
+
+    .how__does-list {
+        padding: 30px 0 40px;
+    }
+
+    .how__does-item {
+        padding: 65px 0 19px 0;
+        margin-right: auto
+    }
+
+    .how__does-item::before {
+        right: 0;
+        margin: 0 auto;
+        width: 50px;
+        height: 50px;
+        font-size: 32px;
+    }
+
+    .video {
+        padding-bottom: 50px;
+    }
+
+    .video__content {
+        height: 250px;
+    }
+
+    .important__list {
+        grid-template-columns: repeat(1, 1fr);
+    }
+
+    .app, .copy__nav-list {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .copy__nav-list {
+        gap: 20px;
+    }
+
+    .blog__item-title {
+        margin-bottom: 10px;
+    }
+
+    .blog__item-link {
+        margin-left: auto;
+    }
+
+    .tabs__btn {
+        flex-direction: column;
+    }
+
+    .choose {
+        padding: 50px 0;
+    }
+
+    .tabs__content-item {
+        gap: 40px;
+    }
+
+    .blog {
+        padding-bottom: 50px;
+    }
+
+}
+
+    /* ==================== 300 =================== */
+@media (max-width: 300px) {
+
+    .section-title {
+        font-size: 28px;
+    }
+}
+
+/* ===================== MEDIA END ==================== */

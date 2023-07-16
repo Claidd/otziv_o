@@ -2,6 +2,7 @@ package com.hunt.otziv.a_login.services;
 
 
 import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
+import com.hunt.otziv.a_login.model.Role;
 import com.hunt.otziv.a_login.model.User;
 import com.hunt.otziv.a_login.repository.RoleRepository;
 import com.hunt.otziv.a_login.repository.UserRepository;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,13 +33,16 @@ public class UserServiceImpl  implements UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-// INSERT INTO otziv_o.roles (name) values ('ROLE_WORKER');
 //      =====================================SECURITY=======================================================
 
+    // INSERT INTO otziv_o.roles (name) values ('ROLE_WORKER');
+
+    // Метод поиска юзера по имени в БД
     public Optional<User> findByUserName(String username){
         return userRepository.findByUsername(username);
     }
 
+// Метод для секьюрити от имплеменитрованного DetailsUsers
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
@@ -52,9 +57,10 @@ public class UserServiceImpl  implements UserService {
                 user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
         );
     }
-    //      =====================================SECURITY - END=======================================================
+//      =====================================SECURITY - END=======================================================
 
-    //      =====================================CREATE USERS - START=======================================================
+//      =====================================CREATE USERS - START=======================================================
+
     // Взять всех юзеров - начало
     @Override
     public List<RegistrationUserDTO> getAllUsers() {
@@ -66,6 +72,58 @@ public class UserServiceImpl  implements UserService {
     }
     // Взять всех юзеров - конец
 
+
+    // Обновить профиль юзера - начало
+    @Override
+    public void updateProfile(RegistrationUserDTO userDTO, String role) {
+        log.info("Вошли в обновление");
+        /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
+        User saveUser = findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", userDTO.getUsername())
+        ));
+        log.info("Достали юзера по имени из дто");
+        boolean isChanged = false;
+
+        /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.getRoles(), saveUser.getRoles())){
+//            saveUser.setRoles(List.of(roleService.getUserRole(role)));
+            List<Role> roles = new ArrayList<>();
+            roles.add(roleService.getUserRole(role));
+            saveUser.setRoles(roles);
+            isChanged = true;
+            log.info("Обновили роль");
+        }
+        /*Проверяем, не равен ли пароль предыдущему */
+//        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()){
+//            saveUser.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+//            isChanged = true;
+//        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.getEmail(), saveUser.getEmail())){
+            saveUser.setEmail(userDTO.getEmail());
+            isChanged = true;
+            log.info("Обновили мейл");
+        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.isActive(), saveUser.isActive())){
+            saveUser.setActive(userDTO.isActive());
+            isChanged = true;
+            log.info("Обновили активность");
+        }
+        /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
+         * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
+        if  (isChanged){
+            log.info("Начали сохранять обновленного юзера в БД");
+            userRepository.save(saveUser);
+            log.info("Сохранили обновленного юзера в БД");
+        }
+        else {
+            log.info("Изменений не было, сущность в БД не изменена");
+        }
+    }
+    // Обновить профиль юзера - конец
+
+
     // Перевод юзера в дто - начало
     private RegistrationUserDTO toDto(User user){
         log.info("Перевод юзера в дто");
@@ -73,10 +131,12 @@ public class UserServiceImpl  implements UserService {
                 .id(user.getId())
                 .username(user.getUsername())
                 .password(user.getPassword())
+                .fio(user.getFio())
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
                 .roles(user.getRoles())
                 .active(user.isActive())
+                .createTime(user.getCreateTime())
 //                .active(user.getActivateCode() == null)
                 .build();
     }
@@ -93,6 +153,7 @@ public class UserServiceImpl  implements UserService {
                 .username(userDto.getUsername())
                 .password(passwordEncoder.encode(userDto.getPassword()))
 //                .password(userDto.getPassword())
+                .fio((userDto.getFio()))
                 .email(userDto.getEmail())
                 .phoneNumber(
                         changeNumberPhone(userDto.getPhoneNumber())
@@ -100,6 +161,7 @@ public class UserServiceImpl  implements UserService {
                 .roles((List.of(roleService.getUserRole())))
                 .active(true)
                 .activateCode(UUID.randomUUID().toString())
+
                 .build();
         log.info("5. Юзер успешно создан");
 //        this.save(user);
@@ -107,6 +169,7 @@ public class UserServiceImpl  implements UserService {
     }
     // Создание нового пользователя "Клиент" - конец
 
+    // Вспомогательный метод для корректировки номера телефона
     public String changeNumberPhone(String phone){
         String[] a;
         a = phone.split("9");
@@ -121,11 +184,19 @@ public class UserServiceImpl  implements UserService {
     @Override
     public RegistrationUserDTO findById(Long id) {
         log.info("Начинается поиск пользователя по id - начало");
-//        return userRepository.findById(id);
+            User user = userRepository.findById(id).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
-        return null;
+        return toDto(user);
     }
     // Взять одного юзера - конец
+
+
+
+
+
+
+
+
 
 
 

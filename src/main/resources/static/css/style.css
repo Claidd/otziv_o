@@ -32,15 +32,25 @@ body {
 	margin: 0;
 	font-display: swap;
 }
+
+.container {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 0 10px;
+}
+
+
+
 /* .page__row {
 	max-width: 1910px;
 	    border: 1px solid #218294;
 } */
 .page__cell {
-	max-width: 1200px;
+	max-width: 1400px;
 	margin: 0 auto;
 	padding: 0 10px;
 }
+
 .page__cell2 {
 	max-width: 1600px;
 	margin: 0 auto;
@@ -148,12 +158,12 @@ body {
     max-width: 1200px;
 }
 
-.displayed {
-
+.image__start {
     display: block;
     margin-left: auto;
     margin-right: auto;
-    max-width: 1050px;
+    max-width: 100%;
+	height: auto;
     }
 
 .dws {

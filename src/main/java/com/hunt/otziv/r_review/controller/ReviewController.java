@@ -1,12 +1,12 @@
-package com.hunt.otziv.controller;
+package com.hunt.otziv.r_review.controller;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Controller
-@RequestMapping("/")
-public class MainController {
+@RequestMapping("/review")
+public class ReviewController {
 
     //Открываем главную страницу
     @GetMapping
