@@ -1,0 +1,24 @@
+<th:block th:fragment="content" xmlns:th="http://www.w3.org/1999/xhtml">
+    <!-- ==================== LEADS STRAT ======================== -->
+
+    <section class="leads">
+        <div class="container">
+            <h2 class="section-title contacts__title">Новый Лид</h2>
+            <p class="contact__text">Введите данные об новом отклике в форму ниже</p>
+            <form th:action="@{/lead/new_lead}" method="post" class="form" >
+                <!--        ввод номера телефона        -->
+                <input type="text" class="form__input"  placeholder="Номер телефона">
+
+                <!--        ввод названия города       -->
+                <input type="text" class="form__input" placeholder="Ваш Город">
+
+                <!--        ввод дополнительных данных        -->
+                <textarea class="form__textarea"  placeholder="Ваш Текст"></textarea>
+                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                <button class="form__btn" type="submit">ОТПРАВИТЬ</button>
+            </form>
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+    <!-- ===================== LEADS END ======================== -->
+</th:block>

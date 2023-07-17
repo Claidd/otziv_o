@@ -1,0 +1,48 @@
+<!--<!doctype html>-->
+<!--<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">-->
+
+<!--<head>-->
+<!--    <th:block th:insert="~{fragments/common :: meta}"></th:block>-->
+
+<!--    <th:block th:insert="~{fragments/common :: styles}"></th:block>-->
+
+
+
+
+<!--    <title>Новый лид</title>-->
+<!--</head>-->
+<!--<body class="page">-->
+<!--<header th:replace="~{fragments/header :: header}"></header>-->
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+<!-- ==================== LEADS STRAT ======================== -->
+
+    <section class="leads">
+        <div class="container">
+            <h2 class="section-title contacts__title">Новый Лид2</h2>
+            <p class="contact__text">Введите данные об новом отклике в форму ниже</p>
+            <form th:action="@{/lead/new_lead}" method="post" class="form" th:object="${newLead}">
+                <!--        ввод номера телефона        -->
+                <input type="text" class="form__input" th:field="*{telephoneLead}" placeholder="Номер телефона">
+                <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation
+                    error</small>
+                <!--        ввод названия города       -->
+                <input type="text" class="form__input" th:field="*{cityLead}" placeholder="Ваш Город">
+                <small class="form-text text-danger" th:each="err : ${#fields.errors('cityLead')}" th:text="${err}">Validation
+                    error</small>
+                <!--        ввод дополнительных данных        -->
+                <textarea class="form__textarea" th:field="*{commentsLead}" placeholder="Ваш Текст"></textarea>
+                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                <button class="form__btn" type="submit">ОТПРАВИТЬ</button>
+            </form>
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+<!-- ===================== LEADS END ======================== -->
+
+</th:block>
+
+<!--<header th:replace="~{fragments/footer :: footer}"></header>-->
+
+<!--</body>-->
+<!--</html>-->
