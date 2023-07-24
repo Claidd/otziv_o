@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
+import com.hunt.otziv.a_login.model.User;
 import com.hunt.otziv.a_login.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -7,6 +9,9 @@ import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -28,7 +33,7 @@ public class LeadServiceImpl implements LeadService{
                 .telephoneLead(leadDTO.getTelephoneLead())
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
-                .lidStatus(LeadStatus.SUNDAY.title)
+                .lidStatus(LeadStatus.NEW.title)
                 .operator(userRepository.findByUsername(username).orElseThrow())
 
                 .build();
@@ -58,6 +63,34 @@ public class LeadServiceImpl implements LeadService{
 
         return leadDTO;
     }
+
+    // Взять всех юзеров - начало
+    @Override
+    public List<LeadDTO> getAllLeads(String status) {
+        log.info("Берем все юзеров");
+        return leadsRepository.findAllByLidStatus(status).stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+    // Взять всех юзеров - конец
+
+
+    // Перевод юзера в дто - начало
+    private LeadDTO toDto(Lead lead){
+        log.info("Перевод юзера в дто");
+        return LeadDTO.builder()
+                .id(lead.getId())
+                .telephoneLead(lead.getTelephoneLead())
+                .cityLead(lead.getCityLead())
+                .lidStatus(lead.getLidStatus())
+                .commentsLead(lead.getCommentsLead())
+                .createDate(lead.getCreateDate())
+                .updateStatus(lead.getUpdateStatus())
+                .dateNewTry(lead.getDateNewTry())
+                .operatorId(lead.getOperator().getId())
+                .build();
+    }
+    // Перевод юзера в дто - конец
 
 
     // Вспомогательный метод для корректировки номера телефона

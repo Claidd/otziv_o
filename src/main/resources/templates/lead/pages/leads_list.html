@@ -1,24 +1,181 @@
 <th:block th:fragment="content" xmlns:th="http://www.w3.org/1999/xhtml">
-    <!-- ==================== LEADS STRAT ======================== -->
 
-    <section class="leads">
+    <!-- ===================== CHOOSE STRAT ========================== -->
+
+    <section class="lead__card">
         <div class="container">
-            <h2 class="section-title contacts__title">Новый Лид</h2>
-            <p class="contact__text">Введите данные об новом отклике в форму ниже</p>
-            <form th:action="@{/lead/new_lead}" method="post" class="form" >
-                <!--        ввод номера телефона        -->
-                <input type="text" class="form__input"  placeholder="Номер телефона">
+            <h2 class="section-title">ЛИД КАБИНЕТ</h2>
+            <div class="tabs__lead">
+                <div class="tabs__btn__lead">
+                    <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Новые</button>
+                    <button class="tabs__btn__lead-item" data-button="content-2">Отправленые</button>
+                    <button class="tabs__btn__lead-item" data-button="content-3">Напоминание</button>
+                    <button class="tabs__btn__lead-item" data-button="content-4">К расслыке</button>
+                </div>
+                <div class="tabs__content-lead">
+                    <div class="tabs__content__lead-item tabs__content__lead-item--active" id="content-1">
+                        <div th:each="lead : ${leadListNew}" class="card__lead">
+                            <div class="card__content__lead">
 
-                <!--        ввод названия города       -->
-                <input type="text" class="form__input" placeholder="Ваш Город">
+                                <div class="card__content__phone">
+                                    <div class="card__title__lead" th:text="${lead.lidStatus}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content__phone">
+                                    <div class="card__title__lead" th:text="${lead.telephoneLead}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content__city">
+                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Toyota Crawn 2023</div>
+                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">начиная от $ 39000</div>
+                                </div>
+                                <div class="card__content__comments">
+                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content_button">
+                                    <form class="card__text__lead" th:method="get" th:action="'lead/status_send/' + ${lead.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="card__text__lead-button ">отправил</button>
+                                    </form>
+                                    <form class="card__text__lead" th:method="get" th:action="'lead/status_resend/' + ${lead.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
+                                    </form>
+                                    <form class="card__text__lead" th:method="get" th:action="'lead/status_archive/' + ${lead.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="card__text__lead-button ">в архив</button>
+                                    </form>
+                                    <form class="card__text__lead" th:method="get" th:action="'lead/status_in_work/' + ${lead.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="card__text__lead-button ">в работу</button>
+                                    </form>
+<!--                                    <a class="card__text__lead">отправил</a>-->
+<!--                                    <a href="#" class="card__text__lead">напомнил</a>-->
+<!--                                    <a href="#" class="card__text__lead">в архив</a>-->
+<!--                                    <a href="#" class="card__text__lead">в работу</a>-->
+                                </div>
 
-                <!--        ввод дополнительных данных        -->
-                <textarea class="form__textarea"  placeholder="Ваш Текст"></textarea>
-                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                <button class="form__btn" type="submit">ОТПРАВИТЬ</button>
-            </form>
+                            </div>
+
+                            <a href="#" class="card__link__lead">Подробнее</a>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+
+                        <div class="tabs__content__lead-item" id="content-2">
+                            <div th:each="lead : ${leadListSend}" class="card__lead">
+                                <div class="card__content__lead">
+    
+                                    <div class="card__content__phone">
+                                        <div class="card__title__lead" th:text="${lead.lidStatus}">$ 650/мес</div>
+                                    </div>
+                                    <div class="card__content__phone">
+                                        <div class="card__title__lead" th:text="${lead.telephoneLead}">$ 650/мес</div>
+                                    </div>
+                                    <div class="card__content__city">
+                                             <div class="card__text__city__lead" th:text="${lead.createDate}">Toyota Crawn 2023</div>
+                                            <div class="card__text__city__lead" th:text="${lead.cityLead}">начиная от $ 39000</div>
+                                    </div>
+                                    
+                                    <div class="card__content__comments">
+                                        <div class="card__text__lead2" th:text="${lead.commentsLead}">$ 650/мес</div>
+                                    </div>
+                                    <div class="card__content_button">
+                                        <form class="card__text__lead" th:method="get" th:action="'lead/status_send/' + ${lead.id}">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                            <button type="submit" class="card__text__lead-button ">отправил</button>
+                                        </form>
+                                        <form class="card__text__lead" th:method="get" th:action="'lead/status_resend/' + ${lead.id}">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                            <button type="submit" class="card__text__lead-button ">напомнил</button>
+                                        </form>
+                                        <form class="card__text__lead" th:method="get" th:action="'lead/status_archive/' + ${lead.id}">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                            <button type="submit" class="card__text__lead-button ">в архив</button>
+                                        </form>
+                                        <form class="card__text__lead" th:method="get" th:action="'lead/status_in_work/' + ${lead.id}">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                            <button type="submit" class="card__text__lead-button ">в работу</button>
+                                        </form>
+    <!--                                    <a class="card__text__lead">отправил</a>-->
+    <!--                                    <a href="#" class="card__text__lead">напомнил</a>-->
+    <!--                                    <a href="#" class="card__text__lead">в архив</a>-->
+    <!--                                    <a href="#" class="card__text__lead">в работу</a>-->
+                                    </div> <!-- card__content_button -->
+                                </div> <!-- card__content__lead -->
+                                <a href="#" class="card__link__lead">Подробнее</a>
+                            </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+
+                    <div class="tabs__content__lead-item" id="content-3">
+                        <div th:each="lead : ${leadListReSend}" class="card__lead">
+                            <div class="card__content__lead">
+
+                                <div class="card__content__phone">
+                                    <div class="card__title__lead" th:text="${lead.lidStatus}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content__city">
+                                         <div class="card__text__city__lead" th:text="${lead.telephoneLead}">Toyota Crawn 2023</div>
+                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">начиная от $ 39000</div>
+                                </div>
+                                <div class="card__content__comments">
+                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content_button">
+                                    <a href="#" class="card__text__lead" th:text="${lead.createDate}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.updateStatus}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
+                                </div>
+
+                            </div>
+
+                            <a href="#" class="card__link__lead">Подробнее</a>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+
+                    <div class="tabs__content__lead-item" id="content-4">
+                        <div th:each="lead : ${leadListArchive}" class="card__lead">
+                            <div class="card__content__lead">
+
+                                <div class="card__content__phone">
+                                    <div class="card__title__lead" th:text="${lead.lidStatus}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content__city">
+                                         <div class="card__text__city__lead" th:text="${lead.telephoneLead}">Toyota Crawn 2023</div>
+                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">начиная от $ 39000</div>
+                                </div>
+                                <div class="card__content__comments">
+                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">$ 650/мес</div>
+                                </div>
+                                <div class="card__content_button">
+                                    <a href="#" class="card__text__lead" th:text="${lead.createDate}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.updateStatus}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
+                                </div>
+
+                            </div>
+
+                            <a href="#" class="card__link__lead">Подробнее</a>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+
+                </div> <!-- tabs__content -->
+            </div> <!-- tabs -->
+<!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
         </div> <!-- container -->
     </section> <!-- section -->
 
-    <!-- ===================== LEADS END ======================== -->
+    <!-- ====================== CHOOSE END =========================== -->
+
 </th:block>
+
+
+<!-- <p class="card__title__lead" th:text="${lead.telephoneLead}">Toyota Crawn 2023</p>
+                          <img src="image/card-1.jpg" alt="" class="card__img">
+                                    <p class="card__text__lead" th:text="${lead.cityLead}">начиная от $ 39000</p> -->
+
+                                    <!-- <a href="#" class="card__text__lead" th:text="${lead.createDate}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.updateStatus}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
+                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a> -->
+                                    <!-- <p class="card__text__lead" th:text="${lead.commentsLead}">$ 650/мес</p>
+                                    <p class="card__price__lead" th:text="${lead.operatorId}">$ 650/мес</p> -->

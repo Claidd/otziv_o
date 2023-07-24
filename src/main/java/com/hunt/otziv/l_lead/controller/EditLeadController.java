@@ -56,8 +56,7 @@ public class EditLeadController {
 
 
     //Пост запрос на несение нового лида, его валидация и сохранение в БД.
-    @PostMapping("/new_lead")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("lead/new_lead")
     public String createLead(Model model, @ModelAttribute("newLead") @Valid LeadDTO leadDTO, BindingResult bindingResult,
                              Principal principal){
         log.info("0. Валидация на повторный мейл");
@@ -66,13 +65,13 @@ public class EditLeadController {
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("1.1 Вошли в ошибку");
-            return "lead/new_lead.html";
+            return "/lead/new_lead";
         }
 
         log.info("2.Передаем дто в сервис");
         if (leadService.save(leadDTO, principal.getName()) == null) {
             model.addAttribute("newLead", leadDTO);
-            return "lead/new_lead.html";
+            return "/lead/new_lead";
         }
         log.info("6. Возвращаем вью");
         return "redirect:/lead";

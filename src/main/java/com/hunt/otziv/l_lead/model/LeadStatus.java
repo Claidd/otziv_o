@@ -2,13 +2,12 @@ package com.hunt.otziv.l_lead.model;
 
 public enum LeadStatus {
 
-    SUNDAY ("Воскресенье"),
-    MONDAY ("Понедельник"),
-    TUESDAY ("Вторник"),
-    WEDNESDAY ("Среда"),
-    THURSDAY ("Четверг"),
-    FRIDAY ("Пятница"),
-    SATURDAY ("Суббота");
+    NEW ("Новый"),
+    SEND ("Отправленный"),
+    RESEND ("Напоминание"),
+
+    ARCHIVE ("К рассылке"),
+    INWORK ("В работе");
 
     public String title;
 

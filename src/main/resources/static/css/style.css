@@ -31,10 +31,12 @@ body {
 	line-height: 1.375;
 	margin: 0;
 	font-display: swap;
+	/* background-color: #f6f6f9; */
+	background-color: #fff;
 }
 
 .container {
-	max-width: 1400px;
+	max-width: 1600px;
 	margin: 0 auto;
 	padding: 0 10px;
 }
@@ -52,12 +54,13 @@ body {
 }
 
 .page__cell2 {
-	max-width: 1600px;
+	max-width: 1800px;
 	margin: 0 auto;
 	padding-left: 10px;
 	padding-right: 10px;
 }
 .header {
+	/* max-width: 1800px; */
     display: flex;
     justify-content: space-between;
     align-items: center;

@@ -45,8 +45,7 @@ public class SecurityConfig {
                                         .requestMatchers("/kvesty").hasRole("ADMIN")
                                         .requestMatchers("/allUsers").hasRole("ADMIN")
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
-                                        .requestMatchers("/lead").permitAll()
-                                        .requestMatchers("/lead/**").permitAll()
+                                        .requestMatchers("/lead/**").hasRole("ADMIN")
 
                 )
                 //    настройка логирования
@@ -84,7 +83,7 @@ public class SecurityConfig {
 //    настройка доступа к внутренним файлам
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer(){
-        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/image/**", "/js/**", "/webjars/**", "/static/**", "/fragments/**", "/templates/**"));
+        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
     }
 //    3
     @Bean
