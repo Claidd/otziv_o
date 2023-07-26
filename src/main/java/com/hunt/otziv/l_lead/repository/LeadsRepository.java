@@ -13,4 +13,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     Optional<Lead> findByTelephoneLead(String telephoneLead);
 
     List<Lead> findAllByLidStatus(String status);
+
+
+    Optional<Lead> findById(Long leadId);
 }

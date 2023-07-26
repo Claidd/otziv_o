@@ -7,10 +7,14 @@ import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,7 +34,7 @@ public class LeadServiceImpl implements LeadService{
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
 
         Lead lead = Lead.builder()
-                .telephoneLead(leadDTO.getTelephoneLead())
+                .telephoneLead(changeNumberPhone(leadDTO.getTelephoneLead()))
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
@@ -72,7 +76,84 @@ public class LeadServiceImpl implements LeadService{
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
+
     // Взять всех юзеров - конец
+
+    //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
+
+    // меняем статус с нового на отправленное - начало
+    @Override
+    @Transactional
+    public void changeStatusLeadOnSend(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", leadId)
+        ));
+        lead.setLidStatus("Отправленный");
+        lead.setUpdateStatus(LocalDate.now());
+        leadsRepository.save(lead);
+    }
+    // меняем статус с нового на отправленное - конец
+
+    // меняем статус с отправленное на напоминание - начало
+    @Override
+    @Transactional
+    public void changeStatusLeadOnReSend(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", leadId)
+        ));
+        lead.setLidStatus("Напоминание");
+        lead.setUpdateStatus(LocalDate.now());
+        leadsRepository.save(lead);
+    }
+    // меняем статус с отправленное на напоминание - конец
+
+    // меняем статус с напоминание на К рассылке - начало
+    @Override
+    @Transactional
+    public void changeStatusLeadOnArchive(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", leadId)
+        ));
+        lead.setLidStatus("К рассылке");
+        lead.setUpdateStatus(LocalDate.now());
+        leadsRepository.save(lead);
+    }
+    // меняем статус с напоминание на К рассылке - конец
+
+    // меняем статус с К рассылке на В работе - начало
+    @Override
+    @Transactional
+    public void changeStatusLeadOnInWork(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", leadId)
+        ));
+        lead.setLidStatus("В работе");
+        lead.setUpdateStatus(LocalDate.now());
+        leadsRepository.save(lead);
+    }
+    // меняем статус с К рассылке на В работе - конец
+
+
+    // меняем статус с любого на Новый - начало
+    @Override
+    @Transactional
+    public void changeStatusLeadOnNew(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", leadId)
+        ));
+        lead.setLidStatus("Новый");
+        lead.setUpdateStatus(LocalDate.now());
+        leadsRepository.save(lead);
+    }
+    // меняем статус с любого на Новый - конец
+
+//    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
+
+    // Метод поиска юзера по имени в БД
+    public Optional<Lead> findByLeadId(Long leadId){
+        return leadsRepository.findById(leadId);
+
+    }
 
 
     // Перевод юзера в дто - начало

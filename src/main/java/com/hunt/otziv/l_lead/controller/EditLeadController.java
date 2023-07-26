@@ -28,6 +28,7 @@ public class EditLeadController {
         this.leadValidation = leadValidation;
     }
 
+    // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - НАЧАЛО  ===============================
 
     //Добавляем на страницу добавления нового лида модель, а именно дто, он будет автоматически добавляться ко всем гет запросам
     @ModelAttribute("newLead")
@@ -40,20 +41,6 @@ public class EditLeadController {
         model.put("route", "create");
         return new ModelAndView("lead/layouts/new_lead", model);
     }
-
-    @GetMapping("lead/edit/{leadId}")
-    public ModelAndView editLead(@PathVariable final String leadId, final Map<String, Object> model){
-        model.put("route", "edit");
-        return new ModelAndView("lead/layouts/edit", model);
-    }
-
-
-    //Открываем главную страницу
-//    @GetMapping("/new_lead")
-//    public String newLead(Model model){
-//        return "lead/new_lead.html";
-//    }
-
 
     //Пост запрос на несение нового лида, его валидация и сохранение в БД.
     @PostMapping("lead/new_lead")
@@ -76,4 +63,77 @@ public class EditLeadController {
         log.info("6. Возвращаем вью");
         return "redirect:/lead";
     }
+    // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - КОНЕЦ  ===============================
+
+
+    //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
+
+    // СМЕНА СТАТУСА НА "ОТПРАВЛЕНО" - НАЧАЛО
+
+    // меняем статус с нового на отправленное - начало
+    @PostMapping("lead/status_send/{leadId}")
+    public String changeStatusLeadOnSend(Model model, @PathVariable final Long leadId,
+                             Principal principal){
+        log.info("вход в меняем статус с нового на отправленное");
+        leadService.changeStatusLeadOnSend(leadId);
+        log.info("статус успешно сменен с нового на отправленного" );
+        return "redirect:/lead";
+    }
+    // меняем статус с нового на отправленное - конец
+
+    // меняем статус с отправленное на напоминание - начало
+    @PostMapping("lead/status_resend/{leadId}")
+    public String changeStatusLeadOnReSend(Model model, @PathVariable final Long leadId,
+                                         Principal principal){
+        log.info("вход в меняем статус с отправленное на напоминание");
+        leadService.changeStatusLeadOnReSend(leadId);
+        log.info("статус успешно сменен с отправленное на напоминание" );
+        return "redirect:/lead";
+    }
+    // меняем статус с отправленное на напоминание - конец
+
+    // меняем статус с напоминание на К рассылке - начало
+    @PostMapping("lead/status_archive/{leadId}")
+    public String changeStatusLeadOnArchive(Model model, @PathVariable final Long leadId,
+                                         Principal principal){
+        log.info("вход в меняем статус с напоминание на К рассылке");
+        leadService.changeStatusLeadOnArchive(leadId);
+        log.info("статус успешно сменен с напоминание на К рассылке" );
+        return "redirect:/lead";
+    }
+    // меняем статус с напоминание на К рассылке - конец
+
+    // меняем статус с К рассылке на В работе - начало
+    @PostMapping("lead/status_in_work/{leadId}")
+    public String changeStatusLeadOnInWork(Model model, @PathVariable final Long leadId,
+                                         Principal principal){
+        log.info("вход в меняем статус с К рассылке на В работе");
+        leadService.changeStatusLeadOnInWork(leadId);
+        log.info("статус успешно сменен К рассылке на В работе" );
+        return "redirect:/lead";
+    }
+    // меняем статус с К рассылке на В работе - конец
+
+    // меняем статус с любого на Новый - начало
+    @PostMapping("lead/status_lead_new/{leadId}")
+    public String changeStatusLeadOnNew(Model model, @PathVariable final Long leadId,
+                                         Principal principal){
+        log.info("вход в меняем статус с любого на Новый ");
+        leadService.changeStatusLeadOnNew(leadId);
+        log.info("статус успешно сменен с любого на Новый " );
+        return "redirect:/lead";
+    }
+    // меняем статус с любого на Новый - конец
+
+    //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
+
+
+
+    @GetMapping("lead/edit/{leadId}")
+    public ModelAndView editLead(@PathVariable final String leadId, final Map<String, Object> model){
+        model.put("route", "edit");
+        return new ModelAndView("lead/layouts/edit", model);
+    }
+
+
 }

@@ -15,4 +15,23 @@ public interface LeadService {
     Lead save(LeadDTO leadDTO, String id);
 
     List<LeadDTO> getAllLeads(String status);
+
+
+    //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
+    // меняем статус с нового на отправленное
+    void changeStatusLeadOnSend(Long leadId);
+
+    // меняем статус с нового на напоминание
+    void changeStatusLeadOnReSend(Long leadId);
+
+    // меняем статус с напоминание на К рассылке
+    void changeStatusLeadOnArchive(Long leadId);
+
+    // меняем статус с К рассылке на В работе
+    void changeStatusLeadOnInWork (Long leadId);
+
+    // меняем статус с любого на Новый
+    void changeStatusLeadOnNew (Long leadId);
+
+    //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

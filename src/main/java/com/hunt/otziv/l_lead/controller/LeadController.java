@@ -28,7 +28,7 @@ public class LeadController {
         model.put("leadListSend", leadService.getAllLeads(LeadStatus.SEND.title));
         model.put("leadListReSend", leadService.getAllLeads(LeadStatus.RESEND.title));
         model.put("leadListArchive", leadService.getAllLeads(LeadStatus.ARCHIVE.title));
-        model.put("leadListInWork", leadService.getAllLeads(LeadStatus.ARCHIVE.title));
+        model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title));
         return new ModelAndView("lead/layouts/lead", model);
     }
 
