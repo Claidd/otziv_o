@@ -25,25 +25,25 @@ public class Lead {
     private Long id;
 
     //    телефон нового лида, который откликнулся на рассылку
-    @Column(name = "telephone_lead")
+    @Column(name = "telephone_lead", length = 20, nullable = false, unique = true)
     private String telephoneLead;
 
     //    город по которому шла рассылка
-    @Column(name = "city_lead")
+    @Column(name = "city_lead", length = 50, nullable = false)
     private String cityLead;
 
     //    город по которому шла рассылка
-    @Column(name = "comments_lead")
+    @Column(name = "comments_lead", length = 2000)
     private String commentsLead;
 
     //    текущий статус лида ЕНАМ?????
 //    @Enumerated(EnumType.STRING)
-    @Column(name = "lid_status")
+    @Column(name = "lid_status", length = 30)
     private String lidStatus;
 
     //    время создания пользователя
     @Temporal(TemporalType.DATE)
-    @Column(name = "create_date")
+    @Column(name = "create_date", nullable = false)
     private LocalDate createDate;
 
     //    дата и время обновления статуса

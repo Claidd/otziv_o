@@ -767,13 +767,15 @@ body {
 }
 
 .card__remember-text {
+    width: 0.1px;
+    font-size: 1px;
     text-decoration: none;
     background: none;
     border: none;
     color: none;
     font-family: 'laptev_brush';
     /* margin-right: 20px; */
-    display: none;
+    
 }
 
 .card__remember__box-serch {
@@ -946,18 +948,6 @@ body {
 .card__img__lead {
     width: 100%;
 }
-
-.card__remember {
-   /* display: flex;
-   justify-content: space-between;
-   align-items: center;
-   margin-bottom: 50px; */
-   /* gap: 100px; */
-}
-
- .card_remember-content2 {
-    
- }
 
 /* =================== LEADS CARD END ================= */
 

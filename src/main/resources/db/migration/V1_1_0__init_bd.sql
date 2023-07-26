@@ -22,10 +22,10 @@ create table IF NOT EXISTS users_roles(
     user_id bigint not null,
     role_id int not null,
     primary key(user_id, role_id),
-    constraint user_id foreign key (user_id) references users(id) ON DELETE CASCADE
-    ON UPDATE CASCADE,
-    constraint role_id foreign key (role_id) references roles(id) ON DELETE CASCADE
-    ON UPDATE CASCADE
+    constraint user_id foreign key (user_id) references users(id) ON delete CASCADE
+    ON update CASCADE,
+    constraint role_id foreign key (role_id) references roles(id) ON delete CASCADE
+    ON update CASCADE
 )engine=InnoDB;
 
 create table IF NOT EXISTS  bots (
@@ -42,16 +42,16 @@ create table IF NOT EXISTS  bots (
 create table IF NOT EXISTS  reviews (
     id bigint not null auto_increment,
     bot_id bigint,
-    constraint bot_id foreign key (bot_id) references bots(id) ON DELETE CASCADE
-    ON UPDATE CASCADE,
+    constraint bot_id foreign key (bot_id) references bots(id) ON delete CASCADE
+    ON update CASCADE,
     primary key (id)) engine=InnoDB;
 
-CREATE TABLE IF NOT EXISTS leads (
+create TABLE IF NOT EXISTS leads (
     id bigint not null auto_increment,
-    telephone_lead VARCHAR(255) not null unique,
-    city_lead VARCHAR(255) not null,
-    comments_lead VARCHAR(255),
-    lid_status VARCHAR(50),
+    telephone_lead VARCHAR(20) not null unique,
+    city_lead VARCHAR(50) not null,
+    comments_lead VARCHAR(500),
+    lid_status VARCHAR(30),
     create_date DATE,
     update_status DATE,
     date_new_try DATE,
@@ -59,7 +59,12 @@ CREATE TABLE IF NOT EXISTS leads (
     CONSTRAINT fk_operator_id
         FOREIGN KEY (operator_id)
         REFERENCES users (id)
-        ON DELETE CASCADE, primary key (id)) ENGINE=InnoDB;
+        ON delete CASCADE, primary key (id)) ENGINE=InnoDB;
+
+create TABLE IF NOT EXISTS text_promo (
+    id int not null auto_increment,
+    telephone_lead VARCHAR(2000) not null,
+    primary key (id)) engine=InnoDB;
 
 --        ALTER TABLE leads DROP INDEX UK_ljqpqpacyg8nhxc8mdvkijepl;
 
@@ -67,9 +72,54 @@ CREATE TABLE IF NOT EXISTS leads (
 --insert into roles (name)
 --values ('ROLE_ADMIN'), ('ROLE_CALLING'), ('ROLE_MANAGER'), ('ROLE_WORKER'), ('ROLE_USER'), ('ROLE_CLIENT');
 
+--insert into users (username, password, fio, email, phone_number, activate_code, active, create_time)
+--values ('alex', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Хант Иван Игоревич', '2.12nps@mail.ru', '2.12nps@mail.ru', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26');
+
+--INSERT INTO `text_promo`(`promo_text`) VALUES ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток.
+-- Все тексты будут нужны, и если в\n каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить.\n Завтра будем публиковать, спасибо');
+
+--INSERT INTO `text_promo`(`promo_text`) VALUES ('Здравствуйте, пишу вам по поводу отзывов, расскажу, как все происходит -\\n
+--У нас есть подборка аккаунтов, которые мы ведём, как живых людей. То есть, ботами их назвать нельзя. Аккаунты \\n
+--ведутся от 2017 года и позднее.\\n
+--Далее либо вы пишите текст, и мы его публикуем, либо мы сами пишем текст, основываясь на вашей информации) \\n
+--Публикуем обычно 1 отзыв в 2-3 дня. Но *не менее 10 в месяц* \\n
+--1 отзыв 2 гис - _300 рублей.\\n
+--✅Можете выслать вашу *ссылку* на 2гис, мы подготовим текст и вышлем на проверку
+--Либо город, адрес и название фирмы)\\n
+--Гарантия на каждый отзыв 3 месяца. \\n
+--Публикуем *непрерывно* до того момента, когда вы попросите сделать паузу.\\n
+--2 раза в месяц высылаем вам отчет и реквизиты для оплаты. Если нужен чек, сообщаете об этом заранее.'), ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток. Все тексты будут нужны, и если в
+--каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить. \\n;
+--Завтра будем публиковать, спасибо') )
+--
+--INSERT INTO `text_promo`(`promo_text`) VALUES ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток. Все тексты будут нужны, и если в
+--каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить. \n;
+--Завтра будем публиковать, спасибо');
+--CHAR(13) + CHAR(10)
+--
+--INSERT INTO `text_promo`(`promo_text`) VALUES ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток. Все тексты будут нужны, и если в
+--каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить.' + CHAR(13) + CHAR(10) + ';
+--Завтра будем публиковать, спасибо');
+
+--INSERT INTO `text_promo`(`promo_text`) VALUES ('Здравствуйте, пишу вам по поводу отзывов, расскажу, как все происходит -\\n
+--У нас есть подборка аккаунтов, которые мы ведём, как живых людей. То есть, ботами их назвать нельзя. Аккаунты \\n
+--ведутся от 2017 года и позднее.\\n
+--Далее либо вы пишите текст, и мы его публикуем, либо мы сами пишем текст, основываясь на вашей информации) \\n
+--Публикуем обычно 1 отзыв в 2-3 дня. Но *не менее 10 в месяц* \\n
+--1 отзыв 2 гис - _300 рублей.\\n
+--✅Можете выслать вашу *ссылку* на 2гис, мы подготовим текст и вышлем на проверку
+--Либо город, адрес и название фирмы)\\n
+--Гарантия на каждый отзыв 3 месяца. \\n
+--Публикуем *непрерывно* до того момента, когда вы попросите сделать паузу.\\n
+--2 раза в месяц высылаем вам отчет и реквизиты для оплаты. Если нужен чек, сообщаете об этом заранее.'), ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток. Все тексты будут нужны, и если в
+--каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить. \\n;
+--Завтра будем публиковать, спасибо') )
+
 
 --insert into bots (login, password, fio, active, status, counter)
 --values ('9086431055','pass','Петров Н.Г.',true,'в работе',0);
+
+
 
 --create table IF NOT EXISTS bots (
 --    id bigint not null auto_increment,
