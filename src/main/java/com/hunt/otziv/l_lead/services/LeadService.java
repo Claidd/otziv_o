@@ -14,7 +14,7 @@ public interface LeadService {
 
     Lead save(LeadDTO leadDTO, String id);
 
-    List<LeadDTO> getAllLeads(String status);
+    List<LeadDTO> getAllLeads(String status, String keyword);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================

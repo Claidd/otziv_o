@@ -70,9 +70,14 @@ public class LeadServiceImpl implements LeadService{
 
     // Взять всех юзеров - начало
     @Override
-    public List<LeadDTO> getAllLeads(String status) {
+    public List<LeadDTO> getAllLeads(String status, String keywords) {
         log.info("Берем все юзеров");
-        return leadsRepository.findAllByLidStatus(status).stream()
+        if (!keywords.equals("")){
+            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+        }
+        else return leadsRepository.findAllByLidStatus(status).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }

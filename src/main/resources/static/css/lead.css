@@ -824,11 +824,12 @@ body {
 .card__text__lead-button {
     background: none;
     border: none;
-    color: none;
     text-decoration: none;
     cursor: pointer;
     padding: 0;
+    color: none;
 }
+
 
 .card__lead {
     text-align: center;

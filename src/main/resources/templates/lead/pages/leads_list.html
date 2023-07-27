@@ -49,12 +49,12 @@
                         </div>
                         <div class="card__remember__box-serch">
                             
-                                <form class="card_remember-search" th:method="get" target="_blank" th:action="'lead/status_send/'">
+                                <form class="card_remember-search" th:method="get" th:action="@{/lead}">
                                     <!-- The text field -->
-                                    <input class="card_remember-search__text" type="text" value="" id="myInput">
+                                    <input class="card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                     <!-- The button used to copy the text -->
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                    <button type="submit" class="card_remember-search__btn" onclick="myFunction()">Найти</button>
+                                    <button type="submit" class="card_remember-search__btn">Найти</button>
                                 </form>
 
                         </div>
