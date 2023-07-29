@@ -830,6 +830,15 @@ body {
     color: none;
 }
 
+.card__link__lead__more {
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    color: none;
+}
+
 
 .card__lead {
     text-align: center;
@@ -872,6 +881,14 @@ body {
 
 .card__content__city {
     margin-top: 20px;
+    display: flex;
+    justify-content: space-around;
+    flex-direction: row;
+}
+
+.card__content__author {
+    margin-top: 10px;
+    margin-bottom: 10px;
     display: flex;
     justify-content: space-around;
     flex-direction: row;

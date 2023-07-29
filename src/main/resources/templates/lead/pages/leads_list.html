@@ -109,12 +109,16 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <a href="#" class="card__link__lead">Подробнее</a>
+                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                                    <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                            </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 1 -->
 
-                    <!-- СПИСОК КАРТОЧЕК 2 -->
+                    <!-- СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ-->
                     <div class="tabs__content__lead-item" id="content-2">
                         <div th:each="lead : ${leadListSend}" class="card__lead">
                             <div class="card__content__lead">
@@ -131,7 +135,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -157,12 +161,16 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <a href="#" class="card__link__lead">Подробнее</a>
+                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                            </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 2 -->
 
-                    <!-- СПИСОК КАРТОЧЕК 3 -->
+                    <!-- СПИСОК КАРТОЧЕК 3 С НАПОМИНАНИЕМ-->
                     <div class="tabs__content__lead-item" id="content-3">
                         <div th:each="lead : ${leadListReSend}" class="card__lead">
                             <div class="card__content__lead">
@@ -179,7 +187,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -205,12 +213,16 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <a href="#" class="card__link__lead">Подробнее</a>
+                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                            </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 3 -->
 
-                    <!-- СПИСОК КАРТОЧЕК 4 -->
+                    <!-- СПИСОК КАРТОЧЕК 4 В АРХИВ-->
                     <div class="tabs__content__lead-item" id="content-4">
                         <div th:each="lead : ${leadListArchive}" class="card__lead">
                             <div class="card__content__lead">
@@ -227,7 +239,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -253,7 +265,11 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <a href="#" class="card__link__lead">Подробнее</a>
+                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                            </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 4 -->
@@ -301,7 +317,11 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <a href="#" class="card__link__lead">Подробнее</a>
+                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                            </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 5 -->

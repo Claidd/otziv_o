@@ -13,6 +13,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -29,6 +30,7 @@ public class LeadServiceImpl implements LeadService{
         this.userRepository = userRepository;
     }
 
+    //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
     // Создание нового пользователя "Лида" - начало
     public Lead save(LeadDTO leadDTO, String username){
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
@@ -47,7 +49,51 @@ public class LeadServiceImpl implements LeadService{
         return leadsRepository.save(lead);
     }
     // Создание нового пользователя "Клиент" - конец
+    //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - НАЧАЛО =========================================
+    // Взять всех юзеров - начало
+    @Override
+    public List<LeadDTO> getAllLeads(String status, String keywords) {
+        log.info("Берем все юзеров");
+        if (!keywords.equals("")){
+            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isAfter(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .collect(Collectors.toList());
+        }
+        else return leadsRepository.findAllByLidStatus(status).stream()
+                .map(this::toDto)
+                .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                .collect(Collectors.toList());
+    }
+    // Взять всех юзеров - конец
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
+
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ ПО ДАТЕ В НАПОМИНАНИИ - НАЧАЛО =========================================
+    // Взять всех юзеров - начало
+    @Override
+    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords) {
+        log.info("Берем все юзеров");
+        if (!keywords.equals("")){
+            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getUpdateStatus().isEqual(LocalDate.now()) || lead.getUpdateStatus().isBefore(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .collect(Collectors.toList());
+        }
+        else return leadsRepository.findAllByLidStatus(status).stream()
+                .map(this::toDto)
+                .filter(lead -> lead.getUpdateStatus().isEqual(LocalDate.now()) || lead.getUpdateStatus().isBefore(LocalDate.now()))
+                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                .collect(Collectors.toList());
+    }
+    // Взять всех юзеров - конец
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
+
+    //    =============================== В DTO - НАЧАЛО =========================================
     // Метод конвертации из класса Lead в класс LeadDTO
     public LeadDTO convertFromLead(Lead lead) {
         log.info("Перевод лида в дто");
@@ -63,26 +109,14 @@ public class LeadServiceImpl implements LeadService{
 
         // Обратите внимание, что здесь мы присваиваем идентификатор пользователя вместо всего объекта User
         // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
-        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getId() : null);
+        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getFio() : null);
+//        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getId() : null);
 
         return leadDTO;
     }
+    //    =============================== В DTO - КОНЕЦ =========================================
 
-    // Взять всех юзеров - начало
-    @Override
-    public List<LeadDTO> getAllLeads(String status, String keywords) {
-        log.info("Берем все юзеров");
-        if (!keywords.equals("")){
-            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-        }
-        else return leadsRepository.findAllByLidStatus(status).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
-    }
 
-    // Взять всех юзеров - конец
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
 
@@ -94,7 +128,7 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Отправленный");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDate.now().plusDays(1));
         leadsRepository.save(lead);
     }
     // меняем статус с нового на отправленное - конец
@@ -107,7 +141,7 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Напоминание");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDate.now().plusDays(2));
         leadsRepository.save(lead);
     }
     // меняем статус с отправленное на напоминание - конец
@@ -120,7 +154,7 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("К рассылке");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDate.now().plusDays(90));
         leadsRepository.save(lead);
     }
     // меняем статус с напоминание на К рассылке - конец
@@ -173,7 +207,8 @@ public class LeadServiceImpl implements LeadService{
                 .createDate(lead.getCreateDate())
                 .updateStatus(lead.getUpdateStatus())
                 .dateNewTry(lead.getDateNewTry())
-                .operatorId(lead.getOperator().getId())
+                .operatorId(lead.getOperator().getFio())
+//                .operatorId(lead.getOperator().getId())
                 .build();
     }
     // Перевод юзера в дто - конец

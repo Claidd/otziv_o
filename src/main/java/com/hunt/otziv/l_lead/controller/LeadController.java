@@ -30,9 +30,9 @@ public class LeadController {
 //        model.put("route", "lead");
         model.put("promoTexts", promoTextService.getAllPromoTexts());
         model.put("leadListNew", leadService.getAllLeads(LeadStatus.NEW.title, keyword));
-        model.put("leadListSend", leadService.getAllLeads(LeadStatus.SEND.title, keyword));
-        model.put("leadListReSend", leadService.getAllLeads(LeadStatus.RESEND.title, keyword));
-        model.put("leadListArchive", leadService.getAllLeads(LeadStatus.ARCHIVE.title, keyword));
+        model.put("leadListSend", leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword));
+        model.put("leadListReSend", leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword));
+        model.put("leadListArchive", leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword));
         model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword));
         return new ModelAndView("lead/layouts/lead", model);
     }

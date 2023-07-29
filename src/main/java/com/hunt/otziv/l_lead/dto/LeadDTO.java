@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.dto;
 
+import com.hunt.otziv.a_login.model.User;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
@@ -47,7 +48,7 @@ public class LeadDTO {
 
     //    привязка юзера-оператора
 
-    private Long operatorId;
+    private String operatorId;
 
 //    ПОЯСНЕНИЕ:
 //  Класс LeadDTO является простым Java-классом, который представляет DTO (Data Transfer Object) для класса Lead.
