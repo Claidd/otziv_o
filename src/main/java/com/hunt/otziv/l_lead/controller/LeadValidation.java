@@ -25,11 +25,11 @@ public class LeadValidation implements Validator {
     @Override
     public void validate(Object target, Errors errors) {
 
-        /*Проверяем на имеющийся username в базе*/
+        /*Проверяем на имеющийся телефон в базе*/
         LeadDTO leadDTO = (LeadDTO) target;
-        if (leadsRepository.findByTelephoneLead(leadDTO.getTelephoneLead()).isPresent()){
-            errors.rejectValue("telephoneLead", "", "Такой номер телефона уже есть в базе");
-        }
+//        if (leadsRepository.findByTelephoneLead(leadDTO.getTelephoneLead()).isPresent()){
+//            errors.rejectValue("telephoneLead", "", "Такой номер телефона уже есть в базе");
+//        }
 
     }
 }

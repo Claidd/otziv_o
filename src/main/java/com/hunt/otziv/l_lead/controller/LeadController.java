@@ -29,11 +29,17 @@ public class LeadController {
     public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword){
 //        model.put("route", "lead");
         model.put("promoTexts", promoTextService.getAllPromoTexts());
+        log.info("загрузили промо тексты");
         model.put("leadListNew", leadService.getAllLeads(LeadStatus.NEW.title, keyword));
+        log.info("загрузили НОВЫЕ компании");
         model.put("leadListSend", leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword));
+        log.info("загрузили ОТПРАВЛЕННЫЕ компании");
         model.put("leadListReSend", leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword));
+        log.info("загрузили НАПОМНЕННЫЕ компании");
         model.put("leadListArchive", leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword));
+        log.info("загрузили АРХИВ компании");
         model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword));
+        log.info("загрузили В РАБОТЕ компании");
         return new ModelAndView("lead/layouts/lead", model);
     }
 

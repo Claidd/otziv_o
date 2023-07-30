@@ -682,6 +682,21 @@ body {
 
 /* =================== CHOOSE END ================= */
 
+/* ================== LEADS EDIT START ================ */
+
+.edit__lead {
+    padding: 100px 0 150px;
+}
+
+.edit__box {
+    /* display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; */
+}
+
+/* ================== LEADS EDIT END ================ */
+
 /* ================== LEADS CARD START ================ */
 
 .lead__card {
@@ -945,6 +960,9 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 70px;
+    /* word-wrap: break-word; */
+    overflow-x:hidden; 
     border-radius: 1.2rem;
 
 }

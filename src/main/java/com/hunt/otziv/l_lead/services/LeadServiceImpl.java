@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
+import com.hunt.otziv.a_login.model.Role;
 import com.hunt.otziv.a_login.model.User;
 import com.hunt.otziv.a_login.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -13,9 +14,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,15 +50,75 @@ public class LeadServiceImpl implements LeadService{
     // Создание нового пользователя "Клиент" - конец
     //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
+    //    =============================== ОБНОВИТЬ ЮЗЕРА - НАЧАЛО =========================================
+    // Обновить профиль юзера - начало
+    @Override
+    @Transactional
+    public void updateProfile(LeadDTO leadDTO, Long id) {
+        log.info("Вошли в обновление лида и ищем лида по id");
+        /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
+        Lead saveLead = findByIdAndToUpdate(id).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель с номером '%s' не найден", leadDTO.getTelephoneLead())
+        ));
+        log.info("Достали лида по ид из дто");
+        boolean isChanged = false;
+
+        /*Проверяем не равен ли телефон предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getTelephoneLead(), saveLead.getTelephoneLead())){
+//            saveUser.setRoles(List.of(roleService.getUserRole(role)));
+            saveLead.setTelephoneLead(leadDTO.getTelephoneLead());
+            isChanged = true;
+            log.info("Обновили телефон");
+        }
+        /*Проверяем, не равен ли пароль предыдущему */
+//        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()){
+//            saveUser.setPassword(passwordEncoder.encode(userDTO.getPassword()));
+//            isChanged = true;
+//        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getCityLead(), saveLead.getCityLead())){
+            saveLead.setCityLead(leadDTO.getCityLead());
+            isChanged = true;
+            log.info("Обновили город");
+        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getCommentsLead(), saveLead.getCommentsLead())){
+            saveLead.setCommentsLead(leadDTO.getCommentsLead());
+            isChanged = true;
+            log.info("Обновили комментарий");
+        }
+        /*Проверяем не равен ли апдейт время предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getUpdateStatus(), saveLead.getUpdateStatus())){
+            saveLead.setUpdateStatus(leadDTO.getUpdateStatus());
+            isChanged = true;
+            log.info("Обновили дату изменения");
+        }
+        /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
+         * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
+        if  (isChanged){
+            log.info("Начали сохранять обновленного лида в БД");
+            leadsRepository.save(saveLead);
+            log.info("Сохранили обновленного лида в БД");
+        }
+        else {
+            log.info("Изменений не было, лид в БД не изменена");
+        }
+    }
+    // Обновить профиль юзера - конец
+    //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
+
+
+
+
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - НАЧАЛО =========================================
     // Взять всех юзеров - начало
     @Override
     public List<LeadDTO> getAllLeads(String status, String keywords) {
         log.info("Берем все юзеров");
-        if (!keywords.equals("")){
+        if (!keywords.isEmpty()){
             return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
                     .map(this::toDto)
-                    .filter(lead -> lead.getCreateDate().isAfter(LocalDate.now()))
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
                     .sorted(Comparator.comparing(LeadDTO::getCreateDate))
                     .collect(Collectors.toList());
         }
@@ -77,21 +136,24 @@ public class LeadServiceImpl implements LeadService{
     @Override
     public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords) {
         log.info("Берем все юзеров");
-        if (!keywords.equals("")){
+        if (!keywords.isEmpty()){
             return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
                     .map(this::toDto)
-                    .filter(lead -> lead.getUpdateStatus().isEqual(LocalDate.now()) || lead.getUpdateStatus().isBefore(LocalDate.now()))
-                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
                     .collect(Collectors.toList());
         }
         else return leadsRepository.findAllByLidStatus(status).stream()
                 .map(this::toDto)
-                .filter(lead -> lead.getUpdateStatus().isEqual(LocalDate.now()) || lead.getUpdateStatus().isBefore(LocalDate.now()))
-                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+                .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
                 .collect(Collectors.toList());
     }
     // Взять всех юзеров - конец
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
+
+
+
 
     //    =============================== В DTO - НАЧАЛО =========================================
     // Метод конвертации из класса Lead в класс LeadDTO
@@ -128,7 +190,8 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Отправленный");
-        lead.setUpdateStatus(LocalDate.now().plusDays(1));
+        lead.setUpdateStatus(LocalDate.now());
+        lead.setDateNewTry(LocalDate.now().plusDays(1));
         leadsRepository.save(lead);
     }
     // меняем статус с нового на отправленное - конец
@@ -141,7 +204,8 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Напоминание");
-        lead.setUpdateStatus(LocalDate.now().plusDays(2));
+        lead.setUpdateStatus(LocalDate.now());
+        lead.setDateNewTry(LocalDate.now().plusDays(2));
         leadsRepository.save(lead);
     }
     // меняем статус с отправленное на напоминание - конец
@@ -154,7 +218,8 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("К рассылке");
-        lead.setUpdateStatus(LocalDate.now().plusDays(90));
+        lead.setUpdateStatus(LocalDate.now());
+        lead.setDateNewTry(LocalDate.now().plusDays(90));
         leadsRepository.save(lead);
     }
     // меняем статус с напоминание на К рассылке - конец
@@ -168,6 +233,7 @@ public class LeadServiceImpl implements LeadService{
         ));
         lead.setLidStatus("В работе");
         lead.setUpdateStatus(LocalDate.now());
+        lead.setDateNewTry(LocalDate.now());
         leadsRepository.save(lead);
     }
     // меняем статус с К рассылке на В работе - конец
@@ -191,9 +257,31 @@ public class LeadServiceImpl implements LeadService{
     // Метод поиска юзера по имени в БД
     public Optional<Lead> findByLeadId(Long leadId){
         return leadsRepository.findById(leadId);
-
     }
+    // Метод поиска юзера по имени в БД - конец
 
+
+    // Взять одного юзера - конец
+    @Override
+    public LeadDTO findById(Long id) {
+        log.info("Начинается поиск пользователя по id - начало");
+        Lead lead = leadsRepository.findById(id).orElseThrow();
+        log.info("Начинается поиск пользователя по id - конец");
+        return toDto(lead);
+    }
+    // Взять одного юзера - конец
+
+    // Взять одного юзера - конец
+    @Override
+    public Optional<Lead> findByIdAndToUpdate(Long id) {
+        log.info("Начинается поиск пользователя по id - начало");
+        return leadsRepository.findById(id);
+    }
+    // Взять одного юзера - конец
+
+    public Optional<User> findByUserName(String username){
+        return userRepository.findByUsername(username);
+    }
 
     // Перевод юзера в дто - начало
     private LeadDTO toDto(Lead lead){

@@ -1,11 +1,13 @@
 <th:block th:fragment="content" xmlns:th="http://www.w3.org/1999/xhtml">
 
-    <!-- ===================== CHOOSE STRAT ========================== -->
+    <!-- ===================== CHOOSE START ========================== -->
 
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="lead__card">
         <div class="container">
             <h2 class="section-title">ЛИД КАБИНЕТ</h2>
             <div class="tabs__lead">
+                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="tabs__btn__lead">
                     <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Новые</button>
                     <button class="tabs__btn__lead-item" data-button="content-2">Отправленые</button>
@@ -13,35 +15,36 @@
                     <button class="tabs__btn__lead-item" data-button="content-4">К расслыке</button>
                     <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
                 </div>
-                <div class="tabs__content-lead">
-                    
+                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
+                <div class="tabs__content-lead">
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
                     <div class="card__remember">
                         <div class="card__remember__box">
                             <div class="card_remember-content">
                                 <!-- The text field -->
-                                <textarea class="card__remember-text" type="text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+                                <textarea class="card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
 
                                 <!-- The button used to copy the text -->
                                 <button class="card_remember-content__btn" onclick="myFunction1()">предложение</button>
                             </div>
                             <div class="card_remember-content">
                                 <!-- The text field -->
-                                <textarea class="card__remember-text" type="text" th:utext="${promoTexts[1]}" id="myInput2"></textarea>
+                                <textarea class="card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>
 
                                 <!-- The button used to copy the text -->
                                 <button class="card_remember-content__btn" onclick="myFunction2()">напоминание</button>
                             </div>
                             <div class="card_remember-content">
                                 <!-- The text field -->
-                                <textarea class="card__remember-text" type="text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>
+                                <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>
 
                                 <!-- The button used to copy the text -->
                                 <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>
                             </div>
                             <div class="card_remember-content">
                                 <!-- The text field -->
-                                <textarea class="card__remember-text" type="text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>
+                                <textarea class="card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>
 
                                 <!-- The button used to copy the text -->
                                 <button class="card_remember-content__btn" onclick="myFunction4()">оплата</button>
@@ -59,12 +62,11 @@
 
                         </div>
                     </div>
-
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
                     
                     
     
-                    <!-- СПИСОК КАРТОЧЕК 1 -->
-                    
+                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                     <div class="tabs__content__lead-item tabs__content__lead-item--active" id="content-1">
                         
                         
@@ -109,7 +111,7 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
                                     <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
@@ -135,7 +137,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -161,7 +163,7 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
                                 <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
@@ -187,7 +189,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -213,7 +215,7 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
                                 <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
@@ -239,7 +241,7 @@
                                     </form>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.updateStatus}">Дата смены статуса Лида</div>
+                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
                                         <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
@@ -265,7 +267,7 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
                                 <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
@@ -317,7 +319,7 @@
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="post" th:action="'lead/edit/' + ${lead.id}">
+                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
                                 <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>

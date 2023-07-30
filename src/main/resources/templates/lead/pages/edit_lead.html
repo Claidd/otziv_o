@@ -1,0 +1,117 @@
+<!--<th:block th:fragment="default(route)" xmlns:th="http://www.w3.org/1999/xhtml">-->
+    <!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+        <head>
+            <!-- ==================== META ======================== -->
+            <th:block th:insert="~{fragments/common :: meta}"></th:block>
+            <!-- ==================== STYLE ======================== -->
+            <th:block th:insert="~{fragments/common :: styles}"></th:block>
+            <!-- ==================== TITLE ======================== -->
+            <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+        </head>
+        <body>
+
+                <!-- создаем внешнюю обертку -->
+                <div class="wrapper">
+                    <header th:replace="~{fragments/header :: header}"></header>
+
+                    <!-- ==================== MAIN START ======================== -->
+
+                    <!-- ==================== FRAGMENT: title ======================== -->
+<!--                    <th:block th:switch="${route}">>-->
+<!--                        <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>-->
+<!--                        &lt;!&ndash;        <th:block th:case="leads_list">Список 2 лидов</th:block>&ndash;&gt;-->
+<!--                        <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>-->
+
+<!--                    </th:block>-->
+
+                    <!-- ===================== MAIN END ======================== -->
+                    <section class="edit__lead">
+                        <div class="container">
+                            <h2 class="section-title">РЕДАКТИРОВАНИЕ ЛИДА</h2>
+                            <div class="edit__box">
+                                <form th:object="${editLeadDto}" method="post">
+                                    <div class="mb-3" >
+                                        <label for="inputCompanyName" class="form-label">Телефон</label>
+                                        <input type="text" name="telephoneLead" th:field="*{telephoneLead}" th:value="${editLeadDto.getTelephoneLead()}" class="form-control" id="inputTelephoneLead" aria-describedby="emailHelp">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3" >
+                                        <label for="inputFio" class="form-label">Город</label>
+                                        <input type="text" name="cityLead" th:field="*{cityLead}" th:value="${editLeadDto.getCityLead()}" class="form-control" id="cityLead" aria-describedby="emailHelp">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('cityLead')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Комментарий</label>
+                                        <input type="text" th:field="*{commentsLead}"  th:value="${editLeadDto.getCommentsLead()}" name="commentsLead" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsLead')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Автор</label>
+                                        <input type="text" th:field="*{operatorId}"  th:value="${editLeadDto.getOperatorId()}" name="operatorId" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('operatorId')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Статус</label>
+                                        <input type="text" th:field="*{lidStatus}"  th:value="${editLeadDto.getLidStatus()}" name="lidStatus" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('lidStatus')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Дата создания</label>
+                                        <input type="text" th:field="*{createDate}"  th:value="${editLeadDto.getCreateDate()}" name="createDate" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('createDate')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Дата изменений</label>
+                                        <input type="text" th:field="*{updateStatus}"  th:value="${editLeadDto.getUpdateStatus()}" name="updateStatus" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('updateStatus')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Дата следующей рассылки</label>
+                                        <input type="text" th:field="*{dateNewTry}"  th:value="${editLeadDto.getDateNewTry()}" name="dateNewTry" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('dateNewTry')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <!-- <div class="mb-3">
+                                        <label for="inputPhone" class="form-label">Телефон</label>
+                                        <input type="text" th:field="*{phoneNumber}" th:value="${editLeadDto.getCommentsLead()}" name="phoneNumber" class="form-control" id="inputPhone" placeholder="Введите номер телефона">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('phoneNumber')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                              
+                                    <div class="mb-3">
+                                        <label for="inputRole" class="form-label">Роль</label> <br>
+                                        <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
+                                            <option th:each="role : ${editLeadDto.roles}"  th:value="${role}" th:text="${role.name}"></option>
+                                            <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option>
+                                        </select>
+                                    </div>
+                            
+                                    <div class="mb-3">
+                                        <label for="inputLink" class="form-label">Активность</label>
+                                        <input type="checkbox" th:checked="${editLeadDto.isActive()}" th:field="*{active}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
+                                    </div> -->
+                            
+                            
+                            
+                                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                </form>
+                            </div>
+                        </div> <!-- container -->
+                    </section>
+                    <!-- ==================== EDIT LEAD START ======================== -->
+
+                    <!-- ===================== EDIT LEAD END ========================= -->
+
+                    <header th:replace="~{fragments/footer2 :: footer}"></header>
+                </div> <!-- wrapper -->
+                <th:block th:insert="~{fragments/common :: js}"></th:block>
+        </body>
+    </html>
+<!--</th:block>-->

@@ -1,17 +1,17 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.LeadService;
 import jakarta.validation.Valid;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
 import java.security.Principal;
@@ -65,6 +65,37 @@ public class EditLeadController {
     }
     // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - КОНЕЦ  ===============================
 
+    @GetMapping("lead/edit/{leadId}")
+    public String editLead(@PathVariable final Long leadId, Model model){
+        System.out.println(leadId);
+//        model.put("route", "edit");
+        model.addAttribute("editLeadDto", leadService.findById(leadId));
+        return "lead/pages/edit_lead";
+    }
+
+    //Сохранение отредактированного лида
+    @PostMapping("lead/edit/{leadId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public String editLead(@PathVariable final Long leadId,
+                           @ModelAttribute("editLeadDto") @Valid LeadDTO leadDTO, BindingResult bindingResult
+                           ){
+        System.out.println(leadId);
+        System.out.println(leadDTO.getId());
+        System.out.println(leadDTO.getTelephoneLead());
+        System.out.println(leadDTO.getUpdateStatus());
+        log.info("0. Валидация на повторный телефон");
+        leadValidation.validate(leadDTO, bindingResult);
+        log.info("1. Валидация данных");
+        /*Проверяем на ошибки*/
+        if (bindingResult.hasErrors()) {
+            log.info("1.1 Вошли в ошибку");
+            return "lead/pages/edit_lead";
+        }
+        log.info("Начинаем обновлять Лида");
+        leadService.updateProfile(leadDTO, leadId);
+        log.info("Обновление лида прошло успешно");
+        return "redirect:/lead";
+    }
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
 
@@ -129,11 +160,9 @@ public class EditLeadController {
 
 
 
-    @GetMapping("lead/edit/{leadId}")
-    public ModelAndView editLead(@PathVariable final String leadId, final Map<String, Object> model){
-        model.put("route", "edit");
-        return new ModelAndView("lead/layouts/edit", model);
-    }
+
+
+
 
 
 }

@@ -8,6 +8,8 @@ import com.hunt.otziv.a_login.repository.RoleRepository;
 import com.hunt.otziv.a_login.repository.UserRepository;
 
 import com.hunt.otziv.a_login.services.service.UserService;
+import com.hunt.otziv.l_lead.dto.LeadDTO;
+import com.hunt.otziv.l_lead.model.Lead;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -75,6 +77,7 @@ public class UserServiceImpl  implements UserService {
 
     // Обновить профиль юзера - начало
     @Override
+    @Transactional
     public void updateProfile(RegistrationUserDTO userDTO, String role) {
         log.info("Вошли в обновление");
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
@@ -189,6 +192,9 @@ public class UserServiceImpl  implements UserService {
         return toDto(user);
     }
     // Взять одного юзера - конец
+
+    // Взять одного юзера - начало
+
 
 
 

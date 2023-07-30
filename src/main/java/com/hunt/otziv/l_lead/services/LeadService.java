@@ -7,15 +7,28 @@ import com.hunt.otziv.l_lead.model.Lead;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Optional;
 
 public interface LeadService {
-
+    //    =============================== СОЗДАНИЕ И ОБНОВЛЕНИЕ =========================================
+    // перевод лида в дто
     LeadDTO convertFromLead(Lead lead);
-
+    // сохранение нового лида
     Lead save(LeadDTO leadDTO, String id);
+    // метод обнолвдения данных лида
+    void updateProfile(LeadDTO leadDTO, Long id);
+    // метод поиска лидав по id
+    Optional<Lead> findByIdAndToUpdate(Long id);
+    public LeadDTO findById(Long id);
 
+
+    //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
+    // метод вывода всех лидов
     List<LeadDTO> getAllLeads(String status, String keyword);
+    // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
     public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords);
+    // метод поиска одного лида по id и перевод его в дто
+
 
 
 
