@@ -65,20 +65,6 @@
                                             <option th:unless="${managers.contains(editLeadDto.operator)}" th:value="${editLeadDto.manager}" th:text="${editLeadDto.manager}" th:selected="${editLeadDto.manager != null}"></option>
                                         </select>
                                     </div>
-
-                                    <!-- <div class="mb-3">
-                                        <label for="inputRole" class="form-label">Роль</label> <br>
-                                        <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
-                                            <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option>
-                                        </select>
-                                    </div> -->
-
-                                    <!-- <div class="mb-3">
-                                        <label for="inputEmail" class="form-label">Менеджер</label>
-                                        <input type="text" th:field="*{manager}"  th:value="${editLeadDto.getManager()}" name="manager" class="form-control" id="inputManager" aria-describedby="emailHelp">
-                            <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
-                                        <!-- <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}" th:text="${err}">Validation error</small>
-                                    </div> --> 
                                     <div class="mb-3">
                                         <label for="inputEmail" class="form-label">Статус</label>
                                         <input type="text" th:field="*{lidStatus}"  th:value="${editLeadDto.getLidStatus()}" name="lidStatus" class="form-control" id="inputEmail" aria-describedby="emailHelp">
@@ -103,28 +89,7 @@
                             <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
                                         <small class="form-text text-danger" th:each="err : ${#fields.errors('dateNewTry')}" th:text="${err}">Validation error</small>
                                     </div>
-                                    <!-- <div class="mb-3">
-                                        <label for="inputPhone" class="form-label">Телефон</label>
-                                        <input type="text" th:field="*{phoneNumber}" th:value="${editLeadDto.getCommentsLead()}" name="phoneNumber" class="form-control" id="inputPhone" placeholder="Введите номер телефона">
-                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('phoneNumber')}" th:text="${err}">Validation error</small>
-                                    </div>
-                                              
-                                    <div class="mb-3">
-                                        <label for="inputRole" class="form-label">Роль</label> <br>
-                                        <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
-                                            <option th:each="role : ${editLeadDto.roles}"  th:value="${role}" th:text="${role.name}"></option>
-                                            <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option>
-                                        </select>
-                                    </div>
-                            
-                                    <div class="mb-3">
-                                        <label for="inputLink" class="form-label">Активность</label>
-                                        <input type="checkbox" th:checked="${editLeadDto.isActive()}" th:field="*{active}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
-                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
-                                    </div> -->
-                            
-                            
-                            
+                          
                                     <button type="submit" class="btn btn-primary">Сохранить</button>
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 </form>

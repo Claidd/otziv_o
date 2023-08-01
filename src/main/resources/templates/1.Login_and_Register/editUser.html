@@ -57,7 +57,11 @@
             <label for="inputRole" class="form-label">Роль</label> <br>
             <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
                 <!-- <option th:each="role : ${editUserDto.roles}"  th:value="${role}" th:text="${role.name}"></option> -->
-                <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option>
+                <!-- <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option> -->
+
+
+                <option th:each="role : ${roles}" th:value="${role.name}" th:text="${role.name}" th:selected="${role.name == editUserDto.getRoles().get(0).getName()}"></option>
+                <!-- <option th:unless="${roles.contains(editUserDto.getRoles())}" th:value="${editUserDto.getRoles()}" th:text="${editUserDto.getRoles()}" th:selected="${editUserDto.getRoles() != null}"></option> -->
             </select>
         </div>
 

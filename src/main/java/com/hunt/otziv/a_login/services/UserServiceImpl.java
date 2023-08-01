@@ -110,6 +110,7 @@ public class UserServiceImpl  implements UserService {
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.isActive(), saveUser.isActive())){
             saveUser.setActive(userDTO.isActive());
+            System.out.println(userDTO.isActive());
             isChanged = true;
             log.info("Обновили активность");
         }
@@ -194,7 +195,7 @@ public class UserServiceImpl  implements UserService {
 
     @Override
     public List<String> getAllUsersByFio(String roleName) {
-        return userRepository.findAllFioByRole(roleName);
+        return userRepository.findAllActiveFioByRole(roleName);
     }
     // Взять одного юзера - конец
 

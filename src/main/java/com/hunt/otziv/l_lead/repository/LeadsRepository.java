@@ -16,6 +16,5 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
     Optional<Lead> findById(Long leadId);
 
-
     List<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword);
 }
