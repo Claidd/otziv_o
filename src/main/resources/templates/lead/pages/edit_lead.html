@@ -37,21 +37,39 @@
                                         <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation error</small>
                                     </div>
                                     <div class="mb-3" >
-                                        <label for="inputFio" class="form-label">Город</label>
+                                        <label for="cityLead" class="form-label">Город</label>
                                         <input type="text" name="cityLead" th:field="*{cityLead}" th:value="${editLeadDto.getCityLead()}" class="form-control" id="cityLead" aria-describedby="emailHelp">
                                         <small class="form-text text-danger" th:each="err : ${#fields.errors('cityLead')}" th:text="${err}">Validation error</small>
                                     </div>
                                     <div class="mb-3">
-                                        <label for="inputEmail" class="form-label">Комментарий</label>
+                                        <label for="inputComments" class="form-label">Комментарий</label>
                                         <input type="text" th:field="*{commentsLead}"  th:value="${editLeadDto.getCommentsLead()}" name="commentsLead" class="form-control" id="inputEmail" aria-describedby="emailHelp">
                             <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
                                         <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsLead')}" th:text="${err}">Validation error</small>
                                     </div>
+
                                     <div class="mb-3">
-                                        <label for="inputEmail" class="form-label">Автор</label>
-                                        <input type="text" th:field="*{operatorId}"  th:value="${editLeadDto.getOperatorId()}" name="operatorId" class="form-control" id="inputEmail" aria-describedby="emailHelp">
+                                        <label for="inputOperator" class="form-label">Оператор</label> <br>
+                                        <select id="inputRole" name="operator"  class="form-control form-select form-select-lg">
+                                            <option th:each="operator : ${operators}" th:value="${operator}" th:text="${operator}" th:selected="${operator == editLeadDto.operator}"></option>
+                                            <!-- <option th:text="${editLeadDto.operator}" th:field="*{operator}"  th:value="${editLeadDto.getOperator()}" name="operator" class="form-control" id="inputOperator" aria-describedby="operatorChange"></option> -->
+                                            <!-- <option th:each="role : ${editLeadDto.roles}" th:field="*{commentsLead}"  th:value="${role}" th:text="${role.name}"></option> -->
+                                            <!-- <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option> -->
+                                        </select>
+                                    </div>
+
+                                    <!-- <div class="mb-3">
+                                        <label for="inputRole" class="form-label">Роль</label> <br>
+                                        <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
+                                            <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option>
+                                        </select>
+                                    </div> -->
+
+                                    <div class="mb-3">
+                                        <label for="inputEmail" class="form-label">Менеджер</label>
+                                        <input type="text" th:field="*{manager}"  th:value="${editLeadDto.getManager()}" name="manager" class="form-control" id="inputManager" aria-describedby="emailHelp">
                             <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
-                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('operatorId')}" th:text="${err}">Validation error</small>
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}" th:text="${err}">Validation error</small>
                                     </div>
                                     <div class="mb-3">
                                         <label for="inputEmail" class="form-label">Статус</label>

@@ -18,8 +18,11 @@ public interface UserService extends UserDetailsService{
     User save(RegistrationUserDTO userDto);
     UserDetails loadUserByUsername(String username);
 
-    public List<RegistrationUserDTO> getAllUsers();
+    List<RegistrationUserDTO> getAllUsers();
+
     RegistrationUserDTO findById(Long id);
+
+    List<String> getAllUsersByFio();
 
 //
 //    Object getUserByPrincipal(Principal principal);

@@ -56,8 +56,8 @@
         <div class="mb-3">
             <label for="inputRole" class="form-label">Роль</label> <br>
             <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
-                <option th:each="role : ${editUserDto.roles}"  th:value="${role}" th:text="${role.name}"></option>
-                <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option>
+                <!-- <option th:each="role : ${editUserDto.roles}"  th:value="${role}" th:text="${role.name}"></option> -->
+                <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option>
             </select>
         </div>
 

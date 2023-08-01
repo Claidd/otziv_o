@@ -61,8 +61,12 @@ public class Lead {
 //    @OneToOne( fetch = FetchType.LAZY)
 //    @JoinColumn(name = "operator_id", unique = false, nullable = true)
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "operator_id", unique = false, nullable = true)
+    @JoinColumn(name = "operator", unique = false, nullable = true)
     private User operator;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager", unique = false, nullable = true)
+    private User manager;
 
 
     // Геттеры и сеттеры

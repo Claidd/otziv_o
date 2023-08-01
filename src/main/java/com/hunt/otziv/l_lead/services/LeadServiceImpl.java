@@ -40,11 +40,10 @@ public class LeadServiceImpl implements LeadService{
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
                 .operator(userRepository.findByUsername(username).orElseThrow())
-
+                .manager(userRepository.findByUsername(username).orElseThrow())
                 .build();
         log.info("5. Юзер успешно создан");
 //        this.save(user);
-        System.out.println(lead.getLidStatus());
         return leadsRepository.save(lead);
     }
     // Создание нового пользователя "Клиент" - конец
@@ -93,6 +92,14 @@ public class LeadServiceImpl implements LeadService{
             isChanged = true;
             log.info("Обновили дату изменения");
         }
+        /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator().getFio())){
+            System.out.println(leadDTO.getOperator());
+            System.out.println(saveLead.getOperator().getFio());
+            saveLead.setOperator(findByFio(leadDTO.getOperator()).orElseThrow());
+            isChanged = true;
+            log.info("Обновили оператора");
+        }
         /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
          * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
         if  (isChanged){
@@ -103,6 +110,10 @@ public class LeadServiceImpl implements LeadService{
         else {
             log.info("Изменений не было, лид в БД не изменена");
         }
+    }
+
+    public Optional<User> findByFio(String operator) {
+        return userRepository.findByFio(operator);
     }
     // Обновить профиль юзера - конец
     //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
@@ -168,12 +179,11 @@ public class LeadServiceImpl implements LeadService{
         leadDTO.setCreateDate(lead.getCreateDate());
         leadDTO.setUpdateStatus(lead.getUpdateStatus());
         leadDTO.setDateNewTry(lead.getDateNewTry());
-
         // Обратите внимание, что здесь мы присваиваем идентификатор пользователя вместо всего объекта User
         // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
-        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getFio() : null);
+        leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator().getFio() : null);
+        leadDTO.setManager(lead.getManager() != null ? lead.getManager().getFio() : null);
 //        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getId() : null);
-
         return leadDTO;
     }
     //    =============================== В DTO - КОНЕЦ =========================================
@@ -295,7 +305,8 @@ public class LeadServiceImpl implements LeadService{
                 .createDate(lead.getCreateDate())
                 .updateStatus(lead.getUpdateStatus())
                 .dateNewTry(lead.getDateNewTry())
-                .operatorId(lead.getOperator().getFio())
+                .operator(lead.getOperator().getFio())
+                .manager(lead.getManager().getFio())
 //                .operatorId(lead.getOperator().getId())
                 .build();
     }

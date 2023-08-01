@@ -960,7 +960,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 70px;
+    height: 75px;
     /* word-wrap: break-word; */
     overflow-x:hidden; 
     border-radius: 1.2rem;

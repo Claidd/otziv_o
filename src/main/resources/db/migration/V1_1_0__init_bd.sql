@@ -55,9 +55,14 @@ create TABLE IF NOT EXISTS leads (
     create_date DATE,
     update_status DATE,
     date_new_try DATE,
-    operator_id bigint,
-    CONSTRAINT fk_operator_id
-        FOREIGN KEY (operator_id)
+    operator bigint,
+    CONSTRAINT fk_operator
+        FOREIGN KEY (operator)
+        REFERENCES users (id)
+        ON delete CASCADE,
+    manager bigint,
+    CONSTRAINT fk_manager
+        FOREIGN KEY (manager)
         REFERENCES users (id)
         ON delete CASCADE, primary key (id)) ENGINE=InnoDB;
 

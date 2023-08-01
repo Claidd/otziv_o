@@ -191,6 +191,11 @@ public class UserServiceImpl  implements UserService {
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(user);
     }
+
+    @Override
+    public List<String> getAllUsersByFio() {
+        return userRepository.findAllFio();
+    }
     // Взять одного юзера - конец
 
     // Взять одного юзера - начало

@@ -20,6 +20,7 @@ public interface LeadService {
     // метод поиска лидав по id
     Optional<Lead> findByIdAndToUpdate(Long id);
     public LeadDTO findById(Long id);
+    Optional<User> findByFio(String operator);
 
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================

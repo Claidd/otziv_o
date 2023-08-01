@@ -112,7 +112,7 @@
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                    <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                    <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
@@ -164,7 +164,7 @@
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
@@ -216,7 +216,7 @@
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
@@ -268,7 +268,7 @@
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
@@ -320,7 +320,7 @@
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operatorId}">Имя Оператора</div>
+                                <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>

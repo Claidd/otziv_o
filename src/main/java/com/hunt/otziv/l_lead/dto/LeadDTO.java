@@ -3,10 +3,7 @@ package com.hunt.otziv.l_lead.dto;
 import com.hunt.otziv.a_login.model.User;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import jakarta.validation.constraints.NotEmpty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 
@@ -48,7 +45,8 @@ public class LeadDTO {
 
     //    привязка юзера-оператора
 
-    private String operatorId;
+    private String operator;
+    private String manager;
 
 //    ПОЯСНЕНИЕ:
 //  Класс LeadDTO является простым Java-классом, который представляет DTO (Data Transfer Object) для класса Lead.
@@ -58,6 +56,7 @@ public class LeadDTO {
 //    Использование DTO позволяет отделить внутреннее представление сущности Lead от данных, передаваемых вне системы
 //    (например, в HTTP-запросах или ответах). Это помогает избежать утечек данных и ненужных зависимостей между слоями
 //    приложения.
+
 
 
 }

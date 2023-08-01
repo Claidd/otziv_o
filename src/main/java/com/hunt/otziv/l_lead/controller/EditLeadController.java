@@ -1,8 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
-import com.hunt.otziv.a_login.dto.RegistrationUserDTO;
+import com.hunt.otziv.a_login.services.service.UserService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
-import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.LeadService;
 import jakarta.validation.Valid;
 
@@ -22,10 +21,12 @@ import java.util.Map;
 public class EditLeadController {
     private final LeadService leadService;
     private final LeadValidation leadValidation;
+    private final UserService userService;
 
-    public EditLeadController(LeadService leadService, LeadValidation leadValidation) {
+    public EditLeadController(LeadService leadService, LeadValidation leadValidation, UserService userService) {
         this.leadService = leadService;
         this.leadValidation = leadValidation;
+        this.userService = userService;
     }
 
     // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - НАЧАЛО  ===============================
@@ -70,6 +71,8 @@ public class EditLeadController {
         System.out.println(leadId);
 //        model.put("route", "edit");
         model.addAttribute("editLeadDto", leadService.findById(leadId));
+        model.addAttribute("operators", userService.getAllUsersByFio());
+
         return "lead/pages/edit_lead";
     }
 
@@ -83,6 +86,7 @@ public class EditLeadController {
         System.out.println(leadDTO.getId());
         System.out.println(leadDTO.getTelephoneLead());
         System.out.println(leadDTO.getUpdateStatus());
+        System.out.println(leadDTO.getOperator());
         log.info("0. Валидация на повторный телефон");
         leadValidation.validate(leadDTO, bindingResult);
         log.info("1. Валидация данных");
