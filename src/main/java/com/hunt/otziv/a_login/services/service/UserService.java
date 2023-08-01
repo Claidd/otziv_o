@@ -22,7 +22,7 @@ public interface UserService extends UserDetailsService{
 
     RegistrationUserDTO findById(Long id);
 
-    List<String> getAllUsersByFio();
+    List<String> getAllUsersByFio(String roleName);
 
 //
 //    Object getUserByPrincipal(Principal principal);

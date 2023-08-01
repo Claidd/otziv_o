@@ -71,7 +71,8 @@ public class EditLeadController {
         System.out.println(leadId);
 //        model.put("route", "edit");
         model.addAttribute("editLeadDto", leadService.findById(leadId));
-        model.addAttribute("operators", userService.getAllUsersByFio());
+        model.addAttribute("operators", userService.getAllUsersByFio("ROLE_CALLING"));
+        model.addAttribute("managers", userService.getAllUsersByFio("ROLE_MANAGER"));
 
         return "lead/pages/edit_lead";
     }

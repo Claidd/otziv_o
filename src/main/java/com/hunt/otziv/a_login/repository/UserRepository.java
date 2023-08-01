@@ -15,8 +15,8 @@ public interface UserRepository extends CrudRepository<User, Long> {
     List<User> findAll();
     Optional<User> findByFio(String operator);
 
-    @Query("SELECT u.fio FROM User u")
-    List<String> findAllFio();
+    @Query("SELECT u.fio FROM User u JOIN u.roles r WHERE r.name = :roleName")
+    List<String> findAllFioByRole(String roleName);
 
 
 //    User findFirstByActivateCode(String activateCode);

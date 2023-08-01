@@ -193,8 +193,8 @@ public class UserServiceImpl  implements UserService {
     }
 
     @Override
-    public List<String> getAllUsersByFio() {
-        return userRepository.findAllFio();
+    public List<String> getAllUsersByFio(String roleName) {
+        return userRepository.findAllFioByRole(roleName);
     }
     // Взять одного юзера - конец
 

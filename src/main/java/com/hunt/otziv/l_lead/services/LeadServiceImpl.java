@@ -100,6 +100,14 @@ public class LeadServiceImpl implements LeadService{
             isChanged = true;
             log.info("Обновили оператора");
         }
+        /*Проверяем не равен ли апдейт менеджера, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getManager(), saveLead.getManager().getFio())){
+            System.out.println(leadDTO.getManager());
+            System.out.println(saveLead.getManager().getFio());
+            saveLead.setManager(findByFio(leadDTO.getManager()).orElseThrow());
+            isChanged = true;
+            log.info("Обновили менеджера");
+        }
         /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
          * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
         if  (isChanged){

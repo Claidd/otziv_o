@@ -51,10 +51,18 @@
                                     <div class="mb-3">
                                         <label for="inputOperator" class="form-label">Оператор</label> <br>
                                         <select id="inputRole" name="operator"  class="form-control form-select form-select-lg">
+                                            <!-- <option th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}">Choose an operator</option> Add this line for the default empty option -->
                                             <option th:each="operator : ${operators}" th:value="${operator}" th:text="${operator}" th:selected="${operator == editLeadDto.operator}"></option>
-                                            <!-- <option th:text="${editLeadDto.operator}" th:field="*{operator}"  th:value="${editLeadDto.getOperator()}" name="operator" class="form-control" id="inputOperator" aria-describedby="operatorChange"></option> -->
-                                            <!-- <option th:each="role : ${editLeadDto.roles}" th:field="*{commentsLead}"  th:value="${role}" th:text="${role.name}"></option> -->
-                                            <!-- <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}"></option> -->
+                                            <option th:unless="${operators.contains(editLeadDto.operator)}" th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}" th:selected="${editLeadDto.operator != null}"></option>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="manager" class="form-label">Менеджер</label> <br>
+                                        <select id="inputRole" name="manager"  class="form-control form-select form-select-lg">
+                                            <!-- <option th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}">Choose an operator</option> Add this line for the default empty option -->
+                                            <option th:each="manager : ${managers}" th:value="${manager}" th:text="${manager}" th:selected="${manager == editLeadDto.manager}"></option>
+                                            <option th:unless="${managers.contains(editLeadDto.operator)}" th:value="${editLeadDto.manager}" th:text="${editLeadDto.manager}" th:selected="${editLeadDto.manager != null}"></option>
                                         </select>
                                     </div>
 
@@ -65,12 +73,12 @@
                                         </select>
                                     </div> -->
 
-                                    <div class="mb-3">
+                                    <!-- <div class="mb-3">
                                         <label for="inputEmail" class="form-label">Менеджер</label>
                                         <input type="text" th:field="*{manager}"  th:value="${editLeadDto.getManager()}" name="manager" class="form-control" id="inputManager" aria-describedby="emailHelp">
                             <!--            <div id="emailHelp" class="form-text">Ваш мейл не будет показываться никому кроме вас</div>-->
-                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}" th:text="${err}">Validation error</small>
-                                    </div>
+                                        <!-- <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}" th:text="${err}">Validation error</small>
+                                    </div> --> 
                                     <div class="mb-3">
                                         <label for="inputEmail" class="form-label">Статус</label>
                                         <input type="text" th:field="*{lidStatus}"  th:value="${editLeadDto.getLidStatus()}" name="lidStatus" class="form-control" id="inputEmail" aria-describedby="emailHelp">
