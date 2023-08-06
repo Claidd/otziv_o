@@ -1,0 +1,63 @@
+
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    <title>Добавление ботов</title>
+</head>
+<body>
+
+<!-- создаем внешнюю обертку -->
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-- ==================== MAIN START ======================== -->
+
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+    <div class="container">
+        <div class="row py-2 pt-1 mt-1">
+            <div class="col-12 pt-5">
+                <form th:action="@{/bots/bot_add}" method="post" th:object="${bot}">
+                    <div class="form-group">
+                        <label for="login">Укажите номер телефона</label>
+                        <input type="text" id="login" th:field="*{login}" class="form-control"
+                               placeholder="Введите логин">
+                        <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('login')}" th:text="${err}">Validation
+                            error</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Пароль</label>
+                        <input type="password" id="password" th:field="*{password}" class="form-control"
+                               placeholder="Введите пароль">
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('password')}" th:text="${err}">Validation
+                            error</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="fio">Укажите Фамилию Имя Отчество</label>
+                        <input type="text" id="fio" th:field="*{fio}" class="form-control"
+                               placeholder="пример Иванов Иван Иванович">
+                        <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('fio')}" th:text="${err}">Validation
+                            error</small>
+                    </div>
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+
+    <!-- ===================== MAIN END ======================== -->
+
+    <header th:replace="~{fragments/footer2 :: footer}"></header>
+</div> <!-- wrapper -->
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+</body>
+</html>

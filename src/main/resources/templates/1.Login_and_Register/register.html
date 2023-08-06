@@ -18,7 +18,7 @@
 </head>
 
 <body>
-
+<!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 <header th:replace="~{fragments/header :: header}"></header>
 
 <div class="container">
@@ -28,7 +28,7 @@
                 <div class="form-group">
                     <label for="username">Укажите логин</label>
                     <input type="text" id="username" th:field="*{username}" class="form-control"
-                           placeholder="Ведите логин">
+                           placeholder="Введите логин">
                     <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
                     <small class="form-text text-danger" th:each="err : ${#fields.errors('username')}" th:text="${err}">Validation
                         error</small>
@@ -75,7 +75,7 @@
         </div>
     </div>
 </div>
-
+<!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 <header th:replace="~{fragments/footer :: footer}"></header>
 
 

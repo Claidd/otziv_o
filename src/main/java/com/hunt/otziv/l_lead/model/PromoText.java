@@ -12,17 +12,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIgnoreProperties({"hibernateLazyInitializer"})
+//@JsonIgnoreProperties({"hibernateLazyInitializer"})
 @Table(name = "text_promo")
-
 public class PromoText {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
-    private Integer id;
+    private Long id;
 
-    @Column(name = "promo_text", length = 2000,nullable = false)
+    @Column(name = "promo_text")
     private String promoText;
 
 }

@@ -1,6 +1,6 @@
 package com.hunt.otziv.l_lead.controller;
 
-import com.hunt.otziv.a_login.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.LeadService;
 import jakarta.validation.Valid;

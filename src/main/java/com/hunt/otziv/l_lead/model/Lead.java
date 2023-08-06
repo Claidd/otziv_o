@@ -1,7 +1,7 @@
 package com.hunt.otziv.l_lead.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.hunt.otziv.a_login.model.User;
+import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

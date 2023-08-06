@@ -1,7 +1,5 @@
 package com.hunt.otziv.l_lead.dto;
 
-import com.hunt.otziv.a_login.model.User;
-import com.hunt.otziv.l_lead.model.LeadStatus;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
