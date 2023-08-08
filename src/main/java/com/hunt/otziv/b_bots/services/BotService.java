@@ -23,6 +23,6 @@ public interface BotService {
 
     // Найти бота по id
     Bot findBotById(Long id);
-
+    // Найти всех ботов
     List<BotDTO> getAllBots();
 }

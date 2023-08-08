@@ -1,0 +1,106 @@
+
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    <title>Добавление Категорий</title>
+</head>
+<body>
+
+<!-- создаем внешнюю обертку -->
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-- ==================== MAIN START ======================== -->
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+    <div class="container mt-5">
+        <h2 class="section-title">СОЗДАТЬ НОВУЮ ПОДКАТЕГОРИЮ</h2>
+        <div class="row py-2 pt-1 mt-1">
+            <div class="col-12 pt-5">
+                <form th:action="@{'/subcategories/' + ${categoryId}+ '/' + ${categoryTitle}}" th:object="${subCategoryDTO}" method="post">
+                    <div class="form-group">
+                        <label for="subCategoryTitle">Добавление новой подкатегрии</label>
+                        <input type="text" id="subCategoryTitle" th:field="*{subCategoryTitle}" class="form-control"
+                               placeholder="Введите название новой подкатегрии">
+                        <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('subCategoryTitle')}" th:text="${err}">Validation
+                            error</small>
+                    </div>
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button  type="submit" class="btn btn-primary mt-3">Добавить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+    <div class="container mt-5">
+        <h2 class="section-title">СПИСОК ПОДКАТЕГОРИЙ</h2>
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th scope="col">Название категории</th>
+                <th scope="col">Название подкатегории</th>
+                <th scope="col">Изменить</th>
+                <th scope="col">Удалить</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="subcategory : ${subCategories}">
+                <th scope="row" th:text="${categoryTitle}">Название категории</th>
+                <th scope="row" th:text="${subcategory.subCategoryTitle}">Название подкатегории</th>
+<!--                <td>-->
+<!--                    <form th:method="get" th:action="'/subcategories/' + ${subcategory.id}">-->
+<!--                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
+<!--                        <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>-->
+<!--                    </form>-->
+<!--                </td>-->
+                <td>
+                    <form th:method="get" th:action="'/subcategories/update/' + ${categoryId} + '/' + ${categoryTitle} + '/' + ${subcategory.id}">
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                    </form>
+                </td>
+                <td>
+                    <form th:method="delete" th:action="'/subcategories/delete/' + ${categoryId} + '/' + ${categoryTitle} + '/' + ${subcategory.id}" >
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+
+<!--<h1>Список подкатегорий для категории: <span th:text="${category.categoryTitle}"></span></h1>-->
+<!--<ul>-->
+<!--    <li th:each="subCategory : ${subCategories}">-->
+<!--        <span th:text="${subCategory.subCategoryTitle}"></span>-->
+<!--    </li>-->
+<!--</ul>-->
+
+<!--<h2>Создать новую подкатегорию</h2>-->
+<!--<form th:action="@{'/subcategories/' + ${categoryId}}" th:object="${subCategoryDTO}" method="post">-->
+<!--&lt;!&ndash;    <input type="hidden" name="categoryId" th:value="${category.id}">&ndash;&gt;-->
+<!--    <label for="subCategoryTitle">Название подкатегории:</label>-->
+<!--    <input type="text" id="subCategoryTitle" th:field="*{subCategoryTitle}" required>-->
+<!--    <button type="submit">Создать</button>-->
+<!--</form>-->
+
+
+    <!-- ===================== MAIN END ======================== -->
+<header th:replace="~{fragments/footer2 :: footer}"></header>
+</div> <!-- wrapper -->
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+</body>
+</html>

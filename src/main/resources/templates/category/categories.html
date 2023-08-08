@@ -1,0 +1,112 @@
+
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    <title>Добавление Категорий</title>
+</head>
+<body>
+
+<!-- создаем внешнюю обертку -->
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-- ==================== MAIN START ======================== -->
+
+
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+    <div class="container mt-5">
+        <h2 class="section-title">СОЗДАТЬ НОВУЮ КАТЕГОРИЮ</h2>
+        <div class="row py-2 pt-1 mt-1">
+            <div class="col-12 pt-5">
+                <form th:action="@{/categories}" method="post" th:object="${categoryDTO}">
+                    <div class="form-group">
+                        <label for="categoryTitle">Добавление новой категрии</label>
+                        <input type="text" id="categoryTitle" th:field="*{categoryTitle}" class="form-control"
+                               placeholder="Введите название новой категрии">
+                        <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('categoryTitle')}" th:text="${err}">Validation
+                            error</small>
+                    </div>
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+
+<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+<div class="container mt-5">
+    <h2 class="section-title">СПИСОК КАТЕГОРИЙ</h2>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th scope="col">Название категории</th>
+            <th scope="col">Добавить подкатегорию</th>
+            <th scope="col">Изменить</th>
+            <th scope="col">Удалить</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="category : ${categories}">
+            <th scope="row" th:text="${category.categoryTitle}">Логин</th>
+            <td>
+                <form th:method="get" th:action="'/subcategories/' + ${category.id} + '/' + ${category.categoryTitle}">
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>
+                </form>
+            </td>
+            <td>
+                <form th:method="get" th:action="'/categories/update/' + ${category.id}">
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                </form>
+            </td>
+            <td>
+                <form th:method="delete" th:action="'/categories/delete/' + ${category.id}" >
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+    <form>
+        <label for="category">Категория:</label>
+        <select id="category" name="selectedCategory.id">
+            <option value="">Выберите категорию...</option>
+            <option th:each="category : ${categories}" th:value="${category.id}" th:text="${category.categoryTitle}"></option>
+        </select>
+
+        <label for="subcategory">Подкатегория:</label>
+        <select id="subcategory" name="selectedSubcategory.id">
+            <option value="">Выберите подкатегорию...</option>
+        </select>
+    </form>
+
+    <ul>
+        <div th:each="category : ${categories}">
+            <a th:href="@{/categories/{categoryId}(categoryId=${category.id})}" th:text="${category.categoryTitle}"></a>
+            <li th:each="subcategory : ${category.subCategories}">
+                <a th:href="@{#}" th:text="${subcategory.subCategoryTitle}">efedfdfds</a>
+            </li>
+        </div>
+    </ul>
+
+    <!-- ===================== MAIN END ======================== -->
+<header th:replace="~{fragments/footer2 :: footer}"></header>
+</div> <!-- wrapper -->
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+</body>
+</html>

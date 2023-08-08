@@ -87,7 +87,19 @@ create TABLE IF NOT EXISTS text_promo (
     primary key (id)) engine=InnoDB;
 
 
+CREATE TABLE IF NOT EXISTS product_categorys (
+    product_category_id bigint NOT NULL AUTO_INCREMENT,
+    product_category_title varchar(255),
+    PRIMARY KEY (product_category_id)
+) ENGINE=InnoDB;
 
+CREATE TABLE product_subcategoryes (
+    product_subcategory_id bigint NOT NULL AUTO_INCREMENT,
+    product_category_id bigint,
+    product_subcategory_title varchar(255),
+    CONSTRAINT product_category_id_fk FOREIGN KEY (product_category_id) REFERENCES product_categorys (product_category_id) ON UPDATE CASCADE ON DELETE CASCADE,
+    PRIMARY KEY (product_subcategory_id)
+) ENGINE=InnoDB;
 
 --create table IF NOT EXISTS  reviews (
 ----    id bigint not null auto_increment,

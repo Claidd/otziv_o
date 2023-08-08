@@ -55,6 +55,16 @@
                             </a>
                         </li>
                         <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/categories}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
+                                Категории
+                            </a>
+                        </li>
+                        <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/subcategories}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
+                                Подкатегории
+                            </a>
+                        </li>
+                        <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/allUsers}"  class="nav__link  link" aria-label="Перейти на страницу нерф">
                                 Пользователи
                             </a>

@@ -1,0 +1,47 @@
+
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    <title>Добавление Категорий</title>
+</head>
+<body>
+
+<!-- создаем внешнюю обертку -->
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-- ==================== MAIN START ======================== -->
+
+
+    <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
+
+    <section class="edit__lead">
+        <div class="container">
+            <h2 class="section-title">РЕДАКТИРОВАНИЕ ЛИДА</h2>
+            <div class="edit__box">
+                <form th:object="${categoryDTO}" method="post">
+                    <div class="mb-3" >
+                        <label for="inputCategory" class="form-label">Категория</label>
+                        <input type="text" name="inputCategory" th:field="*{categoryTitle}" th:value="${categoryTitle}" class="form-control" id="inputCategory" aria-describedby="categoryTitleHelp">
+                        <small class="form-text text-danger" th:each="err : ${#fields.errors('categoryTitle')}" th:text="${err}">Validation error</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                </form>
+            </div>
+        </div> <!-- container -->
+    </section>
+    <!-- ===================== MAIN END ======================== -->
+<header th:replace="~{fragments/footer2 :: footer}"></header>
+</div> <!-- wrapper -->
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+</body>
+</html>
