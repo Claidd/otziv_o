@@ -2,7 +2,10 @@ package com.hunt.otziv.u_users.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.security.core.GrantedAuthority;
+
+import java.util.Collection;
 //implements GrantedAuthority
 
 @Data
@@ -17,6 +20,9 @@ public class Role implements GrantedAuthority {
     @Column(name = "name")
     private String name;
 
+    @ManyToMany(mappedBy = "roles")
+    @ToString.Exclude
+    private Collection<User> users;
 
     @Override
     public String getAuthority() {

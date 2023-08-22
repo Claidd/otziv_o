@@ -15,7 +15,6 @@ import java.util.List;
 public class CategoryDTO {
     private Long id;
     private String categoryTitle;
-
     private List<SubCategoryDTO> subCategories;
 
     // конструкторы, геттеры и сеттеры для других полей

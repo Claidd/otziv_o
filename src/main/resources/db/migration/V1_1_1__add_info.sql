@@ -9,13 +9,46 @@ insert into users (username, password, fio, email, phone_number, activate_code, 
 values ('alex', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Админ Админ Админович', '2.12nps@mail.ru', '89086431055', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('operator', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор Оператор Операторович', '2.12nps2@mail.ru', '89086431056', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('manager', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Менеджер Менджер Менеджерович', '2.12nps3@mail.ru', '89086431057', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
-('worker', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник Работник Работникович', '2.12nps4@mail.ru', '89086431058', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26');
+('worker', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник Работник Работникович', '2.12nps4@mail.ru', '89086431058', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('operator2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор2 Оператор Операторович', '2.12nps5@mail.ru', '89086431059', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('operator3', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор3 Оператор Операторович', '2.12nps6@mail.ru', '89086431060', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('worker2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник2 Работник Работникович', '2.12nps7@mail.ru', '89086431061', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('worker3', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник3 Работник Работникович', '2.12nps8@mail.ru', '89086431062', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('manager2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Менеджер2 Менджер Менеджерович', '2.12nps9@mail.ru', '89086431063', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26');
 
 insert into users_roles (role_id, user_id)
-values (1,1),(2,2),(3,3),(4,4) ;
+values (1,1),(2,2),(3,3),(4,4),(6,5),(6,6),(6,7),(6,8),(6,9);
 
 insert into text_promo (promo_text) values ('Здравствуйте'),('Здравствуйте2'),('Здравствуйте3'),('Здравствуйте4'),('Здравствуйте5'),('Здравствуйте6');
 
+insert into company_status (status_title)
+values ('Новый'), ('На проверке'), ('Коррекция'), ('Публикация'), ('Опубликовано'), ('Выставлен счет'), ('Оплачено');
+
+insert into operators (user_id)
+values (2);
+insert into managers (user_id)
+values (3);
+insert into workers (user_id)
+values (4);
+
+--insert into operators_users (operator_id, user_id)
+--values (1,1), (1,3);
+--insert into managers_users (manager_id, user_id)
+--values (1,1), (1,2), (1,4);
+--insert into workers_users (worker_id, user_id)
+--values (1,3), (1,1);
+
+
+
+
+--insert into operators (user_id)
+--values (2);
+--
+--insert into managers (user_id)
+--values (3);
+--
+--insert into workers (user_id)
+--values (4);
 --insert into text_promo (promo_text)
 --values ('Здравствуйте, это тексты на проверку, проверьте, пожалуйста, в течении суток. Все тексты будут нужны, и если в\n каких-то номерах что-то не подходит, напишите, пожалуйста, что исправить.\n Завтра будем публиковать, спасибо');
 

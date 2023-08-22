@@ -1,12 +1,12 @@
 package com.hunt.otziv.u_users.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
 import java.time.LocalDate;
-import java.util.Collection;
-
+import java.util.*;
 
 
 @Entity
@@ -21,6 +21,10 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
+//    @ManyToOne
+//    @JoinColumn(name = "id")
+//    @JoinColumn(name = "id")
+//    @JoinColumn(name = "id")
     private Long id;
 
     //    имя пользователя
@@ -66,13 +70,112 @@ public class User {
     @Column(name = "create_time")
     private LocalDate createTime;
 
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "operators_users",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "operator_id")
+    )
+    @ToString.Exclude
+    private Set<Operator> operators;
 
-    // Геттеры и сеттеры
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "managers_users",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "manager_id")
+    )
+    @ToString.Exclude
+    private Set<Manager> managers;
+
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "workers_users",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "worker_id")
+    )
+    @ToString.Exclude
+    private Set<Worker> workers;
 
     @PrePersist
     protected void onCreate() {
         createTime = LocalDate.now();
     }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id); // или другие уникальные поля
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        User user = (User) obj;
+        return Objects.equals(id, user.id); // или другие уникальные поля
+    }
+
+//    @Override
+//    public String toString() {
+//        return "User{" +
+//                "id=" + id +
+//                ", username='" + username + '\'' +
+//                // ... другие поля ...
+//                '}';
+//    }
+
+//    public List<SubCategoryDTO> getSubCategories() {
+//        if (subCategories == null) {
+//            subCategories = new ArrayList<>();
+//        }
+//        return subCategories;
+//    }
+
+//    public void addOperator(Operator operator) {
+//        if (operatorId == null) {
+//            operatorId = new HashSet<>();
+//        }
+//        operatorId.add(operator);
+//        operator.setUser(this); // Устанавливаем обратную связь
+//    }
+
+
+//    @OneToMany(mappedBy = "user",cascade = CascadeType.ALL)
+//    @Column(name = "operator_id")
+//    private Set<Operator> operatorId;
+//
+//    @OneToMany(mappedBy = "user",cascade = CascadeType.ALL)
+//    @Column(name = "manager_id")
+//    private Set<Manager> managerId;
+//
+//    @OneToMany(mappedBy = "user",cascade = CascadeType.ALL)
+//    @Column(name = "worker_id")
+//    private Set<Worker> workerId;
+
+//    @ManyToMany(cascade = CascadeType.ALL)
+//    @JoinTable(
+//            name = "user_operators",
+//            joinColumns = @JoinColumn(name = "user_id"),
+//            inverseJoinColumns = @JoinColumn(name = "operator_id")
+//    )
+//    private Set<User> operators = new HashSet<>();
+//
+//
+
+//    @OneToMany(mappedBy = "id",cascade = CascadeType.ALL)
+//    @Column(name = "operator_id")
+//    private Set<User> operatorId;
+//
+//    @OneToMany(mappedBy = "id",cascade = CascadeType.ALL)
+//    @Column(name = "manager_id")
+//    private Set<User> managerId;
+//
+//    @OneToMany(mappedBy = "id",cascade = CascadeType.ALL)
+//    @Column(name = "worker_id")
+//    private Set<User> workerId;
+
+
+    // Геттеры и сеттеры
 
 
 //    @Enumerated(EnumType.STRING)

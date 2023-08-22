@@ -14,7 +14,7 @@ public class RoleService{
 
     // Метод поиск роли в БД по определённой строке, для создания юзера
     public Role getUserRole(){
-        return roleRepository.findByName("ROLE_ADMIN").get();
+        return roleRepository.findByName("ROLE_CLIENT").get();
     }
 
     // Метод поиск роли в БД по переданной строке, для смены роли

@@ -79,6 +79,7 @@ public class BotsController {
     //Обновление бота
     @PostMapping("/edit/{id}")
     public String updateBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("editBotDto") @Valid BotDTO botsDto, BindingResult bindingResult){
+        System.out.println(botsDto.getWorker());
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("Сработал биндинг - есть ошибка");

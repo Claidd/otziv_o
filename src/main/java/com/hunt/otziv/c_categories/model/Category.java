@@ -1,5 +1,6 @@
 package com.hunt.otziv.c_categories.model;
 
+import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,19 +14,22 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "product_categorys")
+@Table(name = "categorys")
 public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "product_category_id")
+    @Column(name = "category_id")
     private Long id;
 
-    @Column(name = "product_category_title")
+    @Column(name = "category_title")
     private String categoryTitle;
 
     @OneToMany(mappedBy = "category",cascade = CascadeType.ALL)
-    @Column(name = "product_subcategory_title")
+    @Column(name = "subcategory_title")
     List<SubCategory> subCategoryTitle;
+
+    @OneToMany(mappedBy = "categoryCompany",cascade = CascadeType.ALL)
+    List<Company> companyCategory;
 
 }

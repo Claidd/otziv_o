@@ -18,5 +18,5 @@ public interface UserRepository extends CrudRepository<User, Long> {
     @Query("SELECT u.fio FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     List<String> findAllActiveFioByRole(String roleName);
 
-//    User findFirstByActivateCode(String activateCode);
+    //    User findFirstByActivateCode(String activateCode);
 }

@@ -55,15 +55,41 @@
 
         <div class="mb-3">
             <label for="inputRole" class="form-label">Роль</label> <br>
-            <select id="inputRole" name="role"  class="form-control form-select form-select-lg">
+            <select id="inputRole" name="role"   class="form-control form-select form-select-lg">
                 <!-- <option th:each="role : ${editUserDto.roles}"  th:value="${role}" th:text="${role.name}"></option> -->
                 <!-- <option th:each="role : ${roles}"  th:value="${role.name}" th:text="${role.name}" th:selected="${role == editUserDto.getRoles()}"></option> -->
-
-
                 <option th:each="role : ${roles}" th:value="${role.name}" th:text="${role.name}" th:selected="${role.name == editUserDto.getRoles().get(0).getName()}"></option>
                 <!-- <option th:unless="${roles.contains(editUserDto.getRoles())}" th:value="${editUserDto.getRoles()}" th:text="${editUserDto.getRoles()}" th:selected="${editUserDto.getRoles() != null}"></option> -->
             </select>
         </div>
+
+        <!--    СПИСКИ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
+        <div class="mb-3" th:each="manager : ${editUserDto.getManagers()}">
+            <label for="inputManagers" class="form-label">Менеджер</label> <br>
+            <select id="inputManagers" name="managerId" th:field="*{managers}"  class="form-control form-select form-select-lg">
+                <option th:each="managerAll : ${AllManagers}" th:value="${managerAll.id}" th:text="${managerAll.user.fio}"  th:selected="${managerAll.user.fio == manager.user.fio}"></option>
+                <option th:unless="${!AllManagers.contains(manager)}" th:value="${manager.id}" th:text="${manager.user.fio}" th:selected="${manager.user.fio != null}"></option>-->
+
+            </select>
+        </div>
+        <div class="mb-3" th:each="operator : ${editUserDto.getOperators()}">
+            <label for="inputOperators" class="form-label">Оператор</label> <br>
+            <select id="inputOperators" name="operatorId" th:field="*{operators}"  class="form-control form-select form-select-lg">
+                <option th:each="operatorAll : ${AllOperators}" th:value="${operatorAll.id}" th:text="${operatorAll.user.fio}"  th:selected="${operatorAll.user.fio == operator.user.fio}"></option>
+                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>-->
+
+            </select>
+            <a th:href="@{/allUsers/delete/{username}/{operatorId}(username = ${editUserDto.username}, operatorId=${operator.id})}">Удалить</a>
+        </div>
+        <div class="mb-3" th:each="worker : ${editUserDto.getWorkers()}">
+            <label for="inputWorkers" class="form-label">Специалист</label> <br>
+            <select id="inputWorkers" name="workerId" th:field="*{workers}"  class="form-control form-select form-select-lg">
+                <option th:each="workerAll : ${AllWorkers}" th:value="${workerAll.id}" th:text="${workerAll.user.fio}"  th:selected="${workerAll.user.fio == worker.user.fio}"></option>
+                <option th:unless="${!AllWorkers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>-->
+
+            </select>
+        </div>
+        <!--    СПИСКИ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
 
         <div class="mb-3">
             <label for="inputLink" class="form-label">Активность</label>
@@ -71,6 +97,32 @@
             <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
         </div>
 
+<!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
+        <div class="mb-3" th:object="${operatorDTO}">
+            <label for="inputAddOperators" class="form-label">Оператор</label> <br>
+            <select id="inputAddOperators" name="operatorId" th:field="*{operatorId}"  class="form-control form-select form-select-lg">
+                <option value="0">Добавить оператора</option>
+                <option th:each="operatorAll2 : ${AllOperators}" th:value="${operatorAll2.id}" th:text="${operatorAll2.user.fio}"></option>
+                <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
+            </select>
+        </div>
+        <div class="mb-3" th:object="${managerDTO}">
+            <label for="inputAddManagers" class="form-label">Менеджер</label> <br>
+            <select id="inputAddManagers" name="managerId" th:field="*{managerId}"  class="form-control form-select form-select-lg">
+                <option value="0">Добавить менеджера</option>
+                <option th:each="managerAll : ${AllManagers}" th:value="${managerAll.id}" th:text="${managerAll.user.fio}"></option>
+                <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
+            </select>
+        </div>
+        <div class="mb-3" th:object="${workerDTO}">
+            <label for="inputAddWorkers" class="form-label">Специалист</label> <br>
+            <select id="inputAddWorkers" name="workerId" th:field="*{workerId}"  class="form-control form-select form-select-lg">
+                <option value="0">Добавить специалиста</option>
+                <option th:each="workerAll : ${AllWorkers}" th:value="${workerAll.id}" th:text="${workerAll.user.fio}"></option>
+                <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
+            </select>
+        </div>
+        <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
 
         <button type="submit" class="btn btn-primary">Сохранить</button>
         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
@@ -78,7 +130,21 @@
 </div>
 
 <!--Внесение новой компании-->
+<!--(categoryId=${category.id})-->
+<!--<div  class="container mt-5" >-->
+<!--    <form th:action="'/allUsers/' + ${user.id} + '/edit/' + ${operatorAll2.id}" th:object="${operatorDTO}" method="post"> -->
+<!--        <div class="mb-3">-->
+<!--            <label for="inputAddOperators" class="form-label">Оператор</label> <br>-->
+<!--            <select id="inputAddOperators" name="operatorId"  class="form-control form-select form-select-lg">-->
+<!--                <option th:each="operatorAll2 : ${AllOperators}" th:value="${operatorAll2.id}" th:text="${operatorAll2.user.fio}"></option>-->
+<!--                &lt;!&ndash;                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;&ndash;&gt;-->
+<!--            </select>-->
+<!--        </div>-->
 
+<!--        <button type="submit" class="btn btn-primary">Сохранить</button>-->
+<!--        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
+<!--    </form>-->
+<!--</div>-->
 <header th:replace="~{fragments/footer :: footer}"></header>
 
 

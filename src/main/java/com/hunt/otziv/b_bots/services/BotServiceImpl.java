@@ -42,7 +42,7 @@ public class BotServiceImpl implements BotService {
     public boolean updateBot(BotDTO botDTO, Long id) {
         log.info("Вошли в обновление бота и ищем бота по id");
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
-        Bot saveBot = findBotById(id);
+        Bot saveBot = findBotById(botDTO.getId());
         log.info("Достали бота по ид из дто");
         boolean isChanged = false;
 

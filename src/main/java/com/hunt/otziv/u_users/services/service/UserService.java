@@ -3,7 +3,10 @@ package com.hunt.otziv.u_users.services.service;
 
 
 
+import com.hunt.otziv.u_users.dto.ManagerDTO;
+import com.hunt.otziv.u_users.dto.OperatorDTO;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
+import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -13,7 +16,7 @@ import java.util.Optional;
 
 public interface UserService extends UserDetailsService{
 
-    void updateProfile(RegistrationUserDTO userDTO, String role);
+    void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO);
 
     User save(RegistrationUserDTO userDto);
     UserDetails loadUserByUsername(String username);
@@ -27,6 +30,8 @@ public interface UserService extends UserDetailsService{
     Optional<User> findByFio(String operator);
 
     Optional<User> findByUserName(String username);
+
+    void deleteOperator(String username, Long operatorId);
 
 //
 //    Object getUserByPrincipal(Principal principal);
