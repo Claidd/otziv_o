@@ -1,11 +1,15 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.OperatorService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -21,24 +25,30 @@ public class LeadServiceImpl implements LeadService{
 
     private final LeadsRepository leadsRepository;
     private final UserRepository userRepository;
+    private final ManagerService managerService;
+    private final OperatorService operatorService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
+        this.managerService = managerService;
+        this.operatorService = operatorService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
     // Создание нового пользователя "Лида" - начало
     public Lead save(LeadDTO leadDTO, String username){
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
-
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
         Lead lead = Lead.builder()
                 .telephoneLead(changeNumberPhone(leadDTO.getTelephoneLead()))
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
-                .operator(userRepository.findByUsername(username).orElseThrow())
-                .manager(userRepository.findByUsername(username).orElseThrow())
+                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : null)
+                .manager(user.getManagers().iterator().hasNext() ? user.getManagers().iterator().next() : null)
                 .build();
         log.info("5. Юзер успешно создан");
 //        this.save(user);
@@ -91,18 +101,18 @@ public class LeadServiceImpl implements LeadService{
             log.info("Обновили дату изменения");
         }
         /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator().getFio())){
+        if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator())){
             System.out.println(leadDTO.getOperator());
-            System.out.println(saveLead.getOperator().getFio());
-            saveLead.setOperator(findByFio(leadDTO.getOperator()).orElseThrow());
+            System.out.println(saveLead.getOperator());
+            saveLead.setOperator(leadDTO.getOperator());
             isChanged = true;
             log.info("Обновили оператора");
         }
         /*Проверяем не равен ли апдейт менеджера, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getManager(), saveLead.getManager().getFio())){
+        if (!Objects.equals(leadDTO.getManager(), saveLead.getManager())){
             System.out.println(leadDTO.getManager());
-            System.out.println(saveLead.getManager().getFio());
-            saveLead.setManager(findByFio(leadDTO.getManager()).orElseThrow());
+            System.out.println(saveLead.getManager());
+            saveLead.setManager(leadDTO.getManager());
             isChanged = true;
             log.info("Обновили менеджера");
         }
@@ -187,8 +197,8 @@ public class LeadServiceImpl implements LeadService{
         leadDTO.setDateNewTry(lead.getDateNewTry());
         // Обратите внимание, что здесь мы присваиваем идентификатор пользователя вместо всего объекта User
         // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
-        leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator().getFio() : null);
-        leadDTO.setManager(lead.getManager() != null ? lead.getManager().getFio() : null);
+        leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator() : null);
+        leadDTO.setManager(lead.getManager() != null ? lead.getManager() : null);
 //        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getId() : null);
         return leadDTO;
     }
@@ -311,8 +321,8 @@ public class LeadServiceImpl implements LeadService{
                 .createDate(lead.getCreateDate())
                 .updateStatus(lead.getUpdateStatus())
                 .dateNewTry(lead.getDateNewTry())
-                .operator(lead.getOperator().getFio())
-                .manager(lead.getManager().getFio())
+                .operator(lead.getOperator())
+                .manager(lead.getManager())
 //                .operatorId(lead.getOperator().getId())
                 .build();
     }

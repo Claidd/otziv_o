@@ -103,12 +103,30 @@ public class UsersController {
         return "redirect:/allUsers";
     }
 
-    @GetMapping("/delete/{username}/{operatorId}")
+    @GetMapping("/delete/operator/{username}/{operatorId}")
     public String deleteOperatorByUser(@PathVariable(name="username") String username, @PathVariable(name="operatorId") Long operatorId){
         System.out.println(username);
         System.out.println(operatorId);
         userService.deleteOperator(username, operatorId);
         log.info("Удаление оператора прошло успешно");
+        return "redirect:/allUsers";
+    }
+
+    @GetMapping("/delete/manager/{username}/{managerId}")
+    public String deleteManagerByUser(@PathVariable(name="username") String username, @PathVariable(name="managerId") Long managerId){
+        System.out.println(username);
+        System.out.println(managerId);
+        userService.deleteManager(username, managerId);
+        log.info("Удаление менеджера прошло успешно");
+        return "redirect:/allUsers";
+    }
+
+    @GetMapping("/delete/worker/{username}/{workerId}")
+    public String deleteWorkerByUser(@PathVariable(name="username") String username, @PathVariable(name="workerId") Long workerId){
+        System.out.println(username);
+        System.out.println(workerId);
+        userService.deleteWorker(username, workerId);
+        log.info("Удаление работника прошло успешно");
         return "redirect:/allUsers";
     }
 

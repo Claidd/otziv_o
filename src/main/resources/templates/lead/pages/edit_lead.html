@@ -50,19 +50,20 @@
 
                                     <div class="mb-3">
                                         <label for="inputOperator" class="form-label">Оператор</label> <br>
-                                        <select id="inputOperator" name="operator"  class="form-control form-select form-select-lg">
+                                        <select th:field="*{operator}" id="inputOperator" name="operator"  class="form-control form-select form-select-lg">
                                             <!-- <option th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}">Choose an operator</option> Add this line for the default empty option -->
-                                            <option th:each="operator : ${operators}" th:value="${operator}" th:text="${operator}" th:selected="${operator == editLeadDto.operator}"></option>
-                                            <option th:unless="${operators.contains(editLeadDto.operator)}" th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}" th:selected="${editLeadDto.operator != null}"></option>
+                                            <option th:each="operator : ${operators}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator == editLeadDto.operator}"></option>
+                                            <option th:unless="${operators == null or operators.isEmpty() or operators.contains(editLeadDto.operator)}" th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}" th:selected="${editLeadDto.operator != null}"></option>
                                         </select>
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('operator')}" th:text="${err}">Validation error</small>
                                     </div>
 
                                     <div class="mb-3">
                                         <label for="inputManager" class="form-label">Менеджер</label> <br>
-                                        <select id="inputManager" name="manager"  class="form-control form-select form-select-lg">
+                                        <select th:field="*{manager}" id="inputManager" name="manager"  class="form-control form-select form-select-lg">
                                             <!-- <option th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}">Choose an operator</option> Add this line for the default empty option -->
-                                            <option th:each="manager : ${managers}" th:value="${manager}" th:text="${manager}" th:selected="${manager == editLeadDto.manager}"></option>
-                                            <option th:unless="${managers.contains(editLeadDto.operator)}" th:value="${editLeadDto.manager}" th:text="${editLeadDto.manager}" th:selected="${editLeadDto.manager != null}"></option>
+                                            <option th:each="manager : ${managers}" th:value="${manager.id}" th:text="${manager.user.fio}" th:selected="${manager == editLeadDto.manager}"></option>
+                                            <option th:unless="${managers == null or managers.isEmpty() or managers.contains(editLeadDto.operator)}" th:value="${editLeadDto.manager.id}" th:text="${editLeadDto.manager.user.fio}" th:selected="${editLeadDto.manager != null}"></option>
                                         </select>
                                     </div>
                                     <div class="mb-3">

@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.dto;
 
+import com.hunt.otziv.u_users.model.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,5 +13,5 @@ import lombok.NoArgsConstructor;
 public class ManagerDTO {
     private Long managerId;
 
-    private Long userId;
+    private User user;
 }

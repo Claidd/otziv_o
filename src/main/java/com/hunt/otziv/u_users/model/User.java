@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
+import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
@@ -96,6 +97,9 @@ public class User {
     )
     @ToString.Exclude
     private Set<Worker> workers;
+
+    @OneToMany(mappedBy = "user")
+    private Set<Company> companies;
 
     @PrePersist
     protected void onCreate() {

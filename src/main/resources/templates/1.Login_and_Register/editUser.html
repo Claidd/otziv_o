@@ -69,25 +69,24 @@
             <select id="inputManagers" name="managerId" th:field="*{managers}"  class="form-control form-select form-select-lg">
                 <option th:each="managerAll : ${AllManagers}" th:value="${managerAll.id}" th:text="${managerAll.user.fio}"  th:selected="${managerAll.user.fio == manager.user.fio}"></option>
                 <option th:unless="${!AllManagers.contains(manager)}" th:value="${manager.id}" th:text="${manager.user.fio}" th:selected="${manager.user.fio != null}"></option>-->
-
             </select>
+            <a th:href="@{/allUsers/delete/manager/{username}/{managerId}(username = ${editUserDto.username}, managerId=${manager.id})}">Удалить</a>
         </div>
         <div class="mb-3" th:each="operator : ${editUserDto.getOperators()}">
             <label for="inputOperators" class="form-label">Оператор</label> <br>
             <select id="inputOperators" name="operatorId" th:field="*{operators}"  class="form-control form-select form-select-lg">
                 <option th:each="operatorAll : ${AllOperators}" th:value="${operatorAll.id}" th:text="${operatorAll.user.fio}"  th:selected="${operatorAll.user.fio == operator.user.fio}"></option>
                 <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>-->
-
             </select>
-            <a th:href="@{/allUsers/delete/{username}/{operatorId}(username = ${editUserDto.username}, operatorId=${operator.id})}">Удалить</a>
+            <a th:href="@{/allUsers/delete/operator/{username}/{operatorId}(username = ${editUserDto.username}, operatorId=${operator.id})}">Удалить</a>
         </div>
         <div class="mb-3" th:each="worker : ${editUserDto.getWorkers()}">
             <label for="inputWorkers" class="form-label">Специалист</label> <br>
             <select id="inputWorkers" name="workerId" th:field="*{workers}"  class="form-control form-select form-select-lg">
                 <option th:each="workerAll : ${AllWorkers}" th:value="${workerAll.id}" th:text="${workerAll.user.fio}"  th:selected="${workerAll.user.fio == worker.user.fio}"></option>
                 <option th:unless="${!AllWorkers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>-->
-
             </select>
+            <a th:href="@{/allUsers/delete/worker/{username}/{workerId}(username = ${editUserDto.username}, workerId=${worker.id})}">Удалить</a>
         </div>
         <!--    СПИСКИ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
 

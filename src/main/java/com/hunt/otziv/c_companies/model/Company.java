@@ -3,13 +3,11 @@ package com.hunt.otziv.c_companies.model;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.util.Set;
@@ -48,18 +46,29 @@ public class Company {
     @Email
     private String email;
 
+    //     владелец компании
+    @ManyToOne(cascade = {CascadeType.ALL})
+    @JoinColumn(name = "company_user")
+    private User user;
 
-//    //    оператор, который нашел компанию
-//    @Column(name = "company_operator")
-//    private String operator;
-//
-//    //   менеджер, который работает с компанией
-//    @Column(name = "company_manager")
-//    private Manager manager;
-//
-//    //   список работников, которые работают с компанией
-//    @Column(name = "company_worker")
-//    private Set<Worker> worker;
+    //    оператор, который нашел компанию
+    @Column(name = "company_operator")
+    private String operator;
+
+    //   менеджер, который работает с компанией
+    @ManyToOne(cascade = {CascadeType.ALL})
+    @JoinColumn(name = "company_manager")
+    private Manager manager;
+
+    //   список работников, которые работают с компанией
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+        name = "workers_companies",
+        joinColumns = @JoinColumn(name = "worker_id"),
+        inverseJoinColumns = @JoinColumn(name = "company_id")
+    )
+    @ToString.Exclude
+    private Set<Worker> workers;
 
     //    статус компании
     @ManyToOne

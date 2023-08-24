@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.LeadService;
@@ -22,11 +24,15 @@ public class EditLeadController {
     private final LeadService leadService;
     private final LeadValidation leadValidation;
     private final UserService userService;
+    private final OperatorService operatorService;
+    private final ManagerService managerService;
 
-    public EditLeadController(LeadService leadService, LeadValidation leadValidation, UserService userService) {
+    public EditLeadController(LeadService leadService, LeadValidation leadValidation, UserService userService, OperatorService operatorService, ManagerService managerService) {
         this.leadService = leadService;
         this.leadValidation = leadValidation;
         this.userService = userService;
+        this.operatorService = operatorService;
+        this.managerService = managerService;
     }
 
     // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - НАЧАЛО  ===============================
@@ -71,8 +77,10 @@ public class EditLeadController {
         System.out.println(leadId);
 //        model.put("route", "edit");
         model.addAttribute("editLeadDto", leadService.findById(leadId));
-        model.addAttribute("operators", userService.getAllUsersByFio("ROLE_CALLING"));
-        model.addAttribute("managers", userService.getAllUsersByFio("ROLE_MANAGER"));
+        model.addAttribute("operators", operatorService.getAllOperators());
+        model.addAttribute("managers", managerService.getAllManagers());
+//        model.addAttribute("operators", userService.getAllUsersByFio("ROLE_CALLING"));
+//        model.addAttribute("managers", userService.getAllUsersByFio("ROLE_MANAGER"));
 
         return "lead/pages/edit_lead";
     }
@@ -88,6 +96,7 @@ public class EditLeadController {
         System.out.println(leadDTO.getTelephoneLead());
         System.out.println(leadDTO.getUpdateStatus());
         System.out.println(leadDTO.getOperator());
+        System.out.println(leadDTO.getManager());
         log.info("0. Валидация на повторный телефон");
         leadValidation.validate(leadDTO, bindingResult);
         log.info("1. Валидация данных");

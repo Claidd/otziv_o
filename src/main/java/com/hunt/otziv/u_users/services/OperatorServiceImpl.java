@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -27,12 +28,17 @@ public class OperatorServiceImpl implements OperatorService {
 
     @Override
     public Operator getOperatorByUserId(Long id) {
-        return operatorRepository.findByUserId(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+        return operatorRepository.findByUserId(id).orElse(null);
     }
 
+//    @Override
+//    public Operator getOperatorByUserId(Long id) {
+//        return operatorRepository.findByUserId(id)
+//                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+//    }
+
     @Override
-    public List<Operator> getAllOperators() {
+    public Set<Operator> getAllOperators() {
         return operatorRepository.findAll();
     }
 
@@ -43,9 +49,6 @@ public class OperatorServiceImpl implements OperatorService {
 
     @Override
     public void saveNewOperator(User user) {
-//        System.out.println(operatorRepository.findById(user.getId()).isPresent());
-//        System.out.println(operatorRepository.findByUserId(user.getId()).isPresent());
-//        System.out.println(user.getId());
         if (operatorRepository.findByUserId(user.getId()).isPresent()){
             log.info("Не добавили оператора так как уже в списке");
         }
@@ -76,4 +79,5 @@ public class OperatorServiceImpl implements OperatorService {
             log.info("Не удалили оператора так как такого нет в списке");
         }
     }
+
 }

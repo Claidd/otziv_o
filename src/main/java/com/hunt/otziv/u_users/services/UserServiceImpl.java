@@ -5,9 +5,7 @@ import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.OperatorDTO;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
-import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.Role;
-import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 
@@ -54,21 +52,6 @@ public class UserServiceImpl  implements UserService {
         return userRepository.findByUsername(username);
     }
 
-    @Override
-    public void deleteOperator(String username, Long operatorId) {
-        log.info("1. Вошли в удаление оператора");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
-        ));
-        log.info("2. Нашли юзера");
-        Set<Operator> operators = user.getOperators();
-        operators.remove(operatorService.getOperatorById(operatorId));
-
-        user.setOperators(operators);
-        log.info("3. Обновили список операторов");
-        userRepository.save(user);
-        log.info("4. Сохранили юзера");
-    }
 
     // Метод для секьюрити от имплеменитрованного DetailsUsers
     @Transactional
@@ -372,8 +355,54 @@ public class UserServiceImpl  implements UserService {
 
 //      =====================================UPDATE USERS - START=======================================================
 
+    //      =====================================DELETE OPERATOR MANAGER WORKER =======================================================
+    @Override
+    public void deleteOperator(String username, Long operatorId) {
+        log.info("1. Вошли в удаление оператора");
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
+        log.info("2. Нашли юзера");
+        Set<Operator> operators = user.getOperators();
+        operators.remove(operatorService.getOperatorById(operatorId));
 
+        user.setOperators(operators);
+        log.info("3. Обновили список операторов");
+        userRepository.save(user);
+        log.info("4. Сохранили юзера");
+    }
 
+    @Override
+    public void deleteManager(String username, Long managerId) {
+        log.info("1. Вошли в удаление менеджера");
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
+        log.info("2. Нашли юзера");
+        Set<Manager> managers = user.getManagers();
+        managers.remove(managerService.getManagerById(managerId));
+
+        user.setManagers(managers);
+        log.info("3. Обновили список менеджеров");
+        userRepository.save(user);
+        log.info("4. Сохранили юзера");
+    }
+
+    @Override
+    public void deleteWorker(String username, Long workerId) {
+        log.info("1. Вошли в удаление работника");
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
+        log.info("2. Нашли юзера");
+        Set<Worker> workers = user.getWorkers();
+        workers.remove(workerService.getWorkerById(workerId));
+
+        user.setWorkers(workers);
+        log.info("3. Обновили список работников");
+        userRepository.save(user);
+        log.info("4. Сохранили юзера");
+    }
 
 
 

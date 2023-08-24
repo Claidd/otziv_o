@@ -104,15 +104,19 @@
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="card__text__lead-button ">в архив</button>
                                     </form>
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="card__text__lead-button ">в работу</button>
                                     </form>
+<!--                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">-->
+<!--                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
+<!--                                        <button type="submit" class="card__text__lead-button ">в работу</button>-->
+<!--                                    </form>-->
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                    <div class="card__link__lead" th:text="${lead.getOperator}">Имя Оператора</div>
+                                    <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
@@ -260,10 +264,17 @@
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="card__text__lead-button ">в архив</button>
                                     </form>
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="card__text__lead-button ">в работу</button>
                                     </form>
+
+<!--                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">-->
+<!--                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
+<!--                                        <button type="submit" class="card__text__lead-button ">в работу</button>-->
+<!--                                    </form>-->
+
+
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->

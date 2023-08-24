@@ -107,16 +107,19 @@ create TABLE IF NOT EXISTS leads (
     create_date DATE,
     update_status DATE,
     date_new_try DATE,
-    operator bigint,
+    operator_id bigint null,
+    manager_id bigint null,
     CONSTRAINT fk_operator
-        FOREIGN KEY (operator)
-        REFERENCES users (id)
-        ON delete CASCADE,
-    manager bigint,
+        FOREIGN KEY (operator_id)
+        REFERENCES operators (operator_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
     CONSTRAINT fk_manager
-        FOREIGN KEY (manager)
-        REFERENCES users (id)
-        ON delete CASCADE, primary key (id)) ENGINE=InnoDB;
+        FOREIGN KEY (manager_id)
+        REFERENCES managers (manager_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+         primary key (id)) ENGINE=InnoDB;
 
 
 
@@ -184,30 +187,34 @@ CREATE TABLE IF NOT EXISTS filial (
   PRIMARY KEY (filial_id))
 ENGINE = InnoDB;
 
-    CREATE TABLE IF NOT EXISTS companies (
-  company_id bigint NOT NULL AUTO_INCREMENT,
-  company_phone VARCHAR(12) NULL,
-  company_city VARCHAR(45) NULL,
-  company_title VARCHAR(45) NOT NULL,
-  company_email VARCHAR(45) NULL,
-  company_status bigint NULL,
-  company_category bigint NULL,
-  company_subcategory bigint NULL,
-  company_filial bigint NULL,
-  company_comments VARCHAR(2000) NULL,
-  company_counter_no_pay INT NULL DEFAULT 0,
-  company_counter_pay INT NULL DEFAULT 0,
-  company_orders VARCHAR(45) NULL,
-  company_active BIT(1) NULL,
-  company_sum INT NULL DEFAULT 0,
-  create_date DATE NULL,
-  update_status DATE NULL,
-  date_new_try DATE NULL,
+   CREATE TABLE IF NOT EXISTS companies (
+      company_id bigint NOT NULL AUTO_INCREMENT,
+      company_phone VARCHAR(12) NULL,
+      company_city VARCHAR(45) NULL,
+      company_title VARCHAR(45) NOT NULL,
+      company_email VARCHAR(45) NULL,
+      company_status bigint NULL,
+      company_category bigint NULL,
+      company_subcategory bigint NULL,
+      company_filial bigint NULL,
+      company_comments VARCHAR(2000) NULL,
+      company_counter_no_pay INT NULL DEFAULT 0,
+      company_counter_pay INT NULL DEFAULT 0,
+      company_orders VARCHAR(45) NULL,
+      company_active BIT(1) NULL,
+      company_sum INT NULL DEFAULT 0,
+      create_date DATE NULL,
+      update_status DATE NULL,
+      date_new_try DATE NULL,
+      company_user bigint NOT NULL,
+      company_manager bigint NULL,
+      company_operator VARCHAR(255) NULL,
   PRIMARY KEY (company_id),
   INDEX company_category_idx (company_category ASC),
   INDEX company_subcategory_idx (company_subcategory ASC),
   INDEX company_status_idx (company_status ASC),
   INDEX company_filial_idx (company_filial ASC),
+  INDEX companies_idx (company_user ASC),
   CONSTRAINT company_category
     FOREIGN KEY (company_category)
     REFERENCES categorys (category_id)
@@ -226,6 +233,33 @@ ENGINE = InnoDB;
   CONSTRAINT company_filial
     FOREIGN KEY (company_filial)
     REFERENCES filial (filial_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+     CONSTRAINT companies
+    FOREIGN KEY (company_user)
+    REFERENCES users (id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT company_manager
+    FOREIGN KEY (company_manager)
+    REFERENCES managers (manager_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS workers_companies (
+  worker_id bigint NULL,
+  company_id bigint NULL,
+  INDEX company_id_idx (company_id ASC),
+  INDEX worker_id_idx (worker_id ASC),
+  CONSTRAINT worker_id
+    FOREIGN KEY (worker_id)
+    REFERENCES workers (worker_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT company_id
+    FOREIGN KEY (company_id)
+    REFERENCES companies (company_id)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

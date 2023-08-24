@@ -12,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class WorkerDTO {
     private Long workerId;
 
-    private Long userId;
+    private Long user;
 }

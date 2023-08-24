@@ -1,13 +1,12 @@
 package com.hunt.otziv.u_users.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hunt.otziv.l_lead.model.Lead;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.Objects;
+import java.util.Set;
 
 @Entity
 @Data
@@ -31,6 +30,10 @@ public class Operator {
 //    @Column(name = "user_id")
     private User user;
 
+    @OneToMany(mappedBy = "operator")
+    @ToString.Exclude
+    private Set<Lead> leads;
+
     @Override
     public int hashCode() {
         return Objects.hash(id); // или другие уникальные поля
@@ -43,6 +46,7 @@ public class Operator {
         Operator operator = (Operator) obj;
         return Objects.equals(id, operator.id); // или другие уникальные поля
     }
+
 
 //    @Override
 //    public String toString() {

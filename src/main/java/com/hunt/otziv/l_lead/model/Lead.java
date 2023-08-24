@@ -1,6 +1,8 @@
 package com.hunt.otziv.l_lead.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -60,15 +62,17 @@ public class Lead {
 //    @MapsId
 //    @OneToOne( fetch = FetchType.LAZY)
 //    @JoinColumn(name = "operator_id", unique = false, nullable = true)
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "operator", unique = false, nullable = true)
-    private User operator;
+    @ManyToOne (fetch = FetchType.LAZY)
+    @JoinColumn(name = "operator_id", unique = false, nullable = true)
+    private Operator operator;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "manager", unique = false, nullable = true)
-    private User manager;
+    @ManyToOne
+    @JoinColumn(name = "manager_id")
+    private Manager manager;
 
-
+//    @OneToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "operator", unique = false, nullable = true)
+//    private User operator;
     // Геттеры и сеттеры
 
     @PrePersist

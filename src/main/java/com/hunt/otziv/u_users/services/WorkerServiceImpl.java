@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -29,7 +30,7 @@ public class WorkerServiceImpl implements WorkerService {
     }
 
     @Override
-    public List<Worker> getAllWorkers() {
+    public Set<Worker> getAllWorkers() {
         return workerRepository.findAll();
     }
 

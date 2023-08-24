@@ -5,10 +5,11 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 
 import java.util.List;
+import java.util.Set;
 
 public interface WorkerService {
     Worker getWorkerById (Long id);
-    List<Worker> getAllWorkers();
+    Set<Worker> getAllWorkers();
 
     Worker getWorkerByUserIdToDelete(Long id);
 

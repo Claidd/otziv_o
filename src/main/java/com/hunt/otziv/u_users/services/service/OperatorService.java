@@ -4,18 +4,30 @@ import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 
 import java.util.List;
+import java.util.Set;
 
 public interface OperatorService {
 
+    // Взять опретора по id его юзера
     Operator getOperatorById (Long id);
-    Operator getOperatorByUserId (Long id);
-    List<Operator> getAllOperators();
 
+    // взять опретора по id го юзера
+    Operator getOperatorByUserId (Long id);
+
+    // взять из БД всех опреторов
+    Set<Operator> getAllOperators();
+
+    // удалить опретора по id оператора и юзера внутри записи
     void delete(Long userId, Long operatorId);
 
+    // сохранить нового опретора
     void saveNewOperator(User user);
 
+    // взять оператора по id перед его удалением
     Operator getOperatorByUserIdToDelete(Long id);
 
+    // Удалить определенного опретора по юзеру, если такой есть в таблице
     void deleteOperator(User user);
+
+
 }

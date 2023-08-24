@@ -7,11 +7,12 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface WorkerRepository extends CrudRepository<Worker, Long> {
     Optional<Worker> findById(Long id);
-    List<Worker> findAll();
+    Set<Worker> findAll();
 
     Optional<Worker> findByUserId(Long id);
 }
