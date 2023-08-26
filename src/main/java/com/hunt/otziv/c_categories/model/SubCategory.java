@@ -2,10 +2,7 @@ package com.hunt.otziv.c_categories.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
@@ -28,8 +25,10 @@ public class SubCategory {
 
     @ManyToOne
     @JoinColumn(name = "category_id")
+    @ToString.Exclude
     private Category category;
 
     @OneToMany(mappedBy = "subCategory",cascade = CascadeType.ALL)
+    @ToString.Exclude
     List<Company> companyList;
 }

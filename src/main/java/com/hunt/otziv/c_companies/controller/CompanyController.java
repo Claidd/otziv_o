@@ -2,10 +2,14 @@ package com.hunt.otziv.c_companies.controller;
 
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
+import com.hunt.otziv.c_categories.repository.CategoryRepository;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.LeadService;
@@ -30,6 +34,8 @@ public class CompanyController {
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final WorkerService workerService;
+    private final FilialService filialService;
+    private final CompanyRepository companyRepository;
 
 
     @GetMapping("/new_company_to_manager/{leadId}")
@@ -39,6 +45,22 @@ public class CompanyController {
         model.addAttribute("categories", categories);
         model.addAttribute("workers", workerService.getAllWorkers());
         return "companies/new_company_to_manager";
+    }
+
+    @PostMapping("/new_company_to_manager")
+    String saveNewCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO){
+        log.info("1.Начинаем сохранение компании");
+        if (companyService.save(companyDTO)){
+            log.info("OK.Начинаем сохранение компании прошло успешно");
+            for (Company company: companyService.getAllCompanies()) {
+                System.out.println(company);
+            }
+            return "redirect:/lead";
+        }
+        else {
+            log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
+            return "redirect:/lead";
+        }
     }
 
     @GetMapping("/getSubcategories")

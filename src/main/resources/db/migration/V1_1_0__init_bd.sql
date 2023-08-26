@@ -179,13 +179,6 @@ CREATE TABLE IF NOT EXISTS company_status (
     PRIMARY KEY (company_status_id)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS filial (
-  filial_id bigint NOT NULL AUTO_INCREMENT,
-  filial_title VARCHAR(45) NULL,
-  filial_url VARCHAR(1000) NULL,
-  company_id bigint,
-  PRIMARY KEY (filial_id))
-ENGINE = InnoDB;
 
    CREATE TABLE IF NOT EXISTS companies (
       company_id bigint NOT NULL AUTO_INCREMENT,
@@ -196,7 +189,6 @@ ENGINE = InnoDB;
       company_status bigint NULL,
       company_category bigint NULL,
       company_subcategory bigint NULL,
-      company_filial bigint NULL,
       company_comments VARCHAR(2000) NULL,
       company_counter_no_pay INT NULL DEFAULT 0,
       company_counter_pay INT NULL DEFAULT 0,
@@ -213,7 +205,6 @@ ENGINE = InnoDB;
   INDEX company_category_idx (company_category ASC),
   INDEX company_subcategory_idx (company_subcategory ASC),
   INDEX company_status_idx (company_status ASC),
-  INDEX company_filial_idx (company_filial ASC),
   INDEX companies_idx (company_user ASC),
   CONSTRAINT company_category
     FOREIGN KEY (company_category)
@@ -228,11 +219,6 @@ ENGINE = InnoDB;
   CONSTRAINT company_status
     FOREIGN KEY (company_status)
     REFERENCES company_status (company_status_id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT company_filial
-    FOREIGN KEY (company_filial)
-    REFERENCES filial (filial_id)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
      CONSTRAINT companies
@@ -263,6 +249,21 @@ CREATE TABLE IF NOT EXISTS workers_companies (
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS filial (
+  filial_id bigint NOT NULL AUTO_INCREMENT,
+  filial_title VARCHAR(45) NULL,
+  filial_url VARCHAR(1000) NULL,
+  company_id bigint NULL,
+  CONSTRAINT fk_company_id
+    FOREIGN KEY (company_id)
+    REFERENCES companies (company_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  PRIMARY KEY (filial_id))
+ENGINE = InnoDB;
+
+
 
 
 --create table IF NOT EXISTS operators(

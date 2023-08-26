@@ -51,6 +51,9 @@ public class CompanyDTO {
     private ManagerDTO manager;
 
     //   список работников, которые работают с компанией
+    private WorkerDTO worker;
+
+    //   список работников, которые работают с компанией
     private Set<WorkerDTO> workers;
 
     //    статус компании
@@ -63,7 +66,7 @@ public class CompanyDTO {
     private SubCategoryDTO subCategory;
 
     //    филиал содержащий название и url
-    private Set<FilialDTO> filial;
+    private FilialDTO filial;
 
 
 

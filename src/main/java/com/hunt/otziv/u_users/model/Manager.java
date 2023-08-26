@@ -5,6 +5,7 @@ import com.hunt.otziv.l_lead.model.Lead;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -31,4 +32,22 @@ public class Manager {
     @OneToMany(mappedBy = "manager")
     @ToString.Exclude
     private Set<Lead> leads;
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id); // Используйте только идентификатор для хэширования
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Manager manager = (Manager) o;
+        return Objects.equals(id, manager.id); // Сравнивайте только идентификатор
+    }
+
+    @Override
+    public String toString() {
+        return "Manager(id=" + id + ", user=" + user + ")";
+    }
 }

@@ -113,6 +113,11 @@ public class CategoryServiceImpl implements CategoryService{
         return categoryOptional.map(this::convertToDTO).orElse(null);
     }
 
+    public Category getCategoryByIdCategory(Long categoryId) {
+       return categoryRepository.findById(categoryId).orElse(null);
+
+    }
+
 
 //    private CategoryDTO convertToCategoryDTO(Category category) {
 //        CategoryDTO categoryDTO = new CategoryDTO();

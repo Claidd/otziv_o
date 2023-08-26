@@ -1,6 +1,7 @@
 package com.hunt.otziv.c_categories.services;
 
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
+import com.hunt.otziv.c_categories.model.Category;
 
 import java.util.List;
 
@@ -15,4 +16,6 @@ public interface CategoryService {
     List<CategoryDTO> getAllCategories();
     // Найти категорию по id
     CategoryDTO getCategoryById(Long categoryId);
+
+    Category getCategoryByIdCategory(Long categoryId);
 }

@@ -23,7 +23,7 @@
         <div class="container">
             <div class="row py-2 pt-1 mt-1">
                 <div class="col-12 pt-5">
-                    <form th:action="@{/new_company}" method="post" th:object="${newCompany}">
+                    <form th:action="@{/companies/new_company_to_manager}" method="post" th:object="${newCompany}">
                         <div class="form-group">
                             <label for="title">Название компании</label>
                             <input type="text" id="title" th:field="*{title}" class="form-control"
@@ -57,7 +57,7 @@
 
                         <div class="form-group">
                             <label for="category">Категория:</label>
-                            <select  class="form-control" th:field="*{categoryCompany}" id="category" name="selectedCategory.id">
+                            <select  class="form-control" th:field="*{categoryCompany.id}" id="category" name="selectedCategory.id">
                                 <option value="">Выберите категорию...</option>
                                 <option th:each="category : ${categories}" th:value="${category.id}" th:text="${category.categoryTitle}"></option>
                             </select>
@@ -65,14 +65,14 @@
 
                         <div class="form-group">
                             <label for="subcategory">Подкатегория:</label>
-                            <select class="form-control" th:field="*{subCategory}" id="subcategory" name="selectedSubcategory.id">
+                            <select class="form-control" th:field="*{subCategory.id}" id="subcategory" name="selectedSubcategory.id">
                                 <option value="">Выберите подкатегорию...</option>
                             </select>
                         </div>
 
                         <div class="mb-3" >
                             <label for="inputManagers" class="form-label">Специалист</label> <br>
-                            <select id="inputManagers" name="managerId" th:field="*{workers}"  class="form-control form-select form-select-lg">
+                            <select id="inputManagers" name="managerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
                                 <option value="">Выберите специалиста...</option>
                                 <option th:each="specialist : ${workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}" ></option>
 <!--                                <option th:unless="${!workers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>&ndash;&gt;-->
@@ -85,6 +85,8 @@
                         <div class="form-group">
                             <label for="manager">Укажите менеджера</label>
                             <input type="text" id="manager" th:field="*{manager.user.fio}"  class="form-control"
+                                   placeholder="Укажите оператора">
+                            <input type="hidden" id="manager_id" th:field="*{manager.managerId}"  class="form-control"
                                    placeholder="Укажите оператора">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}"
                                    th:text="${err}">Validation error</small>
@@ -102,15 +104,25 @@
 
                         <div class="form-group">
                             <label for="status">Укажите статус компании</label>
-                            <input type="text" id="status" th:field="*{status}" class="form-control"
+                            <input type="text" id="status" th:field="*{status.title}" class="form-control"
+                                   placeholder="">
+                            <input type="hidden" id="status_id" th:field="*{status.id}" class="form-control"
                                    placeholder="">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('status')}"
                                    th:text="${err}">Validation error</small>
                         </div>
 
                         <div class="form-group">
-                            <label for="filial">Укажите филиал</label>
-                            <input type="text" id="filial" th:field="*{filial}" class="form-control"
+                            <label for="filial_title">Укажите первый филиала</label>
+                            <input type="text" id="filial_title" th:field="*{filial.title}" class="form-control"
+                                   placeholder="Филиал 1. Иркутск мк-н. Юбилейный, 17">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filial_url">Укажите ссылку 2ГИС</label>
+                            <input type="text" id="filial_url" th:field="*{filial.url}" class="form-control"
                                    placeholder="">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('filial')}"
                                    th:text="${err}">Validation error</small>
@@ -172,11 +184,13 @@
                             <label for="user">Создатель компании</label>
                             <input type="text" id="user" th:field="*{user.fio}"  class="form-control"
                                    placeholder="">
+                            <input type="hidden" id="user_username" th:field="*{user.username}"  class="form-control"
+                                   placeholder="">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('user')}"
                                    th:text="${err}">Validation error</small>
                         </div>
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                        <button  type="submit" class="btn btn-primary mt-3">Зарегистрироваться</button>
+                        <button  type="submit" class="btn btn-primary mt-3">Создать</button>
                     </form>
                 </div>
             </div>

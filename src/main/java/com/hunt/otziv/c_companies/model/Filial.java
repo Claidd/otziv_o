@@ -1,10 +1,7 @@
 package com.hunt.otziv.c_companies.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Data
@@ -27,7 +24,8 @@ public class Filial {
     @Column(name = "filial_url")
     private String url;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "company_id")
+    @ToString.Exclude
     private Company company;
 }

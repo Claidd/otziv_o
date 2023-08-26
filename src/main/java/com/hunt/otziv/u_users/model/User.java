@@ -118,6 +118,11 @@ public class User {
         User user = (User) obj;
         return Objects.equals(id, user.id); // или другие уникальные поля
     }
+    @Override
+    public String toString() {
+        return "User(id=" + id + ", username=" + username + ", email=" + email + ", fio=" + fio + ")";
+    }
+
 
 //    @Override
 //    public String toString() {

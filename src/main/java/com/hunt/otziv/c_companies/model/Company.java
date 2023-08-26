@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Email;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -49,6 +50,7 @@ public class Company {
     //     владелец компании
     @ManyToOne(cascade = {CascadeType.ALL})
     @JoinColumn(name = "company_user")
+    @ToString.Exclude
     private User user;
 
     //    оператор, который нашел компанию
@@ -64,10 +66,9 @@ public class Company {
     @ManyToMany(cascade = CascadeType.ALL)
     @JoinTable(
         name = "workers_companies",
-        joinColumns = @JoinColumn(name = "worker_id"),
-        inverseJoinColumns = @JoinColumn(name = "company_id")
+        joinColumns = @JoinColumn(name = "company_id"),
+        inverseJoinColumns = @JoinColumn(name = "worker_id")
     )
-    @ToString.Exclude
     private Set<Worker> workers;
 
     //    статус компании
@@ -78,16 +79,17 @@ public class Company {
     //    категория компании
     @ManyToOne
     @JoinColumn(name = "company_category")
+    @ToString.Exclude
     private Category categoryCompany;
 
     //    субкатегория компании
     @ManyToOne
     @JoinColumn(name = "company_subcategory")
+    @ToString.Exclude
     private SubCategory subCategory;
 
     //    филиал содержащий название и url
-    @OneToMany(mappedBy = "company",cascade = CascadeType.ALL)
-    @Column(name = "company_filial")
+    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Filial> filial;
 
 
@@ -135,5 +137,18 @@ public class Company {
         updateStatus = LocalDate.now();
         dateNewTry = LocalDate.now();
         System.out.println(LocalDate.now().plusDays(10));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Company company = (Company) o;
+        return Objects.equals(id, company.id); // Сравниваем только идентификатор
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id); // Хэшируем только идентификатор
     }
 }

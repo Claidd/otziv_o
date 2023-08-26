@@ -2,10 +2,7 @@ package com.hunt.otziv.c_categories.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
@@ -30,6 +27,7 @@ public class Category {
     List<SubCategory> subCategoryTitle;
 
     @OneToMany(mappedBy = "categoryCompany",cascade = CascadeType.ALL)
+    @ToString.Exclude
     List<Company> companyCategory;
 
 }

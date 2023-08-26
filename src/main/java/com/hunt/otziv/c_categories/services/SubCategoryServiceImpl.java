@@ -93,4 +93,8 @@ public class SubCategoryServiceImpl implements SubCategoryService{
         return categoryOptional.map(this::convertToSubCategoryDTO).orElse(null);
     }
 
+    public SubCategory getCategoryByIdSubCategory(Long categoryId) {
+        return subCategoryRepository.findById(categoryId).orElse(null);
+    }
+
 }

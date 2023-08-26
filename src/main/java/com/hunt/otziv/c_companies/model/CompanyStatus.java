@@ -1,10 +1,7 @@
 package com.hunt.otziv.c_companies.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
@@ -26,5 +23,6 @@ public class CompanyStatus {
     private String title;
 
     @OneToMany(mappedBy = "status",cascade = CascadeType.ALL)
+    @ToString.Exclude
     List<Company> companyStatus;
 }
