@@ -10,11 +10,12 @@ import java.util.Set;
 
 public interface CompanyService {
 
-    CompanyDTO convertToDtoToManager(Long leadId, Principal principal);
+    CompanyDTO convertToDtoToManager(Long leadId, Principal principal); //    подготовка нового DTO на основе лида
+    boolean save(CompanyDTO companyDTO); //    сохранить компанию
+    Set<Company> getAllCompanies(); //    взять все компании
+    Set<CompanyDTO> getAllCompaniesDTO(); //    взять все компании с переводом их в DTO
 
-    boolean save(CompanyDTO companyDTO);
 
-    Set<Company> getAllCompanies();
 
 //    Set<Filial> convertFilialDTOToFilial(Long id, FilialDTO filialDTO);
 }

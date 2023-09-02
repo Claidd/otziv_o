@@ -68,6 +68,8 @@ public class CompanyDTO {
     //    филиал содержащий название и url
     private FilialDTO filial;
 
+    private Set<FilialDTO> filials;
+
 
 
     //    счетчик не оплаченных отзывов

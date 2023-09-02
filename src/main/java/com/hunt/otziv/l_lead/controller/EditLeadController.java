@@ -87,7 +87,7 @@ public class EditLeadController {
 
     //Сохранение отредактированного лида
     @PostMapping("lead/edit/{leadId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public String editLead(@PathVariable final Long leadId,
                            @ModelAttribute("editLeadDto") @Valid LeadDTO leadDTO, BindingResult bindingResult
                            ){
@@ -149,14 +149,14 @@ public class EditLeadController {
     // меняем статус с напоминание на К рассылке - конец
 
     // меняем статус с К рассылке на В работе - начало
-    @PostMapping("lead/status_in_work/{leadId}")
-    public String changeStatusLeadOnInWork(Model model, @PathVariable final Long leadId,
-                                         Principal principal){
-        log.info("вход в меняем статус с К рассылке на В работе");
-        leadService.changeStatusLeadOnInWork(leadId);
-        log.info("статус успешно сменен К рассылке на В работе" );
-        return "redirect:/lead";
-    }
+//    @PostMapping("lead/status_in_work/{leadId}")
+//    public String changeStatusLeadOnInWork(Model model, @PathVariable final Long leadId,
+//                                         Principal principal){
+//        log.info("вход в меняем статус с К рассылке на В работе");
+//        leadService.changeStatusLeadOnInWork(leadId);
+//        log.info("статус успешно сменен К рассылке на В работе" );
+//        return "redirect:/lead";
+//    }
     // меняем статус с К рассылке на В работе - конец
 
     // меняем статус с любого на Новый - начало

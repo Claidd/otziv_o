@@ -47,7 +47,7 @@ public class LeadServiceImpl implements LeadService{
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
-                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : null)
+                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : user.getOperators().iterator().next() )
                 .manager(user.getManagers().iterator().hasNext() ? user.getManagers().iterator().next() : null)
                 .build();
         log.info("5. Юзер успешно создан");

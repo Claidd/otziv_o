@@ -62,6 +62,11 @@ public class CompanyServiceImpl implements CompanyService{
     public Set<Company> getAllCompanies(){
         return companyRepository.findAll();
     }
+
+    public Set<CompanyDTO> getAllCompaniesDTO(){
+        return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
     //    Метод подготовки ДТО при создании компании из Лида менеджером
 
     //      =====================================CREATE USERS - START=======================================================
@@ -69,7 +74,7 @@ public class CompanyServiceImpl implements CompanyService{
     @Transactional
     public boolean save(CompanyDTO companyDTO){
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
-
+    //        в начале сохранения устанавливаем поля из дто
         Company company = Company.builder()
                 .title(companyDTO.getTitle())
                 .telephone(companyDTO.getTelephone())
@@ -86,22 +91,20 @@ public class CompanyServiceImpl implements CompanyService{
                 .commentsCompany(companyDTO.getCommentsCompany())
                 .build();
 
-        //        Поверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-        Set<Filial> existingFilials = company.getFilial();
+        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+        Set<Filial> existingFilials = company.getFilial(); // пытаемся получить текущий список филиалов из компании
         if (existingFilials == null) {
-            existingFilials = new HashSet<>();
+            existingFilials = new HashSet<>();// если он пустой, то создаем новый set
         }
-        Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial());
-        existingFilials.addAll(newFilials);
-        company.setFilial(existingFilials);
-        //        Поверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-
+        Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial()); // берем список из дто
+        existingFilials.addAll(newFilials); // объединяем эти списки
+        company.setFilial(existingFilials); // устанавливаем компании объединенный список
+        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
         log.info("4. Компания успешно создана");
-
         try {
-            Company company1 = companyRepository.save(company);
+            Company company1 = companyRepository.save(company); // сохраняем новую компанию в БД
             log.info("5. Компания успешно сохранена");
-            for (Filial filial : company1.getFilial()) {
+            for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
                 filial.setCompany(company1); // Установка компании в филиале
                 filialService.save(filial); // Сохранение обновленного филиала
             }
@@ -116,8 +119,9 @@ public class CompanyServiceImpl implements CompanyService{
 
 //    Метод подготовки ДТО при создании компании из Лида менеджером
     public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) {
+    //        находим лида по переданному id
         LeadDTO leadDTO = leadService.findById(leadId);
-
+        //        Устанавливаем поля из лида в новый дто
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
         companyDTO.setCity(leadDTO.getCityLead());
@@ -126,9 +130,10 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setManager(convertToManagerDto(leadDTO.getManager()));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
-
         return companyDTO;
     }
+    //    Метод подготовки ДТО при создании компании из Лида менеджером
+
 
     public CompanyDTO convertToDto(Company company) {
         CompanyDTO companyDTO = new CompanyDTO();
@@ -155,6 +160,7 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
         companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
 //        companyDTO.setFilial(convertToFilialDtoSet(company.getFilial()));
+        companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
 
         return companyDTO;
     }
@@ -167,6 +173,7 @@ public class CompanyServiceImpl implements CompanyService{
         ));
         userDTO.setUsername(user.getUsername());
         userDTO.setFio(user.getFio());
+        userDTO.setWorkers(user.getWorkers());
         // Other fields if needed
         return userDTO;
     }
@@ -175,6 +182,7 @@ public class CompanyServiceImpl implements CompanyService{
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setEmail(user.getEmail());
+
         // Other fields if needed
         return userDTO;
     }
@@ -234,7 +242,7 @@ public class CompanyServiceImpl implements CompanyService{
         FilialDTO filialDTO = new FilialDTO();
         filialDTO.setId(filial.getId());
         filialDTO.setTitle(filial.getTitle());
-        filialDTO.setUrl(filialDTO.getUrl());
+        filialDTO.setUrl(filial.getUrl());
         // Other fields if needed
         return filialDTO;
     }

@@ -44,12 +44,12 @@ public class SecurityConfig {
                                         .requestMatchers("/kvesty").hasRole("ADMIN")
                                         .requestMatchers("/allUsers").hasRole("ADMIN")
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
-                                        .requestMatchers("/lead/**").hasAnyRole("ADMIN", "CALLING")
+                                        .requestMatchers("/lead/**").hasAnyRole("ADMIN", "CALLING","MANAGER")
                                         .requestMatchers("/bots/**").hasRole("ADMIN")
-                                        .requestMatchers("/categories/**").hasRole("ADMIN")
-                                        .requestMatchers("/subcategories/**").hasRole("ADMIN")
+                                        .requestMatchers("/categories/**").hasAnyRole("ADMIN","MANAGER")
+                                        .requestMatchers("/subcategories/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/operator/**").hasRole("ADMIN")
-                                        .requestMatchers("/companies/**").hasRole("ADMIN")
+                                        .requestMatchers("/companies/**").hasAnyRole("ADMIN","MANAGER")
 
                 )
                 //    настройка логирования

@@ -11,6 +11,7 @@
           integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"/>
     <link rel="stylesheet" href="../../../static/css/lead.css" th:href="@{../../css/lead.css}"/>
+    <link rel="stylesheet" href="../../../static/css/lead.css" th:href="@{../../css/company.css}"/>
     <link rel="stylesheet" href="../../../static/css/bot.css" th:href="@{../../css/bot.css}"/>
     <link rel="stylesheet" th:href="@{/css/style.css}"/>
     <link rel="stylesheet" th:href="@{/css/normalize.css}"/>
@@ -46,6 +47,13 @@
 <!--    <script th:src="@{/webjars/jquery/3.6.4/jquery.min.js}" type="text/javascript"></script>-->
     <script th:src="@{/js/jquery-3.7.0.min.js}" type="text/javascript"></script>
     <script type="text/javascript" th:src="@{/js/main.js}"></script>
+
+</th:block>
+
+<th:block th:fragment="js_company" xmlns:th="http://www.w3.org/1999/xhtml">
+    <!--    <script th:src="@{/webjars/jquery/3.6.4/jquery.min.js}" type="text/javascript"></script>-->
+    <script th:src="@{/js/jquery-3.7.0.min.js}" type="text/javascript"></script>
+    <script type="text/javascript" th:src="@{/js/main_company.js}"></script>
 
 </th:block>
 

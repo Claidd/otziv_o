@@ -62,7 +62,7 @@ body {
 }
 
 /* настройки всеъ заголовков */
-.section-title {
+.company__section-title {
     margin-bottom: 50px;
     font-size: 48px;
     font-weight: 700;
@@ -260,206 +260,6 @@ body {
 /* ==================== TOP END ==================== */
 
 
-/* ================== SLIDER START ================= */
-
-/* накладываем сверху полотно для тонировки */
-.swiper::after {
-    content: '';
-    background: rgba(21, 21, 21, .3);
-    position: absolute;
-    z-index: 5;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-}
-
-.swiper-slide {
-    /* задаем высоту слайда - 100% высоты экрана */
-    height: 100vh;
-    /* чтобы картинка полностью отображалась */
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-position: center 0;
-}
-
-/* делаем прямоугольники вместо кругляшков внизу слайдера */
-.swiper-pagination-bullet {
-    width: 120px;
-    height: 3px;
-    background-color: #151515;
-    border-radius: 0;
-    opacity: 1;
-    margin: 0 15px
-}
-
-.swiper-pagination-horizontal.swiper-pagination-bullets
-.swiper-pagination-bullet {
-    margin: 0 15px;
-}
-
-.swiper-pagination-bullets.swiper-pagination-horizontal {
-    bottom: 50px;
-}
-
-/* делаем выделение активной картинки в слайдере */
-.swiper-pagination-bullet-active {
-    height: 6px;
-    background-color: #fff;
-}
-
-/* ================== SLIDER END =================== */
-
-
-/* =================== WHY START =================== */
-.why-lease {
-    margin: 150px 0;
-}
-
-.why-lease-list {
-    /* делаем не флекс, а сетку для адаптива */
-    display: grid;
-    /* количество в строке и размер каждой */
-    grid-template-columns: repeat(4, 1fr);
-    /* расстояние между */
-    gap: 40px;
-    text-align: center;
-}
-
-.why-lease__item {
-    max-width: 270px;
-}
-
-.why-lease__item-img {
-    margin-bottom: 30px;
-}
-
-.why-lease__item-title{
-    font-style: 24px;
-    font-weight: 700;
-    margin-bottom: 30px;
-}
-
-.why-lease__item-text {
-    tab-size: 16px;
-    text-align: left;
-}
-
-/* ==================== WHY END ==================== */
-
-
-/* =================== DOES START =================== */
-
-.how__does {
-    padding-bottom: 150px;
-}
-
-.how__does-inner {
-    /* ограничиваем ширину */
-    max-width: 600px;
-    /* выравниваем по середине */
-    margin: 0 auto;
-}
-
-.how__does-title {
-    font-size: 24px;
-    font-weight: 700;
-    padding-top: 50px;
-}
-
-.how__does-list {
-    padding: 50px 0 70px;
-    /* создаем счетчик */
-    counter-reset: myCounter;
-}
-
-.how__does-item {
-    list-style-type: none;
-    width: 270px;
-    position: relative;
-    margin-left: auto;
-    box-sizing: content-box;
-    padding: 19px 0 19px 240px;
-    min-height: 63px;
-}
-
-/* чтобы у первого не было, а у второго было */
-.how__does-item + .how__does-item {
-    margin-top: 40px;
-}
-
-/* настраиваем цифры */
-.how__does-item::before {
-    /* устанавливаем увеличение счетчика*/
-    counter-increment: myCounter;
-    content: counter(myCounter);
-    /* теперь можем работать с счетчиком */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 48px;
-    font-weight: 700;
-    background-color: #0066FF;
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    color: #fff;
-    position: absolute;
-    left: 0;
-    top: 0;
-}
-
-/* ==================== DOES END ==================== */
-
-
-/* =================== VIDEO START ================== */
-
-.video {
-    padding-bottom: 150px;
-}
-
-.video__title {
-    padding-bottom: 20;
-}
-
-.video__text {
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 50px;
-    text-align: center;
-}
-
-.video__content {
-    margin: 0 auto;
-    display: block;
-}
-/* =================== VIDEO END ================== */
-
-
-/* ================ IMPORTANT START =============== */
-
-.important {
-    padding-bottom: 150px;
-}
-
-.important__title {
-    margin-bottom: 20px;
-}
-
-.important__text{
-    max-width: 580px;
-    margin: 0 auto 50px;
-}
-
-.important__list {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-}
-
-.important__item-img {
-    margin-bottom: 20px;
-}
-/* ================= IMPORTANT END ================ */
 
 
 /* ================= LEADS START =============== */
@@ -545,75 +345,24 @@ body {
 
 
 
-/* ================== BLOG START ================ */
-
-.blog {
-    padding-bottom: 150px;
-}
-
-.blog__items {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 40px;
-    margin-bottom: 70px;
-}
-
-.blog__item {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-}
-
-.blog__item-img {
-    width: 100%;
-    margin-bottom: 30px;
-}
-
-.blog__item-title {
-    /* наподобие ширины */
-    flex-basis: 446px;
-    font-size: 22px;
-    font-weight: 700;
-}
-
-.blog__item-link {
-    color: #fff;
-    background-color: #0066FF;
-    padding: 4px 20px;
-}
-
-.showmore__link {
-    text-transform: uppercase;
-    background-color: #151515;
-    padding: 13px 80px;
-    color: #fff;
-    width: 300px;
-    margin: 0 auto;
-    text-align: center;
-    display: block;
-}
-
-/* ================== BLOG END ================ */
-
-
 /* ================== CHOOSE START ================ */
 
-.choose {
+.company__choose {
     padding: 100px 0 150px;
 }
 
-.tabs {
+.company__tabs {
     margin-bottom: 70px;
 }
 
-.tabs__btn {
+.company__tabs__btn {
     padding: 0 150px 100px;
     display: flex;
     justify-content: space-between;
     gap: 80px;
 }
 
-.tabs__btn-item {
+.company__tabs__btn-item {
     font-size: 24px;
     font-weight: 700;
     cursor: pointer;
@@ -622,61 +371,61 @@ body {
     padding: 0;
 }
 
-.tabs__btn-item--active {
+.company__tabs__btn-item--active {
     color: #0066FF;
 }
 
-.tabs__content-item {
+.company__tabs__content-item {
     display: none;
     grid-template-columns: repeat(4, 1fr);
     gap: 100px 40px;
 }
 
-.tabs__content-item.tabs__content-item--active {
+.company__tabs__content-item.company__tabs__content-item--active {
     display: grid;
 }
 
-.card {
+.company__card {
     text-align: center;
     /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
     border-radius: 1.2rem;
 }
 
-.card:hover {
+.company__card:hover {
     box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
 }
 
-.card__content {
+.company__card__content {
     padding: 0 5px;
     /* border: 1px solid #0066FF; */
     border-top: 0;
 }
 
-.card__title {
+.company__card__title {
     padding-top: 20px;
     font-size: 24px;
     font-weight: 700;
     margin-bottom: 20px;
 }
 
-.card__text {
+.company__card__text {
     margin-bottom: 20px;
 }
 
-.card__price {
+.company__card__price {
     margin-bottom: 20px;
     font-style: 24px;
     font-weight: 700;
 }
 
-.card__link {
+.company__card__link {
     display: block;
     color: #0066FF;
     /* border: 1px solid #0066FF; */
     border-top: 0;
 }
 
-.card__img {
+.company__card__img {
     width: 100%;
 }
 
@@ -699,22 +448,22 @@ body {
 
 /* ================== LEADS CARD START ================ */
 
-.lead__card {
+.company__lead__card {
     padding: 100px 0 150px;
 }
 
-.tabs__lead {
+.company__tabs__lead {
     margin-bottom: 70px;
 }
 
-.tabs__btn__lead{
+.company__tabs__btn__lead{
     padding: 0 150px 50px;
     display: flex;
     justify-content: space-between;
     gap: 80px;
 }
 
-.tabs__btn__lead-item {
+.company__tabs__btn-item {
     font-size: 24px;
     font-weight: 700;
     cursor: pointer;
@@ -723,11 +472,11 @@ body {
     padding: 0;
 }
 
-.tabs__btn__lead-item--active {
+.company__tabs__btn-item--active {
     color: #d45cec;
 }
 
-.tabs__content__lead-item{
+.company__tabs__content-item{
     display: none;
     grid-template-columns: repeat(4, 1fr);
     gap: 100px 40px;
@@ -735,7 +484,7 @@ body {
 
 
 
-.card__remember {
+.company__card__remember {
     display: flex;
     flex-direction: row;
     justify-content: center;
@@ -748,7 +497,7 @@ body {
     margin-bottom: 50px;
 }
 
-.card__remember__box {
+.company__card__remember__box {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -760,7 +509,7 @@ body {
 
 
 
-.card_remember-content {
+.company__card_remember-content {
     /* justify-content: space-between; */
     display: flex;
     justify-content: center;
@@ -772,7 +521,7 @@ body {
     cursor: pointer;
 }
 
-.card_remember-content__btn {
+.company__card_remember-content__btn {
     text-decoration: none;
     background: none;
     border: none;
@@ -781,7 +530,7 @@ body {
     /* margin-right: 5px; */
 }
 
-.card__remember-text {
+.company__card__remember-text {
     width: 0.1px;
     font-size: 1px;
     text-decoration: none;
@@ -793,7 +542,7 @@ body {
     
 }
 
-.card__remember__box-serch {
+.company__card__remember__box-serch {
     display: flex;
     justify-content: right;
     width: 100%;
@@ -803,7 +552,7 @@ body {
     /* gap: 100px;*/
  }
 
-.card_remember-search {
+.company__card_remember-search {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -815,14 +564,14 @@ body {
     cursor: pointer;
 }
 
-.card_remember-search__text {
+.company__card_remember-search__text {
     font-size: 18px;
     margin-left: 20px;
     width: 90%;
     border: none;
 }
 
-.card_remember-search__btn {
+.company__card_remember-search__btn {
     text-decoration: none;
     background: none;
     border: none;
@@ -832,13 +581,13 @@ body {
     margin-right: 20px;
 }
 
-.tabs__content__lead-item.tabs__content__lead-item--active {
+.company__tabs__content-item.company__tabs__content-item--active {
     display: grid;
 }
 
 
 
-.card__link__lead__more {
+.company__card__link__lead__more {
     background: none;
     border: none;
     text-decoration: none;
@@ -848,7 +597,7 @@ body {
 }
 
 
-.card__lead {
+.company__card__lead {
     text-align: center;
     /* серый не прозрачный фон */
     /* border: 1px solid #5b5a5afe; */
@@ -860,24 +609,19 @@ body {
     border-radius: 1.2rem;
 }
 
-.card__lead:hover {
+.company__card__lead:hover {
     box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
 }
 
-.card__content__lead {
+.company__card__content__lead {
     padding: 0 5px;
     /* border: 1px solid #0066FF; */
     border-top: 0;
 }
 
-.card__title__lead {
-    padding-top: 20px;
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 20px;
-}
 
-.card__content__phone {
+
+.company__card__content__phone {
     margin-top: 1rem;
     display: flex;
     justify-content: center;
@@ -885,16 +629,25 @@ body {
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     height: 40px;
+
 }
 
-.card__content__city {
+.company__card__title__lead {
+    padding-top: 20px;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.company__card__content__city {
     margin-top: 20px;
     display: flex;
     justify-content: space-around;
     flex-direction: row;
 }
 
-.card__content__author {
+.company__card__content__author {
     margin-top: 10px;
     margin-bottom: 10px;
     display: flex;
@@ -902,7 +655,7 @@ body {
     flex-direction: row;
 }
 
-.card__text__city__lead {
+.company__card__text__city__lead {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -913,7 +666,7 @@ body {
     font-size: 24px;
 }
 
-.card__content_button {
+.company__card__content_button {
     margin-top: 20px;
     display: flex;
     justify-content: space-evenly;
@@ -922,7 +675,7 @@ body {
 }
 
 /* кнопки в рабюоту */
-.card__text__lead {
+.company__card__text__lead {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -930,7 +683,7 @@ body {
     width: 20%;
 }
 
-.card__text__lead-button{
+.company__card__text__lead-button{
     background: none;
     border: none;
     text-decoration: none;
@@ -944,7 +697,7 @@ body {
     cursor: pointer;
 }
 
-.card__text__lead-button:hover  {
+.company__card__text__lead-button:hover  {
     background-color: #d45cec;
     text-decoration: none;
     text-decoration-style: none;
@@ -952,14 +705,7 @@ body {
 }
 /* кнопки в рабюоту */
 
-/* .card__text__lead:hover {
-    background-color: #d45cec;
-    color: #fff;
-    text-decoration: none;
-    text-decoration-style: none;
-} */
-
-.card__content__comments {
+.company__card__content__comments {
     margin-top: 1rem;
     display: flex;
     justify-content: center;
@@ -969,7 +715,7 @@ body {
     height: 86px;
 }
 
-.card__text__lead2 {
+.company__card__text__lead2 {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -980,13 +726,13 @@ body {
 
 }
 
-.card__price__lead {
+.company__card__price__lead {
     margin-bottom: 20px;
     font-style: 24px;
     font-weight: 700;
 }
 
-.card__link__lead {
+.company__card__link__lead {
     display: block;
     color: #000;
     text-transform: uppercase;
@@ -994,7 +740,7 @@ body {
     margin-top: 10px;
 }
 
-.card__img__lead {
+.company__card__img__lead {
     width: 100%;
 }
 
@@ -1015,19 +761,19 @@ body {
 /* ==================== 1180 =================== */
 @media (max-width: 1180px) {
 
-    .important__list {
+    .company__important__list {
         gap: 30px 20px;
     }
 
-    .important__item-img {
+    .company__important__item-img {
         width: 100%;
     }
 
-    .tabs__content-item {
+    .company__tabs__content-item {
         grid-template-columns: repeat(3, 1fr);
     }
 
-    .tabs__content__lead-item{
+    .company__tabs__content__lead-item{
         grid-template-columns: repeat(3, 1fr);
     }
 
@@ -1037,16 +783,16 @@ body {
 
 @media (max-width: 1040px) {
 
-    .video__content {
+    .company__video__content {
         width: 100%;
     }
 
-    .tabs__btn {
+    .company__tabs__btn {
         padding: 0 0 50px;
         gap: 20px;
     }
 
-    .tabs__btn__lead{
+    .company__tabs__btn__lead{
         padding: 0 0 50px;
         gap: 20px;
     }
@@ -1059,17 +805,17 @@ body {
 @media (max-width: 860px) {
 
     /* настраиваем бургер меню */
-    .menu__btn {
+    .company__menu__btn {
         display: flex;
     }
 
-    .menu__btn,
-    .logo {
+    .company__menu__btn,
+    .company__logo {
         position: relative;
         z-index: 10;
     }
 
-    .menu__list {
+    .company__menu__list {
         position: absolute;
         z-index: 5;
         background-color: #151515;
@@ -1085,26 +831,26 @@ body {
         transition: transform .3s ease;
     }
 
-    .menu__list.menu__list--active {
+    .company__menu__list.menu__list--active {
         transform: translateY(0%);
     }
 
-    .why-lease-list {
+    .company__why-lease-list {
         grid-template-columns: repeat(2, 1fr);
         gap: 20px;
         /* выравниваем содержимое по середине */
         justify-items: center; 
     }
 
-    .important__list {
+    .company__important__list {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .tabs__content-item {
+    .company__tabs__content-item {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .tabs__content__lead-item {
+    .company__tabs__content__lead-item {
         grid-template-columns: repeat(2, 1fr);
     }
 }
@@ -1113,7 +859,7 @@ body {
 
 @media (max-width: 768px) {
 
-    .title {
+    .company__title {
         font-size: 70px;
     }
 
@@ -1148,51 +894,51 @@ body {
 
     @media (max-width: 650px) {
 
-        .tabs__content-item {
+        .company__tabs__content-item {
             grid-template-columns: repeat(1, 1fr);
         }
 
-        .tabs__btn-item {
+        .company__tabs__btn-item {
             tab-size: 18px;
         }
 
-        .blog__items {
+        .company__blog__items {
             grid-template-columns: repeat(1, 1fr);
         }
 
-        .contacts {
+        .company__contacts {
             padding: 50px 0;
         }
 
-        .form__input {
+        .company__form__input {
             width: 100%;
             margin-bottom: 30px;
         }
 
-        .contact__text {
+        .company__contact__text {
             padding: 0;
         }
 
-        .tabs__content__lead-item {
+        .company__tabs__content__lead-item {
             grid-template-columns: repeat(1, 1fr);
         }
 
-        .tabs__btn__lead-item{
+        .company__tabs__btn__lead-item{
             tab-size: 18px;
         }
 
-        .card__remember {
+        .company__card__remember {
             margin-top: 20px;
             margin-bottom: 70px;
             flex-direction: column;
         }
 
-        .card__remember__box-serch {
+        .company__card__remember__box-serch {
             margin-top: 20px;
             
         }
 
-        .card_remember-search {
+        .company__card_remember-search {
             width: 100%;
             
         }
@@ -1203,7 +949,7 @@ body {
 
 @media (max-width: 540px) {
 
-    .title {
+    .company__title {
         font-size: 60px;
     }
 
@@ -1220,15 +966,15 @@ body {
         width: 35px;
     }
 
-    .why-lease-list {
+    .company__why-lease-list {
         grid-template-columns: repeat(1, 1fr);
     }
 
-    .why-lease {
+    .company__why-lease {
         margin: 30px 0;
     }
 
-    .section-title {
+    .company__section-title {
         font-size: 34px;
     }
 
@@ -1265,48 +1011,48 @@ body {
         grid-template-columns: repeat(1, 1fr);
     }
 
-    .app, .copy__nav-list {
+    .company__app, .copy__nav-list {
         flex-direction: column;
         align-items: center;
     }
 
-    .copy__nav-list {
+    .company__copy__nav-list {
         gap: 20px;
     }
 
-    .blog__item-title {
+    .company__blog__item-title {
         margin-bottom: 10px;
     }
 
-    .blog__item-link {
+    .company__blog__item-link {
         margin-left: auto;
     }
 
-    .tabs__btn {
+    .company__tabs__btn {
         flex-direction: column;
     }
 
-    .choose {
+    .company__choose {
         padding: 50px 0;
     }
 
-    .tabs__content-item {
+    .company__tabs__content-item {
         gap: 40px;
     }
 
-    .blog {
+    .company__blog {
         padding-bottom: 50px;
     }
 
-    .tabs__btn__lead{
+    .company__tabs__btn__lead{
         flex-direction: column;
     }
 
-    .lead__card {
+    .company__lead__card {
         padding: 50px 0;
     }
 
-    .tabs__content__lead-item {
+    .company__tabs__content__lead-item {
         gap: 40px;
     }
 
@@ -1315,7 +1061,7 @@ body {
     /* ==================== 300 =================== */
 @media (max-width: 300px) {
 
-    .section-title {
+    .company__section-title {
         font-size: 28px;
     }
 }
