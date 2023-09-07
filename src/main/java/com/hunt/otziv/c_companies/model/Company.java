@@ -2,6 +2,7 @@ package com.hunt.otziv.c_companies.model;
 
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Email;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -92,7 +94,9 @@ public class Company {
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Filial> filial;
 
-
+    //    филиал содержащий название и url
+    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Order> orderList;
 
     //    счетчик не оплаченных отзывов
     @Column(name = "company_counter_no_pay",columnDefinition = "integer default 0")

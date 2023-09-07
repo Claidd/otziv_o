@@ -45,11 +45,13 @@ public class SecurityConfig {
                                         .requestMatchers("/allUsers").hasRole("ADMIN")
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "CALLING","MANAGER")
-                                        .requestMatchers("/bots/**").hasRole("ADMIN")
+                                        .requestMatchers("/bots/**").hasAnyRole("ADMIN","WORKER")
                                         .requestMatchers("/categories/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/subcategories/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/operator/**").hasRole("ADMIN")
                                         .requestMatchers("/companies/**").hasAnyRole("ADMIN","MANAGER")
+                                        .requestMatchers("/products/**").hasAnyRole("ADMIN","MANAGER")
+                                        .requestMatchers("/products").hasAnyRole("ADMIN","MANAGER")
 
                 )
                 //    настройка логирования

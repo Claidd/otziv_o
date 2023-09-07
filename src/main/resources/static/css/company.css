@@ -626,18 +626,26 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    border: 1px solid #5b5a5a38;
-    border-radius: 1.2rem;
+    /* border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem; */
     height: 40px;
 
 }
 
 .company__card__title__lead {
-    padding-top: 20px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    /* border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem; */
+
+    /* padding-top: 20px; */
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 20px;
-    width: 100%;
+    /* margin-bottom: 20px; */
 }
 
 .company__card__content__city {

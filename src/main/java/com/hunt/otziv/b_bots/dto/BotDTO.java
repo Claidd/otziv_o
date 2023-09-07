@@ -2,6 +2,7 @@ package com.hunt.otziv.b_bots.dto;
 
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
@@ -34,5 +35,5 @@ public class BotDTO {
 
     private String status;
 
-    private String worker;
+    private Worker worker;
 }

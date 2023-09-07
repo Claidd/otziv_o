@@ -1,6 +1,7 @@
 package com.hunt.otziv.b_bots.model;
 
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -53,9 +54,9 @@ public class Bot {
 //    List<Review> reviewList;
 
     //    каждый бот имеет Работника, который его добавлял
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "bot_worker")
-    private User worker;
+    private Worker worker;
 
 //    @Enumerated(EnumType.STRING)
 //    @Column(name = "role")

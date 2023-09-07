@@ -70,7 +70,7 @@
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/product}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
                                 Продукт
                             </a>
                         </li>
@@ -89,32 +89,34 @@
 <!--                                Картинг-->
 <!--                            </a>-->
 <!--                        </li>-->
+                        <div sec:authorize="!isAuthenticated()" class="header__contact">
+                            <div class="header__phone-number">
+                                <div class="dws">
+                                    <div class="info__item">
+                                        <a href="/login" class="butt" aria-label="Перейти на страницу правил">Логин</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div sec:authorize="isAuthenticated()" class="header__contact">
+                            <div class="header__phone-number">
+                                <div class="dws">
+                                    <div class="info__item">
+                                        <a th:href="@{/custom-logout}" class="butt" aria-label="Перейти на страницу правил">Выйти</a>
+                                    </div>
+                                </div>
+                                <!--                        <a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a>-->
+                            </div>
+                            <!--                    <div class="header__email-adress">-->
+                            <!--                        <a href="mailto:iquest38@mail.ru" class="email-address">iquest38@mail.ru</a>-->
+                            <!--                    </div>-->
+                        </div>
                     </ul>
+                    
                 </nav>
 
 
-                <div sec:authorize="!isAuthenticated()" class="header__contact">
-                    <div class="header__phone-number">
-                        <div class="dws">
-                            <div class="info__item">
-                                <a href="/login" class="butt" aria-label="Перейти на страницу правил">Логин</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div sec:authorize="isAuthenticated()" class="header__contact">
-                    <div class="header__phone-number">
-                        <div class="dws">
-                            <div class="info__item">
-                                <a th:href="@{/custom-logout}" class="butt" aria-label="Перейти на страницу правил">Выйти</a>
-                            </div>
-                        </div>
-                        <!--                        <a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a>-->
-                    </div>
-                    <!--                    <div class="header__email-adress">-->
-                    <!--                        <a href="mailto:iquest38@mail.ru" class="email-address">iquest38@mail.ru</a>-->
-                    <!--                    </div>-->
-                </div>
+            
             </header>
 
 

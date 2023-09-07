@@ -27,4 +27,16 @@ public class CompanyController {
         model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
         return "companies/company_list";
     }
+
+    @GetMapping("/ordersCompany/{id}")
+    String ProductListToCompany(@PathVariable Long id, Model model){
+        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
+        return "companies/company_list";
+    }
+
+    @GetMapping("/ordersDetails/{id}")
+    String ordersDetailsToCompany(@PathVariable Long id, Model model){
+        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
+        return "companies/company_list";
+    }
 }

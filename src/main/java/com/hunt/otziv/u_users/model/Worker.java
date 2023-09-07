@@ -1,11 +1,12 @@
 package com.hunt.otziv.u_users.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hunt.otziv.b_bots.model.Bot;
+//import com.hunt.otziv.p_products.model.Order;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.util.List;
 
 @Entity
 @Data
@@ -23,4 +24,11 @@ public class Worker {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    @OneToMany(mappedBy = "worker", orphanRemoval = true)
+    @ToString.Exclude
+    private List<Bot> bots;
+
+//    @OneToMany(mappedBy = "worker", cascade = CascadeType.ALL, orphanRemoval = true)
+//    private List<Order> orders;
 }

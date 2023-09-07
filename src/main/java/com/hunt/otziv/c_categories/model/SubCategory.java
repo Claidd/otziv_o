@@ -1,6 +1,7 @@
 package com.hunt.otziv.c_categories.model;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,4 +32,8 @@ public class SubCategory {
     @OneToMany(mappedBy = "subCategory",cascade = CascadeType.ALL)
     @ToString.Exclude
     List<Company> companyList;
+
+    @OneToMany(mappedBy = "subCategory",cascade = CascadeType.ALL)
+    @ToString.Exclude
+    List<Review> reviews;
 }

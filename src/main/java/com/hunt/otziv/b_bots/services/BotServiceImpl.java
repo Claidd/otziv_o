@@ -3,8 +3,9 @@ package com.hunt.otziv.b_bots.services;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
-import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -23,16 +24,21 @@ public class BotServiceImpl implements BotService {
     private final StatusBotService statusBotService;
     private final BotsRepository botsRepository;
 
-    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository) {
+    private final WorkerService workerService;
+
+    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService) {
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botsRepository = botsRepository;
+        this.workerService = workerService;
     }
 
     // Создать нового бота
     @Override
     public boolean createBot(BotDTO botDTO, Principal principal) {
         botsRepository.save(toEntity(botDTO, principal));
+//        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+//        worker.setBots(worker);
         return true;
     }
 
@@ -65,8 +71,8 @@ public class BotServiceImpl implements BotService {
             log.info("Обновили ФИО");
         }
         /*Проверяем не равен ли Владельц предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(botDTO.getWorker(), saveBot.getWorker().getFio())){
-            saveBot.setWorker(userService.findByFio(botDTO.getWorker()).orElseThrow(() -> new NullPointerException(String.format("Пользоваттель с ФИО '%s' не найден", botDTO.getWorker()))));
+        if (!Objects.equals(botDTO.getWorker(), saveBot.getWorker())){
+            saveBot.setWorker(workerService.getWorkerByUserId(botDTO.getWorker().getId()));
             isChanged = true;
             log.info("Обновили Владельца");
         }
@@ -151,7 +157,7 @@ public class BotServiceImpl implements BotService {
                 .active(bot.isActive())
                 .counter(bot.getCounter())
                 .status(bot.getStatus().getBotStatusTitle())
-                .worker(bot.getWorker().getFio())
+                .worker(bot.getWorker() != null ? bot.getWorker() : null)
                 .build();
     }
     // Перевод бота в дто - конец
@@ -166,7 +172,7 @@ public class BotServiceImpl implements BotService {
                 .active(true)
                 .counter(botDTO.getCounter())
                 .status(statusBotService.findByTitle("Новый"))
-                .worker(userService.findByUserName(principal.getName()).orElse(null))
+                .worker(workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId()))
                 .build();
         log.info("БотДТО успешно переведен в Бот");
         return bot;

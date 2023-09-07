@@ -57,6 +57,7 @@ create table IF NOT EXISTS managers(
 create table IF NOT EXISTS workers(
     worker_id  bigint  auto_increment,
     user_id bigint unique,
+
 --    CONSTRAINT workers_fk FOREIGN KEY (user_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
     primary key (worker_id)
 )engine=InnoDB;
@@ -143,10 +144,10 @@ create TABLE IF NOT EXISTS bots (
     REFERENCES bots_status (bot_status_id)
     ON delete NO ACTION
     ON update CASCADE,
-    CONSTRAINT bot_worker
+    CONSTRAINT fk_bot_worker
     FOREIGN KEY (bot_worker)
-    REFERENCES users (id)
-    ON delete NO ACTION
+    REFERENCES workers (worker_id)
+    ON delete SET NULL
     ON update CASCADE,
     PRIMARY KEY (bot_id))
 ENGINE = InnoDB;
@@ -192,7 +193,6 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_comments VARCHAR(2000) NULL,
       company_counter_no_pay INT NULL DEFAULT 0,
       company_counter_pay INT NULL DEFAULT 0,
-      company_orders VARCHAR(45) NULL,
       company_active BIT(1) NULL,
       company_sum INT NULL DEFAULT 0,
       create_date DATE NULL,
@@ -262,6 +262,116 @@ CREATE TABLE IF NOT EXISTS filial (
     ON UPDATE CASCADE,
   PRIMARY KEY (filial_id))
 ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS products (
+  product_id bigint NOT NULL AUTO_INCREMENT,
+  product_title VARCHAR(45) NULL,
+  product_price NUMERIC(7,2) NULL,
+  PRIMARY KEY (product_id))
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`order_statuses` (
+  `order_status_id` bigint NOT NULL AUTO_INCREMENT,
+  `order_status_title` VARCHAR(45) NULL,
+  PRIMARY KEY (`order_status_id`))
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
+  `order_id` bigint NOT NULL AUTO_INCREMENT,
+  `order_created` DATE NULL,
+  `order_changed` DATE NULL,
+  `order_sum` numeric(7,2) NULL,
+  `order_details` bigint NULL,
+  `order_status` bigint NULL,
+  `order_company` bigint NULL,
+  `order_manager` bigint NULL,
+  `order_worker` bigint NULL,
+   order_complete BIT(0) NULL,
+  PRIMARY KEY (`order_id`),
+  INDEX `order_status_idx` (`order_status` ASC),
+  INDEX `order_company_idx` (`order_company` ASC),
+  INDEX `order_worker_idx` (`order_worker` ASC),
+  INDEX `order_manager_idx` (`order_manager` ASC),
+  CONSTRAINT `order_manager`
+    FOREIGN KEY (`order_manager`)
+    REFERENCES `otziv`.`managers` (`manager_id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `order_status`
+    FOREIGN KEY (`order_status`)
+    REFERENCES `otziv`.`order_statuses` (`order_status_id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `order_worker`
+    FOREIGN KEY (`order_worker`)
+    REFERENCES `otziv`.`workers` (`worker_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `order_company`
+    FOREIGN KEY (`order_company`)
+    REFERENCES `otziv`.`companies` (`company_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`order_details` (
+  `order_detail_id` bigint NOT NULL AUTO_INCREMENT,
+  `order_detail_order` bigint NULL,
+  `order_detail_product` bigint NULL,
+  `order_detail_amount` INT NULL,
+  `order_detail_price` DECIMAL(7,2) NULL,
+  `order_detail_date_published` DATE NULL,
+  PRIMARY KEY (`order_detail_id`),
+  INDEX `order_detail_order_idx` (`order_detail_order` ASC),
+  INDEX `order_detail_product_idx` (`order_detail_product` ASC),
+  CONSTRAINT `order_detail_product`
+    FOREIGN KEY (`order_detail_product`)
+    REFERENCES `otziv`.`products` (`product_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `order_detail_order`
+    FOREIGN KEY (`order_detail_order`)
+    REFERENCES `otziv`.`orders` (`order_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
+  `review_id` bigint NOT NULL AUTO_INCREMENT,
+  `review_text` VARCHAR(5000) NULL,
+  `review_category` bigint NULL,
+  `review_subcategory` bigint NULL,
+  `review_answer` VARCHAR(5000) NULL,
+  `review_order_details` bigint NULL,
+  `review_bot` bigint NULL,
+  PRIMARY KEY (`review_id`),
+  INDEX `reviews_order_details_idx` (`review_order_details` ASC),
+  INDEX `reviews_bot_idx` (`review_bot` ASC),
+  INDEX `rewiews_category_idx` (`review_category` ASC),
+  INDEX `rewiews_subcategory_idx` (`review_subcategory` ASC),
+  CONSTRAINT `rewiews_category`
+    FOREIGN KEY (`review_category`)
+    REFERENCES `otziv`.`categorys` (`category_id`)
+    ON DELETE NO ACTION
+    ON UPDATE CASCADE,
+  CONSTRAINT `rewiews_subcategory`
+    FOREIGN KEY (`review_subcategory`)
+    REFERENCES `otziv`.`subcategoryes` (`subcategory_id`)
+    ON DELETE NO ACTION
+    ON UPDATE CASCADE,
+  CONSTRAINT `reviews_order_details`
+    FOREIGN KEY (`review_order_details`)
+    REFERENCES `otziv`.`order_details` (`order_detail_id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `reviews_bot`
+    FOREIGN KEY (`review_bot`)
+    REFERENCES `otziv`.`bots` (`bot_id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
+
+
 
 
 

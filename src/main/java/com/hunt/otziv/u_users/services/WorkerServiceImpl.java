@@ -30,6 +30,11 @@ public class WorkerServiceImpl implements WorkerService {
     }
 
     @Override
+    public Worker getWorkerByUserId(Long id) {
+        return workerRepository.findByUserId(id).orElse(null);
+    }
+
+    @Override
     public Set<Worker> getAllWorkers() {
         return workerRepository.findAll();
     }

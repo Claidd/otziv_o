@@ -16,4 +16,6 @@ public interface WorkerService {
     void deleteWorker(User user);
 
     void saveNewWorker(User user);
+
+    Worker getWorkerByUserId(Long id);
 }
