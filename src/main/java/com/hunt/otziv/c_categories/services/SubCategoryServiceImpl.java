@@ -97,4 +97,8 @@ public class SubCategoryServiceImpl implements SubCategoryService{
         return subCategoryRepository.findById(categoryId).orElse(null);
     }
 
+    public SubCategory getSubCategoryById(Long subCategoryId) {
+        return subCategoryRepository.findById(subCategoryId).orElse(null);
+    }
+
 }

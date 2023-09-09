@@ -67,6 +67,19 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    public CompanyDTO getCompaniesDTOById(Long id){
+        return convertToDto(companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Компания '%d' не найден", id)
+        )));
+    }
+
+    @Override
+    public Company getCompaniesById(Long id) {
+        return companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Компания '%d' не найден", id)
+        ));
+    }
+
     //    Метод подготовки ДТО при создании компании из Лида менеджером
 
     //      =====================================CREATE USERS - START=======================================================
@@ -203,7 +216,7 @@ public class CompanyServiceImpl implements CompanyService{
     private WorkerDTO convertToWorkerDto(Worker worker) {
         WorkerDTO workerDTO = new WorkerDTO();
         workerDTO.setWorkerId(worker.getId());
-        workerDTO.setUser(workerDTO.getUser());
+        workerDTO.setUser(worker.getUser());
         // Other fields if needed
         return workerDTO;
     }

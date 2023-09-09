@@ -17,7 +17,7 @@
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="company__lead__card">
         <div class="container">
-            <h2 class="company__section-title">ВЫБЕРИТЕ ПРОДУКТ</h2>
+            <h2 class="company__section-title">Детали заказа</h2>
             <div class="company__tabs__lead">
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="company__tabs__btn__lead">
@@ -85,23 +85,26 @@
                     <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
 
 
-                        <div th:each="product : ${products}" class="company__card__lead">
+                        <div th:each="review : ${reviews}" class="company__card__lead">
                             <div class="company__card__content__lead">
 
                                 <!-- элементы карточки - начало -->
                                 <div class="company__card__content__product">
-                                    <a class="company__card__title__lead" th:text="${product.title}">Текущий статус Лида</a>
+                                    <a class="company__card__title__lead" th:text="${review.id}">Текущий статус Лида</a>
                                 </div>
                                 <div class="company__card__content__product">
-                                    <a class="company__card__title__lead" th:text="${product.price} + ' руб/шт'">Текущий статус Лида</a>
+                                    <a class="company__card__title__lead" th:text="${review.text} + ' руб.'">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${review.bot.fio} + ' руб.'">Текущий статус Лида</a>
                                 </div>
 
                            
                                 <div >
                                     <!-- <div class="card__title__lead" th:text="${product.title}">Номер Лида</div> -->
-                                    <form th:object="${newOrder}" th:method="post" th:action="@{'/ordersCompany/'+ ${companyID} + '/' + ${product.id}}">
+                                    <form  th:method="post" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${review.id}}">
                                         
-                                        <input type="hidden" id="company" th:field="*{company.id}" class="form-control" placeholder="">
+                                        <!-- <input type="hidden" id="company" th:field="*{company.id}" class="form-control" placeholder="">
                                         <input type="hidden" id="company2" th:field="*{company.categoryCompany.id}" class="form-control" placeholder="">
                                         <input type="hidden" id="company3" th:field="*{company.subCategory.id}" class="form-control" placeholder="">
 
@@ -123,12 +126,12 @@
                                             <select th:field="*{company.filial.id}" id="inputWorker" name="worker"  class="form-control form-select form-select-lg company__card__content__product">  
                                                 <option th:each="filial : ${newOrder.company.filials}" name="filial" th:value="${filial.id}" th:text="${filial.title}"></option>
                                             </select>
-                                        </div>
+                                        </div> -->
 
                                         <!-- <input type="hidden" name="amount" th:value="${amount}" /> -->
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <div class="company__card__content__phone">
-                                            <button type="submit" class="company__card__text__lead-button" th:text="ЗАКАЗАТЬ">в архив</button>
+                                            <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">в архив</button>
                                         </div>
                                   </form>
                               </div>
@@ -172,8 +175,8 @@
                                     <!-- элементы карточки - конец -->
 <!--                                </div> &lt;!&ndash; card__content_button &ndash;&gt;-->
 <!--                            </div> &lt;!&ndash; card__content__lead &ndash;&gt;-->
-                            <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${product.id}">
-                                <div class="company__card__link__lead" th:text="${product.title != null ? product.title : 'пусто'}">Имя Менеджера</div>
+                            <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${review.id}">
+                                <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
                             </form>

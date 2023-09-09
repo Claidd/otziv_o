@@ -280,6 +280,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
   `order_id` bigint NOT NULL AUTO_INCREMENT,
   `order_created` DATE NULL,
   `order_changed` DATE NULL,
+  `order_amount` int NULL,
   `order_sum` numeric(7,2) NULL,
   `order_details` bigint NULL,
   `order_status` bigint NULL,
@@ -344,6 +345,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
   `review_answer` VARCHAR(5000) NULL,
   `review_order_details` bigint NULL,
   `review_bot` bigint NULL,
+  `review_filial` bigint NULL,
   PRIMARY KEY (`review_id`),
   INDEX `reviews_order_details_idx` (`review_order_details` ASC),
   INDEX `reviews_bot_idx` (`review_bot` ASC),
@@ -368,11 +370,35 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
     FOREIGN KEY (`review_bot`)
     REFERENCES `otziv`.`bots` (`bot_id`)
     ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
+    ON UPDATE NO ACTION,
+    CONSTRAINT `review_filial`
+    FOREIGN KEY (`review_filial`)
+    REFERENCES `otziv`.`filial` (`filial_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
 
-
+CREATE TABLE IF NOT EXISTS `otziv`.`reviews_archive` (
+  `review_archive_id` bigint NOT NULL AUTO_INCREMENT,
+  `review_archive_text` VARCHAR(5000) NULL,
+  `review_archive_category` bigint NULL,
+  `review_archive_subcategory` bigint NULL,
+  `review_archive_answer` VARCHAR(5000) NULL,
+  PRIMARY KEY (`review_archive_id`),
+  INDEX `rewiews_archive_category_idx` (`review_archive_category` ASC),
+  INDEX `rewiews_archive_subcategory_idx` (`review_archive_subcategory` ASC),
+  CONSTRAINT `rewiews_archive_category`
+    FOREIGN KEY (`review_archive_category`)
+    REFERENCES `otziv`.`categorys` (`category_id`)
+    ON DELETE NO ACTION
+    ON UPDATE CASCADE,
+  CONSTRAINT `rewiews_archive_subcategory`
+    FOREIGN KEY (`review_archive_subcategory`)
+    REFERENCES `otziv`.`subcategoryes` (`subcategory_id`)
+    ON DELETE NO ACTION
+    ON UPDATE CASCADE)
+ENGINE = InnoDB;
 
 
 

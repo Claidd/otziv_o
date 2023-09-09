@@ -14,6 +14,8 @@ public interface CompanyService {
     boolean save(CompanyDTO companyDTO); //    сохранить компанию
     Set<Company> getAllCompanies(); //    взять все компании
     Set<CompanyDTO> getAllCompaniesDTO(); //    взять все компании с переводом их в DTO
+    CompanyDTO getCompaniesDTOById(Long id); // взять одну компанию по id с переводом их в DTO
+    Company getCompaniesById(Long id); // взять одну компанию по id
 
 
 

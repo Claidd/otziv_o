@@ -1,6 +1,6 @@
-package com.hunt.otziv.u_users.dto;
+package com.hunt.otziv.p_products.dto;
 
-import com.hunt.otziv.u_users.model.User;
+import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,8 +10,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WorkerDTO {
-    private Long workerId;
+public class OrderStatusDTO {
 
-    private User user;
+    private Long id;
+
+    private String title;
 }

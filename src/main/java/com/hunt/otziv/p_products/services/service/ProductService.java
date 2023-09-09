@@ -7,4 +7,6 @@ import java.util.List;
 public interface ProductService {
 
     List<Product> findAll(); // взять все продукты
+
+    Product findById(Long id); // взять продукт по id
 }

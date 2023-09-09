@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Data
@@ -48,4 +49,17 @@ public class OrderDetails {
 
     @Column(name = "order_detail_price")
     private BigDecimal price;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OrderDetails that = (OrderDetails) o;
+        return amount == that.amount && Objects.equals(id, that.id) && Objects.equals(reviews, that.reviews) && Objects.equals(publishedDate, that.publishedDate) && Objects.equals(product, that.product) && Objects.equals(price, that.price);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, reviews, publishedDate, product, amount, price);
+    }
 }

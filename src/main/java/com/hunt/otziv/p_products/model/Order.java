@@ -33,6 +33,8 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "order_changed")
     private LocalDate changed;
+    @Column(name = "order_amount")
+    private Integer amount;
     @Column(name = "order_sum")
     private BigDecimal sum;
     @OneToMany(mappedBy = "order",cascade = CascadeType.ALL)

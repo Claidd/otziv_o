@@ -18,4 +18,6 @@ public interface SubCategoryService {
     SubCategoryDTO getCategoryById(Long categoryId);
 
     SubCategory getCategoryByIdSubCategory(Long categoryId);
+
+    SubCategory getSubCategoryById(Long subCategoryId);
 }

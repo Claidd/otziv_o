@@ -141,9 +141,12 @@ public class BotServiceImpl implements BotService {
         return botsRepository.findAll().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
-
     }
     // Взять всех юзеров - конец
+
+    public List<Bot> getAllBotsByWorkerId(Long id){
+        return botsRepository.findAllByWorkerId(id);
+    }
 
 
     // Перевод бота в дто - начало
@@ -190,6 +193,8 @@ public class BotServiceImpl implements BotService {
         return b;
 //        userDto.getPhoneNumber().replaceFirst("8", "+7")
     }
+
+
 }
 
 

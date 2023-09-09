@@ -13,6 +13,8 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
 
     Optional<Bot> findByLogin(String username);
 
+    List<Bot> findAllByWorkerId(Long workerId);
+
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();

@@ -115,7 +115,6 @@ public class CategoryServiceImpl implements CategoryService{
 
     public Category getCategoryByIdCategory(Long categoryId) {
        return categoryRepository.findById(categoryId).orElse(null);
-
     }
 
 
