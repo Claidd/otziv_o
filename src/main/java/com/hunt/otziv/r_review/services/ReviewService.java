@@ -9,4 +9,6 @@ public interface ReviewService {
     Review save(Review review);
 
     List<Review> getReviewsAllByOrderId(Long id);
+
+    void changeBot(Long id);
 }

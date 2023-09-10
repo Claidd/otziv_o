@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.dto;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 
 import lombok.AllArgsConstructor;
@@ -29,4 +30,6 @@ public class ReviewDTO {
     private BotDTO bot;
 
     private OrderDetailsDTO orderDetails;
+
+    private FilialDTO filial;
 }

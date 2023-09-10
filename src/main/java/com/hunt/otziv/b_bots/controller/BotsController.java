@@ -106,4 +106,5 @@ public class BotsController {
         botService.deleteBot(id);
         return "bots/bots_list";
     }
+
 }

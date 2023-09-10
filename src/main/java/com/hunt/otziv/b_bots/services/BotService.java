@@ -27,4 +27,6 @@ public interface BotService {
     List<BotDTO> getAllBots();
 
     List<Bot> getAllBotsByWorkerId(Long id);
+
+    Bot save(Bot bot);
 }

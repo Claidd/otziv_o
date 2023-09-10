@@ -56,4 +56,18 @@ public class Order {
 
     @Column(name = "order_complete")
     private boolean complete;
+
+    @Override
+    public String toString() {
+        return "Order{" +
+                "id=" + id +
+                ", created=" + created +
+                ", changed=" + changed +
+                ", amount=" + amount +
+                ", sum=" + sum +
+                ", status=" + status +
+                ", worker=" + worker +
+                ", complete=" + complete +
+                '}';
+    }
 }

@@ -148,6 +148,11 @@ public class BotServiceImpl implements BotService {
         return botsRepository.findAllByWorkerId(id);
     }
 
+    @Override
+    public Bot save(Bot bot) {
+        return botsRepository.save(bot);
+    }
+
 
     // Перевод бота в дто - начало
     private BotDTO toDto(Bot bot){

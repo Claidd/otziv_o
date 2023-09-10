@@ -194,55 +194,9 @@ $(document).ready(function(){
   
     /* Alert the copied text */
     alert("Copied the text: " + copyText4.value);
-  }// <!-- ==================== COPY TEXT ====================== -->
-
-  // <!-- ==================== COPY BUTTON REVIEW ====================== -->
-
-  function myFunctionBotLogin(reviewId) { // BOT LOGIN 
-    /* Get the text field */
-    var copyTextLogin = document.getElementById('botLogin_' + reviewId);
-    /* Select the text field */
-    copyTextLogin.select();
-    /* Copy the text inside the text field */
-    document.execCommand("copy");
-    /* Alert the copied text */
-    alert("Copied the text: " + copyTextLogin.value);
   }
 
-  function myFunctionBotPassword(reviewId) { // BOT PASSWORD 
-    /* Get the text field */
-    var copyTextLogin = document.getElementById('botPassword_' + reviewId);
-    /* Select the text field */
-    copyTextLogin.select();
-    /* Copy the text inside the text field */
-    document.execCommand("copy");
-    /* Alert the copied text */
-    alert("Copied the text: " + copyTextLogin.value);
-  }
-
-  function myFunctionReviewText(reviewId) { // Review Text 
-    /* Get the text field */
-    var copyTextLogin = document.getElementById('ReviewText_' + reviewId);
-    /* Select the text field */
-    copyTextLogin.select();
-    /* Copy the text inside the text field */
-    document.execCommand("copy");
-    /* Alert the copied text */
-    alert("Copied the text: " + copyTextLogin.value);
-  }
-
-  function myFunctionReviewAnswer(reviewId) { // Review Answer 
-    /* Get the text field */
-    var copyTextLogin = document.getElementById('ReviewAnswer_' + reviewId);
-    /* Select the text field */
-    copyTextLogin.select();
-    /* Copy the text inside the text field */
-    document.execCommand("copy");
-    /* Alert the copied text */
-    alert("Copied the text: " + copyTextLogin.value);
-  }
-
-  // <!-- ==================== COPY BUTTON REVIEW ====================== -->
+  // <!-- ==================== COPY TEXT ====================== -->
 
 
 
