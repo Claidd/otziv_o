@@ -28,5 +28,7 @@ public interface BotService {
 
     List<Bot> getAllBotsByWorkerId(Long id);
 
+    List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id);
+
     Bot save(Bot bot);
 }

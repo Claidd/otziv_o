@@ -147,6 +147,9 @@ public class BotServiceImpl implements BotService {
     public List<Bot> getAllBotsByWorkerId(Long id){
         return botsRepository.findAllByWorkerId(id);
     }
+    public List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id){
+        return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
+    }
 
     @Override
     public Bot save(Bot bot) {

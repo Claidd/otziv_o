@@ -15,6 +15,8 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
 
     List<Bot> findAllByWorkerId(Long workerId);
 
+    List<Bot> findAllByWorkerIdAndActiveIsTrue(Long workerId);
+
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();

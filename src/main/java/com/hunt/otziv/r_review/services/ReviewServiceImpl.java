@@ -33,7 +33,7 @@ public class ReviewServiceImpl implements ReviewService{
         Review review = reviewRepository.findById(id).orElse(null);
         log.info("2. Достали отзыв по id" + id);
         if (review != null){
-            List<Bot> bots = botService.getAllBotsByWorkerId(review.getOrderDetails().getOrder().getWorker().getId());
+            List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
             var random = new SecureRandom();
             review.setBot(bots.get(random.nextInt(bots.size())));
             log.info("3. Установили нового рандомного бота");
@@ -42,6 +42,33 @@ public class ReviewServiceImpl implements ReviewService{
         }
         else {
             return;
+        }
+    }
+
+    @Override
+    public void deActivateAndChangeBot(Long reviewId, Long botId) {
+        try {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        log.info("2. Достали отзыв по id" + reviewId);
+
+            if (review != null){
+                Bot bot = botService.findBotById(botId);
+                bot.setActive(false);
+                botService.save(bot);
+                log.info("3. Дективировали бота" + reviewId);
+                List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
+                var random = new SecureRandom();
+                review.setBot(bots.get(random.nextInt(bots.size())));
+                log.info("4. Установили нового рандомного бота");
+                reviewRepository.save(review);
+                log.info("5. Сохранили нового бота в отзыве в БД");
+            }
+            else {
+                return;
+            }
+        }
+        catch (Exception e){
+            System.out.println(e);
         }
     }
 }

@@ -6,4 +6,6 @@ public interface OrderService {
     OrderDTO newOrderDTO(Long id);
 
     boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
+
+    boolean changeStatusForOrder(Long orderID, String title);
 }

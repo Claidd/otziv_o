@@ -82,7 +82,7 @@
 
 
                     <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-                    <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
+                    <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
 
 
                         <div th:each="review : ${reviews}" class="company__card__lead">
@@ -138,7 +138,7 @@
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="company__card__text__lead-button ">смена</button> 
                                     </form>
-                                    <form class="company__card__text__lead" th:method="post" th:action="'company/status_archive/' + ${review.id}">
+                                    <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${orderID} + '/deactivate_bot/' + ${review.id} + '/' + ${review.bot.id}}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit"  class="company__card__text__lead-button ">блок</button>
                                     </form>

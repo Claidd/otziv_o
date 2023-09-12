@@ -381,6 +381,16 @@ body {
     gap: 100px 40px;
 }
 
+.orderdetails__tabs__content-item {
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 100px 40px;
+}
+
+.orderdetails__tabs__content-item.orderdetails__tabs__content-item--active {
+    display: grid;
+}
+
 .company__tabs__content-item.company__tabs__content-item--active {
     display: grid;
 }
@@ -479,6 +489,12 @@ body {
 .company__tabs__content-item{
     display: none;
     grid-template-columns: repeat(4, 1fr);
+    gap: 100px 40px;
+}
+
+.orderdetails__tabs__content-item{
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
     gap: 100px 40px;
 }
 
@@ -671,6 +687,7 @@ body {
     display: flex;
     justify-content: space-around;
     flex-direction: row;
+    height: 40px;
 }
 
 .company__card__content__author {
@@ -782,6 +799,16 @@ body {
 
 /* ==================== MEDIA START =================== */
 
+/* ==================== 1180 =================== */
+@media (max-width: 1420px) {
+
+
+    .orderdetails__tabs__content-item {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+}
+/* ==================== 1040 =================== */
 
 
 /* ==================== 1180 =================== */
@@ -796,6 +823,9 @@ body {
     }
 
     .company__tabs__content-item {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .orderdetails__tabs__content-item {
         grid-template-columns: repeat(3, 1fr);
     }
 
@@ -876,6 +906,10 @@ body {
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .orderdetails__tabs__content-item {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .company__tabs__content__lead-item {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -924,6 +958,10 @@ body {
             grid-template-columns: repeat(1, 1fr);
         }
 
+        .orderdetails__tabs__content-item {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
         .company__tabs__btn-item {
             tab-size: 18px;
         }
@@ -946,6 +984,10 @@ body {
         }
 
         .company__tabs__content__lead-item {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+        .orderdetails__tabs__content__lead-item {
             grid-template-columns: repeat(1, 1fr);
         }
 
@@ -1063,6 +1105,10 @@ body {
     }
 
     .company__tabs__content-item {
+        gap: 40px;
+    }
+
+    .orderdetails__tabs__content-item {
         gap: 40px;
     }
 

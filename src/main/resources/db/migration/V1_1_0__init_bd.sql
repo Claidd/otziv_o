@@ -282,11 +282,11 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
   `order_changed` DATE NULL,
   `order_amount` int NULL,
   `order_sum` numeric(7,2) NULL,
-  `order_details` bigint NULL,
   `order_status` bigint NULL,
   `order_company` bigint NULL,
   `order_manager` bigint NULL,
   `order_worker` bigint NULL,
+  `order_filial` bigint NULL,
    order_complete BIT(0) NULL,
   PRIMARY KEY (`order_id`),
   INDEX `order_status_idx` (`order_status` ASC),
@@ -306,6 +306,11 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
   CONSTRAINT `order_worker`
     FOREIGN KEY (`order_worker`)
     REFERENCES `otziv`.`workers` (`worker_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+    CONSTRAINT `order_filial`
+    FOREIGN KEY (`order_filial`)
+    REFERENCES `otziv`.`filial` (`filial_id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
   CONSTRAINT `order_company`
@@ -400,7 +405,11 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews_archive` (
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
-
+CREATE TABLE IF NOT EXISTS `otziv`.`amounts` (
+  `amount_id` bigint NOT NULL AUTO_INCREMENT,
+  `amount` INT NULL,
+  PRIMARY KEY (`amount_id`))
+ENGINE = InnoDB;
 
 --create table IF NOT EXISTS operators(
 --    operator_id  bigint  auto_increment,

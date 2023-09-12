@@ -26,15 +26,26 @@ public class OrderDetailsController {
         return "products/orders_detail_list";
     }
 
-    @PostMapping("/{companyID}/{orderID}/change_bot/{id}")
-    public String changeBot(@PathVariable Long id,@PathVariable Long companyID, @PathVariable Long orderID, Model model){
+    @PostMapping("/{companyID}/{orderID}/change_bot/{reviewId}")
+    public String changeBot(@PathVariable Long reviewId,@PathVariable Long companyID, @PathVariable Long orderID, Model model){
         log.info("1. Заходим в Post метод замены бота");
-        reviewService.changeBot(id);
-        log.info("4. Все прошло успешно, вернулись в контроллер");
+        reviewService.changeBot(reviewId);
+        log.info("5. Все прошло успешно, вернулись в контроллер");
         model.addAttribute("companyID", companyID);
-        model.addAttribute("orderID", id);
+        model.addAttribute("orderID", orderID);
+        model.addAttribute("reviewID", orderID);
         // Build the redirect URL by appending the context path
-        String redirectUrl = String.format("redirect:/ordersDetails/%s/%s", companyID, orderID);
-        return redirectUrl;
+        return String.format("redirect:/ordersDetails/%s/%s", companyID, orderID);
+    }
+
+    @PostMapping("/{companyID}/{orderID}/deactivate_bot/{reviewId}/{botId}")
+    public String deActivateBot(@PathVariable Long reviewId, @PathVariable Long companyID, @PathVariable Long orderID, @PathVariable Long botId, Model model){
+        log.info("1. Заходим в Post метод замены бота");
+        reviewService.deActivateAndChangeBot(reviewId, botId);
+        log.info("6. Все прошло успешно, вернулись в контроллер");
+        model.addAttribute("companyID", companyID);
+        model.addAttribute("orderID", orderID);
+        // Build the redirect URL by appending the context path
+        return String.format("redirect:/ordersDetails/%s/%s", companyID, orderID);
     }
 }

@@ -17,21 +17,29 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.dto.OrderStatusDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.webjars.NotFoundException;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -46,6 +54,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final CompanyService companyService;
     private final WorkerService workerService;
+    private final ManagerService managerService;
     private final OrderDetailsService orderDetailsService;
     private final ProductService productService;
     private final CategoryService categoryService;
@@ -53,17 +62,21 @@ public class OrderServiceImpl implements OrderService {
     private final BotService botService;
     private final FilialService filialService;
     private final ReviewService reviewService;
+    private final OrderStatusService orderStatusService;
     @Override
     public OrderDTO newOrderDTO(Long id) {
-        CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id сс переводом ее в дто
+        CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
         OrderDTO orderDTO = new OrderDTO();
         orderDTO.setCompany(companyDTO); // устанавливаем заказу компанию
         orderDTO.setWorkers(companyDTO.getWorkers()); // список работников в этой компании
+        orderDTO.setManager(companyDTO.getManager());
+        orderDTO.setStatus(orderStatusService.getOrderStatusDTOByTitle("Новый"));
         return orderDTO;
     }
 
     @Override
-    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
+    @Transactional
+    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) { // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
         Order order = toEntityOrderFromDTO(orderDTO, productId);
         Order saveOrder = orderRepository.save(order);
         log.info("1. Сохранили ORDER");
@@ -95,60 +108,71 @@ public class OrderServiceImpl implements OrderService {
         return true;
     }
 
-    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){
+    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // перевод из ДТО в Сущность ORDER
         Product product1 = productService.findById(productId);
-        Order order = Order.builder()
+        System.out.println(orderDTO.getFilial());
+        return Order.builder()
                 .amount(orderDTO.getAmount())
                 .complete(false)
                 .worker(convertWorkerDTOToWorker(orderDTO.getWorker()))
                 .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
+                .manager(convertManagerDTOToManager(orderDTO.getManager()))
+                .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
                 .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
+                .status(convertStatusDTOToStatus(orderDTO.getStatus()))
                 .build();
-        return order;
     }
 
-    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO){
+    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO){ // поиск и перевод из ДТО в Сущность
         return workerService.getWorkerById(workerDTO.getWorkerId());
     }
-
     private Company convertCompanyDTOToCompany(CompanyDTO companyDTO){
         return companyService.getCompaniesById(companyDTO.getId());
     }
+    private Manager convertManagerDTOToManager(ManagerDTO managerDTO){
+        return managerService.getManagerById(managerDTO.getManagerId());
+    }
+    private OrderStatus convertStatusDTOToStatus(OrderStatusDTO orderStatusDTO){
+        return orderStatusService.getOrderStatusByTitle(orderStatusDTO.getTitle());
+    }
+    private Filial convertFilialDTOToFilial(FilialDTO filialDTO){
+        System.out.println(filialDTO.getId());
+        return filialService.getFilial(filialDTO.getId());
+    }
 
 
-    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){
+    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){ // перевод из ДТО в Сущность ORDER_DETAIL
         Product product1 = productService.findById(productId);
-        OrderDetails orderDetails = OrderDetails.builder()
+        return OrderDetails.builder()
                 .amount(orderDTO.getAmount())
+                .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
                 .order(order)
                 .product(product1)
                 .build();
-        return orderDetails;
     }
 
-    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){
+    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // составляем список отзывов
         List<Review> reviewList = new ArrayList<>();
         for (int i = 0; i < orderDTO.getAmount(); i++) {
-            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getWorker());
+            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getWorker(), orderDTO.getFilial());
             Review review2 = reviewService.save(review);
             reviewList.add(review2);
         }
         return reviewList;
     }
 
-    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, WorkerDTO workerDTO){
-        List<Bot> bots = botService.getAllBotsByWorkerId(workerDTO.getWorkerId());
+    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, WorkerDTO workerDTO, FilialDTO filialDTO){ // перевод из ДТО в Сущность REVIEW
+        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(workerDTO.getWorkerId());
         var random = new SecureRandom();
-        Review review = Review.builder()
+        return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
-                .text("Заполнить")
-                .answer("Заполнить при необходимости")
+                .text("Текст отзыва")
+                .answer("Ответ на отзыв")
                 .orderDetails(orderDetails)
                 .bot(bots.get(random.nextInt(bots.size())))
-                .filial(convertFilialDTOToFilial(companyDTO.getFilial()))
+                .filial(convertFilialDTOToFilial(filialDTO))
                 .build();
-        return review;
     }
     private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
@@ -156,9 +180,20 @@ public class OrderServiceImpl implements OrderService {
     private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO){
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
     }
-    private Filial convertFilialDTOToFilial(FilialDTO filialDTO){
-        return filialService.getFilial(filialDTO.getId());
+
+//    ==================================================================================================================
+
+    public boolean changeStatusForOrder(Long orderID, String title){
+        try {
+            Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
+            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+            orderRepository.save(order);
+            return true;
+        } catch (Exception e){
+            System.out.println(e);
+            return false;
+        }
     }
 
-
+//    ==================================================================================================================
 }

@@ -1,6 +1,8 @@
 package com.hunt.otziv.p_products.model;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
@@ -34,7 +36,7 @@ public class Order {
     @Column(name = "order_changed")
     private LocalDate changed;
     @Column(name = "order_amount")
-    private Integer amount;
+    private int amount;
     @Column(name = "order_sum")
     private BigDecimal sum;
     @OneToMany(mappedBy = "order",cascade = CascadeType.ALL)
@@ -51,8 +53,18 @@ public class Order {
 
     //    каждый бот имеет Работника, который его добавлял
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_manager")
+    private Manager manager;
+
+    //    каждый бот имеет Работника, который его добавлял
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_company")
     private Company company;
+    //    каждый бот имеет Работника, который его добавлял
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_filial")
+    private Filial filial;
+
 
     @Column(name = "order_complete")
     private boolean complete;

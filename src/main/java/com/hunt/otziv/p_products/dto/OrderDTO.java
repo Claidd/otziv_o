@@ -1,6 +1,8 @@
 package com.hunt.otziv.p_products.dto;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,9 +38,13 @@ public class OrderDTO {
     //    каждый бот имеет Работника, который его добавлял
     private WorkerDTO worker;
     private Set<WorkerDTO> workers;
+    private ManagerDTO manager;
 
     //    каждый бот имеет Работника, который его добавлял
     private CompanyDTO company;
 
     private boolean complete;
+
+    //    филиал содержащий название и url
+    private FilialDTO filial;
 }
