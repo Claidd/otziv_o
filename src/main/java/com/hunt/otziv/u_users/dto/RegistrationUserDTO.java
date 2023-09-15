@@ -34,6 +34,7 @@ public class RegistrationUserDTO {
     private boolean active;
     private Collection<Role> roles;
     private LocalDate createTime;
+    private Manager manager;
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;

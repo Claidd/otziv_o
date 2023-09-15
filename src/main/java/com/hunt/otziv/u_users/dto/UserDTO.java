@@ -40,6 +40,7 @@ public class UserDTO {
     private boolean active;
     private Collection<Role> roles;
     private LocalDate createTime;
+
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;

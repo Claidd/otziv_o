@@ -14,5 +14,7 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     Optional<Worker> findById(Long id);
     Set<Worker> findAll();
 
+    Set<Worker> findAllByUserId(Long id);
+
     Optional<Worker> findByUserId(Long id);
 }

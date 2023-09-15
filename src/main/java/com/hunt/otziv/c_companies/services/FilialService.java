@@ -10,5 +10,9 @@ public interface FilialService {
 
     Filial getFilial(Long id);
 
+    void deleteFilial(Long filialId);
     Filial findFilialByTitleAndUrl(String title, String url);
+
+    FilialDTO getFilialByIdToDTO(Long id);
+    void updateFilial(FilialDTO filialDTO);
 }

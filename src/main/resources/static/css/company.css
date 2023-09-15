@@ -806,6 +806,11 @@ body {
     .orderdetails__tabs__content-item {
         grid-template-columns: repeat(4, 1fr);
     }
+    
+    .company__tabs__btn__lead{
+        padding: 0 0 50px;
+        gap: 20px;
+    }
 
 }
 /* ==================== 1040 =================== */
@@ -831,6 +836,11 @@ body {
 
     .company__tabs__content__lead-item{
         grid-template-columns: repeat(3, 1fr);
+    }
+
+    .company__tabs__btn__lead{
+        padding: 0 0 50px;
+        gap: 20px;
     }
 
 }
@@ -913,6 +923,11 @@ body {
     .company__tabs__content__lead-item {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .company__tabs__btn__lead{
+        padding: 0 0 50px;
+        gap: 10px;
+    }
 }
 
 /* ==================== 768 =================== */
@@ -946,6 +961,9 @@ body {
 
     .video__content {
         height: 400px;
+    }
+    .company__tabs__btn__lead{
+        flex-direction: column;
     }
 
 }

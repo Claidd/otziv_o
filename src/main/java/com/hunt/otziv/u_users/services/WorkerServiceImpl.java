@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -37,6 +39,17 @@ public class WorkerServiceImpl implements WorkerService {
     @Override
     public Set<Worker> getAllWorkers() {
         return workerRepository.findAll();
+    }
+
+    public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){
+        return workers.stream().map(this::toDTO).collect(Collectors.toSet());
+    }
+
+    private WorkerDTO toDTO(Worker worker){
+        WorkerDTO workerDTO = new WorkerDTO();
+        workerDTO.setWorkerId(worker.getId());
+        workerDTO.setUser(worker.getUser());
+        return workerDTO;
     }
 
     @Override

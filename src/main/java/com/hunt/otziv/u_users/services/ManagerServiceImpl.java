@@ -25,8 +25,8 @@ public class ManagerServiceImpl implements ManagerService {
 
     @Override
     public Manager getManagerById(Long id) {
-        return managerRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+        return managerRepository.findById(id).orElse(null);
+//                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
     }
 
     @Override

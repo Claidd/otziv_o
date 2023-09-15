@@ -110,7 +110,7 @@ public class OrderServiceImpl implements OrderService {
 
     private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // перевод из ДТО в Сущность ORDER
         Product product1 = productService.findById(productId);
-        System.out.println(orderDTO.getFilial());
+        System.out.println(orderDTO);
         return Order.builder()
                 .amount(orderDTO.getAmount())
                 .complete(false)
@@ -164,6 +164,11 @@ public class OrderServiceImpl implements OrderService {
     private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, WorkerDTO workerDTO, FilialDTO filialDTO){ // перевод из ДТО в Сущность REVIEW
         List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(workerDTO.getWorkerId());
         var random = new SecureRandom();
+//        System.out.println(workerDTO);
+//        System.out.println(bots);
+//        System.out.println(bots.size());
+//        System.out.println(random.nextInt(bots.size()));
+//        System.out.println(bots.get(random.nextInt(bots.size())));
         return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))

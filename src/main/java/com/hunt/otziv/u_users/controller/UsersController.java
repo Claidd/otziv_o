@@ -1,9 +1,6 @@
 package com.hunt.otziv.u_users.controller;
 
-import com.hunt.otziv.u_users.dto.ManagerDTO;
-import com.hunt.otziv.u_users.dto.OperatorDTO;
-import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
-import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.services.RoleService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -66,6 +63,8 @@ public class UsersController {
 //        for (Operator operator: operatorService.getAllOperators()) {
 //            System.out.println(operator);
 //        }
+        RegistrationUserDTO userDTO = userService.findById(id);
+        System.out.println(userDTO.getManager());
         return "1.Login_and_Register/editUser";
     }
 
@@ -82,6 +81,9 @@ public class UsersController {
         System.out.println(operatorDTO.getOperatorId());
         System.out.println(managerDTO.getManagerId());
         System.out.println(workerDTO.getWorkerId());
+        System.out.println("================================================================");
+        System.out.println(userDto.getManager());
+        System.out.println("================================================================");
 //        userValidation.validate(userDto, bindingResult);
 //        log.info("1. Валидация данных");
 //        /*Проверяем на ошибки*/

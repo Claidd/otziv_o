@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services.service;
 
+import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -18,4 +19,6 @@ public interface WorkerService {
     void saveNewWorker(User user);
 
     Worker getWorkerByUserId(Long id);
+
+    Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers);
 }

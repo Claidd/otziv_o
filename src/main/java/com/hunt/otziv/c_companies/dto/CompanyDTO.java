@@ -55,6 +55,7 @@ public class CompanyDTO {
 
     //   список работников, которые работают с компанией
     private Set<WorkerDTO> workers;
+    private Set<Integer> workers2;
 
     //    статус компании
     private CompanyStatusDTO status;

@@ -16,10 +16,9 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.LeadService;
-import com.hunt.otziv.u_users.dto.ManagerDTO;
-import com.hunt.otziv.u_users.dto.UserDTO;
-import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -164,7 +163,6 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setUpdateStatus(company.getUpdateStatus());
         companyDTO.setDateNewTry(company.getDateNewTry());
         companyDTO.setActive(company.isActive());
-
         // Convert related entities to DTOs
         companyDTO.setUser(convertToUserDto(company.getUser()));
         companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -172,7 +170,6 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setStatus(convertToCompanyStatusDto(company.getStatus()));
         companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
         companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
-//        companyDTO.setFilial(convertToFilialDtoSet(company.getFilial()));
         companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
 
         return companyDTO;
@@ -195,6 +192,8 @@ public class CompanyServiceImpl implements CompanyService{
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setEmail(user.getEmail());
+        userDTO.setFio(user.getFio());
+        userDTO.setWorkers(user.getWorkers());
 
         // Other fields if needed
         return userDTO;
@@ -260,9 +259,145 @@ public class CompanyServiceImpl implements CompanyService{
         return filialDTO;
     }
 
+//    ======================================== COMPANY UPDATE =========================================================
+    // Обновить профиль юзера - начало
+    @Override
+    @Transactional
+    public void updateCompany(CompanyDTO companyDTO, WorkerDTO newWorkerDTO, Long companyId) {
+        log.info("2. Вошли в обновление данных компании");
+        Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
+        boolean isChanged = false;
+
+        /*Временная проверка сравнений*/
+        System.out.println("title: " + !Objects.equals(companyDTO.getTitle(), saveCompany.getTitle()));
+        System.out.println("telephone: " + !Objects.equals(changeNumberPhone(companyDTO.getTelephone()), changeNumberPhone(saveCompany.getTelephone())));
+        System.out.println("city: " + !Objects.equals(companyDTO.getCity(), saveCompany.getCity()));
+        System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
+        System.out.println("active: " + !Objects.equals(companyDTO.isActive(), saveCompany.isActive()));
+        System.out.println("status: " + !Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId()));
+        System.out.println("category: " + !Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId()));
+        System.out.println("subCategory: " + !Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId()));
+        System.out.println("manager: " + !Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId()));
+        System.out.println("workerId: " +  (newWorkerDTO.getWorkerId() != 0));
+        System.out.println("filial: " +  (!companyDTO.getFilial().getTitle().isEmpty()));
+
+        if (!Objects.equals(companyDTO.getTitle(), saveCompany.getTitle())){ /*Проверка смены названия*/
+            log.info("Обновляем названия компании");
+            saveCompany.setTitle(companyDTO.getTitle());
+            isChanged = true;
+        }
+        if (!Objects.equals(changeNumberPhone(companyDTO.getTelephone()), changeNumberPhone(saveCompany.getTelephone()))){ /*Проверка смены телефона*/
+            log.info("Обновляем телефон компании");
+            saveCompany.setTelephone(changeNumberPhone(companyDTO.getTelephone()));
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getCity(), saveCompany.getCity())){ /*Проверка смены города*/
+            log.info("Обновляем город");
+            saveCompany.setCity(companyDTO.getCity());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getEmail(), saveCompany.getEmail())){ /*Проверка смены мейл*/
+            log.info("Обновляем мейл");
+            saveCompany.setEmail(companyDTO.getEmail());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.isActive(), saveCompany.isActive())){ /*Проверка активности*/
+            log.info("Обновляем активность");
+            saveCompany.setActive(companyDTO.isActive());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId())){ /*Проверка статус компании*/
+            log.info("Обновляем статус компании");
+            saveCompany.setStatus(companyStatusService.getCompanyStatusById(companyDTO.getStatus().getId()));
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId())){ /*Проверка категорию*/
+            log.info("Обновляем категорию");
+            saveCompany.setCategoryCompany(categoryService.getCategoryByIdCategory(companyDTO.getCategoryCompany().getId()));
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId())){ /*Проверка субкатегорию*/
+            log.info("Обновляем субкатегорию");
+            saveCompany.setSubCategory(subCategoryService.getSubCategoryById(companyDTO.getSubCategory().getId()));
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId())){ /*Проверка менеджера*/
+            log.info("Обновляем менеджера");
+            saveCompany.setManager(managerService.getManagerById(companyDTO.getManager().getManagerId()));
+            isChanged = true;
+        }
+        if (newWorkerDTO.getWorkerId() != 0) { /* Добваление нового работника*/
+            log.info("Обновляем список работников");
+            Set<Worker> workerSet = saveCompany.getWorkers();
+            workerSet.add(workerService.getWorkerById(newWorkerDTO.getWorkerId()));
+            saveCompany.setWorkers(workerSet);
+            isChanged = true;
+        }
+        if (!companyDTO.getFilial().getTitle().isEmpty()) { /*Проверка списка работников*/
+            log.info("Добавляем новый филиал");
+            Set<Filial> existingFilials = saveCompany.getFilial(); // пытаемся получить текущий список филиалов из компании
+            if (existingFilials == null) {
+                existingFilials = new HashSet<>();// если он пустой, то создаем новый set
+            }
+            Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial()); // берем список из дто
+            existingFilials.addAll(newFilials); // объединяем эти списки
+            saveCompany.setFilial(existingFilials); // устанавливаем компании объединенный список
+            //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+            log.info("4. Компания успешно создана");
+            try {
+                Company company1 = companyRepository.save(saveCompany); // сохраняем новую компанию в БД
+                log.info("5. Компания успешно сохранена");
+                for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
+                    filial.setCompany(company1); // Установка компании в филиале
+                    filialService.save(filial); // Сохранение обновленного филиала
+                }
+                isChanged = true;
+            } catch (Exception e) {
+                log.error("Ошибка при сохранении нового филиала компании: " + e.getMessage());
+            }
+        }
+        if  (isChanged){
+            log.info("3. Начали сохранять обновленную компанию в БД");
+            companyRepository.save(saveCompany);
+            log.info("4. Сохранили обновленную компанию в БД");
+        }
+        else {
+            log.info("3. Изменений не было, сущность в БД не изменена");
+        }
+    }
 
 //    =====================================================================================================
 
+public boolean deleteWorkers(Long companyId, Long workerId){
+        try {
+            log.info("2. Вошли в удаление работника из списка работников компании");
+            Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
+            saveCompany.getWorkers().remove(workerService.getWorkerById(workerId));
+            companyRepository.save(saveCompany);
+            log.info("3. Сохранили обновленную компанию в БД");
+            return true;
+        }
+        catch (Exception e){
+            return false;
+        }
+}
+@Transactional
+    public boolean deleteFilial(Long companyId, Long filialId){
+        try {
+            log.info("2. Вошли в удаление филиала из списка филиалов компании");
+            Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
+            saveCompany.getFilial().remove(filialService.getFilial(filialId));
+            filialService.deleteFilial(filialId);
+            companyRepository.save(saveCompany);
+            log.info("3. Сохранили обновленную компанию в БД");
+            return true;
+        }
+        catch (Exception e){
+            return false;
+        }
+    }
+
+//    =====================================================================================================
     private User convertUserDTOToUser(UserDTO userDTO){
         return userService.findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", userDTO.getUsername())
@@ -308,34 +443,17 @@ public class CompanyServiceImpl implements CompanyService{
         }
     }
 
-//    private Set<Filial> convertFilialDTOToFilial( FilialDTO filialDTO){
-//        Filial filial = filialService.save(filialDTO);
-////        Set<Filial> filials = new HashSet<>();
-////        filials.add(filial);
-//        System.out.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-//        System.out.println(filialService.getFilial(filial.getId()));
-//        System.out.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-//        return Collections.singleton(filial);
-//    }
-
-//    private Set<Filial> convertFilialDTOToFilial2(Filial filial) {
-//        Filial existingFilial = filialService.getFilial(filial.getId());
-//        if (existingFilial != null) {
-//            return Collections.singleton(existingFilial);
-//        } else {
-//            Filial newFilial = filialService.save(filial);
-//            return Collections.singleton(newFilial);
-//        }
-//    }
-
-    //    public Set<Filial> convertFilialDTOToFilial(Long id,FilialDTO filialDTO){
-//        Filial filial = new Filial();
-//        filial.setTitle(filialDTO.getTitle());
-//        filial.setUrl(filialDTO.getUrl());
-//        filial.setCompany(companyRepository.findById(id).orElse(null));
-//        Set<Filial> filials = new HashSet<>();
-//        filials.add(filial);
-//
-//        return filials;
-//    }
+    // Вспомогательный метод для корректировки номера телефона
+    private String changeNumberPhone(String phone){
+        if (phone.contains("9")) {
+            String[] a = phone.split("9");
+            a[0] = "+79";
+            String b = a[0] + a[1];
+//            System.out.println(b);
+            return b;
+        } else {
+            // Обработка случая, когда "9" не найдено в строке
+            return phone; // или верните значение по умолчанию, которое вам нужно
+        }
+    }
 }

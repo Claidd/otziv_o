@@ -1,6 +1,7 @@
 package com.hunt.otziv.u_users.services;
 
 
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.OperatorDTO;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
@@ -110,6 +111,7 @@ public class UserServiceImpl  implements UserService {
                 .operators(user.getOperators() == null ? new HashSet<>() : user.getOperators())
                 .managers(user.getManagers() == null ? new HashSet<>() : user.getManagers())
                 .workers(user.getWorkers() == null ? new HashSet<>() : user.getWorkers())
+                .manager(new Manager())
                 .build();
         //                .active(user.getActivateCode() == null)
     }
@@ -185,6 +187,11 @@ public class UserServiceImpl  implements UserService {
     @Transactional
     public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO) {
         log.info("Вошли в обновление");
+
+//        User user = userService.findByName(username);
+//        if(user == null){
+//            throw new RuntimeException("User not found. " + username);
+//        }
 
         if (userDTO.getOperators() == null){
             userDTO.setOperators(new HashSet<>());
@@ -308,17 +315,49 @@ public class UserServiceImpl  implements UserService {
         }
 
         /*Проверяем не равен ли менеджера предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
+        if (Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
             System.out.println(userDTO.getManagers()==null);
             System.out.println(saveUser.getManagers()==null);
             System.out.println(!Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
             System.out.println(managerDTO.getManagerId());
             System.out.println(managerDTO.getManagerId() != 0);
             System.out.println((userDTO.getManagers()==null && managerDTO.getManagerId() != 0));
+            System.out.println(userDTO.getManagers());
             log.info("зашли в обновление менеджеров");
-//            System.out.println(managerService.getManagerById(managerDTO.getId()));
-            userDTO.getManagers().add(managerService.getManagerById(managerDTO.getManagerId()));
-            saveUser.setManagers(userDTO.getManagers());
+//            System.out.println(managerService.getManagerById(userDTO.getManager().getId()));
+
+
+            if (managerDTO.getManagerId() != 0){
+//        Проверка есть ли уже какие-то менеджеры, если да, то добавляем, если нет то загружаем новый список
+                Set<Manager> existingManagers = saveUser.getManagers(); // пытаемся получить текущий список филиалов из компании
+                if (existingManagers == null) {
+                    existingManagers = new HashSet<>();// если он пустой, то создаем новый set
+                }
+                Set<Manager> newManager = new HashSet<>();
+                newManager.add(managerService.getManagerById(managerDTO.getManagerId()));// берем список из дто
+                existingManagers.addAll(newManager); // объединяем эти списки
+                saveUser.setManagers(existingManagers); // устанавливаем компании объединенный список
+                //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+            }
+            else if (userDTO.getManagers().size() == 1) {
+                Set<Manager> newManagerList2 = new HashSet<>();
+                newManagerList2.add(managerService.getManagerById(userDTO.getManager().getId()));
+                saveUser.setManagers(newManagerList2);
+            }
+            else {
+                //        Проверка есть ли уже какие-то менеджеры, если да, то добавляем, если нет то загружаем новый список
+                Set<Manager> existingManagers = saveUser.getManagers(); // пытаемся получить текущий список филиалов из компании
+                if (existingManagers == null) {
+                    existingManagers = new HashSet<>();// если он пустой, то создаем новый set
+                }
+                Set<Manager> newManager = userDTO.getManagers(); // берем список из дто
+                existingManagers.addAll(newManager); // объединяем эти списки
+                saveUser.setManagers(existingManagers); // устанавливаем компании объединенный список
+                //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+            }
+//            userDTO.getManagers().add(managerService.getManagerById(managerDTO.getManagerId()) == null ? managerService.getManagerById(userDTO.getManager().getId()) : managerService.getManagerById(managerDTO.getManagerId()));
+//            System.out.println(userDTO.getManagers());
+//            saveUser.setManagers(userDTO.getManagers());
             isChanged = true;
             log.info("Обновили менеджера");
         }
@@ -351,6 +390,8 @@ public class UserServiceImpl  implements UserService {
             log.info("Изменений не было, сущность в БД не изменена");
         }
     }
+
+
     // Обновить профиль юзера - конец
 
 //      =====================================UPDATE USERS - START=======================================================
@@ -405,60 +446,4 @@ public class UserServiceImpl  implements UserService {
     }
 
 
-
-
-
-
-
-//    public User getUserByPrincipal(Principal principal) {
-//        if (principal == null) return new User();
-//        return userRepository.findByEmail(principal.getName());
-//    }
-
-
-
-
-
-//    @Override
-//    @Transactional
-//    public void save(User user) {
-//        userRepository.save(user);
-//        if(user.getActivateCode() != null && !user.getActivateCode().isEmpty()){
-//            mailSenderService.sendActivateCode(user);
-//        }
-//    }
-
-
-//    @Override
-//    @Transactional
-//    public boolean activateUser(String activateCode) {
-//        if(activateCode == null || activateCode.isEmpty()){
-//            return false;
-//        }
-//        User user = userRepository.findFirstByActivateCode(activateCode);
-//        if(user == null){
-//            return false;
-//        }
-//
-//        user.setActivateCode(null);
-//        userRepository.save(user);
-//
-//        return true;
-//    }
-
-
-//      =====================================SECURITY=======================================================
-    //    @Transactional
-//    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-//        Optional<User> user = findByUserName(username);
-//        if (user.isEmpty()){
-//            throw new UsernameNotFoundException("Пользователь не найден");
-//        }
-//
-//        UserDetails userDetailsImpl = new UserDetailsImpl(user.get());
-//        System.out.println(userDetailsImpl.getUsername() + "  " +  userDetailsImpl.getPassword() + "   " + userDetailsImpl.getAuthorities());
-//        return userDetailsImpl;
-//
-//    }
-    //      =====================================SECURITY - END=======================================================
 }

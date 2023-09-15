@@ -374,8 +374,8 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
   CONSTRAINT `reviews_bot`
     FOREIGN KEY (`review_bot`)
     REFERENCES `otziv`.`bots` (`bot_id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
     CONSTRAINT `review_filial`
     FOREIGN KEY (`review_filial`)
     REFERENCES `otziv`.`filial` (`filial_id`)
