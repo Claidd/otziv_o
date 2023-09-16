@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.util.ArrayList;
@@ -40,27 +41,24 @@ public class CompanyController {
     }
 
     @GetMapping("/editCompany/{companyId}")
-    String ordersDetailsToCompany(@PathVariable Long companyId, Model model){
+    String ordersDetailsToCompany(@PathVariable Long companyId,  Model model){
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
-
         model.addAttribute("companyDTO", companyDTO);
         model.addAttribute("categories", categoryService.getAllCategories());
         model.addAttribute("subCategories", subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()));
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("newWorkerDTO", new WorkerDTO());
-        List<String> list = new ArrayList<>();
-        model.addAttribute("ListWorker", list);
-//        model.addAttribute("newFilialDTO" , new FilialDTO());
         model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));
         return "companies/company_edit";
     }
 
     @PostMapping("/editCompany/{companyId}")
     String editCompany(@ModelAttribute ("companyDTO") CompanyDTO companyDTO, @ModelAttribute("newWorkerDTO") WorkerDTO newWorkerDTO,
-                        @PathVariable Long companyId, Model model){
+                        @PathVariable Long companyId, RedirectAttributes rm, Model model){
         log.info("1. Начинаем обновлять данные компании");
         companyService.updateCompany(companyDTO, newWorkerDTO, companyId);
         log.info("5. Обновление компании прошло успешно");
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/companies/editCompany/{companyId}";
     }
 
@@ -69,7 +67,6 @@ public class CompanyController {
         log.info("1. Начинаем удалять работника из списка работников компании");
         if (companyService.deleteWorkers(companyId, workerId)){
             log.info("4. Удаление работника из компании прошло успешно");
-
             return "redirect:/companies/editCompany/{companyId}";
         }
         else {
@@ -83,7 +80,6 @@ public class CompanyController {
         log.info("1. Начинаем удалять филиал из списка филиалов компании");
         if (companyService.deleteFilial(companyId, filialId)){
             log.info("4. Удаление филиала из компании прошло успешно");
-
             return "redirect:/companies/editCompany/{companyId}";
         }
         else {

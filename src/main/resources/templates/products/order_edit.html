@@ -1,0 +1,103 @@
+<th:block th:fragment="default(route)" xmlns:th="http://www.w3.org/1999/xhtml">
+    <!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles2}"></th:block>
+        <!-- ==================== TITLE ======================== -->
+        <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    </head>
+    <body>
+
+    <!-- создаем внешнюю обертку -->
+    <div class="wrapper">
+        <header th:replace="~{fragments/header :: header}"></header>
+
+        <!-- ==================== MAIN START ======================== -->
+
+        
+
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+        <div class="container">
+            <div class="row py-2 pt-1 mt-1">
+                <div class="col-12 pt-5">
+                    <form method="post" th:object="${ordersDTO}">
+                        <div class="mb-3" th:if="${saveSuccess}">
+                            <div class="alert alert-success">
+                                Данные успешно изменены и сохранены.
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="inputFilial" class="form-label">Филиал</label> <br>
+                            <select id="inputFilial" name="filialId" th:field="*{filial.id}"  class="form-control form-select form-select-lg">
+                                <option th:each="filial1 : ${ordersDTO.company.filials}" th:value="${filial1.id}" th:text="${filial1.title}" th:selected="${filial != null and filial1.title eq ordersDTO.filial.title}"></option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="inputWorkerFromOrder" class="form-label">Работник</label> <br>
+                            <select id="inputWorkerFromOrder" name="workerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
+                                <option th:each="workerOne : ${ordersDTO.company.workers}" th:value="${workerOne.workerId}" th:text="${workerOne.user.fio}" th:selected="${ordersDTO.worker.workerId != null and workerOne.workerId == ordersDTO.worker.workerId}"></option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="inputManagerOrder" class="form-label">Менеджер</label> <br>
+                            <select id="inputManagerOrder" name="ManagerOrder" th:field="*{manager.managerId}"  class="form-control form-select form-select-lg">
+                                <option th:each="managerOne : ${ordersDTO.company.manager}" th:value="${managerOne.managerId}" th:text="${managerOne.user.fio}" th:selected="${ordersDTO.manager.managerId != null and managerOne.managerId == ordersDTO.manager.managerId}"></option>
+                            </select>
+                        </div>
+
+                        <div class="form-group d-none">
+                            <label for="amount">Количество</label>
+                            <input type="text" id="sum" th:field="*{amount}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('amount')}" th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group d-none">
+                            <label for="sum">Сумма</label>
+                            <input type="text" id="sum" th:field="*{sum}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('sum')}" th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="created">Дата создания</label>
+                            <input type="text" id="created" th:field="*{created}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('created')}" th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="changed">Дата изменений</label>
+                            <input type="text" id="changed" th:field="*{changed}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('changed')}" th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="inputLink" class="form-label">Активность</label>
+                            <input type="checkbox" th:checked="${ordersDTO.isComplete()}" th:field="*{complete}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('complete')}" th:text="${err}">Validation error</small>
+                        </div>
+                        
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                            <!-- Кнопка "Назад" -->
+                            <a th:href="@{'/ordersCompany/ordersDetails/'+ ${companyID}}" class="btn btn-secondary mt-3">Назад</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+
+
+
+        <!-- ===================== MAIN END ======================== -->
+
+        <header th:replace="~{fragments/footer2 :: footer}"></header>
+    </div> <!-- wrapper -->
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+    <th:block th:insert="~{fragments/common :: js_category}"></th:block>
+    </body>
+    </html>

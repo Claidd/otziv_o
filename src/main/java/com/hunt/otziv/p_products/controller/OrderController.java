@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,17 +29,8 @@ public class OrderController {
     private final AmountService amountService;
 
 
-    @GetMapping("/{id}")
-    String ProductListToCompany(@PathVariable Long id, Model model){
-        model.addAttribute("companyID", id);
-        model.addAttribute("amounts", amountService.getAmountDTOList());
-        model.addAttribute("products", productService.findAll());
-        model.addAttribute("newOrder", orderService.newOrderDTO(id));
-        return "products/products_list";
-    }
-
-    @GetMapping("/{companyID}/{id}")
-    String ProductListToCompany2(@PathVariable Long companyID, @PathVariable Long id, Model model){
+    @GetMapping("/{companyID}")
+    String ProductListToCompany(@PathVariable Long companyID, Model model){
         model.addAttribute("companyID", companyID);
         model.addAttribute("amounts", amountService.getAmountDTOList());
         model.addAttribute("products", productService.findAll());
@@ -46,7 +38,16 @@ public class OrderController {
         return "products/products_list";
     }
 
-    @PostMapping ("/{companyID}/{id}")
+    @GetMapping("/{companyID}/{orderId}") // Переход на страницу заказа продукта для нового Заказа
+    String ProductListToCompany2(@PathVariable Long companyID, @PathVariable Long orderId, Model model){
+        model.addAttribute("companyID", companyID);
+        model.addAttribute("amounts", amountService.getAmountDTOList());
+        model.addAttribute("products", productService.findAll());
+        model.addAttribute("newOrder", orderService.newOrderDTO(companyID));
+        return "products/products_list";
+    }
+
+    @PostMapping ("/{companyID}/{id}") // Пост запрос на создание нового заказа и редирект на оформление нового заказа
     String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, @PathVariable Long id, Model model){
         System.out.println("==============================================");
         System.out.println(orderDTO);
@@ -55,15 +56,30 @@ public class OrderController {
         return "redirect:/companies/allCompany";
     }
 
-    @GetMapping("/ordersDetails/{companyID}")
-    String OrderListToCompany(@PathVariable Long companyID, Model model){
-        model.addAttribute("companyID", companyID);
-        model.addAttribute("orders", companyService.getCompaniesById(companyID).getOrderList());
+    @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании
+    String OrderListToCompany(@PathVariable Long companyId, Model model){
+        model.addAttribute("companyID", companyId);
+        model.addAttribute("orders", companyService.getCompaniesById(companyId).getOrderList());
         return "products/orders_list";
     }
 
+    //    =========================================== ORDER EDIT =======================================================
+    @GetMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Get
+    String OrderEdit(@PathVariable Long companyId, @PathVariable Long orderId,  Model model){
+        model.addAttribute("ordersDTO", orderService.getOrderDTO(orderId));
+        model.addAttribute("companyID", companyId);
+        System.out.println(orderService.getOrderDTO(orderId));
+        return "products/order_edit";
+    }
 
-
+    @PostMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Post
+    String OrderEditPost(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm,  Model model){
+        log.info("1. Начинаем обновлять данные Заказа");
+        orderService.updateOrder(orderDTO, companyId, orderId);
+        log.info("5. Обновление Заказа прошло успешно");
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
+    }
 
 
 //    ==========================================================================================================

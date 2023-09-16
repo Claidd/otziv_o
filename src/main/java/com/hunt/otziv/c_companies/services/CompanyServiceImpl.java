@@ -274,6 +274,7 @@ public class CompanyServiceImpl implements CompanyService{
         System.out.println("city: " + !Objects.equals(companyDTO.getCity(), saveCompany.getCity()));
         System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
         System.out.println("active: " + !Objects.equals(companyDTO.isActive(), saveCompany.isActive()));
+        System.out.println("comments: " +  !Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany()));
         System.out.println("status: " + !Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId()));
         System.out.println("category: " + !Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId()));
         System.out.println("subCategory: " + !Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId()));
@@ -304,6 +305,11 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.isActive(), saveCompany.isActive())){ /*Проверка активности*/
             log.info("Обновляем активность");
             saveCompany.setActive(companyDTO.isActive());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/
+            log.info("Обновляем комментарий");
+            saveCompany.setCommentsCompany(companyDTO.getCommentsCompany());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId())){ /*Проверка статус компании*/

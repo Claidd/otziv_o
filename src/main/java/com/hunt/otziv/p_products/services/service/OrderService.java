@@ -8,4 +8,8 @@ public interface OrderService {
     boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
 
     boolean changeStatusForOrder(Long orderID, String title);
+
+    OrderDTO getOrderDTO(Long orderId);
+
+    void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
 }

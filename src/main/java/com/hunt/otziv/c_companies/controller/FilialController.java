@@ -20,7 +20,7 @@ public class FilialController {
     private final FilialService filialService;
 
     @GetMapping("/edit/{filialId}")
-    String editCompanyDeleteFilial(@ModelAttribute ("OK") String ok, @PathVariable Long filialId, Model model){
+    String editCompanyDeleteFilial(@PathVariable Long filialId, Model model){
         model.addAttribute("editFilialDTO", filialService.getFilialByIdToDTO(filialId));
         return "companies/filial_edit";
     }

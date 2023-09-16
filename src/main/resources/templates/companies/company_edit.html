@@ -17,13 +17,18 @@
 
         <!-- ==================== MAIN START ======================== -->
 
-
+        
 
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
         <div class="container">
             <div class="row py-2 pt-1 mt-1">
                 <div class="col-12 pt-5">
                     <form method="post" th:object="${companyDTO}">
+                        <div class="mb-3" th:if="${saveSuccess}">
+                            <div class="alert alert-success">
+                                Данные успешно изменены и сохранены.
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label for="title">Название компании</label>
                             <input type="text" id="title" th:field="*{title}" class="form-control"
@@ -95,7 +100,7 @@
                                    placeholder="Введите номер компании">
                             <input type="hidden" th:value="${filial1.id}" class="form-control"
                                    placeholder="Введите номер компании"> 
-                            <a th:href="@{/filial/edit/{filial} (filial = ${filial1.id})}">редактировать</a>   
+                            <a th:href="@{/filial/edit/{filialId} (filialId = ${filial1.id})}">редактировать</a>   
                             <a th:href="@{/companies/editCompany/{companyId}/deleteFilial/{filialId}(companyId = ${companyDTO.id}, filialId=${filial1.id})}">Удалить</a>                              
                         </div>
 
@@ -172,19 +177,27 @@
                                    th:text="${err}">Validation error</small>
                         </div> -->
 
+                        <div class="form-group">
+                            <label class="form-label" for="commentsCompany">Укажите комментарий</label>
+                            <input type="text" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
+                                   placeholder="* необязательное поле">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+                        <!-- <div class="mb-3">
+                            <label for="inputComments" class="form-label">Комментарий</label>
+                            <input type="text" th:field="*{commentsLead}"  th:value="${editLeadDto.getCommentsLead()}" name="commentsLead" class="form-control" id="inputComments" aria-describedby="emailHelp">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsLead')}" th:text="${err}">Validation error</small>
+                        </div> -->
+
                         <div class="mb-3">
                             <label for="inputLink" class="form-label">Активность</label>
                             <input type="checkbox" th:checked="${companyDTO.isActive()}" th:field="*{active}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div class="form-group d-none">
-                            <label for="commentsCompany">Укажите комментарий</label>
-                            <input type="hidden" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
-                                   placeholder="* необязательное поле">
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"
-                                   th:text="${err}">Validation error</small>
-                        </div>
+                        
                         <!-- <div class="form-group d-none">
                             <label for="commentsCompany">Укажите активность</label>
                             <input type="hidden" id="commentsCompany" th:field="*{active}" class="form-control"
@@ -252,6 +265,8 @@
                         </div>
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                        <!-- Кнопка "Назад" -->
+                        <a th:href="@{'/companies/allCompany'}" class="btn btn-secondary mt-3">Назад</a>
                     </form>
                 </div>
             </div>

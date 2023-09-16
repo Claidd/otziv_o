@@ -1,0 +1,70 @@
+<th:block th:fragment="default(route)" xmlns:th="http://www.w3.org/1999/xhtml">
+    <!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles2}"></th:block>
+        <!-- ==================== TITLE ======================== -->
+        <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    </head>
+    <body>
+
+    <!-- создаем внешнюю обертку -->
+    <div class="wrapper">
+        <header th:replace="~{fragments/header :: header}"></header>
+
+        <!-- ==================== MAIN START ======================== -->
+
+
+
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+        <div class="container">
+            <div class="row py-2 pt-1 mt-1">
+                <div class="col-12 pt-5">
+                    <form method="post" th:object="${ordersDTO}">
+
+                        <div class="mb-3" th:if="${saveSuccess}">
+                            <div class="alert alert-success">
+                                Данные успешно изменены и сохранены.
+                            </div>
+                        </div>
+
+<!--                        <div class="mb-3" >-->
+<!--                            <label for="inputFilial" class="form-label">Название</label> <br>-->
+<!--                            <input id="inputFilial" type="text" th:field="*{title}" class="form-control" placeholder="Введите номер компании">-->
+<!--                            <label for="inputUrl" class="form-label">URL</label> <br>-->
+<!--                            <input id="inputUrl" type="text" th:field="*{url}"  class="form-control" placeholder="Введите ссылку компании">-->
+<!--                            <input type="hidden" th:field="*{id}" class="form-control"-->
+<!--                                   placeholder="Введите номер компании">-->
+<!--                        </div>-->
+
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+
+
+
+        <!-- ===================== MAIN END ======================== -->
+
+        <header th:replace="~{fragments/footer2 :: footer}"></header>
+    </div> <!-- wrapper -->
+<!--    <script th:inline="javascript">-->
+<!--        /* Скрыть сообщение об успешном сохранении через 5 секунд */-->
+<!--        setTimeout(function() {-->
+<!--            var successMessage = document.querySelector('.alert-success');-->
+<!--            if (successMessage) {-->
+<!--                successMessage.style.display = 'none';-->
+<!--            }-->
+<!--        }, 5000);-->
+<!--    </script>-->
+
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+    <th:block th:insert="~{fragments/common :: js_category}"></th:block>
+    </body>
+    </html>

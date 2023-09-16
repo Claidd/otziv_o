@@ -151,13 +151,13 @@
                                     <form  th:method="get" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${order.id}}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <div class="company__card__content__phone">
-                                            <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">в архив</button>
+                                            <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">Подробнее</button>
                                         </div>
                                   </form>
                               </div>
 
                               
-                            <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${order.id}">
+                            <form class="company__card__content__author" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyID} + '/' + ${order.id}}">
                                 <div class="company__card__link__lead" th:text="'Заказ № ' + ${order.id != null ? order.id : 'пусто'} + ' ' + ${order.changed}">Имя Менеджера</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
