@@ -79,6 +79,11 @@ public class CompanyServiceImpl implements CompanyService{
         ));
     }
 
+    @Transactional
+    public void save(Company company){
+        companyRepository.save(company);
+    }
+
     //    Метод подготовки ДТО при создании компании из Лида менеджером
 
     //      =====================================CREATE USERS - START=======================================================

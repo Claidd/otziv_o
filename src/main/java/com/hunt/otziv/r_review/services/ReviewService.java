@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.services;
 
+import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 
 import java.util.List;
@@ -13,4 +14,7 @@ public interface ReviewService {
     void changeBot(Long id);
 
     void deActivateAndChangeBot(Long reviewId, Long botId);
+
+    ReviewDTO getReviewDTOById(Long reviewId);
+    void updateReview(ReviewDTO reviewDTO, Long reviewId);
 }

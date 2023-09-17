@@ -115,6 +115,10 @@ public class OrderServiceImpl implements OrderService {
         Order saveOrder2 = orderRepository.save(saveOrder);
         log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
         System.out.println(saveOrder2);
+        log.info("10. Обновляем счетчик компании в БД");
+        Company  company = companyService.getCompaniesById(companyId);
+        company.setCounterNoPay(saveOrder2.getAmount());
+        companyService.save(company);
         return true;
     }
 
@@ -201,6 +205,7 @@ public class OrderServiceImpl implements OrderService {
                 .worker(convertToWorkerDTO(order.getWorker()))
                 .details(convertToDetailsDTOList(order.getDetails()))
                 .complete(order.isComplete())
+                .counter(order.getCounter())
                 .build();
     }
 
@@ -260,6 +265,7 @@ public class OrderServiceImpl implements OrderService {
                 .product(convertToProductDTO(orderDetails.getProduct()))
                 .order(convertToOrderDTO(orderDetails.getOrder()))
                 .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
+                .comment(orderDetails.getComment())
                 .build();
     }
     private ProductDTO convertToProductDTO(Product product){
@@ -311,6 +317,7 @@ public class OrderServiceImpl implements OrderService {
                 .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
                 .order(order)
                 .product(product1)
+                .comment("")
                 .build();
     }
 
@@ -327,11 +334,7 @@ public class OrderServiceImpl implements OrderService {
     private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, WorkerDTO workerDTO, FilialDTO filialDTO){ // перевод из ДТО в Сущность REVIEW
         List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(workerDTO.getWorkerId());
         var random = new SecureRandom();
-//        System.out.println(workerDTO);
-//        System.out.println(bots);
-//        System.out.println(bots.size());
-//        System.out.println(random.nextInt(bots.size()));
-//        System.out.println(bots.get(random.nextInt(bots.size())));
+
         return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
@@ -340,6 +343,8 @@ public class OrderServiceImpl implements OrderService {
                 .orderDetails(orderDetails)
                 .bot(bots.get(random.nextInt(bots.size())))
                 .filial(convertFilialDTOToFilial(filialDTO))
+                .publish(false)
+                .worker(orderDetails.getOrder().getWorker())
                 .build();
     }
     private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){

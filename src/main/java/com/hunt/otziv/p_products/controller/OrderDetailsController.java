@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @Slf4j
@@ -19,10 +20,12 @@ public class OrderDetailsController {
     private final ReviewService reviewService;
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
-    public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, Model model){
-        model.addAttribute("companyID", companyId);
-        model.addAttribute("orderID", orderId);
+    public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
+        model.addAttribute("companyId", companyId);
+        model.addAttribute("orderId", orderId);
         model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
+        rm.addFlashAttribute("companyId", companyId);
+        rm.addFlashAttribute("orderId", orderId);
         return "products/orders_detail_list";
     }
 

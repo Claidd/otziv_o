@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
   `order_created` DATE NULL,
   `order_changed` DATE NULL,
   `order_amount` int NULL,
+  `order_counter` int NULL DEFAULT 0,
   `order_sum` numeric(7,2) NULL,
   `order_status` bigint NULL,
   `order_company` bigint NULL,
@@ -326,6 +327,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`order_details` (
   `order_detail_product` bigint NULL,
   `order_detail_amount` INT NULL,
   `order_detail_price` DECIMAL(7,2) NULL,
+  `order_detail_comments` VARCHAR(5000) NULL,
   `order_detail_date_published` DATE NULL,
   PRIMARY KEY (`order_detail_id`),
   INDEX `order_detail_order_idx` (`order_detail_order` ASC),
@@ -348,29 +350,35 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
   `review_category` bigint NULL,
   `review_subcategory` bigint NULL,
   `review_answer` VARCHAR(5000) NULL,
+  `review_created` DATE NULL,
+  `review_changed` DATE NULL,
+  `review_publish` BIT(0) NULL DEFAULT 0,
+  `review_publish_date` DATE NULL,
   `review_order_details` bigint NULL,
   `review_bot` bigint NULL,
   `review_filial` bigint NULL,
+  `review_worker` bigint NULL,
   PRIMARY KEY (`review_id`),
   INDEX `reviews_order_details_idx` (`review_order_details` ASC),
   INDEX `reviews_bot_idx` (`review_bot` ASC),
   INDEX `rewiews_category_idx` (`review_category` ASC),
   INDEX `rewiews_subcategory_idx` (`review_subcategory` ASC),
+  INDEX `review_worker_idx` (`review_worker` ASC),
   CONSTRAINT `rewiews_category`
     FOREIGN KEY (`review_category`)
-    REFERENCES `otziv`.`categorys` (`category_id`)
-    ON DELETE NO ACTION
+    REFERENCES `otziv`.`companies` (`company_category`)
+    ON DELETE CASCADE
     ON UPDATE CASCADE,
   CONSTRAINT `rewiews_subcategory`
     FOREIGN KEY (`review_subcategory`)
-    REFERENCES `otziv`.`subcategoryes` (`subcategory_id`)
-    ON DELETE NO ACTION
+    REFERENCES `otziv`.`companies` (`company_subcategory`)
+    ON DELETE CASCADE
     ON UPDATE CASCADE,
   CONSTRAINT `reviews_order_details`
     FOREIGN KEY (`review_order_details`)
     REFERENCES `otziv`.`order_details` (`order_detail_id`)
     ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
+    ON UPDATE CASCADE,
   CONSTRAINT `reviews_bot`
     FOREIGN KEY (`review_bot`)
     REFERENCES `otziv`.`bots` (`bot_id`)
@@ -378,7 +386,12 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
     ON UPDATE CASCADE,
     CONSTRAINT `review_filial`
     FOREIGN KEY (`review_filial`)
-    REFERENCES `otziv`.`filial` (`filial_id`)
+    REFERENCES `otziv`.`orders` (`order_filial`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+    CONSTRAINT `review_worker`
+    FOREIGN KEY (`review_worker`)
+    REFERENCES `otziv`.`orders` (`order_worker`)
     ON DELETE CASCADE
     ON UPDATE CASCADE)
 ENGINE = InnoDB;

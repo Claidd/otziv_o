@@ -31,4 +31,6 @@ public class OrderDetailsDTO {
 
     private BigDecimal price;
 
+    private String comment;
+
 }

@@ -5,11 +5,16 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
 
 @Entity
 @Data
@@ -26,10 +31,22 @@ public class Review {
     private String text;
     @Column(name = "review_answer")
     private String answer;
-    @ManyToOne
+
+    @CreationTimestamp
+    @Column(name = "review_created")
+    private LocalDate created;
+    @UpdateTimestamp
+    @Column(name = "review_changed")
+    private LocalDate changed;
+    @Column(name = "review_publish_date")
+    private LocalDate publishedDate;
+    @Column(name = "review_publish")
+    private boolean publish;
+
+    @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "review_category")
     private Category category;
-    @ManyToOne
+    @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "review_subcategory")
     private SubCategory subCategory;
     @ManyToOne
@@ -38,8 +55,12 @@ public class Review {
     @ManyToOne
     @JoinColumn(name = "review_order_details")
     private OrderDetails orderDetails;
-    @ManyToOne
+    @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "review_filial")
     private Filial filial;
+    //    каждый бот имеет Работника, который его добавлял
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "review_worker")
+    private Worker worker;
 
 }

@@ -5,4 +5,6 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 public interface OrderDetailsService {
 
     OrderDetails save(OrderDetails orderDetails);
+
+    OrderDetails getOrderDetailById(Long orderDetailId);
 }

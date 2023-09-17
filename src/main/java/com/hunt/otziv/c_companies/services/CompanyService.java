@@ -23,5 +23,7 @@ public interface CompanyService {
     boolean deleteWorkers(Long companyId, Long workerId);
     boolean deleteFilial(Long companyId, Long filialId);
 
+    void save(Company company);
+
 //    Set<Filial> convertFilialDTOToFilial(Long id, FilialDTO filialDTO);
 }

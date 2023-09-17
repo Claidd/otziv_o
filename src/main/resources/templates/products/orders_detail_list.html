@@ -220,7 +220,7 @@
                                     <!-- элементы карточки - конец -->
 <!--                                </div> &lt;!&ndash; card__content_button &ndash;&gt;-->
 <!--                            </div> &lt;!&ndash; card__content__lead &ndash;&gt;-->
-                            <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${review.id}">
+                            <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/' + ${review.id}">
                                 <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>

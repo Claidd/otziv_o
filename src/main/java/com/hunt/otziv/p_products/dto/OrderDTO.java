@@ -28,6 +28,7 @@ public class OrderDTO {
     private LocalDate changed;
 
     private Integer amount;
+    private Integer counter;
 
     private BigDecimal sum;
 

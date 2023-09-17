@@ -55,6 +55,7 @@ public class SecurityConfig {
                                         .requestMatchers("/ordersCompany/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/ordersDetails/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/filial/**").hasAnyRole("ADMIN","MANAGER")
+                                        .requestMatchers("/review/**").hasAnyRole("ADMIN","MANAGER")
 
                 )
                 //    настройка логирования

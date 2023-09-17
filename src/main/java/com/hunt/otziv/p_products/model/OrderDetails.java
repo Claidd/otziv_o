@@ -47,6 +47,9 @@ public class OrderDetails {
     @Column(name = "order_detail_amount")
     private int amount;
 
+    @Column(name = "order_detail_comments")
+    private String comment;
+
     @Column(name = "order_detail_price")
     private BigDecimal price;
 

@@ -39,6 +39,8 @@ public class Order {
     private int amount;
     @Column(name = "order_sum")
     private BigDecimal sum;
+    @Column(name = "order_counter")
+    private int counter;
     @OneToMany(mappedBy = "order",cascade = CascadeType.ALL)
     private List<OrderDetails> details;
 
