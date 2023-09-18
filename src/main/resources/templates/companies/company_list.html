@@ -22,13 +22,11 @@
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="company__tabs__btn__lead">
                     <button class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10">Новые</button>
-                    <button class="company__tabs__btn-item" data-button="content-12">Пишем отзывы</button>
-                    <button class="company__tabs__btn-item" data-button="content-13">На проверке</button>
-                    <button class="company__tabs__btn-item" data-button="content-14">Коррекция</button>
-                    <button class="company__tabs__btn-item" data-button="content-15">Публикация</button>
-                    <button class="company__tabs__btn-item" data-button="content-16">Опубликовано</button>
-                    <button class="company__tabs__btn-item" data-button="content-17">Выставлен счет</button>
-                    <button class="company__tabs__btn-item" data-button="content-18">Оплачено </button>
+                    <button class="company__tabs__btn-item" data-button="content-12">К рассылке</button>
+                    <button class="company__tabs__btn-item" data-button="content-13">В работе</button>
+                    <button class="company__tabs__btn-item" data-button="content-14">На стопе</button>
+                    <button class="company__tabs__btn-item" data-button="content-15">Все</button>
+                    <button class="company__tabs__btn-item" data-button="content-16">Бан</button>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
@@ -108,7 +106,7 @@
                                     <div class="company__card__text__city__lead" th:text="${company.createDate}">Дата создания Лида</div>
                                     <div class="company__card__text__city__lead" th:text="${company.subCategory.subCategoryTitle}">Город Лида</div>
                                 </div> -->
-                                <div class="company__card__content__comments">
+                                <div class="company__card__content__comments__tocompany">
                                     <div class="company__card__text__lead2" th:text="${company.title}">Комментарий для лида</div>
                                 </div>
                                 <div class="company__card__content_button"> <!-- card__content_button -->
@@ -134,6 +132,14 @@
                                     <!--                                    </form>-->
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
+                                <div >
+                                    <form  th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${company.id}}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <div class="company__card__content__phone">
+                                            <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">Подробнее</button>
+                                        </div>
+                                  </form>
+                              </div>
                             </div> <!-- card__content__lead -->
                             <form class="company__card__content__author" th:method="get" th:action="'editCompany/' + ${company.id}">
                                 <div class="company__card__link__lead" th:text="${company.manager.user.fio != null ? company.manager.user.fio : 'пусто'}">Имя Менеджера</div>

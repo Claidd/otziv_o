@@ -24,6 +24,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class CompanyServiceImpl implements CompanyService{
     private final CompanyRepository companyRepository;
     private final LeadService leadService;
@@ -46,17 +48,6 @@ public class CompanyServiceImpl implements CompanyService{
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
 
-    public CompanyServiceImpl(CompanyRepository companyRepository, LeadService leadService, UserService userService, ManagerService managerService, WorkerService workerService, CompanyStatusService companyStatusService, CategoryService categoryService, SubCategoryService subCategoryService, FilialService filialService, FilialRepository filialRepository) {
-        this.companyRepository = companyRepository;
-        this.leadService = leadService;
-        this.userService = userService;
-        this.managerService = managerService;
-        this.workerService = workerService;
-        this.companyStatusService = companyStatusService;
-        this.categoryService = categoryService;
-        this.subCategoryService = subCategoryService;
-        this.filialService = filialService;
-    }
 
     public Set<Company> getAllCompanies(){
         return companyRepository.findAll();
@@ -465,6 +456,19 @@ public boolean deleteWorkers(Long companyId, Long workerId){
         } else {
             // Обработка случая, когда "9" не найдено в строке
             return phone; // или верните значение по умолчанию, которое вам нужно
+        }
+    }
+
+    public boolean changeStatusForCompany(Long companyId, String title){ // смена статуса компании
+        try {
+            Company company = companyRepository.findById(companyId).orElse(null);
+            assert company != null;
+            company.setStatus(companyStatusService.getStatusByTitle(title));
+            companyRepository.save(company);
+            return true;
+        } catch (Exception e){
+            System.out.println(e);
+            return false;
         }
     }
 }

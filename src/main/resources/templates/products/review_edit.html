@@ -85,7 +85,99 @@
         </div>
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__card">
+        <div class="container">
+            <h2 class="company__section-title">Детали заказа</h2>
+            <div class="company__tabs__lead">
 
+
+
+                <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
+
+
+                    <div th:each="review : ${reviews}" class="company__card__lead">
+                        <div class="company__card__content__lead">
+
+                            <!-- элементы карточки - начало -->
+                            <div class="company__card__content__product">
+                                <a class="company__card__title__lead" th:text="${review.filial.title}">Название компании</a>
+                            </div>
+                            <div class="company__card__content__comments">
+                                    <div class="company__card__text__lead2" th:text="${review.text}">Текст отзыва</div>
+                            </div> 
+                            <div class="company__card__content__comments">
+                                <div class="company__card__text__lead2" th:text="${review.answer}">Ответ на отзыв</div>
+                            </div> 
+                            <div class="company__card__content__product">
+                                <a class="company__card__title__review" th:text="${review.bot.fio}">ФИО бота</a>
+                            </div>
+                            <div class="company__card__content_button">
+                                <form class="company__card__text__lead" target="_blank" th:action="@{'https://vk.com/'}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="company__card__text__lead-button ">вк</button>
+                                </form>
+                                <div class="company__card__text__lead"> <!-- Bot Login -->
+                                    <textarea class="company__card__remember-text" th:utext="${review.bot.login}" th:id="'botLogin_' + ${review.id}"></textarea>
+                                    <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotLogin(' + ${review.id} + ')'" >логин</button>
+                                </div>
+                                <div class="company__card__text__lead"> <!-- Bot Password -->
+                                    <textarea class="company__card__remember-text" th:utext="${review.bot.password}" th:id="'botPassword_' + ${review.id}"></textarea>
+                                    <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
+                                </div>
+                                <form class="company__card__text__lead" target="_blank" th:action="@{${review.filial.url}}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit"  class="company__card__text__lead-button ">ссылка</button>
+                                </form>
+                            </div> <!-- card__content_button -->
+                            <div class="company__card__content_button">
+                                <div class="company__card__text__lead"> <!-- Review Text -->
+                                    <textarea class="company__card__remember-text" th:utext="${review.text}" th:id="'ReviewText_' + ${review.id}"></textarea>
+                                    <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewText(' + ${review.id} + ')'" >отзыв</button>
+                                </div>
+                                <div class="company__card__text__lead"> <!-- Review Text -->
+                                    <textarea class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>
+                                    <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewAnswer(' + ${review.id} + ')'" >ответ</button>
+                                </div>
+                                <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${orderID} + '/change_bot/' + ${review.id}}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="company__card__text__lead-button ">смена</button> 
+                                </form>
+                                <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${orderID} + '/deactivate_bot/' + ${review.id} + '/' + ${review.bot.id}}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit"  class="company__card__text__lead-button ">блок</button>
+                                </form>
+                            </div> <!-- card__content_button -->
+
+                       
+                            <div >
+                                
+                                <form  th:method="post" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${review.id}}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <div class="company__card__content__phone">
+                                        <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
+                                    </div>
+                              </form>
+                          </div>
+
+                          
+                        <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/' + ${review.id}">
+                            <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div>
+                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                            <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                        </form>
+                    </div> <!-- card -->
+                </div> <!-- tabs__content-item -->
+                <!-- СПИСОК КАРТОЧЕК 1 -->
+
+
+
+
+            </div> <!-- tabs -->
+            <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
+        </div> <!-- container -->
+    </section> <!-- section -->
 
         <!-- ===================== MAIN END ======================== -->
 

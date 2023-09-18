@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -33,14 +34,15 @@ public class CompanyController {
     private final SubCategoryService subCategoryService;
     private final ManagerService managerService;
     private final WorkerService workerService;
+    private final CompanyStatusService companyStatusService;
 
-    @GetMapping("/allCompany")
-    String CompanyList(Model model){
+    @GetMapping("/allCompany") // список всех компаний
+    public String CompanyList(Model model){
         model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
         return "companies/company_list";
     }
 
-    @GetMapping("/editCompany/{companyId}")
+    @GetMapping("/editCompany/{companyId}") // обновление компании - гет
     String ordersDetailsToCompany(@PathVariable Long companyId,  Model model){
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
         model.addAttribute("companyDTO", companyDTO);
@@ -52,8 +54,8 @@ public class CompanyController {
         return "companies/company_edit";
     }
 
-    @PostMapping("/editCompany/{companyId}")
-    String editCompany(@ModelAttribute ("companyDTO") CompanyDTO companyDTO, @ModelAttribute("newWorkerDTO") WorkerDTO newWorkerDTO,
+    @PostMapping("/editCompany/{companyId}") // обновление компании - пост
+    public String editCompany(@ModelAttribute ("companyDTO") CompanyDTO companyDTO, @ModelAttribute("newWorkerDTO") WorkerDTO newWorkerDTO,
                         @PathVariable Long companyId, RedirectAttributes rm, Model model){
         log.info("1. Начинаем обновлять данные компании");
         companyService.updateCompany(companyDTO, newWorkerDTO, companyId);
@@ -62,8 +64,8 @@ public class CompanyController {
         return "redirect:/companies/editCompany/{companyId}";
     }
 
-    @GetMapping("/editCompany/{companyId}/deleteWorker/{workerId}")
-    String editCompanyDeleteWorker(@PathVariable Long companyId, @PathVariable Long workerId, Model model){
+    @GetMapping("/editCompany/{companyId}/deleteWorker/{workerId}")// удалить работника в компании
+    public String editCompanyDeleteWorker(@PathVariable Long companyId, @PathVariable Long workerId, Model model){
         log.info("1. Начинаем удалять работника из списка работников компании");
         if (companyService.deleteWorkers(companyId, workerId)){
             log.info("4. Удаление работника из компании прошло успешно");
@@ -75,8 +77,8 @@ public class CompanyController {
         }
     }
 
-    @GetMapping("/editCompany/{companyId}/deleteFilial/{filialId}")
-    String editCompanyDeleteFilial(@PathVariable Long companyId, @PathVariable Long filialId, Model model){
+    @GetMapping("/editCompany/{companyId}/deleteFilial/{filialId}")// удалить филиал в компании
+    public String editCompanyDeleteFilial(@PathVariable Long companyId, @PathVariable Long filialId, Model model){
         log.info("1. Начинаем удалять филиал из списка филиалов компании");
         if (companyService.deleteFilial(companyId, filialId)){
             log.info("4. Удаление филиала из компании прошло успешно");
@@ -88,4 +90,17 @@ public class CompanyController {
         }
     }
 
+    //    ==========================================================================================================
+    @PostMapping ("/status_for_checking/{companyId}") // смена статуса на "Новая"
+    public String changeStatusForChecking(@PathVariable Long companyId, Model model){
+        if(companyService.changeStatusForCompany(companyId, "Новая")) {
+            log.info("статус заказа успешно изменен на Новая");
+            return "redirect:/ordersCompany/ordersDetails/{companyID}";
+        } else {
+            log.info("ошибка при изменении статуса заказа на Новая");
+            return "products/orders_list";
+        }
+    }
 }
+
+

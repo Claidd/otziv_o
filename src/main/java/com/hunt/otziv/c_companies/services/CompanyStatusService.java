@@ -7,6 +7,7 @@ public interface CompanyStatusService {
 
     // Взять менеджера по id его юзера
     CompanyStatus getCompanyStatusById (Long id);
+    CompanyStatus getStatusByTitle(String title);
 
 
 }

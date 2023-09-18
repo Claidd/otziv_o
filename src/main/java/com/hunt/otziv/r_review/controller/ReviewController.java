@@ -1,6 +1,10 @@
 package com.hunt.otziv.r_review.controller;
 
 import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +21,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final OrderDetailsService orderDetailsService;
+    private final OrderService orderService;
 
-    //    =========================================== ORDER EDIT =======================================================
+    //    =========================================== REVIEW EDIT =======================================================
     @GetMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Get
     String ReviewEdit(@PathVariable Long reviewId, Model model){
         System.out.println(reviewService.getReviewDTOById(reviewId));
@@ -40,4 +46,62 @@ public class ReviewController {
 
 
 //    ==========================================================================================================
+
+    //    =========================================== REVIEW'S EDIT =======================================================
+    @GetMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Get
+    String ReviewsEdit(@PathVariable Long orderDetailId, Model model){
+
+        OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
+        model.addAttribute("orderDetailDTO", orderDetailsDTO);
+        model.addAttribute("orderDetailId", orderDetailId);
+        System.out.println(orderDetailsDTO);
+
+
+        return "products/reviews_edit";
+    }
+
+    @PostMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Post - СОХРАНИТЬ
+    String ReviewsEditPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
+        log.info("1. Начинаем обновлять данные Отзыва");
+        for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
+            reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
+        }
+        log.info("5. Обновление Отзыва прошло успешно");
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/review/editReviews/{orderDetailId}";
+    }
+
+    @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
+    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
+        log.info("1. Начинаем обновлять данные Отзыва3");
+        for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
+            reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
+        }
+        log.info("Начинаем обновлять статус заказа");
+        orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
+        log.info("Обновили статус заказа");
+        log.info("5. Обновление Отзыва прошло успешно3");
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/review/editReviews/{orderDetailId}";
+    }
+
+    @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
+    String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
+        log.info("1. Начинаем обновлять данные Отзыва2");
+        for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
+            reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
+        }
+        log.info("Начинаем обновлять статус заказа");
+        orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Коррекция");
+        log.info("Обновили статус заказа");
+        log.info("5. Обновление Отзыва прошло успешно2");
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/review/editReviews/{orderDetailId}";
+    }
+
+
+//    ==========================================================================================================
+
+
+
 }

@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.services;
 
+import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 
@@ -17,4 +18,6 @@ public interface ReviewService {
 
     ReviewDTO getReviewDTOById(Long reviewId);
     void updateReview(ReviewDTO reviewDTO, Long reviewId);
+
+    void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
 }

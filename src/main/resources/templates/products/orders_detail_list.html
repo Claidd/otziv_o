@@ -229,7 +229,11 @@
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 1 -->
 
-
+                    <form class="company__card__content__author" th:method="get" th:action="'/review/editReviews/' + ${orderId}">
+                        <!-- <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div> -->
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить все отзывы</button>
+                    </form>
 <!--                    -->
 <!--                    &lt;!&ndash; СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ&ndash;&gt;-->
 <!--                    <div class="tabs__content__lead-item" id="content-2">-->

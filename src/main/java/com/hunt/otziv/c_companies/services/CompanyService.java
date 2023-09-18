@@ -25,5 +25,7 @@ public interface CompanyService {
 
     void save(Company company);
 
+    boolean changeStatusForCompany(Long companyId, String title);
+
 //    Set<Filial> convertFilialDTOToFilial(Long id, FilialDTO filialDTO);
 }

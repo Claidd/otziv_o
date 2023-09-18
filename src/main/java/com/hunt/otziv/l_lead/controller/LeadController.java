@@ -26,7 +26,7 @@ public class LeadController {
     }
 
     @GetMapping()
-    public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword){
+    public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword) {
 //        model.put("route", "lead");
         model.put("promoTexts", promoTextService.getAllPromoTexts());
         log.info("загрузили промо тексты");
@@ -40,14 +40,10 @@ public class LeadController {
         log.info("загрузили АРХИВ компании");
         model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword));
         log.info("загрузили В РАБОТЕ компании");
+        model.put("leadListALL", leadService.getAllLeadsNoStatus(keyword));
+        System.out.println(leadService.getAllLeadsNoStatus(keyword));
+        log.info("загрузили ВСЕ компании");
         return new ModelAndView("lead/layouts/lead", model);
     }
-
-
-
-
-
-
-
 
 }

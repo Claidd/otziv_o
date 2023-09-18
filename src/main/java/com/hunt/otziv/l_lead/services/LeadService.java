@@ -28,7 +28,7 @@ public interface LeadService {
     public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords);
     // метод поиска одного лида по id и перевод его в дто
 
-
+    List<LeadDTO> getAllLeadsNoStatus(String keywords);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
@@ -46,6 +46,8 @@ public interface LeadService {
 
     // меняем статус с любого на Новый
     void changeStatusLeadOnNew (Long leadId);
+
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

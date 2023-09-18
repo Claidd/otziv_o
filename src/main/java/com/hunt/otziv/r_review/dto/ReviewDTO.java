@@ -37,6 +37,7 @@ public class ReviewDTO {
     private BotDTO bot;
 
     private OrderDetailsDTO orderDetails;
+    private Long orderDetailsId;
 
     private FilialDTO filial;
 

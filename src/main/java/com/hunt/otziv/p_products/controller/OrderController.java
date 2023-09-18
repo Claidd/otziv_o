@@ -29,7 +29,7 @@ public class OrderController {
     private final AmountService amountService;
 
 
-    @GetMapping("/{companyID}")
+    @GetMapping("/{companyID}") // страница выбора продукта для заказа
     String ProductListToCompany(@PathVariable Long companyID, Model model){
         model.addAttribute("companyID", companyID);
         model.addAttribute("amounts", amountService.getAmountDTOList());

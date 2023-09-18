@@ -63,9 +63,18 @@ body {
 
 /* настройки всеъ заголовков */
 .company__section-title {
+    margin-top: 2rem;
     margin-bottom: 50px;
     font-size: 48px;
     font-weight: 700;
+    text-align: center;
+}
+
+.company__section-subtitle {
+    margin-bottom: 30px;
+    margin-top: 1rem;
+    font-size: 48px;
+    font-weight: 400;
     text-align: center;
 }
 /* ============== ОБЩИЕ НАСТРОЙКИ END ============ */
@@ -460,6 +469,7 @@ body {
 
 .company__lead__card {
     padding: 100px 0 150px;
+    
 }
 
 .company__tabs__lead {
@@ -495,6 +505,12 @@ body {
 .orderdetails__tabs__content-item{
     display: none;
     grid-template-columns: repeat(5, 1fr);
+    gap: 100px 40px;
+}
+
+.orderdetails__tabs__content__review-item{
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
     gap: 100px 40px;
 }
 
@@ -601,6 +617,10 @@ body {
     display: grid;
 }
 
+.green {
+    background-color: #04b68798;
+}
+
 
 
 .company__card__link__lead__more {
@@ -610,6 +630,17 @@ body {
     cursor: pointer;
     padding: 0;
     color: none;
+}
+
+.company__tabs__review{
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    padding: 10px;
+    background-color: #001aff11;
+}
+
+.company__tabs__review:hover{
+    box-shadow: 0 0rem 4rem rgba(132, 139, 200, 0.18);
 }
 
 
@@ -652,9 +683,66 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 40px;
+}
+
+.company__card__content__button {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    /* margin-bottom: 100px; */
+   
+    /* height: 50px; */
+}
+
+.company__card__content__button2 {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    margin-bottom: 100px;
+    /* height: 50px; */
+}
+
+.company__card__content__button3 {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    margin-bottom: 100px;
+   
+    /* height: 50px; */
+}
+
+.company__card__content__button__btn {
+    margin-top: 1rem;
+    height: 70px;
+    width: 100%;
+}
+
+.company__label {
+    text-align: center;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.company__card__content__subtitle {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     /* border: 1px solid #5b5a5a38;
     border-radius: 1.2rem; */
-    height: 40px;
+    height: 26px;
+    font-weight: 700;
+    color: #3d3d3d;
 }
 
 .company__card__title__lead {
@@ -747,6 +835,79 @@ body {
     color: #fff;
 }
 /* кнопки в рабюоту */
+/* кнока сохранить отзыв */
+.company__card__text__review-button{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    /* background-color: #00ff4411; */
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 -2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.company__card__text__review-button:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.company__card__text__publish-button{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    background-color: #00ff4411;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 -2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.company__card__text__publish-button:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+/* кнока сохранить отзыв */
+
+/* кнока сохранить отзыв */
+.company__card__text__comment-button{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    /* background-color: #152cfc00; */
+    background-color: #707efb00;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.company__card__text__comment-button:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+/* кнока сохранить отзыв */
 
 .company__card__content__comments {
     margin-top: 1rem;
@@ -755,7 +916,92 @@ body {
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 86px;
+    height: 186px;
+}
+
+.company__card__content__comments__tocompany {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 100px;
+}
+
+.company__card__content__review__text {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 336px;
+    width: 100%;
+}
+
+/* .company__card__content__review__comment {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 386px;
+    width: 100%;
+} */
+
+/* .company__card__content__review__comment:hover{
+    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
+}  */
+
+.company__card__content__review__answer {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 136px;
+    width: 100%;
+    text-align: center;
+    padding: 5px 5px 8px 10px;
+    overflow-x:hidden;
+    margin-bottom: 20px;
+}
+
+.company__card__content__review__comment{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 136px;
+    width: 100%;
+    text-align: center;
+    padding: 5px 5px 8px 10px;
+    overflow-x:hidden;
+    margin-bottom: 20px;
+    background-color: #152cfc00;
+}
+/* .company__card__content__review__comment:hover{
+    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
+} */
+
+.company__card__text__review {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    padding: 5px 5px 8px 10px;
+    /* word-wrap: break-word; */
+    overflow-x:hidden; 
+    border: none;
+    border-radius: 1.2rem;
+    text-align: center;
+    /* border-radius: 1.2rem; */
+
 }
 
 .company__card__text__lead2 {
@@ -768,6 +1014,7 @@ body {
     /* border-radius: 1.2rem; */
 
 }
+
 
 .company__card__price__lead {
     margin-bottom: 20px;
@@ -862,6 +1109,25 @@ body {
         padding: 0 0 50px;
         gap: 20px;
     }
+
+    .company__card__content__button {
+        flex-direction: column;
+        height: 100px;
+        margin-bottom: 100px;
+    }
+
+    .company__card__content__button__btn{
+        
+        margin-top: 60px;
+    }
+
+    .company__section-subtitle{
+        height: 30px;
+    }
+
+    /* .company__label{
+        padding: 30px;
+    } */
 
 }
 
@@ -1028,6 +1294,10 @@ body {
             width: 100%;
             
         }
+
+        .company__card__content__button__btn{
+            width: 500px;
+        }
 }
 
 
@@ -1061,6 +1331,10 @@ body {
     }
 
     .company__section-title {
+        font-size: 34px;
+    }
+
+    .company__section-subtitle {
         font-size: 34px;
     }
 
@@ -1146,6 +1420,10 @@ body {
         gap: 40px;
     }
 
+    .company__card__content__button__btn{
+        width: 350px;
+    }
+
 }
 
     /* ==================== 300 =================== */
@@ -1154,6 +1432,11 @@ body {
     .company__section-title {
         font-size: 28px;
     }
+
+    .company__section-subtitle {
+        font-size: 28px;
+    }
+    
 }
 
 /* ===================== MEDIA END ==================== */

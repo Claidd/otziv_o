@@ -179,7 +179,26 @@ public class LeadServiceImpl implements LeadService{
     // Взять всех юзеров - конец
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
-
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ БЕЗ СТАТУСА - НАЧАЛО =========================================
+    // Взять всех юзеров - начало
+    @Override
+    public List<LeadDTO> getAllLeadsNoStatus(String keywords) {
+        log.info("Берем все юзеров");
+        if (!keywords.isEmpty()){
+            return leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .collect(Collectors.toList());
+        }
+        else return leadsRepository.findAll().stream()
+                .map(this::toDto)
+                .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                .collect(Collectors.toList());
+    }
+    // Взять всех юзеров - конец
+    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
 
     //    =============================== В DTO - НАЧАЛО =========================================

@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -31,12 +32,10 @@ public class CompanyEditorController {
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final WorkerService workerService;
-    private final FilialService filialService;
-    private final CompanyRepository companyRepository;
 
 
     @GetMapping("/new_company_to_manager/{leadId}")
-    String newCompanyToManager(@PathVariable final Long leadId, Principal principal, Model model){
+    String newCompanyToManager(@PathVariable final Long leadId, Principal principal, Model model) {
         model.addAttribute("newCompany", companyService.convertToDtoToManager(leadId, principal));
         List<CategoryDTO> categories = categoryService.getAllCategories();
         model.addAttribute("categories", categories);
@@ -46,19 +45,18 @@ public class CompanyEditorController {
     }
 
     @PostMapping("/new_company_to_manager")
-    String saveNewCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO, @ModelAttribute("leadId") Long leadId){
+    String saveNewCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO, @ModelAttribute("leadId") Long leadId) {
         log.info("1.Начинаем сохранение компании");
-        if (companyService.save(companyDTO)){
+        if (companyService.save(companyDTO)) {
             log.info("OK.Начинаем сохранение компании прошло успешно");
-            for (Company company: companyService.getAllCompanies()) {
+            for (Company company : companyService.getAllCompanies()) {
                 log.info("вход в меняем статус с К рассылке на В работе");
                 leadService.changeStatusLeadOnInWork(leadId);
-                log.info("статус успешно сменен К рассылке на В работе" );
+                log.info("статус успешно сменен К рассылке на В работе");
                 System.out.println(company);
             }
             return "redirect:/lead";
-        }
-        else {
+        } else {
             log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
             return "redirect:/lead";
         }
@@ -70,3 +68,6 @@ public class CompanyEditorController {
         return subCategoryService.getSubcategoriesByCategoryId(categoryId);
     }
 }
+
+
+
