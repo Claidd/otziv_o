@@ -35,7 +35,7 @@
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Новый лид
                             </a>
                         </li>
@@ -49,11 +49,7 @@
                                 Компании
                             </a>
                         </li>
-                        <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lasertag}" class="nav__link  link" aria-label="Перейти на страницу квестов">
-                                О нас
-                            </a>
-                        </li>
+
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/bots}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Боты
@@ -72,6 +68,11 @@
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
                                 Продукт
+                            </a>
+                        </li>
+                        <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/zp}" class="nav__link  link" aria-label="Перейти на страницу квестов">
+                                ЗП
                             </a>
                         </li>
                         <li class="mev__item">

@@ -13,6 +13,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Set;
@@ -44,6 +45,8 @@ public class UserDTO {
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;
+
+    private BigDecimal coefficient;
 
 
     public boolean isActive() {

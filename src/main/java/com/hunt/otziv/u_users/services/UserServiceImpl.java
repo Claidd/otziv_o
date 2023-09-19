@@ -22,6 +22,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -112,6 +114,7 @@ public class UserServiceImpl  implements UserService {
                 .managers(user.getManagers() == null ? new HashSet<>() : user.getManagers())
                 .workers(user.getWorkers() == null ? new HashSet<>() : user.getWorkers())
                 .manager(new Manager())
+                .coefficient(user.getCoefficient())
                 .build();
         //                .active(user.getActivateCode() == null)
     }
@@ -188,11 +191,6 @@ public class UserServiceImpl  implements UserService {
     public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO) {
         log.info("Вошли в обновление");
 
-//        User user = userService.findByName(username);
-//        if(user == null){
-//            throw new RuntimeException("User not found. " + username);
-//        }
-
         if (userDTO.getOperators() == null){
             userDTO.setOperators(new HashSet<>());
         }
@@ -213,12 +211,10 @@ public class UserServiceImpl  implements UserService {
         System.out.println(!Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
         System.out.println(!Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
         System.out.println(!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
-        System.out.println(userDTO.getOperators());
-        System.out.println(saveUser.getOperators());
-        System.out.println(userDTO.getManagers());
-        System.out.println(saveUser.getManagers());
-        System.out.println(userDTO.getWorkers());
-        System.out.println(saveUser.getWorkers());
+        System.out.println("coefficient: " + !Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient()));
+        System.out.println(userDTO.getCoefficient());
+        System.out.println(saveUser.getCoefficient());
+
 
         /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getRoles(), saveUser.getRoles())){
@@ -296,6 +292,15 @@ public class UserServiceImpl  implements UserService {
             System.out.println(userDTO.isActive());
             isChanged = true;
             log.info("Обновили активность");
+        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient())){
+            if (userDTO.getCoefficient().compareTo(new BigDecimal("0.30")) < 0){
+                saveUser.setCoefficient(userDTO.getCoefficient());
+                System.out.println(userDTO.getCoefficient());
+                isChanged = true;
+                log.info("Обновили коэффициент");
+            }
         }
         /*Проверяем не равен ли оператор предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getOperators(), saveUser.getOperators()) || operatorDTO.getOperatorId() != 0){

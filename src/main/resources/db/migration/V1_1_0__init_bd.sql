@@ -11,6 +11,7 @@ create table IF NOT EXISTS users (
     operator_id bigint,
     manager_id bigint,
     worker_id bigint,
+    coefficient numeric(3,2) NOT NULL DEFAULT 0.05,
 --    operator_id bigint NULL,
 --    manager_id bigint NULL,
 --    worker_id bigint NULL,
@@ -422,6 +423,18 @@ CREATE TABLE IF NOT EXISTS `otziv`.`amounts` (
   `amount_id` bigint NOT NULL AUTO_INCREMENT,
   `amount` INT NULL,
   PRIMARY KEY (`amount_id`))
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`zp` (
+  `zp_id` bigint NOT NULL AUTO_INCREMENT,
+  `zp_fio` VARCHAR(100) NOT NULL,
+  `zp_sum` numeric(7,2) NULL,
+  `zp_user` bigint NOT NULL,
+  `zp_profession` bigint NOT NULL,
+  `zp_order` bigint NOT NULL,
+  `zp_date` DATE NOT NULL,
+  `zp_active` BIT(1) NULL DEFAULT 1,
+  PRIMARY KEY (`zp_id`))
 ENGINE = InnoDB;
 
 --create table IF NOT EXISTS operators(

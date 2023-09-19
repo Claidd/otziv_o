@@ -88,16 +88,10 @@
                         <div th:each="review : ${reviews}" class="company__card__lead">
                             <div class="company__card__content__lead">
 
-                                <!-- th:class="${clientlist.number == 0} ? disabled" -->
                                 <div  th:class="${review.isPublish} ? reviewTitleRed :  reviewTitleGreen"  >
                                     <a  class="company__card__title__lead" th:text="${review.filial.title}">Название компании</a>
                                 </div>
-                                <!-- <div  class="company__card__content__product">
-                                    <a th:class="${#review.isPublish() ? company__card__title__lead : company__card__title__review__red}" th:text="${review.filial.title}">Название компании</a>
-                                </div> -->
-                                <!-- <div class="company__card__content__product">
-                                    <a class="company__card__title__lead" th:text="${review.text}">Текст отзывы</a>
-                                </div> -->
+                                
                                 <div class="company__card__content__comments">
                                         <div class="company__card__text__lead2" th:text="${review.text}">Текст отзыва</div>
                                 </div> 

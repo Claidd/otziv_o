@@ -40,6 +40,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.ObjectNotFoundException;
@@ -76,6 +77,7 @@ public class OrderServiceImpl implements OrderService {
     private final ReviewService reviewService;
     private final OrderStatusService orderStatusService;
     private final ReviewArchiveService reviewArchiveService;
+    private final ZpService zpService;
     @Override
     public OrderDTO newOrderDTO(Long id) {
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
@@ -358,15 +360,43 @@ public class OrderServiceImpl implements OrderService {
     }
 
 //    ==================================================================================================================
-
+@Transactional
     public boolean changeStatusForOrder(Long orderID, String title){
         try {
-            Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
-            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-            orderRepository.save(order);
-            return true;
+
+            if (title.equals("Оплачено")){
+                log.info("1. Вошли в смену статуса в оплачено");
+                Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
+                System.out.println("orderIsComplete: " + !order.isComplete());
+                System.out.println("order.getAmount() == order.getCounter(): " + Objects.equals(order.getAmount(), order.getCounter()));
+
+                    if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
+                        log.info("2. Проверили, что заказ еще не бьл выполнен");
+                        if (zpService.save(order)){
+                            order.setComplete(true);
+                            orderRepository.save(order);
+                            log.info("Оплата поступила, ЗП начислена Менеджеру и Работнику");
+                        }
+                        else {
+                            log.info("Оплата поступила, но при сохранении какие-то проблемы");
+                        }
+                    }
+                    else {
+
+                    }
+                log.info("2. Проверили, что заказ УЖЕ был выполнен и просто меняем статус");
+                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                orderRepository.save(order);
+                return true;
+            }
+            else {
+                Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
+                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                orderRepository.save(order);
+                return true;
+            }
         } catch (Exception e){
-            System.out.println(e);
+            log.info("При смене статуса произошли какие-то проблемы");
             return false;
         }
     }

@@ -6,6 +6,8 @@ import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -48,6 +50,10 @@ public class User {
     //    номер телефона пользователя
     @Column(name = "phone_number")
     private String phoneNumber;
+
+    //    Коеффициент
+    @Column(name = "coefficient")
+    private BigDecimal coefficient;
 
     //    роль пользователя в системе. связь многие ко многим.
     @ManyToMany(cascade = CascadeType.ALL)

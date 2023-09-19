@@ -124,6 +124,12 @@
                 <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
             </select>
         </div>
+
+        <div class="mb-3">
+            <label for="coefficient" class="form-label">Коэффициент (0.00)</label>
+            <input type="number" step="0.01" min="0.05" max="0.30" required th:field="*{coefficient}" th:value="${editUserDto.coefficient}" name="coefficient" class="form-control" id="coefficient" placeholder="коэффициент 0.00">
+            <small class="form-text text-danger" th:each="err : ${#fields.errors('coefficient')}" th:text="${err}">Validation error</small>
+        </div>
         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
 
         <button type="submit" class="btn btn-primary">Сохранить</button>

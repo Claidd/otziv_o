@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -38,6 +39,7 @@ public class RegistrationUserDTO {
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;
+    private BigDecimal coefficient;
 
 
     public RegistrationUserDTO(Long id, String username, String password) {
