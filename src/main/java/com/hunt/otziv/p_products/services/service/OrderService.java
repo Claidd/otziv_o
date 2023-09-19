@@ -14,5 +14,6 @@ public interface OrderService {
 
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
 //    Order getOrderById(Long orderId);
+    boolean changeStatusAndOrderCounter(Long reviewId);
 
 }

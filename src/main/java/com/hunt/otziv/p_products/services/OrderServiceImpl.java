@@ -30,6 +30,7 @@ import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.UserDTO;
@@ -47,6 +48,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.webjars.NotFoundException;
 
+import javax.crypto.spec.PSource;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -73,6 +75,7 @@ public class OrderServiceImpl implements OrderService {
     private final FilialService filialService;
     private final ReviewService reviewService;
     private final OrderStatusService orderStatusService;
+    private final ReviewArchiveService reviewArchiveService;
     @Override
     public OrderDTO newOrderDTO(Long id) {
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
@@ -365,6 +368,49 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e){
             System.out.println(e);
             return false;
+        }
+    }
+
+    @Override
+    @Transactional
+    public boolean changeStatusAndOrderCounter(Long reviewId) { // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+        Review review = reviewService.getReviewById(reviewId);
+        log.info("2. Достали отзыв по id" + reviewId);
+        if (review != null){
+            Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
+            if(order != null && !review.isPublish()){
+                log.info("3. Прошли проверку order != null && !review.isPublish()");
+                reviewArchiveService.saveNewReviewArchive(reviewId);
+                log.info("4. Сохранили отзыв в архив");
+                order.setCounter(order.getCounter() + 1);
+                Order saveOrder = orderRepository.save(order);
+                log.info("5. Увеличили и обновили счетчик публикаций в заказе");
+                checkOrderCounterAndAmount(saveOrder);
+            }
+            else {
+                log.info("3. Счетчик не увеличен, проверка не пройдена");
+                System.out.println("order: " + (order != null));
+                System.out.println("publish status: " + (!review.isPublish()));
+            }
+            review.setPublish(true);
+            log.info("6. Установили Publish на тру - опубликовано");
+            reviewService.save(review);
+            log.info("7. Сохранили отзыв в БД");
+            return true;
+        }
+        else {
+            log.info("2. Что-то пошло не так и метод changeStatusAndOrderCounter не отработал правильно ");
+            return false;
+        }
+    }
+
+    private void checkOrderCounterAndAmount(Order order){ // проверка счетчиков заказа
+        if (order.getAmount() == order.getCounter()){
+            changeStatusForOrder(order.getId(), "Опубликовано");
+            log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
+        }
+        else {
+            log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");
         }
     }
 

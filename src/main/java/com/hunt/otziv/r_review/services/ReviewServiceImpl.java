@@ -20,6 +20,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -191,6 +192,8 @@ public class ReviewServiceImpl implements ReviewService{
         }
     }
 
+
+
     @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
         try {
@@ -320,6 +323,12 @@ public class ReviewServiceImpl implements ReviewService{
                 .id(company.getId())
                 .title(company.getTitle())
                 .build();
+    }
+
+    public Review getReviewById(Long reviewId){
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        assert review != null;
+        return review;
     }
     //    ============================================== CONVERTER TO DTO ==============================================
 

@@ -18,23 +18,21 @@
         <!-- ==================== MAIN START ======================== -->
 
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
-        <div class="company__card__remember__box-serch">
+        <!-- <div class="company__card__remember__box-serch">
 
             <form class="company__card_remember-search" th:method="get" th:action="@{/lead}">
-                <!-- The text field -->
                 <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
-                <!-- The button used to copy the text -->
                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                 <button type="submit" class="company__card_remember-search__btn">Найти</button>
             </form>
 
-        </div>     
+        </div>      -->
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
 <section class="company__lead__cardsmoll">
     <div class="container">
-        <h2 class="company__section-title">Редактор отзывов</h2>
+        <h2 class="company__section-title2">Редактор отзывов</h2>
             <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
                 <div class="mb-3" th:if="${saveSuccess}">
                     <div class="alert alert-success">
