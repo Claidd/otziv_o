@@ -56,34 +56,12 @@ public class ReviewServiceImpl implements ReviewService{
        return reviewRepository.save(review);
     }
 
+
+
     public boolean deleteReview(Long reviewId){
         reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
         return true;
     }
-
-//    public boolean deleteReview(Long reviewId) {
-//        // Получаем отзыв по его ID
-//        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
-//
-//        if (reviewOptional.isPresent()) {
-//            Review review = reviewOptional.get();
-//
-//            // Получаем значение review_subcategory из отзыва
-//            Long reviewSubcategoryId = review.getSubCategory().getId();
-//
-//            // Проверяем существование reviewSubcategoryId в таблице companies
-//            if (companyRepository.existsBySubCategoryId(reviewSubcategoryId)) {
-//                // Если reviewSubcategoryId существует, удаляем отзыв
-//                reviewRepository.deleteById(reviewId);
-//            } else {
-//                // Если reviewSubcategoryId не существует, выполняем необходимые действия, например, выбрасываем исключение
-//                throw new IllegalArgumentException("Недопустимое значение review_subcategory");
-//            }
-//        } else {
-//            throw new IllegalArgumentException("Отзыв с ID " + reviewId + " не найден");
-//        }
-//        return true;
-//    }
 
     @Override
     public List<Review> getReviewsAllByOrderId(Long id) {

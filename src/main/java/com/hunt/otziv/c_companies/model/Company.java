@@ -11,6 +11,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -108,8 +109,8 @@ public class Company {
     private int counterPay;
 
     //    счетчик выручки
-    @Column(name = "company_sum",columnDefinition = "integer default 0")
-    private int sumTotal;
+    @Column(name = "company_sum",columnDefinition = "integer default 0.00")
+    private BigDecimal sumTotal;
 
     //    город по которому шла рассылка
     @Column(name = "company_comments", length = 2000)

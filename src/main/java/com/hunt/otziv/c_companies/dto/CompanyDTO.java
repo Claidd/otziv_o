@@ -16,6 +16,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Set;
 
@@ -81,7 +82,7 @@ public class CompanyDTO {
     private int counterPay;
 
     //    счетчик выручки
-    private int sumTotal;
+    private BigDecimal sumTotal;
 
     //    город по которому шла рассылка
     private String commentsCompany;

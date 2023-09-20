@@ -35,6 +35,8 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "order_changed")
     private LocalDate changed;
+    @Column(name = "order_pay_day")
+    private LocalDate payDay;
     @Column(name = "order_amount")
     private int amount;
     @Column(name = "order_sum")

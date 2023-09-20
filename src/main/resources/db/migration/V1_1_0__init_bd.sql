@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_counter_no_pay INT NULL DEFAULT 0,
       company_counter_pay INT NULL DEFAULT 0,
       company_active BIT(1) NULL,
-      company_sum INT NULL DEFAULT 0,
+      company_sum NUMERIC(10,2) NULL DEFAULT 0,
       create_date DATE NULL,
       update_status DATE NULL,
       date_new_try DATE NULL,
@@ -267,7 +267,7 @@ ENGINE = InnoDB;
 CREATE TABLE IF NOT EXISTS products (
   product_id bigint NOT NULL AUTO_INCREMENT,
   product_title VARCHAR(45) NULL,
-  product_price NUMERIC(7,2) NULL,
+  product_price NUMERIC(10,2) NULL,
   PRIMARY KEY (product_id))
 ENGINE = InnoDB;
 
@@ -281,9 +281,10 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
   `order_id` bigint NOT NULL AUTO_INCREMENT,
   `order_created` DATE NULL,
   `order_changed` DATE NULL,
+  `order_pay_day` DATE NULL,
   `order_amount` int NULL,
   `order_counter` int NULL DEFAULT 0,
-  `order_sum` numeric(7,2) NULL,
+  `order_sum` numeric(10,2) NULL,
   `order_status` bigint NULL,
   `order_company` bigint NULL,
   `order_manager` bigint NULL,
@@ -327,7 +328,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`order_details` (
   `order_detail_order` bigint NULL,
   `order_detail_product` bigint NULL,
   `order_detail_amount` INT NULL,
-  `order_detail_price` DECIMAL(7,2) NULL,
+  `order_detail_price` DECIMAL(10,2) NULL,
   `order_detail_comments` VARCHAR(5000) NULL,
   `order_detail_date_published` DATE NULL,
   PRIMARY KEY (`order_detail_id`),
@@ -428,7 +429,7 @@ ENGINE = InnoDB;
 CREATE TABLE IF NOT EXISTS `otziv`.`zp` (
   `zp_id` bigint NOT NULL AUTO_INCREMENT,
   `zp_fio` VARCHAR(100) NOT NULL,
-  `zp_sum` numeric(7,2) NULL,
+  `zp_sum` numeric(10,2) NULL,
   `zp_user` bigint NOT NULL,
   `zp_profession` bigint NOT NULL,
   `zp_order` bigint NOT NULL,

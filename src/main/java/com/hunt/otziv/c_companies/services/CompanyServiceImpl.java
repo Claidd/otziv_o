@@ -30,6 +30,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -97,6 +98,9 @@ public class CompanyServiceImpl implements CompanyService{
                 .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
                 .active(true)
                 .commentsCompany(companyDTO.getCommentsCompany())
+                .counterNoPay(0)
+                .counterPay(0)
+                .sumTotal(new BigDecimal(0))
                 .build();
 
         //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список

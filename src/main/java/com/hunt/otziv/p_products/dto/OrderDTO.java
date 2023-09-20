@@ -27,6 +27,8 @@ public class OrderDTO {
 
     private LocalDate changed;
 
+    private LocalDate payDay;
+
     private Integer amount;
     private Integer counter;
 

@@ -47,6 +47,7 @@ import org.hibernate.ObjectNotFoundException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.w3c.dom.ls.LSOutput;
 import org.webjars.NotFoundException;
 
 import javax.crypto.spec.PSource;
@@ -95,19 +96,22 @@ public class OrderServiceImpl implements OrderService {
             Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
             OrderDetails orderDetails = saveOrder.getDetails().get(0);
             Company saveCompany = saveOrder.getCompany();
-//            System.out.println(saveOrder);
-//            System.out.println(saveCompany);
             Review review = createNewReview(saveCompany, orderDetails, saveOrder);
-//            System.out.println(review);
             log.info("2. Создали новый отзыв");
             List<Review> newList = orderDetails.getReviews();
             newList.add(review);
             orderDetails.setReviews(newList);
+            orderDetails.setAmount(orderDetails.getAmount() + 1);
+            orderDetails.setPrice(orderDetails.getPrice().add(orderDetails.getProduct().getPrice()));
             orderDetailsService.save(orderDetails);
             log.info("3. Сохранили его в детали");
             saveOrder.setAmount(saveOrder.getAmount() + 1);
-            orderRepository.save(saveOrder);
+            saveOrder.setSum(saveOrder.getSum().add(saveOrder.getDetails().get(0).getProduct().getPrice()));
+            Order saveOrder2 = orderRepository.save(saveOrder);
             log.info("4. Обновили счетчик в заказе");
+
+            saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() + (saveOrder2.getAmount() - saveCompany.getCounterNoPay()));
+            companyService.save(saveCompany);
             return true;
         }
         catch (Exception e){
@@ -115,6 +119,36 @@ public class OrderServiceImpl implements OrderService {
             return false;
         }
     }
+    @Transactional
+    public boolean deleteNewReview(Long orderId, Long reviewId){
+        try {
+            Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+            OrderDetails orderDetails = saveOrder.getDetails().get(0);
+            Company saveCompany = saveOrder.getCompany();
+            log.info("2. Удалили отзыв");
+            List<Review> newList = orderDetails.getReviews();
+            Review review = reviewService.getReviewById(reviewId);
+            newList.remove(review);
+            orderDetails.setReviews(newList);
+            orderDetails.setAmount(orderDetails.getAmount() - 1);
+            orderDetails.setPrice(orderDetails.getPrice().subtract(orderDetails.getProduct().getPrice()));
+            orderDetailsService.save(orderDetails);
+            log.info("3. Сохранили его в детали");
+            saveOrder.setAmount(saveOrder.getAmount() - 1);
+            saveOrder.setSum(saveOrder.getSum().subtract(saveOrder.getDetails().get(0).getProduct().getPrice()));
+            Order saveOrder2 = orderRepository.save(saveOrder);
+            reviewService.deleteReview(reviewId);
+            log.info("4. Обновили счетчик в заказе");
+            saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() + (saveOrder2.getAmount() - saveCompany.getCounterNoPay()));
+            companyService.save(saveCompany);
+            return true;
+        }
+        catch (Exception e){
+            log.info("2. Что-то пошло не так в создании нового отзыва");
+            return false;
+        }
+    }
+
 
     private Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // перевод из ДТО в Сущность REVIEW
         List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId());
@@ -131,6 +165,10 @@ public class OrderServiceImpl implements OrderService {
                 .worker(order.getWorker())
                 .build();
     }
+
+
+
+
 
 
     @Override
@@ -166,10 +204,12 @@ public class OrderServiceImpl implements OrderService {
         System.out.println(saveOrder2);
         log.info("10. Обновляем счетчик компании в БД");
         Company  company = companyService.getCompaniesById(companyId);
-        company.setCounterNoPay(saveOrder2.getAmount());
+        company.setCounterNoPay(company.getCounterNoPay() + (saveOrder2.getAmount() - company.getCounterNoPay()));
         companyService.save(company);
         return true;
     }
+
+
 
     private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // перевод из ДТО в Сущность ORDER
         Product product1 = productService.findById(productId);
@@ -417,16 +457,35 @@ public class OrderServiceImpl implements OrderService {
                     if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
                         log.info("2. Проверили, что заказ еще не бьл выполнен");
                         if (zpService.save(order)){
-                            order.setComplete(true);
-                            orderRepository.save(order);
-                            log.info("Оплата поступила, ЗП начислена Менеджеру и Работнику");
+                            log.info("3. Сохранили ЗП");
+                            Company company = companyService.getCompaniesById(order.getCompany().getId());
+
+                            try {
+                                company.setCounterPay(company.getCounterPay() + order.getAmount());
+                                System.out.println("счетчик: " + company.getCounterPay() + order.getAmount());
+                                company.setSumTotal(company.getSumTotal().add(order.getSum()));
+                                System.out.println("сумма: " + company.getSumTotal().add(order.getSum()));
+                                log.info("4. Успешно установили суммы");
+                                companyService.save(company);
+                                log.info("5. Компания сохранена");
+                                order.setComplete(true);
+                                order.setPayDay(LocalDate.now());
+                                System.out.println("PayDay: " + order.getPayDay());
+                                orderRepository.save(order);
+                                log.info("6. Заказ обновлен и сохранен");
+                                log.info("7. Оплата поступила, ЗП начислена Менеджеру и Работнику");
+                            }
+                            catch (Exception e){
+                                log.info("4. НЕ Успешно установили суммы");
+                            }
+
                         }
                         else {
-                            log.info("Оплата поступила, но при сохранении какие-то проблемы");
+                            log.info("2. Оплата поступила, но при сохранении какие-то проблемы");
                         }
                     }
                     else {
-
+                        log.info("3. Что-то пошло не так и выбросило в момент Зачисления");
                     }
                 log.info("2. Проверили, что заказ УЖЕ был выполнен и просто меняем статус");
                 order.setStatus(orderStatusService.getOrderStatusByTitle(title));
