@@ -95,7 +95,7 @@
 
         <div class="mb-3">
             <label for="inputLink" class="form-label">Активность</label>
-            <input type="checkbox" th:checked="${editUserDto.isActive()}" th:field="*{active}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
+            <input type="checkbox" th:checked="${editUserDto.isActive()}" th:field="*{active}" class="form-control form-paymentCheck" id="inputLink" aria-describedby="emailHelp">
             <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
         </div>
 
@@ -205,7 +205,7 @@
 
 <!--        <div class="mb-3">-->
 <!--            <label for="inputLink" class="form-label">Активность</label>-->
-<!--            <input type="checkbox" th:value="${editUserDto.isActive()}" name="active" class="form-control form-check-input" id="inputLink" aria-describedby="emailHelp">-->
+<!--            <input type="checkbox" th:value="${editUserDto.isActive()}" name="active" class="form-control form-paymentCheck-input" id="inputLink" aria-describedby="emailHelp">-->
 <!--            <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>-->
 <!--        </div>-->
 
@@ -222,8 +222,8 @@
 <!--            </select>-->
 <!--        </div>-->
 <!--        <div>-->
-<!--            <div class="form-check form-switch">-->
-<!--                <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckChecked" checked>-->
-<!--                <label class="form-check-label" for="flexSwitchCheckChecked">Компания активна</label>-->
+<!--            <div class="form-paymentCheck form-switch">-->
+<!--                <input class="form-paymentCheck-input" type="checkbox" role="switch" id="flexSwitchCheckChecked" checked>-->
+<!--                <label class="form-paymentCheck-label" for="flexSwitchCheckChecked">Компания активна</label>-->
 <!--            </div>-->
 <!--        </div>-->

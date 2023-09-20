@@ -77,7 +77,7 @@
 
                         <div class="mb-3">
                             <label for="inputLink" class="form-label">Активность</label>
-                            <input type="checkbox" th:checked="${ordersDTO.isComplete()}" th:field="*{complete}" class="form-control form-check" id="inputLink" aria-describedby="emailHelp">
+                            <input type="checkbox" th:checked="${ordersDTO.isComplete()}" th:field="*{complete}" class="form-control form-paymentCheck" id="inputLink" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('complete')}" th:text="${err}">Validation error</small>
                         </div>
                         

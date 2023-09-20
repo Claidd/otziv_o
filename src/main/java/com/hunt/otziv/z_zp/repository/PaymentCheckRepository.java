@@ -1,14 +1,13 @@
 package com.hunt.otziv.z_zp.repository;
 
-import com.hunt.otziv.r_review.model.Amount;
-import com.hunt.otziv.z_zp.model.Zp;
+import com.hunt.otziv.z_zp.model.PaymentCheck;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 @Repository
-public interface ZpRepository extends CrudRepository<Zp, Long>  {
+public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Long>  {
     @NotNull
-    List<Zp> findAll();
+    List<PaymentCheck> findAll();
 }

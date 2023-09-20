@@ -65,7 +65,7 @@
 
                         <div class="mb-3">
                             <label for="publish" class="form-label">Активность</label>
-                            <input type="checkbox" th:checked="${reviewDTO.isPublish()}" th:field="*{publish}" class="form-control form-check" id="publish" aria-describedby="emailHelp">
+                            <input type="checkbox" th:checked="${reviewDTO.isPublish()}" th:field="*{publish}" class="form-control form-paymentCheck" id="publish" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('publish')}" th:text="${err}">Validation error</small>
                         </div>
 

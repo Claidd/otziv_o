@@ -62,7 +62,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="inputActive" class="form-label">Активность</label>
-                        <input type="checkbox" th:checked="${editBotDto.isActive()}" th:field="*{active}" class="form-control form-check" id="inputActive" aria-describedby="emailHelp">
+                        <input type="checkbox" th:checked="${editBotDto.isActive()}" th:field="*{active}" class="form-control form-paymentCheck" id="inputActive" aria-describedby="emailHelp">
                         <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
                     </div>
 

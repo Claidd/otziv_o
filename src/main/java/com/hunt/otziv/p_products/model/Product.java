@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.model;
 
+import com.hunt.otziv.c_categories.model.ProductCategory;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,4 +26,8 @@ public class Product {
 
     @Column(name = "product_price")
     private BigDecimal price;
+
+    @ManyToOne
+    @JoinColumn(name = "product_category")
+    private ProductCategory productCategory;
 }

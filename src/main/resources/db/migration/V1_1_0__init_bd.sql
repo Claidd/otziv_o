@@ -264,12 +264,28 @@ CREATE TABLE IF NOT EXISTS filial (
   PRIMARY KEY (filial_id))
 ENGINE = InnoDB;
 
+CREATE TABLE IF NOT EXISTS `otziv`.`product_categorys` (
+  `product_category_id` bigint NOT NULL AUTO_INCREMENT,
+  `product_category_title` VARCHAR(70) NULL,
+  PRIMARY KEY (`product_category_id`))
+ENGINE = InnoDB;
+
+
 CREATE TABLE IF NOT EXISTS products (
   product_id bigint NOT NULL AUTO_INCREMENT,
   product_title VARCHAR(45) NULL,
   product_price NUMERIC(10,2) NULL,
+  product_category bigint NULL,
+  INDEX `product_category_idx` (`product_category` ASC),
+  CONSTRAINT `fk_product_category`
+    FOREIGN KEY (`product_category`)
+    REFERENCES `otziv`.`product_categorys` (`product_category_id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
   PRIMARY KEY (product_id))
 ENGINE = InnoDB;
+
+
 
 CREATE TABLE IF NOT EXISTS `otziv`.`order_statuses` (
   `order_status_id` bigint NOT NULL AUTO_INCREMENT,
@@ -436,6 +452,19 @@ CREATE TABLE IF NOT EXISTS `otziv`.`zp` (
   `zp_date` DATE NOT NULL,
   `zp_active` BIT(1) NULL DEFAULT 1,
   PRIMARY KEY (`zp_id`))
+ENGINE = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `otziv`.`payment_check` (
+  `check_id` bigint NOT NULL AUTO_INCREMENT,
+  `check_title` VARCHAR(100) NOT NULL,
+  `check_company` bigint NOT NULL,
+  `check_order` bigint NOT NULL,
+  `check_manager` bigint NULL,
+  `check_worker` bigint NULL,
+  `check_date` DATE NOT NULL,
+  `check_sum` DECIMAL(10,2) NULL,
+  `check_active` BIT(1) NULL DEFAULT 1,
+  PRIMARY KEY (`check_id`))
 ENGINE = InnoDB;
 
 --create table IF NOT EXISTS operators(

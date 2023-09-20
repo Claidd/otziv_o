@@ -1,6 +1,5 @@
 package com.hunt.otziv.p_products.services;
 
-import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
@@ -33,24 +32,20 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
-import com.hunt.otziv.u_users.dto.UserDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.ObjectNotFoundException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.w3c.dom.ls.LSOutput;
 import org.webjars.NotFoundException;
 
-import javax.crypto.spec.PSource;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -79,6 +74,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderStatusService orderStatusService;
     private final ReviewArchiveService reviewArchiveService;
     private final ZpService zpService;
+    private final PaymentCheckService paymentCheckService;
     @Override
     public OrderDTO newOrderDTO(Long id) {
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
@@ -458,6 +454,9 @@ public class OrderServiceImpl implements OrderService {
                         log.info("2. Проверили, что заказ еще не бьл выполнен");
                         if (zpService.save(order)){
                             log.info("3. Сохранили ЗП");
+                            boolean chek = paymentCheckService.save(order);
+                            System.out.println(chek);
+                            log.info("4. Сохранили Чек компании");
                             Company company = companyService.getCompaniesById(order.getCompany().getId());
 
                             try {
@@ -465,15 +464,15 @@ public class OrderServiceImpl implements OrderService {
                                 System.out.println("счетчик: " + company.getCounterPay() + order.getAmount());
                                 company.setSumTotal(company.getSumTotal().add(order.getSum()));
                                 System.out.println("сумма: " + company.getSumTotal().add(order.getSum()));
-                                log.info("4. Успешно установили суммы");
+                                log.info("5. Успешно установили суммы");
                                 companyService.save(company);
-                                log.info("5. Компания сохранена");
+                                log.info("6. Компания сохранена");
                                 order.setComplete(true);
                                 order.setPayDay(LocalDate.now());
                                 System.out.println("PayDay: " + order.getPayDay());
                                 orderRepository.save(order);
-                                log.info("6. Заказ обновлен и сохранен");
-                                log.info("7. Оплата поступила, ЗП начислена Менеджеру и Работнику");
+                                log.info("7. Заказ обновлен и сохранен");
+                                log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
                             }
                             catch (Exception e){
                                 log.info("4. НЕ Успешно установили суммы");

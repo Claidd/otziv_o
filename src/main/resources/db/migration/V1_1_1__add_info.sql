@@ -34,14 +34,18 @@ values (3);
 insert into workers (user_id)
 values (4);
 
+insert into product_categorys (product_category_title)
+values ('Отзывы');
+
 insert into bots(bot_login, bot_password, bot_fio, bot_counter, bot_active, bot_status, bot_worker)
 values ('89086431055', 'pass', 'Ботовский Бот Ботович', 0, 1, 1,1), ('89086431056', 'pass', 'Ботовский Бот Ботович 2', 0, 1, 1,1);
 
-insert into products (product_title, product_price)
-values ('Отзыв 2ГИС', 200.00), ('Отзыв 2ГИС + ответ', 300.00);
-
 insert into amounts (amount)
 values (5),(10),(15),(20),(25),(30);
+
+
+insert into products (product_title, product_price, product_category)
+values ('Отзыв 2ГИС', 200.00, 1), ('Отзыв 2ГИС + ответ', 300.00, 1);
 
 --insert into operators_users (operator_id, user_id)
 --values (1,1), (1,3);
