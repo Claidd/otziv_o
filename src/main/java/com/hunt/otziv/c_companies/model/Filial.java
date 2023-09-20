@@ -1,7 +1,10 @@
 package com.hunt.otziv.c_companies.model;
 
+import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.util.Objects;
 
 @Entity
 @Data
@@ -28,4 +31,29 @@ public class Filial {
     @JoinColumn(name = "company_id")
     @ToString.Exclude
     private Company company;
+
+//    @OneToOne(mappedBy = "filial", cascade = CascadeType.ALL, optional = false, fetch = FetchType.LAZY)
+//    Review review;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Filial filial = (Filial) o;
+        return Objects.equals(id, filial.id) && Objects.equals(title, filial.title) && Objects.equals(url, filial.url);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, url);
+    }
+
+    @Override
+    public String toString() {
+        return "Filial{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", url='" + url + '\'' +
+                '}';
+    }
 }

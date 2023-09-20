@@ -36,6 +36,9 @@ public class OrderDetails {
     @OneToMany(mappedBy = "orderDetails",cascade = CascadeType.ALL)
     List<Review> reviews;
 
+//    @OneToOne(mappedBy = "orderDetails", cascade = CascadeType.ALL)
+//    Review review;
+
     @UpdateTimestamp
     @Column(name = "order_detail_date_published")
     private LocalDate publishedDate;

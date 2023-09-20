@@ -9,4 +9,6 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     @Override
     Set<Company> findAll();
+
+    boolean existsBySubCategoryId(Long reviewSubcategoryId);
 }

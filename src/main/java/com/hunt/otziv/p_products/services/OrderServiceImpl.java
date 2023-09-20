@@ -89,6 +89,50 @@ public class OrderServiceImpl implements OrderService {
         return orderDTO;
     }
 
+    @Transactional
+    public boolean addNewReview(Long orderId){
+        try {
+            Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+            OrderDetails orderDetails = saveOrder.getDetails().get(0);
+            Company saveCompany = saveOrder.getCompany();
+//            System.out.println(saveOrder);
+//            System.out.println(saveCompany);
+            Review review = createNewReview(saveCompany, orderDetails, saveOrder);
+//            System.out.println(review);
+            log.info("2. Создали новый отзыв");
+            List<Review> newList = orderDetails.getReviews();
+            newList.add(review);
+            orderDetails.setReviews(newList);
+            orderDetailsService.save(orderDetails);
+            log.info("3. Сохранили его в детали");
+            saveOrder.setAmount(saveOrder.getAmount() + 1);
+            orderRepository.save(saveOrder);
+            log.info("4. Обновили счетчик в заказе");
+            return true;
+        }
+        catch (Exception e){
+            log.info("2. Что-то пошло не так в создании нового отзыва");
+            return false;
+        }
+    }
+
+    private Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // перевод из ДТО в Сущность REVIEW
+        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId());
+        var random = new SecureRandom();
+        return Review.builder()
+                .category(company.getCategoryCompany())
+                .subCategory(company.getSubCategory())
+                .text("Текст отзыва")
+                .answer(" ")
+                .orderDetails(orderDetails)
+                .bot(bots.get(random.nextInt(bots.size())))
+                .filial(order.getFilial())
+                .publish(false)
+                .worker(order.getWorker())
+                .build();
+    }
+
+
     @Override
     @Transactional
     public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) { // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS

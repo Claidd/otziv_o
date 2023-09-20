@@ -33,7 +33,9 @@ public class SubCategory {
     @ToString.Exclude
     List<Company> companyList;
 
-    @OneToMany(mappedBy = "subCategory",cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "subCategory", cascade = CascadeType.ALL)
     @ToString.Exclude
     List<Review> reviews;
+
+
 }

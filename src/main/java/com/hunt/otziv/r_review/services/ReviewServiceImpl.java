@@ -13,6 +13,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,15 +49,48 @@ public class ReviewServiceImpl implements ReviewService{
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final OrderDetailsService orderDetailsService;
+    private final CompanyRepository companyRepository;
+
 
     public Review save(Review review){
        return reviewRepository.save(review);
     }
 
+    public boolean deleteReview(Long reviewId){
+        reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
+        return true;
+    }
+
+//    public boolean deleteReview(Long reviewId) {
+//        // Получаем отзыв по его ID
+//        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
+//
+//        if (reviewOptional.isPresent()) {
+//            Review review = reviewOptional.get();
+//
+//            // Получаем значение review_subcategory из отзыва
+//            Long reviewSubcategoryId = review.getSubCategory().getId();
+//
+//            // Проверяем существование reviewSubcategoryId в таблице companies
+//            if (companyRepository.existsBySubCategoryId(reviewSubcategoryId)) {
+//                // Если reviewSubcategoryId существует, удаляем отзыв
+//                reviewRepository.deleteById(reviewId);
+//            } else {
+//                // Если reviewSubcategoryId не существует, выполняем необходимые действия, например, выбрасываем исключение
+//                throw new IllegalArgumentException("Недопустимое значение review_subcategory");
+//            }
+//        } else {
+//            throw new IllegalArgumentException("Отзыв с ID " + reviewId + " не найден");
+//        }
+//        return true;
+//    }
+
     @Override
     public List<Review> getReviewsAllByOrderId(Long id) {
         return reviewRepository.findAllByOrderDetailsId(id);
     }
+
+
 
     //    ======================================== FILIAL UPDATE =========================================================
     // Обновить профиль отзыв - начало

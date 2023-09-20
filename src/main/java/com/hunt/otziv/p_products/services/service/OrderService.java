@@ -6,6 +6,8 @@ import com.hunt.otziv.p_products.model.Order;
 public interface OrderService {
     OrderDTO newOrderDTO(Long id);
 
+    boolean addNewReview(Long orderId);
+
     boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
 
     boolean changeStatusForOrder(Long orderID, String title);

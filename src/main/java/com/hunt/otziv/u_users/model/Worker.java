@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hunt.otziv.b_bots.model.Bot;
 //import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,6 +29,10 @@ public class Worker {
     @OneToMany(mappedBy = "worker", orphanRemoval = true)
     @ToString.Exclude
     private List<Bot> bots;
+
+//    @OneToOne(mappedBy = "worker", cascade = CascadeType.PERSIST)
+//    Review review;
+
 
 //    @OneToMany(mappedBy = "worker", cascade = CascadeType.ALL, orphanRemoval = true)
 //    private List<Order> orders;

@@ -3,6 +3,7 @@ package com.hunt.otziv.c_companies.model;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -132,6 +133,12 @@ public class Company {
     //    активнность компании
     @Column(name = "company_active")
     private boolean active;
+
+//    @OneToOne(mappedBy = "category", cascade = CascadeType.ALL)
+//    Review review;
+
+//    @OneToOne(mappedBy = "subCategory", cascade = CascadeType.ALL)
+//    Review review2;
 
     // Геттеры и сеттеры
 

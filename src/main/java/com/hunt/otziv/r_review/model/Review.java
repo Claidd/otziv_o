@@ -15,6 +15,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Entity
 @Data
@@ -43,10 +44,10 @@ public class Review {
     @Column(name = "review_publish")
     private boolean publish;
 
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
     @JoinColumn(name = "review_category")
     private Category category;
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
     @JoinColumn(name = "review_subcategory")
     private SubCategory subCategory;
     @ManyToOne
@@ -55,12 +56,37 @@ public class Review {
     @ManyToOne
     @JoinColumn(name = "review_order_details")
     private OrderDetails orderDetails;
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
     @JoinColumn(name = "review_filial")
     private Filial filial;
     //    каждый бот имеет Работника, который его добавлял
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
     @JoinColumn(name = "review_worker")
     private Worker worker;
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Review review = (Review) o;
+        return publish == review.publish && Objects.equals(id, review.id) && Objects.equals(text, review.text) && Objects.equals(answer, review.answer) && Objects.equals(created, review.created) && Objects.equals(changed, review.changed) && Objects.equals(publishedDate, review.publishedDate);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, text, answer, created, changed, publishedDate, publish);
+    }
+
+    @Override
+    public String toString() {
+        return "Review{" +
+                "id=" + id +
+                ", text='" + text + '\'' +
+                ", answer='" + answer + '\'' +
+                ", created=" + created +
+                ", changed=" + changed +
+                ", publishedDate=" + publishedDate +
+                ", publish=" + publish +
+                '}';
+    }
 }

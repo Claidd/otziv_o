@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.AmountDTO;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Controller
@@ -59,7 +61,7 @@ public class OrderController {
     @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании
     String OrderListToCompany(@PathVariable Long companyId, Model model){
         model.addAttribute("companyID", companyId);
-        model.addAttribute("orders", companyService.getCompaniesById(companyId).getOrderList());
+        model.addAttribute("orders", companyService.getCompaniesById(companyId).getOrderList().stream().sorted(Comparator.comparing(Order::getCreated).reversed()).toList());
         return "products/orders_list";
     }
 
@@ -67,7 +69,8 @@ public class OrderController {
     @GetMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Get
     String OrderEdit(@PathVariable Long companyId, @PathVariable Long orderId,  Model model){
         model.addAttribute("ordersDTO", orderService.getOrderDTO(orderId));
-        model.addAttribute("companyID", companyId);
+        model.addAttribute("companyId", companyId);
+        model.addAttribute("orderId", orderId);
         System.out.println(orderService.getOrderDTO(orderId));
         return "products/order_edit";
     }

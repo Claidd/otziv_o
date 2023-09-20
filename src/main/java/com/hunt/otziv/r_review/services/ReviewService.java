@@ -9,6 +9,7 @@ import java.util.List;
 public interface ReviewService {
 
     Review save(Review review);
+    boolean deleteReview(Long reviewId);
 
     List<Review> getReviewsAllByOrderId(Long id);
 
@@ -19,6 +20,7 @@ public interface ReviewService {
     ReviewDTO getReviewDTOById(Long reviewId);
     Review getReviewById(Long reviewId);
     void updateReview(ReviewDTO reviewDTO, Long reviewId);
+
 
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
 }

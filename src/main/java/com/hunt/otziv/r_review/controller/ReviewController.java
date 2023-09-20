@@ -30,8 +30,8 @@ public class ReviewController {
         System.out.println(reviewService.getReviewDTOById(reviewId));
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
         model.addAttribute("reviewDTO", reviewDTO);
-        model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getId());
-        model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
+        model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
+        model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getId());
         return "products/review_edit";
     }
 
@@ -42,6 +42,30 @@ public class ReviewController {
         log.info("5. Обновление Отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReview/{reviewId}";
+    }
+
+    @PostMapping("/addReviews/{companyId}/{orderId}") // Добавить новый отзыв - Post
+    String ReviewAdd(@PathVariable Long orderId, @PathVariable Long companyId, RedirectAttributes rm, Model model){
+        log.info("1. Начинаем добавлять новый Отзыв");
+        if (orderService.addNewReview(orderId)){
+            log.info("5. Добавили новый отзыв");
+            rm.addFlashAttribute("saveSuccess", "true");
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+        log.info("3. Неудачная попытка");
+        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+    }
+
+    @GetMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Добавить новый отзыв - Post
+    String ReviewDelete(@PathVariable Long orderId, @PathVariable Long companyId, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
+        log.info("1. Начинаем удалять новый Отзыв");
+        if (reviewService.deleteReview(reviewId)){
+            log.info("2. Удалили отзыв");
+            rm.addFlashAttribute("saveSuccess", "true");
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+        log.info("2. Неудачная попытка удаления");
+        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
 
 
