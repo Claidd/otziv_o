@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -85,8 +86,7 @@ public class ReviewServiceImpl implements ReviewService{
         System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
         System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
         System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-
+        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
@@ -110,9 +110,9 @@ public class ReviewServiceImpl implements ReviewService{
             saveReview.setPublish(reviewDTO.isPublish());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка статус заказа*/
+        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
             log.info("Обновляем дату публикации отзыва");
-            saveReview.setPublish(reviewDTO.isPublish());
+            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
         }
 
@@ -144,8 +144,7 @@ public class ReviewServiceImpl implements ReviewService{
         System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
         System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
         System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-
+        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
@@ -168,9 +167,9 @@ public class ReviewServiceImpl implements ReviewService{
             saveReview.setPublish(reviewDTO.isPublish());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка статус заказа*/
+        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
             log.info("Обновляем дату публикации отзыва");
-            saveReview.setPublish(reviewDTO.isPublish());
+            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
         }
 
@@ -186,7 +185,97 @@ public class ReviewServiceImpl implements ReviewService{
 
 //    =====================================================================================================
 
+//    ============================== ORDER DETAIL AND REVIEW UPDATE AND SET PUBLISH DATE ===============================
+    // Обновить профиль отзыв - начало
+    @Override
+    @Transactional
+    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
+        System.out.println(orderDetailsDTO);
+        System.out.println(orderDetailsDTO.getAmount());
+        int plusDays = (30 / orderDetailsDTO.getAmount());
+        LocalDate localDate = LocalDate.now();
+        System.out.println(localDate);
+        System.out.println(plusDays);
+        try {
+            OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
 
+                checkUpdateReview(reviewDTO, localDate);
+                log.info("Начинаем обновлять дату");
+                localDate = localDate.plusDays(plusDays);
+                log.info(" Обновили дату");
+                System.out.println(localDate);
+            }
+            /*Замена комментария*/
+            System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
+            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())){ /*Проверка статус заказа*/
+                log.info("Обновляем комментарий отзыва и Деталей Заказа");
+                saveOrderDetails.setComment(orderDetailsDTO.getComment());
+                orderDetailsService.save(saveOrderDetails);
+            }
+            log.info("Все прошло успешно вернулось TRUE");
+            return true;
+        }
+        catch (Exception e){
+            log.info("Все прошло успешно вернулось FALSE");
+            return false;
+        }
+
+
+    }
+
+//    =====================================================================================================
+
+    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate){
+        Review saveReview = reviewRepository.findById(reviewDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
+        log.info("Достали Отзыв");
+        boolean isChanged = false;
+        /*Временная проверка сравнений*/
+        System.out.println(reviewDTO);
+
+        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+        System.out.println("publish date: " + (!saveReview.isPublish()));
+        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+
+        if (!saveReview.isPublish()){ /*Проверка смены даты публикации*/
+            log.info("Обновляем дату публикации");
+            saveReview.setPublishedDate(localDate);
+            isChanged = true;
+        }
+
+        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
+            log.info("Обновляем текст отзыва");
+            saveReview.setText(reviewDTO.getText());
+            isChanged = true;
+        }
+        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())){ /*Проверка смены работника*/
+            log.info("Обновляем ответ на отзыв");
+            saveReview.setAnswer(reviewDTO.getAnswer());
+            isChanged = true;
+        }
+        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())){ /*Проверка статус заказа*/
+            log.info("Обновляем публикацию отзыва");
+            saveReview.setPublish(reviewDTO.isPublish());
+            isChanged = true;
+        }
+//        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
+//            log.info("Обновляем дату публикации отзыва");
+//            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
+//            isChanged = true;
+//        }
+
+        if  (isChanged){
+            log.info("3. Начали сохранять обновленный Отзыв в БД");
+            reviewRepository.save(saveReview);
+            log.info("4. Сохранили обновленный Отзыв в БД");
+        }
+        else {
+            log.info("3. Изменений не было, сущность в БД не изменена");
+        }
+    }
 
     @Override
     public void changeBot(Long id) {

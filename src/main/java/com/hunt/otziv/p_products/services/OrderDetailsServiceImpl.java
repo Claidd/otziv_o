@@ -69,6 +69,8 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .text(review.getText())
                 .answer(review.getAnswer())
                 .orderDetailsId(review.getOrderDetails().getId())
+                .publish(review.isPublish())
+                .publishedDate(review.getPublishedDate())
                 .build();
     }
 }

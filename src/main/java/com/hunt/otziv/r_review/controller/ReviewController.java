@@ -99,15 +99,18 @@ public class ReviewController {
     @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
     String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
         log.info("1. Начинаем обновлять данные Отзыва3");
-        for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
-            reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
+        if (reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO)){
+            log.info("Начинаем обновлять статус заказа");
+            orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
+            log.info("Обновили статус заказа");
+            log.info("5. Обновление Отзыва прошло успешно3");
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/review/editReviews/{orderDetailId}";
         }
-        log.info("Начинаем обновлять статус заказа");
-        orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
-        log.info("Обновили статус заказа");
-        log.info("5. Обновление Отзыва прошло успешно3");
-        rm.addFlashAttribute("saveSuccess", "true");
-        return "redirect:/review/editReviews/{orderDetailId}";
+        else {
+            log.info("2. Произошла какая-то ошибка");
+            return "redirect:/review/editReviews/{orderDetailId}";
+        }
     }
 
     @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ

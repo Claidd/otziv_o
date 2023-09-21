@@ -25,26 +25,26 @@
                                 <form th:method="get" th:action="'/review/editReviews/' + ${orderId}"  class="company__card__content__button3">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}">
-                                        <!-- <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label> -->
-                                        <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="'ИЗМЕНИТЬ ВСЕ ОТЗЫВЫ'">Изменить все отзывы</button>
+                                        <label class="company__label" for="btn_editAll">Сохранить изменения, но пока, что не публиковать</label>
+                                        <button id="btn_editAll" type="submit" class="review__btn__review-editAll" th:text="'ИЗМЕНИТЬ ВСЕ ОТЗЫВЫ'">Изменить все отзывы</button>
                                     </div>
                                 </form>
                                 <form th:method="post" th:action="'/review/addReviews/' + ${companyId} + '/' + ${orderId}"  class="company__card__content__button3">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}">
-                                        <!-- <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label> -->
-                                        <button id="btn_add_review" type="submit" class="company__card__text__comment-button" th:text="'ДОБАВИТЬ НОВЫЙ ОТЗЫВ'">Изменить все отзывы</button>
+                                        <label class="company__label" for="btn_add_review">Сохранить изменения, но пока, что не публиковать</label>
+                                        <button id="btn_add_review" type="submit" class="review__btn__review-add" th:text="'ДОБАВИТЬ НОВЫЙ ОТЗЫВ'">Изменить все отзывы</button>
                                     </div>
                                 </form>
-                                <form th:method="post" th:action="'/review/addReviews/' + ${companyId} + '/' + ${orderId}"  class="company__card__content__button3">
+                                <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${companyId} + '/' + ${orderId}"  class="company__card__content__button3">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}">
-                                        <!-- <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label> -->
-                                        <button id="btn_go_to_check" type="submit" class="company__card__text__comment-button" th:text="'ОТПРАВИТЬ НА ПРОВЕРКУ'">Изменить все отзывы</button>
+                                        <label class="company__label" for="btn_go_to_check">Сохранить изменения, но пока, что не публиковать</label>
+                                        <button id="btn_go_to_check" type="submit" class="review__btn__review-check" th:text="'ОТПРАВИТЬ НА ПРОВЕРКУ'">Изменить все отзывы</button>
                                     </div>
                                 </form>
                             </div>
-                    </div> <!-- company__tabs__lead -->
+                    </div> <!-- company__tabs__lead --> 
         </div><!-- container -->
     </section> <!-- section -->
 

@@ -63,6 +63,12 @@
                                 <div style="display: none;">
                                     <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
                                 </div> 
+                                <div style="display: none;">
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
+                                </div> 
+                                <div style="display: none;">
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
+                                </div> 
                             </div>  
                     </div> <!-- tabs__content-item -->
 
@@ -116,6 +122,13 @@
                                 <div style="display: none;">
                                     <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
                                 </div> 
+                                <div style="display: none;">
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
+                                </div> 
+                                <div style="display: none;">
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
+                                </div> 
+                            
                                 
                                 <form  th:method="post" th:action="@{'/ordersDetails/'+ ${orderDetailId} + '/' }">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}">
@@ -144,13 +157,16 @@
                         <div   style="display: none;">
                             <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
                         </div> 
+                        <div   style="display: none;">
+                            <textarea class="company__card__content__review__comment" type="text" th:field="*{amount}">  </textarea>
+                        </div> 
                     
                     <!-- СПИСОК КАРТОЧЕК 1 -->
                         <div  class="company__card__content__button2">
                             <div class="company__card__content__button__btn">
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <label class="company__label" for="btn_publish">Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекци".</label>
-                                <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ' + ' ПУБЛИКАЦИЮ'">в архив</button>
+                                <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
                             </div>
                         </div>
                     </div>
@@ -207,23 +223,26 @@
                         
                     </div> <!-- tabs__content-item --> 
                     <div class="company__tabs__review"> 
-                        <h2 class="company__section-subtitle">Комментарий</h2>
-                        <div style="display: none;" >
-                            <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
-                        </div> 
-                        <div  >
-                            <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
-                        </div> 
-                        <div style="display: none;" >
-                            <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
-                        </div> 
-                    
-                    <!-- СПИСОК КАРТОЧЕК 1 -->
-                        <div  class="company__card__content__button3">
-                            <div class="company__card__content__button__btn">
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label>
-                                <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
+                        <div class="company__tabs__review2">
+                            <h2 class="company__section-subtitle">Комментарий</h2>
+                            <div style="display: none;" >
+                                <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
+                            </div> 
+                            <div  class="reviews__btn__save">
+                                <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
+                            </div> 
+                            <div style="display: none;" >
+                                <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
+                            </div> 
+                        
+                            <!-- СПИСОК КАРТОЧЕК 1 --> 
+                                <div  class="reviews__btn__save">
+                                    <div class="company__card__content__button__btn">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label>
+                                        <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

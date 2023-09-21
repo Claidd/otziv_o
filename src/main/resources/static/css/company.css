@@ -80,7 +80,7 @@ body {
 
 .company__section-subtitle {
     margin-bottom: 30px;
-    margin-top: 1rem;
+    /* margin-top: 1rem; */
     font-size: 48px;
     font-weight: 400;
     text-align: center;
@@ -479,6 +479,28 @@ body {
     padding: 0px 0 100px;
     
 }
+.company__tabs__review{
+    margin-top: 3rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    padding: 10px;
+    background-color: #001aff11;
+    height: 400px;
+    width: 100%;
+}
+
+.company__tabs__review2{
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+
+    height: 100%;
+    width: 100%;
+}
 
 .company__tabs__lead {
     margin-bottom: 70px;
@@ -644,12 +666,7 @@ body {
     color: none;
 }
 
-.company__tabs__review{
-    border: 1px solid #5b5a5a38;
-    border-radius: 1.2rem;
-    padding: 10px;
-    background-color: #001aff11;
-}
+
 
 .company__tabs__review:hover{
     box-shadow: 0 0rem 4rem rgba(132, 139, 200, 0.18);
@@ -743,7 +760,7 @@ body {
 }
 
 .company__card__content__button3 {
-    margin-top: 2rem;
+    margin-top: 1rem;
     display: flex;
     justify-content: space-around;
     align-items: center;
@@ -752,6 +769,12 @@ body {
     margin-bottom: 0px;
    
     /* height: 50px; */
+}
+
+.reviews__btn__save {
+    margin-top: 1rem;
+    height: 70px;
+    width: 100%;
 }
 
 .company__card__content__button__btn {
@@ -797,6 +820,17 @@ body {
     width: 100%;
     font-size: 24px;
     font-weight: 300;
+}
+
+.company__card__title__bot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    font-size: 24px;
+    font-weight: 300;
+    /* background-color: #707efb08; */
 }
 
 .company__card__content__city {
@@ -938,6 +972,84 @@ body {
 }
 /* кнока сохранить отзыв */
 
+/* кнока редактировать все отзывы */
+.review__btn__review-editAll{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    /* background-color: #152cfc00; */
+    background-color: #707efb08;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.review__btn__review-editAll:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+/* кнока редактировать все отзывы */
+
+/* кнока добавить отзыв */
+.review__btn__review-add{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    /* background-color: #152cfc00; */
+    background-color: #707efb08;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.review__btn__review-add:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+/* кнока добавить отзыв */
+
+/* кнока отправить на проверку */
+.review__btn__review-check{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    /* background-color: #152cfc00; */
+    background-color: #707efb08;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+
+.review__btn__review-check:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+}
+/* кнока отправить на проверку */
+
 .company__card__content__comments {
     margin-top: 1rem;
     display: flex;
@@ -1000,9 +1112,9 @@ body {
 }
 
 .company__card__content__review__comment{
-    display: flex;
+    /* display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: center; */
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     height: 136px;
@@ -1329,7 +1441,7 @@ body {
         }
 
         .company__card__content__button__btn{
-            width: 500px;
+            /* width: 500px; */
         }
 }
 
