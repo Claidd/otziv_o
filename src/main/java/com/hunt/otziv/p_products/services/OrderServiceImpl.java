@@ -274,6 +274,9 @@ public class OrderServiceImpl implements OrderService {
 
 //    =====================================================================================================
 
+    public Order getOrder(Long orderId){
+        return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
+    }
     public OrderDTO getOrderDTO(Long orderId){
         return  toDTO(orderRepository.findById(orderId).orElseThrow());
     }

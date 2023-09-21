@@ -15,6 +15,7 @@ public interface OrderService {
     boolean changeStatusForOrder(Long orderID, String title);
 
     OrderDTO getOrderDTO(Long orderId);
+    Order getOrder(Long orderId);
 
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
 //    Order getOrderById(Long orderId);

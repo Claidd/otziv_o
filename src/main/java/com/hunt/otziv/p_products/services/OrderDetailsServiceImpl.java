@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -58,6 +60,14 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
     private OrderDTO convertToOrderDTO(Order order){
         return OrderDTO.builder()
                 .id(order.getId())
+                .company(convertToCompanyDTO(order.getCompany()))
+                .build();
+    }
+
+    private CompanyDTO convertToCompanyDTO(Company company){
+        return CompanyDTO.builder()
+                .id(company.getId())
+                .title(company.getTitle())
                 .build();
     }
     private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){

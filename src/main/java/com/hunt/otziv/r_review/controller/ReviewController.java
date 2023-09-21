@@ -105,7 +105,8 @@ public class ReviewController {
             log.info("Обновили статус заказа");
             log.info("5. Обновление Отзыва прошло успешно3");
             rm.addFlashAttribute("saveSuccess", "true");
-            return "redirect:/review/editReviews/{orderDetailId}";
+            Long companyId = orderDetailDTO.getOrder().getCompany().getId();
+            return "redirect:/ordersCompany/ordersDetails/" + companyId;
         }
         else {
             log.info("2. Произошла какая-то ошибка");

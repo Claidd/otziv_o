@@ -1,11 +1,13 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +64,7 @@ public class OrderDetailsController {
         if(orderService.changeStatusAndOrderCounter(reviewId)){
             log.info("8. Все прошло успешно, вернулись в контроллер");
             rm.addFlashAttribute("saveSuccess", "true");
+            checkOrderOnPublishedAll(orderId);
         }
         else {
             log.info("8. Все прошло плохо, вернулись в контроллер");
@@ -69,5 +72,14 @@ public class OrderDetailsController {
         }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
+@Transactional
+    private void checkOrderOnPublishedAll(Long orderId){
+        Order order = orderService.getOrder(orderId);
+        System.out.println(order.getAmount());
+        System.out.println(order.getCounter());
+        if(order.getAmount() == order.getCounter()){
+            orderService.changeStatusForOrder(orderId, "Опубликовано");
+        }
+}
 
 }
