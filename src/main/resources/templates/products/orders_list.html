@@ -67,7 +67,7 @@
 <!--                        </div>-->
                         <div class="company__card__remember__box-serch">
 
-                            <form class="company__card_remember-search" th:method="get" th:action="@{/lead}">
+                            <form class="company__card_remember-search" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyID}}">
                                 <!-- The text field -->
                                 <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                 <!-- The button used to copy the text -->

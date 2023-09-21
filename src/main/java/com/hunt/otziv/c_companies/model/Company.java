@@ -98,7 +98,7 @@ public class Company {
 
     //    филиал содержащий название и url
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Order> orderList;
+    private Set<Order> orderList;
 
     //    счетчик не оплаченных отзывов
     @Column(name = "company_counter_no_pay",columnDefinition = "integer default 0")

@@ -476,7 +476,7 @@ body {
 /* ================== LEADS CARD START ================ */
 
 .company__lead__card {
-    padding: 100px 0 150px;
+    padding: 0px 0 100px;
     
 }
 
@@ -522,7 +522,11 @@ body {
     gap: 100px 40px;
 }
 
-
+.btn__cell{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+}
 
 .company__card__remember {
     display: flex;
@@ -745,13 +749,13 @@ body {
     align-items: center;
     width: 100%;
     height: 100%;
-    margin-bottom: 100px;
+    margin-bottom: 0px;
    
     /* height: 50px; */
 }
 
 .company__card__content__button__btn {
-    margin-top: 1rem;
+    margin-top: 3rem;
     height: 70px;
     width: 100%;
 }
@@ -783,17 +787,6 @@ body {
     width: 100%;
     font-size: 24px;
     font-weight: 700;
-}
-
-.company__card__title__review__red {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    width: 100%;
-    font-size: 24px;
-    font-weight: 700;
-    background-color: red;
 }
 
 .company__card__title__review {
@@ -1267,6 +1260,11 @@ body {
         flex-direction: column;
     }
 
+    .btn__cell{
+        grid-template-columns: repeat(1, 1fr);
+        gap: 0px;
+    }
+
 }
 
     /* ==================== 650 =================== */
@@ -1456,7 +1454,7 @@ body {
     }
 
     .company__card__content__button__btn{
-        width: 350px;
+        width: 100%;
     }
 
 }

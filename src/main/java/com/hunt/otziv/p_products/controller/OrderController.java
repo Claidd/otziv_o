@@ -57,11 +57,11 @@ public class OrderController {
         orderService.createNewOrderWithReviews(companyID, id, orderDTO);
         return "redirect:/companies/allCompany";
     }
-
-    @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании
-    String OrderListToCompany(@PathVariable Long companyId, Model model){
+    //    =========================================== ORDER STATUS =======================================================
+    @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании по всем статусам
+    String OrderListToCompany(@PathVariable Long companyId, @RequestParam(defaultValue = "") String keyword, Model model){
         model.addAttribute("companyID", companyId);
-        model.addAttribute("orders", companyService.getCompaniesById(companyId).getOrderList().stream().sorted(Comparator.comparing(Order::getCreated).reversed()).toList());
+        model.addAttribute("orders", companyService.getCompaniesAllStatusByIdAndKeyword(companyId,keyword).getOrders().stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
         return "products/orders_list";
     }
 

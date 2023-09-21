@@ -16,6 +16,14 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.dto.OrderStatusDTO;
+import com.hunt.otziv.p_products.dto.ProductDTO;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
@@ -32,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -54,8 +63,21 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findAll();
     }
 
-    public Set<CompanyDTO> getAllCompaniesDTO(){
-        return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new));
+    @Override
+    public Set<CompanyDTO> getAllCompaniesDTO() {
+                return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    public Set<CompanyDTO> getAllCompaniesDTO(String keywords){ // Показ всех компаний + поиск
+        if (!keywords.isEmpty()){
+            log.info("Отработал метод с keywords");
+            return convertToCompanyDTOSet(companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords).stream().sorted(Comparator.comparing(Company::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new)));
+
+        }
+        else return convertToCompanyDTOSet(companyRepository.findAll());
+
+
+
     }
 
     public CompanyDTO getCompaniesDTOById(Long id){
@@ -70,6 +92,26 @@ public class CompanyServiceImpl implements CompanyService{
                 String.format("Компания '%d' не найден", id)
         ));
     }
+
+    @Override
+    public CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long companyId, String keywords) {
+        if (!keywords.isEmpty()){
+            log.info("Отработал метод с keywords");
+            Company company = companyRepository.findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(companyId, keywords, keywords).orElse(null);
+            if (company != null){
+                log.info("Отработал не равно null " + company.getId());
+                return convertToDto(company);
+            }
+            else {
+                log.info("Отработал равно null");
+                return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
+                        String.format("Компания '%d' не найден", companyId))));
+            }
+
+        }
+        else return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Компания '%d' не найден", companyId))));
+    }// берем компанию с поиском для вывода всех ее заказов
 
     @Transactional
     public void save(Company company){
@@ -145,36 +187,138 @@ public class CompanyServiceImpl implements CompanyService{
         return companyDTO;
     }
     //    Метод подготовки ДТО при создании компании из Лида менеджером
-
-
-    public CompanyDTO convertToDto(Company company) {
-        CompanyDTO companyDTO = new CompanyDTO();
-        companyDTO.setId(company.getId());
-        companyDTO.setTitle(company.getTitle());
-        companyDTO.setTelephone(company.getTelephone());
-        companyDTO.setCity(company.getCity());
-        companyDTO.setEmail(company.getEmail());
-        companyDTO.setOperator(company.getOperator());
-        companyDTO.setCounterNoPay(company.getCounterNoPay());
-        companyDTO.setCounterPay(company.getCounterPay());
-        companyDTO.setSumTotal(company.getSumTotal());
-        companyDTO.setCommentsCompany(company.getCommentsCompany());
-        companyDTO.setCreateDate(company.getCreateDate());
-        companyDTO.setUpdateStatus(company.getUpdateStatus());
-        companyDTO.setDateNewTry(company.getDateNewTry());
-        companyDTO.setActive(company.isActive());
-        // Convert related entities to DTOs
-        companyDTO.setUser(convertToUserDto(company.getUser()));
-        companyDTO.setManager(convertToManagerDto(company.getManager()));
-        companyDTO.setWorkers(convertToWorkerDtoSet(company.getWorkers()));
-        companyDTO.setStatus(convertToCompanyStatusDto(company.getStatus()));
-        companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
-        companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
-        companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
-
-        return companyDTO;
+    private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){
+        return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
     }
 
+    public CompanyDTO convertToDto(Company company) {
+        if (company.getId() != null) {
+            log.info("отработал не нулл");
+            CompanyDTO companyDTO = new CompanyDTO();
+            System.out.println(company.getId());
+            companyDTO.setId(company.getId());
+            companyDTO.setTitle(company.getTitle());
+            companyDTO.setTelephone(company.getTelephone());
+            companyDTO.setCity(company.getCity());
+            companyDTO.setEmail(company.getEmail());
+            companyDTO.setOperator(company.getOperator());
+            companyDTO.setCounterNoPay(company.getCounterNoPay());
+            companyDTO.setCounterPay(company.getCounterPay());
+            companyDTO.setSumTotal(company.getSumTotal());
+            companyDTO.setCommentsCompany(company.getCommentsCompany());
+            companyDTO.setCreateDate(company.getCreateDate());
+            companyDTO.setUpdateStatus(company.getUpdateStatus());
+            companyDTO.setDateNewTry(company.getDateNewTry());
+            companyDTO.setActive(company.isActive());
+            // Convert related entities to DTOs
+            companyDTO.setUser(convertToUserDto(company.getUser()));
+            companyDTO.setManager(convertToManagerDto(company.getManager()));
+            companyDTO.setWorkers(convertToWorkerDtoSet(company.getWorkers()));
+            companyDTO.setStatus(convertToCompanyStatusDto(company.getStatus()));
+            companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
+            companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
+            companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
+            companyDTO.setOrders(convertToOrderDTOSet(company.getOrderList()));
+            System.out.println(companyDTO);
+            return companyDTO;
+        }
+        else {
+            log.info("отработал нулл");
+            return new CompanyDTO();
+        }
+    }
+
+    private Set<OrderDTO> convertToOrderDTOSet(Set<Order> orders){
+        return orders.stream().map(this::convertToOrderDTO).collect(Collectors.toSet());
+    }
+
+    private OrderDTO convertToOrderDTO(Order order){
+        return OrderDTO.builder()
+                .id(order.getId())
+                .amount(order.getAmount())
+                .sum(order.getSum())
+                .created(order.getCreated())
+                .changed(order.getChanged())
+                .status(convertToOrderStatusDTO(order.getStatus()))
+                .filial(convertToFilialDTO(order.getFilial()))
+//                .manager(convertToManagerDTO(order.getManager()))
+//                .worker(convertToWorkerDTO(order.getWorker()))
+//                .details(convertToDetailsDTOList(order.getDetails()))
+                .company(convertToCompanyDTO(order.getCompany()))
+//                .complete(order.isComplete())
+//                .counter(order.getCounter())
+                .build();
+    }
+
+    private ProductDTO convertToProductDTO(Product product){
+        return ProductDTO.builder()
+                .id(product.getId())
+                .title(product.getTitle())
+                .price(product.getPrice())
+                .build();
+    }
+
+    private OrderStatusDTO convertToOrderStatusDTO(OrderStatus orderStatus){
+        return OrderStatusDTO.builder()
+                .id(orderStatus.getId())
+                .title(orderStatus.getTitle())
+                .build();
+    }
+
+    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){
+        return details.stream().map(this::convertToDetailsDTO).collect(Collectors.toList());
+    }
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){
+        return OrderDetailsDTO.builder()
+                .id(orderDetails.getId())
+                .amount(orderDetails.getAmount())
+                .price(orderDetails.getPrice())
+                .publishedDate(orderDetails.getPublishedDate())
+//                .product(convertToProductDTO(orderDetails.getProduct()))
+                .order(convertToOrderDTO(orderDetails.getOrder()))
+//                .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
+                .comment(orderDetails.getComment())
+                .build();
+    }
+
+    private CompanyDTO convertToCompanyDTO(Company company){
+        return CompanyDTO.builder()
+                .id(company.getId())
+                .title(company.getTitle())
+                .telephone(company.getTelephone())
+                .manager(convertToManagerDTO(company.getManager()))
+                .workers(convertToWorkerDTOList(company.getWorkers()))
+                .filials(convertToFilialDTOList(company.getFilial()))
+                .build();
+    }
+
+    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials){
+        return filials.stream().map(this::convertToFilialDTO).collect(Collectors.toSet());
+    }
+    private FilialDTO convertToFilialDTO(Filial filial){
+        return FilialDTO.builder()
+                .id(filial.getId())
+                .title(filial.getTitle())
+                .url(filial.getUrl())
+                .build();
+    }
+
+    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers){
+        return workers.stream().map(this::convertToWorkerDTO).collect(Collectors.toSet());
+    }
+    private WorkerDTO convertToWorkerDTO(Worker worker){
+        return WorkerDTO.builder()
+                .workerId(worker.getId())
+                .user(worker.getUser())
+                .build();
+    }
+
+    private ManagerDTO convertToManagerDTO(Manager manager){
+        return ManagerDTO.builder()
+                .managerId(manager.getId())
+                .user(manager.getUser())
+                .build();
+    }
 
     private UserDTO convertToUserDtoToManager(Principal principal) {
         UserDTO userDTO = new UserDTO();

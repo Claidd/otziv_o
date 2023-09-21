@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.UserDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
@@ -72,8 +73,7 @@ public class CompanyDTO {
     private FilialDTO filial;
 
     private Set<FilialDTO> filials;
-
-
+    private Set<OrderDTO> orders;
 
     //    счетчик не оплаченных отзывов
     private int counterNoPay;

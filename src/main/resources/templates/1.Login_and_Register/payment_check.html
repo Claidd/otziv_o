@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+    <title>Список всех пользователей</title>
+</head>
+<body class="page">
+<header th:replace="~{fragments/header :: header}"></header>
+
+<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+<div class="container mt-5">
+    <h2 class="section-title">СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ</h2>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th scope="col">Компания</th>
+            <th scope="col">Сумма</th>
+            <th scope="col">Дата</th>
+            <th scope="col">Компания</th>
+            <th scope="col">Заказ</th>
+            <th scope="col">Менеджер</th>
+            <th scope="col">Работник</th>
+            <th scope="col">Активность</th>
+            <th scope="col">Изменить</th>
+            <th scope="col">Удалить</th>
+
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="paymentCheck : ${checkList}">
+            
+            <th scope="row" th:text="${paymentCheck.title}">Компания</th>
+            <td th:text="${paymentCheck.sum}">Сумма</td>
+            <td th:text="${paymentCheck.created}">Дата</td>
+            <td th:text="${paymentCheck.companyId}">Компания</td>
+            <td th:text="${paymentCheck.orderId}">Заказ</td>
+            <td th:text="${paymentCheck.managerId}">Менеджер</td>
+            <th th:text="${paymentCheck.workerId}">Работник</th>
+            <td th:text="${paymentCheck.active}">Активность</td>
+            <td>
+                <form th:method="get" th:action="'/payment_check/' + ${paymentCheck.id} + '/edit'">
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                </form>
+            </td>
+            <td>
+                <form th:method="delete" th:action="'/payment_check/' + ${paymentCheck.id} + '/delete'" >
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+
+
+<!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
+<header th:replace="~{fragments/footer :: footer}"></header>
+
+
+
+
+
+<!-- Optional JavaScript -->
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<!--<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"-->
+<!--        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"-->
+<!--        crossorigin="anonymous"></script>-->
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"-->
+<!--        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"-->
+<!--        crossorigin="anonymous"></script>-->
+<!--<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"-->
+<!--        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"-->
+<!--        crossorigin="anonymous"></script>-->
+</body>
+</html>

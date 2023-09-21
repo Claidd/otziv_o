@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -18,10 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Controller
 @Slf4j
@@ -36,13 +34,16 @@ public class CompanyController {
     private final WorkerService workerService;
     private final CompanyStatusService companyStatusService;
 
-    @GetMapping("/allCompany") // список всех компаний
-    public String CompanyList(Model model){
-        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
+    //    =========================================== COMPANY STATUS =======================================================
+    @GetMapping("/allCompany") // список всех компаний c ПОИСКОМ
+    public String CompanyList(@RequestParam(defaultValue = "") String keyword, Model model){
+//        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
+        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO(keyword));
         return "companies/company_list";
     }
 
-    @GetMapping("/editCompany/{companyId}") // обновление компании - гет
+//    =========================================== COMPANY STATUS =======================================================
+    @GetMapping("/editCompany/{companyId}")
     String ordersDetailsToCompany(@PathVariable Long companyId,  Model model){
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
         model.addAttribute("companyDTO", companyDTO);
@@ -52,7 +53,7 @@ public class CompanyController {
         model.addAttribute("newWorkerDTO", new WorkerDTO());
         model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));
         return "companies/company_edit";
-    }
+    } // обновление компании -
 
     @PostMapping("/editCompany/{companyId}") // обновление компании - пост
     public String editCompany(@ModelAttribute ("companyDTO") CompanyDTO companyDTO, @ModelAttribute("newWorkerDTO") WorkerDTO newWorkerDTO,
