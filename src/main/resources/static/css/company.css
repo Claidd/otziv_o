@@ -1169,6 +1169,18 @@ body {
     /* border: 1px solid #0066FF; */
     margin-top: 10px;
 }
+.company__card__link__order {
+    display: block;
+    color: #000;
+    text-transform: uppercase;
+    /* border: 1px solid #0066FF; */
+    margin-top: 10px;
+}
+
+/* Стиль для цифр внутри .company__card__link__order */
+.company__card__link__order .digits {
+    font-size: 24px; /* Размер шрифта для цифр */
+}
 
 .company__card__img__lead {
     width: 100%;

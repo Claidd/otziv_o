@@ -50,7 +50,6 @@ public class ReviewServiceImpl implements ReviewService{
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final OrderDetailsService orderDetailsService;
-    private final CompanyRepository companyRepository;
 
 
     public Review save(Review review){
@@ -261,11 +260,6 @@ public class ReviewServiceImpl implements ReviewService{
             saveReview.setPublish(reviewDTO.isPublish());
             isChanged = true;
         }
-//        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
-//            log.info("Обновляем дату публикации отзыва");
-//            saveReview.setPublishedDate(reviewDTO.getPublishedDate());
-//            isChanged = true;
-//        }
 
         if  (isChanged){
             log.info("3. Начали сохранять обновленный Отзыв в БД");
@@ -315,11 +309,12 @@ public class ReviewServiceImpl implements ReviewService{
                 log.info("5. Сохранили нового бота в отзыве в БД");
             }
             else {
-                return;
+                log.info("Что-то пошло не так и бот не деактивирован");
             }
         }
         catch (Exception e){
             System.out.println(e);
+            log.info("Что-то пошло не так и бот не деактивирован");
         }
     }
 

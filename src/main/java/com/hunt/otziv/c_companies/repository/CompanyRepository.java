@@ -11,10 +11,11 @@ import java.util.Set;
 public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     @Override
-    Set<Company> findAll();
+    List<Company> findAll();
 
     boolean existsBySubCategoryId(Long reviewSubcategoryId);
 
     Optional<Company> findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(Long id, String keyword, String keyword2);
-    Set<Company> findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(String keyword, String keyword2);
+
+    List<Company> findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(String keyword, String keyword2);
 }

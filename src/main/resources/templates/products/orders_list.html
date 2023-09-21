@@ -158,7 +158,11 @@
 
                               
                             <form class="company__card__content__author" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyID} + '/' + ${order.id}}">
-                                <div class="company__card__link__lead" th:text="'Заказ № ' + ${order.id != null ? order.id : 'пусто'} + ' ' + ${order.changed}">Имя Менеджера</div>
+                                <div class="company__card__link__order">
+                                    <span th:utext="'Без изменений: '"></span>
+                                    <span class="digits" th:text="${order.dayToChangeStatusAgo != null ? order.dayToChangeStatusAgo : 'пусто'}"></span>
+                                    <span th:utext="' дней'"></span>
+                                </div>
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
                             </form>

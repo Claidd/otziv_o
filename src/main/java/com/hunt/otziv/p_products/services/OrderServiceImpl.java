@@ -49,6 +49,7 @@ import org.webjars.NotFoundException;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -277,6 +278,12 @@ public class OrderServiceImpl implements OrderService {
         return  toDTO(orderRepository.findById(orderId).orElseThrow());
     }
     private OrderDTO toDTO (Order order){
+        LocalDate now = LocalDate.now();
+        LocalDate changedDate = order.getChanged();
+        // Вычисляем разницу между датами
+        Period period = Period.between(changedDate, now);
+        // Преобразуем период в дни
+        int daysDifference = period.getDays();
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
@@ -291,6 +298,7 @@ public class OrderServiceImpl implements OrderService {
                 .details(convertToDetailsDTOList(order.getDetails()))
                 .complete(order.isComplete())
                 .counter(order.getCounter())
+                .dayToChangeStatusAgo(period.getDays())
                 .build();
     }
 

@@ -37,6 +37,7 @@ public class OrderDTO {
     private List<OrderDetailsDTO> details;
 
     private OrderStatusDTO status;
+    private int dayToChangeStatusAgo;
 
     //    каждый бот имеет Работника, который его добавлял
     private WorkerDTO worker;

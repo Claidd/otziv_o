@@ -49,7 +49,7 @@ public class CompanyEditorController {
         log.info("1.Начинаем сохранение компании");
         if (companyService.save(companyDTO)) {
             log.info("OK.Начинаем сохранение компании прошло успешно");
-            for (Company company : companyService.getAllCompanies()) {
+            for (Company company : companyService.getAllCompaniesList()) {
                 log.info("вход в меняем статус с К рассылке на В работе");
                 leadService.changeStatusLeadOnInWork(leadId);
                 log.info("статус успешно сменен К рассылке на В работе");

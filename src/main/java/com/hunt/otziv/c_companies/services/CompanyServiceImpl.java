@@ -41,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,26 +60,23 @@ public class CompanyServiceImpl implements CompanyService{
     private final FilialService filialService;
 
 
-    public Set<Company> getAllCompanies(){
+    public List<Company> getAllCompaniesList(){
         return companyRepository.findAll();
     }
 
     @Override
-    public Set<CompanyDTO> getAllCompaniesDTO() {
-                return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new));
+    public List<CompanyDTO> getAllCompaniesDTOList() {
+        return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList();
     }
 
-    public Set<CompanyDTO> getAllCompaniesDTO(String keywords){ // Показ всех компаний + поиск
+    public List<CompanyDTO> getAllCompaniesDTOList(String keywords){ // Показ всех компаний + поиск
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            return convertToCompanyDTOSet(companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords).stream().sorted(Comparator.comparing(Company::getCreateDate)).collect(Collectors.toCollection(LinkedHashSet::new)));
-
+            return convertToCompanyDTOList(companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords).stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
         }
-        else return convertToCompanyDTOSet(companyRepository.findAll());
-
-
-
+        else return convertToCompanyDTOList(companyRepository.findAll().stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
     }
+
 
     public CompanyDTO getCompaniesDTOById(Long id){
         return convertToDto(companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
@@ -190,12 +188,13 @@ public class CompanyServiceImpl implements CompanyService{
     private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){
         return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
     }
+    private List<CompanyDTO> convertToCompanyDTOList(List<Company> companies){
+        return companies.stream().map(this::convertToDto).collect(Collectors.toList());
+    }
 
     public CompanyDTO convertToDto(Company company) {
         if (company.getId() != null) {
-            log.info("отработал не нулл");
             CompanyDTO companyDTO = new CompanyDTO();
-            System.out.println(company.getId());
             companyDTO.setId(company.getId());
             companyDTO.setTitle(company.getTitle());
             companyDTO.setTelephone(company.getTelephone());
@@ -233,6 +232,12 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     private OrderDTO convertToOrderDTO(Order order){
+        LocalDate now = LocalDate.now();
+        LocalDate changedDate = order.getChanged();
+        // Вычисляем разницу между датами
+        Period period = Period.between(changedDate, now);
+        // Преобразуем период в дни
+        int daysDifference = period.getDays();
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
@@ -245,6 +250,7 @@ public class CompanyServiceImpl implements CompanyService{
 //                .worker(convertToWorkerDTO(order.getWorker()))
 //                .details(convertToDetailsDTOList(order.getDetails()))
                 .company(convertToCompanyDTO(order.getCompany()))
+                .dayToChangeStatusAgo(period.getDays())
 //                .complete(order.isComplete())
 //                .counter(order.getCounter())
                 .build();

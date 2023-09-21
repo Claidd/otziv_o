@@ -38,7 +38,7 @@ public class CompanyController {
     @GetMapping("/allCompany") // список всех компаний c ПОИСКОМ
     public String CompanyList(@RequestParam(defaultValue = "") String keyword, Model model){
 //        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO());
-        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTO(keyword));
+        model.addAttribute("allCompanyNew", companyService.getAllCompaniesDTOList(keyword));
         return "companies/company_list";
     }
 
