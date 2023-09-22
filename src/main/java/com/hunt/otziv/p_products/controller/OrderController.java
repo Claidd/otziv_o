@@ -59,14 +59,28 @@ public class OrderController {
         orderService.createNewOrderWithReviews(companyID, id, orderDTO);
         return "redirect:/companies/allCompany";
     }
-    //    =========================================== ORDER STATUS =======================================================
+
+
+
+
+
+    //    =========================================== ORDER TO COMPANY =======================================================
     @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании по всем статусам
     String OrderListToCompany(@PathVariable Long companyId, @RequestParam(defaultValue = "") String keyword, Model model){
+        CompanyDTO companyDTO = companyService.getCompaniesAllStatusByIdAndKeyword(companyId,keyword);
         model.addAttribute("companyID", companyId);
         model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-        model.addAttribute("orders", companyService.getCompaniesAllStatusByIdAndKeyword(companyId,keyword).getOrders().stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+        model.addAttribute("TitleName", companyDTO.getTitle());
+        model.addAttribute("orders", companyDTO.getOrders().stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
         return "products/orders_list";
     }
+
+
+
+
+
+
+
 
     //    =========================================== ORDER EDIT =======================================================
     @GetMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Get

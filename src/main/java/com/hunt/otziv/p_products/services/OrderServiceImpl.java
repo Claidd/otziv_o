@@ -36,6 +36,7 @@ import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
@@ -47,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.webjars.NotFoundException;
 
 import java.math.BigDecimal;
+import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.Period;
@@ -76,6 +78,7 @@ public class OrderServiceImpl implements OrderService {
     private final ReviewArchiveService reviewArchiveService;
     private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
+    private final UserService userService;
     @Override
     public OrderDTO newOrderDTO(Long id) {
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
@@ -272,10 +275,33 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-//    =====================================================================================================
+//    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+    public List<OrderDTO> getAllOrderDTO(){
+        return convertToOrderDTOList(orderRepository.findAll());
+    }
+
+    public List<OrderDTO> getAllOrderDTOAndKeyword(String keyword){ // Берем все заказы с поиском по названию компании или номеру
+        if (!keyword.isEmpty()){
+            return convertToOrderDTOList(orderRepository.findAllByCompanyTitleContainingIgnoreCaseOrCompanyTelephoneContainingIgnoreCase(keyword, keyword));
+        }
+        else return convertToOrderDTOList(orderRepository.findAll());
+    }  // Берем все заказы с поиском по названию компании или номеру
+
+    public List<OrderDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        if (!keyword.isEmpty()){
+            return convertToOrderDTOList(orderRepository.findAllByManagerAndCompanyTitleContainingIgnoreCaseOrManagerAndCompanyTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
+        }
+        else return convertToOrderDTOList(orderRepository.findAllByManagerId(manager.getId()));
+    } // Берем все заказы с поиском для Менеджера
 
     public Order getOrder(Long orderId){
         return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
+    }
+
+    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+    private List<OrderDTO> convertToOrderDTOList(List<Order> orders){
+        return orders.stream().map(this::toDTO).collect(Collectors.toList());
     }
     public OrderDTO getOrderDTO(Long orderId){
         return  toDTO(orderRepository.findById(orderId).orElseThrow());
@@ -310,6 +336,7 @@ public class OrderServiceImpl implements OrderService {
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
+                .telephone(company.getTelephone())
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
                 .filials(convertToFilialDTOList(company.getFilial()))

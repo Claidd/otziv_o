@@ -14,20 +14,34 @@
     <header th:replace="~{fragments/header :: header}"></header>
 
 
+    
+
+
+
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="company__lead__card">
         <div class="container">
-            <h2 class="company__section-title">РАБОТА С КОМПАНИЯМИ</h2>
+
+
+            <th:block th:insert="~{fragments/order_list_from_company :: order_list_from_company}" id="content-10"></th:block>
+
+
+            
+            <h2 class="company__section-title">Список заказов</h2>
             <div class="company__tabs__lead">
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="company__tabs__btn__lead">
                     <button class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10">Новые</button>
-                    <button class="company__tabs__btn-item" data-button="content-12">К рассылке</button>
-                    <button class="company__tabs__btn-item" data-button="content-13">В работе</button>
-                    <button class="company__tabs__btn-item" data-button="content-14">На стопе</button>
-                    <button class="company__tabs__btn-item" data-button="content-15">Все</button>
-                    <button class="company__tabs__btn-item" data-button="content-16">Бан</button>
-                    <a class="company__tabs__btn-item" th:href="@{'/all_orders_list'}" data-button="content-16">Заказы</a>
+                    <button class="company__tabs__btn-item" data-button="content-11">На проверку</button>
+                    <button class="company__tabs__btn-item" data-button="content-12">В проверке</button>
+                    <button class="company__tabs__btn-item" data-button="content-13">Коррекция</button>
+                    <button class="company__tabs__btn-item" data-button="content-14">Публикация</button>
+                    <button class="company__tabs__btn-item" data-button="content-15">Опубликовано</button>
+                    <button class="company__tabs__btn-item" data-button="content-16">Выставлен счет</button>
+                    <button class="company__tabs__btn-item" data-button="content-17">Напоминание</button>
+                    <button class="company__tabs__btn-item" data-button="content-17">Не опл.</button>
+                    <button class="company__tabs__btn-item" data-button="content-18">Оплачено </button>
+                    <button class="company__tabs__btn-item" data-button="content-19">Все </button>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
@@ -35,13 +49,10 @@
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
                     <div class="company__card__remember">
 <!--                        <div class="company__card__remember__box">-->
-<!--                            <div class="company__card_remember-content">-->
-<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
-<!--                                <textarea class="company__card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>-->
-
-<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
-<!--                                <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>-->
-<!--                            </div>-->
+                            <!-- <div class="company__card_remember-content">
+                                    <textarea class="company__card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+                                    <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>
+                            </div> -->
 <!--                            <div class="company__card_remember-content">-->
 <!--                                &lt;!&ndash; The text field &ndash;&gt;-->
 <!--                                <textarea class="company__card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>-->
@@ -66,7 +77,7 @@
 <!--                        </div>-->
                         <div class="company__card__remember__box-serch">
 
-                            <form class="company__card_remember-search" th:method="get" th:action="@{/companies/allCompany}">
+                            <form class="company__card_remember-search" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyID}}">
                                 <!-- The text field -->
                                 <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                 <!-- The button used to copy the text -->
@@ -78,78 +89,127 @@
                     </div>
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
+                    <!-- <th:block th:insert="~{fragments/order_list_from_company :: order_list_from_company}" id="content-10"></th:block>
+                    <th:block th:insert="~{fragments/order_list_from_company :: order_list_from_company}" id="content-11"></th:block> -->
+
+
+
+
+
 
 
                     <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-                    <div class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
+                    <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-12">
 
 
-                        <div th:each="company : ${allCompanyNew}" class="company__card__lead">
+                        <div th:each="order : ${orders}" class="company__card__lead">
                             <div class="company__card__content__lead">
 
                                 <!-- элементы карточки - начало -->
-                                <div class="company__card__content__phone">
-                                    <a class="company__card__title__lead" th:text="${company.title}" target="_blank"  th:href="@{${company.filials[0].url}}">Текущий статус Лида</a>
+                                <div class="company__card__content__phone"> <!-- Название компании + ссылка на филиал-->
+                                    <a class="company__card__title__lead" th:text="${order.company.title}" target="_blank"  th:href="@{${order.filial.url}}">Текущий статус Лида</a>
                                 </div>
-                                <div class="company__card__content__phone">
-                                    <!-- <div class="card__title__lead" th:text="${lead.telephoneLead}">Номер Лида</div> -->
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${company.telephone}">
+
+                                <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
+                                    <p class="company__card__text__city__lead" th:text="${order.status.title}">Статус заказа</p>
+                                    <p class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p> 
+                                </div>
+
+                                <div class="company__card__content__phone"> <!-- Телефон + ссылка в WhatsApp -->
+                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${order.company.telephone}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${company.telephone}">в архив</button>
+                                        <button type="submit" class="company__card__text__lead-button " th:text="${order.company.telephone}">в архив</button>
                                     </form>
                                 </div>
-                                <div class="card__content__city">
-                                    <a class="company__card__text__city__lead" th:text="Заказ"  th:href="@{'/ordersCompany/'+ ${company.id}}">Дата создания Лида</a>
-                                    <a class="company__card__text__city__lead" th:text="Подробности"  th:href="@{'/ordersCompany/ordersDetails/'+ ${company.id}}">Дата создания Лида</a>
-                                    <!-- <div class="company__card__text__city__lead" th:text="${company.subCategory.subCategoryTitle}">Город Лида</div> -->
-                                </div>
-                                <!-- <div class="card__content__city">
-                                    <div class="company__card__text__city__lead" th:text="${company.createDate}">Дата создания Лида</div>
-                                    <div class="company__card__text__city__lead" th:text="${company.subCategory.subCategoryTitle}">Город Лида</div>
-                                </div> -->
-                                <div class="company__card__content__comments__tocompany">
-                                    <div class="company__card__text__lead2" th:text="${company.title}">Комментарий для лида</div>
-                                </div>
+
+                                <!-- КНОПКИ 1 -->
                                 <div class="company__card__content_button"> <!-- card__content_button -->
-                                    <form class="company__card__text__lead" th:method="post" th:action="'company/status_send/' + ${company.id}">
+                                    <div class="company__card__text__lead">
+                                        <textarea style="display: none;" class="company__card__remember-text" th:utext="${promoTexts[0]} + ' Ссылка на проверку отзывов: ' + 'http://localhost:8080/review/editReviews/' + ${order.id} " id="myInput1"></textarea>
+                                        <button class="company__card__text__lead-button" onclick="myFunction1()">текст+url</button>
+                                   </div>
+                                    <form class="company__card__text__lead" th:method="get" th:action="'/review/editReviews/' + ${order.id}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button ">отправил</button>
+                                        <button type="submit" class="company__card__text__lead-button ">url</button>
                                     </form>
-                                    <form class="company__card__text__lead" th:method="post" th:action="'company/status_resend/' + ${company.id}">
+                                    <div class="company__card__text__lead">
+                                        <textarea style="display: none;" class="company__card__remember-text" th:utext="${promoTexts[1]} + ' К олате: ' + ${order.sum} + ' руб.'" id="myInput2"></textarea>
+                                        <button class="company__card__text__lead-button" onclick="myFunction2()">счет</button>
+                                   </div>
+                                    <form class="company__card__text__lead" target="_blank" th:action="@{${order.filial.url}}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button ">напомнил</button>
+                                        <button type="submit"  class="company__card__text__lead-button ">ссылка</button> 
                                     </form>
-                                    <form class="company__card__text__lead" th:method="post" th:action="'company/status_archive/' + ${company.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button ">в архив</button>
-                                    </form>
-                                    <form class="company__card__text__lead" th:method="post" th:action="'company/status_archive/' + ${company.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit"  class="company__card__text__lead-button ">в работу</button>
-                                    </form>
-                                    <!--                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">-->
-                                    <!--                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
-                                    <!--                                        <button type="submit" class="card__text__lead-button ">в работу</button>-->
-                                    <!--                                    </form>-->
-                                    <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
+
+                                <!-- PROGRESS BAR -->
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${order.amount}" th:style="'width: ' + (${order.counter} / ${order.amount} * 100) + '%'" id="progress-bar">
+                                        <span th:text="${order.counter}"></span>
+                                    </div>
+                                </div>
+
+                                <!-- КНОПКИ 2 -->
+                                <div class="company__card__content_button"> <!-- card__content_button -->
+                                    
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">на проверку</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">коррекция</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">опублик.</button>
+                                    </form>
+                                </div> <!-- card__content_button -->
+                                <!-- КНОПКИ 3 -->
+                                <div class="company__card__content_button"> <!-- card__content_button -->
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_to_pay/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">счет</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/remember/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">напомнить</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_no_pay/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__text__lead-button ">не опл.</button>
+                                    </form>
+                                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_pay/' + ${companyID} + '/' + ${order.id}">
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit"  class="company__card__text__lead-button ">оплатили</button>
+                                    </form>
+                                </div> <!-- card__content_button -->
+
+                                <!-- НИЖНИИ КНОПКИ -->
                                 <div >
-                                    <form  th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${company.id}}">
+                                    <form  th:method="get" th:action="@{'/ordersDetails/'+ ${companyID} + '/' + ${order.id}}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <div class="company__card__content__phone">
                                             <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">Подробнее</button>
                                         </div>
                                   </form>
-                              </div>
-                            </div> <!-- card__content__lead -->
-                            <form class="company__card__content__author" th:method="get" th:action="'editCompany/' + ${company.id}">
-                                <div class="company__card__link__lead" th:text="${company.manager.user.fio != null ? company.manager.user.fio : 'пусто'}">Имя Менеджера</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
-                            </form>
+                              </div>      
+                              <form class="company__card__content__author" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyID} + '/' + ${order.id}}">
+                                    <div class="company__card__link__order">
+                                        <span th:utext="'Без изменений: '"></span>
+                                        <span class="digits" th:text="${order.dayToChangeStatusAgo != null ? order.dayToChangeStatusAgo : 'пусто'}"></span>
+                                        <span th:utext="' дней'"></span>
+                                    </div>
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                                </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
-                    <!-- СПИСОК КАРТОЧЕК 1 -->
+                    <!-- СПИСОК КАРТОЧЕК 1 КОНЕЦ -->
 
 
 <!--                    -->
@@ -375,6 +435,8 @@
             <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
         </div> <!-- container -->
     </section> <!-- section -->
+    
+    
 
         <!-- ====================== CHOOSE END =========================== -->
         <header th:replace="~{fragments/footer2 :: footer}"></header>
