@@ -14,6 +14,70 @@ $(document).ready(function(){
 
 });
 
+// <!-- ==================== COPY TEXT ====================== -->
+
+  function myFunction1() {
+    /* Get the text field */
+    var copyText1 = document.getElementById("myInput1");
+    /* Select the text field */
+    copyText1.select();
+
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText1.value);
+  }
+
+  function myFunction2() {
+    /* Get the text field */
+    var copyText2 = document.getElementById("myInput2");
+
+
+    /* Select the text field */
+    copyText2.select();
+
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText2.value);
+  }
+
+  function myFunction3() {
+    /* Get the text field */
+    var copyText3 = document.getElementById("myInput3");
+
+    /* Select the text field */
+    copyText3.select();
+
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText3.value);
+  }
+
+  function myFunction4() {
+    /* Get the text field */
+    var copyText4 = document.getElementById("myInput4");
+
+    /* Select the text field */
+    copyText4.select();
+
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText4.value);
+  }
+
+  // <!-- ==================== COPY TEXT ====================== -->
+
 
   // <!-- ==================== MENU STRAT ====================== -->
     // ищем кнопку

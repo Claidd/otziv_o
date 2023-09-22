@@ -61,6 +61,8 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         return OrderDTO.builder()
                 .id(order.getId())
                 .company(convertToCompanyDTO(order.getCompany()))
+                .amount(order.getAmount())
+                .counter(order.getCounter())
                 .build();
     }
 

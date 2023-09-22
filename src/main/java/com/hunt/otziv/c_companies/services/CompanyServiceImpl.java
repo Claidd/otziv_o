@@ -241,6 +241,7 @@ public class CompanyServiceImpl implements CompanyService{
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
+                .counter(order.getCounter())
                 .sum(order.getSum())
                 .created(order.getCreated())
                 .changed(order.getChanged())

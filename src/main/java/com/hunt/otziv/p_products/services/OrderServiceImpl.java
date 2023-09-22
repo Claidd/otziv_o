@@ -547,8 +547,9 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+
     private void checkOrderCounterAndAmount(Order order){ // проверка счетчиков заказа
-        if (order.getAmount() == order.getCounter()){
+        if (order.getAmount() <= order.getCounter()){
             changeStatusForOrder(order.getId(), "Опубликовано");
             log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
         }
@@ -556,6 +557,7 @@ public class OrderServiceImpl implements OrderService {
             log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");
         }
     }
+
 
 //    ==================================================================================================================
 }

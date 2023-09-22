@@ -21,6 +21,7 @@
                     <div class="company__tabs__lead">
 
                         <header th:replace="~{fragments/reviews_to_worker :: reviews_to_worker}"></header> <!-- вставка карточек отзывов-->
+                            
                             <div class="btn__cell">
                                 <form th:method="get" th:action="'/review/editReviews/' + ${orderId}"  class="company__card__content__button3">
                                     <div class="company__card__content__button__btn">
@@ -52,7 +53,7 @@
         <header th:replace="~{fragments/footer2 :: footer}"></header>
         </th:block> <!-- wrapper -->
         <th:block th:insert="~{fragments/common :: js}"></th:block>
-        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+        <!-- <th:block th:insert="~{fragments/common :: js_company}"></th:block> -->
 
     </body>
 </html>

@@ -510,7 +510,7 @@ body {
     padding: 0 150px 50px;
     display: flex;
     justify-content: space-between;
-    gap: 80px;
+    /* gap: 80px; */
 }
 
 .company__tabs__btn-item {
@@ -1188,6 +1188,35 @@ body {
 
 /* =================== LEADS CARD END ================= */
 
+/* ================= PROGRESS BAR START ================ */
+
+
+.progress {
+    height: 15px;
+    margin-left: 3px;
+    margin-right: 3px;
+    border: 1px solid #5b5a5a38;
+    background: none;
+}
+
+.progress-bar {
+    height: 15px;
+    background: #d45cec81;
+    border: 1px solid #5b5a5a38;
+    /* Длительность анимации 2 секунды (по желанию) */
+}
+
+.progress-bar span {
+    display: block;
+    text-align: center;
+    width: 100%;
+    color: #000;
+}
+
+
+
+/* ================== PROGRESS BAR END ================= */
+
 /* ==================== MAIN END =================== */
 
 
@@ -1210,6 +1239,8 @@ body {
         padding: 0 0 50px;
         gap: 20px;
     }
+
+    
 
 }
 /* ==================== 1040 =================== */

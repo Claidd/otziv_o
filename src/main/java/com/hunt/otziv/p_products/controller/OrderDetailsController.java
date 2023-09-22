@@ -64,7 +64,7 @@ public class OrderDetailsController {
         if(orderService.changeStatusAndOrderCounter(reviewId)){
             log.info("8. Все прошло успешно, вернулись в контроллер");
             rm.addFlashAttribute("saveSuccess", "true");
-            checkOrderOnPublishedAll(orderId);
+//            checkOrderOnPublishedAll(orderId);
         }
         else {
             log.info("8. Все прошло плохо, вернулись в контроллер");
@@ -72,14 +72,6 @@ public class OrderDetailsController {
         }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
-@Transactional
-    private void checkOrderOnPublishedAll(Long orderId){
-        Order order = orderService.getOrder(orderId);
-        System.out.println(order.getAmount());
-        System.out.println(order.getCounter());
-        if(order.getAmount() == order.getCounter()){
-            orderService.changeStatusForOrder(orderId, "Опубликовано");
-        }
-}
+
 
 }
