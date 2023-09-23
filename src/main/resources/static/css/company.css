@@ -526,6 +526,10 @@ body {
     color: #d45cec;
 }
 
+.company__tabs__btn-item--active2 {
+    color: #d45cec5d;
+}
+
 .company__tabs__content-item{
     display: none;
     grid-template-columns: repeat(4, 1fr);
@@ -571,6 +575,7 @@ body {
     text-align: center;
     height: 40px;
     width: 100%;
+    gap: 20px;
 }
 
 

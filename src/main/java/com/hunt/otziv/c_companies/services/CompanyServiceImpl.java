@@ -77,6 +77,14 @@ public class CompanyServiceImpl implements CompanyService{
         else return convertToCompanyDTOList(companyRepository.findAll().stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
     }
 
+    public List<CompanyDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        if (!keyword.isEmpty()){
+            return convertToCompanyDTOList(companyRepository.findAllByManagerAndTitleContainingIgnoreCaseOrManagerAndTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
+        }
+        else return convertToCompanyDTOList(companyRepository.findAllByManager(manager));
+    } // Берем все заказы с поиском для Менеджера
+
 
     public CompanyDTO getCompaniesDTOById(Long id){
         return convertToDto(companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
@@ -625,5 +633,12 @@ public boolean deleteWorkers(Long companyId, Long workerId){
             System.out.println(e);
             return false;
         }
+    }
+
+    public void changeDataTry(Long companyId){
+        Company company = companyRepository.findById(companyId).orElse(null);
+        assert company != null;
+        company.setDateNewTry(company.getDateNewTry().plusDays(100));
+        companyRepository.save(company);
     }
 }

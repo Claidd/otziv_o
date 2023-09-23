@@ -1,12 +1,8 @@
 package com.hunt.otziv.p_products.controller;
 
-import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
-import com.hunt.otziv.p_products.services.service.AllOrderListService;
 import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -28,10 +24,8 @@ import java.util.Comparator;
 public class AllOrderListController {
 
     private final PromoTextService promoTextService;
-    private final CompanyService companyService;
-    private final AllOrderListService allOrderListService;
     private final OrderService orderService;
-    private final UserService userService;
+
 
     //    =========================================== ORDER ALL =======================================================
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
@@ -95,14 +89,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "В проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "В проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -117,14 +111,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "На проверке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/on_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "На проверке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/on_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -139,14 +133,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/correct_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/correct_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -161,14 +155,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_published_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -183,14 +177,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Опубликовано");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_published_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -205,14 +199,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/published_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -227,14 +221,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/remember_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/remember_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -249,14 +243,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Не оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/no_pay_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/no_pay_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -271,14 +265,14 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged).reversed()).toList());
             return "products/orders/pay_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged).reversed()).toList());
             return "products/orders/pay_orders_list";
         }
         else return "redirect:/companies/allCompany";

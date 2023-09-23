@@ -84,7 +84,7 @@
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                             <!-- Кнопка "Назад" -->
-                            <a th:href="@{'/ordersCompany/ordersDetails/'+ ${companyID}}" class="btn btn-secondary mt-3">Назад</a>
+                            <a th:href="@{'/ordersCompany/ordersDetails/'+ ${ordersDTO.company.id}}" class="btn btn-secondary mt-3">Назад</a>
                     </form>
                 </div>
             </div>

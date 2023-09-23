@@ -53,9 +53,6 @@ public class OrderController {
 
     @PostMapping ("/{companyID}/{id}") // Пост запрос на создание нового заказа и редирект на оформление нового заказа
     String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, @PathVariable Long id, Model model){
-        System.out.println("==============================================");
-        System.out.println(orderDTO);
-        System.out.println("==============================================");
         orderService.createNewOrderWithReviews(companyID, id, orderDTO);
         return "redirect:/companies/allCompany";
     } // Пост запрос на создание нового заказа и редирект на оформление нового заказа

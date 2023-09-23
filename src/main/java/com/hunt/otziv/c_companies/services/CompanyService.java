@@ -32,8 +32,9 @@ public interface CompanyService {
 
     boolean changeStatusForCompany(Long companyId, String title);
 
-
+    void changeDataTry(Long companyId);
     CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long id, String keyword);
+    List<CompanyDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword);
 
 //    Set<Filial> convertFilialDTOToFilial(Long id, FilialDTO filialDTO);
 }

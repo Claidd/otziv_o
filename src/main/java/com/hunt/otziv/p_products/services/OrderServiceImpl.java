@@ -13,6 +13,7 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -79,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
     private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
+    private final CompanyStatusService companyStatusService;
 
     //    ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ =========================================================
     @Override
@@ -198,6 +200,7 @@ public class OrderServiceImpl implements OrderService {
         log.info("10. Обновляем счетчик компании в БД");
         Company  company = companyService.getCompaniesById(companyId);
         company.setCounterNoPay(company.getCounterNoPay() + (saveOrder2.getAmount() - company.getCounterNoPay()));
+        company.setStatus(companyStatusService.getStatusByTitle("В работе"));
         companyService.save(company);
         return true;
     } // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
@@ -280,13 +283,13 @@ public class OrderServiceImpl implements OrderService {
                             company.setSumTotal(company.getSumTotal().add(order.getSum()));
                             System.out.println("сумма: " + company.getSumTotal().add(order.getSum()));
                             log.info("5. Успешно установили суммы");
-                            companyService.save(company);
-                            log.info("6. Компания сохранена");
                             order.setComplete(true);
                             order.setPayDay(LocalDate.now());
                             System.out.println("PayDay: " + order.getPayDay());
                             orderRepository.save(order);
-                            log.info("7. Заказ обновлен и сохранен");
+                            log.info("6. Заказ обновлен и сохранен");
+                            companyService.save(checkStatusToCompany(company));
+                            log.info("7. Компания сохранена");
                             log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
                         }
                         catch (Exception e){
@@ -317,6 +320,22 @@ public class OrderServiceImpl implements OrderService {
             return false;
         }
     } // смена статуса для заказа с проверкой на Оплачено
+
+    @Transactional
+    public Company checkStatusToCompany(Company company){
+        int result = 0;
+        for (Order order1 : company.getOrderList()) {
+            if (!order1.isComplete()) {
+                result = 1;
+                break;
+            }
+        }
+        if (result == 0){
+            company.setStatus(companyStatusService.getStatusByTitle("Новый заказ"));
+        }
+        return company;
+    }
+
     @Override
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) { // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
@@ -379,15 +398,15 @@ public class OrderServiceImpl implements OrderService {
         if (!keyword.isEmpty()){
             return convertToOrderDTOList(orderRepository.findAllByManagerAndCompanyTitleContainingIgnoreCaseOrManagerAndCompanyTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
         }
-        else return convertToOrderDTOList(orderRepository.findAllByManagerId(manager.getId()));
+        else return convertToOrderDTOList(orderRepository.findAllByManager(manager));
     } // Берем все заказы с поиском для Менеджера
     public List<OrderDTO> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         if (!keyword.isEmpty()){
             return convertToOrderDTOList(orderRepository.findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(worker,keyword, worker, keyword));
         }
-        else return convertToOrderDTOList(orderRepository.findAllByManagerId(worker.getId()));
-    } // Берем все заказы с поиском для Менеджера
+        else return convertToOrderDTOList(orderRepository.findAllByWorker(worker));
+    } // Берем все заказы с поиском для Работника
     public Order getOrder(Long orderId){ // Взять заказ
         return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
     } // Взять заказ

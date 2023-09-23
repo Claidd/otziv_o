@@ -5,16 +5,16 @@
                 <div class="company__tabs__btn__lead">
                     <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-11">К компаниям</a>
                     <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10" th:href="@{'/orders/new_orders'}">Новые</a>
-                    <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/orders/to_check'}">В проверку</a>
+                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-11" th:href="@{'/orders/to_check'}">В проверку</a>
                     <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/orders/on_check'}">На проверке</a>
                     <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/orders/correct'}">Коррекция</a>
                     <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/orders/to_published'}">Публикация</a>
-                    <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/orders/published'}">Опубликовано</a>
-                    <a class="company__tabs__btn-item" data-button="content-16" th:href="@{'/orders/payment_check'}">Выставлен счет</a>
+                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-15" th:href="@{'/orders/published'}">Опубликовано</a>
+                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-16" th:href="@{'/orders/payment_check'}">Выставлен счет</a>
                     <a class="company__tabs__btn-item" data-button="content-17" th:href="@{'/orders/remember'}">Напоминание</a>
                     <a class="company__tabs__btn-item" data-button="content-17" th:href="@{'/orders/no_pay'}">Не опл.</a>
                     <a class="company__tabs__btn-item" data-button="content-18" th:href="@{'/orders/pay'}">Оплачено </a>
-                    <a class="company__tabs__btn-item" data-button="content-19" th:href="@{'/orders/all_orders'}">Все </a>
+                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-19" th:href="@{'/orders/all_orders'}">Все </a>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
@@ -50,7 +50,7 @@
 <!--                        </div>-->
                         <div class="company__card__remember__box-serch">
 
-                            <form class="company__card_remember-search" th:method="get" th:action="@{'/all_orders_list'}">
+                            <form class="company__card_remember-search" th:method="get">
                                 <!-- The text field -->
                                 <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                 <!-- The button used to copy the text -->

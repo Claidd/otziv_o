@@ -17,7 +17,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Order> findAll();
     List<Order> findAllByCompanyTitleContainingIgnoreCaseOrCompanyTelephoneContainingIgnoreCase(String keyword1, String keyword2); //взять все заказы по названию и телефону компании
 
-    List<Order> findAllByManagerId(Long managerId);
+    List<Order> findAllByManager(Manager manager);
+    List<Order> findAllByWorker(Worker worker);
     List<Order> findAllByManagerAndCompanyTitleContainingIgnoreCaseOrManagerAndCompanyTelephoneContainingIgnoreCase(
             Manager manager, String keyword1, Manager manager2, String keyword2); //взять все заказы по названию и телефону компании определенного менеджера
     List<Order> findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(
