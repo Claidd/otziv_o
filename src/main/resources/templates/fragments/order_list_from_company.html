@@ -4,17 +4,17 @@
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="company__tabs__btn__lead">
                     <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-11">К компаниям</a>
-                    <button class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10">Новые</button>
-                    <button class="company__tabs__btn-item" data-button="content-11">На проверку</button>
-                    <button class="company__tabs__btn-item" data-button="content-12">В проверке</button>
-                    <button class="company__tabs__btn-item" data-button="content-13">Коррекция</button>
-                    <button class="company__tabs__btn-item" data-button="content-14">Публикация</button>
-                    <button class="company__tabs__btn-item" data-button="content-15">Опубликовано</button>
-                    <button class="company__tabs__btn-item" data-button="content-16">Выставлен счет</button>
-                    <button class="company__tabs__btn-item" data-button="content-17">Напоминание</button>
-                    <button class="company__tabs__btn-item" data-button="content-17">Не опл.</button>
-                    <button class="company__tabs__btn-item" data-button="content-18">Оплачено </button>
-                    <button class="company__tabs__btn-item" data-button="content-19">Все </button>
+                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10" th:href="@{'/orders/new_orders'}">Новые</a>
+                    <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/orders/to_check'}">В проверку</a>
+                    <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/orders/on_check'}">На проверке</a>
+                    <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/orders/correct'}">Коррекция</a>
+                    <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/orders/to_published'}">Публикация</a>
+                    <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/orders/published'}">Опубликовано</a>
+                    <a class="company__tabs__btn-item" data-button="content-16" th:href="@{'/orders/payment_check'}">Выставлен счет</a>
+                    <a class="company__tabs__btn-item" data-button="content-17" th:href="@{'/orders/remember'}">Напоминание</a>
+                    <a class="company__tabs__btn-item" data-button="content-17" th:href="@{'/orders/no_pay'}">Не опл.</a>
+                    <a class="company__tabs__btn-item" data-button="content-18" th:href="@{'/orders/pay'}">Оплачено </a>
+                    <a class="company__tabs__btn-item" data-button="content-19" th:href="@{'/orders/all_orders'}">Все </a>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 

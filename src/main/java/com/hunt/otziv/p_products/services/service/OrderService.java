@@ -23,6 +23,7 @@ public interface OrderService {
 
     List<OrderDTO> getAllOrderDTOAndKeyword(String keyword);
     List<OrderDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword);
+    List<OrderDTO> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword);
 
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
 //    Order getOrderById(Long orderId);
