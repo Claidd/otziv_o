@@ -46,9 +46,9 @@ public class AllOrderListController {
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
-            return "products/all_orders_list";
+            return "products/orders/all_orders_list";
         }
-        else return "/companies/allCompany";
+        else return "redirect:/companies/allCompany";
     } // Страница просмотра всех заказов компании по всем статусам
 
     @GetMapping("/new_orders") // Все заказы - Новые

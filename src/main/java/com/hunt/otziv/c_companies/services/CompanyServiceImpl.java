@@ -304,6 +304,8 @@ public class CompanyServiceImpl implements CompanyService{
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
                 .filials(convertToFilialDTOList(company.getFilial()))
+                .categoryCompany(convertToCategoryDto(company.getCategoryCompany()))
+                .subCategory(convertToSubCategoryDto(company.getSubCategory()))
                 .build();
     }
 

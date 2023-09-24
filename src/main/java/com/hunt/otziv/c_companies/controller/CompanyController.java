@@ -117,7 +117,7 @@ public class CompanyController {
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
-            model.addAttribute("TitleName", "Готовы к новому заказу");
+            model.addAttribute("TitleName", "Предложение нового заказа");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новый заказ".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
 //            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
@@ -125,7 +125,7 @@ public class CompanyController {
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "Готовы к новому заказу");
+            model.addAttribute("TitleName", "Предложение нового заказа");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "Новый заказ".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
             return "companies/company/new_order_company_list";

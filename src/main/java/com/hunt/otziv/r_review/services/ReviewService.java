@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 
+import java.security.Principal;
 import java.util.List;
 
 public interface ReviewService {
@@ -12,6 +13,8 @@ public interface ReviewService {
     boolean deleteReview(Long reviewId);
 
     List<Review> getReviewsAllByOrderId(Long id);
+    List<ReviewDTO> getAllReviewDTOAndDateToAdmin();
+    List<ReviewDTO> getAllReviewDTOByWorkerByPublish(Principal principal);
 
     void changeBot(Long id);
 

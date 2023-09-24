@@ -26,13 +26,17 @@ import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.List;
@@ -50,6 +54,19 @@ public class ReviewServiceImpl implements ReviewService{
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final OrderDetailsService orderDetailsService;
+    private final WorkerService workerService;
+    private final UserService userService;
+
+
+    public List<ReviewDTO> getAllReviewDTOAndDateToAdmin(){ // Берем все заказы с поиском по названию компании или номеру
+        LocalDate localDate = LocalDate.now();
+        return (convertToReviewDTOList(reviewRepository.findAllByPublishedDateAndPublish(localDate)));
+    }  // Берем все заказы с поиском по названию компании или номеру
+    public List<ReviewDTO> getAllReviewDTOByWorkerByPublish(Principal principal) { // Берем все отзывы с датой для Работника
+        LocalDate localDate = LocalDate.now();
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+            return convertToReviewDTOList(reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate));
+    }// Берем все отзывы с датой для Работника
 
 
     public Review save(Review review){
@@ -319,6 +336,31 @@ public class ReviewServiceImpl implements ReviewService{
     }
 
     //    ============================================== CONVERTER TO DTO ==============================================
+        private List<ReviewDTO> convertToReviewDTOList(List<Review> reviews){
+            return reviews.stream().map(this::convertToReviewDTO).collect(Collectors.toList());
+        }
+
+         ReviewDTO convertToReviewDTO(Review review){
+            assert review != null;
+            return ReviewDTO.builder()
+                    .id(review.getId())
+                    .text(review.getText())
+                    .answer(review.getAnswer())
+                    .created(review.getCreated())
+                    .changed(review.getChanged())
+                    .publishedDate(review.getPublishedDate())
+                    .publish(review.isPublish())
+                    .category(convertToCategoryDto(review.getCategory()))
+                    .subCategory(convertToSubCategoryDto(review.getSubCategory()))
+                    .bot(convertToBotDTO(review.getBot()))
+                    .filial(convertToFilialDTO(review.getFilial()))
+                    .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
+                    .worker(convertToWorkerDTO(review.getWorker()))
+                    .comment(review.getOrderDetails().getComment())
+                    .orderDetailsId(review.getOrderDetails().getId())
+                    .build();
+        }
+
     public ReviewDTO getReviewDTOById(Long reviewId){
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;

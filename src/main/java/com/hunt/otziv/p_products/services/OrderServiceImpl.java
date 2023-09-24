@@ -456,8 +456,25 @@ public class OrderServiceImpl implements OrderService {
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
                 .filials(convertToFilialDTOList(company.getFilial()))
+                .categoryCompany(convertToCategoryDto(company.getCategoryCompany()))
+                .subCategory(convertToSubCategoryDto(company.getSubCategory()))
                 .build();
     } // Конвертер DTO для компании
+
+    private CategoryDTO convertToCategoryDto(Category category) {// Конвертер DTO для категории
+        CategoryDTO categoryDTO = new CategoryDTO();
+        categoryDTO.setId(category.getId());
+        categoryDTO.setCategoryTitle(category.getCategoryTitle());
+        // Other fields if needed
+        return categoryDTO;
+    } // Конвертер DTO для категории
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Конвертер DTO для субкатегории
+        SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
+        subCategoryDTO.setId(subCategory.getId());
+        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
+        // Other fields if needed
+        return subCategoryDTO;
+    } // Конвертер DTO для субкатегории
     private ManagerDTO convertToManagerDTO(Manager manager){// Конвертер DTO для менеджера
         return ManagerDTO.builder()
                 .managerId(manager.getId())

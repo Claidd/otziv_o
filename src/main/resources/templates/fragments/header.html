@@ -35,6 +35,11 @@
                             </a>
                         </li>
                         <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/categories}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
+                                Категории
+                            </a>
+                        </li>
+                        <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Новый лид
                             </a>
@@ -46,7 +51,12 @@
                         </li>
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/companies/new_company}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
-                                Компании
+                                Менеджер
+                            </a>
+                        </li>
+                        <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/worker/new_orders}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                                Специалист
                             </a>
                         </li>
 
@@ -55,16 +65,13 @@
                                 Боты
                             </a>
                         </li>
-                        <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/categories}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
-                                Категории
-                            </a>
-                        </li>
+                        
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
                                 Продукт
                             </a>
                         </li>
+                        
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/payment_check}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Чеки
