@@ -190,5 +190,98 @@ public class OrderController {
         }
         return "redirect:/orders/payment_check";
     } // смена статуса на "Оплачено"
+
+
+    //    =========================================== СМЕНА СТАТУСА ========================================================
+    @PostMapping ("/status_for_checking2/{companyID}/{orderID}") // смена статуса на "в проверку"
+    String changeStatusForChecking2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "В проверку")) {
+            log.info("статус заказа успешно изменен на на проверке");
+            model.addAttribute("companyId", companyID);
+        } else {
+            log.info("ошибка при изменении статуса заказа на на проверке");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "на проверке"
+    @PostMapping ("/status_on_checking2/{companyID}/{orderID}") // смена статуса на "на проверке"
+    String changeStatusOnChecking2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "На проверке")) {
+            log.info("статус заказа успешно изменен на на проверке");
+        } else {
+            log.info("ошибка при изменении статуса заказа на на проверке");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "на проверке"
+    @PostMapping ("/status_for_correct2/{companyID}/{orderID}") // смена статуса на "Коррекция"
+    String changeStatusForCorrect2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
+            log.info("статус заказа успешно изменен на Коррекция");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Коррекция");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Коррекция"
+    @PostMapping ("/status_for_publish2/{companyID}/{orderID}") // смена статуса на "Публикация"
+    String changeStatusForPublish2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Публикация")) {
+            log.info("статус заказа успешно изменен на Публикация");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Публикация");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Публикация"
+    @PostMapping ("/status_for_publish_ok2/{companyID}/{orderID}") // смена статуса на "Опубликовано"
+    String changeStatusForPublishOk2( @PathVariable Long orderID, @PathVariable Long companyID, Model model) {
+        Order order = orderService.getOrder(orderID);
+        if (order.getAmount() <= order.getCounter()) {
+            orderService.changeStatusForOrder(orderID, "Опубликовано");
+            log.info("статус заказа успешно изменен на Опубликовано");
+        }
+        else {
+            log.info("ошибка при изменении статуса заказа на Опубликовано");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Опубликовано"
+    @PostMapping ("/status_to_pay2/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
+    String changeStatusToPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
+            log.info("статус заказа успешно изменен на Выставлен счет");
+            return "redirect:/ordersCompany/ordersDetails/{companyID}";
+        } else {
+            log.info("ошибка при изменении статуса заказа на Выставлен счет");
+            return "redirect:/ordersCompany/ordersDetails/{companyID}";
+        }
+    } // смена статуса на "Выставлен счет"
+    @PostMapping ("/remember2/{companyID}/{orderID}") // смена статуса на "Напоминание"
+    String changeStatusRemember2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
+            log.info("статус заказа успешно изменен на Напоминание");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Напоминание");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Напоминание"
+
+    @PostMapping ("/status_no_pay2/{companyID}/{orderID}") // смена статуса на "Не оплачено"
+    String changeStatusNoPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Не оплачено")) {
+            log.info("статус заказа успешно изменен на Не оплачено");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Не оплачено");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Не оплачено"
+    @PostMapping ("/status_pay2/{companyID}/{orderID}") // смена статуса на "Оплачено"
+    String changeStatusPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        Order order = orderService.getOrder(orderID);
+        if (order.getAmount() <= order.getCounter()){
+            orderService.changeStatusForOrder(orderID, "Оплачено");
+            log.info("статус заказа успешно изменен на Оплачено");
+        }
+        else {
+            log.info("ошибка при изменении статуса заказа на Выставлен счет");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Оплачено"
 //    =========================================== СМЕНА СТАТУСА ========================================================
 }

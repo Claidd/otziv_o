@@ -2,10 +2,7 @@ package com.hunt.otziv.c_categories.model;
 
 import com.hunt.otziv.p_products.model.Product;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 import java.util.Set;
@@ -27,4 +24,12 @@ public class ProductCategory {
 
     @OneToMany(mappedBy = "productCategory", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Product> product;
+
+    @Override
+    public String toString() {
+        return "ProductCategory{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                '}';
+    }
 }

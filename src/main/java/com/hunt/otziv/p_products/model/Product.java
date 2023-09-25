@@ -2,10 +2,7 @@ package com.hunt.otziv.p_products.model;
 
 import com.hunt.otziv.c_categories.model.ProductCategory;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 
@@ -29,5 +26,6 @@ public class Product {
 
     @ManyToOne
     @JoinColumn(name = "product_category")
+    @ToString.Include
     private ProductCategory productCategory;
 }
