@@ -29,9 +29,11 @@
                         <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/worker/new_orders'}">Новые</a>
                         <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/correct'}">Коррекция</a>
                         <a class="company__tabs__btn-item  company__tabs__btn-item--active" data-button="content-12" th:href="@{'/worker/publish'}">Публикация</a>
-                        <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/to_check'}">Аккаунты</a>
+                        <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/bot'}">Аккаунты</a>
                         <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/worker/all_orders'}">Все</a>
                     </div>
+
+                    
                     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
                     <th:block th:insert="~{fragments/reviews_to_worker :: reviews_to_worker}" id="content-10"></th:block>

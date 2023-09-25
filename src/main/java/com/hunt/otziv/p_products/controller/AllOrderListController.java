@@ -160,7 +160,7 @@ public class AllOrderListController {
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "Коррекция");
+            model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/to_published_orders_list";
@@ -178,14 +178,14 @@ public class AllOrderListController {
             model.addAttribute("TitleName", "Опубликовано");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
-            return "products/orders/to_published_orders_list";
+            return "products/orders/published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "Коррекция");
+            model.addAttribute("TitleName", "Опубликовано");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
-            return "products/orders/to_published_orders_list";
+            return "products/orders/published_orders_list";
         }
         else return "redirect:/companies/allCompany";
     } // Все заказы - Опубликовано
@@ -200,14 +200,14 @@ public class AllOrderListController {
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
-            return "products/orders/published_orders_list";
+            return "products/orders/payment_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
-            return "products/orders/published_orders_list";
+            return "products/orders/payment_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
     } // Все заказы - Выставлен счет

@@ -1,4 +1,4 @@
-<section th:fragment="reviews_to_worker" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+<section th:fragment="reviews_to_order" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
 
     
 
@@ -62,7 +62,7 @@
                         </div>
                         <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.orderDetails.order.company.id} + '/' + ${review.orderDetails.order.id} + '/change_bot/' + ${review.id}}">
                             <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                            <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
+                            <input style="display: none;" class="company__card_remember-search__text" type="text" value="Заказ_Отзыв" name="pageName" id="pageName">
                             <button type="submit" class="company__card__text__lead-button ">смена</button>
                         </form>
                         <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.orderDetails.order.company.id} + '/' + ${review.orderDetails.order.id} + '/deactivate_bot/' + ${review.id} + '/' + ${review.bot.id}}">

@@ -1,19 +1,23 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.security.Principal;
+import java.util.Comparator;
 
 @Controller
 @Slf4j
@@ -36,16 +40,28 @@ public class OrderDetailsController {
         return "products/orders_detail_list";
     }
 
-    @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}")
-    public String changeBot(@PathVariable Long reviewId,@PathVariable Long companyId, @PathVariable Long orderId, Model model){
+    @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота
+    public String changeBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, Model model){
+        System.out.println(pageName);
         log.info("1. Заходим в Post метод замены бота");
         reviewService.changeBot(reviewId);
         log.info("5. Все прошло успешно, вернулись в контроллер");
-        model.addAttribute("companyID", companyId);
-        model.addAttribute("orderID", orderId);
-        model.addAttribute("reviewID", orderId);
+//
         // Build the redirect URL by appending the context path
-        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+
+        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+            log.info("Зашли список всех заказов для админа");
+            return "redirect:/worker/publish";
+        }
+        if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("companyID", companyId);
+            model.addAttribute("orderID", orderId);
+            model.addAttribute("reviewID", orderId);
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+        return "redirect:/worker/publish";
+//        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
 
     @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}")
@@ -72,6 +88,16 @@ public class OrderDetailsController {
         }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
+
+
+    private String gerRole(Principal principal){
+        // Получите текущий объект аутентификации
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Получите имя текущего пользователя (пользователя, не роль)
+        String username = principal.getName();
+        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
+        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+    } // Берем роль пользователя
 
 
 }

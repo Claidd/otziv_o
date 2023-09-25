@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.l_lead.model.PromoText;
 import com.hunt.otziv.l_lead.services.PromoTextService;
@@ -29,6 +30,45 @@ public class WorkerOrderController {
     private final PromoTextService promoTextService;
     private final OrderService orderService;
     private final ReviewService reviewService;
+    private final BotService botService;
+
+//    @GetMapping
+//    public String bots(Model model){
+//        model.addAttribute("all_bots", botService.getAllBots());
+//        return "bots/bots_list";
+//    }
+
+    @GetMapping("/bot") // Все заказы - Новые
+    public String BotAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех заказов для админа");
+            model.addAttribute("all_bots", botService.getAllBots());
+            model.addAttribute("TitleName", "Новые");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+
+            return "products/orders/bot_worker";
+        }
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("TitleName", "Новые");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            return "products/orders/bot_worker";
+        }
+        if ("ROLE_WORKER".equals(userRole)){
+            log.info("Зашли список всех заказов для Работника");
+            model.addAttribute("TitleName", "Новые");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("all_bots", botService.getAllBotsByWorker(principal));
+            return "products/orders/bot_worker";
+        }
+        else return "redirect:/";
+    } // Все заказы - Новые
+
+
+
 
     @GetMapping("/new_orders") // Все заказы - Новые
     public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){

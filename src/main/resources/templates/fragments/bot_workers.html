@@ -1,0 +1,96 @@
+<section th:fragment="bot_workers" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
+
+    <div class="company__tabs__content-lead">
+
+        
+
+
+        <div class="wrapper">
+            <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
+        <div class="mb-3 " th:if="${saveSuccess}">
+            <div class="alert alert-success">
+                Данные успешно изменены и сохранены.
+            </div>
+        </div>
+    
+            <!-- ==================== MAIN START ======================== -->
+            <!-- <div class="company__card__content__button__btn">
+                <a class="company__card__text__publish-button" th:href="@{/bots/bot_add}" >ДОБАВИТЬ НОВОГО БОТА</a>
+            </div> -->
+            <div  class="company__card__content__button">
+                <div class="company__card__content__button__btn">
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
+                    <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/bots/bot_add}" th:text="'ДОБАВИТЬ НОВОГО БОТА'">в архив</a>
+                </div>
+            </div>
+
+            <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+            <div class="container mt-5">
+                <h2 class="section-title">СПИСОК БОТОВ</h2>
+                <table class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Логин</th>
+                        <th scope="col">Пароль</th>
+                        <th scope="col">ФИО</th>
+                        <th scope="col">Публикаций</th>
+                        <th scope="col">Владелец</th>
+                        <th scope="col">Статус</th>
+                        <th scope="col">Активность</th>
+                        <th scope="col">Изменить</th>
+                        <th scope="col">Удалить</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="bot : ${all_bots}">
+                        <th scope="row" th:text="${bot.id}">ID</th>
+                        <th scope="row" th:text="${bot.login}">Логин</th>
+                        <th scope="row" th:text="${bot.password}">Пароль</th>
+                        <th scope="row" th:text="${bot.fio}">ФИО</th>
+                        <th scope="row" th:text="${bot.counter}">Публикаций</th>
+                        <th scope="row" th:text="${bot.worker.user.fio}">Владелец</th>
+                        <th scope="row" th:text="${bot.status}">Статус</th>
+                        <th scope="row" th:text="${bot.active}">Активность</th>
+                        <td>
+                            <form th:method="get" th:action="'/bots/edit/' + ${bot.id}">
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                            </form>
+                        </td>
+                        <td>
+                            <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+    
+    
+            <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+            <!-- ==================== FRAGMENT: title ======================== -->
+    <!--        <th:block th:switch="${route}">>-->
+    <!--            <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>-->
+    <!--            &lt;!&ndash;        <th:block th:case="leads_list">Список 2 лидов</th:block>&ndash;&gt;-->
+    <!--            <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>-->
+    
+    <!--        </th:block>-->
+    
+            <!-- ===================== MAIN END ======================== -->
+            <th:block th:insert="~{fragments/common :: js}"></th:block>
+            
+        </div> <!-- wrapper -->
+        
+
+        
+
+            <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+    </div>    
+</section>

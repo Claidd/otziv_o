@@ -18,7 +18,13 @@
 
         <!-- ==================== MAIN START ======================== -->
 
-        <a th:href="@{/bots/bot_add}" >ДОБАВИТЬ НОВОГО БОТА</a>
+        <div  class="company__card__content__button">
+            <div class="company__card__content__button__btn">
+                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
+                <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/bots/bot_add}" th:text="'ДОБАВИТЬ НОВОГО БОТА'">в архив</a>
+            </div>
+        </div>
 
         <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
         <div class="container mt-5">

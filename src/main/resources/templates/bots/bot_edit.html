@@ -44,7 +44,7 @@
                         <label for="inputWorker" class="form-label">Владелец</label> <br>
                         <select id="inputWorker" name="worker"  class="form-control form-select form-select-lg">
                             <option th:each="worker : ${workers}" th:value="${worker}" th:text="${worker}" th:selected="${worker == editBotDto.worker}"></option>
-                            <option th:unless="${workers.contains(editBotDto.worker)}" th:value="${editBotDto.worker}" th:text="${editBotDto.worker}" th:selected="${editBotDto.worker != null}"></option>
+                            <option th:unless="${workers.contains(editBotDto.worker)}" th:value="${editBotDto.worker}" th:text="${editBotDto.worker.user.fio}" th:selected="${editBotDto.worker != null}"></option>
                         </select>
                     </div>
                     <div class="mb-3">

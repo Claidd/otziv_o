@@ -345,10 +345,10 @@ public class OrderServiceImpl implements OrderService {
             Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
             if(order != null && !review.isPublish()){
                 log.info("3. Прошли проверку order != null && !review.isPublish()");
-                reviewArchiveService.saveNewReviewArchive(reviewId);
+                    reviewArchiveService.saveNewReviewArchive(reviewId);
                 log.info("4. Сохранили отзыв в архив");
-                order.setCounter(order.getCounter() + 1);
-                Order saveOrder = orderRepository.save(order);
+                    order.setCounter(order.getCounter() + 1);
+                    Order saveOrder = orderRepository.save(order);
                 log.info("5. Увеличили и обновили счетчик публикаций в заказе");
                 checkOrderCounterAndAmount(saveOrder);
             }
@@ -358,9 +358,14 @@ public class OrderServiceImpl implements OrderService {
                 System.out.println("publish status: " + (!review.isPublish()));
             }
             review.setPublish(true);
-            log.info("6. Установили Publish на тру - опубликовано");
+            log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
+                Bot bot = review.getBot();
+                bot.setCounter(bot.getCounter() + 1);
+            botService.save(bot);
+
+            log.info("7. Установили Publish на тру - опубликовано");
             reviewService.save(review);
-            log.info("7. Сохранили отзыв в БД");
+            log.info("8. Сохранили отзыв в БД");
             return true;
         }
         else {

@@ -20,6 +20,7 @@ public interface BotService {
 
     // Найти бота по id
     BotDTO findById(Long id);
+    BotDTO findByWorker(Principal principal);
 
     // Найти бота по id
     Bot findBotById(Long id);
@@ -30,5 +31,9 @@ public interface BotService {
 
     List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id);
 
+    List<Bot> getAllBotsByWorkerActiveIsTrue(Principal principal);
+
     Bot save(Bot bot);
+
+    List<Bot> getAllBotsByWorker(Principal principal);
 }

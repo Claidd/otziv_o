@@ -126,6 +126,27 @@ public class BotServiceImpl implements BotService {
     }
 
     @Override
+    public BotDTO findByWorker(Principal principal) {
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        log.info("вошли в поиск бота по работнику");
+        System.out.println(botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null));
+        if (worker != null){
+            log.info("работник не нулл");
+            Bot bot = botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null);
+            if(bot != null){
+                log.info("бот не нулл");
+                BotDTO botDTO = new BotDTO();
+                botDTO.setPassword(bot.getPassword());
+                return botDTO;
+            }
+            else throw new UsernameNotFoundException("User not found with name: " + bot.getLogin());
+        }
+        else return new BotDTO();
+
+
+    }
+
+    @Override
     public Bot findBotById(Long id) {
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         Bot saveBot = botsRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
@@ -147,8 +168,18 @@ public class BotServiceImpl implements BotService {
     public List<Bot> getAllBotsByWorkerId(Long id){
         return botsRepository.findAllByWorkerId(id);
     }
+    public List<Bot> getAllBotsByWorker(Principal principal){
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        return botsRepository.findAllByWorker(worker);
+    }
+
     public List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id){
         return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
+    }
+
+    public List<Bot> getAllBotsByWorkerActiveIsTrue(Principal principal){
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        return botsRepository.findAllByWorkerAndActiveIsTrue(worker);
     }
 
     @Override
@@ -177,7 +208,7 @@ public class BotServiceImpl implements BotService {
     public Bot toEntity(BotDTO botDTO, Principal principal){
         log.info("Заходим в метод перевода ДТО в Бота");
         Bot bot = Bot.builder()
-                .login(changeNumberPhone(botDTO.getLogin()))
+                .login(botDTO.getLogin())
                 .password(botDTO.getPassword())
                 .fio(botDTO.getFio())
                 .active(true)

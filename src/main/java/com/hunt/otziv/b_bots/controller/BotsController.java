@@ -7,6 +7,9 @@ import com.hunt.otziv.b_bots.utils.BotValidation;
 import com.hunt.otziv.u_users.services.service.UserService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -41,8 +44,14 @@ public class BotsController {
 
     //Открываем страницу добавления бота
     @GetMapping("/bot_add")
-    public String botAdd(Model model, BotDTO botsDto){
-        model.addAttribute("bot", new BotDTO());
+    public String botAdd(Model model, BotDTO botsDto, Principal principal){
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+        if ("ROLE_WORKER".equals(userRole)){
+            model.addAttribute("bot", botService.findByWorker(principal));
+            System.out.println(botService.findByWorker(principal));
+        }
+        else model.addAttribute("bot", botService.findByWorker(principal));
     return "bots/bot_add";
     }
 
@@ -106,5 +115,14 @@ public class BotsController {
         botService.deleteBot(id);
         return "bots/bots_list";
     }
+
+    private String gerRole(Principal principal){
+        // Получите текущий объект аутентификации
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Получите имя текущего пользователя (пользователя, не роль)
+        String username = principal.getName();
+        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
+        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+    } // Берем роль пользователя
 
 }
