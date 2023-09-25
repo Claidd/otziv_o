@@ -1,0 +1,89 @@
+<!--<th:block th:fragment="default(route)" xmlns:th="http://www.w3.org/1999/xhtml">-->
+    <!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+        <head>
+            <!-- ==================== META ======================== -->
+            <th:block th:insert="~{fragments/common :: meta}"></th:block>
+            <!-- ==================== STYLE ======================== -->
+            <th:block th:insert="~{fragments/common :: styles}"></th:block>
+            <!-- ==================== TITLE ======================== -->
+            <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
+            <title>Добавить новый продукт</title>
+        </head>
+        <body>
+
+                <!-- создаем внешнюю обертку -->
+                <div class="wrapper">
+                    <header th:replace="~{fragments/header :: header}"></header>
+
+                    <!-- ==================== MAIN START ======================== -->
+
+                    <!-- ==================== FRAGMENT: title ======================== -->
+<!--                    <th:block th:switch="${route}">>-->
+<!--                        <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>-->
+<!--                        &lt;!&ndash;        <th:block th:case="leads_list">Список 2 лидов</th:block>&ndash;&gt;-->
+<!--                        <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>-->
+
+<!--                    </th:block>-->
+
+                    <!-- ===================== MAIN END ======================== -->
+                    <section class="edit__lead">
+                        <div class="container">
+                            <h2 class="section-title">ДОБАВЛЕНИЕ ПРОДУКТА</h2>
+                            <div class="mb-3" th:if="${saveSuccess}">
+                                <div class="alert alert-success">
+                                    Данные успешно изменены и сохранены.
+                                </div>
+                            </div>
+                            <div class="edit__box">
+                                <form th:object="${newProductDto}" method="post">
+                                    <div class="mb-3" >
+                                        <label for="inputTelephoneLead" class="form-label">Название</label>
+                                        <input type="text" name="id" th:field="*{id}" th:value="${newProductDto.id}" class="form-control d-none" id="inputTelephoneLead" aria-describedby="emailHelp">
+                                        <input type="text" name="title" th:field="*{title}" th:value="${newProductDto.title}" class="form-control" id="inputTelephoneLead" aria-describedby="emailHelp">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('title')}" th:text="${err}">Validation error</small>
+                                    </div>
+                                    <div class="mb-3" >
+                                        <label for="cityLead" class="form-label">Цена</label>
+                                        <input type="text" name="price" th:field="*{price}" th:value="${newProductDto.price}" class="form-control" id="cityLead" aria-describedby="emailHelp">
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('price')}" th:text="${err}">Validation error</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="inputOperator" class="form-label">Категория продукта</label> <br>
+                                        <select th:field="*{productCategory}" id="inputOperator" name="operator"  class="form-control form-select form-select-lg">
+                                            <option th:each="prodCat : ${productsCategory}" th:value="${prodCat.id}" th:text="${prodCat.title}" th:selected="${prodCat == newProductDto.productCategory}"></option>
+                                            <!-- <option th:unless="${productsCategory == null or productsCategory.isEmpty() or productsCategory.contains(newProductDto.productCategory)}" th:value="${newProductDto.id}" th:text="${newProductDto.productCategory.title}" th:selected="${newProductDto.title != null}"></option> -->
+                                        </select>
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('productCategory')}" th:text="${err}">Validation error</small>
+                                    </div>
+
+                                    <!-- <div class="mb-3">
+                                        <label for="inputOperator" class="form-label">Оператор</label> <br>
+                                        <select th:field="*{operator}" id="inputOperator" name="operator"  class="form-control form-select form-select-lg">
+                                            
+                                            <option th:each="operator : ${operators}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator == editLeadDto.operator}"></option>
+                                            <option th:unless="${operators == null or operators.isEmpty() or operators.contains(editLeadDto.operator)}" th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}" th:selected="${editLeadDto.operator != null}"></option>
+                                        </select>
+                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('operator')}" th:text="${err}">Validation error</small>
+                                    </div> -->
+
+                                
+                          
+                                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                </form>
+                                
+                            </div>
+                        </div> <!-- container -->
+                    </section>
+                    <!-- ==================== EDIT LEAD START ======================== -->
+
+                    <!-- ===================== EDIT LEAD END ========================= -->
+
+                    <header th:replace="~{fragments/footer2 :: footer}"></header>
+                </div> <!-- wrapper -->
+                <th:block th:insert="~{fragments/common :: js}"></th:block>
+        </body>
+    </html>
+<!--</th:block>-->

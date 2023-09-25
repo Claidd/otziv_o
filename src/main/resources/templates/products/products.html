@@ -1,0 +1,138 @@
+<!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles}"></th:block>
+        <!-- ==================== TITLE ======================== -->
+        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
+        <title>Выбор продукта</title>
+    </head>
+    <body>
+
+    <!-- ===================== CHOOSE START ========================== -->
+    <header th:replace="~{fragments/header :: header}"></header>
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__card">
+        <div class="container">
+            <h2 class="company__section-title">ВЫБЕРИТЕ ПРОДУКТ</h2>
+            <div class="company__tabs__lead">
+                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                <!-- <div class="company__tabs__btn__lead">
+                    <button class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10">Новые</button>
+                    <button class="company__tabs__btn-item" data-button="content-12">Подготовка</button>
+                    <button class="company__tabs__btn-item" data-button="content-13">На проверке</button>
+                    <button class="company__tabs__btn-item" data-button="content-14">Коррекция</button>
+                    <button class="company__tabs__btn-item" data-button="content-15">Публикация</button>
+                    <button class="company__tabs__btn-item" data-button="content-16">Опубликовано</button>
+                    <button class="company__tabs__btn-item" data-button="content-17">Выставлен счет</button>
+                    <button class="company__tabs__btn-item" data-button="content-18">Оплачено </button>
+                </div> -->
+                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
+
+                <div class="company__tabs__content-lead">
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
+                    <div class="company__card__remember">
+<!--                        <div class="company__card__remember__box">-->
+<!--                            <div class="company__card_remember-content">-->
+<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
+<!--                                <textarea class="company__card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>-->
+
+<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
+<!--                                <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>-->
+<!--                            </div>-->
+<!--                            <div class="company__card_remember-content">-->
+<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
+<!--                                <textarea class="company__card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>-->
+
+<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
+<!--                                <button class="company__card_remember-content__btn" onclick="myFunction2()">напоминание</button>-->
+<!--                            </div>-->
+<!--                            <div class="company__card_remember-content">-->
+<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
+<!--                                <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>-->
+
+<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
+<!--                                <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>-->
+<!--                            </div>-->
+<!--                            <div class="company__card_remember-content">-->
+<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
+<!--                                <textarea class="company__card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>-->
+
+<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
+<!--                                <button class="company__card_remember-content__btn" onclick="myFunction4()">оплата</button>-->
+<!--                            </div>-->
+<!--                        </div>-->
+                        <div class="company__card__remember__box-serch">
+
+                            <form class="company__card_remember-search" th:method="get" th:action="@{/lead}">
+                                
+                                <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                                
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="company__card_remember-search__btn">Найти</button>
+                            </form>
+
+                        </div>
+                    </div>
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
+
+
+
+                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                    <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
+
+
+                        <div th:each="product : ${products}" class="company__card__lead">
+                            <div class="company__card__content__lead">
+
+                                <!-- элементы карточки - начало -->
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.title}">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.price} + ' руб/шт'">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.productCategory.title}">Текущий статус Лида</a>
+                                </div>
+
+                            <form class="company__card__content__author" th:method="get" th:action="'/products/edit/' + ${product.id}">
+                                <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                            </form>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+                    <!-- СПИСОК КАРТОЧЕК 1 -->
+
+                    
+
+
+
+
+                </div> <!-- tabs__content -->
+            </div> <!-- tabs -->
+
+
+            <div  class="company__card__content__button">
+                <div class="company__card__content__button__btn">
+                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
+                    <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/products/add}" th:text="'ДОБАВИТЬ ПРОДУКТ'">в архив</a>
+                </div>
+            </div>
+
+            <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+        <!-- ====================== CHOOSE END =========================== -->
+        <header th:replace="~{fragments/footer2 :: footer}"></header>
+        </th:block> <!-- wrapper -->
+        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+
+    </body>
+</html>
