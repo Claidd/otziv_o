@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en"xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"> 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <link rel="stylesheet" href="D:\Java\Project\otziv\src\main\resources\static\css\company.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Sharp"rel="stylesheet">
+    <title>Админ панель</title>
+</head>
+<body>
+    <div class="container_admin">
+        <!-- Слайдер бар - Начало -->
+        <aside>
+            <div class="toggle">
+                <div class="logo">
+                   <img src="\Java\Project\otziv\src\main\resources\static\images\image\logo.png" alt="">
+
+                   <h2>Компания<span class="danger">О!</span></h2>
+                </div>
+                <div class="close" id="close-btn">
+                    <span class="material-icons-sharp">close</span>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <a href="#">
+                    <span class="material-icons-sharp">dashboard</span>
+                    <h3>Панель управления</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">person_outline</span>
+                    <h3>Юзеры</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">receipt_long</span>
+                    <h3>История</h3>
+                </a>
+                <a href="#" class="active">
+                    <span class="material-icons-sharp">insights</span>
+                    <h3>Аналитика</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">mail_outline</span>
+                    <h3>Билеты</h3>
+                    <span class="message-count">27</span>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">inventory</span>
+                    <h3>Продажи</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">report_gmailerrorred</span>
+                    <h3>Отчеты</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">settings</span>
+                    <h3>Настройки</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">add</span>
+                    <h3>Добавить</h3>
+                </a>
+                <a href="#">
+                    <span class="material-icons-sharp">logout</span>
+                    <h3>Выйти</h3>
+                </a>
+            </div>
+        </aside>
+        <!-- Слайдер бар - Конец -->
+        <!-- Основной контент - Начало -->
+        <main>
+            <h1>Аналитика</h1>
+            <!-- Аналитика -->
+            <div class="analyse">
+                <div class="sales">
+                    <div class="status">
+                        <div class="info">
+                            <h3>Сумма продаж</h3>
+                            <h1>$ 550,024</h1>
+                        </div>
+                        <div class="progresss">
+                            <svg>
+                                <circle cx="38" cy="38" r="36"></circle>
+                            </svg>
+                            <div class="percentage">
+                                <p>+81%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="visits">
+                    <div class="status">
+                        <div class="info">
+                            <h3>Просмотр страниц</h3>
+                            <h1>24,981</h1>
+                        </div>
+                        <div class="progresss">
+                            <svg>
+                                <circle cx="38" cy="38" r="36"></circle>
+                            </svg>
+                            <div class="percentage">
+                                <p>-48%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="searches">
+                    <div class="status">
+                        <div class="info">
+                            <h3>Количество поисков</h3>
+                            <h1>$ 3,115</h1>
+                        </div>
+                        <div class="progresss">
+                            <svg>
+                                <circle cx="38" cy="38" r="36"></circle>
+                            </svg>
+                            <div class="percentage">
+                                <p>+21%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Аналитика -->
+            <!-- Пользователи -->
+            <div class="new-users">
+                <h2>Новые Юзеры</h2>
+                <div class="user-list">
+                    <div class="user">
+                        <img src="\Java\Project\otziv\src\main\resources\static\images\image\profile-2.jpg" alt="">
+                        <h2>Дмитрий С.</h2>
+                        <p>54 минуты назад</p>
+                    </div>
+                    <div class="user">
+                        <img src="\Java\Project\otziv\src\main\resources\static\images\image\profile-3.jpg" alt="">
+                        <h2>Николай Б.</h2>
+                        <p>3 часа назад</p>
+                    </div>
+                    <div class="user">
+                        <img src="\Java\Project\otziv\src\main\resources\static\images\image\profile-4.jpg" alt="">
+                        <h2>Ирина К.</h2>
+                        <p>12 минуты назад</p>
+                    </div>
+                    <div class="user">
+                        <img src="\Java\Project\otziv\src\main\resources\static\images\image\profile-1.jpg" alt="">
+                        <h2>Калина М.</h2>
+                        <p>8 часов назад</p>
+                    </div>
+                    <div class="user">
+                        <img src="\Java\Project\otziv\src\main\resources\static\images\image\plus.png" alt="">
+                        <h2>Больше</h2>
+                        <p>Новые пользователи</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Пользователи конец -->
+
+            <!-- Таблица заказов -->
+            <div class="recent-orders">
+                <h2>Таблица заказов</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Название компании</th>
+                            <th>Номер заказа</th>
+                            <th>Сумма</th>
+                            <th>Статус</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <a href="#">Показать все</a>
+            </div>
+            <!-- Таблица заказов конец -->
+        </main>
+
+        <!-- Правая секция -->
+        <div class="right-section">
+            <!-- Профиль -->
+            <div class="nav_right">
+                <button id="menu-btn">
+                    <span class="material-icons-sharp">
+                        menu
+                    </span>
+                </button>
+                <div class="dark-mode">
+                    <span class="material-icons-sharp active">
+                        light_mode
+                    </span>
+                    <span class="material-icons-sharp">
+                        dark_mode
+                    </span>
+                </div>
+
+                <div class="profile">
+                    <div class="info">
+                        <p>Привет, <b>Работник</b></p>
+                        <small class="text-muted">Admin</small>
+                    </div>
+                    <div class="profile-photo">
+                        <img src="D:\Java\Project\otziv\src\main\resources\static\images\image\profile-1.jpg" alt="">
+                    </div>
+                </div>
+            </div>
+            <!-- Профиль -->
+            <div class="user-profile">
+                <div class="logo">
+                    <img src="D:\Java\Project\otziv\src\main\resources\static\images\image\logo.png" alt="">
+                    <h2>Компания О!</h2>
+                    <p>Повышение репутации</p>
+                </div>
+            </div>
+            <!-- Профиль -->
+
+            <!-- Напоминания -->
+            <div class="reminders">
+                <div class="headers">
+                    <h2>Напоминания</h2>
+                    <span class="material-icons-sharp">
+                        notifications_none
+                    </span>
+                </div>
+
+                <div class="notification">
+                    <div class="icon">
+                        <span class="material-icons-sharp">volume_up</span>
+                    </div>
+                    <div class="content">
+                        <div class="info">
+                            <h3>Магазин</h3>
+                            <small class="text_muted">08:00 AM - 12:00 PM</small>
+                        </div>
+                        <span class="material-icons-sharp">more_vert</span>
+                    </div>
+                </div>
+
+                <div class="notification deactive">
+                    <div class="icon">
+                        <span class="material-icons-sharp">edit</span>
+                    </div>
+                    <div class="content">
+                        <div class="info">
+                            <h3>Магазин</h3>
+                            <small class="text_muted">08:00 AM - 12:00 PM</small>
+                        </div>
+                        <span class="material-icons-sharp">more_vert</span>
+                    </div>
+                </div>
+                <div class="notification add-reminder">
+                    <div>
+                        <span class="material-icons-sharp">add</span>
+                        <h3>Добавить напоминание</h3>
+                    </div>
+                </div>
+            </div>
+            <!-- Напоминания -->
+        </div>
+
+    </div>
+    <script src="D:\Java\Project\otziv\src\main\resources\js\orders.js"></script>
+    <script src="D:\Java\Project\otziv\src\main\resources\js\index.js"></script>
+    <header th:replace="~{fragments/footer2 :: footer}"></header>
+</body>
+</html>

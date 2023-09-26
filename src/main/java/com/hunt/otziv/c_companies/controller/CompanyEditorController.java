@@ -55,7 +55,7 @@ public class CompanyEditorController {
                 log.info("статус успешно сменен К рассылке на В работе");
                 System.out.println(company);
             }
-            return "redirect:/companies/allCompany";
+            return "redirect:/companies/new_company";
         } else {
             log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
             return "redirect:/lead";

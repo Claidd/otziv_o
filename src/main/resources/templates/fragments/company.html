@@ -75,7 +75,7 @@
                             </div>
                             
                             <div class="company__card__content__comments__tocompany">
-                                <div class="company__card__text__lead2" th:text="${company.title}">Комментарий для лида</div>
+                                <div class="company__card__text__lead2" th:text="${company.commentsCompany}">Комментарий для лида</div>
                             </div>
                             <div class="company__card__content_button"> <!-- card__content_button -->
                                 <form class="company__card__text__lead" th:method="post" th:action="'/companies/status_for_waiting/' + ${company.id}">
