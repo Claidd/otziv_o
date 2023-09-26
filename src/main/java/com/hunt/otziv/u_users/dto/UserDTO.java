@@ -1,9 +1,6 @@
 package com.hunt.otziv.u_users.dto;
 
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.Role;
-import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.model.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
@@ -45,6 +42,7 @@ public class UserDTO {
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;
+    private Set<Marketolog> marketologs;
 
     private BigDecimal coefficient;
 

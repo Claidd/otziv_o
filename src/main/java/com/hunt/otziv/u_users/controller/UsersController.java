@@ -3,10 +3,7 @@ package com.hunt.otziv.u_users.controller;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.services.RoleService;
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.OperatorService;
-import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.services.service.*;
 import com.hunt.otziv.u_users.utils.UserValidation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +24,7 @@ public class UsersController {
     private final OperatorService operatorService;
     private final ManagerService managerService;
     private final WorkerService workerService;
+    private final MarketologService marketologService;
     private final UserValidation userValidation;
 
     //Страница со всеми пользователями
@@ -38,33 +36,27 @@ public class UsersController {
     //Модель со списком все пользователей
     @ModelAttribute(name = "all_users")
     public List<RegistrationUserDTO> allUsersList(){
-        List<RegistrationUserDTO> userDTO = userService.getAllUsers();
-//        for (RegistrationUserDTO user: userDTO) {
-////            for (Operator operator: user.getOperators()) {
-////                System.out.println(operator.getUser() + " / ");
-////            }
-//            System.out.println(user.getOperators() + " " + user.getManagers() + " " + user.getWorkers());
-//        }
-        return userDTO;
+        return userService.getAllUsers();
     }
 
     //Открытие страницы редактирования пользователя
-    @GetMapping("/{id}/edit")
+    @GetMapping("/{userId}/edit")
     @PreAuthorize("hasRole('ADMIN')")
-    public String editUser(@PathVariable(value = "id")  long id, Model model){
-        model.addAttribute("editUserDto", userService.findById(id));
+    public String editUser(@PathVariable(value = "userId")  long userId, Model model){
+        model.addAttribute("editUserDto", userService.findById(userId));
         model.addAttribute("roles", roleService.getAllRoles());
         model.addAttribute("AllOperators", operatorService.getAllOperators());
         model.addAttribute("AllManagers", managerService.getAllManagers());
         model.addAttribute("AllWorkers", workerService.getAllWorkers());
+        model.addAttribute("AllMarketologs", marketologService.getAllMarketologs());
         model.addAttribute("operatorDTO", new OperatorDTO());
         model.addAttribute("managerDTO", new ManagerDTO());
         model.addAttribute("workerDTO", new WorkerDTO());
-//        for (Operator operator: operatorService.getAllOperators()) {
-//            System.out.println(operator);
-//        }
-        RegistrationUserDTO userDTO = userService.findById(id);
-        System.out.println(userDTO.getManager());
+        model.addAttribute("marketologDTO", new MarketologDTO());
+
+        System.out.println(marketologService.getAllMarketologs());
+
+//        RegistrationUserDTO userDTO = userService.findById(userId);
         return "1.Login_and_Register/editUser";
     }
 
@@ -76,13 +68,14 @@ public class UsersController {
                            @RequestParam String role,
                            @ModelAttribute("operatorDTO") OperatorDTO operatorDTO,
                            @ModelAttribute("managerDTO") ManagerDTO managerDTO,
-                               @ModelAttribute("workerDTO") WorkerDTO workerDTO){
+                           @ModelAttribute("workerDTO") WorkerDTO workerDTO,
+                           @ModelAttribute("marketologDTO") MarketologDTO marketologDTO){
         log.info("0. Валидация на повторный мейл");
         System.out.println(operatorDTO.getOperatorId());
         System.out.println(managerDTO.getManagerId());
         System.out.println(workerDTO.getWorkerId());
         System.out.println("================================================================");
-        System.out.println(userDto.getManager());
+        System.out.println(userDto.getMarketologs());
         System.out.println("================================================================");
 //        userValidation.validate(userDto, bindingResult);
 //        log.info("1. Валидация данных");
@@ -100,7 +93,7 @@ public class UsersController {
         System.out.println(userDto.getRoles());
         System.out.println(role);
         log.info("Начинаем обновлять юзера");
-        userService.updateProfile(userDto, role, operatorDTO, managerDTO, workerDTO);
+        userService.updateProfile(userDto, role, operatorDTO, managerDTO, workerDTO, marketologDTO);
         log.info("Обновление юзера прошло успешно");
         return "redirect:/allUsers";
     }
@@ -131,5 +124,15 @@ public class UsersController {
         log.info("Удаление работника прошло успешно");
         return "redirect:/allUsers";
     }
+    @GetMapping("/delete/marketolog/{username}/{marketologId}")
+    public String deleteMarketologByUser(@PathVariable(name="username") String username, @PathVariable(name="marketologId") Long marketologId){
+        System.out.println(username);
+        System.out.println(marketologId);
+        log.info("Входим в удаление маркетолога");
+        userService.deleteMarketolog(username, marketologId);
+        log.info("Удаление маркетолога прошло успешно");
+        return "redirect:/allUsers";
+    }
+
 
 }

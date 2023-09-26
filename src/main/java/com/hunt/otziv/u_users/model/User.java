@@ -104,6 +104,15 @@ public class User {
     @ToString.Exclude
     private Set<Worker> workers;
 
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "marketologs_users",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "marketolog_id")
+    )
+    @ToString.Exclude
+    private Set<Marketolog> marketologs;
+
     @OneToMany(mappedBy = "user")
     private Set<Company> companies;
 

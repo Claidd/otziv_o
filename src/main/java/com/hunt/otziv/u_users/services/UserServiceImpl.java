@@ -1,19 +1,12 @@
 package com.hunt.otziv.u_users.services;
 
 
-import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.u_users.dto.ManagerDTO;
-import com.hunt.otziv.u_users.dto.OperatorDTO;
-import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
-import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.OperatorService;
-import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.services.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -23,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,14 +27,16 @@ public class UserServiceImpl  implements UserService {
     private final OperatorService operatorService;
     private final ManagerService managerService;
     private final WorkerService workerService;
+    private final MarketologService marketologService;
     private final PasswordEncoder passwordEncoder;
 
-    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, OperatorService operatorService, ManagerService managerService, WorkerService workerService, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, OperatorService operatorService, ManagerService managerService, WorkerService workerService, MarketologService marketologService, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.roleService = roleService;
         this.operatorService = operatorService;
         this.managerService = managerService;
         this.workerService = workerService;
+        this.marketologService = marketologService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -56,15 +50,14 @@ public class UserServiceImpl  implements UserService {
     }
 
 
-    // Метод для секьюрити от имплеменитрованного DetailsUsers
-    @Transactional
+
+    @Transactional // Метод для секьюрити от имплеменитрованного DetailsUsers
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", username)
         ));
         System.out.println(user.getUsername() + user.getPassword()
                 + user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).toList());
-//        return new UserDetailsImpl(user.get());
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
@@ -89,16 +82,6 @@ public class UserServiceImpl  implements UserService {
 
     // Перевод юзера в дто - начало
     private RegistrationUserDTO toDto(User user){
-//        List<SubCategoryDTO> subCategoryDTOList = subCategoryRepository.findAllByCategory(category.getId()).stream()
-//                .map(subCategory -> new SubCategoryDTO(subCategory.getId(), subCategory.getSubCategoryTitle(), null))
-//                .collect(Collectors.toList());
-//        categoryDTO.setSubCategories(subCategoryDTOList);
-        System.out.println(user.getOperators());
-        System.out.println(user.getManagers());
-        System.out.println(user.getWorkers());
-//        for (Operator operator:user.getOperators()) {
-//            System.out.println(operator.getUser());
-//        }
         log.info("Перевод юзера в дто");
         return RegistrationUserDTO.builder()
                 .id(user.getId())
@@ -113,6 +96,7 @@ public class UserServiceImpl  implements UserService {
                 .operators(user.getOperators() == null ? new HashSet<>() : user.getOperators())
                 .managers(user.getManagers() == null ? new HashSet<>() : user.getManagers())
                 .workers(user.getWorkers() == null ? new HashSet<>() : user.getWorkers())
+                .marketologs(user.getMarketologs() == null ? new HashSet<>() : user.getMarketologs())
                 .manager(new Manager())
                 .coefficient(user.getCoefficient())
                 .build();
@@ -131,18 +115,14 @@ public class UserServiceImpl  implements UserService {
         User user = User.builder()
                 .username(userDto.getUsername())
                 .password(passwordEncoder.encode(userDto.getPassword()))
-//                .password(userDto.getPassword())
                 .fio((userDto.getFio()))
                 .email(userDto.getEmail())
-                .phoneNumber(
-                        changeNumberPhone(userDto.getPhoneNumber())
-                )
+                .phoneNumber(changeNumberPhone(userDto.getPhoneNumber()))
                 .roles((List.of(roleService.getUserRole())))
                 .operators(userDto.getOperators())
                 .managers(userDto.getManagers())
                 .workers(userDto.getWorkers())
-//                .managerId(new HashSet<>())
-//                .workerId(new HashSet<>())
+                .marketologs(userDto.getMarketologs())
                 .active(true)
                 .activateCode(UUID.randomUUID().toString())
                 .build();
@@ -188,7 +168,7 @@ public class UserServiceImpl  implements UserService {
     // Обновить профиль юзера - начало
     @Override
     @Transactional
-    public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO) {
+    public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO) {
         log.info("Вошли в обновление");
 
         if (userDTO.getOperators() == null){
@@ -200,44 +180,43 @@ public class UserServiceImpl  implements UserService {
         if (userDTO.getWorkers() == null){
             userDTO.setWorkers(new HashSet<>());
         }
+        if (userDTO.getMarketologs() == null){
+            userDTO.setMarketologs(new HashSet<>());
+        }
 
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         User saveUser = findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", userDTO.getUsername())
-        ));
+                String.format("Пользоваттель '%s' не найден", userDTO.getUsername())));
         log.info("Достали юзера по имени из дто");
         boolean isChanged = false;
 
-        System.out.println(!Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
-        System.out.println(!Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
-        System.out.println(!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
+        System.out.println("change operators: " + !Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
+        System.out.println("change managers: " + !Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
+        System.out.println("change workers: " + !Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
+        System.out.println("change marketologs: " + !Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
         System.out.println("coefficient: " + !Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient()));
-        System.out.println(userDTO.getCoefficient());
-        System.out.println(saveUser.getCoefficient());
-
 
         /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getRoles(), saveUser.getRoles())){
             log.info("Вошли в обновление роли");
             System.out.println(userDTO.getRoles());
             System.out.println(saveUser.getRoles());
-//            saveUser.setRoles(List.of(roleService.getUserRole(role)));
             List<Role> roles = new ArrayList<>();
             roles.add(roleService.getUserRole(role));
             saveUser.setRoles(roles);
             isChanged = true;
             log.info("Обновили роль");
-//            if (role.equals("ROLE_ADMIN")){
-//                return;
-//            }
-            if (role.equals("ROLE_CALLING")){
+            if (role.equals("ROLE_OPERATOR")){
                 log.info("Вошли в удаления из менеджера в операторе");
                 managerService.deleteManager(saveUser);
                 log.info("Вышли из удаления из менеджера");
                 workerService.deleteWorker(saveUser);
                 log.info("Вышли из удаления из работника");
+                marketologService.deleteMarketolog(saveUser);
+                log.info("Вышли из удаления маркетолога в операторе");
                 operatorService.saveNewOperator(saveUser);
                 log.info("Создали нового оператора");
+
             }
             if (role.equals("ROLE_MANAGER")){
                 log.info("Вошли в удаления работника в менеджере");
@@ -246,6 +225,8 @@ public class UserServiceImpl  implements UserService {
                 log.info("Вошли в удаления оператора в менеджере");
                 operatorService.deleteOperator(saveUser);
                 log.info("Вышли из удаления из оператора в менеджере");
+                marketologService.deleteMarketolog(saveUser);
+                log.info("Вышли из удаления маркетолога в менеджере");
                 managerService.saveNewManager(saveUser);
                 log.info("Создали нового менеджера");
             }
@@ -257,24 +238,23 @@ public class UserServiceImpl  implements UserService {
                 operatorService.deleteOperator(saveUser);
                 log.info("Вышли из удаление оператора в работнике");
                 log.info("Переходим в создание нового работника");
+                marketologService.deleteMarketolog(saveUser);
+                log.info("Вышли из удаления маркетолога в работнике");
                 workerService.saveNewWorker(saveUser);
                 log.info("Создали нового работника");
             }
-            if (role.equals("ROLE_CLIENT")){
+            if (role.equals("ROLE_MARKETOLOG")){
                 workerService.deleteWorker(saveUser);
                 log.info("Вышли из удаления из работника");
                 managerService.deleteManager(saveUser);
                 log.info("Вышли из удаления из менеджера");
                 operatorService.deleteOperator(saveUser);
                 log.info("Вышли из удаления из оператора");
+                marketologService.saveNewMarketolog(saveUser);
+                log.info("Создали нового маркетолога");
             }
         }
-        /*Проверяем, не равен ли пароль предыдущему */
-//        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()){
-//            saveUser.setPassword(passwordEncoder.encode(userDTO.getPassword()));
-//            isChanged = true;
-//        }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+
         if (!Objects.equals(userDTO.getEmail(), saveUser.getEmail())){
             saveUser.setEmail(userDTO.getEmail());
             isChanged = true;
@@ -319,6 +299,23 @@ public class UserServiceImpl  implements UserService {
             log.info("Обновили операторов");
         }
 
+        /*Проверяем не равен ли маркетолога предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()) || marketologDTO.getMarketologId() != 0){
+            log.info("зашли в обновление маркетологов");
+            System.out.println(userDTO.getMarketologs()==null);
+            System.out.println(saveUser.getMarketologs()==null);
+            System.out.println(!Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
+            System.out.println(marketologDTO.getMarketologId());
+            System.out.println(marketologDTO.getMarketologId() != 0);
+            System.out.println((userDTO.getMarketologs()==null && marketologDTO.getMarketologId() != 0));
+            log.info("зашли в обновление маркетологов");
+            System.out.println(marketologService.getMarketologById(marketologDTO.getMarketologId()));
+            userDTO.getMarketologs().add(marketologService.getMarketologById(marketologDTO.getMarketologId()));
+            saveUser.setMarketologs(userDTO.getMarketologs());
+            isChanged = true;
+            log.info("Обновили маркетологов");
+        }
+
         /*Проверяем не равен ли менеджера предыдущему, если нет, то меняем флаг на тру*/
         if (Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
             System.out.println(userDTO.getManagers()==null);
@@ -360,14 +357,10 @@ public class UserServiceImpl  implements UserService {
                 saveUser.setManagers(existingManagers); // устанавливаем компании объединенный список
                 //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
             }
-//            userDTO.getManagers().add(managerService.getManagerById(managerDTO.getManagerId()) == null ? managerService.getManagerById(userDTO.getManager().getId()) : managerService.getManagerById(managerDTO.getManagerId()));
-//            System.out.println(userDTO.getManagers());
-//            saveUser.setManagers(userDTO.getManagers());
             isChanged = true;
             log.info("Обновили менеджера");
         }
         /*Проверяем не равен ли специалист предыдущему, если нет, то меняем флаг на тру*/
-
         if (!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()) || workerDTO.getWorkerId() != 0){
             System.out.println(saveUser.getWorkers()==null);
             System.out.println(userDTO.getWorkers()==null);
@@ -383,7 +376,6 @@ public class UserServiceImpl  implements UserService {
             log.info("Обновили специалиста");
         }
 
-//        if (userDTO.getOperators().isEmpty() && userDTO.)
         /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
          * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
         if  (isChanged){
@@ -445,6 +437,22 @@ public class UserServiceImpl  implements UserService {
         workers.remove(workerService.getWorkerById(workerId));
 
         user.setWorkers(workers);
+        log.info("3. Обновили список работников");
+        userRepository.save(user);
+        log.info("4. Сохранили юзера");
+    }
+
+    @Override
+    public void deleteMarketolog(String username, Long marketologId) {
+        log.info("1. Вошли в удаление маркетолога из списка юзера");
+        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользоваттель '%s' не найден", username)
+        ));
+        log.info("2. Нашли юзера");
+        Set<Marketolog> marketologs = user.getMarketologs();
+        marketologs.remove(marketologService.getMarketologById(marketologId));
+
+        user.setMarketologs(marketologs);
         log.info("3. Обновили список работников");
         userRepository.save(user);
         log.info("4. Сохранили юзера");

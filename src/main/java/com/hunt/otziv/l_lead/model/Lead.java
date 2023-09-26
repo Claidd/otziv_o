@@ -2,6 +2,7 @@ package com.hunt.otziv.l_lead.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.*;
@@ -70,9 +71,10 @@ public class Lead {
     @JoinColumn(name = "manager_id")
     private Manager manager;
 
-//    @OneToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "operator", unique = false, nullable = true)
-//    private User operator;
+    @ManyToOne
+    @JoinColumn(name = "marketolog_id")
+    private Marketolog marketolog;
+
     // Геттеры и сеттеры
 
     @PrePersist

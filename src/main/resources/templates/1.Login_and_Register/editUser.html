@@ -70,8 +70,7 @@
             <label for="inputManagers" class="form-label">Менеджер</label> <br>
             <select id="inputManagers" name="managerId" th:field="*{manager.id}"  class="form-control form-select form-select-lg">
                 <option th:unless="${!AllManagers.contains(manager)}" th:value="${manager.id}" th:text="${manager.user.fio}" th:selected="${manager.user.fio != null}"></option>
-                <option th:each="managerAll : ${AllManagers}" th:value="${managerAll.id}" th:text="${managerAll.user.fio}"  th:selected="${managerAll.user.fio == manager.user.fio}"></option>
-                
+                <option th:each="managerAll : ${AllManagers}" th:value="${managerAll.id}" th:text="${managerAll.user.fio}"  th:selected="${managerAll.user.fio == manager.user.fio}"></option>  
             </select>
             <a th:href="@{/allUsers/delete/manager/{username}/{managerId}(username = ${editUserDto.username}, managerId=${manager.id})}">Удалить</a>
         </div>
@@ -79,7 +78,7 @@
             <label for="inputOperators" class="form-label">Оператор</label> <br>
             <select id="inputOperators" name="operatorId" th:field="*{operators}"  class="form-control form-select form-select-lg">
                 <option th:each="operatorAll : ${AllOperators}" th:value="${operatorAll.id}" th:text="${operatorAll.user.fio}"  th:selected="${operatorAll.user.fio == operator.user.fio}"></option>
-                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>-->
+                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>
             </select>
             <a th:href="@{/allUsers/delete/operator/{username}/{operatorId}(username = ${editUserDto.username}, operatorId=${operator.id})}">Удалить</a>
         </div>
@@ -90,6 +89,15 @@
                 <option th:unless="${!AllWorkers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>
             </select>
             <a th:href="@{/allUsers/delete/worker/{username}/{workerId}(username = ${editUserDto.username}, workerId=${worker.id})}">Удалить</a>
+        </div>
+
+        <div class="mb-3" th:each="marketolog : ${editUserDto.getMarketologs()}">
+            <label for="inputMarketolog" class="form-label">Маркетолог</label> <br>
+            <select id="inputMarketolog" name="marketologId" th:field="*{marketologs}"  class="form-control form-select form-select-lg">
+                <option th:each="marketologAll : ${AllMarketologs}" th:value="${marketologAll.id}" th:text="${marketologAll.user.fio}"  th:selected="${marketologAll.user.fio == marketolog.user.fio}"></option>
+                <option th:unless="${!AllMarketologs.contains(marketolog)}" th:value="${marketolog.id}" th:text="${marketolog.user.fio}" th:selected="${marketolog.user.fio != null}"></option>
+            </select>
+            <a th:href="@{/allUsers/delete/marketolog/{username}/{marketologId}(username = ${editUserDto.username}, marketologId=${marketolog.id})}">Удалить</a>
         </div>
         <!--    СПИСКИ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
 
@@ -121,6 +129,14 @@
             <select id="inputAddWorkers" name="workerId" th:field="*{workerId}"  class="form-control form-select form-select-lg">
                 <option value="0">Добавить специалиста</option>
                 <option th:each="workerAll : ${AllWorkers}" th:value="${workerAll.id}" th:text="${workerAll.user.fio}"></option>
+                <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
+            </select>
+        </div>
+        <div class="mb-3" th:object="${marketologDTO}">
+            <label for="inputAddMarketologs" class="form-label">Маркетолог</label> <br>
+            <select id="inputAddMarketologs" name="marketologId" th:field="*{marketologId}"  class="form-control form-select form-select-lg">
+                <option value="0">Добавить маркетолога</option>
+                <option th:each="marketologAll : ${AllMarketologs}" th:value="${marketologAll.id}" th:text="${marketologAll.user.fio}"></option>
                 <!--                <option th:unless="${!AllOperators.contains(operator)}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator.user.fio != null}"></option>&ndash;&gt;-->
             </select>
         </div>

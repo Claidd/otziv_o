@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -23,14 +24,14 @@ import java.util.Map;
 public class EditLeadController {
     private final LeadService leadService;
     private final LeadValidation leadValidation;
-    private final UserService userService;
+    private final MarketologService marketologService;
     private final OperatorService operatorService;
     private final ManagerService managerService;
 
-    public EditLeadController(LeadService leadService, LeadValidation leadValidation, UserService userService, OperatorService operatorService, ManagerService managerService) {
+    public EditLeadController(LeadService leadService, LeadValidation leadValidation, MarketologService marketologService, OperatorService operatorService, ManagerService managerService) {
         this.leadService = leadService;
         this.leadValidation = leadValidation;
-        this.userService = userService;
+        this.marketologService = marketologService;
         this.operatorService = operatorService;
         this.managerService = managerService;
     }
@@ -79,9 +80,10 @@ public class EditLeadController {
         model.addAttribute("editLeadDto", leadService.findById(leadId));
         model.addAttribute("operators", operatorService.getAllOperators());
         model.addAttribute("managers", managerService.getAllManagers());
+        model.addAttribute("marketologs", marketologService.getAllMarketologs());
 //        model.addAttribute("operators", userService.getAllUsersByFio("ROLE_CALLING"));
 //        model.addAttribute("managers", userService.getAllUsersByFio("ROLE_MANAGER"));
-
+        System.out.println(marketologService.getAllMarketologs());
         return "lead/pages/edit_lead";
     }
 
@@ -89,14 +91,7 @@ public class EditLeadController {
     @PostMapping("lead/edit/{leadId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public String editLead(@PathVariable final Long leadId,
-                           @ModelAttribute("editLeadDto") @Valid LeadDTO leadDTO, BindingResult bindingResult
-                           ){
-        System.out.println(leadId);
-        System.out.println(leadDTO.getId());
-        System.out.println(leadDTO.getTelephoneLead());
-        System.out.println(leadDTO.getUpdateStatus());
-        System.out.println(leadDTO.getOperator());
-        System.out.println(leadDTO.getManager());
+                           @ModelAttribute("editLeadDto") @Valid LeadDTO leadDTO, BindingResult bindingResult){
         log.info("0. Валидация на повторный телефон");
         leadValidation.validate(leadDTO, bindingResult);
         log.info("1. Валидация данных");
@@ -148,16 +143,6 @@ public class EditLeadController {
     }
     // меняем статус с напоминание на К рассылке - конец
 
-    // меняем статус с К рассылке на В работе - начало
-//    @PostMapping("lead/status_in_work/{leadId}")
-//    public String changeStatusLeadOnInWork(Model model, @PathVariable final Long leadId,
-//                                         Principal principal){
-//        log.info("вход в меняем статус с К рассылке на В работе");
-//        leadService.changeStatusLeadOnInWork(leadId);
-//        log.info("статус успешно сменен К рассылке на В работе" );
-//        return "redirect:/lead";
-//    }
-    // меняем статус с К рассылке на В работе - конец
 
     // меняем статус с любого на Новый - начало
     @PostMapping("lead/status_lead_new/{leadId}")

@@ -1,6 +1,6 @@
 
 insert into roles (name)
-values ('ROLE_ADMIN'), ('ROLE_CALLING'), ('ROLE_MANAGER'), ('ROLE_WORKER'), ('ROLE_USER'), ('ROLE_CLIENT');
+values ('ROLE_ADMIN'), ('ROLE_OPERATOR'), ('ROLE_MANAGER'), ('ROLE_WORKER'), ('ROLE_MARKETOLOG'), ('ROLE_USER'), ('ROLE_CLIENT');
 
 insert into bots_status (bot_status_title)
 values ('Новый'), ('Средний'), ('Высокий');
@@ -10,6 +10,7 @@ values ('alex', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 
 ('operator', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор Оператор Операторович', '2.12nps2@mail.ru', '89086431056', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('manager', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Менеджер Менджер Менеджерович', '2.12nps3@mail.ru', '89086431057', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('worker', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник Работник Работникович', '2.12nps4@mail.ru', '89086431058', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
+('marketolog', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Маркетолог Маркетолог Маркетологович', '2.12nps10@mail.ru', '89086431064', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('operator2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор2 Оператор Операторович', '2.12nps5@mail.ru', '89086431059', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('operator3', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Оператор3 Оператор Операторович', '2.12nps6@mail.ru', '89086431060', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
 ('worker2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Работник2 Работник Работникович', '2.12nps7@mail.ru', '89086431061', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26'),
@@ -17,7 +18,7 @@ values ('alex', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 
 ('manager2', '$2a$10$IfEDIgjdQ0Ox634r2gBZF.k2ORbI7h85LyS4m7S3qm9aI5AWtGcSG', 'Менеджер2 Менджер Менеджерович', '2.12nps9@mail.ru', '89086431063', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2023-07-26');
 
 insert into users_roles (role_id, user_id)
-values (1,1),(2,2),(3,3),(4,4),(6,5),(6,6),(6,7),(6,8),(6,9);
+values (1,1),(2,2),(3,3),(4,4),(5,5),(7,6),(7,7),(7,8),(7,9),(7,10);
 
 insert into text_promo (promo_text) values ('Здравствуйте'),('Здравствуйте2'),('Здравствуйте3'),('Здравствуйте4'),('Здравствуйте5'),('Здравствуйте6');
 
@@ -33,6 +34,8 @@ insert into managers (user_id)
 values (3);
 insert into workers (user_id)
 values (4);
+insert into marketologs (user_id)
+values (5);
 
 insert into product_categorys (product_category_title)
 values ('Отзывы');

@@ -1,7 +1,5 @@
 package com.hunt.otziv.l_lead.services;
 
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -9,7 +7,9 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
+import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -27,12 +27,16 @@ public class LeadServiceImpl implements LeadService{
     private final UserRepository userRepository;
     private final ManagerService managerService;
     private final OperatorService operatorService;
+    private final MarketologService marketologService;
+    private final ZpService zpService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
         this.operatorService = operatorService;
+        this.marketologService = marketologService;
+        this.zpService = zpService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -47,12 +51,15 @@ public class LeadServiceImpl implements LeadService{
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
-                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : user.getOperators().iterator().next() )
+                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : user.getOperators().iterator().next())
+                .marketolog(marketologService.getMarketologByUserId(user.getId()) != null ? marketologService.getMarketologByUserId(user.getId()) : user.getMarketologs().iterator().next())
                 .manager(user.getManagers().iterator().hasNext() ? user.getManagers().iterator().next() : null)
                 .build();
         log.info("5. Юзер успешно создан");
 //        this.save(user);
-        return leadsRepository.save(lead);
+        Lead lead1 = leadsRepository.save(lead);
+        zpService.saveLeadZp(lead1);
+        return lead1;
     }
     // Создание нового пользователя "Клиент" - конец
     //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
@@ -107,6 +114,14 @@ public class LeadServiceImpl implements LeadService{
             saveLead.setOperator(leadDTO.getOperator());
             isChanged = true;
             log.info("Обновили оператора");
+        }
+        /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(leadDTO.getMarketolog(), saveLead.getMarketolog())){
+            System.out.println(leadDTO.getMarketolog());
+            System.out.println(saveLead.getMarketolog());
+            saveLead.setMarketolog(leadDTO.getMarketolog());
+            isChanged = true;
+            log.info("Обновили маркетолога");
         }
         /*Проверяем не равен ли апдейт менеджера, если нет, то меняем флаг на тру*/
         if (!Objects.equals(leadDTO.getManager(), saveLead.getManager())){
@@ -218,7 +233,7 @@ public class LeadServiceImpl implements LeadService{
         // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
         leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator() : null);
         leadDTO.setManager(lead.getManager() != null ? lead.getManager() : null);
-//        leadDTO.setOperatorId(lead.getOperator() != null ? lead.getOperator().getId() : null);
+        leadDTO.setMarketolog(lead.getMarketolog() != null ? lead.getMarketolog() : null);
         return leadDTO;
     }
     //    =============================== В DTO - КОНЕЦ =========================================
@@ -342,6 +357,7 @@ public class LeadServiceImpl implements LeadService{
                 .dateNewTry(lead.getDateNewTry())
                 .operator(lead.getOperator())
                 .manager(lead.getManager())
+                .marketolog(lead.getMarketolog())
 //                .operatorId(lead.getOperator().getId())
                 .build();
     }

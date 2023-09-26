@@ -8,19 +8,11 @@ create table IF NOT EXISTS users (
     activate_code varchar(255),
     active bit,
     create_time date,
-    operator_id bigint,
-    manager_id bigint,
-    worker_id bigint,
     coefficient numeric(3,2) NOT NULL DEFAULT 0.05,
---    operator_id bigint NULL,
---    manager_id bigint NULL,
---    worker_id bigint NULL,
---    INDEX `operator_id_idx` (`operator_id` ASC),
---    INDEX `manager_id_idx` (`manager_id` ASC),
---    INDEX `worker_id_idx` (`worker_id` ASC),
---    CONSTRAINT operator_fk FOREIGN KEY (operator_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
---    CONSTRAINT manager_fk FOREIGN KEY (manager_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE  CASCADE,
---    CONSTRAINT worker_fk FOREIGN KEY (worker_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE  CASCADE,
+    UNIQUE INDEX email_UNIQUE (email ASC),
+    UNIQUE INDEX phone_number_UNIQUE (phone_number ASC),
+    UNIQUE INDEX username_UNIQUE (username ASC),
+    UNIQUE INDEX id_UNIQUE (id ASC),
     primary key (id)
 )engine=InnoDB;
 
@@ -33,46 +25,55 @@ create table IF NOT EXISTS roles(
 create table IF NOT EXISTS users_roles(
     user_id bigint not null,
     role_id int not null,
-    primary key(user_id, role_id),
-    constraint user_id foreign key (user_id) references users(id) ON delete CASCADE
-    ON update CASCADE,
-    constraint role_id foreign key (role_id) references roles(id) ON delete CASCADE
-    ON update CASCADE
+    constraint user_id foreign key (user_id) references users(id) ON delete CASCADE ON update CASCADE,
+    constraint role_id foreign key (role_id) references roles(id) ON delete CASCADE ON update CASCADE,
+    primary key(user_id, role_id)
 )engine=InnoDB;
 
 create table IF NOT EXISTS operators(
     operator_id  bigint  auto_increment,
---    manager_id bigint,
     user_id bigint unique,
---    CONSTRAINT operators_fk FOREIGN KEY (user_id) REFERENCES users (operator_id) ON UPDATE CASCADE ON DELETE CASCADE,
     primary key (operator_id)
 )engine=InnoDB;
 
 create table IF NOT EXISTS managers(
     manager_id  bigint  auto_increment,
     user_id bigint unique,
---    CONSTRAINT managers_fk FOREIGN KEY (user_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
     primary key (manager_id)
 )engine=InnoDB;
 
 create table IF NOT EXISTS workers(
     worker_id  bigint  auto_increment,
     user_id bigint unique,
-
---    CONSTRAINT workers_fk FOREIGN KEY (user_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE,
     primary key (worker_id)
 )engine=InnoDB;
+
+create table IF NOT EXISTS marketologs(
+    marketolog_id  bigint  auto_increment,
+    user_id bigint unique,
+    primary key (marketolog_id)
+)engine=InnoDB;
+
+CREATE TABLE IF NOT EXISTS marketologs_users (
+  marketolog_id bigint not null,
+  user_id bigint not null,
+  INDEX user_marketolog_id_idx (user_id ASC),
+  INDEX marketolog_user_id_idx (marketolog_id ASC),
+  CONSTRAINT marketolog_user_id_fk
+    FOREIGN KEY (user_id) REFERENCES users (id) ON delete CASCADE ON update CASCADE,
+  CONSTRAINT marketolog_id_fk
+    FOREIGN KEY (marketolog_id) REFERENCES marketologs (marketolog_id) ON delete CASCADE ON update CASCADE
+    )ENGINE = InnoDB;
 
 CREATE TABLE IF NOT EXISTS operators_users (
   operator_id bigint not null,
   user_id bigint not null,
-  INDEX user_id_idx (user_id ASC) ,
-  INDEX operator_id_idx (operator_id ASC) ,
-  CONSTRAINT user_id_fk
+  INDEX user_id_idx (user_id ASC),
+  INDEX operator_user_id_idx (operator_id ASC),
+  CONSTRAINT operator_user_id_fk
     FOREIGN KEY (user_id) REFERENCES users (id) ON delete CASCADE ON update CASCADE,
   CONSTRAINT operator_id_fk
     FOREIGN KEY (operator_id) REFERENCES operators (operator_id) ON delete CASCADE ON update CASCADE
---    UNIQUE INDEX operator_UNIQUE (operator_id ASC)
     )ENGINE = InnoDB;
 
     CREATE TABLE IF NOT EXISTS managers_users (
@@ -84,23 +85,21 @@ CREATE TABLE IF NOT EXISTS operators_users (
     FOREIGN KEY (user_id) REFERENCES users (id) ON delete CASCADE ON update CASCADE,
   CONSTRAINT manager_id_fk
     FOREIGN KEY (manager_id) REFERENCES managers (manager_id) ON delete CASCADE ON update CASCADE
---    UNIQUE INDEX manager_UNIQUE (manager_id ASC)
     )ENGINE = InnoDB;
 
     CREATE TABLE IF NOT EXISTS workers_users (
   worker_id bigint not null,
   user_id bigint not null,
-  INDEX worker_user_id_idx (user_id ASC) ,
-  INDEX worker_id_idx (worker_id ASC) ,
+  INDEX worker_user_id_idx (user_id ASC),
+  INDEX worker_id_idx (worker_id ASC),
   CONSTRAINT worker_user_id_fk
     FOREIGN KEY (user_id) REFERENCES users (id) ON delete CASCADE ON update CASCADE,
   CONSTRAINT worker_id_fk
     FOREIGN KEY (worker_id) REFERENCES workers (worker_id) ON delete CASCADE ON update CASCADE
---    UNIQUE INDEX worker_UNIQUE (worker_id ASC)
     )ENGINE = InnoDB;
 
 
-create TABLE IF NOT EXISTS leads (
+CREATE TABLE IF NOT EXISTS leads (
     id bigint not null auto_increment,
     telephone_lead VARCHAR(20) not null unique,
     city_lead VARCHAR(50) not null,
@@ -111,6 +110,7 @@ create TABLE IF NOT EXISTS leads (
     date_new_try DATE,
     operator_id bigint null,
     manager_id bigint null,
+    marketolog_id bigint NULL,
     CONSTRAINT fk_operator
         FOREIGN KEY (operator_id)
         REFERENCES operators (operator_id)
@@ -121,17 +121,21 @@ create TABLE IF NOT EXISTS leads (
         REFERENCES managers (manager_id)
         ON DELETE CASCADE
         ON UPDATE CASCADE,
-         primary key (id)) ENGINE=InnoDB;
+    CONSTRAINT fk_marketolog
+        FOREIGN KEY (marketolog_id)
+        REFERENCES marketologs (marketolog_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    primary key (id)
+) ENGINE=InnoDB;
 
-
-
-create TABLE IF NOT EXISTS bots_status (
+CREATE TABLE IF NOT EXISTS bots_status (
   bot_status_id BIGINT NOT NULL AUTO_INCREMENT,
   bot_status_title varchar(255) NULL,
-  PRIMARY KEY (bot_status_id))
-ENGINE = InnoDB;
+  PRIMARY KEY (bot_status_id)
+) ENGINE=InnoDB;
 
-create TABLE IF NOT EXISTS bots (
+CREATE TABLE IF NOT EXISTS bots (
   bot_id BIGINT NOT NULL AUTO_INCREMENT,
   bot_login VARCHAR(45) NULL,
   bot_password VARCHAR(255) NULL,
@@ -140,18 +144,19 @@ create TABLE IF NOT EXISTS bots (
   bot_active BIT(1) NULL,
   bot_status BIGINT NULL,
   bot_worker BIGINT NULL,
+  INDEX bot_status_idx (bot_status ASC),
   CONSTRAINT bot_status
     FOREIGN KEY (bot_status)
     REFERENCES bots_status (bot_status_id)
     ON delete NO ACTION
     ON update CASCADE,
-    CONSTRAINT fk_bot_worker
+  CONSTRAINT fk_bot_worker
     FOREIGN KEY (bot_worker)
     REFERENCES workers (worker_id)
     ON delete SET NULL
     ON update CASCADE,
-    PRIMARY KEY (bot_id))
-ENGINE = InnoDB;
+  PRIMARY KEY (bot_id)
+) ENGINE=InnoDB;
 
 create TABLE IF NOT EXISTS text_promo (
     id bigint auto_increment,

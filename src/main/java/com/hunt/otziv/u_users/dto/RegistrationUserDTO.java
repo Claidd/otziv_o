@@ -39,6 +39,7 @@ public class RegistrationUserDTO {
     private Set<Operator> operators;
     private Set<Manager> managers;
     private Set<Worker> workers;
+    private Set<Marketolog> marketologs;
     private BigDecimal coefficient;
 
 

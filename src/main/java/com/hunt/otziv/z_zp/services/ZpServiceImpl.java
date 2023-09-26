@@ -1,5 +1,6 @@
 package com.hunt.otziv.z_zp.services;
 
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.model.Zp;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +30,18 @@ public class ZpServiceImpl implements ZpService{
         try {
             saveZpManager(order);
             saveZpWorker(order);
+            return true;
+        }
+        catch (Exception e){
+            return false;
+        }
+    }
+
+    @Transactional
+    public boolean saveLeadZp(Lead lead){
+        try {
+            saveZpMarketolog(lead);
+            saveZpOperator(lead);
             return true;
         }
         catch (Exception e){
@@ -58,6 +72,30 @@ public class ZpServiceImpl implements ZpService{
         workerZp.setProfessionId(order.getWorker().getId());
         workerZp.setActive(true);
         zpRepository.save(workerZp);
+    }
+
+    @Transactional
+    private void saveZpMarketolog(Lead lead){
+        Zp marketologZp = new Zp();
+        marketologZp.setFio(lead.getMarketolog().getUser().getFio());
+        marketologZp.setSum(new BigDecimal("1000.00").multiply(lead.getMarketolog().getUser().getCoefficient()));
+        marketologZp.setUserId(lead.getMarketolog().getUser().getId());
+        marketologZp.setOrderId(0L);
+        marketologZp.setProfessionId(lead.getMarketolog().getId());
+        marketologZp.setActive(true);
+        zpRepository.save(marketologZp);
+    }
+
+    @Transactional
+    private void saveZpOperator(Lead lead){
+        Zp operatorZp = new Zp();
+        operatorZp.setFio(lead.getOperator().getUser().getFio());
+        operatorZp.setSum(new BigDecimal("1000.00").multiply(lead.getOperator().getUser().getCoefficient()));
+        operatorZp.setUserId(lead.getOperator().getUser().getId());
+        operatorZp.setProfessionId(lead.getOperator().getId());
+        operatorZp.setOrderId(0L);
+        operatorZp.setActive(true);
+        zpRepository.save(operatorZp);
     }
 
     private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO
