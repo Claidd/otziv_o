@@ -38,12 +38,12 @@
                         </form>
                         <div class="company__card__text__lead"> <!-- Bot Login -->
                             <label>
-                                <textarea style="display: none;" class="company__card__remember-text" th:utext="${review.bot.login}" th:id="'botLogin_' + ${review.id}"></textarea>
+                                <textarea  class="company__card__remember-text" th:utext="${review.bot.login}" th:id="'botLogin_' + ${review.id}"></textarea>
                             </label>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotLogin(' + ${review.id} + ')'" >логин</button>
                         </div>
                         <div class="company__card__text__lead"> <!-- Bot Password -->
-                            <textarea style="display: none;" class="company__card__remember-text" th:utext="${review.bot.password}" th:id="'botPassword_' + ${review.id}"></textarea>
+                            <textarea  class="company__card__remember-text" th:utext="${review.bot.password}" th:id="'botPassword_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
                         </div>
                         <form class="company__card__text__lead" target="_blank" th:action="@{${review.filial.url}}">
@@ -53,13 +53,13 @@
                     </div> <!-- card__content_button -->
                     <div class="company__card__content_button">
                         <div class="company__card__text__lead"> <!-- Review Text -->
-                            <textarea style="display: none;" class="company__card__remember-text" th:utext="${review.text}" th:id="'ReviewText_' + ${review.id}"></textarea>
+                            <textarea  class="company__card__remember-text" th:utext="${review.text}" th:id="'ReviewText_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewText(' + ${review.id} + ')'" >отзыв</button>
                         </div>
                         <div class="company__card__text__lead"> <!-- Review Text -->
-                            <textarea style="display: none;" class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>
+                            <textarea  class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewAnswer(' + ${review.id} + ')'" >ответ</button>
-                        </div>
+                        </div>   
                         <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.orderDetails.order.company.id} + '/' + ${review.orderDetails.order.id} + '/change_bot/' + ${review.id}}">
                             <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                             <input style="display: none;" class="company__card_remember-search__text" type="text" value="Заказ_Отзыв" name="pageName" id="pageName">
@@ -88,6 +88,7 @@
             <!-- СПИСОК КАРТОЧЕК 1 -->
 
             <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+            <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>
 

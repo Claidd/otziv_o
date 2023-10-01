@@ -266,7 +266,7 @@ public class OrderServiceImpl implements OrderService {
                 log.info("1. Вошли в смену статуса в оплачено");
                 Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
                 System.out.println("orderIsComplete: " + !order.isComplete());
-                System.out.println("order.getAmount() == order.getCounter(): " + Objects.equals(order.getAmount(), order.getCounter()));
+                System.out.println("order.getAmount() <= order.getCounter(): " + Objects.equals(order.getAmount(), order.getCounter()));
 
                 if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
                     log.info("2. Проверили, что заказ еще не бьл выполнен");

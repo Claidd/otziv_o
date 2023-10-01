@@ -76,6 +76,37 @@ $(document).ready(function(){
     alert("Copied the text: " + copyText4.value);
   }
 
+  function checkAndUrl(button) {
+    var orderId = button.getAttribute("data-orderid");
+    var checkAndUrl = document.getElementById("checkAndUrl");
+    // Получить текущее значение текстовой области
+    var currentText = checkAndUrl.value;
+    // Создать новую строку с добавленным orderId
+    var newText = currentText + orderId;
+    // Установить новое значение в текстовой области
+    checkAndUrl.value = newText;
+    // Выделить и скопировать текст
+    checkAndUrl.select();
+    document.execCommand("copy");
+    // Оповестить пользователя
+    alert("Copied the text: " + newText);
+    checkAndUrl.value = currentText;
+}
+
+function onPayment(button) {
+  var onPayment = document.getElementById("onPayment");
+  var sum = button.getAttribute("data-sum");
+  var currentText = onPayment.value;
+    // Создать новую строку с добавленным orderId
+  var newText = currentText + sum + ' руб.';
+    // Установить новое значение в текстовой области
+  onPayment.value = newText;
+  onPayment.select();
+  document.execCommand("copy");
+  alert("Copied the text: " + newText);
+  onPayment.value = currentText;
+}
+
   // <!-- ==================== COPY TEXT ====================== -->
 
 

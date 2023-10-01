@@ -52,9 +52,10 @@ public class OrderController {
     } // Переход на страницу заказа продукта для нового Заказа
 
     @PostMapping ("/{companyID}/{id}") // Пост запрос на создание нового заказа и редирект на оформление нового заказа
-    String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, @PathVariable Long id, Model model){
+    String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, RedirectAttributes rm, @PathVariable Long id, Model model){
         orderService.createNewOrderWithReviews(companyID, id, orderDTO);
-        return "redirect:/companies/allCompany";
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/companies/new_company";
     } // Пост запрос на создание нового заказа и редирект на оформление нового заказа
 
 //    ======================================== ПРОСМОТР И СОЗДАНИЕ ЗАКАЗОВ =============================================

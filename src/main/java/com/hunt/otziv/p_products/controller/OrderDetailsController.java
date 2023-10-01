@@ -80,13 +80,26 @@ public class OrderDetailsController {
         if(orderService.changeStatusAndOrderCounter(reviewId)){
             log.info("8. Все прошло успешно, вернулись в контроллер");
             rm.addFlashAttribute("saveSuccess", "true");
-//            checkOrderOnPublishedAll(orderId);
         }
         else {
             log.info("8. Все прошло плохо, вернулись в контроллер");
 //            rm.addFlashAttribute("saveSuccess", "false");
         }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+    }
+
+    @PostMapping("/{companyId}/{orderId}/published_to_worker/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
+    public String publishReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
+        log.info("1. Заходим в Post метод Изменение статуса");
+        if(orderService.changeStatusAndOrderCounter(reviewId)){
+            log.info("8. Все прошло успешно, вернулись в контроллер");
+            rm.addFlashAttribute("saveSuccess", "true");
+        }
+        else {
+            log.info("8. Все прошло плохо, вернулись в контроллер");
+//            rm.addFlashAttribute("saveSuccess", "false");
+        }
+        return "redirect:/worker/publish";
     }
 
 

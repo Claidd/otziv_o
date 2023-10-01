@@ -15,6 +15,7 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.util.Map;
@@ -52,7 +53,7 @@ public class EditLeadController {
 
     //Пост запрос на несение нового лида, его валидация и сохранение в БД.
     @PostMapping("lead/new_lead")
-    public String createLead(Model model, @ModelAttribute("newLead") @Valid LeadDTO leadDTO, BindingResult bindingResult,
+    public String createLead(Model model, RedirectAttributes rm, @ModelAttribute("newLead") @Valid LeadDTO leadDTO, BindingResult bindingResult,
                              Principal principal){
         log.info("0. Валидация на повторный мейл");
         leadValidation.validate(leadDTO, bindingResult);
@@ -66,10 +67,12 @@ public class EditLeadController {
         log.info("2.Передаем дто в сервис");
         if (leadService.save(leadDTO, principal.getName()) == null) {
             model.addAttribute("newLead", leadDTO);
-            return "/lead/new_lead";
+
+        } else {
+            log.info("6. Возвращаем вью");
+            rm.addFlashAttribute("saveSuccess", "true");
         }
-        log.info("6. Возвращаем вью");
-        return "redirect:/lead";
+        return "redirect:/lead/new_lead";
     }
     // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - КОНЕЦ  ===============================
 

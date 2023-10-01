@@ -41,7 +41,7 @@ insert into product_categorys (product_category_title)
 values ('Отзывы');
 
 insert into bots(bot_login, bot_password, bot_fio, bot_counter, bot_active, bot_status, bot_worker)
-values ('89086431055', 'pass', 'Ботовский Бот Ботович', 0, 1, 1,1), ('89086431056', 'pass', 'Ботовский Бот Ботович 2', 0, 1, 1,1);
+values ('89086431055', 'pass', 'Ботовский Бот Ботович', 0, 1, 1,1), ('89086431056', 'pass', 'Ботовский Бот Ботович 2', 0, 1, 1,1), ('89086431058', 'pass', 'Ботовский Бот Ботович 3', 0, 1, 1,1);
 
 insert into amounts (amount)
 values (5),(10),(15),(20),(25),(30);

@@ -21,6 +21,12 @@
         <div class="container">
             <h2 class="section-title contacts__title">Новый Лид2</h2>
             <p class="contact__text">Введите данные об новом отклике в форму ниже</p>
+
+            <div class="mb-3" th:if="${saveSuccess}">
+                <div class="alert alert-success">
+                    Данные успешно изменены и сохранены.
+                </div>
+            </div>
             <form th:action="@{/lead/new_lead}" method="post" class="form" th:object="${newLead}">
                 <!--        ввод номера телефона        -->
                 <input type="text" class="form__input" th:field="*{telephoneLead}" placeholder="Номер телефона">
@@ -39,6 +45,8 @@
     </section> <!-- section -->
 
 <!-- ===================== LEADS END ======================== -->
+
+<th:block th:insert="~{fragments/common :: js_company}"></th:block>
 
 </th:block>
 

@@ -94,17 +94,17 @@
                 <!-- КНОПКИ 1 -->
                 <div class="company__card__content_button"> <!-- card__content_button -->
                     <div class="company__card__text__lead">
-                        <textarea style="display: none;" class="company__card__remember-text" th:utext="${promoTexts[0]} + ' Ссылка на проверку отзывов: ' + 'http://localhost:8080/review/editReviews/' + ${order.id} " id="myInput1"></textarea>
-                        <button class="company__card__text__lead-button" onclick="myFunction1()">текст+url</button>
-                </div>
+                        <textarea class="company__card__remember-text" th:utext="${promoTexts[0]} + ' Ссылка на проверку отзывов: ' + 'http://localhost:8080/review/editReviews/'" id="checkAndUrl"></textarea>
+                        <button class="company__card__text__lead-button" th:attr="data-orderid=${order.id}" onclick="checkAndUrl(this)">текст+url</button>
+                    </div>
                     <form class="company__card__text__lead" th:method="get" th:action="'/review/editReviews/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">url</button>
                     </form>
                     <div class="company__card__text__lead">
-                        <textarea style="display: none;" class="company__card__remember-text" th:utext="${promoTexts[1]} + ' К олате: ' + ${order.sum} + ' руб.'" id="myInput2"></textarea>
-                        <button class="company__card__text__lead-button" onclick="myFunction2()">счет</button>
-                </div>
+                        <textarea  class="company__card__remember-text" th:utext="${promoTexts[1]} + ' К оплате: '" id="onPayment"></textarea>
+                        <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}" onclick="onPayment(this)">счет</button>
+                    </div>
                     <form class="company__card__text__lead" target="_blank" th:action="@{${order.filial.url}}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit"  class="company__card__text__lead-button ">ссылка</button> 
@@ -190,5 +190,6 @@
 </div> <!-- tabs -->
 
             <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+            <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>
