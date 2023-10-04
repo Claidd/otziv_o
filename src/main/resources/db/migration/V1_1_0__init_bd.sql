@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS otziv;
+
 create table IF NOT EXISTS users (
     id bigint auto_increment,
     username varchar(30) not null unique,
@@ -192,6 +194,7 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_phone VARCHAR(12) NULL,
       company_city VARCHAR(45) NULL,
       company_title VARCHAR(45) NOT NULL,
+      company_url_chat VARCHAR(500) NOT NULL,
       company_email VARCHAR(45) NULL,
       company_status bigint NULL,
       company_category bigint NULL,

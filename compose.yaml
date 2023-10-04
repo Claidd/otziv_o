@@ -3,8 +3,20 @@ services:
     image: 'mysql:latest'
     environment:
       - 'MYSQL_DATABASE=mydatabase'
-      - 'MYSQL_PASSWORD=secret'
-      - 'MYSQL_ROOT_PASSWORD=verysecret'
-      - 'MYSQL_USER=myuser'
+      - 'MYSQL_PASSWORD=545321'
+      - 'MYSQL_ROOT_PASSWORD=root_password'
+      - 'MYSQL_USER=hunt'
+    restart: 'always'
     ports:
       - '3306'
+  adminer:
+    image: 'adminer'
+    restart: 'always'
+    ports:
+        - '8080:8080'
+
+
+  api:
+    build: './api'
+    depends_on:
+      - 'mysql'

@@ -42,6 +42,9 @@ public class Company {
     @Column(name = "company_city", length = 50, nullable = false)
     private String city;
 
+    @Column(name = "company_url_chat", length = 500, nullable = false)
+    private String urlChat;
+
 //    //    город по которому шла рассылка
 //    @Column(name = "company_url", length = 50, nullable = false)
 //    private String url;

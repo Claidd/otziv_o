@@ -32,6 +32,9 @@ public class CompanyDTO {
     //    название компании
     private String title;
 
+    //    ссылка на чат
+    private String urlChat;
+
     //    телефон нового компании
     private String telephone;
 

@@ -31,13 +31,18 @@
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
-                                Новый лид
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                                Лиды
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
-                                Лиды
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                                Оператор
+                            </a>
+                        </li>
+                        <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/marketolog/operator_list}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                                Маркетолог
                             </a>
                         </li>
                         <li class="mev__item">
@@ -50,7 +55,6 @@
                                 Специалист
                             </a>
                         </li>
-
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/bots}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Боты

@@ -13,11 +13,11 @@ spring:
     show-sql: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-#    org.postgresql.Driver
-#    com.mysql.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/otziv
-#    jdbc:postgresql://localhost:5432/otziv
-#    jdbc:mysql://localhost:3308/otziv_o
+
+#    url: jdbc:mysql://127.0.0.1:3306/otziv
+#    url: jdbc:mysql://localhost:3306/otziv
+    url: jdbc:mysql://mydatabase:3306/otziv
+
     username: hunt
     password: 545321
   flyway:
