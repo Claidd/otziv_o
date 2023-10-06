@@ -458,6 +458,7 @@ public class OrderServiceImpl implements OrderService {
                 .id(company.getId())
                 .title(company.getTitle())
                 .telephone(company.getTelephone())
+                .urlChat(company.getUrlChat())
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
                 .filials(convertToFilialDTOList(company.getFilial()))

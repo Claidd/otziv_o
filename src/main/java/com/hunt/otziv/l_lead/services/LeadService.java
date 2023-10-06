@@ -4,6 +4,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,12 +24,12 @@ public interface LeadService {
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
     // метод вывода всех лидов
-    List<LeadDTO> getAllLeads(String status, String keyword);
+    List<LeadDTO> getAllLeads(String status, String keyword, Principal principal);
     // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
-    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords);
+    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal);
     // метод поиска одного лида по id и перевод его в дто
 
-    List<LeadDTO> getAllLeadsNoStatus(String keywords);
+    List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================

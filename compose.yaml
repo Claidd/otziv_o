@@ -1,22 +1,90 @@
+version: '3'
 services:
-  mysql:
-    image: 'mysql:latest'
-    environment:
-      - 'MYSQL_DATABASE=mydatabase'
-      - 'MYSQL_PASSWORD=545321'
-      - 'MYSQL_ROOT_PASSWORD=root_password'
-      - 'MYSQL_USER=hunt'
-    restart: 'always'
+
+  app:
+    build: .
     ports:
-      - '3306'
-  adminer:
-    image: 'adminer'
-    restart: 'always'
-    ports:
-        - '8080:8080'
+      - "8080:8080"
+    restart: always
 
 
-  api:
-    build: './api'
-    depends_on:
-      - 'mysql'
+
+
+#    network_mode: "host"
+
+#networks:
+#  mynetwork:
+#    driver: host
+
+
+
+#  mysql:
+#    image: mysql:8.0
+#    environment:
+#      MYSQL_ROOT_PASSWORD: password
+#      MYSQL_DATABASE: otziv
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#    networks:
+#      - mynetwork
+#    ports:
+#      - '3306:3306'
+
+#
+#volumes:
+#  mysql_data:
+
+
+
+#networks:
+#  mynetwork:
+#    driver: bridge
+
+
+
+
+
+
+
+
+
+#services:
+#  mysql:
+#    image: mysql:latest
+#    environment:
+#      - MYSQL_DATABASE=otziv
+#      - MYSQL_PASSWORD=545321
+#      - MYSQL_ROOT_PASSWORD=root_password
+#      - MYSQL_USER=hunt
+#    restart: always
+#    ports:
+#      - '3306'
+#  adminer:
+#    image: adminer
+#    restart: always
+#    ports:
+#        - '8080:8080'
+#  api:
+#    build: .
+#    depends_on:
+#      - mysql
+#    environment:
+#      SPRING_PROFILES_ACTIVE: application-server
+#      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#      DB_USER: root
+#      DB_PASSWORD: password
+
+
+#      - SPRING_PROFILES_ACTIVE=production
+#      - SERVER_PORT=8080
+#      - JWT_SECRET=SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+#      - JWT_LIFETIME=5m
+#      - SPRING_DATASOURCE_DRIVER-CLASS-NAME=com.mysql.cj.jdbc.Driver
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/otziv
+#      - SPRING_DATASOURCE_USERNAME=hunt
+#      - SPRING_DATASOURCE_PASSWORD=545321
+#      - SPRING_JPA_HIBERNATE_DDL-AUTO=validate
+#      - SPRING_JPA_SHOW-SQL=true
+#      - FLYWAY_BASELINE-ON-MIGRATE=true
+#    ports:
+#      - "8080:8080"

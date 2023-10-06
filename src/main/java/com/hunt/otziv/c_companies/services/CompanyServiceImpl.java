@@ -136,6 +136,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .title(companyDTO.getTitle())
                 .telephone(companyDTO.getTelephone())
                 .city(companyDTO.getCity())
+                .urlChat(companyDTO.getUrlChat())
                 .email(companyDTO.getEmail())
                 .user(convertUserDTOToUser(companyDTO.getUser()))
                 .operator(companyDTO.getOperator())
@@ -207,6 +208,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setTitle(company.getTitle());
             companyDTO.setTelephone(company.getTelephone());
             companyDTO.setCity(company.getCity());
+            companyDTO.setUrlChat(company.getUrlChat());
             companyDTO.setEmail(company.getEmail());
             companyDTO.setOperator(company.getOperator());
             companyDTO.setCounterNoPay(company.getCounterNoPay());
@@ -430,6 +432,7 @@ public class CompanyServiceImpl implements CompanyService{
         System.out.println("title: " + !Objects.equals(companyDTO.getTitle(), saveCompany.getTitle()));
         System.out.println("telephone: " + !Objects.equals(changeNumberPhone(companyDTO.getTelephone()), changeNumberPhone(saveCompany.getTelephone())));
         System.out.println("city: " + !Objects.equals(companyDTO.getCity(), saveCompany.getCity()));
+        System.out.println("urlChat: " + !Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat()));
         System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
         System.out.println("active: " + !Objects.equals(companyDTO.isActive(), saveCompany.isActive()));
         System.out.println("comments: " +  !Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany()));
@@ -453,6 +456,11 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.getCity(), saveCompany.getCity())){ /*Проверка смены города*/
             log.info("Обновляем город");
             saveCompany.setCity(companyDTO.getCity());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat())){ /*Проверка смены ссылки на чат*/
+            log.info("Обновляем ссылку на чат");
+            saveCompany.setUrlChat(companyDTO.getUrlChat());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getEmail(), saveCompany.getEmail())){ /*Проверка смены мейл*/

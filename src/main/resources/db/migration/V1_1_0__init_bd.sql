@@ -1,4 +1,3 @@
-CREATE DATABASE IF NOT EXISTS otziv;
 
 create table IF NOT EXISTS users (
     id bigint auto_increment,
@@ -272,7 +271,7 @@ CREATE TABLE IF NOT EXISTS filial (
   PRIMARY KEY (filial_id))
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`product_categorys` (
+CREATE TABLE IF NOT EXISTS product_categorys (
   `product_category_id` bigint NOT NULL AUTO_INCREMENT,
   `product_category_title` VARCHAR(70) NULL,
   PRIMARY KEY (`product_category_id`))
@@ -295,13 +294,13 @@ ENGINE = InnoDB;
 
 
 
-CREATE TABLE IF NOT EXISTS `otziv`.`order_statuses` (
+CREATE TABLE IF NOT EXISTS order_statuses (
   `order_status_id` bigint NOT NULL AUTO_INCREMENT,
   `order_status_title` VARCHAR(45) NULL,
   PRIMARY KEY (`order_status_id`))
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
+CREATE TABLE IF NOT EXISTS orders (
   `order_id` bigint NOT NULL AUTO_INCREMENT,
   `order_created` DATE NULL,
   `order_changed` DATE NULL,
@@ -347,7 +346,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`orders` (
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`order_details` (
+CREATE TABLE IF NOT EXISTS order_details (
   `order_detail_id` bigint NOT NULL AUTO_INCREMENT,
   `order_detail_order` bigint NULL,
   `order_detail_product` bigint NULL,
@@ -370,7 +369,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`order_details` (
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
+CREATE TABLE IF NOT EXISTS reviews (
   `review_id` bigint NOT NULL AUTO_INCREMENT,
   `review_text` VARCHAR(5000) NULL,
   `review_category` bigint NULL,
@@ -423,7 +422,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews` (
 ENGINE = InnoDB;
 
 
-CREATE TABLE IF NOT EXISTS `otziv`.`reviews_archive` (
+CREATE TABLE IF NOT EXISTS reviews_archive (
   `review_archive_id` bigint NOT NULL AUTO_INCREMENT,
   `review_archive_text` VARCHAR(5000) NULL,
   `review_archive_category` bigint NULL,
@@ -444,13 +443,13 @@ CREATE TABLE IF NOT EXISTS `otziv`.`reviews_archive` (
     ON UPDATE CASCADE)
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`amounts` (
+CREATE TABLE IF NOT EXISTS amounts (
   `amount_id` bigint NOT NULL AUTO_INCREMENT,
   `amount` INT NULL,
   PRIMARY KEY (`amount_id`))
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`zp` (
+CREATE TABLE IF NOT EXISTS zp (
   `zp_id` bigint NOT NULL AUTO_INCREMENT,
   `zp_fio` VARCHAR(100) NOT NULL,
   `zp_sum` numeric(10,2) NULL,
@@ -462,7 +461,7 @@ CREATE TABLE IF NOT EXISTS `otziv`.`zp` (
   PRIMARY KEY (`zp_id`))
 ENGINE = InnoDB;
 
-CREATE TABLE IF NOT EXISTS `otziv`.`payment_check` (
+CREATE TABLE IF NOT EXISTS payment_check (
   `check_id` bigint NOT NULL AUTO_INCREMENT,
   `check_title` VARCHAR(100) NOT NULL,
   `check_company` bigint NOT NULL,

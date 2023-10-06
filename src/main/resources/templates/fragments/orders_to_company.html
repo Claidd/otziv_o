@@ -85,7 +85,7 @@
                 </div>
 
                 <div class="company__card__content__phone"> <!-- Телефон + ссылка в WhatsApp -->
-                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${order.company.telephone}">
+                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${order.company.urlChat}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button " th:text="${order.company.telephone}">в архив</button>
                     </form>

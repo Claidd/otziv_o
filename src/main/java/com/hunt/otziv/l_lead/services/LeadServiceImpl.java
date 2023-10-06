@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -9,12 +11,17 @@ import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,20 +36,22 @@ public class LeadServiceImpl implements LeadService{
     private final OperatorService operatorService;
     private final MarketologService marketologService;
     private final ZpService zpService;
+    private final UserService userService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
         this.operatorService = operatorService;
         this.marketologService = marketologService;
         this.zpService = zpService;
+        this.userService = userService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
     // Создание нового пользователя "Лида" - начало
     public Lead save(LeadDTO leadDTO, String username){
-        log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
+        log.info("3. Заходим в создание нового лида и проверяем совпадение паролей");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", username)
         ));
@@ -155,20 +164,60 @@ public class LeadServiceImpl implements LeadService{
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - НАЧАЛО =========================================
     // Взять всех юзеров - начало
     @Override
-    public List<LeadDTO> getAllLeads(String status, String keywords) {
-        log.info("Берем все юзеров");
-        if (!keywords.isEmpty()){
-            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+    public List<LeadDTO> getAllLeads(String status, String keywords, Principal principal) {
+        log.info("Берем все лиды");
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех заказов для админа");
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                        .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByLidStatus(status).stream()
                     .map(this::toDto)
                     .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
-                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
                     .collect(Collectors.toList());
         }
-        else return leadsRepository.findAllByLidStatus(status).stream()
-                .map(this::toDto)
-                .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
-                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
-                .collect(Collectors.toList());
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                        .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByLidStatusAndManager(status, manager).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
+                    .collect(Collectors.toList());
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)){
+            log.info("Зашли список всех заказов для Маркетолога");
+            Marketolog marketolog = marketologService.getMarketologById(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                        .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate).reversed())
+                    .collect(Collectors.toList());
+        }
+        else {
+           return new ArrayList<LeadDTO>();
+        }
     }
     // Взять всех юзеров - конец
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
@@ -176,20 +225,42 @@ public class LeadServiceImpl implements LeadService{
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ ПО ДАТЕ В НАПОМИНАНИИ - НАЧАЛО =========================================
     // Взять всех юзеров - начало
     @Override
-    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords) {
-        log.info("Берем все юзеров");
-        if (!keywords.isEmpty()){
-            return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal) {
+        log.info("Берем все лиды");
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех заказов для админа");
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+                        .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByLidStatus(status).stream()
                     .map(this::toDto)
                     .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
                     .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
                     .collect(Collectors.toList());
         }
-        else return leadsRepository.findAllByLidStatus(status).stream()
-                .map(this::toDto)
-                .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
-                .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
-                .collect(Collectors.toList());
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для менеджера");
+            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+                        .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByLidStatusAndManager(status, manager).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+                    .collect(Collectors.toList());
+        }
+        return new ArrayList<LeadDTO>();
     }
     // Взять всех юзеров - конец
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
@@ -197,22 +268,53 @@ public class LeadServiceImpl implements LeadService{
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ БЕЗ СТАТУСА - НАЧАЛО =========================================
     // Взять всех юзеров - начало
     @Override
-    public List<LeadDTO> getAllLeadsNoStatus(String keywords) {
-        log.info("Берем все юзеров");
-        if (!keywords.isEmpty()){
-            return leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords).stream()
+    public List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal) {
+        log.info("Берем все лиды");
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех заказов для админа");
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                        .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAll().stream()
                     .map(this::toDto)
                     .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
                     .sorted(Comparator.comparing(LeadDTO::getCreateDate))
                     .collect(Collectors.toList());
         }
-        else return leadsRepository.findAll().stream()
-                .map(this::toDto)
-                .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
-                .sorted(Comparator.comparing(LeadDTO::getCreateDate))
-                .collect(Collectors.toList());
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для менеджера");
+            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+                return leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager).stream()
+                        .map(this::toDto)
+                        .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                        .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                        .collect(Collectors.toList());
+            }
+            else return leadsRepository.findAllByManager(manager).stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+                    .collect(Collectors.toList());
+        }
+        return new ArrayList<LeadDTO>();
     }
     // Взять всех юзеров - конец
+
+    private String gerRole(Principal principal){
+        // Получите текущий объект аутентификации
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Получите имя текущего пользователя (пользователя, не роль)
+        String username = principal.getName();
+        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
+        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+    } // Берем роль пользователя
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
 

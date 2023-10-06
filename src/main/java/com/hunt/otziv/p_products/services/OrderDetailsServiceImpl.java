@@ -70,6 +70,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
+                .urlChat(company.getUrlChat())
                 .build();
     }
     private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){

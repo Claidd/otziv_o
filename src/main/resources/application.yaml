@@ -1,7 +1,6 @@
+
 server:
   port: 8080
-  #servlet:
-    #context-path: /api
 jwt:
   secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
   lifetime: 5m
@@ -10,18 +9,33 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+      dialect: org.hibernate.dialect.MySQLDialect
     show-sql: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
 
-#    url: jdbc:mysql://127.0.0.1:3306/otziv
-#    url: jdbc:mysql://localhost:3306/otziv
-    url: jdbc:mysql://mydatabase:3306/otziv
 
+#    база данных на рег ру
+#    url: jdbc:mysql://37.140.192.105:3306/u1215824_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#    username: u1215824
+#    password: Rkfql54532111
+
+#    база данных на в игру ру
+#    url: jdbc:mysql://46.254.20.38:3306/p478535_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#    username: p478535_hunt
+#    password: Rkfql54532111
+
+#    локальная база данных
+    url: jdbc:mysql://localhost:3306/otziv
     username: hunt
     password: 545321
+
+
   flyway:
     baseline-on-migrate: true
+
+#    username: hunt
+#    password: 545321
 
 #logging:
  # level:

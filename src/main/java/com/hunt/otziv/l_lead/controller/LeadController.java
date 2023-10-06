@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
+
+import java.security.Principal;
 import java.util.Map;
 
 @Controller
@@ -26,22 +28,21 @@ public class LeadController {
     }
 
     @GetMapping()
-    public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword) {
+    public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal) {
 //        model.put("route", "lead");
         model.put("promoTexts", promoTextService.getAllPromoTexts());
         log.info("загрузили промо тексты");
-        model.put("leadListNew", leadService.getAllLeads(LeadStatus.NEW.title, keyword));
+        model.put("leadListNew", leadService.getAllLeads(LeadStatus.NEW.title, keyword, principal));
         log.info("загрузили НОВЫЕ компании");
-        model.put("leadListSend", leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword));
+        model.put("leadListSend", leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword, principal));
         log.info("загрузили ОТПРАВЛЕННЫЕ компании");
-        model.put("leadListReSend", leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword));
+        model.put("leadListReSend", leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword, principal));
         log.info("загрузили НАПОМНЕННЫЕ компании");
-        model.put("leadListArchive", leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword));
+        model.put("leadListArchive", leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword, principal));
         log.info("загрузили АРХИВ компании");
-        model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword));
+        model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword, principal));
         log.info("загрузили В РАБОТЕ компании");
-        model.put("leadListALL", leadService.getAllLeadsNoStatus(keyword));
-        System.out.println(leadService.getAllLeadsNoStatus(keyword));
+        model.put("leadListALL", leadService.getAllLeadsNoStatus(keyword, principal));
         log.info("загрузили ВСЕ компании");
         return new ModelAndView("lead/layouts/lead", model);
     }

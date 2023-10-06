@@ -63,7 +63,7 @@
                             </div>
                             <div class="company__card__content__phone">
                                 <!-- <div class="card__title__lead" th:text="${lead.telephoneLead}">Номер Лида</div> -->
-                                <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${company.telephone}">
+                                <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${company.urlChat}">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="company__card__text__lead-button " th:text="${company.telephone}">в архив</button>
                                 </form>

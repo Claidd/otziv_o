@@ -40,6 +40,14 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('telephone')}" th:text="${err}">Validation
                                 error</small>
                         </div>
+                        <div class="form-group">
+                            <label for="urlChat">Ссылка на чат</label>
+                            <input type="text" id="urlChat" th:field="*{urlChat}" th:value="${urlChat}" class="form-control"
+                                   placeholder="">
+                            <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('urlChat')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
                         <div class="form-group d-none">
                             <label for="city">Город</label>
                             <input type="hidden" id="city" th:field="*{city}" th:value="${newCompany.getCity()}" class="form-control"
