@@ -61,7 +61,8 @@ public class EditLeadController {
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("1.1 Вошли в ошибку");
-            return "/lead/new_lead";
+            model.addAttribute("newLead", leadDTO);
+            return "lead/layouts/new_lead";
         }
 
         log.info("2.Передаем дто в сервис");

@@ -27,15 +27,15 @@
                     Данные успешно изменены и сохранены.
                 </div>
             </div>
+            
             <form th:action="@{/lead/new_lead}" method="post" class="form" th:object="${newLead}">
+                
                 <!--        ввод номера телефона        -->
                 <input type="text" class="form__input" th:field="*{telephoneLead}" placeholder="Номер телефона">
-                <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation
-                    error</small>
                 <!--        ввод названия города       -->
                 <input type="text" class="form__input" th:field="*{cityLead}" placeholder="Ваш Город">
-                <small class="form-text text-danger" th:each="err : ${#fields.errors('cityLead')}" th:text="${err}">Validation
-                    error</small>
+                <small class="form-text text-danger" th:each="err : ${#fields.errors('cityLead')}" th:text="${err}">Validation error</small>
+                <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation error</small>
                 <!--        ввод дополнительных данных        -->
                 <textarea class="form__textarea" th:field="*{commentsLead}" placeholder="Ваш Текст"></textarea>
                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>

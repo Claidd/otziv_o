@@ -27,9 +27,20 @@ public class LeadValidation implements Validator {
 
         /*Проверяем на имеющийся телефон в базе*/
         LeadDTO leadDTO = (LeadDTO) target;
-//        if (leadsRepository.findByTelephoneLead(leadDTO.getTelephoneLead()).isPresent()){
-//            errors.rejectValue("telephoneLead", "", "Такой номер телефона уже есть в базе");
-//        }
+        if (leadsRepository.findByTelephoneLead(changeNumberPhone(leadDTO.getTelephoneLead())).isPresent()){
+            errors.rejectValue("telephoneLead", "", "Такой номер телефона уже есть в базе");
+        }
 
+    }
+
+    // Вспомогательный метод для корректировки номера телефона
+    public String changeNumberPhone(String phone){
+        String[] a;
+        a = phone.split("9");
+        a[0] = "+79";
+        String b = a[0] + a[1];
+        System.out.println(b);
+        return b;
+//        userDto.getPhoneNumber().replaceFirst("8", "+7")
     }
 }
