@@ -1,5 +1,6 @@
 package com.hunt.otziv.c_companies.services;
 
+import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.model.Category;
@@ -40,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.security.Principal;
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.*;
@@ -180,8 +182,12 @@ public class CompanyServiceImpl implements CompanyService{
 
 //    Метод подготовки ДТО при создании компании из Лида менеджером
     public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) {
-    //        находим лида по переданному id
         LeadDTO leadDTO = leadService.findById(leadId);
+        List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
+        System.out.println(workers);
+        var random = new SecureRandom();
+    //        находим лида по переданному id
+
         //        Устанавливаем поля из лида в новый дто
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
@@ -191,6 +197,7 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setManager(convertToManagerDto(leadDTO.getManager()));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
+        companyDTO.setWorker(workers.get(random.nextInt(workers.size())));
         return companyDTO;
     }
     //    Метод подготовки ДТО при создании компании из Лида менеджером

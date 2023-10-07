@@ -76,6 +76,17 @@ $(document).ready(function(){
     alert("Copied the text: " + copyText4.value);
   }
 
+  function myFunctionVk() {
+    /* Get the text field */
+    var copyText5 = document.getElementById("myInput5");
+    /* Select the text field */
+    copyText5.select();
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText5.value);
+  }
+
   function checkAndUrl(button) {
     var orderId = button.getAttribute("data-orderid");
     var checkAndUrl = document.getElementById("checkAndUrl");

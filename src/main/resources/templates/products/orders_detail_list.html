@@ -18,7 +18,7 @@
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="company__lead__card">
         <div class="container">
-                <h2 class="company__section-title2">Детали заказа</h2>
+                <h2 class="company__section-title2" th:utext="'Детали заказа ' + ${reviews[0].orderDetails.product.title}"></h2>
                     <div class="company__tabs__lead">
 
                         <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->

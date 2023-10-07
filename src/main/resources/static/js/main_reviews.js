@@ -196,6 +196,8 @@ $(document).ready(function(){
     alert("Copied the text: " + copyText4.value);
   }
 
+  
+
   // <!-- ==================== COPY TEXT ====================== -->
 
 

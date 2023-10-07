@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static java.util.stream.Collectors.toList;
+
 @Service
 @Slf4j
 public class WorkerServiceImpl implements WorkerService {
@@ -44,6 +46,12 @@ public class WorkerServiceImpl implements WorkerService {
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
     }
+
+
+//    public List<WorkerDTO> getListAllWorkersByManagerId(Manager manager){
+//        System.out.println(workerRepository.findAllByUser(manager.getUser()).stream().map(this::toDTO).collect(toList()));
+//        return workerRepository.findAllByUser(manager.getUser()).stream().map(this::toDTO).collect(toList());
+//    }
 
     private WorkerDTO toDTO(Worker worker){
         WorkerDTO workerDTO = new WorkerDTO();

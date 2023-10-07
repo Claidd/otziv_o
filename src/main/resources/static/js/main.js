@@ -196,6 +196,21 @@ $(document).ready(function(){
     alert("Copied the text: " + copyText4.value);
   }
 
+  function myFunction5() {
+    /* Get the text field */
+    var copyText5 = document.getElementById("myInput5");
+
+    /* Select the text field */
+    copyText5.select();
+
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+
+    /* Alert the copied text */
+    alert("Copied the text: " + copyText5.value);
+  }
+
   // <!-- ==================== COPY TEXT ====================== -->
 
     /* Скрыть сообщение об успешном сохранении через 5 секунд */

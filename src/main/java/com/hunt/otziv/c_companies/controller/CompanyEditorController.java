@@ -11,6 +11,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class CompanyEditorController {
     private final LeadService leadService;
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
-    private final WorkerService workerService;
+    private final UserService userService;
 
 
     @GetMapping("/new_company_to_manager/{leadId}")
@@ -39,7 +40,7 @@ public class CompanyEditorController {
         model.addAttribute("newCompany", companyService.convertToDtoToManager(leadId, principal));
         List<CategoryDTO> categories = categoryService.getAllCategories();
         model.addAttribute("categories", categories);
-        model.addAttribute("workers", workerService.getAllWorkers());
+        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().toList());
         model.addAttribute("leadId", leadId);
         return "companies/new_company_to_manager";
     }
