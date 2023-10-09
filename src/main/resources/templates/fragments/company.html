@@ -21,22 +21,18 @@
             <div class="company__card__remember">
                 <div class="company__card__remember__box">
                            <div class="company__card_remember-content">
-                               <textarea class="company__card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+                               <textarea class="company__card__remember-text" th:utext="${promoTexts[7]}" id="myInput1"></textarea>
                                <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>
                             </div>
                             <div class="company__card_remember-content">
-                                <textarea class="company__card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>
+                                <textarea class="company__card__remember-text" th:utext="${promoTexts[8]}" id="myInput3"></textarea>
+                                <button class="company__card_remember-content__btn" onclick="myFunction3()">предложение 2</button>
+                            </div>
+                            <div class="company__card_remember-content">
+                                <textarea class="company__card__remember-text"th:utext="${promoTexts[9]}" id="myInput2"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction2()">рассылка</button>
                             </div>
-<!--                            <div class="company__card_remember-content">-->
-<!--                                <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>-->
-<!--                                <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>-->
-<!--                            </div>-->
-<!--                            <div class="company__card_remember-content">-->
-<!--                                <textarea class="company__card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>-->
-<!--                                <button class="company__card_remember-content__btn" onclick="myFunction4()">оплата</button>-->
-<!--                            </div>-->
-<!--                        </div>-->
+
                     <div class="company__card__remember__box-serch">
 
                         <form class="company__card_remember-search" th:method="get">

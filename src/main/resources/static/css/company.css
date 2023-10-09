@@ -1934,6 +1934,7 @@ main .recent-orders a{
         flex-direction: column;
         height: 100px;
         margin-bottom: 100px;
+        
     }
 
     .company__card__content__button__btn{

@@ -21,43 +21,25 @@
         <div class="company__tabs__content-lead">
             <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
             <div class="company__card__remember">
-<!--                        <div class="company__card__remember__box">-->
-                    <!-- <div class="company__card_remember-content">
-                            <textarea class="company__card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
-                            <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>
-                    </div> -->
-<!--                            <div class="company__card_remember-content">-->
-<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
-<!--                                <textarea class="company__card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>-->
+                <div class="company__card__remember__box">
+                    <div class="company__card_remember-content">
+                        <textarea class="company__card__remember-text" th:utext="${promoTexts[5]}" id="myInput1"></textarea>
+                        <button class="company__card_remember-content__btn" onclick="myFunction1()">напоминание счет</button>
+                    </div>
+                    <div class="company__card_remember-content">
+                        <textarea class="company__card__remember-text"th:utext="${promoTexts[6]}" id="myInput2"></textarea>
+                        <button class="company__card_remember-content__btn" onclick="myFunction2()">угроза</button>
+                    </div>
+                    <div class="company__card__remember__box-serch">
 
-<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
-<!--                                <button class="company__card_remember-content__btn" onclick="myFunction2()">напоминание</button>-->
-<!--                            </div>-->
-<!--                            <div class="company__card_remember-content">-->
-<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
-<!--                                <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>-->
-
-<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
-<!--                                <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>-->
-<!--                            </div>-->
-<!--                            <div class="company__card_remember-content">-->
-<!--                                &lt;!&ndash; The text field &ndash;&gt;-->
-<!--                                <textarea class="company__card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>-->
-
-<!--                                &lt;!&ndash; The button used to copy the text &ndash;&gt;-->
-<!--                                <button class="company__card_remember-content__btn" onclick="myFunction4()">оплата</button>-->
-<!--                            </div>-->
-<!--                        </div>-->
-                <div class="company__card__remember__box-serch">
-
-                    <form class="company__card_remember-search" th:method="get">
-                        <!-- The text field -->
-                        <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
-                        <!-- The button used to copy the text -->
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                        <button type="submit" class="company__card_remember-search__btn">Найти</button>
-                    </form>
-
+                        <form class="company__card_remember-search" th:method="get">
+                            <!-- The text field -->
+                            <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                            <!-- The button used to copy the text -->
+                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                            <button type="submit" class="company__card_remember-search__btn">Найти</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         
@@ -94,7 +76,7 @@
                 <!-- КНОПКИ 1 -->
                 <div class="company__card__content_button"> <!-- card__content_button -->
                     <div class="company__card__text__lead">
-                        <textarea class="company__card__remember-text" th:utext="${promoTexts[0]} + ' Ссылка на проверку отзывов: ' + 'http://localhost:8080/review/editReviews/'" id="checkAndUrl"></textarea>
+                        <textarea class="company__card__remember-text" th:utext="${promoTexts[5]} + ' Ссылка на проверку отзывов: ' + 'http://localhost:8080/review/editReviews/'" id="checkAndUrl"></textarea>
                         <button class="company__card__text__lead-button" th:attr="data-orderid=${order.id}" onclick="checkAndUrl(this)">текст+url</button>
                     </div>
                     <form class="company__card__text__lead" th:method="get" th:action="'/review/editReviews/' + ${order.id}">
@@ -102,7 +84,7 @@
                         <button type="submit" class="company__card__text__lead-button ">url</button>
                     </form>
                     <div class="company__card__text__lead">
-                        <textarea  class="company__card__remember-text" th:utext="${promoTexts[1]} + ' К оплате: '" id="onPayment"></textarea>
+                        <textarea  class="company__card__remember-text" th:utext="${order.manager.payText} + ' К оплате: '" id="onPayment"></textarea>
                         <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}" onclick="onPayment(this)">счет</button>
                     </div>
                     <form class="company__card__text__lead" target="_blank" th:action="@{${order.filial.url}}">

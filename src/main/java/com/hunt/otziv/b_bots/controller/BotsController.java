@@ -45,13 +45,14 @@ public class BotsController {
     //Открываем страницу добавления бота
     @GetMapping("/bot_add")
     public String botAdd(Model model, BotDTO botsDto, Principal principal){
-        String userRole = gerRole(principal);
-        System.out.println(userRole);
-        if ("ROLE_WORKER".equals(userRole)){
-            model.addAttribute("bot", botService.findByWorker(principal));
-            System.out.println(botService.findByWorker(principal));
-        }
-        else model.addAttribute("bot", botService.findByWorker(principal));
+//        String userRole = gerRole(principal);
+//        System.out.println(userRole);
+//        if ("ROLE_WORKER".equals(userRole)){ метол вставляет последний вносимый пароль
+//            model.addAttribute("bot", botService.findByWorker(principal));
+//            System.out.println(botService.findByWorker(principal));
+//        }
+//        else
+            model.addAttribute("bot", new BotDTO());
     return "bots/bot_add";
     }
 

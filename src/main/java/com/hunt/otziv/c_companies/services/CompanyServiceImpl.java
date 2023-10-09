@@ -266,6 +266,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .filial(convertToFilialDTO(order.getFilial()))
                 .company(convertToCompanyDTO(order.getCompany()))
                 .dayToChangeStatusAgo(period.getDays())
+                .manager(convertToManagerDTO(order.getManager()))
 //                .complete(order.isComplete())
 //                .counter(order.getCounter())
                 .build();
@@ -306,6 +307,7 @@ public class CompanyServiceImpl implements CompanyService{
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
+                .urlChat(company.getUrlChat())
                 .telephone(company.getTelephone())
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
@@ -340,6 +342,7 @@ public class CompanyServiceImpl implements CompanyService{
         return ManagerDTO.builder()
                 .managerId(manager.getId())
                 .user(manager.getUser())
+                .payText(manager.getPayText())
                 .build();
     }
 

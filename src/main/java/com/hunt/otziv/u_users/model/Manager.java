@@ -26,6 +26,9 @@ public class Manager {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @JoinColumn(name = "pay_text")
+    private String payText;
+
     @OneToMany(mappedBy = "manager")
     private Set<Company> companies;
 

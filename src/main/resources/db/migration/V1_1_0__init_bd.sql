@@ -40,6 +40,7 @@ create table IF NOT EXISTS operators(
 create table IF NOT EXISTS managers(
     manager_id  bigint  auto_increment,
     user_id bigint unique,
+    pay_text varchar(1000) DEFAULT ' ',
     primary key (manager_id)
 )engine=InnoDB;
 

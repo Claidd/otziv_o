@@ -485,6 +485,7 @@ public class OrderServiceImpl implements OrderService {
         return ManagerDTO.builder()
                 .managerId(manager.getId())
                 .user(manager.getUser())
+                .payText(manager.getPayText())
                 .build();
     } // Конвертер DTO для менеджера
     private OrderStatusDTO convertToOrderDTO(OrderStatus orderStatus){// Конвертер DTO для статуса заказа
