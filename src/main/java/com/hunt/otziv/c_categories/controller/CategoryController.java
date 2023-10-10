@@ -10,6 +10,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Controller
@@ -29,7 +30,7 @@ public class CategoryController {
 
     @GetMapping
     public String getAllCategories(Model model) {
-        List<CategoryDTO> categories = categoryService.getAllCategories();
+        List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         model.addAttribute("categories", categories);
         model.addAttribute("categoryDTO", new CategoryDTO());
         return "category/categories";
@@ -38,7 +39,7 @@ public class CategoryController {
     @GetMapping("/getSubcategories")
     @ResponseBody
     public List<SubCategoryDTO> getSubcategoriesByCategoryId(@RequestParam Long categoryId) {
-        return subCategoryService.getSubcategoriesByCategoryId(categoryId);
+        return subCategoryService.getSubcategoriesByCategoryId(categoryId).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
     }
     @PostMapping
     public String createCategory(@ModelAttribute("categoryDTO") CategoryDTO categoryDTO) {

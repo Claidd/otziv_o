@@ -20,6 +20,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.Comparator;
 import java.util.List;
 
 @Controller
@@ -38,7 +39,7 @@ public class CompanyEditorController {
     @GetMapping("/new_company_to_manager/{leadId}")
     String newCompanyToManager(@PathVariable final Long leadId, Principal principal, Model model) {
         model.addAttribute("newCompany", companyService.convertToDtoToManager(leadId, principal));
-        List<CategoryDTO> categories = categoryService.getAllCategories();
+        List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         model.addAttribute("categories", categories);
         model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().toList());
         model.addAttribute("leadId", leadId);
@@ -66,7 +67,7 @@ public class CompanyEditorController {
     @GetMapping("/getSubcategories")
     @ResponseBody
     public List<SubCategoryDTO> getSubcategoriesByCategoryId(@RequestParam Long categoryId) {
-        return subCategoryService.getSubcategoriesByCategoryId(categoryId);
+        return subCategoryService.getSubcategoriesByCategoryId(categoryId).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
     }
 }
 

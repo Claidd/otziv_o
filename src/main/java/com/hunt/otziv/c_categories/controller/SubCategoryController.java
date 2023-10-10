@@ -9,6 +9,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Controller
@@ -27,7 +28,7 @@ public class SubCategoryController {
     @GetMapping("/{id}/{categoryTitle}")
     public String showAllSubCategories(@PathVariable Long id,@PathVariable String categoryTitle, Model model) {
         System.out.println(categoryTitle);
-        List<SubCategoryDTO> subCategories = subCategoryService.getSubcategoriesByCategoryId(id);
+        List<SubCategoryDTO> subCategories = subCategoryService.getSubcategoriesByCategoryId(id).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
         model.addAttribute("subCategories", subCategories);
         model.addAttribute("subCategoryDTO", new SubCategoryDTO());
         model.addAttribute("categoryId", id);
