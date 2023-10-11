@@ -24,10 +24,6 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
-//    @ManyToOne
-//    @JoinColumn(name = "id")
-//    @JoinColumn(name = "id")
-//    @JoinColumn(name = "id")
     private Long id;
 
     //    имя пользователя
@@ -76,6 +72,11 @@ public class User {
     //    время создания пользователя
     @Column(name = "create_time")
     private LocalDate createTime;
+
+    //    картинка
+    @OneToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "image")
+    private Image image;
 
     @ManyToMany(cascade = CascadeType.ALL)
     @JoinTable(

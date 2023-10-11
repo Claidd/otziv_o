@@ -45,6 +45,7 @@ public class UserDTO {
     private Set<Marketolog> marketologs;
 
     private BigDecimal coefficient;
+    private Image image;
 
 
     public boolean isActive() {

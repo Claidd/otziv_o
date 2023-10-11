@@ -22,10 +22,10 @@ public class AuthController {
         return authService.createAuthToken(authRequest);
     }
 
-    @PostMapping("/registration")
-    public ResponseEntity<?> createAuthToken(@RequestBody RegistrationUserDTO registrationUserDTO){
-        return authService.createNewUsers(registrationUserDTO);
-    }
+//    @PostMapping("/registration")
+//    public ResponseEntity<?> createAuthToken(@RequestBody RegistrationUserDTO registrationUserDTO){
+//        return authService.createNewUsers(registrationUserDTO);
+//    }
 
     @GetMapping("/index2")
     public String index2(){

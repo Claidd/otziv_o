@@ -41,6 +41,7 @@ public class RegistrationUserDTO {
     private Set<Worker> workers;
     private Set<Marketolog> marketologs;
     private BigDecimal coefficient;
+    private Image image;
 
 
     public RegistrationUserDTO(Long id, String username, String password) {

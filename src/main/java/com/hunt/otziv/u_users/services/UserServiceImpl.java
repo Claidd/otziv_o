@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.services;
 
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.*;
+import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 
@@ -14,7 +15,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,8 +32,9 @@ public class UserServiceImpl  implements UserService {
     private final WorkerService workerService;
     private final MarketologService marketologService;
     private final PasswordEncoder passwordEncoder;
+    private final ImageRepository imageRepository;
 
-    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, OperatorService operatorService, ManagerService managerService, WorkerService workerService, MarketologService marketologService, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, OperatorService operatorService, ManagerService managerService, WorkerService workerService, MarketologService marketologService, PasswordEncoder passwordEncoder, ImageRepository imageRepository) {
         this.userRepository = userRepository;
         this.roleService = roleService;
         this.operatorService = operatorService;
@@ -38,6 +42,7 @@ public class UserServiceImpl  implements UserService {
         this.workerService = workerService;
         this.marketologService = marketologService;
         this.passwordEncoder = passwordEncoder;
+        this.imageRepository = imageRepository;
     }
 
 //      =====================================SECURITY=======================================================
@@ -99,13 +104,14 @@ public class UserServiceImpl  implements UserService {
                 .marketologs(user.getMarketologs() == null ? new HashSet<>() : user.getMarketologs())
                 .manager(new Manager())
                 .coefficient(user.getCoefficient())
+                .image(user.getImage())
                 .build();
         //                .active(user.getActivateCode() == null)
     }
     // Перевод юзера в дто - конец
 //      =====================================CREATE USERS - START=======================================================
     // Создание нового пользователя "Клиент" - начало
-    public User save(RegistrationUserDTO userDto){
+    public User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException {
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
         if(!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
             throw new RuntimeException("Пароли не совпадают");
@@ -125,6 +131,8 @@ public class UserServiceImpl  implements UserService {
                 .marketologs(userDto.getMarketologs())
                 .active(true)
                 .activateCode(UUID.randomUUID().toString())
+                .image(toImageEntity(file))
+                .coefficient(new BigDecimal("0.05"))
                 .build();
         log.info("5. Юзер успешно создан");
 //        this.save(user);
@@ -168,7 +176,7 @@ public class UserServiceImpl  implements UserService {
     // Обновить профиль юзера - начало
     @Override
     @Transactional
-    public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO) {
+    public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO, MultipartFile imageFile) throws IOException {
         log.info("Вошли в обновление");
 
         if (userDTO.getOperators() == null){
@@ -272,6 +280,14 @@ public class UserServiceImpl  implements UserService {
             System.out.println(userDTO.isActive());
             isChanged = true;
             log.info("Обновили активность");
+        }
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        if (imageFile != null){
+            Image imageDelete = saveUser.getImage();
+            imageRepository.delete(imageDelete);
+            saveUser.setImage(toImageEntity(imageFile));
+            isChanged = true;
+            log.info("Обновили изображение");
         }
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient())){
@@ -456,6 +472,18 @@ public class UserServiceImpl  implements UserService {
         log.info("3. Обновили список работников");
         userRepository.save(user);
         log.info("4. Сохранили юзера");
+    }
+
+    private Image toImageEntity(MultipartFile file) throws IOException {
+        System.out.println(file);
+        Image image = new Image();
+        image.setName(file.getName());
+        image.setOriginalFileName(file.getOriginalFilename());
+        image.setContentType(file.getContentType());
+        image.setSize(file.getSize());
+        image.setBytes(file.getBytes());
+        imageRepository.save(image);
+        return image;
     }
 
 

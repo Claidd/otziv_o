@@ -139,7 +139,9 @@
                         <button type="submit"  class="company__card__text__lead-button ">оплатили</button>
                     </form>
                 </div> <!-- card__content_button -->
-
+                <div class="company__card__content__product">
+                    <a class="company__card__title__bot" th:text="${order.worker.user.fio}">ФИО бота</a>
+                </div>
                 <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
                     <p class="company__card__text__city__lead" th:text="${order.company.categoryCompany.categoryTitle}">Категрия</p>
                     <p class="company__card__text__city__lead" th:text="${order.company.subCategory.subCategoryTitle}">Под категория</p> 

@@ -37,15 +37,15 @@ public class AuthService {
         return ResponseEntity.ok(new JwtResponse(token));
     }
 
-    public ResponseEntity<?>createNewUsers(@RequestBody RegistrationUserDTO registrationUserDTO){
-        if (!registrationUserDTO.getPassword().equals(registrationUserDTO.getMatchingPassword())){
-            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пароли не совпадают"), HttpStatus.BAD_REQUEST);
-        }
-        if (userService.findByUserName(registrationUserDTO.getUsername()).isPresent()){
-            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пользователь с данным именем уже существует"), HttpStatus.BAD_REQUEST);
-        }
-        User user = userService.save(registrationUserDTO);
-        return ResponseEntity.ok(new RegistrationUserDTO(user.getId(), user.getUsername(), user.getPassword()));
-    }
+//    public ResponseEntity<?>createNewUsers(@RequestBody RegistrationUserDTO registrationUserDTO){
+//        if (!registrationUserDTO.getPassword().equals(registrationUserDTO.getMatchingPassword())){
+//            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пароли не совпадают"), HttpStatus.BAD_REQUEST);
+//        }
+//        if (userService.findByUserName(registrationUserDTO.getUsername()).isPresent()){
+//            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пользователь с данным именем уже существует"), HttpStatus.BAD_REQUEST);
+//        }
+//        User user = userService.save(registrationUserDTO);
+//        return ResponseEntity.ok(new RegistrationUserDTO(user.getId(), user.getUsername(), user.getPassword()));
+//    }
 
 }

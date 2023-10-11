@@ -1,3 +1,12 @@
+CREATE TABLE IF NOT EXISTS images (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `bytes` tinyblob NULL,
+  `content_type` VARCHAR(255) NULL,
+  `name` VARCHAR(255) NULL,
+  `original_file_name` VARCHAR(255) NULL,
+  `size` BIGINT(20) NULL,
+  PRIMARY KEY (`id`))
+ENGINE = InnoDB;
 
 create table IF NOT EXISTS users (
     id bigint auto_increment,
@@ -10,10 +19,17 @@ create table IF NOT EXISTS users (
     active bit,
     create_time date,
     coefficient numeric(3,2) NOT NULL DEFAULT 0.05,
+    image bigint null,
+    INDEX `image_idx` (`image` ASC),
     UNIQUE INDEX email_UNIQUE (email ASC),
     UNIQUE INDEX phone_number_UNIQUE (phone_number ASC),
     UNIQUE INDEX username_UNIQUE (username ASC),
     UNIQUE INDEX id_UNIQUE (id ASC),
+    CONSTRAINT `image`
+    FOREIGN KEY (`image`)
+    REFERENCES images (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
     primary key (id)
 )engine=InnoDB;
 
@@ -474,6 +490,8 @@ CREATE TABLE IF NOT EXISTS payment_check (
   `check_active` BIT(1) NULL DEFAULT 1,
   PRIMARY KEY (`check_id`))
 ENGINE = InnoDB;
+
+
 
 --create table IF NOT EXISTS operators(
 --    operator_id  bigint  auto_increment,

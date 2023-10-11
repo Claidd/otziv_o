@@ -11,7 +11,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @Controller
@@ -53,10 +55,6 @@ public class UsersController {
         model.addAttribute("managerDTO", new ManagerDTO());
         model.addAttribute("workerDTO", new WorkerDTO());
         model.addAttribute("marketologDTO", new MarketologDTO());
-
-        System.out.println(marketologService.getAllMarketologs());
-
-//        RegistrationUserDTO userDTO = userService.findById(userId);
         return "1.Login_and_Register/editUser";
     }
 
@@ -66,16 +64,14 @@ public class UsersController {
     public String editUser(@PathVariable(value = "id")  long id, Model model,
                            @ModelAttribute("editUserDto")  RegistrationUserDTO userDto,
                            @RequestParam String role,
+                           @RequestParam("imageFile") MultipartFile imageFile,
                            @ModelAttribute("operatorDTO") OperatorDTO operatorDTO,
                            @ModelAttribute("managerDTO") ManagerDTO managerDTO,
                            @ModelAttribute("workerDTO") WorkerDTO workerDTO,
-                           @ModelAttribute("marketologDTO") MarketologDTO marketologDTO){
+                           @ModelAttribute("marketologDTO") MarketologDTO marketologDTO) throws IOException {
         log.info("0. Валидация на повторный мейл");
-        System.out.println(operatorDTO.getOperatorId());
-        System.out.println(managerDTO.getManagerId());
-        System.out.println(workerDTO.getWorkerId());
         System.out.println("================================================================");
-        System.out.println(userDto.getMarketologs());
+        System.out.println(imageFile);
         System.out.println("================================================================");
 //        userValidation.validate(userDto, bindingResult);
 //        log.info("1. Валидация данных");
@@ -87,13 +83,8 @@ public class UsersController {
 //        for (Operator operator:userDto.getOperators()) {
 //            System.out.println(operator);
 //        }
-
-
-        System.out.println(userDto.getOperators());
-        System.out.println(userDto.getRoles());
-        System.out.println(role);
         log.info("Начинаем обновлять юзера");
-        userService.updateProfile(userDto, role, operatorDTO, managerDTO, workerDTO, marketologDTO);
+        userService.updateProfile(userDto, role, operatorDTO, managerDTO, workerDTO, marketologDTO, imageFile);
         log.info("Обновление юзера прошло успешно");
         return "redirect:/allUsers";
     }

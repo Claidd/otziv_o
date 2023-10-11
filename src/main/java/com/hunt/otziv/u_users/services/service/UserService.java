@@ -7,15 +7,17 @@ import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
 public interface UserService extends UserDetailsService{
 
-    void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO);
+    void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO, MultipartFile imageFile) throws IOException;
 
-    User save(RegistrationUserDTO userDto);
+    User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException;
     UserDetails loadUserByUsername(String username);
 
     List<RegistrationUserDTO> getAllUsers();
