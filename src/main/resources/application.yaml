@@ -13,6 +13,11 @@ spring:
     show-sql: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # Настройки мультипарт загрузки
+    servlet:
+      multipart:
+        max-file-size: 50MB
+        max-request-size: 50MB
 
 #    база данных на рег ру
 #    url: jdbc:mysql://37.140.192.105:3306/u1215824_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
@@ -25,20 +30,20 @@ spring:
 #    password: Rkfql54532111
 
 #    локальная база данных
-    url: jdbc:mysql://localhost:3306/otziv
-    username: hunt
-    password: 545321
+#    url: jdbc:mysql://localhost:3306/otziv
+#    username: hunt
+#    password: 545321
 
+  #    Docker база данных
+    url: jdbc:mysql://mysql:3306/otziv
+    username: root
+    password: password
 
   flyway:
     baseline-on-migrate: true
 
 
-# Настройки мультипарт загрузки
-  servlet:
-    multipart:
-      max-file-size: 50MB
-      max-request-size: 50MB
+
 #    username: hunt
 #    password: 545321
 

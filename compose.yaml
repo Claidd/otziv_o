@@ -1,12 +1,52 @@
 version: '3'
+
 services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+    ports:
+      - '3306:3306'
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_NO_CACHE: 1
     ports:
       - "8080:8080"
     restart: always
+    depends_on:
+      - mysql
 
+  adminer:
+    image: adminer:latest
+    restart: always
+    ports:
+        - '8090:8080'
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: always
+    ports:
+      - '9000:80'
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+volumes:
+  mysql_data:
 
 
 
@@ -18,21 +58,10 @@ services:
 
 
 
-#  mysql:
-#    image: mysql:8.0
-#    environment:
-#      MYSQL_ROOT_PASSWORD: password
-#      MYSQL_DATABASE: otziv
-#    volumes:
-#      - mysql_data:/var/lib/mysql
-#    networks:
-#      - mynetwork
-#    ports:
-#      - '3306:3306'
+
 
 #
-#volumes:
-#  mysql_data:
+
 
 
 

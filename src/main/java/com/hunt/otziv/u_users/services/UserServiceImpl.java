@@ -178,6 +178,7 @@ public class UserServiceImpl  implements UserService {
     @Transactional
     public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO, MultipartFile imageFile) throws IOException {
         log.info("Вошли в обновление");
+        String originalFilename = imageFile.getOriginalFilename();
 
         if (userDTO.getOperators() == null){
             userDTO.setOperators(new HashSet<>());
@@ -203,6 +204,7 @@ public class UserServiceImpl  implements UserService {
         System.out.println("change workers: " + !Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
         System.out.println("change marketologs: " + !Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
         System.out.println("coefficient: " + !Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient()));
+        System.out.println("image: " + (!imageFile.isEmpty()));
 
         /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getRoles(), saveUser.getRoles())){
@@ -282,9 +284,11 @@ public class UserServiceImpl  implements UserService {
             log.info("Обновили активность");
         }
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (imageFile != null){
+        if (originalFilename != null && (originalFilename.endsWith(".jpg") || originalFilename.endsWith(".png") || originalFilename.endsWith(".jpeg") || originalFilename.endsWith(".webp"))){
             Image imageDelete = saveUser.getImage();
-            imageRepository.delete(imageDelete);
+            if (imageDelete != null){
+                imageRepository.delete(imageDelete);
+            }
             saveUser.setImage(toImageEntity(imageFile));
             isChanged = true;
             log.info("Обновили изображение");

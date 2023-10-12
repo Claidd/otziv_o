@@ -1,6 +1,8 @@
+CREATE DATABASE IF NOT EXISTS otziv;
+
 CREATE TABLE IF NOT EXISTS images (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `bytes` tinyblob NULL,
+  `bytes` LONGBLOB NULL,
   `content_type` VARCHAR(255) NULL,
   `name` VARCHAR(255) NULL,
   `original_file_name` VARCHAR(255) NULL,
@@ -159,7 +161,7 @@ CREATE TABLE IF NOT EXISTS bots (
   bot_password VARCHAR(255) NULL,
   bot_fio VARCHAR(50) NULL,
   bot_counter INT NULL,
-  bot_active BIT(1) NULL,
+  bot_active BIT NULL,
   bot_status BIGINT NULL,
   bot_worker BIGINT NULL,
   INDEX bot_status_idx (bot_status ASC),
@@ -218,7 +220,7 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_comments VARCHAR(2000) NULL,
       company_counter_no_pay INT NULL DEFAULT 0,
       company_counter_pay INT NULL DEFAULT 0,
-      company_active BIT(1) NULL,
+      company_active BIT NULL,
       company_sum NUMERIC(10,2) NULL DEFAULT 0,
       create_date DATE NULL,
       update_status DATE NULL,
@@ -330,7 +332,7 @@ CREATE TABLE IF NOT EXISTS orders (
   `order_manager` bigint NULL,
   `order_worker` bigint NULL,
   `order_filial` bigint NULL,
-   order_complete BIT(0) NULL,
+   order_complete BIT NULL,
   PRIMARY KEY (`order_id`),
   INDEX `order_status_idx` (`order_status` ASC),
   INDEX `order_company_idx` (`order_company` ASC),
@@ -394,7 +396,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   `review_answer` VARCHAR(5000) NULL,
   `review_created` DATE NULL,
   `review_changed` DATE NULL,
-  `review_publish` BIT(0) NULL DEFAULT 0,
+  `review_publish` BIT NULL DEFAULT 0,
   `review_publish_date` DATE NULL,
   `review_order_details` bigint NULL,
   `review_bot` bigint NULL,
@@ -474,7 +476,7 @@ CREATE TABLE IF NOT EXISTS zp (
   `zp_profession` bigint NOT NULL,
   `zp_order` bigint NOT NULL,
   `zp_date` DATE NOT NULL,
-  `zp_active` BIT(1) NULL DEFAULT 1,
+  `zp_active` BIT NULL DEFAULT 1,
   PRIMARY KEY (`zp_id`))
 ENGINE = InnoDB;
 
@@ -487,7 +489,7 @@ CREATE TABLE IF NOT EXISTS payment_check (
   `check_worker` bigint NULL,
   `check_date` DATE NOT NULL,
   `check_sum` DECIMAL(10,2) NULL,
-  `check_active` BIT(1) NULL DEFAULT 1,
+  `check_active` BIT NULL DEFAULT 1,
   PRIMARY KEY (`check_id`))
 ENGINE = InnoDB;
 
