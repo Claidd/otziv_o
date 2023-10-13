@@ -1,0 +1,84 @@
+version: '3'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    volumes:
+      - mysql_data_pub:/var/lib/mysql
+    restart: always
+    ports:
+      - '3306:3306'
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - '80:80'
+      - '443:443'
+    restart:
+      always
+    volumes:
+      - ./hosts:/etc/nginx/conf.d
+      - ./www:/var/www
+      - ./logs/nginx:/var/log/nginx
+      # nginx должен общаться с php контейнером
+    links:
+      - app
+
+
+  app:
+    image: claid38/otziv-app
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - mysql
+
+  adminer:
+    image: adminer:latest
+    restart: always
+    ports:
+        - '8090:8080'
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+volumes:
+  mysql_data_pub:
+
+
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '9000:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+
+#    network_mode: "host"
+
+#networks:
+#  mynetwork:
+#    driver: host
+
+
+
+
+
+#
+
+
+
+
+#networks:
+#  mynetwork:
+#    driver: bridge
+

@@ -12,6 +12,22 @@ services:
     ports:
       - '3306:3306'
 
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - '80:80'
+      - '443:443'
+    restart:
+      always
+    volumes:
+      - ./hosts:/etc/nginx/conf.d
+      - ./www:/var/www
+      - ./logs/nginx:/var/log/nginx
+      # nginx должен общаться с php контейнером
+    links:
+      - app
+
   app:
     build:
       context: .
@@ -45,6 +61,9 @@ services:
     environment:
       PMA_HOST: mysql
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+
+
 volumes:
   mysql_data:
 

@@ -8,6 +8,11 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>O-otziv</title>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles}"></th:block>
+        <!-- ==================== TITLE ======================== -->
 
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
           integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
@@ -20,6 +25,8 @@
     <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
     <script th:src="@{/webjars/jquery/3.6.4/jquery.min.js}" type="text/javascript"></script>
     <script type="text/javascript" th:src="@{/js/script.js}"></script>
+
+
 </head>
 <body class="page">
     
@@ -29,7 +36,8 @@
             <div class="page__row">
                 <div class="container">
                     <div class="image__inner">
-                        <img class="image__start" th:src="@{/images/TacoCloud.png}" alt="ocompany" src="../static/images/TacoCloud.png"/>
+                        <img class="app__item-img" th:src="@{/images/image/TacoCloud.png}" src= "../../static/images/image/TacoCloud.png" alt="">
+
                     </div>
                 </div>
             </div> <!--  -->
@@ -39,7 +47,7 @@
 
 <!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
 <header th:replace="~{fragments/footer :: footer}"></header>
-
+<th:block th:insert="~{fragments/common :: js_company}"></th:block>
 
 
 
