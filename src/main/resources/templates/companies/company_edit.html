@@ -5,9 +5,8 @@
         <!-- ==================== META ======================== -->
         <th:block th:insert="~{fragments/common :: meta}"></th:block>
         <!-- ==================== STYLE ======================== -->
-        <th:block th:insert="~{fragments/common :: styles}"></th:block>
-        <!-- ==================== TITLE ======================== -->
-        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
+        <th:block th:insert="~{fragments/common :: styles_bootstrap}"></th:block>
+
         <title>Редактирование компаний</title>
     </head>
     <body>
@@ -133,16 +132,8 @@
                                    th:text="${err}">Validation error</small>
                         </div>
 
-                        <!-- <div class="form-group d-none">
-                            <label for="workers">Список работников</label>
-                            <input type="text" id="workers" th:field="*{workers}" th:value="${workers}" class="form-control"
-                                   placeholder="Укажите оператора">
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('workers')}"
-                                   th:text="${err}">Validation error</small>
-                        </div> -->
 
-                  
-
+                
                         <div class="form-group ">
                             <label for="status">Укажите статус компании</label>
                             <input type="text" id="status" th:field="*{status.title}" class="form-control"
@@ -179,13 +170,6 @@
         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
                         
 
-                        <!-- <div class="form-group">
-                            
-                            
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial')}"
-                                   th:text="${err}">Validation error</small>
-                        </div> -->
-
                         <div class="form-group">
                             <label class="form-label" for="commentsCompany">Укажите комментарий</label>
                             <input type="text" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
@@ -194,11 +178,7 @@
                                    th:text="${err}">Validation error</small>
                         </div>
 
-                        <!-- <div class="mb-3">
-                            <label for="inputComments" class="form-label">Комментарий</label>
-                            <input type="text" th:field="*{commentsLead}"  th:value="${editLeadDto.getCommentsLead()}" name="commentsLead" class="form-control" id="inputComments" aria-describedby="emailHelp">
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsLead')}" th:text="${err}">Validation error</small>
-                        </div> -->
+
 
                         <div class="mb-3">
                             <label for="inputLink" class="form-label">Активность</label>
@@ -206,62 +186,10 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('active')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        
-                        <!-- <div class="form-group d-none">
-                            <label for="commentsCompany">Укажите активность</label>
-                            <input type="hidden" id="commentsCompany" th:field="*{active}" class="form-control"
-                                   placeholder="* необязательное поле">
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"
-                                   th:text="${err}">Validation error</small>
-                        </div> -->
+
 
                         
-                        
-
-
-<!--                        <div class="form-group">-->
-<!--                            <label for="categoryCompany">Укажите категорию</label>-->
-<!--                            <input type="text" id="categoryCompany" th:field="*{categoryCompany}" class="form-control"-->
-<!--                                   placeholder="Укажите категорию">-->
-<!--                            <small class="form-text text-danger" th:each="err : ${#fields.errors('categoryCompany')}"-->
-<!--                                   th:text="${err}">Validation error</small>-->
-<!--                        </div>-->
-<!--                        <div class="form-group">-->
-<!--                            <label for="subCategory">Укажите подкатегорию</label>-->
-<!--                            <input type="text" id="subCategory1" th:field="*{subCategory}" class="form-control"-->
-<!--                                   placeholder="Укажите подкатегорию">-->
-<!--                            <small class="form-text text-danger" th:each="err : ${#fields.errors('subCategory')}"-->
-<!--                                   th:text="${err}">Validation error</small>-->
-<!--                        </div>-->
-
-                        <!--                        <div class="mb-3">-->
-                        <!--                            <label for="inputWorker" class="form-label">Специалист</label> <br>-->
-                        <!--                            <select th:field="*{worker}" id="inputWorker" name="worker"  class="form-control form-select form-select-lg">-->
-                        <!--                                &lt;!&ndash; <option th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}">Choose an operator</option> Add this line for the default empty option &ndash;&gt;-->
-                        <!--                                <option th:each="worker : ${workers}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker == newCompany.worker}"></option>-->
-                        <!--                                <option th:unless="${workers == null or workers.isEmpty() or workers.contains(newCompany.worker)}" th:value="${newCompany.worker.id}" th:text="${newCompany.worker.user.fio}" th:selected="${newCompany.worker != null}"></option>-->
-                        <!--                            </select>-->
-                        <!--                        </div>-->
-
-                        <!--                        <div class="mb-3" th:each="worker : ${newCompany.getWorkers()}">-->
-                        <!--                            <label for="inputManagers" class="form-label">Специалист</label> <br>-->
-                        <!--                            <select id="inputManagers" name="managerId" th:field="*{managers}"  class="form-control form-select form-select-lg">-->
-                        <!--                                <option value="">Выберите специалиста...</option>-->
-                        <!--                                <option th:each="specialist : ${workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}"  th:selected="${specialist.user.fio == worker.user.fio}"></option>-->
-                        <!--                                <option th:unless="${!workers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>&ndash;&gt;-->
-                        <!--                            </select>-->
-                        <!--                            &lt;!&ndash;                            <a th:href="@{/allUsers/delete/manager/{username}/{managerId}(username = ${editUserDto.username}, managerId=${manager.id})}">Удалить</a>&ndash;&gt;-->
-                        <!--                        </div>-->
-
-                        <!--                        <div class="form-group">-->
-                        <!--                            <label for="workers">Укажите специалиста</label>-->
-                        <!--                            <input type="text" id="workers" th:field="*{workers}" class="form-control"-->
-                        <!--                                   placeholder="Укажите специалиста">-->
-                        <!--                            <small class="form-text text-danger" th:each="err : ${#fields.errors('workers')}"-->
-                        <!--                                   th:text="${err}">Validation error</small>-->
-                        <!--                        </div>-->
-
-
+                    
                         <div class="form-group d-none">
                             <label for="user">Создатель компании</label>
                             <input type="text" id="user" th:field="*{user.fio}"  class="form-control"
@@ -286,9 +214,8 @@
 
         <!-- ===================== MAIN END ======================== -->
 
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
+        <header th:replace="~{fragments/footer :: footer}"></header>
     </div> <!-- wrapper -->
     <th:block th:insert="~{fragments/common :: js}"></th:block>
-    <th:block th:insert="~{fragments/common :: js_category}"></th:block>
     </body>
     </html>

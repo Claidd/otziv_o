@@ -30,13 +30,13 @@
 
                         <div class="form-group">
                             <label for="text">Текст</label>
-                            <input type="text" id="text" th:field="*{text}" class="form-control">
+                            <textarea type="text" id="text" th:field="*{text}" class="form-control"> </textarea>
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('text')}" th:text="${err}">Validation error</small>
                         </div>
 
                         <div class="form-group">
                             <label for="answer">Ответ на отзыв</label>
-                            <input type="text" id="answer" th:field="*{answer}" class="form-control">
+                            <textarea type="text" id="answer" th:field="*{answer}" class="form-control"> </textarea>
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('answer')}" th:text="${err}">Validation error</small>
                         </div>
                         <div class="form-group">

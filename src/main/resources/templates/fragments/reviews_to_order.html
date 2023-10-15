@@ -14,8 +14,8 @@
         </div>
 
         <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-        <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
-            <div th:each="review : ${reviews}" class="company__card__lead">
+        <div  class="reviews__details">
+            <div th:each="review : ${reviews}" class="company__card__review">
                 <div class="company__card__content__lead">
 
                     <div  th:class="${review.isPublish} ? reviewTitleRed :  reviewTitleGreen"  >
@@ -23,7 +23,7 @@
                     </div>
 
                     <div class="company__card__content__comments">
-                        <div class="company__card__text__lead2" th:text="${review.text}">Текст отзыва</div>
+                        <div class="company__card__text__review2" th:text="${review.text}">Текст отзыва</div>
                     </div>
                     <div class="company__card__content__comments__tocompany">
                         <div class="company__card__text__lead2" th:text="${review.answer}">Ответ на отзыв</div>
@@ -81,7 +81,7 @@
                         </form>
                     </div>
                     <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/' + ${review.id}">
-                        <div class="company__card__link__lead" th:text="${review.publishedDate != null ? review.publishedDate : 'пусто'}">Имя Менеджера</div>
+                        <div class="company__card__data" th:text="${review.publishedDate != null ? review.publishedDate : 'пусто'}">Имя Менеджера</div>
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
                     </form>

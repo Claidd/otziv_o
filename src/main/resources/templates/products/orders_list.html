@@ -6,37 +6,30 @@
         <!-- ==================== STYLE ======================== -->
         <th:block th:insert="~{fragments/common :: styles}"></th:block>
         <!-- ==================== TITLE ======================== -->
-        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-        <title>Список заказов</title>
+
+        <title>Список заказов O! Company!</title>
     </head>
     <body>
-
-    <!-- ===================== CHOOSE START ========================== -->
-    <header th:replace="~{fragments/header :: header}"></header>
-
-
-    
+        <div class="wrapper">
+            <!-- ===================== CHOOSE START ========================== -->
+            <header th:replace="~{fragments/header :: header}"></header>
 
 
-
-    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-    <section class="company__lead__card">
-        <div class="container">
+            <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+            <section class="company__lead__card">
+                <div class="container">
              <h2 class="company__section-title" th:text="${TitleName}"></h2>
 
 
             <th:block th:insert="~{fragments/orders_to_company :: orders_to_company}" id="content-10"></th:block>
             
 
-        </div> <!-- container -->
+        
     </section> <!-- section -->
-    
-    
 
-        <!-- ====================== CHOOSE END =========================== -->
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
-        <!-- </th:block>  -->
-        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
-
-    </body>
+    <!-- ====================== CHOOSE END =========================== -->
+    <header th:replace="~{fragments/footer :: footer}"></header>
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+</div><!-- wrapper -->
+</body>
 </html>

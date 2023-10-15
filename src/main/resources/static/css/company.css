@@ -633,6 +633,7 @@ b{
 /* Меняет количество */
 
 
+
 .orderdetails__tabs__content-item{
     display: none;
     grid-template-columns: repeat(5, 1fr);
@@ -814,6 +815,20 @@ b{
     border-radius: 1.2rem;
 }
 
+.reviews__details{
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 40px;
+}
+
+.company__card__review {
+    text-align: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    width: 100%;
+    /* width: 18%; */
+}
+
 .company__card__lead:hover {
     box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
 }
@@ -969,15 +984,14 @@ b{
 
 .company__card__content__button__btn {
     margin-top: 3rem;
-    height: 70px;
-    width: 100%;
+    width: 100%; /* Удалите height: 70px; */
 }
 
 .company__label {
     text-align: center;
-    align-items: center;
+    display: block; /* Измените на display: block; */
     width: 100%;
-    margin-bottom: 2rem;
+    margin-bottom: 2rem; 
 }
 
 .company__card__content__subtitle {
@@ -1018,7 +1032,7 @@ b{
     align-items: center;
     height: 100%;
     width: 100%;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 300;
     /* background-color: #707efb08; */
 }
@@ -1109,13 +1123,14 @@ b{
     padding: 0;
     /* background-color: #00ff4411; */
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-around;
+    font-family: 'laptev_brush';
     /* box-shadow: 0 -2rem 3rem rgba(132, 139, 200, 0.18); */
 }
 
@@ -1135,10 +1150,11 @@ b{
     padding: 0;
     background-color: #00ff4411;
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
+    font-family: 'laptev_brush';
     /* box-shadow: 0 -2rem 3rem rgba(132, 139, 200, 0.18); */
 }
 
@@ -1161,10 +1177,11 @@ b{
     /* background-color: #152cfc00; */
     background-color: #707efb00;
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
+    font-family: 'laptev_brush';
     /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
 }
 
@@ -1179,6 +1196,7 @@ b{
 
 /* кнока редактировать все отзывы */
 .review__btn__review-editAll{
+    font-family: 'laptev_brush';
     background: none;
     border: none;
     text-decoration: none;
@@ -1187,7 +1205,7 @@ b{
     /* background-color: #152cfc00; */
     background-color: #707efb08;
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
@@ -1205,6 +1223,7 @@ b{
 
 /* кнока добавить отзыв */
 .review__btn__review-add{
+    font-family: 'laptev_brush';
     background: none;
     border: none;
     text-decoration: none;
@@ -1213,7 +1232,7 @@ b{
     /* background-color: #152cfc00; */
     background-color: #707efb08;
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
@@ -1231,6 +1250,7 @@ b{
 
 /* кнока отправить на проверку */
 .review__btn__review-check{
+    font-family: 'laptev_brush';
     background: none;
     border: none;
     text-decoration: none;
@@ -1239,7 +1259,7 @@ b{
     /* background-color: #152cfc00; */
     background-color: #707efb08;
     width: 100%;
-    height: 100%;
+    height: 70px;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
@@ -1262,7 +1282,8 @@ b{
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 186px;
+    height: 240px;
+    width: 100%;
 }
 
 .company__card__content__comments__tocompany {
@@ -1273,12 +1294,20 @@ b{
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     height: 46px;
+    width: 100%;
 }
 
 .company__card__text__lead2 {
     height: 40px;
     overflow-x:hidden; 
 }
+
+.company__card__text__review2 {
+    height: 240px;
+    padding: 5px;
+    overflow-x:hidden; 
+}
+
 
 .company__card__content__review__text {
     margin-top: 1rem;
@@ -1332,7 +1361,6 @@ b{
     border-radius: 1.2rem;
     text-align: center;
     /* border-radius: 1.2rem; */
-
 }
 
 .company__card__price__lead {
@@ -1349,6 +1377,17 @@ b{
     font-size: 0.75rem;
     font-family: 'laptev_brush';
 }
+
+.company__card__data {
+    display: block;
+    color: #000;
+    text-transform: uppercase;
+    margin-top: 10px;
+    font-size: 1.1rem;
+    font-family: 'laptev_brush';
+}
+
+
 .company__card__link__order {
     display: block;
     color: #000;
@@ -1933,6 +1972,17 @@ main .recent-orders a{
         gap: 20px;
     }
 }
+
+/* ==================== 1300 =================== */
+@media (max-width: 1300px) {
+
+    .reviews__details{
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 40px;
+    }
+
+}
 /* ==================== 1420 =================== */
 @media (max-width: 1250px) {
     
@@ -2041,6 +2091,12 @@ main .recent-orders a{
 
 
 @media (max-width: 1040px) {
+
+    .reviews__details{
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 40px;
+    }
 
     .company__video__content {
         width: 100%;
@@ -2155,6 +2211,10 @@ main .recent-orders a{
 /* ==================== 768 =================== */
 
 @media (max-width: 768px) {
+
+    .reviews__details{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 
     .company__title {
         font-size: 70px;
@@ -2315,6 +2375,8 @@ main .recent-orders a{
 
     @media (max-width: 650px) {
 
+        
+
         .company__tabs__btn__lead{
             grid-template-columns: repeat(4, 1fr);
         } 
@@ -2394,6 +2456,11 @@ main .recent-orders a{
     /* ==================== 540 =================== */
 
 @media (max-width: 540px) {
+
+    .reviews__details{
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+
 
     .company__title {
         font-size: 60px;

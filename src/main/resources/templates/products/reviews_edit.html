@@ -31,228 +31,229 @@
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-<section class="company__lead__cardsmoll">
-    <div class="container">
-        <h2 class="company__section-title2">Редактор отзывов</h2>
-            <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
-                <div class="mb-3" th:if="${saveSuccess}">
-                    <div class="alert alert-success">
-                        Данные успешно изменены и сохранены.
-                    </div>
-                </div>
-                <div class="company__tabs__lead">
-                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-                    <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
-                        <div th:each="item, itemStat : *{reviews}" class="company__card__lead">
-                            <div class="company__card__content__lead" >
-                                <!-- элементы карточки - начало -->
-                                <div class="company__card__content__subtitle">
-                                    <p >ТЕКСТ ОТЗЫВА:</p>
-                                </div>
-                                <div  class="company__card__content__review__text">
-                                    <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
-                                </div> 
-                                <div class="company__card__content__subtitle">
-                                    <a class="company__card__title__lead2" >текст ответа: </a>
-                                </div>
-                                <div >
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
-                                </div> 
-                            </div>  
-                    </div> <!-- tabs__content-item -->
-
-                    <div style="display: none;" >
-                        <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
-                    </div> 
-                    <!-- СПИСОК КАРТОЧЕК 1 -->
-                </div> <!-- card -->
-                <div style="display: none;" >
-                    <input class="company__card__content__review__answer" type="text" th:field="*{comment}">
-                </div> 
-
-                    <div  class="company__card__content__button">
-                        <div class="company__card__content__button__btn">
-                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                            <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label>
-                            <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">в архив</button>
-                        </div>
-                    </div>
-                </div> <!-- tabs -->
-            </form>
-    </div> <!-- container -->
-</section> <!-- section -->
-
- <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
- <section class="company__lead__cardsmoll">
-    <div class="container">
-        <!-- <h2 class="company__section-title">Детали заказа</h2> -->
-            <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId} + '/publish'">
-                <div class="company__tabs__lead" >
-                    <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
-                    <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
-                        <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
-                            <div class="company__card__content__lead" >
-                                <!-- элементы карточки - начало -->
-                                <div class="company__card__content__subtitle">
-                                    <a class="company__card__title__lead2" >текст отзыва:</a>
-                                </div>
-                                <div  class="company__card__content__review__text">
-                                    <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
-                                </div> 
-                                <div class="company__card__content__subtitle">
-                                    <a class="company__card__title__lead2" >текст ответа: </a>
-                                </div>
-                                <div >
-                                    <input class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}" />
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
-                                </div> 
-                            
-                                
-                                <form  th:method="post" th:action="@{'/ordersDetails/'+ ${orderDetailId} + '/' }">
-                                    <input type="hidden" name="_csrf" value="${_csrf.token}">
-                                    <div class="company__card__content__phone">
-                                            <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
-                                    </div>
-                                </form>
-                            </div>
-                            
-                            <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/'">
-                                <!-- <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div> -->
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
-                            </form>
-                        </div> <!-- card -->
-                        
-                    </div> <!-- tabs__content-item --> 
-                    <div > 
-                        <!-- <h2 class="company__section-subtitle">Комментарий</h2> -->
-                        <div style="display: none;" >
-                            <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
-                        </div> 
-                        <div style="display: none;" >
-                            <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
-                        </div> 
-                        <div   style="display: none;">
-                            <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
-                        </div> 
-                        <div   style="display: none;">
-                            <textarea class="company__card__content__review__comment" type="text" th:field="*{amount}">  </textarea>
-                        </div> 
-                        <div   style="display: none;">
-                            <textarea class="company__card__content__review__comment" type="text" th:field="*{order.company.id}">  </textarea>
-                        </div> 
-                    
-                    <!-- СПИСОК КАРТОЧЕК 1 -->
-                        <div  class="company__card__content__button2">
-                            <div class="company__card__content__button__btn">
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <label class="company__label" for="btn_publish">Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекци".</label>
-                                <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
+        <section class="company__lead__cardsmoll">
+            <div class="container">
+                <h2 class="company__section-title2">Редактор отзывов</h2>
+                    <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
+                        <div class="mb-3" th:if="${saveSuccess}">
+                            <div class="alert alert-success">
+                                Данные успешно изменены и сохранены.
                             </div>
                         </div>
-                    </div>
-                </div> <!-- tabs -->
-            </form>
-    </div> <!-- container -->
-</section> <!-- section --> <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
+                        <div class="company__tabs__lead">
+                            <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                            <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
+                                <div th:each="item, itemStat : *{reviews}" class="company__card__lead">
+                                    <div class="company__card__content__lead" >
+                                        <!-- элементы карточки - начало -->
+                                        <div class="company__card__content__subtitle">
+                                            <p >ТЕКСТ ОТЗЫВА:</p>
+                                        </div>
+                                        <div  class="company__card__content__review__text">
+                                            <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
+                                        </div> 
+                                        <div class="company__card__content__subtitle">
+                                            <a class="company__card__title__lead2" >текст ответа: </a>
+                                        </div>
+                                        <div >
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
+                                        </div> 
+                                    </div>  
+                            </div> <!-- tabs__content-item -->
 
-
-  <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО --><!-- СПИСОК КАРТОЧЕК 3 НОВЫЕ-->
-  <section class="company__lead__cardsmoll">
-    <div class="container">
-        <!-- <h2 class="company__section-title">Детали заказа</h2> -->
-            <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviewses/' + ${orderDetailId}">
-                <div class="company__tabs__lead" >
-                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-                    <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
-                        <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
-                            <div class="company__card__content__lead" >
-                                <!-- элементы карточки - начало -->
-                                <div class="company__card__content__subtitle">
-                                    <a class="company__card__title__lead2" >текст отзыва:</a>
-                                </div>
-                                <div  class="company__card__content__review__text">
-                                    <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
-                                </div> 
-                                <div class="company__card__content__subtitle">
-                                    <a class="company__card__title__lead2" >текст ответа: </a>
-                                </div>
-                                <div >
-                                    <input class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}" />
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
-                                </div> 
-                                <div style="display: none;">
-                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
-                                </div> 
-                                
-                                <form  th:method="post" th:action="@{'/ordersDetails/'+ ${orderDetailId} + '/' }">
-                                    <input type="hidden" name="_csrf" value="${_csrf.token}">
-                                    <div class="company__card__content__phone">
-                                            <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
-                                    </div>
-                                </form>
-                            </div>
-                            
-                            <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/'">
-                                <!-- <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div> -->
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
-                            </form>
-                        </div> <!-- card -->
-                        
-                    </div> <!-- tabs__content-item --> 
-                    <div class="company__tabs__review"> 
-                        <div class="company__tabs__review2">
-                            <h2 class="company__section-subtitle">Комментарий</h2>
                             <div style="display: none;" >
                                 <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
                             </div> 
-                            <div  class="reviews__btn__save">
-                                <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
-                            </div> 
-                            <div style="display: none;" >
-                                <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
-                            </div> 
-                        
-                            <!-- СПИСОК КАРТОЧЕК 1 --> 
-                                <div  class="reviews__btn__save">
+                            <!-- СПИСОК КАРТОЧЕК 1 -->
+                        </div> <!-- card -->
+                        <div style="display: none;" >
+                            <input class="company__card__content__review__answer" type="text" th:field="*{comment}">
+                        </div> 
+
+                            <div  class="company__card__content__button">
+                                <div class="company__card__content__button__btn">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
+                                    <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">в архив</button>
+                                </div>
+                            </div>
+                        </div> <!-- tabs -->
+                    </form>
+            </div> <!-- container -->
+        </section> <!-- section -->
+
+        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+        <section class="company__lead__cardsmoll">
+            <div class="container">
+                <!-- <h2 class="company__section-title">Детали заказа</h2> -->
+                    <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId} + '/publish'">
+                        <div class="company__tabs__lead" >
+                            <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
+                            <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
+                                <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
+                                    <div class="company__card__content__lead" >
+                                        <!-- элементы карточки - начало -->
+                                        <div class="company__card__content__subtitle">
+                                            <a class="company__card__title__lead2" >текст отзыва:</a>
+                                        </div>
+                                        <div  class="company__card__content__review__text">
+                                            <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
+                                        </div> 
+                                        <div class="company__card__content__subtitle">
+                                            <a class="company__card__title__lead2" >текст ответа: </a>
+                                        </div>
+                                        <div >
+                                            <input class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}" />
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publish}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].publishedDate}"></textarea>
+                                        </div> 
+                                    
+                                        
+                                        <form  th:method="post" th:action="@{'/ordersDetails/'+ ${orderDetailId} + '/' }">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                            <div class="company__card__content__phone">
+                                                    <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/'">
+                                        <!-- <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div> -->
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                                    </form>
+                                </div> <!-- card -->
+                                
+                            </div> <!-- tabs__content-item --> 
+                            <div > 
+                                <!-- <h2 class="company__section-subtitle">Комментарий</h2> -->
+                                <div style="display: none;" >
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
+                                </div> 
+                                <div style="display: none;" >
+                                    <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
+                                </div> 
+                                <div   style="display: none;">
+                                    <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
+                                </div> 
+                                <div   style="display: none;">
+                                    <textarea class="company__card__content__review__comment" type="text" th:field="*{amount}">  </textarea>
+                                </div> 
+                                <div   style="display: none;">
+                                    <textarea class="company__card__content__review__comment" type="text" th:field="*{order.company.id}">  </textarea>
+                                </div> 
+                            
+                            <!-- СПИСОК КАРТОЧЕК 1 -->
+                                <div  class="company__card__content__button2">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <label class="company__label" for="btn_comment">Сохранить изменения, но пока, что не публиковать</label>
-                                        <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
+                                        <p class="company__label" >Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекци".</p>
+                                        <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div> <!-- tabs -->
-            </form>
-    </div> <!-- container -->
+                        </div> <!-- tabs -->
+                    </form>
+            </div> <!-- container -->
+        </section> <!-- section --> <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
+
+
+        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО --><!-- СПИСОК КАРТОЧЕК 3 НОВЫЕ-->
+        <section class="company__lead__cardsmoll">
+            <div class="container">
+                <!-- <h2 class="company__section-title">Детали заказа</h2> -->
+                    <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviewses/' + ${orderDetailId}">
+                        <div class="company__tabs__lead" >
+                            <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                            <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
+                                <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
+                                    <div class="company__card__content__lead" >
+                                        <!-- элементы карточки - начало -->
+                                        <div class="company__card__content__subtitle">
+                                            <a class="company__card__title__lead2" >текст отзыва:</a>
+                                        </div>
+                                        <div  class="company__card__content__review__text">
+                                            <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
+                                        </div> 
+                                        <div class="company__card__content__subtitle">
+                                            <a class="company__card__title__lead2" >текст ответа: </a>
+                                        </div>
+                                        <div >
+                                            <input class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}" />
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
+                                        </div> 
+                                        <div style="display: none;">
+                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].orderDetailsId}"></textarea>
+                                        </div> 
+                                        
+                                        <form  th:method="post" th:action="@{'/ordersDetails/'+ ${orderDetailId} + '/' }">
+                                            <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                            <div class="company__card__content__phone">
+                                                    <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    <form class="company__card__content__author" th:method="get" th:action="'/review/editReview/'">
+                                        <!-- <div class="company__card__link__lead" th:text="${review.id != null ? review.id : 'пусто'}">Имя Менеджера</div> -->
+                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                                    </form>
+                                </div> <!-- card -->
+                                
+                            </div> <!-- tabs__content-item --> 
+                            <div class="company__tabs__review"> 
+                                <div class="company__tabs__review2">
+                                    <h2 class="company__section-subtitle">Комментарий</h2>
+                                    <div style="display: none;" >
+                                        <textarea class="company__card__content__review__answer" type="text" th:field="*{id}"></textarea>
+                                    </div> 
+                                    <div  class="reviews__btn__save">
+                                        <textarea class="company__card__content__review__comment" type="text" th:field="*{comment}">  </textarea>
+                                    </div> 
+                                    <div style="display: none;" >
+                                        <textarea class="company__card__content__review__answer" type="text" th:field="*{order.id}"></textarea>
+                                    </div> 
+                                
+                                    <!-- СПИСОК КАРТОЧЕК 1 --> 
+                                        <div  class="reviews__btn__save">
+                                            <div class="company__card__content__button__btn">
+                                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                                <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
+                                                <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- tabs -->
+                    </form>
+            
+
 </section> <!-- section -->
 
 
@@ -262,9 +263,8 @@
 
         <!-- ===================== MAIN END ======================== -->
 
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
+        <header th:replace="~{fragments/footer :: footer}"></header>
     </div> <!-- wrapper -->
     <th:block th:insert="~{fragments/common :: js}"></th:block>
-    <th:block th:insert="~{fragments/common :: js_category}"></th:block>
     </body>
     </html>
