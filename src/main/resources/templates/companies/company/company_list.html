@@ -5,24 +5,22 @@
         <th:block th:insert="~{fragments/common :: meta}"></th:block>
         <!-- ==================== STYLE ======================== -->
         <th:block th:insert="~{fragments/common :: styles}"></th:block>
-        <!-- ==================== TITLE ======================== -->
-        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-        <title>Компании в бане</title>
+
+        <title>Все компании O! Company!</title>
     </head>
     <body>
+        <div class="wrapper">
+            <!-- ===================== CHOOSE START ========================== -->
+            <header th:replace="~{fragments/header :: header}"></header>
 
-    <!-- ===================== CHOOSE START ========================== -->
-    <header th:replace="~{fragments/header :: header}"></header>
 
-
-    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-    <section class="company__lead__card">
-        <div class="container">
-
-            <h2 class="company__section-title" th:text="${TitleName}"></h2>
-            <div class="company__tabs__lead">
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                <div class="company__tabs__btn__lead">
+            <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+            <section class="company__lead__card">
+                <div class="container">
+                    <h2 class="company__section-title" th:text="${TitleName}"></h2>
+                    <div class="company__tabs__lead">
+                        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                        <div class="company__tabs__btn__lead">
                     <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/lead'}">Лиды</a>
                     <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/companies/new_company'}">Новые</a>
                     <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/companies/on_work'}">В работе</a>
@@ -34,18 +32,18 @@
                     <a class="company__tabs__btn-item  company__tabs__btn-item--active" data-button="content-15" th:href="@{'/companies/allCompany'}">Все</a>
                     <a class="company__tabs__btn-item" th:href="@{'/orders/new_orders'}" data-button="content-16">Заказы</a>
                 </div>
+
+
+                <th:block th:insert="~{fragments/company :: company}"></th:block>
             
-            <th:block th:insert="~{fragments/company :: company}"></th:block>
 
             
-
         </div> <!-- container -->
     </section> <!-- section -->
 
         <!-- ====================== CHOOSE END =========================== -->
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
-        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
-        
-
-    </body>
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+</div><!-- wrapper -->
+</body>
 </html>

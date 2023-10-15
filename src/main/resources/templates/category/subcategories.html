@@ -5,7 +5,7 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
     <!-- ==================== TITLE ======================== -->
     <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
     <title>Субкатегории</title>
@@ -22,6 +22,11 @@
         <h2 class="section-title">СОЗДАТЬ НОВУЮ ПОДКАТЕГОРИЮ</h2>
         <div class="row py-2 pt-1 mt-1">
             <div class="col-12 pt-5">
+                <div class="mb-3" th:if="${saveSuccess}">
+                    <div class="alert alert-success">
+                        Данные успешно изменены и сохранены.
+                    </div>
+                </div>
                 <form th:action="@{'/subcategories/' + ${categoryId}+ '/' + ${categoryTitle}}" th:object="${subCategoryDTO}" method="post">
                     <div class="form-group">
                         <label for="subCategoryTitle">Добавление новой подкатегрии</label>
@@ -98,9 +103,9 @@
 
 
     <!-- ===================== MAIN END ======================== -->
-<header th:replace="~{fragments/footer2 :: footer}"></header>
+<header th:replace="~{fragments/footer :: footer}"></header>
 </div> <!-- wrapper -->
 <th:block th:insert="~{fragments/common :: js}"></th:block>
-<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+
 </body>
 </html>

@@ -77,6 +77,13 @@
 		left: 20%;
 	}
 }
+@media screen and (max-width: 615px) {
+	.section-title{
+		font-size: 34px;
+	}
+
+}
+
 @media screen and (max-width: 600px) {
 	html {	
 	font-size: 100%
@@ -133,6 +140,7 @@
 		font-size: 1.2rem;
     }
 
+	
 	
 }
 @media screen and (max-width: 370px) {

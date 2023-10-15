@@ -4,7 +4,33 @@
 
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
+
     <div class="company__tabs__content-lead">
+        <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
+        <div class="company__card__remember">
+            <div class="company__card__remember__box">
+                <!-- <div class="company__card_remember-content">
+                    <textarea class="company__card__remember-text" th:utext="${promoTexts[5]}" id="myInput1"></textarea>
+                    <button class="company__card_remember-content__btn" onclick="myFunction1()">напоминание счет</button>
+                </div>
+                <div class="company__card_remember-content">
+                    <textarea class="company__card__remember-text"th:utext="${promoTexts[6]}" id="myInput2"></textarea>
+                    <button class="company__card_remember-content__btn" onclick="myFunction2()">угроза</button>
+                </div> -->
+                <div class="company__card__remember__box-serch">
+
+                    <form class="company__card_remember-search2" th:method="get">
+                        <!-- The text field -->
+                        <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                        <!-- The button used to copy the text -->
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="company__card_remember-search__btn">Найти</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    
+        <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
         <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
         <div class="mb-3" th:if="${saveSuccess}">
@@ -93,7 +119,7 @@
             </div> <!-- tabs__content-item -->
             <!-- СПИСОК КАРТОЧЕК 1 -->
 
-            <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+            <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
             <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>

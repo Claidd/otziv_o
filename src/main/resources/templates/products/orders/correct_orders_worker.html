@@ -7,26 +7,21 @@
         <th:block th:insert="~{fragments/common :: styles}"></th:block>
         <!-- ==================== TITLE ======================== -->
         <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-        <title>Заказы на коррекции</title>
+        <title>Заказы на коррекции O! Company!</title>
     </head>
     <body>
-
-    <!-- ===================== CHOOSE START ========================== -->
-    <header th:replace="~{fragments/header :: header}"></header>
-
-
-    
+        <div class="wrapper">
+            <!-- ===================== CHOOSE START ========================== -->
+            <header th:replace="~{fragments/header :: header}"></header>
 
 
-
-    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-    <section class="company__lead__card">
-        <div class="container">
-            <h2 class="company__section-title" th:text="'Список заказов:  ' + ${TitleName}">Список заказов</h2>
-                <div class="company__tabs__lead">
-                    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                    <div class="company__tabs__btn__lead">
-                        <!-- <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-11">К компаниям</a> -->
+            <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+            <section class="company__lead__card">
+                <div class="container">
+                    <h2 class="company__section-title" th:text="'Список заказов:  ' + ${TitleName}">Список заказов</h2>
+                    <div class="company__tabs__lead">
+                        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                        <div class="company__tabs__btn__worker">
                         <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/worker/new_orders'}">Новые</a>
                         <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-11" th:href="@{'/worker/correct'}">Коррекция</a>
                         <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/worker/publish'}">Публикация</a>
@@ -37,16 +32,11 @@
 
                     <th:block th:insert="~{fragments/order_list_worker :: order_list_worker}" id="content-10"></th:block>
                 
-                </div> <!-- tabs -->
-        </div> <!-- container -->
-    </section> <!-- section -->
-    
-    
+                </section> <!-- section -->
 
-        <!-- ====================== CHOOSE END =========================== -->
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
-        <!-- </th:block>  -->
-        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
-
+                <!-- ====================== CHOOSE END =========================== -->
+                <header th:replace="~{fragments/footer :: footer}"></header>
+                <th:block th:insert="~{fragments/common :: js}"></th:block>
+            </div><!-- wrapper -->
     </body>
-</html>
+    </html>

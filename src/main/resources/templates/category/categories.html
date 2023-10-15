@@ -5,10 +5,9 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles}"></th:block>
-    <!-- ==================== TITLE ======================== -->
-    <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-    <title>Добавление Категорий</title>
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+
+    <title>Добавление Категорий O! Company!</title>
 </head>
 <body>
 
@@ -24,6 +23,11 @@
         <h2 class="section-title">СОЗДАТЬ НОВУЮ КАТЕГОРИЮ</h2>
         <div class="row py-2 pt-1 mt-1">
             <div class="col-12 pt-5">
+                <div class="mb-3" th:if="${saveSuccess}">
+                    <div class="alert alert-success">
+                        Данные успешно изменены и сохранены.
+                    </div>
+                </div>
                 <form th:action="@{/categories}" method="post" th:object="${categoryDTO}">
                     <div class="form-group">
                         <label for="categoryTitle">Добавление новой категрии</label>
@@ -44,39 +48,41 @@
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
 <div class="container mt-5">
     <h2 class="section-title">СПИСОК КАТЕГОРИЙ</h2>
-    <table class="table table-striped">
-        <thead>
-        <tr>
-            <th scope="col">Название категории</th>
-            <th scope="col">Добавить подкатегорию</th>
-            <th scope="col">Изменить</th>
-            <th scope="col">Удалить</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="category : ${categories}">
-            <th scope="row" th:text="${category.categoryTitle}">Логин</th>
-            <td>
-                <form th:method="get" th:action="'/subcategories/' + ${category.id} + '/' + ${category.categoryTitle}">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>
-                </form>
-            </td>
-            <td>
-                <form th:method="get" th:action="'/categories/update/' + ${category.id}">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
-                </form>
-            </td>
-            <td>
-                <form th:method="delete" th:action="'/categories/delete/' + ${category.id}" >
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
-                </form>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th scope="col">Название категории</th>
+                <th scope="col">Добавить подкатегорию</th>
+                <th scope="col">Изменить</th>
+                <th scope="col">Удалить</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="category : ${categories}">
+                <th scope="row" th:text="${category.categoryTitle}">Логин</th>
+                <td>
+                    <form th:method="get" th:action="'/subcategories/' + ${category.id} + '/' + ${category.categoryTitle}">
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>
+                    </form>
+                </td>
+                <td>
+                    <form th:method="get" th:action="'/categories/update/' + ${category.id}">
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                    </form>
+                </td>
+                <td>
+                    <form th:method="delete" th:action="'/categories/delete/' + ${category.id}" >
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 
@@ -104,9 +110,9 @@
     </ul> -->
 
     <!-- ===================== MAIN END ======================== -->
-<header th:replace="~{fragments/footer2 :: footer}"></header>
+<header th:replace="~{fragments/footer :: footer}"></header>
 </div> <!-- wrapper -->
 <th:block th:insert="~{fragments/common :: js}"></th:block>
-<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+<!-- <th:block th:insert="~{fragments/common :: js_category}"></th:block> -->
 </body>
 </html>

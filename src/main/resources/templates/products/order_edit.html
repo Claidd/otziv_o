@@ -5,10 +5,9 @@
         <!-- ==================== META ======================== -->
         <th:block th:insert="~{fragments/common :: meta}"></th:block>
         <!-- ==================== STYLE ======================== -->
-        <th:block th:insert="~{fragments/common :: styles2}"></th:block>
-        <!-- ==================== TITLE ======================== -->
-        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-        <title>Редактор заказа</title>
+        <th:block th:insert="~{fragments/common :: styles_index_boot2}"></th:block>
+
+        <title>Редактор заказа O! Company!</title>
     </head>
     <body>
 
@@ -96,9 +95,8 @@
 
         <!-- ===================== MAIN END ======================== -->
 
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
+        <header th:replace="~{fragments/footer :: footer}"></header>
     </div> <!-- wrapper -->
     <th:block th:insert="~{fragments/common :: js}"></th:block>
-    <th:block th:insert="~{fragments/common :: js_category}"></th:block>
     </body>
     </html>

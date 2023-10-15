@@ -84,6 +84,7 @@ body {
     display: flex;
     /* устанавливаем добавление дивов друг под другом */
     flex-direction: column;
+    position: relative;
 }
 
 .container {
@@ -734,10 +735,7 @@ body {
 @media (max-width: 1500px) {
 /* Меняет количество */
 .tabs__content__lead-item{
-    display: none;
     grid-template-columns: repeat(4, 1fr);
-    gap: 100px 40px;
-    margin-top: 5rem;
 }
 /* Меняет количество */
 }

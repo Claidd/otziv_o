@@ -5,7 +5,7 @@
             <!-- ==================== META ======================== -->
             <th:block th:insert="~{fragments/common :: meta}"></th:block>
             <!-- ==================== STYLE ======================== -->
-            <th:block th:insert="~{fragments/common :: styles}"></th:block>
+            <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
             <!-- ==================== TITLE ======================== -->
             <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
         </head>
@@ -17,13 +17,6 @@
 
                     <!-- ==================== MAIN START ======================== -->
 
-                    <!-- ==================== FRAGMENT: title ======================== -->
-<!--                    <th:block th:switch="${route}">>-->
-<!--                        <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>-->
-<!--                        &lt;!&ndash;        <th:block th:case="leads_list">Список 2 лидов</th:block>&ndash;&gt;-->
-<!--                        <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>-->
-
-<!--                    </th:block>-->
 
                     <!-- ===================== MAIN END ======================== -->
                     <section class="edit__lead">
@@ -110,9 +103,10 @@
 
                     <!-- ===================== EDIT LEAD END ========================= -->
 
-                    <header th:replace="~{fragments/footer2 :: footer}"></header>
+                    <header th:replace="~{fragments/footer :: footer}"></header>
+                    <th:block th:insert="~{fragments/common :: js}"></th:block>
                 </div> <!-- wrapper -->
-                <th:block th:insert="~{fragments/common :: js}"></th:block>
+                
         </body>
     </html>
 <!--</th:block>-->

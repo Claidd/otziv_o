@@ -1,20 +1,5 @@
 <section th:fragment="company" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
 
-    <!-- <h2 class="company__section-title" th:text="${TitleName}"></h2>
-    <div class="company__tabs__lead"> -->
-        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-        <!-- <div class="company__tabs__btn__lead">
-            <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10" th:href="@{'/companies/new_company'}">Новые</a>
-            <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/companies/on_work'}">В работе</a>
-            <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/companies/new_order'}">Новый заказ</a>
-            <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/companies/to_send'}">К рассылке</a>
-            <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/companies/waiting'}">Ожидание</a>
-            <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/companies/on_stop'}">На стопе</a>
-            <a class="company__tabs__btn-item" data-button="content-16" th:href="@{'/companies/ban_company'}">Бан</a>
-            <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/companies/allCompany'}">Все</a>
-            <a class="company__tabs__btn-item" th:href="@{'/orders/new_orders'}" data-button="content-16">Заказы</a>
-        </div> -->
-        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ --> 
 
         <div class="company__tabs__content-lead">
             <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
@@ -74,7 +59,7 @@
                             <div class="company__card__content_button"> <!-- card__content_button -->
                                 <form class="company__card__text__lead" th:method="post" th:action="'/companies/status_for_waiting/' + ${company.id}">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                    <button type="submit" class="company__card__text__lead-button ">предложил</button>
+                                    <button type="submit" class="company__card__text__lead-button">предложил</button>
                                 </form>
                                 <form class="company__card__text__lead" th:method="post" th:action="'/companies/status_for_waiting_send/' + ${company.id}">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>

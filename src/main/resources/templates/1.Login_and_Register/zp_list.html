@@ -5,10 +5,10 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles}"></th:block>
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
     <!-- ==================== TITLE ======================== -->
     <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-    <title>Зарплата работников</title>
+    <title>Зарплата работников O! Company!</title>
 </head>
 <body class="page">
 <header th:replace="~{fragments/header :: header}"></header>
@@ -16,45 +16,47 @@
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
 <div class="container mt-5">
     <h2 class="section-title">СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ</h2>
-    <table class="table table-striped">
-        <thead>
-        <tr>
-            <th scope="col">ФИО</th>
-            <th scope="col">Сумма</th>
-            <th scope="col">Дата</th>
-            <th scope="col">Активность</th>
-            <th scope="col">Заказ</th>
-            <th scope="col">UserId</th>
-            <th scope="col">ProfId</th>
-            <th scope="col">Изменить</th>
-            <th scope="col">Удалить</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="zp : ${zpList}">
-            
-            <th scope="row" th:text="${zp.fio}">ФИО</th>
-            <td th:text="${zp.sum}">Сумма</td>
-            <td th:text="${zp.created}">Дата</td>
-            <td th:text="${zp.active}">Активность</td>
-            <td th:text="${zp.orderId}">Заказ</td>
-            <td th:text="${zp.userId}">UserId</td>
-            <th th:text="${zp.professionId}">ProfId</th>
-            <td>
-                <form th:method="get" th:action="'/zp/' + ${zp.id} + '/edit'">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
-                </form>
-            </td>
-            <td>
-                <form th:method="delete" th:action="'/zp/' + ${zp.id} + '/delete'" >
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
-                </form>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th scope="col">ФИО</th>
+                <th scope="col">Сумма</th>
+                <th scope="col">Дата</th>
+                <th scope="col">Активность</th>
+                <th scope="col">Заказ</th>
+                <th scope="col">UserId</th>
+                <th scope="col">ProfId</th>
+                <th scope="col">Изменить</th>
+                <th scope="col">Удалить</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="zp : ${zpList}">
+                
+                <th scope="row" th:text="${zp.fio}">ФИО</th>
+                <td th:text="${zp.sum}">Сумма</td>
+                <td th:text="${zp.created}">Дата</td>
+                <td th:text="${zp.active}">Активность</td>
+                <td th:text="${zp.orderId}">Заказ</td>
+                <td th:text="${zp.userId}">UserId</td>
+                <th th:text="${zp.professionId}">ProfId</th>
+                <td>
+                    <form th:method="get" th:action="'/zp/' + ${zp.id} + '/edit'">
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                    </form>
+                </td>
+                <td>
+                    <form th:method="delete" th:action="'/zp/' + ${zp.id} + '/delete'" >
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
@@ -62,6 +64,7 @@
 
 <!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
 <header th:replace="~{fragments/footer :: footer}"></header>
+<th:block th:insert="~{fragments/common :: js}"></th:block>
 
 
 

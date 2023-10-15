@@ -1,36 +1,19 @@
 <section th:fragment="order_list_from_company" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
     
-            <!-- <div class="company__tabs__lead"> -->
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                <!-- <div class="company__tabs__btn__lead">
-                    <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-10">К компаниям</a>
-                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-11" th:href="@{'/orders/new_orders'}">Новые</a>
-                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-12" th:href="@{'/orders/to_check'}">В проверку</a>
-                    <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/orders/on_check'}">На проверке</a>
-                    <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/orders/correct'}">Коррекция</a>
-                    <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/orders/to_published'}">Публикация</a>
-                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-16" th:href="@{'/orders/published'}">Опубликовано</a>
-                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-17" th:href="@{'/orders/payment_check'}">Выставлен счет</a>
-                    <a class="company__tabs__btn-item" data-button="content-18" th:href="@{'/orders/remember'}">Напоминание</a>
-                    <a class="company__tabs__btn-item" data-button="content-19" th:href="@{'/orders/no_pay'}">Не опл.</a>
-                    <a class="company__tabs__btn-item" data-button="content-20" th:href="@{'/orders/pay'}">Оплачено </a>
-                    <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-21" th:href="@{'/orders/all_orders'}">Все </a>
-                </div> -->
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
                 <div class="company__tabs__content-lead">
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
                     <div class="company__card__remember">
                         <div class="company__card__remember__box">
-                            <div class="company__card_remember-content">
+                            <div class="company__card_remember-content2">
                                 <textarea class="company__card__remember-text" th:utext="${promoTexts[5]}" id="myInput1"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction1()">напоминание счет</button>
                             </div>
-                            <div class="company__card_remember-content">
+                            <div class="company__card_remember-content2">
                                 <textarea class="company__card__remember-text"th:utext="${promoTexts[6]}" id="myInput2"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction2()">угроза</button>
                             </div>
-
+                        </div>
                             <div class="company__card__remember__box-serch">
                                 <form class="company__card_remember-search" th:method="get">
                                     <!-- The text field -->
@@ -42,7 +25,7 @@
                             </div>
                         </div>
                     </div>
-                
+                </div>
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
 
@@ -69,7 +52,7 @@
                         <div class="company__card__content__phone"> <!-- Телефон + ссылка в WhatsApp -->
                             <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${order.company.urlChat}">
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="company__card__text__lead-button " th:text="${order.company.telephone}">в архив</button>
+                                <button type="submit" class="company__telephone__button" th:text="${order.company.telephone}">в архив</button>
                             </form>
                         </div>
 
@@ -79,7 +62,7 @@
                                 <textarea class="company__card__remember-text" th:utext="${promoTexts[5]} + ' Ссылка на проверку отзывов: ' + 'https://o-ogo.ru/review/editReviews/'" id="checkAndUrl"></textarea>
                                 <button class="company__card__text__lead-button" th:attr="data-orderid=${order.id}" onclick="checkAndUrl(this)">текст+url</button>
                             </div>
-                            <form class="company__card__text__lead" th:method="get" th:action="'/review/editReviews/' + ${order.id}">
+                            <form class="company__card__text__lead" th:method="get" target="_blank" th:action="'/review/editReviews/' + ${order.id}">
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__text__lead-button ">url</button>
                             </form>
@@ -140,7 +123,7 @@
                             </form>
                         </div> <!-- card__content_button -->
                         <div class="company__card__content__product">
-                            <a class="company__card__title__bot" th:text="${order.worker.user.fio}">ФИО бота</a>
+                            <a class="company__card__title__worker" th:text="${order.worker.user.fio}">ФИО бота</a>
                         </div>
                         <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
                             <p class="company__card__text__city__lead" th:text="${order.company.categoryCompany.categoryTitle}">Категрия</p>
@@ -170,10 +153,10 @@
             </div>
             <!-- СПИСОК КАРТОЧЕК 1 КОНЕЦ -->
 
-        </div> <!-- tabs__content -->
+        
     </div> <!-- tabs -->
 
-                    <th:block th:insert="~{fragments/common :: js_company}"></th:block>
+                    
                     <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>

@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Comparator;
 import java.util.List;
@@ -27,7 +28,6 @@ public class CategoryController {
         this.subCategoryService = subCategoryService;
     }
 
-
     @GetMapping
     public String getAllCategories(Model model) {
         List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
@@ -42,8 +42,9 @@ public class CategoryController {
         return subCategoryService.getSubcategoriesByCategoryId(categoryId).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
     }
     @PostMapping
-    public String createCategory(@ModelAttribute("categoryDTO") CategoryDTO categoryDTO) {
+    public String createCategory(@ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) {
         categoryService.saveCategory(categoryDTO);
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
     }
 
@@ -53,15 +54,17 @@ public class CategoryController {
         return "category/edit_categories";
     }
     @PostMapping("/update/{id}")
-    public String updateCategory(@PathVariable Long id, @ModelAttribute("categoryDTO") CategoryDTO categoryDTO) {
+    public String updateCategory(@PathVariable Long id, @ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) {
         categoryService.updateCategory(id, categoryDTO);
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
     }
 
     @PostMapping("/delete/{id}")
-    public String deleteCategory(@PathVariable Long id) {
+    public String deleteCategory(@PathVariable Long id, RedirectAttributes rm) {
         log.info("входим в удаление");
         categoryService.deleteCategory(id);
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
     }
 

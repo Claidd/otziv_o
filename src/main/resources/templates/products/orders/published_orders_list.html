@@ -5,27 +5,22 @@
         <th:block th:insert="~{fragments/common :: meta}"></th:block>
         <!-- ==================== STYLE ======================== -->
         <th:block th:insert="~{fragments/common :: styles}"></th:block>
-        <!-- ==================== TITLE ======================== -->
-        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-        <title>Опубликованные заказы</title>
+
+        <title>Опубликованные заказы O! Company!</title>
     </head>
     <body>
-
-    <!-- ===================== CHOOSE START ========================== -->
-    <header th:replace="~{fragments/header :: header}"></header>
-
-
-    
+        <div class="wrapper">
+            <!-- ===================== CHOOSE START ========================== -->
+            <header th:replace="~{fragments/header :: header}"></header>
 
 
-
-    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-    <section class="company__lead__card">
-        <div class="container">
-            <h2 class="company__section-title" th:text="'Список заказов:  ' + ${TitleName}">Список заказов</h2>
-            <div class="company__tabs__lead">
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                <div class="company__tabs__btn__lead">
+            <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+            <section class="company__lead__card">
+                <div class="container">
+                    <h2 class="company__section-title" th:text="${TitleName}"></h2>
+                    <div class="company__tabs__lead">
+                        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                        <div class="company__tabs__btn__order">
                     <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-10">К компаниям</a>
                     <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/orders/new_orders'}">Новые</a>
                     <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/orders/to_check'}">В проверку</a>
@@ -43,15 +38,11 @@
 
             <th:block th:insert="~{fragments/order_list_from_company :: order_list_from_company}" id="content-10"></th:block>
 
-        </div> <!-- container -->
-    </section> <!-- section -->
-    
-    
+        </section> <!-- section -->
 
         <!-- ====================== CHOOSE END =========================== -->
-        <header th:replace="~{fragments/footer2 :: footer}"></header>
-        </th:block> <!-- wrapper -->
-        <th:block th:insert="~{fragments/common :: js_company}"></th:block>
-
-    </body>
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+    </div><!-- wrapper -->
+</body>
 </html>

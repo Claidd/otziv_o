@@ -17,56 +17,28 @@ $(document).ready(function() {
   });
 });
 
-  // <!-- ==================== MENU STRAT ====================== -->
-    // ищем кнопку
-  //   const menuBtn = document.querySelector('.menu__btn');
-  //   // ищем само меню
-  // const menu = document.querySelector('.menu__list');
 
-  //   // вещаем обработчик на клик
-  // menuBtn.addEventListener('click', () => {
-  //   // по клику добавляем класс дял меню
-  //   menu.classList.toggle('menu__list--active')
-  // });
+// Обработчик события изменения значения в первом селекторе
+$("#category").change(function() {
+  var categoryId = $(this).val();
+  // Отправляем AJAX запрос на сервер для получения списка подкатегорий
+    $.ajax({
+        url: "/categories/getSubcategories", // URL для обработки запроса на сервере
+        data: {categoryId: categoryId}, // Параметр с идентификатором категории
+        success: function(data) {
+            // При успешном ответе сервера обновляем список подкатегорий во втором селекторе
+            $("#subcategory").empty();
+            $.each(data, function(index, subcategory) {
+                $("#subcategory").append('<option value="' + subcategory.id + '">' + subcategory.subCategoryTitle + '</option>');
+            });
+        },
+        error: function() {
+            // Обработка ошибки
+            alert("Произошла ошибка при загрузке подкатегорий.");
+        }
+    });
+});
 
-  // <!-- ===================== MENU END ======================= -->
-
-
-  
-  // <!-- ==================== CHOOSE STRAT ====================== -->
-
-  // создаем переменные
-  // const tabsItemm = document.querySelectorAll('.tabs__btn-item');
-  // const tabsContent = document.querySelectorAll('.tabs__content-item');
-
-  // // вышаем слушатель
-  // tabsItemm.forEach(function(element){
-  //   element.addEventListener('click', open);
-  // });
-
-  // function open(evt) {
-  //   const tabTarget = evt.currentTarget;
-  //   // должны понять .что написано в дата атрибуте
-  //   const button = tabTarget.dataset.button;
-
-  //   // удаляем класс
-  //   tabsItemm.forEach(function(item){
-  //     item.classList.remove('tabs__btn-item--active')
-  //   });
-
-  //   // добавляем класс
-  //   tabTarget.classList.add('tabs__btn-item--active');
-
-  //   // удаляем класс
-  //   tabsContent.forEach(function(item){
-  //     item.classList.remove('tabs__content-item--active');
-  //   });
-
-  //   // добавляем класс
-  //   document.querySelector(`#${button}`).classList.add('tabs__content-item--active');
-  // }
-
-  // <!-- ===================== CHOOSE END ======================= -->
 
     // <!-- ==================== CHOOSE STRAT ====================== -->
 
@@ -102,39 +74,6 @@ $(document).ready(function() {
   }
   // <!-- ===================== CHOOSE END ======================= -->
 
-    // <!-- ==================== CHOOSE COMPANY STRAT ====================== -->
-
-  // создаем переменные
-//  const tabsItem3 = document.querySelectorAll('.company__tabs__btn-item');
-//  const tabsContent3 = document.querySelectorAll('.company__tabs__content-item');
-//
-//  // вышаем слушатель
-//  tabsItem3.forEach(function(element){
-//    element.addEventListener('click', open);
-//  });
-//
-//  function open(evt) {
-//    const tabTarget3 = evt.currentTarget;
-//    // должны понять .что написано в дата атрибуте
-//    const button = tabTarget3.dataset.button;
-//
-//    // удаляем класс
-//    tabsItem3.forEach(function(item){
-//      item.classList.remove('company__tabs__btn-item--active')
-//    });
-//
-//    // добавляем класс
-//    tabTarget3.classList.add('company__tabs__btn-item--active');
-//
-//    // удаляем класс
-//    tabsContent3.forEach(function(item){
-//      item.classList.remove('company__tabs__content-item--active');
-//    });
-//
-//    // добавляем класс
-//    document.querySelector(`#${button}`).classList.add('company__tabs__content-item--active');
-//  }
-  // <!-- ===================== CHOOSE COMPANY END ======================= -->
 
   // <!-- ==================== COPY TEXT ====================== -->
 
@@ -213,7 +152,88 @@ $(document).ready(function() {
     alert("Copied the text: " + copyText5.value);
   }
 
+  function checkAndUrl(button) {
+    var orderId = button.getAttribute("data-orderid");
+    var checkAndUrl = document.getElementById("checkAndUrl");
+    // Получить текущее значение текстовой области
+    var currentText = checkAndUrl.value;
+    // Создать новую строку с добавленным orderId
+    var newText = currentText + orderId;
+    // Установить новое значение в текстовой области
+    checkAndUrl.value = newText;
+    // Выделить и скопировать текст
+    checkAndUrl.select();
+    document.execCommand("copy");
+    // Оповестить пользователя
+    alert("Copied the text: " + newText);
+    checkAndUrl.value = currentText;
+}
+
+function onPayment(button) {
+  var onPayment = document.getElementById("onPayment");
+  var sum = button.getAttribute("data-sum");
+  var currentText = onPayment.value;
+    // Создать новую строку с добавленным orderId
+  var newText = currentText + sum + ' руб.';
+    // Установить новое значение в текстовой области
+  onPayment.value = newText;
+  onPayment.select();
+  document.execCommand("copy");
+  alert("Copied the text: " + newText);
+  onPayment.value = currentText;
+}
+    // <!-- ==================== COPY BUTTON REVIEW ====================== -->
+
+    function myFunctionBotLogin(reviewId) { // BOT LOGIN 
+      /* Get the text field */
+      var copyTextLogin = document.getElementById('botLogin_' + reviewId);
+      /* Select the text field */
+      copyTextLogin.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyTextLogin.value);
+    }
+  
+    function myFunctionBotPassword(reviewId) { // BOT PASSWORD 
+      /* Get the text field */
+      var copyTextLogin = document.getElementById('botPassword_' + reviewId);
+      /* Select the text field */
+      copyTextLogin.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyTextLogin.value);
+    }
+  
+    function myFunctionReviewText(reviewId) { // Review Text 
+      /* Get the text field */
+      var copyTextLogin = document.getElementById('ReviewText_' + reviewId);
+      /* Select the text field */
+      copyTextLogin.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyTextLogin.value);
+    }
+  
+    function myFunctionReviewAnswer(reviewId) { // Review Answer 
+      /* Get the text field */
+      var copyTextLogin = document.getElementById('ReviewAnswer_' + reviewId);
+      /* Select the text field */
+      copyTextLogin.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyTextLogin.value);
+    }
+  
+    // <!-- ==================== COPY BUTTON REVIEW ====================== -->
+
   // <!-- ==================== COPY TEXT ====================== -->
+
+
+
 
     /* Скрыть сообщение об успешном сохранении через 5 секунд */
    setTimeout(function() {
@@ -222,6 +242,9 @@ $(document).ready(function() {
             successMessage.style.display = 'none';
         }
     }, 5000);
+
+
+
 
 
   // <!-- ==================== SLIDER STRAT ====================== -->

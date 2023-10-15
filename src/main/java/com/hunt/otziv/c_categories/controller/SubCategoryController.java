@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Comparator;
 import java.util.List;
@@ -37,11 +38,12 @@ public class SubCategoryController {
     }
 
     @PostMapping("/{id}/{categoryTitle}")
-    public String createSubCategory(@PathVariable Long id, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO) {
+    public String createSubCategory(@PathVariable Long id, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) {
         CategoryDTO categoryDTO = categoryService.getCategoryById(id);
         if (categoryDTO != null) {
 //            subCategoryDTO.setCategory(categoryDTO);
             subCategoryService.saveSubCategory(id, subCategoryDTO);
+            rm.addFlashAttribute("saveSuccess", "true");
         }
         return "redirect:/subcategories/{id}/{categoryTitle}";
     }
@@ -52,14 +54,16 @@ public class SubCategoryController {
         return "category/edit_subcategories";
     }
     @PostMapping("/update/{categoryId}/{categoryTitle}/{id}")
-    public String updateSubCategory(@PathVariable Long id, @PathVariable String categoryTitle, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO) {
+    public String updateSubCategory(@PathVariable Long id, @PathVariable String categoryTitle, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) {
         subCategoryService.updateSubCategory(id, subCategoryDTO);
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/subcategories/{categoryId}/{categoryTitle}";
     }
 
     @PostMapping("/delete/{categoryId}/{categoryTitle}/{id}")
-    public String deleteSubCategory(@PathVariable Long id) {
+    public String deleteSubCategory(@PathVariable Long id, RedirectAttributes rm) {
         subCategoryService.deleteSubCategory(id);
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/subcategories/{categoryId}/{categoryTitle}";
     }
 

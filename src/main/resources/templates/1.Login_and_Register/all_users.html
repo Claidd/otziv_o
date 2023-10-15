@@ -5,79 +5,64 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles}"></th:block>
-    <!-- ==================== TITLE ======================== -->
-    <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-    <title>Список всех пользователей</title>
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+
+    <title>Список всех пользователей O! Company!</title>
 </head>
-<body class="page">
-<header th:replace="~{fragments/header :: header}"></header>
+<body>
+    <div class="wrapper">
+        <header th:replace="~{fragments/header :: header}"></header>
 
-<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
-<div class="container mt-5">
-    <h2 class="section-title">СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ</h2>
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                <tr>
-                    <th scope="col">Логин</th>
-                    <th scope="col">ФИО</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">Номер телефона</th>
-                    <th scope="col">Активность</th>
-                    <th scope="col">Роль</th>
-                    <th scope="col">Время</th>
-                    <th scope="col">Изменить</th>
-                    <th scope="col">Удалить</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="user : ${all_users}">
-                    <th scope="row" th:text="${user.username}">Логин</th>
-                    <th scope="row" th:text="${user.fio}">ФИО</th>
-                    <td th:text="${user.email}">Email</td>
-                    <td th:text="${user.phoneNumber}">Телефон</td>
-                    <td th:text="${user.active}">Активность</td>
-                    <td th:text="${user.roles[0].name}">Роль</td>
-                    <td th:text="${user.createTime}">Время</td>
-                    <td>
-                        <form th:method="get" th:action="'/allUsers/' + ${user.id} + '/edit'">
-                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                            <button type="submit" class="btn btn-outline-primary">Изменить</button>
-                        </form>
-                    </td>
-                    <td>
-                        <form th:method="delete" th:action="'/allUsers/' + ${user.id} + '/delete'" >
-                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                            <button type="submit" class="btn btn-outline-danger">Удалить</button>
-                        </form>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
+        <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+        <div class="container mt-5">
+            <h2 class="section-title">СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ</h2>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                        <tr>
+                            <th scope="col">Логин</th>
+                            <th scope="col">ФИО</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Номер телефона</th>
+                            <th scope="col">Активность</th>
+                            <th scope="col">Роль</th>
+                            <th scope="col">Время</th>
+                            <th scope="col">Изменить</th>
+                            <th scope="col">Удалить</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="user : ${all_users}">
+                            <th scope="row" th:text="${user.username}">Логин</th>
+                            <th scope="row" th:text="${user.fio}">ФИО</th>
+                            <td th:text="${user.email}">Email</td>
+                            <td th:text="${user.phoneNumber}">Телефон</td>
+                            <td th:text="${user.active}">Активность</td>
+                            <td th:text="${user.roles[0].name}">Роль</td>
+                            <td th:text="${user.createTime}">Время</td>
+                            <td>
+                                <form th:method="get" th:action="'/allUsers/' + ${user.id} + '/edit'">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form th:method="delete" th:action="'/allUsers/' + ${user.id} + '/delete'" >
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
         </div>
-</div>
 
-<!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
-
-
-<!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
-<header th:replace="~{fragments/footer :: footer}"></header>
+        <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
 
 
-
-
-
-<!-- Optional JavaScript -->
-<!-- jQuery first, then Popper.js, then Bootstrap JS -->
-<!--<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"-->
-<!--        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"-->
-<!--        crossorigin="anonymous"></script>-->
-<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"-->
-<!--        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"-->
-<!--        crossorigin="anonymous"></script>-->
-<!--<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"-->
-<!--        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"-->
-<!--        crossorigin="anonymous"></script>-->
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+    </div>
 </body>
 </html>

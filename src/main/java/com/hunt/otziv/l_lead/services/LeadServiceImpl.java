@@ -468,13 +468,13 @@ public class LeadServiceImpl implements LeadService{
 
     // Вспомогательный метод для корректировки номера телефона
     public String changeNumberPhone(String phone){
-        String[] a;
-        a = phone.split("9");
-        a[0] = "+79";
-        String b = a[0] + a[1];
-        System.out.println(b);
-        return b;
-//        userDto.getPhoneNumber().replaceFirst("8", "+7")
+        String[] a = phone.split("9", 2);
+        if (a.length > 1) {
+            a[0] = "+79";
+            return a[0] + a[1];
+        } else {
+            return phone;
+        }
     }
 
 }

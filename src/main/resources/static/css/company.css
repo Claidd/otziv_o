@@ -134,6 +134,7 @@ b{
     display: flex;
     /* устанавливаем добавление дивов друг под другом */
     flex-direction: column;
+    font-family: 'laptev_brush';
 }
 
 .container {
@@ -551,6 +552,9 @@ b{
     padding: 0px 0 100px;
     
 }
+
+
+
 .company__tabs__review{
     margin-top: 3rem;
     display: flex;
@@ -585,6 +589,20 @@ b{
     gap: 10px;
 }
 
+.company__tabs__btn__order{
+    padding: 0 0px 50px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 10px;
+}
+
+.company__tabs__btn__worker{
+    padding: 0 0px 50px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+}
+
 .company__tabs__btn-item {
     font-family: 'laptev_brush';
     font-size: 24px;
@@ -604,11 +622,16 @@ b{
     color: #d45cec5d;
 }
 
+
+/* Меняет количество */
 .company__tabs__content-item{
     display: none;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 100px 40px;
+    margin-top: 5rem;
 }
+/* Меняет количество */
+
 
 .orderdetails__tabs__content-item{
     display: none;
@@ -665,6 +688,22 @@ b{
     background-color: #d45cec;
 }
 
+.company__card_remember-content2 {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 45%;
+    cursor: pointer;
+}
+
+
+.company__card_remember-content2:hover {
+    background-color: #d45cec;
+}
+
 .company__card_remember-content__btn {
     text-decoration: none;
     background: none;
@@ -704,6 +743,18 @@ b{
     border-radius: 1.2rem;
     height: 40px;
     width: 90%;
+    cursor: pointer;
+}
+
+.company__card_remember-search2 {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 100%;
     cursor: pointer;
 }
 
@@ -972,6 +1023,17 @@ b{
     /* background-color: #707efb08; */
 }
 
+.company__card__title__worker {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    font-size: 20px;
+    font-weight: 300;
+    /* background-color: #707efb08; */
+}
+
 .company__card__content__city {
     margin-top: 20px;
     display: flex;
@@ -996,7 +1058,7 @@ b{
     border-radius: 1.2rem;
     height: 40px;
     width: 45%;
-    font-size: 24px;
+    font-size: 22px;
 }
 
 .company__card__content_button {
@@ -1028,6 +1090,7 @@ b{
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     cursor: pointer;
+    font-family: 'laptev_brush';
 }
 
 .company__card__text__lead-button:hover  {
@@ -1209,7 +1272,12 @@ b{
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 100px;
+    height: 46px;
+}
+
+.company__card__text__lead2 {
+    height: 40px;
+    overflow-x:hidden; 
 }
 
 .company__card__content__review__text {
@@ -1223,20 +1291,6 @@ b{
     width: 100%;
 }
 
-/* .company__card__content__review__comment {
-    margin-top: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border: 1px solid #5b5a5a38;
-    border-radius: 1.2rem;
-    height: 386px;
-    width: 100%;
-} */
-
-/* .company__card__content__review__comment:hover{
-    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
-}  */
 
 .company__card__content__review__answer {
     margin-top: 1rem;
@@ -1254,9 +1308,6 @@ b{
 }
 
 .company__card__content__review__comment{
-    /* display: flex;
-    justify-content: center;
-    align-items: center; */
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
     height: 136px;
@@ -1267,9 +1318,6 @@ b{
     margin-bottom: 20px;
     background-color: #152cfc00;
 }
-/* .company__card__content__review__comment:hover{
-    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
-} */
 
 .company__card__text__review {
     display: flex;
@@ -1287,17 +1335,6 @@ b{
 
 }
 
-.company__card__text__lead2 {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    height: 75px;
-    /* word-wrap: break-word; */
-    overflow-x:hidden; 
-    /* border-radius: 1.2rem; */
-}
-
-
 .company__card__price__lead {
     margin-bottom: 20px;
     font-style: 24px;
@@ -1308,8 +1345,9 @@ b{
     display: block;
     color: #000;
     text-transform: uppercase;
-    /* border: 1px solid #0066FF; */
     margin-top: 10px;
+    font-size: 0.75rem;
+    font-family: 'laptev_brush';
 }
 .company__card__link__order {
     display: block;
@@ -1859,6 +1897,23 @@ main .recent-orders a{
 
 
 /* ==================== MEDIA START =================== */
+    /* ==================== 1770 =================== */
+    @media (max-width: 1770px) {
+   
+        .company__tabs__btn__order{
+            grid-template-columns: repeat(6, 1fr);
+            padding: 0 0 50px;
+            gap: 20px;
+        }
+    }
+
+@media (max-width: 1500px) {
+    /* Меняет количество */
+    .company__tabs__content-item{
+        grid-template-columns: repeat(4, 1fr);
+    }
+    /* Меняет количество */
+    }
 
 /* ==================== 1420 =================== */
 @media (max-width: 1420px) {
@@ -1872,6 +1927,11 @@ main .recent-orders a{
         padding: 0 0 50px;
         gap: 20px;
     } 
+
+    .company__tabs__btn__order{
+        padding: 0 0 50px;
+        gap: 20px;
+    }
 }
 /* ==================== 1420 =================== */
 @media (max-width: 1250px) {
@@ -1879,6 +1939,10 @@ main .recent-orders a{
     .company__tabs__btn__lead{
         grid-template-columns: repeat(5, 1fr);
     } 
+
+    .company__tabs__btn__order{
+        grid-template-columns: repeat(4, 1fr);
+    }
 }
 /* ==================== 1200 =================== */
 
@@ -1967,6 +2031,11 @@ main .recent-orders a{
         gap: 20px;
     }
 
+    .company__tabs__btn__order{
+        padding: 0 0 50px;
+        gap: 20px;
+    }
+
 }
 /* ==================== 1040 =================== */
 
@@ -1986,6 +2055,7 @@ main .recent-orders a{
         padding: 0 0 50px;
         gap: 20px;
     }
+
 
     .company__card__content__button {
         flex-direction: column;
@@ -2072,6 +2142,10 @@ main .recent-orders a{
         margin-bottom: 20px;
     }
 
+    .company__tabs__btn__order{
+        margin-bottom: 20px;
+    }
+
     /* .company__tabs__btn__lead{
         grid-template-columns: repeat(3, 1fr);
         margin-bottom: 20px;
@@ -2111,6 +2185,10 @@ main .recent-orders a{
         height: 400px;
     }
     .company__tabs__btn__lead{
+        flex-direction: column;
+    }
+
+    .company__tabs__btn__order{
         flex-direction: column;
     }
 
@@ -2241,6 +2319,10 @@ main .recent-orders a{
             grid-template-columns: repeat(4, 1fr);
         } 
 
+        .company__tabs__btn__order{
+            grid-template-columns: repeat(4, 1fr);
+        }
+
         .company__tabs__content-item {
             grid-template-columns: repeat(1, 1fr);
         }
@@ -2281,6 +2363,7 @@ main .recent-orders a{
         .company__tabs__btn__lead-item{
             tab-size: 18px;
         }
+        
 
         .company__card__remember {
             margin-top: 20px;
@@ -2440,6 +2523,11 @@ main .recent-orders a{
             grid-template-columns: repeat(3, 1fr);
             margin-bottom: 20px;
         } 
+
+        .company__tabs__btn__order{
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 20px;
+        }
     }
 
     /* ==================== 300 =================== */

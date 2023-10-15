@@ -5,10 +5,10 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles2}"></th:block>
+    <th:block th:insert="~{fragments/common :: styles_index_boot2}"></th:block>
     <!-- ==================== TITLE ======================== -->
     <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-    <title>Редактирование СубКатегорий</title>
+    <title>Редактирование СубКатегорий O! Company!</title>
 </head>
 <body>
 
@@ -25,6 +25,11 @@
         <div class="container">
             <h2 class="section-title">РЕДАКТИРОВАНИЕ ПОДКАТЕГОРИИ</h2>
             <div class="edit__box">
+                <div class="mb-3" th:if="${saveSuccess}">
+                    <div class="alert alert-success">
+                        Данные успешно изменены и сохранены.
+                    </div>
+                </div>
                 <form th:object="${subCategoryDTO}" method="post">
                     <div class="mb-3" >
                         <label for="inputCategory" class="form-label">Категория</label>
@@ -39,9 +44,9 @@
         </div> <!-- container -->
     </section>
     <!-- ===================== MAIN END ======================== -->
-    <header th:replace="~{fragments/footer2 :: footer}"></header>
+    <header th:replace="~{fragments/footer :: footer}"></header>
 </div> <!-- wrapper -->
 <th:block th:insert="~{fragments/common :: js}"></th:block>
-<th:block th:insert="~{fragments/common :: js_category}"></th:block>
+
 </body>
 </html>

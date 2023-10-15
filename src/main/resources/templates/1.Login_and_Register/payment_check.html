@@ -5,10 +5,9 @@
     <!-- ==================== META ======================== -->
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
-    <th:block th:insert="~{fragments/common :: styles}"></th:block>
-    <!-- ==================== TITLE ======================== -->
-    <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
-    <title>Чеки оплаты</title>
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+
+    <title>Чеки оплаты O! Company!</title>
 </head>
 <body class="page">
 <header th:replace="~{fragments/header :: header}"></header>
@@ -16,48 +15,50 @@
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
 <div class="container mt-5">
     <h2 class="section-title">СПИСОК ЧЕКОВ КОМПАНИЙ</h2>
-    <table class="table table-striped">
-        <thead>
-        <tr>
-            <th scope="col">Компания</th>
-            <th scope="col">Сумма</th>
-            <th scope="col">Дата</th>
-            <th scope="col">Компания</th>
-            <th scope="col">Заказ</th>
-            <th scope="col">Менеджер</th>
-            <th scope="col">Работник</th>
-            <th scope="col">Активность</th>
-            <th scope="col">Изменить</th>
-            <th scope="col">Удалить</th>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th scope="col">Компания</th>
+                <th scope="col">Сумма</th>
+                <th scope="col">Дата</th>
+                <th scope="col">Компания</th>
+                <th scope="col">Заказ</th>
+                <th scope="col">Менеджер</th>
+                <th scope="col">Работник</th>
+                <th scope="col">Активность</th>
+                <th scope="col">Изменить</th>
+                <th scope="col">Удалить</th>
 
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="paymentCheck : ${checkList}">
-            
-            <th scope="row" th:text="${paymentCheck.title}">Компания</th>
-            <td th:text="${paymentCheck.sum}">Сумма</td>
-            <td th:text="${paymentCheck.created}">Дата</td>
-            <td th:text="${paymentCheck.companyId}">Компания</td>
-            <td th:text="${paymentCheck.orderId}">Заказ</td>
-            <td th:text="${paymentCheck.managerId}">Менеджер</td>
-            <th th:text="${paymentCheck.workerId}">Работник</th>
-            <td th:text="${paymentCheck.active}">Активность</td>
-            <td>
-                <form th:method="get" th:action="'/payment_check/' + ${paymentCheck.id} + '/edit'">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
-                </form>
-            </td>
-            <td>
-                <form th:method="delete" th:action="'/payment_check/' + ${paymentCheck.id} + '/delete'" >
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
-                </form>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="paymentCheck : ${checkList}">
+                
+                <th scope="row" th:text="${paymentCheck.title}">Компания</th>
+                <td th:text="${paymentCheck.sum}">Сумма</td>
+                <td th:text="${paymentCheck.created}">Дата</td>
+                <td th:text="${paymentCheck.companyId}">Компания</td>
+                <td th:text="${paymentCheck.orderId}">Заказ</td>
+                <td th:text="${paymentCheck.managerId}">Менеджер</td>
+                <th th:text="${paymentCheck.workerId}">Работник</th>
+                <td th:text="${paymentCheck.active}">Активность</td>
+                <td>
+                    <form th:method="get" th:action="'/payment_check/' + ${paymentCheck.id} + '/edit'">
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                    </form>
+                </td>
+                <td>
+                    <form th:method="delete" th:action="'/payment_check/' + ${paymentCheck.id} + '/delete'" >
+                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
@@ -65,6 +66,7 @@
 
 <!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
 <header th:replace="~{fragments/footer :: footer}"></header>
+<th:block th:insert="~{fragments/common :: js}"></th:block>
 
 
 

@@ -213,6 +213,16 @@ body {
 	height: auto;
     }
 
+.alert {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	background-color: #2fff0020;
+	color: #000;
+	font-size: 1rem;
+	margin-bottom: 10px;
+}
+
 .dws {
     	display: flex;
     	justify-content: center;
@@ -269,6 +279,8 @@ body {
     .butt:hover::before, .butt:hover::after {
     	left: 0;
     }
+
+
 
 
 
@@ -487,4 +499,12 @@ body {
 	text-align: right;
 	margin: 0.7rem 0;
 	display: none;
+}
+
+.section-title{
+	margin-top: 2rem;
+    margin-bottom: 50px;
+    font-size: 48px;
+    font-weight: 700;
+    text-align: center;
 }
