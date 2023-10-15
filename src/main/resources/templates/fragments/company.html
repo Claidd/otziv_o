@@ -19,7 +19,7 @@
         <div class="company__tabs__content-lead">
             <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
             <div class="company__card__remember">
-                <div class="company__card__remember__box">
+                    <div class="company__card__remember__box">
                            <div class="company__card_remember-content">
                                <textarea class="company__card__remember-text" th:utext="${promoTexts[7]}" id="myInput1"></textarea>
                                <button class="company__card_remember-content__btn" onclick="myFunction1()">предложение</button>
@@ -32,9 +32,8 @@
                                 <textarea class="company__card__remember-text"th:utext="${promoTexts[9]}" id="myInput2"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction2()">рассылка</button>
                             </div>
-
+                    </div>
                     <div class="company__card__remember__box-serch">
-
                         <form class="company__card_remember-search" th:method="get">
                             <!-- The text field -->
                             <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
@@ -43,7 +42,6 @@
                             <button type="submit" class="company__card_remember-search__btn">Найти</button>
                         </form>
                     </div>
-                </div>
             </div>
             <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
@@ -61,10 +59,10 @@
                                 <!-- <div class="card__title__lead" th:text="${lead.telephoneLead}">Номер Лида</div> -->
                                 <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${company.urlChat}">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                    <button type="submit" class="company__card__text__lead-button " th:text="${company.telephone}">в архив</button>
+                                    <button type="submit" class="company__telephone__button" th:text="${company.telephone}">в архив</button>
                                 </form>
                             </div>
-                            <div class="card__content__city">
+                            <div class="company__card__content__city">
                                 <p class="company__card__text__city__lead" th:text="${company.status.title}">Статус заказа</p>
                                 <a class="company__card__text__city__lead" th:text="Заказ"  th:href="@{'/ordersCompany/'+ ${company.id}}">Дата создания Лида</a>
                                 <!-- <a class="company__card__text__city__lead" th:text="Подробности"  th:href="@{'/ordersCompany/ordersDetails/'+ ${company.id}}">Дата создания Лида</a> -->
@@ -111,9 +109,7 @@
             </div> <!-- tabs__content-item -->
             <!-- СПИСОК КАРТОЧЕК 1 -->
         </div> <!-- tabs__content -->
-    </div> <!-- tabs -->
+    
 
-    <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
-    <th:block th:insert="~{fragments/common :: js_company}"></th:block>
 
 </section>

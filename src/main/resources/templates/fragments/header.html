@@ -1,7 +1,7 @@
 <section th:fragment="header" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
 
-
-    <div class="page__row">
+<div class="container">
+    <!-- <div class="page__row"> -->
         <div class="page__cell2">
             <header class="header">
 
@@ -25,24 +25,25 @@
                                 Главная
                             </a>
                         </li>
-                        <li class="mev__item">
+                        <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/categories}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Категории
                             </a>
-                        </li>
-                        <li class="mev__item">
+                        </li> -->
+                        <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Лиды
                             </a>
-                        </li>
+                        </li> -->
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Оператор
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/marketolog/operator_list}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Маркетолог
+                                                                <!-- th:href="@{/marketolog/operator_list}" -->
                             </a>
                         </li>
                         <li class="mev__item">
@@ -55,7 +56,7 @@
                                 Специалист
                             </a>
                         </li>
-                        <li class="mev__item">
+                        <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/bots}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Боты
                             </a>
@@ -76,7 +77,7 @@
                             <a sec:authorize="isAuthenticated()" th:href="@{/zp}" class="nav__link  link" aria-label="Перейти на страницу квестов">
                                 ЗП
                             </a>
-                        </li>
+                        </li> -->
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/admin}" class="nav__link  link" aria-label="Перейти на страницу квестов">
                                 Админ
@@ -110,6 +111,7 @@
             </header>
         </div>
     </div>
+    <!-- </div> -->
 
   </section>
 

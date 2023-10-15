@@ -1,4 +1,4 @@
-@import url("/normalize.css");
+/* @import url("/css/normalize.css"); */
 
 @font-face {
     font-family: 'laptev_brush';
@@ -21,9 +21,13 @@ box-sizing: border-box;
 	clear: both;
 }
 html {
+	box-sizing: border-box;
 	font-size: 100%;
+	height: 100%;
 }
 body {
+	/* width: 100vw; */
+    height: 100vh;
 	font-family: 'laptev_brush';
 	font-weight:300;
 	color: #000;
@@ -33,12 +37,36 @@ body {
 	font-display: swap;
 	/* background-color: #f6f6f9; */
 	background-color: #fff;
+	
+}
+
+.wrapper {
+    /* устанавливаем минимальную высоту обертки в 100% страницы */
+	position: relative;
+    height: 100%;
+	max-width: 100%;
+    display: flex;
+    /* устанавливаем добавление дивов друг под другом */
+    flex-direction: column;
 }
 
 .container {
-	max-width: 1600px;
-	margin: 0 auto;
-	padding: 0 10px;
+	/* устанавливаем максимальную ширину */
+	max-width: 100%;
+	flex: 1 0 auto;
+	/* выравниваем по середине. 1 верх и низ, 2 лево право */
+	/* margin: 0 auto; */
+	/* устанавливаем отступы от краев */
+	/* padding: 0 10px; */
+}
+
+.header-main {
+    background-color: transparent;
+    position: absolute;
+    z-index: 10;
+    /* растягиваем обратно после позиционирования */
+    left: 0;
+    right: 0;
 }
 
 .avatar {
@@ -49,12 +77,16 @@ body {
 	object-fit: cover;
  }
 
+.page__row {
+	display: flex;
+    justify-content: space-around;
+    align-items: center;
+}
+.app__item-img{
+	max-width: 100%;
+  	height: auto; 
+}
 
-
-/* .page__row {
-	max-width: 1910px;
-	    border: 1px solid #218294;
-} */
 .page__cell {
 	max-width: 1400px;
 	margin: 0 auto;
@@ -62,13 +94,13 @@ body {
 }
 
 .page__cell2 {
-	max-width: 1800px;
+	max-width: 100%;
 	margin: 0 auto;
 	padding-left: 10px;
 	padding-right: 10px;
 }
 .header {
-	/* max-width: 1800px; */
+	max-width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -88,12 +120,16 @@ body {
 	align-items: center;
 }
 .phone-number2 {
-    padding-left: 50px;
+    /* padding-left: 50px; */
 	font-weight: 700;
 	font-size: 2rem;
 	color: #000;
 	align-items: center;
 }
+
+.logo{
+		align-items: baseline;
+	}
 
 .email-address {
 	color: #3e3e3e
@@ -113,13 +149,13 @@ body {
 .header__contact {
 	float: right;
 	display: flex;
-    text-align: right;
+    text-align: left;
     align-items: center;
 }
 .nav {
     margin-left: auto;
     text-align: right;
-    padding-right: 50px;
+    /* padding-right: 50px; */
 	font-size: 1.1875rem;
 }
 .nav2 {
@@ -188,12 +224,11 @@ body {
     	margin: 0px;
     }
 
-
-
     .butt {
     	border: 3px solid #696969;
-    	font-size: 30px;
+    	font-size: 2rem;
     	color: #218294;
+		/* color: #ff8400; */
     	text-decoration: none;
     	text-transform: uppercase;
     	width: 180px;
@@ -204,6 +239,7 @@ body {
     	position: relative;
     	transition: .5s;
     	overflow: hidden;
+		border-radius: 2rem;
     }
 
     .butt::before,
@@ -212,7 +248,7 @@ body {
     	content: '';
     	width: 100%;
     	height: 100%;
-    	background: #218294;
+    	background:  #ffae00;
     	top: 0;
     	left: -100%;
     	opacity: .5;
@@ -376,64 +412,6 @@ body {
 	max-width: 100%;
 }
 
-/*
-.dws {
-	display: flex;
-	justify-content: center;
-	margin: 0 auto;	
-	flex-wrap: wrap;
-}
-
-.info__item{
-	margin: 20px;
-}
-
-
-
-.butt {
-	border: 3px solid #218294;
-	font-size: 30px;
-	color: #218294;
-	text-decoration: none;
-	text-transform: uppercase;
-	width: 340px;
-	height: 60px;
-	display: block;
-	text-align: center;
-	line-height: 60px;
-	position: relative;
-	transition: .5s;
-	overflow: hidden;
-}
-
-.butt::before, 
-.butt::after {
-	position: absolute;
-	content: '';
-	width: 100%;
-	height: 100%;
-	background: #218294;
-	top: 0;
-	left: -100%;
-	opacity: .5;
-	transition: .3s;
-	z-index: -1;
-
-}
-
-.butt:after {
-	opacity: 1;
-	transition-delay: .2s;
-}
-
-.butt:hover{
-	color: #fff;
-}
-
-.butt:hover::before, .butt:hover::after {
-	left: 0;
-}
-*/
 .advantage {
 	display: flex;
 	
@@ -460,9 +438,9 @@ body {
 	margin-bottom: 1.2rem;
 }
 .page__row-footer {
-background: #ffc600;
+	background: #ffc600;
 
-margin-top: 4.375rem;
+	margin-top: 4.375rem;
 }
 .footer__copyright {
 	text-align: right;
@@ -474,9 +452,14 @@ margin-top: 4.375rem;
 }
 .footer__link:hover {
 	text-decoration: underline;
-}
+} 
 .footer {
 	padding: 1.2rem 0;
+	text-align: right;
+}
+.footer2 {
+	width: 100%;
+	flex: 0 0 auto;
 }
 .btn-nav {
 	border: 0;

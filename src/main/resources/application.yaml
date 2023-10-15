@@ -30,14 +30,14 @@ spring:
 #    password: Rkfql54532111
 
 #    локальная база данных
-#    url: jdbc:mysql://localhost:3306/otziv
-#    username: hunt
-#    password: 545321
+    url: jdbc:mysql://localhost:3306/otziv
+    username: hunt
+    password: 545321
 
   #    Docker база данных
-    url: jdbc:mysql://mysql:3306/otziv
-    username: root
-    password: password
+#    url: jdbc:mysql://mysql:3306/otziv
+#    username: root
+#    password: password
 
   flyway:
     baseline-on-migrate: true

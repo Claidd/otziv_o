@@ -1,21 +1,14 @@
-// $(".btn-nav").on("click", function() {
-//   	var target = $(this).data("target");
-//     const logo = document.querySelector('.header');
 
-//   	$(target).toggleClass("nav__list--open");
-//     $(logo).toggleClass("logo");
-
-//   });
-
-$(document).ready(function() {
   $(".btn-nav").on("click", function() {
-      var target = $(this).data("target");
-      const logo = document.querySelector('.header');
+  	var target = $(this).data("target");
+    const logo = document.querySelector('.header');
 
-      $(target).toggleClass("nav__list--open");
-      $(logo).toggleClass("logo");
+  	$(target).toggleClass("nav__list--open");
+    $(logo).toggleClass("logo");
+
   });
-});
+
+
 
   // <!-- ==================== MENU STRAT ====================== -->
     // ищем кнопку
@@ -36,35 +29,35 @@ $(document).ready(function() {
   // <!-- ==================== CHOOSE STRAT ====================== -->
 
   // создаем переменные
-  // const tabsItemm = document.querySelectorAll('.tabs__btn-item');
-  // const tabsContent = document.querySelectorAll('.tabs__content-item');
+  const tabsItem = document.querySelectorAll('.tabs__btn-item');
+  const tabsContent = document.querySelectorAll('.tabs__content-item');
 
-  // // вышаем слушатель
-  // tabsItemm.forEach(function(element){
-  //   element.addEventListener('click', open);
-  // });
+  // вышаем слушатель
+  tabsItem.forEach(function(element){
+    element.addEventListener('click', open);
+  });
 
-  // function open(evt) {
-  //   const tabTarget = evt.currentTarget;
-  //   // должны понять .что написано в дата атрибуте
-  //   const button = tabTarget.dataset.button;
+  function open(evt) {
+    const tabTarget = evt.currentTarget;
+    // должны понять .что написано в дата атрибуте
+    const button = tabTarget.dataset.button;
 
-  //   // удаляем класс
-  //   tabsItemm.forEach(function(item){
-  //     item.classList.remove('tabs__btn-item--active')
-  //   });
+    // удаляем класс
+    tabsItem.forEach(function(item){
+      item.classList.remove('tabs__btn-item--active')
+    });
 
-  //   // добавляем класс
-  //   tabTarget.classList.add('tabs__btn-item--active');
+    // добавляем класс
+    tabTarget.classList.add('tabs__btn-item--active');
 
-  //   // удаляем класс
-  //   tabsContent.forEach(function(item){
-  //     item.classList.remove('tabs__content-item--active');
-  //   });
+    // удаляем класс
+    tabsContent.forEach(function(item){
+      item.classList.remove('tabs__content-item--active');
+    });
 
-  //   // добавляем класс
-  //   document.querySelector(`#${button}`).classList.add('tabs__content-item--active');
-  // }
+    // добавляем класс
+    document.querySelector(`#${button}`).classList.add('tabs__content-item--active');
+  }
 
   // <!-- ===================== CHOOSE END ======================= -->
 

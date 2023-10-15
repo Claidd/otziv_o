@@ -16,44 +16,46 @@
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
 <div class="container mt-5">
     <h2 class="section-title">СПИСОК ВСЕХ ПОЛЬЗОВАТЕЛЕЙ</h2>
-    <table class="table table-striped">
-        <thead>
-        <tr>
-            <th scope="col">Логин</th>
-            <th scope="col">ФИО</th>
-            <th scope="col">Email</th>
-            <th scope="col">Номер телефона</th>
-            <th scope="col">Активность</th>
-            <th scope="col">Роль</th>
-            <th scope="col">Время</th>
-            <th scope="col">Изменить</th>
-            <th scope="col">Удалить</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="user : ${all_users}">
-            <th scope="row" th:text="${user.username}">Логин</th>
-            <th scope="row" th:text="${user.fio}">ФИО</th>
-            <td th:text="${user.email}">Email</td>
-            <td th:text="${user.phoneNumber}">Телефон</td>
-            <td th:text="${user.active}">Активность</td>
-            <td th:text="${user.roles[0].name}">Роль</td>
-            <td th:text="${user.createTime}">Время</td>
-            <td>
-                <form th:method="get" th:action="'/allUsers/' + ${user.id} + '/edit'">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-primary">Изменить</button>
-                </form>
-            </td>
-            <td>
-                <form th:method="delete" th:action="'/allUsers/' + ${user.id} + '/delete'" >
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <button type="submit" class="btn btn-outline-danger">Удалить</button>
-                </form>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th scope="col">Логин</th>
+                    <th scope="col">ФИО</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Номер телефона</th>
+                    <th scope="col">Активность</th>
+                    <th scope="col">Роль</th>
+                    <th scope="col">Время</th>
+                    <th scope="col">Изменить</th>
+                    <th scope="col">Удалить</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="user : ${all_users}">
+                    <th scope="row" th:text="${user.username}">Логин</th>
+                    <th scope="row" th:text="${user.fio}">ФИО</th>
+                    <td th:text="${user.email}">Email</td>
+                    <td th:text="${user.phoneNumber}">Телефон</td>
+                    <td th:text="${user.active}">Активность</td>
+                    <td th:text="${user.roles[0].name}">Роль</td>
+                    <td th:text="${user.createTime}">Время</td>
+                    <td>
+                        <form th:method="get" th:action="'/allUsers/' + ${user.id} + '/edit'">
+                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                            <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form th:method="delete" th:action="'/allUsers/' + ${user.id} + '/delete'" >
+                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                            <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
 </div>
 
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>

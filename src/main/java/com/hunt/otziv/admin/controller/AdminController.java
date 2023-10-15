@@ -13,7 +13,7 @@ public class AdminController {
 
     @GetMapping()
     String adminPanel(Model model){
-        return "/admin/admin_panel";
+        return "admin/admin_panel";
     }
 
 }

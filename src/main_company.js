@@ -1,18 +1,13 @@
 $(document).ready(function(){
-//  $(".slider").owlCarousel({
-//  	items: 1,
-//	lazyLoad: true,
-//  	loop: true,
-//  	autoplay: true,
-//  	autoplayTimeout: 5000
-//  });
-  $(".btn-nav").on("click", function() {
-  	var target = $(this).data("target");
-  	$(target).toggleClass("nav__list--open");
-
+    $(".btn-nav").on("click", function() {
+      var target = $(this).data("target");
+      const logo = document.querySelector('.header');
+  
+      $(target).toggleClass("nav__list--open");
+      $(logo).toggleClass("logo");
+    });
+  
   });
-
-});
 
 // <!-- ==================== COPY TEXT ====================== -->
 
@@ -240,6 +235,9 @@ function onPayment(button) {
   }
   // <!-- ===================== CHOOSE COMPANY END ======================= -->
 
+
+
+
   // <!-- ==================== COPY TEXT ====================== -->
 
   function myFunction1() {
@@ -355,16 +353,7 @@ function onPayment(button) {
 
   // <!-- ==================== SLIDER STRAT ====================== -->
 
-  const swiper = new Swiper(".swiper", {
-    effect: "fade",
-    pagination: {
-      el: ".swiper-pagination",
-    },
-    autoplay: {
-        delay: 5000,
-        disableOnInteraction: false,
-      },
-  });
+
 
   // <!-- ===================== SLIDER END ======================= -->
 

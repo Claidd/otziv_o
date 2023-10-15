@@ -5,7 +5,7 @@
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="company__lead__card">
         <div class="container">
-            <h2 class="company__section-title">ЛИД КАБИНЕТ</h2>
+            <h2 class="company__section-title">Лид кабинет</h2>
             <div class="company__tabs__lead">
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                 <div class="tabs__btn__lead">
@@ -15,7 +15,8 @@
                     <button class="tabs__btn__lead-item" data-button="content-4">К расслыке</button>
                     <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
                     <button class="tabs__btn__lead-item" data-button="content-6">Все</button>
-                    <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-10">К компаниям</a>
+                    <a class="tabs__btn__lead__a-item" th:href="@{'/categories'}" data-button="content-7">Категории</a>
+                    <a class="tabs__btn__lead__a-item" th:href="@{'/companies/allCompany'}" data-button="content-8">Компании</a>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
@@ -82,7 +83,7 @@
                                 <div class="company__card__content__phone">
                                     <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
+                                        <button type="submit" class="company__card__text__lead-button" th:text="${lead.telephoneLead}">телефон лида</button>
                                     </form>
                                 </div>
                                 <div class="card__content__city">
@@ -348,7 +349,7 @@
                                 <div class="company__card__content__phone">
                                     <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
+                                        <button type="submit" class="company__card__text__lead-button" th:text="${lead.telephoneLead}">телефон лида</button>
                                     </form>
                                 </div>
                                 <div class="card__content__city">
@@ -396,17 +397,5 @@
     </section> <!-- section -->
 
     <!-- ====================== CHOOSE END =========================== -->
-
+    
 </th:block>
-
-
-<!-- <p class="card__title__lead" th:text="${lead.telephoneLead}">Toyota Crawn 2023</p>
-                          <img src="image/card-1.jpg" alt="" class="card__img">
-                                    <p class="card__text__lead" th:text="${lead.cityLead}">начиная от $ 39000</p> -->
-
-                                    <!-- <a href="#" class="card__text__lead" th:text="${lead.createDate}">$ 650/мес</a>
-                                    <a href="#" class="card__text__lead" th:text="${lead.updateStatus}">$ 650/мес</a>
-                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a>
-                                    <a href="#" class="card__text__lead" th:text="${lead.dateNewTry}">$ 650/мес</a> -->
-                                    <!-- <p class="card__text__lead" th:text="${lead.commentsLead}">$ 650/мес</p>
-                                    <p class="card__price__lead" th:text="${lead.operatorId}">$ 650/мес</p> -->

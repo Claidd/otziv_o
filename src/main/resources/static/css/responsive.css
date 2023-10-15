@@ -1,17 +1,65 @@
+@media screen and (max-width: 1200px) {
+	html {	
+	font-size: 90%;
+	}
+	.butt {
+    	width: 140px;
+		font-size: 1.5rem;
+    }
+	.phone-number2 {
+		font-size: 1.4rem;
+	}
+}
+
+@media screen and (max-width: 1015px) {
+	html {	
+	font-size: 85%;
+	}
+}
+
 @media screen and (max-width: 992px) {
 	html {	
-	font-size: 90%
+	font-size: 100%
 	}
-		
+	.nav__list {
+		display: none;
 	}
-@media screen and (max-width: 768px) {
-	html {	
-	font-size: 85%
+	.nav__list--open,
+	.nav__btn {
+		display: block;
 	}
-	.slider__item {
-		padding-top: 30rem;
+	.nav__link {
+		padding: 0.7rem;
+		display: inline-block;
 	}
+
+	.text{
+		padding: 5px;
+	}
+
+	.butt {
+    	width: 110px;
+		font-size: 1.2rem;
+    }
+		.header__logo,
+		.header__contact {
+			float: none;
+			text-align: center;
+		}
+		.header__contact {
+			margin-top: 1rem;
+		}
+
+
+
+
 	
+}
+
+@media screen and (max-width: 768px) {
+	/* html {	
+	font-size: 85%
+	} */
 
 	.nav__list {
 		display: none;
@@ -27,7 +75,6 @@
 
 	.dws{
 		left: 20%;
-
 	}
 }
 @media screen and (max-width: 600px) {
@@ -81,13 +128,18 @@
 		padding: 5px;
 	}
 
+	.butt {
+    	width: 110px;
+		font-size: 1.2rem;
+    }
+
 	
 }
 @media screen and (max-width: 370px) {
-	.butt {
+	/* .butt {
 		width: 300px;
 		height: 60px;
-	}
+	} */
 	
 }
 @media screen and (max-width: 340px) {
@@ -96,9 +148,9 @@
 		width: 94%;
 		margin-right: 0; 
 	}
-	.dws{
+	/* .dws{
 		
 		width: 80%;
-	}
+	} */
 		
-	}
+}

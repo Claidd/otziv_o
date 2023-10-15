@@ -1,67 +1,35 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
-<head>
+    <head>
+        <title>O-otziv</title>
 
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>O-otziv</title>
-        <!-- ==================== META ======================== -->
-        <th:block th:insert="~{fragments/common :: meta}"></th:block>
-        <!-- ==================== STYLE ======================== -->
-        <th:block th:insert="~{fragments/common :: styles}"></th:block>
-        <!-- ==================== TITLE ======================== -->
+            <!-- ==================== META ======================== -->
+            <th:block th:insert="~{fragments/common :: meta}"></th:block>
+            <!-- ================== FAVICON ======================= -->
+            <!-- <th:block th:insert="~{fragments/common :: favicon}"></th:block> -->
+            <!-- ==================== STYLE ======================== -->
+            <th:block th:insert="~{fragments/common :: styles_index}"></th:block>
+            <!-- ==================== TITLE ======================== -->
+    </head>
 
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
-          integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"/>
-
-    <link rel="stylesheet" href="../static/css/style.css" th:href="@{../css/style.css}"/>
-
-    <link rel="stylesheet" th:href="@{/css/style.css}"/>
-    <link rel="stylesheet" th:href="@{/css/normalize.css}"/>
-    <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
-    <script th:src="@{/webjars/jquery/3.6.4/jquery.min.js}" type="text/javascript"></script>
-    <script type="text/javascript" th:src="@{/js/script.js}"></script>
-
-
-</head>
-<body class="page">
-    
-<header th:replace="~{fragments/header :: header}"></header>
-
-
-            <div class="page__row">
-                <div class="container">
-                    <div class="image__inner">
-                        <img class="app__item-img" th:src="@{/images/image/TacoCloud.png}" src= "../../static/images/image/TacoCloud.png" alt="">
-
-                    </div>
-                </div>
-            </div> <!--  -->
-
-<!--  -->
-
-
-<!--<header th:replace="~{fragments/header2 :: header2}"></header>-->
-<header th:replace="~{fragments/footer :: footer}"></header>
-<th:block th:insert="~{fragments/common :: js_company}"></th:block>
-
-
-
-
-<!-- Optional JavaScript -->
-<!-- jQuery first, then Popper.js, then Bootstrap JS -->
-<!--<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"-->
-<!--        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"-->
-<!--        crossorigin="anonymous"></script>-->
-<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"-->
-<!--        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"-->
-<!--        crossorigin="anonymous"></script>-->
-<!--<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"-->
-<!--        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"-->
-<!--        crossorigin="anonymous"></script>-->
-</body>
+    <body>
+        <div class="wrapper">
+            <!-- ==================== HEADER ======================== -->
+                <header th:replace="~{fragments/header :: header}"></header>
+                <!-- ==================== IMAGE ======================== -->
+                    <div class="container">
+                        <div class="page__row">
+                            <div class="image__inner">
+                                    <img class="app__item-img" th:src="@{/images/image/TacoCloud.png}" src= "../../static/images/image/TacoCloud.png" alt="">
+                            </div>
+                        </div> <!--  -->
+                    </div> 
+                <!-- ==================== FOOTER ======================== -->            
+                <header th:replace="~{fragments/footer :: footer}"></header>
+                <!-- ==================== JS ======================== -->  
+                <th:block th:insert="~{fragments/common :: js}"></th:block>
+            </div>
+        </div>
+    </body>
 </html>
