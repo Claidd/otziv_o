@@ -53,7 +53,7 @@
 
                         <div class="form-group d-none">
                             <label for="amount">Количество</label>
-                            <input type="text" id="sum" th:field="*{amount}" class="form-control">
+                            <input type="text" id="amount" th:field="*{amount}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('amount')}" th:text="${err}">Validation error</small>
                         </div>
 

@@ -1,27 +1,26 @@
 package com.hunt.otziv.u_users.services;
 
 import com.hunt.otziv.u_users.dto.WorkerDTO;
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
 
 @Service
 @Slf4j
 public class WorkerServiceImpl implements WorkerService {
 
     private final WorkerRepository workerRepository;
+
 
     public WorkerServiceImpl(WorkerRepository workerRepository) {
         this.workerRepository = workerRepository;
@@ -46,6 +45,10 @@ public class WorkerServiceImpl implements WorkerService {
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
     }
+
+//    public List<WorkerDTO> getAllWorkersIsActiveByUser(User user){
+//        return workerRepository.findAllByUserAndUserActive(user, true).stream().map(this::toDTO).collect(Collectors.toList());
+//    }
 
 
 //    public List<WorkerDTO> getListAllWorkersByManagerId(Manager manager){

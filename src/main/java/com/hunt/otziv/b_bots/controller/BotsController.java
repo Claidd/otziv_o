@@ -5,6 +5,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 
@@ -26,13 +28,15 @@ public class BotsController {
     private final UserService userService;
     private final StatusBotService statusBotService;
     private final BotValidation botValidation;
+    private final WorkerService workerService;
 
 
-    public BotsController(BotService botService, UserService userService, StatusBotService statusBotService, BotValidation botValidation) {
+    public BotsController(BotService botService, UserService userService, StatusBotService statusBotService, BotValidation botValidation, WorkerService workerService) {
         this.botService = botService;
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botValidation = botValidation;
+        this.workerService = workerService;
     }
 
     //Открываем страницу со списком ботов
@@ -45,20 +49,13 @@ public class BotsController {
     //Открываем страницу добавления бота
     @GetMapping("/bot_add")
     public String botAdd(Model model, BotDTO botsDto, Principal principal){
-//        String userRole = gerRole(principal);
-//        System.out.println(userRole);
-//        if ("ROLE_WORKER".equals(userRole)){ метол вставляет последний вносимый пароль
-//            model.addAttribute("bot", botService.findByWorker(principal));
-//            System.out.println(botService.findByWorker(principal));
-//        }
-//        else
             model.addAttribute("bot", new BotDTO());
     return "bots/bot_add";
     }
 
     //Сохраняем нового бота
     @PostMapping ("/bot_add")
-    public String saveBot(Model model,@ModelAttribute("bot") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal){
+    public String saveBot(Model model,@ModelAttribute("bot") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal, RedirectAttributes rm){
         log.info("Валидация на совпадение логина");
         botValidation.validate(botsDto, bindingResult);
         log.info("Вход в общую валидацию");
@@ -69,7 +66,8 @@ public class BotsController {
         }
         if (botService.createBot(botsDto, principal)){
             log.info("Новый бот сохранен");
-            return "redirect:/bots";
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/bots/bot_add";
         } else {
             model.addAttribute("bot", botsDto);
             log.info("Ошибка сохранения нового бота");
@@ -79,34 +77,42 @@ public class BotsController {
 
     //Редактирование бота
     @GetMapping("/edit/{id}")
-    public String editBot(@PathVariable(value = "id")  long id, Model model, BotDTO botsDto){
+    public String editBot(@PathVariable(value = "id")  long id, Model model, BotDTO botsDto, Principal principal){
         model.addAttribute("editBotDto", botService.findById(id));
-        model.addAttribute("workers", userService.getAllUsersByFio("ROLE_WORKER"));
+//        model.addAttribute("workers", userService.getAllUsersByFio("ROLE_WORKER"));
+        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
+//        model.addAttribute("workers", workerService.getAllWorkersIsActiveByUser(userService.findByUserName(principal.getName()).orElseThrow()));
         model.addAttribute("statuses", statusBotService.findAllBotsStatus());
+        System.out.println(botService.findById(id));
+        System.out.println(userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
         return "bots/bot_edit";
     }
 
     //Обновление бота
     @PostMapping("/edit/{id}")
-    public String updateBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("editBotDto") @Valid BotDTO botsDto, BindingResult bindingResult){
+    public String updateBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("editBotDto") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal, RedirectAttributes rm){
         System.out.println(botsDto.getWorker());
+        System.out.println(botsDto);
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("Сработал биндинг - есть ошибка");
             model.addAttribute("editBotDto", botsDto);
-            model.addAttribute("workers", userService.getAllUsersByFio("ROLE_WORKER"));
+            model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
             model.addAttribute("statuses", statusBotService.findAllBotsStatus());
             return "bots/bot_edit";
         }
         if (botService.updateBot(botsDto, id)){
             log.info("Бот обновлен");
-            return "redirect:/bots";
+//            return "redirect:/bots";
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/worker/bot";
         } else {
-            model.addAttribute("editBotDto", botsDto);
-            model.addAttribute("workers", userService.getAllUsersByFio("ROLE_WORKER"));
-            model.addAttribute("statuses", statusBotService.findAllBotsStatus());
+            log.info("Бот не обновлен");
+//            model.addAttribute("editBotDto", botsDto);
+//            model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
+//            model.addAttribute("statuses", statusBotService.findAllBotsStatus());
             log.info("Ошибка обновления нового бота");
-            return "bots/bot_edit";
+            return "redirect:/bots/edit/{id}";
         }
     }
 
@@ -114,7 +120,8 @@ public class BotsController {
     @PostMapping("/delete/{id}")
     public String deleteBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("bot") BotDTO botsDto){
         botService.deleteBot(id);
-        return "bots/bots_list";
+        return "redirect:/worker/bot";
+//       return "bots/bots_list";
     }
 
     private String gerRole(Principal principal){

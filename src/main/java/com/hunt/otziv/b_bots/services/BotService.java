@@ -31,7 +31,7 @@ public interface BotService {
 
     List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id);
 
-    List<Bot> getAllBotsByWorkerActiveIsTrue(Principal principal);
+    List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal);
 
     Bot save(Bot bot);
 

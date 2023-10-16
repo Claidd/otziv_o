@@ -61,7 +61,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("all_bots", botService.getAllBotsByWorker(principal));
+            model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(principal));
             return "products/orders/bot_worker";
         }
         else return "redirect:/";

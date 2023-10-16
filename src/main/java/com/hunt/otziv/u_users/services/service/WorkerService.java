@@ -6,6 +6,7 @@ import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Set;
 
@@ -24,4 +25,6 @@ public interface WorkerService {
 //    List<WorkerDTO> getListAllWorkersByManagerId(Manager manager);
 
     Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers);
+
+//    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }

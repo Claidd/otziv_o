@@ -3,7 +3,9 @@ package com.hunt.otziv.u_users.repository;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -20,4 +22,7 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     List<Worker> findAllByUser(User user);
 
     Optional<Worker> findByUserId(Long id);
+
+//    @Query("SELECT w FROM Worker w WHERE w.user = :user AND w.user.active = :active")
+//    List<Worker> findAllByUserAndUserActive(User user, boolean active);
 }

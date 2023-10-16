@@ -3,6 +3,7 @@ package com.hunt.otziv.b_bots.services;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -71,8 +72,8 @@ public class BotServiceImpl implements BotService {
             log.info("Обновили ФИО");
         }
         /*Проверяем не равен ли Владельц предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(botDTO.getWorker(), saveBot.getWorker())){
-            saveBot.setWorker(workerService.getWorkerByUserId(botDTO.getWorker().getId()));
+        if (!Objects.equals(botDTO.getWorker().getId(), saveBot.getWorker().getId())){
+            saveBot.setWorker(workerService.getWorkerById(botDTO.getWorker().getId()));
             isChanged = true;
             log.info("Обновили Владельца");
         }
@@ -104,7 +105,7 @@ public class BotServiceImpl implements BotService {
             return true;
         }
         else {
-            log.info("Изменений не было, лид в БД не изменена");
+            log.info("Изменений не было, Бот в БД не изменена");
             return false;
         }
     }
@@ -177,9 +178,9 @@ public class BotServiceImpl implements BotService {
         return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
     }
 
-    public List<Bot> getAllBotsByWorkerActiveIsTrue(Principal principal){
+    public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal){
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        return botsRepository.findAllByWorkerAndActiveIsTrue(worker);
+        return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
     }
 
     @Override
@@ -207,6 +208,8 @@ public class BotServiceImpl implements BotService {
     //    =============================== ПЕРЕВОД ДТО В СУЩНОСТЬ - НАЧАЛО =========================================
     public Bot toEntity(BotDTO botDTO, Principal principal){
         log.info("Заходим в метод перевода ДТО в Бота");
+        User user = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null));
+        Worker worker = workerService.getWorkerByUserId(user.getId());
         Bot bot = Bot.builder()
                 .login(botDTO.getLogin())
                 .password(botDTO.getPassword())
@@ -214,7 +217,7 @@ public class BotServiceImpl implements BotService {
                 .active(true)
                 .counter(botDTO.getCounter())
                 .status(statusBotService.findByTitle("Новый"))
-                .worker(workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId()))
+                .worker( worker != null ? worker  : user.getWorkers().iterator().next())
                 .build();
         log.info("БотДТО успешно переведен в Бот");
         return bot;

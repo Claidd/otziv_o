@@ -22,6 +22,11 @@
     <div class="container">
         <div class="row py-2 pt-1 mt-1">
             <div class="col-12 pt-5">
+                <div class="mb-3" th:if="${saveSuccess}">
+                    <div class="alert alert-success">
+                        Данные успешно изменены и сохранены.
+                    </div>
+                </div>
                 <form th:action="@{/bots/bot_add}" method="post" th:object="${bot}">
                     <div class="form-group">
                         <label for="login">Укажите номер телефона</label>
@@ -48,6 +53,7 @@
                     </div>
                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                     <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                    <a th:href="@{'/worker/bot'}" class="btn btn-secondary mt-3">Назад</a>
                 </form>
             </div>
         </div>

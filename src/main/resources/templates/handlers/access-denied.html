@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Вход</title>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+    <title>Отказ в доступе</title>
+</head>
+
+<body>
+<div class="wrapper">
+    <header th:replace="~{fragments/header3 :: header3}"></header>
+
+
+    <!-- ==================== IMAGE ======================== -->
+    <div class="container">
+        <div class="page__row">
+            <div class="image__inner">
+                <img class="app__item-img" th:src="@{/images/image/denied.png}" src= "../../static/images/image/denied.png" alt="">
+            </div>
+        </div> <!--  -->
+        <h2 class="headline"><a href="tel:+79016668881" class="phone-number">«К СОЖАЛЕНИЮ, У ВАС НЕТ ДОСТУПА К ДАННОМУ РАЗДЕЛУ САЙТА»</a></h2>
+    </div>
+
+
+    <!-- ==================== FOOTER ======================== -->
+
+    <!-- ==================== FOOTER ======================== -->
+    <header th:replace="~{fragments/footer :: footer}"></header>
+    <!-- ==================== JS ======================== -->
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+</div>
+</body>
+
+</html>

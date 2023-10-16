@@ -34,6 +34,11 @@ public class MainController {
         return "index";
     }
 
+    @GetMapping("/access-denied")
+    public String accessDenied(){
+        return "handlers/access-denied.html";
+    }
+
 //    @GetMapping("/index2")
 //    public String index2(){
 //        return "index2";
