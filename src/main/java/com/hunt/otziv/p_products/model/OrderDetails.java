@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -24,15 +25,15 @@ import java.util.Objects;
 @Table(name = "order_details")
 public class OrderDetails {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "order_detail_id")
-    private Long id;
-
 //    @Id
-//    @GeneratedValue(strategy = GenerationType.UUID)
+//    @GeneratedValue(strategy = GenerationType.IDENTITY)
 //    @Column(name = "order_detail_id")
-//    private UUID id;
+//    private Long id;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "order_detail_id")
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_detail_order")

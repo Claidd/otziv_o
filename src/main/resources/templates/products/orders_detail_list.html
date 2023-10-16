@@ -23,7 +23,7 @@
                                 <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->
                                     
                                     <div class="btn__cell">
-                                        <form th:method="get" th:action="'/review/editReviews/' + ${orderId}"  class="company__card__content__button3">
+                                        <form th:method="get" th:action="'/review/editReviews/' + ${orderDetailsId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" name="_csrf" value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>

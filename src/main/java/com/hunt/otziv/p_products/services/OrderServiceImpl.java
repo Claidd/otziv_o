@@ -111,6 +111,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public boolean addNewReview(Long orderId){  // Добавление нового отзыва
         try {
+            log.info("1. Зашли в добавление нового отзыва");
             Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
             OrderDetails orderDetails = saveOrder.getDetails().get(0);
             Company saveCompany = saveOrder.getCompany();
@@ -221,7 +222,8 @@ public class OrderServiceImpl implements OrderService {
         boolean isChanged = false;
 
         /*Временная проверка сравнений*/
-        System.out.println("filial: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
+        System.out.println("filial id: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
+        System.out.println("filial url: " + !Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl()));
         System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()));
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getWorker().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
@@ -230,6 +232,11 @@ public class OrderServiceImpl implements OrderService {
         if (!Objects.equals(orderDTO.getFilial().getTitle(), saveOrder.getFilial().getTitle())){ /*Проверка смены названия*/
             log.info("Обновляем филиал");
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
+            isChanged = true;
+        }
+        if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены названия*/
+            log.info("Обновляем url филиала");
+            saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId())){ /*Проверка смены работника*/
@@ -451,6 +458,7 @@ public class OrderServiceImpl implements OrderService {
                 .complete(order.isComplete())
                 .counter(order.getCounter())
                 .dayToChangeStatusAgo(period.getDays())
+                .orderDetailsId(order.getDetails().iterator().next().getId())
                 .build();
     } // Конвертер DTO для заказа
     private CompanyDTO convertToCompanyDTO(Company company){ // Конвертер DTO для компании

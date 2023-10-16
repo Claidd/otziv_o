@@ -53,6 +53,8 @@ public class SecurityConfig {
                                         .requestMatchers("/filial/**").hasAnyRole("ADMIN","MANAGER","WORKER")
                                         .requestMatchers("/review").hasAnyRole("ADMIN","MANAGER","WORKER")
                                         .requestMatchers("/review/editReview/**").hasAnyRole("ADMIN","MANAGER","WORKER")
+                                        .requestMatchers("/review/addReviews/**").hasAnyRole("ADMIN","MANAGER","WORKER")
+                                        .requestMatchers("/review/deleteReviews/**").hasAnyRole("ADMIN","MANAGER","WORKER")
                                         .requestMatchers("/review/editReviews/**").permitAll()
                                         .requestMatchers("/review/editReviewses/**").permitAll()
                                         .requestMatchers("/zp/**").hasAnyRole("ADMIN","MANAGER")

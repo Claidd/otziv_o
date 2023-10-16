@@ -10,11 +10,12 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public interface ReviewRepository extends CrudRepository<Review, Long> {
 
-    List<Review> findAllByOrderDetailsId(Long orderDetailsId);
+    List<Review> findAllByOrderDetailsId(UUID orderDetailsId);
 
     @Query("SELECT r FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false")
     List<Review> findAllByPublishedDateAndPublish(@Param("localDate") LocalDate localDate);

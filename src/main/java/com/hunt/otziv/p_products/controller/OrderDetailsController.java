@@ -18,6 +18,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.util.Comparator;
+import java.util.UUID;
 
 @Controller
 @Slf4j
@@ -33,8 +34,9 @@ public class OrderDetailsController {
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
         model.addAttribute("companyId", companyId);
         model.addAttribute("orderId", orderId);
-        model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
-//        System.out.println(reviewService.getReviewsAllByOrderId(orderId));
+        Order order = orderService.getOrder(orderId);
+        model.addAttribute("orderDetailsId", order.getDetails().iterator().next().getId());
+        model.addAttribute("reviews", reviewService.getReviewsAllByOrderDetailsId(order));
         rm.addFlashAttribute("companyId", companyId);
         rm.addFlashAttribute("orderId", orderId);
         return "products/orders_detail_list";

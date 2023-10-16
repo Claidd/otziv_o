@@ -17,6 +17,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -37,7 +38,7 @@ public class ReviewDTO {
     private BotDTO bot;
 
     private OrderDetailsDTO orderDetails;
-    private Long orderDetailsId;
+    private UUID orderDetailsId;
 
     private FilialDTO filial;
 

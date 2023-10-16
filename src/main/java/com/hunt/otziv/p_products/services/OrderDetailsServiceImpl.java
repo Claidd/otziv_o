@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,10 +32,10 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         return orderDetailsRepository.save(orderDetails);
     }
 
-    public OrderDetails getOrderDetailById(Long orderDetailId){
+    public OrderDetails getOrderDetailById(UUID orderDetailId){
         return orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
     }
-    public OrderDetailsDTO getOrderDetailDTOById(Long orderDetailId){
+    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
         return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
     }
 
@@ -63,6 +64,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .company(convertToCompanyDTO(order.getCompany()))
                 .amount(order.getAmount())
                 .counter(order.getCounter())
+                .orderDetailsId(order.getDetails().iterator().next().getId())
                 .build();
     }
 

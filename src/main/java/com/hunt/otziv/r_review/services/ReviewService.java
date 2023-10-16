@@ -1,17 +1,19 @@
 package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.UUID;
 
 public interface ReviewService {
 
     Review save(Review review);
     boolean deleteReview(Long reviewId);
-    List<Review> getReviewsAllByOrderId(Long id);
+    List<Review> getReviewsAllByOrderId(UUID id);
     List<ReviewDTO> getAllReviewDTOAndDateToAdmin();
     List<ReviewDTO> getAllReviewDTOByWorkerByPublish(Principal principal);
     void changeBot(Long id);
@@ -21,4 +23,6 @@ public interface ReviewService {
     void updateReview(ReviewDTO reviewDTO, Long reviewId);
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
+
+    List<Review> getReviewsAllByOrderDetailsId(Order order);
 }

@@ -42,6 +42,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -81,8 +82,13 @@ public class ReviewServiceImpl implements ReviewService{
     }
 
     @Override
-    public List<Review> getReviewsAllByOrderId(Long id) {
-        return reviewRepository.findAllByOrderDetailsId(id);
+    public List<Review> getReviewsAllByOrderId(UUID orderDetailsId) {
+        return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
+    }
+
+    public List<Review> getReviewsAllByOrderDetailsId(Order order){
+
+        return getReviewsAllByOrderId(order.getDetails().iterator().next().getId());
     }
 
 

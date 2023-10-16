@@ -268,6 +268,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .dayToChangeStatusAgo(period.getDays())
                 .manager(convertToManagerDTO(order.getManager()))
                 .worker(convertToWorkerDto(order.getWorker()))
+                .orderDetailsId(order.getDetails().iterator().next().getId())
 //                .complete(order.isComplete())
 //                .counter(order.getCounter())
                 .build();

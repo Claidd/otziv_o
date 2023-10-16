@@ -37,6 +37,13 @@
                             </select>
                         </div>
 
+                        <div class="form-group">
+                            <label for="url">Дата изменений</label>
+                            <input type="text" id="url" th:field="*{filial.url}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.url')}" th:text="${err}">Validation error</small>
+                        </div>
+
+
                         <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3">
                             <label for="inputWorkerFromOrder" class="form-label">Работник</label> <br>
                             <select id="inputWorkerFromOrder" name="workerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
@@ -45,6 +52,20 @@
                         </div>
 
                         <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3">
+                            <label for="inputManagerOrder" class="form-label">Менеджер</label> <br>
+                            <select id="inputManagerOrder" name="ManagerOrder" th:field="*{manager.managerId}"  class="form-control form-select form-select-lg">
+                                <option th:each="managerOne : ${ordersDTO.company.manager}" th:value="${managerOne.managerId}" th:text="${managerOne.user.fio}" th:selected="${ordersDTO.manager.managerId != null and managerOne.managerId == ordersDTO.manager.managerId}"></option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3 d-none">
+                            <label for="inputWorkerFromOrder" class="form-label">Работник</label> <br>
+                            <select id="inputWorkerFromOrder" name="workerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
+                                <option th:each="workerOne : ${ordersDTO.company.workers}" th:value="${workerOne.workerId}" th:text="${workerOne.user.fio}" th:selected="${ordersDTO.worker.workerId != null and workerOne.workerId == ordersDTO.worker.workerId}"></option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3 d-none">
                             <label for="inputManagerOrder" class="form-label">Менеджер</label> <br>
                             <select id="inputManagerOrder" name="ManagerOrder" th:field="*{manager.managerId}"  class="form-control form-select form-select-lg">
                                 <option th:each="managerOne : ${ordersDTO.company.manager}" th:value="${managerOne.managerId}" th:text="${managerOne.user.fio}" th:selected="${ordersDTO.manager.managerId != null and managerOne.managerId == ordersDTO.manager.managerId}"></option>

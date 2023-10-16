@@ -14,6 +14,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.UUID;
+
 @Controller
 @Slf4j
 @RequiredArgsConstructor
@@ -75,7 +77,7 @@ public class ReviewController {
 
     //    =========================================== REVIEW'S EDIT =======================================================
     @GetMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Get
-    String ReviewsEdit(@PathVariable Long orderDetailId, Model model){
+    String ReviewsEdit(@PathVariable UUID orderDetailId, Model model){
 
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
         model.addAttribute("orderDetailDTO", orderDetailsDTO);

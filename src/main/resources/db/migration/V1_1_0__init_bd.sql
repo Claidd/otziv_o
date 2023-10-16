@@ -366,7 +366,7 @@ CREATE TABLE IF NOT EXISTS orders (
 ENGINE = InnoDB;
 
 CREATE TABLE IF NOT EXISTS order_details (
-  `order_detail_id` bigint NOT NULL AUTO_INCREMENT,
+  `order_detail_id` BINARY(16) NOT NULL,
   `order_detail_order` bigint NULL,
   `order_detail_product` bigint NULL,
   `order_detail_amount` INT NULL,
@@ -398,7 +398,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   `review_changed` DATE NULL,
   `review_publish` BIT NULL DEFAULT 0,
   `review_publish_date` DATE NULL,
-  `review_order_details` bigint NULL,
+  `review_order_details` BINARY(16) NULL,
   `review_bot` bigint NULL,
   `review_filial` bigint NULL,
   `review_worker` bigint NULL,
