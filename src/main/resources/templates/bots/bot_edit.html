@@ -67,7 +67,7 @@
                     </div>
 
                     <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <a th:href="@{'/worker/bot'}" class="btn btn-secondary">Назад</a>
+                    <button th:onclick="goBack(event)" class="btn btn-secondary">Назад</button>
                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                 </form>
             </div>

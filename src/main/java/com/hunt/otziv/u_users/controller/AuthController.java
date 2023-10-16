@@ -27,8 +27,4 @@ public class AuthController {
 //        return authService.createNewUsers(registrationUserDTO);
 //    }
 
-    @GetMapping("/index2")
-    public String index2(){
-        return  "WORKER IS WORK";
-    }
 }

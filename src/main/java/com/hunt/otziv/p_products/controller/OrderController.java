@@ -101,14 +101,15 @@ public class OrderController {
 
 
 //    =========================================== СМЕНА СТАТУСА ========================================================
-    @PostMapping ("/status_for_checking/{companyID}/{orderID}") // смена статуса на "на проверке"
-    String changeStatusForChecking( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    @PostMapping ("/status_for_checking/{companyID}/{orderID}") // смена статуса на "в проверку"
+    String changeStatusForChecking( @PathVariable Long orderID, @PathVariable Long companyID, Model model, RedirectAttributes rm){
         if(orderService.changeStatusForOrder(orderID, "В проверку")) {
             log.info("статус заказа успешно изменен на на проверке");
-            return "redirect:/ordersCompany/ordersDetails/{companyID}";
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/ordersDetails/{companyID}/{orderID}";
         } else {
             log.info("ошибка при изменении статуса заказа на на проверке");
-            return "products/orders_list";
+            return "redirect:/ordersDetails/{companyID}/{orderID}";
         }
     } // смена статуса на "на проверке"
     @PostMapping ("/status_on_checking/{companyID}/{orderID}") // смена статуса на "на проверке"

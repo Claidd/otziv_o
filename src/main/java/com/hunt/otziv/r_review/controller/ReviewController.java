@@ -27,8 +27,9 @@ public class ReviewController {
     //    =========================================== REVIEW EDIT =======================================================
     @GetMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Get
     String ReviewEdit(@PathVariable Long reviewId, Model model){
-        System.out.println(reviewService.getReviewDTOById(reviewId));
+        System.out.println("Вошли в обновление " + reviewService.getReviewDTOById(reviewId));
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
+        System.out.println(reviewDTO.getOrderDetailsId());
         model.addAttribute("reviewDTO", reviewDTO);
         model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
         model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getId());
@@ -106,7 +107,8 @@ public class ReviewController {
             log.info("5. Обновление Отзыва прошло успешно3");
             rm.addFlashAttribute("saveSuccess", "true");
             Long companyId = orderDetailDTO.getOrder().getCompany().getId();
-            return "redirect:/ordersCompany/ordersDetails/" + companyId;
+            return "redirect:/review/editReviews/{orderDetailId}";
+//            return "redirect:/ordersCompany/ordersDetails/" + companyId;
         }
         else {
             log.info("2. Произошла какая-то ошибка");

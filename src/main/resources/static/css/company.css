@@ -1284,6 +1284,7 @@ b{
     border-radius: 1.2rem;
     height: 240px;
     width: 100%;
+    font-family: 'laptev_brush';
 }
 
 .company__card__content__comments__tocompany {
@@ -1295,6 +1296,7 @@ b{
     border-radius: 1.2rem;
     height: 46px;
     width: 100%;
+    font-family: 'laptev_brush';
 }
 
 .company__card__text__lead2 {
@@ -1306,6 +1308,7 @@ b{
     height: 240px;
     padding: 5px;
     overflow-x:hidden; 
+    font-family: 'laptev_brush';
 }
 
 
@@ -1318,6 +1321,7 @@ b{
     border-radius: 1.2rem;
     height: 336px;
     width: 100%;
+    font-family: 'laptev_brush';
 }
 
 
@@ -1334,6 +1338,8 @@ b{
     padding: 5px 5px 8px 10px;
     overflow-x:hidden;
     margin-bottom: 20px;
+    font-family: 'laptev_brush';
+    font-size: 1rem;
 }
 
 .company__card__content__review__comment{
@@ -1346,6 +1352,8 @@ b{
     overflow-x:hidden;
     margin-bottom: 20px;
     background-color: #152cfc00;
+    font-family: 'laptev_brush';
+    font-size: 1rem;
 }
 
 .company__card__text__review {
@@ -1360,6 +1368,8 @@ b{
     border: none;
     border-radius: 1.2rem;
     text-align: center;
+    font-family: 'laptev_brush';
+    font-size: 1rem;
     /* border-radius: 1.2rem; */
 }
 
@@ -1416,12 +1426,20 @@ b{
     margin-right: 3px;
     border: 1px solid #5b5a5a38;
     background: none;
+    margin-top: 20px;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
 }
 
 .progress-bar {
     height: 15px;
     background: #d45cec81;
     border: 1px solid #5b5a5a38;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
     /* Длительность анимации 2 секунды (по желанию) */
 }
 

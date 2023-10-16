@@ -37,7 +37,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('title')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div class="form-group">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group">
                             <label for="urlChat">Ссылка на чат</label>
                             <input type="text" id="urlChat" th:field="*{urlChat}" class="form-control"
                                    placeholder="">
@@ -45,7 +45,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('urlChat')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div class="form-group ">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group">
                             <label for="telephone">Номер телефона</label>
                             <input type="text" id="telephone" th:field="*{telephone}" th:value="${telephone}" class="form-control"
                                    placeholder="Введите номер компании">
@@ -85,7 +85,7 @@
                         </div>
 
 
-                        <div class="mb-3" th:each="worker1 : ${companyDTO.getWorkers()}">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3" th:each="worker1 : ${companyDTO.getWorkers()}">
                             <label for="inputWorkers2" class="form-label">Специалист</label> <br>
                             <select id="inputWorkers2" name="workerId2" class="form-control form-select form-select-lg">
                                 <option  th:value="${worker1.workerId}" th:text="${worker1.user.fio}" ></option>
@@ -93,7 +93,7 @@
                             <a th:href="@{/companies/editCompany/{companyId}/deleteWorker/{workerId}(companyId = ${companyDTO.id}, workerId=${worker1.workerId})}">Удалить</a>
                         </div>
 
-                        <div class="mb-3">
+                        <div sec:authorize="hasAnyRole('ADMIN')" class="mb-3">
                             <label for="inputManagers" class="form-label">Менеджер</label> <br>
                             <select id="inputManagers" name="managerId" th:field="*{manager.managerId}"  class="form-control form-select form-select-lg">
                                 <option th:each="manag: ${managers}" th:value="${manag.id}" th:text="${manag.user.fio}" ></option>
@@ -134,7 +134,7 @@
 
 
                 
-                        <div class="form-group ">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group ">
                             <label for="status">Укажите статус компании</label>
                             <input type="text" id="status" th:field="*{status.title}" class="form-control"
                                    placeholder="">
@@ -160,7 +160,7 @@
                         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
                         
                     
-                        <div class="mb-3" th:object="${newWorkerDTO}">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3" th:object="${newWorkerDTO}">
                             <label for="inputAddWorkers" class="form-label">Специалист</label> <br>
                             <select id="inputAddWorkers" name="workerId" th:field="*{workerId}"  class="form-control form-select form-select-lg">
                                 <option value="0">Добавить специалиста</option>
@@ -203,7 +203,8 @@
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                         <!-- Кнопка "Назад" -->
-                        <a th:href="@{'/companies/allCompany'}" class="btn btn-secondary mt-3">Назад</a>
+                        <!-- <a th:href="@{'/companies/allCompany'}" class="btn btn-secondary mt-3">Назад</a> -->
+                        <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                     </form>
                 </div>
             </div>

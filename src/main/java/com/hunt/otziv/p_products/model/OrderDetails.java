@@ -29,6 +29,11 @@ public class OrderDetails {
     @Column(name = "order_detail_id")
     private Long id;
 
+//    @Id
+//    @GeneratedValue(strategy = GenerationType.UUID)
+//    @Column(name = "order_detail_id")
+//    private UUID id;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_detail_order")
     private Order order;

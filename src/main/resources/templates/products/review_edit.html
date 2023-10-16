@@ -74,12 +74,19 @@
                             <input type="text" id="orderDetails" th:field="*{orderDetails.id}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('orderDetails')}" th:text="${err}">Validation error</small>
                         </div>
+
+                        <div class="form-group d-none">
+                            <label for="orderDetailsId">orderDetailsId</label>
+                            <input type="text" id="orderDetailsId" th:field="*{orderDetailsId}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('orderDetailsId')}" th:text="${err}">Validation error</small>
+                        </div>
                         
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                             
-                            <a th:href="@{'/ordersDetails/'+ ${companyId} + '/' + ${orderId}}" class="btn btn-secondary mt-3">Назад</a>
-                            <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3">Удалить</a>
+                            <!-- <a th:href="@{'/ordersDetails/'+ ${companyId} + '/' + ${orderId}}" class="btn btn-secondary mt-3">Назад</a> -->
+                            <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
+                            <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3 ml-5">Удалить</a>
                     </form>
                 </div>
             </div>

@@ -17,6 +17,11 @@ $(document).ready(function() {
   });
 });
 
+function goBack(event) {
+  event.preventDefault();
+  window.history.back();
+}
+
 
 // Обработчик события изменения значения в первом селекторе
 $("#category").change(function() {
@@ -226,6 +231,28 @@ function onPayment(button) {
       document.execCommand("copy");
       /* Alert the copied text */
       alert("Copied the text: " + copyTextLogin.value);
+    }
+
+    function myFunctionVk() {
+      /* Get the text field */
+      var copyText5 = document.getElementById("myInput5");
+      /* Select the text field */
+      copyText5.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyText5.value);
+    }
+
+    function myFunction2Gis() {
+      /* Get the text field */
+      var copyText6 = document.getElementById("myInput6");
+      /* Select the text field */
+      copyText6.select();
+      /* Copy the text inside the text field */
+      document.execCommand("copy");
+      /* Alert the copied text */
+      alert("Copied the text: " + copyText6.value);
     }
   
     // <!-- ==================== COPY BUTTON REVIEW ====================== -->

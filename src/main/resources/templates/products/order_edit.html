@@ -37,14 +37,14 @@
                             </select>
                         </div>
 
-                        <div class="mb-3">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3">
                             <label for="inputWorkerFromOrder" class="form-label">Работник</label> <br>
                             <select id="inputWorkerFromOrder" name="workerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
                                 <option th:each="workerOne : ${ordersDTO.company.workers}" th:value="${workerOne.workerId}" th:text="${workerOne.user.fio}" th:selected="${ordersDTO.worker.workerId != null and workerOne.workerId == ordersDTO.worker.workerId}"></option>
                             </select>
                         </div>
 
-                        <div class="mb-3">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3">
                             <label for="inputManagerOrder" class="form-label">Менеджер</label> <br>
                             <select id="inputManagerOrder" name="ManagerOrder" th:field="*{manager.managerId}"  class="form-control form-select form-select-lg">
                                 <option th:each="managerOne : ${ordersDTO.company.manager}" th:value="${managerOne.managerId}" th:text="${managerOne.user.fio}" th:selected="${ordersDTO.manager.managerId != null and managerOne.managerId == ordersDTO.manager.managerId}"></option>
@@ -84,7 +84,7 @@
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                             <!-- Кнопка "Назад" -->
-                            <a th:href="@{'/ordersCompany/ordersDetails/'+ ${ordersDTO.company.id}}" class="btn btn-secondary mt-3">Назад</a>
+                            <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
                     </form>
                 </div>
             </div>

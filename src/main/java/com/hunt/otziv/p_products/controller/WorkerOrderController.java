@@ -123,7 +123,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
-            return "products/orders/new_orders_worker";
+            return "products/orders/correct_orders_worker";
         }
         else return "redirect:/";
     } // Все заказы - Коррекция
@@ -143,13 +143,7 @@ public class WorkerOrderController {
             model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin());
             return "products/orders/publish_orders_worker";
         }
-//        if ("ROLE_MANAGER".equals(userRole)){
-//            log.info("Зашли список всех заказов для Менеджера");
-//            model.addAttribute("TitleName", "Публикация");
-//            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-//            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
-//            return "products/orders/publish_orders_worker";
-//        }
+
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Публикация");

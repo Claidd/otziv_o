@@ -25,7 +25,11 @@
 <!-- ==================== STYLE INDEX ======================== -->
 <th:block th:fragment="styles_index" xmlns:th="http://www.w3.org/1999/xhtml">
     <link rel="stylesheet" href="../../../static/css/style.css" th:href="@{../../css/style.css}"/>
-    <!-- <link rel="stylesheet" href="../../../static/css/lead.css" th:href="@{../../css/company.css}"/> -->
+    <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
+</th:block>
+<!-- ==================== STYLE INDEX 2======================== -->
+<th:block th:fragment="styles_index2" xmlns:th="http://www.w3.org/1999/xhtml">
+    <link rel="stylesheet" href="../../../../static/css/style.css" th:href="@{../../../css/style.css}"/>
     <link rel="stylesheet" th:href="@{/css/responsive.css}"/>
 </th:block>
 <!-- ==================== STYLE INDEX + BOOTSTRAP ======================== -->
@@ -132,5 +136,15 @@
     <!-- <script th:src="@{/js/jquery-3.7.0.min.js}" type="text/javascript"></script> -->
     <script type="text/javascript" th:src="@{/js/orders.js}"></script>
     <script type="text/javascript" th:src="@{/js/index.js}"></script>
+</th:block>
 
+
+<!-- ==================== BUTTON BACK DENIED ======================== -->
+<th:block th:fragment="back" xmlns:th="http://www.w3.org/1999/xhtml">
+    <a th:onclick="goBack(event)" class="butt">Назад</a>
+</th:block>
+
+<!-- ==================== BUTTON BACK ======================== -->
+<th:block th:fragment="backDen" xmlns:th="http://www.w3.org/1999/xhtml">
+    <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
 </th:block>

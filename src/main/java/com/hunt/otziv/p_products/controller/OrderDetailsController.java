@@ -64,14 +64,25 @@ public class OrderDetailsController {
 //        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
 
-    @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}")
-    public String deActivateBot(@PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
+    @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}") // Деактивация и замена Бота
+    public String deActivateBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
         log.info("1. Заходим в Post метод замены бота");
         reviewService.deActivateAndChangeBot(reviewId, botId);
         log.info("6. Все прошло успешно, вернулись в контроллер");
-        model.addAttribute("companyID", companyId);
-        model.addAttribute("orderID", orderId);
-        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+
+        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+            log.info("Зашли список всех заказов для админа");
+            return "redirect:/worker/publish";
+        }
+        if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("companyID", companyId);
+            model.addAttribute("orderID", orderId);
+            model.addAttribute("reviewID", orderId);
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+        return "redirect:/worker/publish";
+//        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     }
 
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.

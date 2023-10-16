@@ -11,21 +11,14 @@ public interface ReviewService {
 
     Review save(Review review);
     boolean deleteReview(Long reviewId);
-
     List<Review> getReviewsAllByOrderId(Long id);
     List<ReviewDTO> getAllReviewDTOAndDateToAdmin();
     List<ReviewDTO> getAllReviewDTOByWorkerByPublish(Principal principal);
-
     void changeBot(Long id);
-
     void deActivateAndChangeBot(Long reviewId, Long botId);
-
     ReviewDTO getReviewDTOById(Long reviewId);
     Review getReviewById(Long reviewId);
     void updateReview(ReviewDTO reviewDTO, Long reviewId);
-
-
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
-
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
 }
