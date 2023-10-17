@@ -49,8 +49,8 @@ public class LeadServiceImpl implements LeadService{
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
-    // Создание нового пользователя "Лида" - начало
-    public Lead save(LeadDTO leadDTO, String username){
+
+    public Lead save(LeadDTO leadDTO, String username){ // Создание нового пользователя "Лида" - начало
         log.info("3. Заходим в создание нового лида и проверяем совпадение паролей");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", username)
@@ -69,15 +69,15 @@ public class LeadServiceImpl implements LeadService{
         Lead lead1 = leadsRepository.save(lead);
         zpService.saveLeadZp(lead1);
         return lead1;
-    }
-    // Создание нового пользователя "Клиент" - конец
+    } // Создание нового пользователя "Клиент" - конец
+
     //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
     //    =============================== ОБНОВИТЬ ЮЗЕРА - НАЧАЛО =========================================
-    // Обновить профиль юзера - начало
+
     @Override
     @Transactional
-    public void updateProfile(LeadDTO leadDTO, Long id) {
+    public void updateProfile(LeadDTO leadDTO, Long id) {  // Обновить профиль юзера - начало
         log.info("Вошли в обновление лида и ищем лида по id");
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         Lead saveLead = findByIdAndToUpdate(id).orElseThrow(() -> new UsernameNotFoundException(
@@ -93,11 +93,7 @@ public class LeadServiceImpl implements LeadService{
             isChanged = true;
             log.info("Обновили телефон");
         }
-        /*Проверяем, не равен ли пароль предыдущему */
-//        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()){
-//            saveUser.setPassword(passwordEncoder.encode(userDTO.getPassword()));
-//            isChanged = true;
-//        }
+
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(leadDTO.getCityLead(), saveLead.getCityLead())){
             saveLead.setCityLead(leadDTO.getCityLead());
@@ -150,21 +146,21 @@ public class LeadServiceImpl implements LeadService{
         else {
             log.info("Изменений не было, лид в БД не изменена");
         }
-    }
+    }   // Обновить профиль юзера - конец
 
     public Optional<User> findByFio(String operator) {
         return userRepository.findByFio(operator);
-    }
-    // Обновить профиль юзера - конец
+    } // Взять лида по ФИО
+
     //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
 
 
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - НАЧАЛО =========================================
-    // Взять всех юзеров - начало
+
     @Override
-    public List<LeadDTO> getAllLeads(String status, String keywords, Principal principal) {
+    public List<LeadDTO> getAllLeads(String status, String keywords, Principal principal) { // Взять всех лидов
         log.info("Берем все лиды");
         String userRole = gerRole(principal);
         System.out.println(userRole);
@@ -218,14 +214,14 @@ public class LeadServiceImpl implements LeadService{
         else {
            return new ArrayList<LeadDTO>();
         }
-    }
-    // Взять всех юзеров - конец
+    } // Взять всех лидов
+
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ ПО ДАТЕ В НАПОМИНАНИИ - НАЧАЛО =========================================
-    // Взять всех юзеров - начало
+
     @Override
-    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal) {
+    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal) { // Взять всех лидов - к рассылке
         log.info("Берем все лиды");
         String userRole = gerRole(principal);
         System.out.println(userRole);
@@ -261,14 +257,14 @@ public class LeadServiceImpl implements LeadService{
                     .collect(Collectors.toList());
         }
         return new ArrayList<LeadDTO>();
-    }
-    // Взять всех юзеров - конец
+    } // Взять всех лидов - к рассылке
+
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ БЕЗ СТАТУСА - НАЧАЛО =========================================
-    // Взять всех юзеров - начало
+
     @Override
-    public List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal) {
+    public List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal) { // Взять всех лидов без статуса - конец
         log.info("Берем все лиды");
         String userRole = gerRole(principal);
         System.out.println(userRole);
@@ -304,10 +300,9 @@ public class LeadServiceImpl implements LeadService{
                     .collect(Collectors.toList());
         }
         return new ArrayList<LeadDTO>();
-    }
-    // Взять всех юзеров - конец
+    } // Взять всех лидов без статуса - конец
 
-    private String gerRole(Principal principal){
+    private String gerRole(Principal principal){ // Берем роль пользователя
         // Получите текущий объект аутентификации
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Получите имя текущего пользователя (пользователя, не роль)
@@ -358,10 +353,9 @@ public class LeadServiceImpl implements LeadService{
     }
     // меняем статус с нового на отправленное - конец
 
-    // меняем статус с отправленное на напоминание - начало
     @Override
     @Transactional
-    public void changeStatusLeadOnReSend(Long leadId) {
+    public void changeStatusLeadOnReSend(Long leadId) { // меняем статус с отправленное на напоминание - начало
         Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
@@ -369,13 +363,11 @@ public class LeadServiceImpl implements LeadService{
         lead.setUpdateStatus(LocalDate.now());
         lead.setDateNewTry(LocalDate.now().plusDays(2));
         leadsRepository.save(lead);
-    }
-    // меняем статус с отправленное на напоминание - конец
+    } // меняем статус с отправленное на напоминание - конец
 
-    // меняем статус с напоминание на К рассылке - начало
     @Override
     @Transactional
-    public void changeStatusLeadOnArchive(Long leadId) {
+    public void changeStatusLeadOnArchive(Long leadId) { // меняем статус с напоминание на К рассылке - начало
         Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
@@ -383,13 +375,11 @@ public class LeadServiceImpl implements LeadService{
         lead.setUpdateStatus(LocalDate.now());
         lead.setDateNewTry(LocalDate.now().plusDays(90));
         leadsRepository.save(lead);
-    }
-    // меняем статус с напоминание на К рассылке - конец
+    } // меняем статус с напоминание на К рассылке - конец
 
-    // меняем статус с К рассылке на В работе - начало
     @Override
     @Transactional
-    public void changeStatusLeadOnInWork(Long leadId) {
+    public void changeStatusLeadOnInWork(Long leadId) { // меняем статус с К рассылке на В работе - начало
         Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
@@ -397,56 +387,45 @@ public class LeadServiceImpl implements LeadService{
         lead.setUpdateStatus(LocalDate.now());
         lead.setDateNewTry(LocalDate.now());
         leadsRepository.save(lead);
-    }
-    // меняем статус с К рассылке на В работе - конец
+    } // меняем статус с К рассылке на В работе - конец
 
-
-    // меняем статус с любого на Новый - начало
     @Override
     @Transactional
-    public void changeStatusLeadOnNew(Long leadId) {
+    public void changeStatusLeadOnNew(Long leadId) { // меняем статус с любого на Новый - начало
         Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Новый");
         lead.setUpdateStatus(LocalDate.now());
         leadsRepository.save(lead);
-    }
-    // меняем статус с любого на Новый - конец
+    } // меняем статус с любого на Новый - конец
 
 //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 
-    // Метод поиска юзера по имени в БД
-    public Optional<Lead> findByLeadId(Long leadId){
+    public Optional<Lead> findByLeadId(Long leadId){ // Метод поиска юзера по имени в БД
         return leadsRepository.findById(leadId);
-    }
-    // Метод поиска юзера по имени в БД - конец
+    } // Метод поиска юзера по имени в БД - конец
 
-
-    // Взять одного юзера - конец
     @Override
-    public LeadDTO findById(Long id) {
+    public LeadDTO findById(Long leadId) { // Взять одного лида дто по id
         log.info("Начинается поиск пользователя по id - начало");
-        Lead lead = leadsRepository.findById(id).orElseThrow();
+        Lead lead = leadsRepository.findById(leadId).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(lead);
-    }
-    // Взять одного юзера - конец
+    } // Взять одного лида дто - конец
 
-    // Взять одного юзера - конец
     @Override
-    public Optional<Lead> findByIdAndToUpdate(Long id) {
+    public Optional<Lead> findByIdAndToUpdate(Long id) { // Взять одного юзера - конец
         log.info("Начинается поиск пользователя по id - начало");
         return leadsRepository.findById(id);
-    }
-    // Взять одного юзера - конец
+    } // Взять одного юзера - конец
 
-    public Optional<User> findByUserName(String username){
+    public Optional<User> findByUserName(String username){ // Взять одного юзера по имени
         return userRepository.findByUsername(username);
-    }
+    } // Взять одного юзера по имени
 
     // Перевод юзера в дто - начало
-    private LeadDTO toDto(Lead lead){
+    private LeadDTO toDto(Lead lead){ // Перевод лида в дто
         log.info("Перевод юзера в дто");
         return LeadDTO.builder()
                 .id(lead.getId())
@@ -460,14 +439,10 @@ public class LeadServiceImpl implements LeadService{
                 .operator(lead.getOperator())
                 .manager(lead.getManager())
                 .marketolog(lead.getMarketolog())
-//                .operatorId(lead.getOperator().getId())
                 .build();
-    }
-    // Перевод юзера в дто - конец
+    } // Перевод юзера в дто - конец
 
-
-    // Вспомогательный метод для корректировки номера телефона
-    public String changeNumberPhone(String phone){
+    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "+79";
@@ -475,6 +450,6 @@ public class LeadServiceImpl implements LeadService{
         } else {
             return phone;
         }
-    }
+    } // Вспомогательный метод для корректировки номера телефона
 
 }

@@ -62,14 +62,14 @@ public class CompanyServiceImpl implements CompanyService{
     private final FilialService filialService;
 
 
-    public List<Company> getAllCompaniesList(){
+    public List<Company> getAllCompaniesList(){ // Взять все компании
         return companyRepository.findAll();
-    }
+    } // Взять все компании
 
     @Override
-    public List<CompanyDTO> getAllCompaniesDTOList() {
+    public List<CompanyDTO> getAllCompaniesDTOList() { // Взять все компании ДТО
         return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList();
-    }
+    } // Взять все компании ДТО
 
     public List<CompanyDTO> getAllCompaniesDTOList(String keywords){ // Показ всех компаний + поиск
         if (!keywords.isEmpty()){
@@ -77,7 +77,7 @@ public class CompanyServiceImpl implements CompanyService{
             return convertToCompanyDTOList(companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords).stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
         }
         else return convertToCompanyDTOList(companyRepository.findAll().stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
-    }
+    } // Показ всех компаний + поиск
 
     public List<CompanyDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
@@ -88,21 +88,21 @@ public class CompanyServiceImpl implements CompanyService{
     } // Берем все заказы с поиском для Менеджера
 
 
-    public CompanyDTO getCompaniesDTOById(Long id){
-        return convertToDto(companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Компания '%d' не найден", id)
+    public CompanyDTO getCompaniesDTOById(Long companyId){  // Берем компанию ДТО по Id
+        return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Компания '%d' не найден", companyId)
         )));
-    }
+    } // Берем компанию ДТО по Id
 
     @Override
-    public Company getCompaniesById(Long id) {
+    public Company getCompaniesById(Long id) { // Берем компанию по Id
         return companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Компания '%d' не найден", id)
         ));
-    }
+    } // Берем компанию по Id
 
     @Override
-    public CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long companyId, String keywords) {
+    public CompanyDTO getCompaniesAllStatusByIdAndKeyword(Long companyId, String keywords) { // Взять компанию по Id и поиску
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
             Company company = companyRepository.findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(companyId, keywords, keywords).orElse(null);
@@ -119,19 +119,19 @@ public class CompanyServiceImpl implements CompanyService{
         }
         else return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Компания '%d' не найден", companyId))));
-    }// берем компанию с поиском для вывода всех ее заказов
+    } // Взять компанию по Id и поиску
 
     @Transactional
     public void save(Company company){
         companyRepository.save(company);
-    }
+    } // Сохранение компании в БД
 
     //    Метод подготовки ДТО при создании компании из Лида менеджером
 
     //      =====================================CREATE USERS - START=======================================================
     // Создание нового пользователя "Клиент" - начало
     @Transactional
-    public boolean save(CompanyDTO companyDTO){
+    public boolean save(CompanyDTO companyDTO){ // Сохранение новой компании из дто
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
     //        в начале сохранения устанавливаем поля из дто
         Company company = Company.builder()
@@ -176,12 +176,11 @@ public class CompanyServiceImpl implements CompanyService{
             log.error("Ошибка при сохранении компании: " + e.getMessage());
             return false;
         }
-    }
-    // Создание нового пользователя "Клиент" - конец
+    } // Создание нового пользователя "Клиент" - конец
 //      =====================================CREATE USERS - START=======================================================
 
-//    Метод подготовки ДТО при создании компании из Лида менеджером
-    public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) {
+
+    public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
         LeadDTO leadDTO = leadService.findById(leadId);
         List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
         System.out.println(workers);
@@ -199,16 +198,16 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setFilial(new FilialDTO());
         companyDTO.setWorker(workers.get(random.nextInt(workers.size())));
         return companyDTO;
-    }
-    //    Метод подготовки ДТО при создании компании из Лида менеджером
-    private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){
-        return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
-    }
-    private List<CompanyDTO> convertToCompanyDTOList(List<Company> companies){
-        return companies.stream().map(this::convertToDto).collect(Collectors.toList());
-    }
+    } //    Метод подготовки ДТО при создании компании из Лида менеджером
 
-    public CompanyDTO convertToDto(Company company) {
+    private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){ // перевод компании в ДТО Сэт
+        return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
+    } // перевод компании в ДТО
+    private List<CompanyDTO> convertToCompanyDTOList(List<Company> companies){ // перевод компании в ДТО Лист
+        return companies.stream().map(this::convertToDto).collect(Collectors.toList());
+    } // перевод компании в ДТО
+
+    public CompanyDTO convertToDto(Company company) { // перевод компании в ДТО
         if (company.getId() != null) {
             CompanyDTO companyDTO = new CompanyDTO();
             companyDTO.setId(company.getId());
@@ -242,13 +241,13 @@ public class CompanyServiceImpl implements CompanyService{
             log.info("отработал нулл");
             return new CompanyDTO();
         }
-    }
+    } // перевод компании в ДТО
 
-    private Set<OrderDTO> convertToOrderDTOSet(Set<Order> orders){
+    private Set<OrderDTO> convertToOrderDTOSet(Set<Order> orders){ // перевод заказа в ДТО Сэт
         return orders.stream().map(this::convertToOrderDTO).collect(Collectors.toSet());
-    }
+    } // перевод заказа в ДТО Сэт
 
-    private OrderDTO convertToOrderDTO(Order order){
+    private OrderDTO convertToOrderDTO(Order order){ // перевод заказа в ДТО
         LocalDate now = LocalDate.now();
         LocalDate changedDate = order.getChanged();
         // Вычисляем разницу между датами
@@ -269,30 +268,28 @@ public class CompanyServiceImpl implements CompanyService{
                 .manager(convertToManagerDTO(order.getManager()))
                 .worker(convertToWorkerDto(order.getWorker()))
                 .orderDetailsId(order.getDetails().iterator().next().getId())
-//                .complete(order.isComplete())
-//                .counter(order.getCounter())
                 .build();
-    }
+    } // перевод заказа в ДТО
 
-    private ProductDTO convertToProductDTO(Product product){
+    private ProductDTO convertToProductDTO(Product product){ // перевод продукта в ДТО
         return ProductDTO.builder()
                 .id(product.getId())
                 .title(product.getTitle())
                 .price(product.getPrice())
                 .build();
-    }
+    } // перевод продукта в ДТО
 
-    private OrderStatusDTO convertToOrderStatusDTO(OrderStatus orderStatus){
+    private OrderStatusDTO convertToOrderStatusDTO(OrderStatus orderStatus){ // перевод статус заказа в ДТО
         return OrderStatusDTO.builder()
                 .id(orderStatus.getId())
                 .title(orderStatus.getTitle())
                 .build();
-    }
+    } // перевод статус заказа в ДТО
 
-    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){
+    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){ // перевод деталей заказа в ДТО
         return details.stream().map(this::convertToDetailsDTO).collect(Collectors.toList());
-    }
-    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){
+    } // перевод деталей заказа в ДТО
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей заказа в ДТО
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
                 .amount(orderDetails.getAmount())
@@ -303,9 +300,9 @@ public class CompanyServiceImpl implements CompanyService{
 //                .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
                 .comment(orderDetails.getComment())
                 .build();
-    }
+    } // перевод деталей заказа в ДТО
 
-    private CompanyDTO convertToCompanyDTO(Company company){
+    private CompanyDTO convertToCompanyDTO(Company company){ // перевод компании в ДТО
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
@@ -319,36 +316,36 @@ public class CompanyServiceImpl implements CompanyService{
                 .build();
     }
 
-    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials){
+    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials){ // перевод филиалов в ДТО Сэт
         return filials.stream().map(this::convertToFilialDTO).collect(Collectors.toSet());
-    }
-    private FilialDTO convertToFilialDTO(Filial filial){
+    } // перевод филиалов в ДТО Сэт
+    private FilialDTO convertToFilialDTO(Filial filial){ // перевод филиала в ДТО
         return FilialDTO.builder()
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .build();
-    }
+    } // перевод филиала в ДТО
 
-    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers){
+    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers){ // перевод работника в ДТО Лист
         return workers.stream().map(this::convertToWorkerDTO).collect(Collectors.toSet());
-    }
-    private WorkerDTO convertToWorkerDTO(Worker worker){
+    } // перевод работника в ДТО Лист
+    private WorkerDTO convertToWorkerDTO(Worker worker){ // перевод работника в ДТО
         return WorkerDTO.builder()
                 .workerId(worker.getId())
                 .user(worker.getUser())
                 .build();
-    }
+    } // перевод работника в ДТО
 
-    private ManagerDTO convertToManagerDTO(Manager manager){
+    private ManagerDTO convertToManagerDTO(Manager manager){ // перевод менеджера в ДТО
         return ManagerDTO.builder()
                 .managerId(manager.getId())
                 .user(manager.getUser())
                 .payText(manager.getPayText())
                 .build();
-    }
+    } // перевод менеджера в ДТО
 
-    private UserDTO convertToUserDtoToManager(Principal principal) {
+    private UserDTO convertToUserDtoToManager(Principal principal) { // перевод юзера в ДТО
         UserDTO userDTO = new UserDTO();
         User user = userService.findByUserName(principal.getName()).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", principal.getName())
@@ -356,73 +353,67 @@ public class CompanyServiceImpl implements CompanyService{
         userDTO.setUsername(user.getUsername());
         userDTO.setFio(user.getFio());
         userDTO.setWorkers(user.getWorkers());
-        // Other fields if needed
         return userDTO;
-    }
-    private UserDTO convertToUserDto(User user) {
+    } // перевод юзера в ДТО
+
+    private UserDTO convertToUserDto(User user) { // перевод юзера в ДТО
         UserDTO userDTO = new UserDTO();
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setEmail(user.getEmail());
         userDTO.setFio(user.getFio());
         userDTO.setWorkers(user.getWorkers());
-
-        // Other fields if needed
         return userDTO;
-    }
+    } // перевод юзера в ДТО
 
-    private ManagerDTO convertToManagerDto(Manager manager) {
+    private ManagerDTO convertToManagerDto(Manager manager) { // перевод менеджера в ДТО
         ManagerDTO managerDTO = new ManagerDTO();
         managerDTO.setManagerId(manager.getId());
         managerDTO.setUser(manager.getUser());
         return managerDTO;
-    }
+    } // перевод менеджера в ДТО
 
-    private Set<WorkerDTO> convertToWorkerDtoSet(Set<Worker> workers) {
+    private Set<WorkerDTO> convertToWorkerDtoSet(Set<Worker> workers) { // перевод менеджера в ДТО Сэт
         return workers.stream()
                 .map(this::convertToWorkerDto)
                 .collect(Collectors.toSet());
-    }
+    } // перевод менеджера в ДТО Сэт
 
-    private WorkerDTO convertToWorkerDto(Worker worker) {
+    private WorkerDTO convertToWorkerDto(Worker worker) { // перевод работника в ДТО
         WorkerDTO workerDTO = new WorkerDTO();
         workerDTO.setWorkerId(worker.getId());
         workerDTO.setUser(worker.getUser());
-        // Other fields if needed
         return workerDTO;
-    }
+    } // перевод работника в ДТО
 
-    private CompanyStatusDTO convertToCompanyStatusDto(CompanyStatus status) {
+    private CompanyStatusDTO convertToCompanyStatusDto(CompanyStatus status) { // перевод статуса компании в ДТО
         CompanyStatusDTO statusDTO = new CompanyStatusDTO();
         statusDTO.setId(status.getId());
         statusDTO.setTitle(status.getTitle());
-        // Other fields if needed
         return statusDTO;
-    }
+    } // перевод статуса компании в ДТО
 
-    private CategoryDTO convertToCategoryDto(Category category) {
+    private CategoryDTO convertToCategoryDto(Category category) { // перевод категории в ДТО
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId());
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
-        // Other fields if needed
         return categoryDTO;
-    }
+    } // перевод категории в ДТО
 
-    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) {
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // перевод подкатегории в ДТО
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
         subCategoryDTO.setId(subCategory.getId());
         subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
-        // Other fields if needed
         return subCategoryDTO;
-    }
+    } // перевод подкатегории в ДТО
 
-    private Set<FilialDTO> convertToFilialDtoSet(Set<Filial> filial) {
+    private Set<FilialDTO> convertToFilialDtoSet(Set<Filial> filial) { // перевод филиала в ДТО Сэт
         return filial.stream()
                 .map(this::convertToFilialDto)
                 .collect(Collectors.toSet());
-    }
+    } // перевод филиала в ДТО Сэт
 
-    private FilialDTO convertToFilialDto(Filial filial) {
+    private FilialDTO convertToFilialDto(Filial filial) { // перевод филиала в ДТО
         FilialDTO filialDTO = new FilialDTO();
         filialDTO.setId(filial.getId());
         filialDTO.setTitle(filial.getTitle());
@@ -435,7 +426,7 @@ public class CompanyServiceImpl implements CompanyService{
     // Обновить профиль юзера - начало
     @Override
     @Transactional
-    public void updateCompany(CompanyDTO companyDTO, WorkerDTO newWorkerDTO, Long companyId) {
+    public void updateCompany(CompanyDTO companyDTO, WorkerDTO newWorkerDTO, Long companyId) { // Обновление компании
         log.info("2. Вошли в обновление данных компании");
         Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
         boolean isChanged = false;
@@ -548,11 +539,11 @@ public class CompanyServiceImpl implements CompanyService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    }
+    } // Обновление компании
 
 //    =====================================================================================================
 
-public boolean deleteWorkers(Long companyId, Long workerId){
+public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление работника
         try {
             log.info("2. Вошли в удаление работника из списка работников компании");
             Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
@@ -564,9 +555,9 @@ public boolean deleteWorkers(Long companyId, Long workerId){
         catch (Exception e){
             return false;
         }
-}
+} // Удаление работника
 @Transactional
-    public boolean deleteFilial(Long companyId, Long filialId){
+    public boolean deleteFilial(Long companyId, Long filialId){ // Удаление филиала
         try {
             log.info("2. Вошли в удаление филиала из списка филиалов компании");
             Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
@@ -579,45 +570,45 @@ public boolean deleteWorkers(Long companyId, Long workerId){
         catch (Exception e){
             return false;
         }
-    }
+    } // Удаление филиала
 
 //    =====================================================================================================
-    private User convertUserDTOToUser(UserDTO userDTO){
+    private User convertUserDTOToUser(UserDTO userDTO){ // перевод юзера из Дто в сущность
         return userService.findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", userDTO.getUsername())
         ));
-    }
+    } // перевод юзера из Дто в Сущность
 
-    private Manager convertManagerDTOToManager(ManagerDTO managerDTO){
+    private Manager convertManagerDTOToManager(ManagerDTO managerDTO){ // перевод менеджера из Дто в сущность
         return managerService.getManagerById(managerDTO.getManagerId());
-    }
+    } // перевод менеджера из Дто в Сущность
 
-    private Set<Worker> convertWorkerDTOToWorkersSetToSet(Set<WorkerDTO> workerDTO){
+    private Set<Worker> convertWorkerDTOToWorkersSetToSet(Set<WorkerDTO> workerDTO){ // перевод работников из Дто в сущность
         return workerDTO.stream()
                 .map(workerDTO1 -> {
                     return workerService.getWorkerById(workerDTO1.getWorkerId());
                 }).collect(Collectors.toSet());
-    }
+    } // перевод работников из Дто в сущность
 
-    private Set<Worker> convertWorkerDTOToWorker(WorkerDTO workerDTO){
+    private Set<Worker> convertWorkerDTOToWorker(WorkerDTO workerDTO){ // перевод работника из Дто в сущность
         Set<Worker> workers = new HashSet<>();
         workers.add(workerService.getWorkerById(workerDTO.getWorkerId()));
         return workers;
-    }
+    } // перевод работника из Дто в сущность
 
-    private CompanyStatus convertCompanyStatusDTOToCompanyStatus(CompanyStatusDTO companyStatusDTO){
+    private CompanyStatus convertCompanyStatusDTOToCompanyStatus(CompanyStatusDTO companyStatusDTO){ // перевод статуса компании из Дто в сущность
         return companyStatusService.getCompanyStatusById(companyStatusDTO.getId());
-    }
+    } // перевод статуса компании из Дто в сущность
 
-    private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO){
+    private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO){ // перевод категории из Дто в сущность
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
-    }
+    } // перевод категории из Дто в сущность
 
-    private SubCategory convertSubCategoryDTOToSubCategory(SubCategoryDTO subcategoryDTO){
+    private SubCategory convertSubCategoryDTOToSubCategory(SubCategoryDTO subcategoryDTO){ // перевод подкатегории из Дто в сущность
         return subCategoryService.getCategoryByIdSubCategory(subcategoryDTO.getId());
-    }
+    } // перевод подкатегории из Дто в сущность
 
-    private Set<Filial> convertFilialDTOToFilial(FilialDTO filialDTO) {
+    private Set<Filial> convertFilialDTOToFilial(FilialDTO filialDTO) { // перевод филиала из Дто в сущность
         Filial existingFilial = filialService.findFilialByTitleAndUrl(filialDTO.getTitle(), filialDTO.getUrl());
         if (existingFilial != null) {
             return Collections.singleton(existingFilial);
@@ -625,21 +616,18 @@ public boolean deleteWorkers(Long companyId, Long workerId){
             Filial newFilial = filialService.save(filialDTO);
             return Collections.singleton(newFilial);
         }
-    }
+    } // перевод филиала из Дто в сущность
 
-    // Вспомогательный метод для корректировки номера телефона
-    private String changeNumberPhone(String phone){
-        if (phone.contains("9")) {
-            String[] a = phone.split("9");
+
+    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
+        String[] a = phone.split("9", 2);
+        if (a.length > 1) {
             a[0] = "+79";
-            String b = a[0] + a[1];
-//            System.out.println(b);
-            return b;
+            return a[0] + a[1];
         } else {
-            // Обработка случая, когда "9" не найдено в строке
-            return phone; // или верните значение по умолчанию, которое вам нужно
+            return phone;
         }
-    }
+    } // Вспомогательный метод для корректировки номера телефона
 
     public boolean changeStatusForCompany(Long companyId, String title){ // смена статуса компании
         try {
@@ -652,12 +640,12 @@ public boolean deleteWorkers(Long companyId, Long workerId){
             System.out.println(e);
             return false;
         }
-    }
+    } // смена статуса компании
 
-    public void changeDataTry(Long companyId){
+    public void changeDataTry(Long companyId){ // смена даты новой попытки (рассылки)
         Company company = companyRepository.findById(companyId).orElse(null);
         assert company != null;
         company.setDateNewTry(company.getDateNewTry().plusDays(100));
         companyRepository.save(company);
-    }
+    } // смена даты новой попытки (рассылки)
 }

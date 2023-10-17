@@ -45,10 +45,6 @@ public class Company {
     @Column(name = "company_url_chat", length = 500, nullable = false)
     private String urlChat;
 
-//    //    город по которому шла рассылка
-//    @Column(name = "company_url", length = 50, nullable = false)
-//    private String url;
-
     //    мейл пользователя
     @Column(name = "company_email", unique = true, updatable = false)
     @Email
@@ -138,11 +134,6 @@ public class Company {
     @Column(name = "company_active")
     private boolean active;
 
-//    @OneToOne(mappedBy = "category", cascade = CascadeType.ALL)
-//    Review review;
-
-//    @OneToOne(mappedBy = "subCategory", cascade = CascadeType.ALL)
-//    Review review2;
 
     // Геттеры и сеттеры
 

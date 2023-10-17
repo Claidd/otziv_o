@@ -23,6 +23,5 @@ public interface ReviewService {
     void updateReview(ReviewDTO reviewDTO, Long reviewId);
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
-
     List<Review> getReviewsAllByOrderDetailsId(Order order);
 }

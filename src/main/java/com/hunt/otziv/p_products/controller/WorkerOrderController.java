@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.l_lead.model.PromoText;
@@ -32,42 +33,54 @@ public class WorkerOrderController {
     private final ReviewService reviewService;
     private final BotService botService;
 
-//    @GetMapping
-//    public String bots(Model model){
-//        model.addAttribute("all_bots", botService.getAllBots());
-//        return "bots/bots_list";
-//    }
-
-    @GetMapping("/bot") // Все заказы - Новые
+    @GetMapping("/bot") // Страница с кнопками "Добавить акк" и "Список всех аккаунтов"
     public String BotAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
-            model.addAttribute("all_bots", botService.getAllBots());
-            model.addAttribute("TitleName", "Новые");
-            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-
+            model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "Новые");
-            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
-            model.addAttribute("TitleName", "Новые");
-            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(principal));
+            model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
         else return "redirect:/";
-    } // Все заказы - Новые
+    } // Страница с кнопками "Добавить акк" и "Список всех аккаунтов"
 
+    @GetMapping("/bot_list") // Страница "Список всех аккаунтов"
+    public String BotAllList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
 
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех заказов для админа");
+            model.addAttribute("all_bots", botService.getAllBots().stream().sorted(Comparator.comparing(BotDTO:: getFio)));
+            model.addAttribute("TitleName", "Список аккаунтов");
+            return "products/orders/bot_list";
+        }
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("TitleName", "Список аккаунтов");
+            return "products/orders/bot_list";
+        }
+        if ("ROLE_WORKER".equals(userRole)){
+            log.info("Зашли список всех заказов для Работника");
+            model.addAttribute("TitleName", "Список аккаунтов");
+//            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(principal).stream().sorted(Comparator.comparing(BotDTO :: getFio)));
+            return "products/orders/bot_list";
+        }
+        else return "redirect:/";
+    } // Страница "Список всех аккаунтов"
 
 
     @GetMapping("/new_orders") // Все заказы - Новые
@@ -128,8 +141,6 @@ public class WorkerOrderController {
         else return "redirect:/";
     } // Все заказы - Коррекция
 
-
-
     @GetMapping("/publish") // Все заказы - Публикация
     public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
@@ -184,7 +195,7 @@ public class WorkerOrderController {
         else return "redirect:/";
     } // Страница просмотра всех заказов компании по всем статусам
 
-    private String gerRole(Principal principal){
+    private String gerRole(Principal principal){ // Берем роль пользователя
         // Получите текущий объект аутентификации
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Получите имя текущего пользователя (пользователя, не роль)

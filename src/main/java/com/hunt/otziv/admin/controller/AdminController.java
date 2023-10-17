@@ -9,9 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/admin")
 public class AdminController {
 
-    //Открываем главную страницу
 
-    @GetMapping()
+    @GetMapping() //Открываем главную страницу
     String adminPanel(Model model){
         return "admin/admin_panel";
     }

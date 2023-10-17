@@ -18,36 +18,22 @@ public class OrderStatusServiceImpl implements OrderStatusService {
 
     private final OrderStatusRepository orderStatusRepository;
 
-    public OrderStatus getOrderStatusByTitle(String title){
+    public OrderStatus getOrderStatusByTitle(String title){ // Взять статус заказа по названию
         return orderStatusRepository.findByTitle(title).orElse(null);
-    }
+    } // Взять статус заказа по названию
 
 
-    public OrderStatusDTO getOrderStatusDTOByTitle(String title) {
+    public OrderStatusDTO getOrderStatusDTOByTitle(String title) { // Взять статус заказа дто по названию
         OrderStatus orderStatus = orderStatusRepository.findByTitle(title)
                 .orElseThrow(() -> new NotFoundException("Order status not found for title: " + title));
-
         return convertOrderStatusToDTO(orderStatus);
-    }
+    } // Взять статус заказа дто по названию
 
-    private OrderStatusDTO convertOrderStatusToDTO(OrderStatus orderStatus) {
+    private OrderStatusDTO convertOrderStatusToDTO(OrderStatus orderStatus) { // Перевод статуса заказа в дто
         return OrderStatusDTO.builder()
                 .id(orderStatus.getId())
                 .title(orderStatus.getTitle())
                 .build();
-    }
+    } // Перевод статуса заказа в дто
 
-
-//    public OrderStatusDTO getOrderStatusDTOByTitle(String title){
-//        System.out.println(title);
-//        return convertOrderStatusToDTO(Objects.requireNonNull(orderStatusRepository.findByTitle(title).orElse(null)));
-//    }
-//
-//    private OrderStatusDTO convertOrderStatusToDTO(OrderStatus orderStatus){
-//        System.out.println(orderStatus);
-//        return OrderStatusDTO.builder()
-//                .id(orderStatus.getId())
-//                .title(orderStatus.getTitle())
-//                .build();
-//    }
 }

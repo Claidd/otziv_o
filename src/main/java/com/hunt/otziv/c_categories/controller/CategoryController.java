@@ -29,44 +29,45 @@ public class CategoryController {
     }
 
     @GetMapping
-    public String getAllCategories(Model model) {
+    public String getAllCategories(Model model) { // Лист всех категорий
         List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         model.addAttribute("categories", categories);
         model.addAttribute("categoryDTO", new CategoryDTO());
         return "category/categories";
-    }
+    } // Лист всех категорий
 
     @GetMapping("/getSubcategories")
     @ResponseBody
-    public List<SubCategoryDTO> getSubcategoriesByCategoryId(@RequestParam Long categoryId) {
+    public List<SubCategoryDTO> getSubcategoriesByCategoryId(@RequestParam Long categoryId) { // Подгрузка субкатегорий
         return subCategoryService.getSubcategoriesByCategoryId(categoryId).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
-    }
+    } // Подгрузка субкатегорий
+
     @PostMapping
-    public String createCategory(@ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) {
+    public String createCategory(@ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) { // Создание новой категории
         categoryService.saveCategory(categoryDTO);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
-    }
+    } // Создание новой категории
 
     @GetMapping("/update/{id}")
-    public String editCategory(@PathVariable Long id, Model model) {
+    public String editCategory(@PathVariable Long id, Model model) { // Обновление категории
         model.addAttribute("categoryDTO", categoryService.getCategoryById(id));
         return "category/edit_categories";
-    }
+    } // Обновление категории
     @PostMapping("/update/{id}")
-    public String updateCategory(@PathVariable Long id, @ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) {
+    public String updateCategory(@PathVariable Long id, @ModelAttribute("categoryDTO") CategoryDTO categoryDTO, RedirectAttributes rm) { // Обновление категории
         categoryService.updateCategory(id, categoryDTO);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
-    }
+    } // Обновление категории
 
     @PostMapping("/delete/{id}")
-    public String deleteCategory(@PathVariable Long id, RedirectAttributes rm) {
+    public String deleteCategory(@PathVariable Long id, RedirectAttributes rm) { // Удаление категории
         log.info("входим в удаление");
         categoryService.deleteCategory(id);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/categories";
-    }
+    } // Удаление категории
 
 
 }

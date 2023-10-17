@@ -13,11 +13,7 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
 
     // найти оператора по id
     Optional<Marketolog> findById(Long id);
-
     // найти оператора по id его юзера
     Optional<Marketolog> findByUserId(Long id);
-
-    // найти всех операторов в таблице операторы
-//    List<Operator> findAll();
     Set<Marketolog> findAll();
 }

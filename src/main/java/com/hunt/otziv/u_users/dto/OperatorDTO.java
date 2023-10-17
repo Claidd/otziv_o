@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class OperatorDTO {
+
     private Long operatorId;
 
     private Long userId;

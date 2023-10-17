@@ -18,7 +18,6 @@ public class OperatorController {
     public String deleteOperatorByUser(@PathVariable(name="userId") Long userId, @PathVariable(name="operatorId") Long operatorId){
         System.out.println(userId);
         System.out.println(operatorId);
-
         return "redirect:/allUsers";
     }
 

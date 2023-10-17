@@ -47,17 +47,13 @@ public class UserServiceImpl  implements UserService {
 
 //      =====================================SECURITY=======================================================
 
-    // INSERT INTO otziv_o.roles (name) values ('ROLE_WORKER');
 
-    // Метод поиска юзера по имени в БД
-    public Optional<User> findByUserName(String username){
+    public Optional<User> findByUserName(String username){ // Метод поиска юзера по имени в БД
         return userRepository.findByUsername(username);
-    }
+    } // Метод поиска юзера по имени в БД
 
-
-
-    @Transactional // Метод для секьюрити от имплеменитрованного DetailsUsers
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    @Transactional
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException { // Метод для секьюрити от имплеменитрованного DetailsUsers
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", username)
         ));
@@ -68,25 +64,22 @@ public class UserServiceImpl  implements UserService {
                 user.getPassword(),
                 user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
         );
-    }
+    } // Метод для секьюрити от имплеменитрованного DetailsUsers
+
 //      =====================================SECURITY - END=======================================================
 
 //      =====================================CREATE USERS - START=======================================================
 
-    // Взять всех юзеров - начало
+
     @Override
-    public List<RegistrationUserDTO> getAllUsers() {
+    public List<RegistrationUserDTO> getAllUsers() { // Взять всех юзеров - начало
         log.info("Берем все юзеров");
         return userRepository.findAll().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
-    }
-    // Взять всех юзеров - конец
+    } // Взять всех юзеров - конец
 
-
-
-    // Перевод юзера в дто - начало
-    private RegistrationUserDTO toDto(User user){
+    private RegistrationUserDTO toDto(User user){ // Перевод юзера в дто - начало
         log.info("Перевод юзера в дто");
         return RegistrationUserDTO.builder()
                 .id(user.getId())
@@ -106,17 +99,15 @@ public class UserServiceImpl  implements UserService {
                 .coefficient(user.getCoefficient())
                 .image(user.getImage())
                 .build();
-        //                .active(user.getActivateCode() == null)
-    }
-    // Перевод юзера в дто - конец
+    } // Перевод юзера в дто - конец
+
 //      =====================================CREATE USERS - START=======================================================
-    // Создание нового пользователя "Клиент" - начало
-    public User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException {
+
+    public User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException { // Создание нового пользователя "Клиент" - начало
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
         if(!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
             throw new RuntimeException("Пароли не совпадают");
         }
-
         log.info("4. Создаем юзера");
         User user = User.builder()
                 .username(userDto.getUsername())
@@ -135,47 +126,43 @@ public class UserServiceImpl  implements UserService {
                 .coefficient(new BigDecimal("0.05"))
                 .build();
         log.info("5. Юзер успешно создан");
-//        this.save(user);
         return userRepository.save(user);
-    }
-    // Создание нового пользователя "Клиент" - конец
+    } // Создание нового пользователя "Клиент" - конец
+
 //      =====================================CREATE USERS - START=======================================================
 
     // Вспомогательный метод для корректировки номера телефона
-    public String changeNumberPhone(String phone){
-        String[] a;
-        a = phone.split("9");
-        a[0] = "+79";
-        String b = a[0] + a[1];
-        System.out.println(b);
-        return b;
-//        userDto.getPhoneNumber().replaceFirst("8", "+7")
-    }
+    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
+        String[] a = phone.split("9", 2);
+        if (a.length > 1) {
+            a[0] = "+79";
+            return a[0] + a[1];
+        } else {
+            return phone;
+        }
+    } // Вспомогательный метод для корректировки номера телефона
 
-    // Взять одного юзера - начало
     @Override
-    public RegistrationUserDTO findById(Long id) {
+    public RegistrationUserDTO findById(Long id) { // Взять одного юзера по Id
         log.info("Начинается поиск пользователя по id - начало");
             User user = userRepository.findById(id).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(user);
-    }
+    } // Взять одного юзера по Id
 
     @Override
-    public List<String> getAllUsersByFio(String roleName) {
+    public List<String> getAllUsersByFio(String roleName) { // Взять одного юзера по названию роли и фио
         return userRepository.findAllActiveFioByRole(roleName);
-    }
+    } // Взять одного юзера по названию роли и фио
 
     @Override
-    public Optional<User> findByFio(String operator) {
+    public Optional<User> findByFio(String operator) { // Взять одного юзера по  фио
         return userRepository.findByFio(operator);
-    }
-    // Взять одного юзера - конец
+    } // Взять одного юзера по  фио
 
     //      =====================================UPDATE USERS - START=======================================================
-    // Обновить профиль юзера - начало
     @Override
-    @Transactional
+    @Transactional // Обновление юзера
     public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO, MultipartFile imageFile) throws IOException {
         log.info("Вошли в обновление");
         String originalFilename = imageFile.getOriginalFilename();
@@ -389,7 +376,6 @@ public class UserServiceImpl  implements UserService {
             System.out.println(workerDTO.getWorkerId() != 0);
             System.out.println((userDTO.getWorkers()==null && workerDTO.getWorkerId() != 0));
             log.info("зашли в обновление работников");
-//            System.out.println(workerService.getWorkerById(workerDTO.getId()));
             userDTO.getWorkers().add(workerService.getWorkerById(workerDTO.getWorkerId()));
             saveUser.setWorkers(userDTO.getWorkers());
             isChanged = true;
@@ -406,7 +392,7 @@ public class UserServiceImpl  implements UserService {
         else {
             log.info("Изменений не было, сущность в БД не изменена");
         }
-    }
+    } // Обновление юзера
 
 
     // Обновить профиль юзера - конец
@@ -415,10 +401,10 @@ public class UserServiceImpl  implements UserService {
 
     //      =====================================DELETE OPERATOR MANAGER WORKER =======================================================
     @Override
-    public void deleteOperator(String username, Long operatorId) {
+    public void deleteOperator(String username, Long operatorId) { // Удаление оператора
         log.info("1. Вошли в удаление оператора");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
+                String.format("Пользователь '%s' не найден", username)
         ));
         log.info("2. Нашли юзера");
         Set<Operator> operators = user.getOperators();
@@ -428,13 +414,13 @@ public class UserServiceImpl  implements UserService {
         log.info("3. Обновили список операторов");
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    }
+    } // Удаление оператора
 
     @Override
-    public void deleteManager(String username, Long managerId) {
+    public void deleteManager(String username, Long managerId) { // Удаление менеджера
         log.info("1. Вошли в удаление менеджера");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
+                String.format("Пользователь '%s' не найден", username)
         ));
         log.info("2. Нашли юзера");
         Set<Manager> managers = user.getManagers();
@@ -444,13 +430,13 @@ public class UserServiceImpl  implements UserService {
         log.info("3. Обновили список менеджеров");
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    }
+    } // Удаление менеджера
 
     @Override
-    public void deleteWorker(String username, Long workerId) {
+    public void deleteWorker(String username, Long workerId) { // Удаление работника
         log.info("1. Вошли в удаление работника");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
+                String.format("Пользователь '%s' не найден", username)
         ));
         log.info("2. Нашли юзера");
         Set<Worker> workers = user.getWorkers();
@@ -460,13 +446,13 @@ public class UserServiceImpl  implements UserService {
         log.info("3. Обновили список работников");
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    }
+    } // Удаление работника
 
     @Override
-    public void deleteMarketolog(String username, Long marketologId) {
+    public void deleteMarketolog(String username, Long marketologId) { // Удаление маркетолога
         log.info("1. Вошли в удаление маркетолога из списка юзера");
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
+                String.format("Пользователь '%s' не найден", username)
         ));
         log.info("2. Нашли юзера");
         Set<Marketolog> marketologs = user.getMarketologs();
@@ -476,9 +462,9 @@ public class UserServiceImpl  implements UserService {
         log.info("3. Обновили список работников");
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    }
+    } // Удаление маркетолога
 
-    private Image toImageEntity(MultipartFile file) throws IOException {
+    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность
         System.out.println(file);
         Image image = new Image();
         image.setName(file.getName());
@@ -488,7 +474,7 @@ public class UserServiceImpl  implements UserService {
         image.setBytes(file.getBytes());
         imageRepository.save(image);
         return image;
-    }
+    } // Перевод картинки в сущность
 
 
 }

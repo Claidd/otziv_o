@@ -30,14 +30,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public List<Product> findAll() {
         return (List<Product>) productRepository.findAll();
-    }
+    } // взять все продукты
 
     @Override
-    public Product findById(Long id) {
-        return productRepository.findById(id).orElse(null);
-    }
+    public Product findById(Long filialId) { // взять продукт по Id
+        return productRepository.findById(filialId).orElse(null);
+    } // взять продукт по Id
 
-    public boolean save(ProductDTO productDTO){
+    public boolean save(ProductDTO productDTO){ // Сохранение продукта в БД
         Product product = new Product();
         product.setTitle(productDTO.getTitle());
         product.setPrice(productDTO.getPrice());
@@ -47,9 +47,9 @@ public class ProductServiceImpl implements ProductService {
         productCategory.getProduct().add(product1);
         productCategoryService.save(productCategory);
         return true;
-    }
+    } // Сохранение продукта в БД
 
-    public boolean delete(ProductDTO productDTO){
+    public boolean delete(ProductDTO productDTO){ // Удаление продукта
         Product product = productRepository.findById(productDTO.getId()).orElse(null);
         ProductCategory productCategory = productCategoryService.findById(productDTO.getProductCategory().getId());
         productCategory.getProduct().remove(product);
@@ -57,15 +57,10 @@ public class ProductServiceImpl implements ProductService {
         assert product != null;
         productRepository.delete(product);
         return true;
-    }
+    } // Удаление продукта
 
-    private ProductCategory converterProductCategoryDTOToEntity(ProductCategoryDTO productCategoryDTO){
-        ProductCategory productCategory = new ProductCategory();
-        productCategory.setTitle(productCategoryDTO.getTitle());
-        return productCategory;
-    }
 
-    public boolean update(ProductDTO productDTO){
+    public boolean update(ProductDTO productDTO){ // Обновление продукта
         log.info("2. Вошли в обновление данных Продукта");
         Product saveProduct = productRepository.findById(productDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%s' не найден", productDTO)));
         log.info("Достали Продукт");
@@ -103,12 +98,18 @@ public class ProductServiceImpl implements ProductService {
             log.info("3. Изменений не было, сущность в БД не изменена");
             return false;
         }
-    }
+    } // Обновление продукта
 
-    private ProductCategoryDTO convertProductCategoryToDTO(ProductCategory productCategory){
+    private ProductCategoryDTO convertProductCategoryToDTO(ProductCategory productCategory){ // Перевод категории продукта в дто
         return ProductCategoryDTO.builder()
                 .id(productCategory.getId())
                 .title(productCategory.getTitle())
                 .build();
-    }
+    } // Перевод категории продукта в дто
+
+    private ProductCategory converterProductCategoryDTOToEntity(ProductCategoryDTO productCategoryDTO){ // Перевод категории продукта в сущность
+        ProductCategory productCategory = new ProductCategory();
+        productCategory.setTitle(productCategoryDTO.getTitle());
+        return productCategory;
+    } // Перевод категории продукта в сущность
 }

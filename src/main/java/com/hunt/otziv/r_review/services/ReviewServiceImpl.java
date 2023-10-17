@@ -67,37 +67,28 @@ public class ReviewServiceImpl implements ReviewService{
         LocalDate localDate = LocalDate.now();
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
             return convertToReviewDTOList(reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate));
-    }// Берем все отзывы с датой для Работника
-
-
-    public Review save(Review review){
+    } // Берем все отзывы с датой для Работника
+    public Review save(Review review){ // Сохранить отзыв в БД
        return reviewRepository.save(review);
-    }
-
-
-
-    public boolean deleteReview(Long reviewId){
+    } // Сохранить отзыв в БД
+    public boolean deleteReview(Long reviewId){ // Удалить отзыв
         reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
         return true;
-    }
-
+    } // Удалить отзыв
     @Override
-    public List<Review> getReviewsAllByOrderId(UUID orderDetailsId) {
+    public List<Review> getReviewsAllByOrderId(UUID orderDetailsId) { // Взять все отзывы по Id
         return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
-    }
-
-    public List<Review> getReviewsAllByOrderDetailsId(Order order){
-
+    } // Вхять все отзывы по Id
+    public List<Review> getReviewsAllByOrderDetailsId(Order order){ // Взять все отзывы по Id заказа
         return getReviewsAllByOrderId(order.getDetails().iterator().next().getId());
-    }
-
+    } // Взять все отзывы по Id заказа
 
 
     //    ======================================== FILIAL UPDATE =========================================================
     // Обновить профиль отзыв - начало
     @Override
     @Transactional
-    public void updateReview(ReviewDTO reviewDTO, Long reviewId) {
+    public void updateReview(ReviewDTO reviewDTO, Long reviewId) { // Обновление отзывов
         log.info("2. Вошли в обновление данных Отзыв");
         Review saveReview = reviewRepository.findById(reviewId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         log.info("Достали Отзыв");
@@ -146,7 +137,7 @@ public class ReviewServiceImpl implements ReviewService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    }
+    } // Обновление отзывов
 
 //    =====================================================================================================
 
@@ -154,7 +145,7 @@ public class ReviewServiceImpl implements ReviewService{
     // Обновить профиль отзыв - начало
     @Override
     @Transactional
-    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) {
+    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) { // Обновление Деталей и Отзывов
         log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа");
         Review saveReview = reviewRepository.findById(reviewId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
@@ -203,15 +194,14 @@ public class ReviewServiceImpl implements ReviewService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    }
+    } // Обновление Деталей и Отзывов
 
 //    =====================================================================================================
 
 //    ============================== ORDER DETAIL AND REVIEW UPDATE AND SET PUBLISH DATE ===============================
-    // Обновить профиль отзыв - начало
     @Override
     @Transactional
-    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) { // Обновление Деталей и Отзывов, Разрешение к публикации
         log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
         System.out.println(orderDetailsDTO);
         System.out.println(orderDetailsDTO.getAmount());
@@ -243,19 +233,15 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("Все прошло успешно вернулось FALSE");
             return false;
         }
-
-
-    }
+    } // Обновление Деталей и Отзывов, Разрешение к публикации
 
 //    =====================================================================================================
 
-    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate){
+    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate){ // Проверка обновлений отзыва
         Review saveReview = reviewRepository.findById(reviewDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
         log.info("Достали Отзыв");
         boolean isChanged = false;
         /*Временная проверка сравнений*/
-        System.out.println(reviewDTO);
-
         System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
         System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
         System.out.println("publish date: " + (!saveReview.isPublish()));
@@ -292,10 +278,9 @@ public class ReviewServiceImpl implements ReviewService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    }
-
+    } // Проверка обновлений отзыва
     @Override
-    public void changeBot(Long id) {
+    public void changeBot(Long id) { // Замена бота
         Review review = reviewRepository.findById(id).orElse(null);
         log.info("2. Достали отзыв по id" + id);
         if (review != null){
@@ -306,15 +291,9 @@ public class ReviewServiceImpl implements ReviewService{
             reviewRepository.save(review);
             log.info("4. Сохранили нового бота в отзыве в БД");
         }
-        else {
-            return;
-        }
-    }
-
-
-
+    } // Замена бота
     @Override
-    public void deActivateAndChangeBot(Long reviewId, Long botId) {
+    public void deActivateAndChangeBot(Long reviewId, Long botId) { // Деактивация бота
         try {
         Review review = reviewRepository.findById(reviewId).orElse(null);
         log.info("2. Достали отзыв по id" + reviewId);
@@ -339,35 +318,8 @@ public class ReviewServiceImpl implements ReviewService{
             System.out.println(e);
             log.info("Что-то пошло не так и бот не деактивирован");
         }
-    }
-
-    //    ============================================== CONVERTER TO DTO ==============================================
-        private List<ReviewDTO> convertToReviewDTOList(List<Review> reviews){
-            return reviews.stream().map(this::convertToReviewDTO).collect(Collectors.toList());
-        }
-
-         ReviewDTO convertToReviewDTO(Review review){
-            assert review != null;
-            return ReviewDTO.builder()
-                    .id(review.getId())
-                    .text(review.getText())
-                    .answer(review.getAnswer())
-                    .created(review.getCreated())
-                    .changed(review.getChanged())
-                    .publishedDate(review.getPublishedDate())
-                    .publish(review.isPublish())
-                    .category(convertToCategoryDto(review.getCategory()))
-                    .subCategory(convertToSubCategoryDto(review.getSubCategory()))
-                    .bot(convertToBotDTO(review.getBot()))
-                    .filial(convertToFilialDTO(review.getFilial()))
-                    .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
-                    .worker(convertToWorkerDTO(review.getWorker()))
-                    .comment(review.getOrderDetails().getComment())
-                    .orderDetailsId(review.getOrderDetails().getId())
-                    .build();
-        }
-
-    public ReviewDTO getReviewDTOById(Long reviewId){
+    } // Деактивация бота
+    public ReviewDTO getReviewDTOById(Long reviewId){ // Взять дто отзыв по Id
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;
         return ReviewDTO.builder()
@@ -387,33 +339,52 @@ public class ReviewServiceImpl implements ReviewService{
                 .comment(review.getOrderDetails().getComment())
                 .orderDetailsId(review.getOrderDetails().getId())
                 .build();
-    }
+    } // Взять дто отзыв по Id
 
-    private CategoryDTO convertToCategoryDto(Category category) {
+    //    ============================================== CONVERTER TO DTO ==============================================
+    private List<ReviewDTO> convertToReviewDTOList(List<Review> reviews){ // Перевод отзыва в дто
+            return reviews.stream().map(this::convertToReviewDTO).collect(Collectors.toList());
+        } // Перевод отзыва в дто
+    private ReviewDTO convertToReviewDTO(Review review){ // Перевод отзыва в дто
+            assert review != null;
+            return ReviewDTO.builder()
+                    .id(review.getId())
+                    .text(review.getText())
+                    .answer(review.getAnswer())
+                    .created(review.getCreated())
+                    .changed(review.getChanged())
+                    .publishedDate(review.getPublishedDate())
+                    .publish(review.isPublish())
+                    .category(convertToCategoryDto(review.getCategory()))
+                    .subCategory(convertToSubCategoryDto(review.getSubCategory()))
+                    .bot(convertToBotDTO(review.getBot()))
+                    .filial(convertToFilialDTO(review.getFilial()))
+                    .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
+                    .worker(convertToWorkerDTO(review.getWorker()))
+                    .comment(review.getOrderDetails().getComment())
+                    .orderDetailsId(review.getOrderDetails().getId())
+                    .build();
+        } // Перевод отзыва в дто
+    private CategoryDTO convertToCategoryDto(Category category) { // Перевод категории в дто
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId());
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
-        // Other fields if needed
         return categoryDTO;
-    }
-
-    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) {
+    } // Перевод категории в дто
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Перевод подкатегории в дто
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
         subCategoryDTO.setId(subCategory.getId());
         subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
-        // Other fields if needed
         return subCategoryDTO;
-    }
-
-    private FilialDTO convertToFilialDTO(Filial filial){
+    } // Перевод подкатегории в дто
+    private FilialDTO convertToFilialDTO(Filial filial){ // Перевод филиала в дто
         return FilialDTO.builder()
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .build();
-    }
-
-    private BotDTO convertToBotDTO(Bot bot){
+    } // Перевод филиала в дто
+    private BotDTO convertToBotDTO(Bot bot){ // Перевод бота в дто
         log.info("Перевод Бота в дто");
         return BotDTO.builder()
                 .id(bot.getId())
@@ -425,19 +396,17 @@ public class ReviewServiceImpl implements ReviewService{
                 .status(bot.getStatus().getBotStatusTitle())
                 .worker(bot.getWorker() != null ? bot.getWorker() : null)
                 .build();
-    }
-
-    private WorkerDTO convertToWorkerDTO(Worker worker){
+    } // Перевод бота в дто
+    private WorkerDTO convertToWorkerDTO(Worker worker){ // Перевод работника в дто
         return WorkerDTO.builder()
                 .workerId(worker.getId())
                 .user(worker.getUser())
                 .build();
-    }
-
-    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){
+    } // Перевод работника в дто
+    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){ // Перевод деталей в дто
         return details.stream().map(this::convertToDetailsDTO).collect(Collectors.toList());
-    }
-    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){
+    } // Перевод деталей в дто
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // Перевод деталей в дто
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
                 .amount(orderDetails.getAmount())
@@ -447,44 +416,39 @@ public class ReviewServiceImpl implements ReviewService{
                 .order(convertToOrderDTO(orderDetails.getOrder()))
                 .comment(orderDetails.getComment())
                 .build();
-    }
-
-    private ProductDTO convertToProductDTO(Product product){
+    } // Перевод деталей в дто
+    private ProductDTO convertToProductDTO(Product product){ // Перевод продуктов в дто
         return ProductDTO.builder()
                 .id(product.getId())
                 .title(product.getTitle())
                 .price(product.getPrice())
                 .build();
-    }
-    private OrderDTO convertToOrderDTO(Order order){
+    } // Перевод продуктов в дто
+    private OrderDTO convertToOrderDTO(Order order){ // Перевод заказа в дто
         return OrderDTO.builder()
                 .id(order.getId())
                 .company(convertToCompanyDTO(order.getCompany()))
                 .build();
-    }
-
-    private CompanyDTO convertToCompanyDTO(Company company){
+    } // Перевод заказа в дто
+    private CompanyDTO convertToCompanyDTO(Company company){ // Перевод компании в дто
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
                 .build();
-    }
-
-    public Review getReviewById(Long reviewId){
+    } // Перевод компании в дто
+    public Review getReviewById(Long reviewId){  // Взять отзыв по Id
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;
         return review;
-    }
+    } // Взять отзыв по Id
     //    ============================================== CONVERTER TO DTO ==============================================
 
-
-
     //    ============================================ CONVERTER TO ENTITY =============================================
-    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){
+    private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO){ // Перевод категории дто в сущность
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
-    }
-    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO){
+    } // Перевод категории дто в сущность
+    private SubCategory convertSubCompanyDTOToSubCategory(SubCategoryDTO subCategoryDTO){ // Перевод подкатегории дто в сущность
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
-    }
+    } // Перевод подкатегории дто в сущность
     //    ============================================ CONVERTER TO ENTITY =============================================
 }

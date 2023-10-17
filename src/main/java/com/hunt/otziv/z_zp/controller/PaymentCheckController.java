@@ -17,8 +17,8 @@ public class PaymentCheckController {
 
     private final PaymentCheckService paymentCheckService;
     @GetMapping
-    private String checkList(Model model){
+    private String checkList(Model model){ // Страница с Чеками
         model.addAttribute("checkList", paymentCheckService.getAllCheckDTO());
         return "1.Login_and_Register/payment_check";
-    }
+    } // Страница с Чеками
 }

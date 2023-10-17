@@ -21,34 +21,27 @@ public class OperatorServiceImpl implements OperatorService {
     }
 
     @Override
-    public Operator getOperatorById(Long id) {
+    public Operator getOperatorById(Long id) { // Взять оператора по Id
         return operatorRepository.findById(id)
            .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
-    }
+    } // Взять оператора по Id
 
     @Override
-    public Operator getOperatorByUserId(Long id) {
+    public Operator getOperatorByUserId(Long id) { // Взять оператора по Id юзера
         return operatorRepository.findByUserId(id).orElse(null);
-    }
-
-//    @Override
-//    public Operator getOperatorByUserId(Long id) {
-//        return operatorRepository.findByUserId(id)
-//                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
-//    }
+    } // Взять оператора по Id юзера
 
     @Override
     public Set<Operator> getAllOperators() {
         return operatorRepository.findAll();
-    }
+    } // Взять всех операторов
 
     @Override
     public void delete(Long userId, Long operatorId) {
-
     }
 
     @Override
-    public void saveNewOperator(User user) {
+    public void saveNewOperator(User user) { // Сохранить нового оператора
         if (operatorRepository.findByUserId(user.getId()).isPresent()){
             log.info("Не добавили оператора так как уже в списке");
         }
@@ -59,15 +52,15 @@ public class OperatorServiceImpl implements OperatorService {
             operatorRepository.save(operator);
             log.info("Добавили оператора");
         }
-    }
+    } // Сохранить нового оператора
 
     @Override
-    public Operator getOperatorByUserIdToDelete(Long id) {
+    public Operator getOperatorByUserIdToDelete(Long id) { // Найти оператора для удаления
         return operatorRepository.findByUserId(id).orElse(null);
-    }
+    } // Найти оператора для удаления
 
     @Override
-    public void deleteOperator(User user) {
+    public void deleteOperator(User user) { // Удалить оператора
         log.info("Вошли в проверку при удалении есть ли такой оператор при смене роли");
         Operator operator = getOperatorByUserIdToDelete(user.getId());
         log.info("Достали опертора");
@@ -78,6 +71,6 @@ public class OperatorServiceImpl implements OperatorService {
         else {
             log.info("Не удалили оператора так как такого нет в списке");
         }
-    }
+    } // Удалить оператора
 
 }

@@ -15,9 +15,7 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
 
     // найти менеджера по id
     Optional<Manager> findById(Long id);
-
     // найти оператора по id
     Set<Manager> findAll();
-
     Optional<Manager> findByUserId(Long id);
 }

@@ -27,7 +27,7 @@ public class SubCategoryController {
     }
 
     @GetMapping("/{id}/{categoryTitle}")
-    public String showAllSubCategories(@PathVariable Long id,@PathVariable String categoryTitle, Model model) {
+    public String showAllSubCategories(@PathVariable Long id,@PathVariable String categoryTitle, Model model) { // Лист подкатегории
         System.out.println(categoryTitle);
         List<SubCategoryDTO> subCategories = subCategoryService.getSubcategoriesByCategoryId(id).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
         model.addAttribute("subCategories", subCategories);
@@ -35,10 +35,10 @@ public class SubCategoryController {
         model.addAttribute("categoryId", id);
         model.addAttribute("categoryTitle", categoryTitle);
         return "category/subcategories";
-    }
+    } // Лист подкатегории
 
     @PostMapping("/{id}/{categoryTitle}")
-    public String createSubCategory(@PathVariable Long id, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) {
+    public String createSubCategory(@PathVariable Long id, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) { // Создание подкатегории
         CategoryDTO categoryDTO = categoryService.getCategoryById(id);
         if (categoryDTO != null) {
 //            subCategoryDTO.setCategory(categoryDTO);
@@ -46,32 +46,32 @@ public class SubCategoryController {
             rm.addFlashAttribute("saveSuccess", "true");
         }
         return "redirect:/subcategories/{id}/{categoryTitle}";
-    }
+    } // Создание подкатегории
 
-    @GetMapping("/update/{categoryId}/{categoryTitle}/{id}")
+    @GetMapping("/update/{categoryId}/{categoryTitle}/{id}")  // Обновление подкатегории
     public String editSubCategory(@PathVariable Long id, @PathVariable String categoryTitle, Model model) {
         model.addAttribute("subCategoryDTO", subCategoryService.getCategoryById(id));
         return "category/edit_subcategories";
-    }
+    } // Обновление подкатегории
     @PostMapping("/update/{categoryId}/{categoryTitle}/{id}")
-    public String updateSubCategory(@PathVariable Long id, @PathVariable String categoryTitle, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) {
+    public String updateSubCategory(@PathVariable Long id, @PathVariable String categoryTitle, @ModelAttribute("subCategoryDTO") SubCategoryDTO subCategoryDTO, RedirectAttributes rm) { // Обновление подкатегории
         subCategoryService.updateSubCategory(id, subCategoryDTO);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/subcategories/{categoryId}/{categoryTitle}";
-    }
+    } // Обновление подкатегории
 
     @PostMapping("/delete/{categoryId}/{categoryTitle}/{id}")
-    public String deleteSubCategory(@PathVariable Long id, RedirectAttributes rm) {
+    public String deleteSubCategory(@PathVariable Long id, RedirectAttributes rm) { // Удаление подкатегории
         subCategoryService.deleteSubCategory(id);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/subcategories/{categoryId}/{categoryTitle}";
-    }
+    } // Удаление подкатегории
 
     @GetMapping()
-    public String getAllSubCategories(Model model) {
+    public String getAllSubCategories(Model model) { // Взять все подкатегории
         List<SubCategoryDTO> subCategories = subCategoryService.getAllSubCategories();
         model.addAttribute("subCategories", subCategories);
         model.addAttribute("subCategoryDTO", new SubCategoryDTO());
         return "category/subcategories";
-    }
+    } // Взять все подкатегории
 }

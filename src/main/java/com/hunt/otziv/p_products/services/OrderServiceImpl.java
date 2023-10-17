@@ -364,12 +364,9 @@ public class OrderServiceImpl implements OrderService {
                 System.out.println("order: " + (order != null));
                 System.out.println("publish status: " + (!review.isPublish()));
             }
-            review.setPublish(true);
             log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
-                Bot bot = review.getBot();
-                bot.setCounter(bot.getCounter() + 1);
-            botService.save(bot);
-
+            changeBotCounterAndStatus(review.getBot());
+            review.setPublish(true);
             log.info("7. Установили Publish на тру - опубликовано");
             reviewService.save(review);
             log.info("8. Сохранили отзыв в БД");
@@ -380,6 +377,21 @@ public class OrderServiceImpl implements OrderService {
             return false;
         }
     } // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+
+
+    private void changeBotCounterAndStatus(Bot bot){ // обновление счетчика и статуса у бота
+        bot.setCounter(bot.getCounter() + 1);
+        if (bot.getCounter() >= 10){
+            log.info("6. меняем статус бота от 10 отзывов");
+            bot.setStatus(botService.changeStatus("Средний"));
+        }
+        if (bot.getCounter() >= 20){
+            log.info("6. меняем статус бота от 20 отзывов");
+            bot.setStatus(botService.changeStatus("Высокий"));
+        }
+        botService.save(bot);
+    } // обновление счетчика и статуса у бота
+
     private void checkOrderCounterAndAmount(Order order){ // проверка счетчиков заказа
         if (order.getAmount() <= order.getCounter()){
             changeStatusForOrder(order.getId(), "Опубликовано");

@@ -14,11 +14,7 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
 
     // найти оператора по id
     Optional<Operator> findById(Long id);
-
     // найти оператора по id его юзера
     Optional<Operator> findByUserId(Long id);
-
-    // найти всех операторов в таблице операторы
-//    List<Operator> findAll();
     Set<Operator> findAll();
 }

@@ -28,7 +28,7 @@ public class CategoryServiceImpl implements CategoryService{
     }
 
     @Override
-    public CategoryDTO saveCategory(CategoryDTO categoryDTO) {
+    public CategoryDTO saveCategory(CategoryDTO categoryDTO) { // Лист категорий
         Category category = new Category();
         category.setCategoryTitle(categoryDTO.getCategoryTitle());
         // Convert SubCategoryDTO list to SubCategory entities
@@ -43,10 +43,10 @@ public class CategoryServiceImpl implements CategoryService{
         category.setSubCategoryTitle(subCategories);
         Category savedCategory = categoryRepository.save(category);
         return convertToDTO(savedCategory);
-    }
+    } // Лист категорий
 
     @Override
-    public CategoryDTO updateCategory(Long categoryId, CategoryDTO categoryDTO) {
+    public CategoryDTO updateCategory(Long categoryId, CategoryDTO categoryDTO) { // Обновление категорий
         Category category = categoryRepository.findById(categoryId).orElse(null);
         if (category == null) {
             // Handle not found case
@@ -69,67 +69,42 @@ public class CategoryServiceImpl implements CategoryService{
         category.setSubCategoryTitle(updatedSubCategories);
         Category updatedCategory = categoryRepository.save(category);
         return convertToDTO(updatedCategory);
-    }
+    } // Обновление категорий
 
     @Override
     public void deleteCategory(Long id) {
         categoryRepository.deleteById(id);
-    }
+    } // Удаление категорий
 
     @Override
-    public List<CategoryDTO> getAllCategories() {
+    public List<CategoryDTO> getAllCategories() { // Взять все категории
         List<Category> categories = (List<Category>) categoryRepository.findAll();
         return categories.stream()
                 .map(this::convertToDTO)
                 .sorted(Comparator.comparing(CategoryDTO::getCategoryTitle))
                 .collect(Collectors.toList());
-    }
+    } // Взять все категории
 
-    private CategoryDTO convertToDTO(Category category) {
+    private CategoryDTO convertToDTO(Category category) { // Перевод категории в ДТО
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId());
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
-        List<SubCategoryDTO> subCategoryDTOList = subCategoryRepository.findAllByCategory(category.getId()).stream()
+        List<SubCategoryDTO> subCategoryDTOList = subCategoryRepository.findAllByCategoryId(category.getId()).stream()
                 .map(subCategory -> new SubCategoryDTO(subCategory.getId(), subCategory.getSubCategoryTitle(), null))
                 .collect(Collectors.toList());
         categoryDTO.setSubCategories(subCategoryDTOList);
 
         return categoryDTO;
-    }
+    } // Перевод категории в ДТО
 
-//    private CategoryDTO convertToDTO(Category category) {
-//        CategoryDTO categoryDTO = new CategoryDTO();
-//        categoryDTO.setId(category.getId());
-//        categoryDTO.setCategoryTitle(category.getCategoryTitle());
-//        List<SubCategoryDTO> subCategoryDTOList = category.getSubCategoryTitle().stream()
-//                .map(subCategory -> new SubCategoryDTO(subCategory.getId(), subCategory.getSubCategoryTitle()))
-//                .collect(Collectors.toList());
-//        categoryDTO.setSubCategories(subCategoryDTOList);
-//        return categoryDTO;
-//    }
-
-    public CategoryDTO getCategoryById(Long categoryId) {
+    public CategoryDTO getCategoryById(Long categoryId) { // Взять категорию ДТО по Id
         Optional<Category> categoryOptional = categoryRepository.findById(categoryId);
         return categoryOptional.map(this::convertToDTO).orElse(null);
-    }
+    } // Взять категорию ДТО по Id
 
-    public Category getCategoryByIdCategory(Long categoryId) {
+    public Category getCategoryByIdCategory(Long categoryId) { // Взять категорию по Id
        return categoryRepository.findById(categoryId).orElse(null);
-    }
+    } // Взять категорию по Id
 
 
-//    private CategoryDTO convertToCategoryDTO(Category category) {
-//        CategoryDTO categoryDTO = new CategoryDTO();
-//        categoryDTO.setId(category.getId());
-//        categoryDTO.setCategoryTitle(category.getCategoryTitle());
-
-        // Если в классе Category есть поле List<SubCategory> subCategoryTitle,
-        // которое нужно скопировать в CategoryDTO, выполните следующие действия:
-        // List<SubCategoryDTO> subCategoryDTOList = category.getSubCategoryTitle().stream()
-        //         .map(this::convertToSubCategoryDTO)
-        //         .collect(Collectors.toList());
-        // categoryDTO.setSubCategoryTitle(subCategoryDTOList);
-
-//        return categoryDTO;
-//    }
 }

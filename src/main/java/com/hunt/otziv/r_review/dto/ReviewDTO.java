@@ -38,6 +38,7 @@ public class ReviewDTO {
     private BotDTO bot;
 
     private OrderDetailsDTO orderDetails;
+
     private UUID orderDetailsId;
 
     private FilialDTO filial;

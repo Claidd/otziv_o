@@ -23,8 +23,4 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
     List<Review> findAllByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker, @Param("localDate") LocalDate localDate);
 
-
-    List<Review> findAllByPublishedDateLessThanEqualAndPublishIsFalse(LocalDate localDate);
-//    @Query("SELECT r FROM Review r WHERE r.publishDate <= :localDate AND r.publish = false")
-//    List<Review> findAllByPublishDateAndPublish(@Param("localDate") LocalDate localDate);
 }

@@ -27,7 +27,6 @@ public class Bot {
     @Column(name = "bot_login", nullable = false)
     private String login;
 
-
     //    установленный пароль для бота (должен меняться)
     @Column(name = "bot_password", nullable = false)
     private String password;
@@ -49,17 +48,9 @@ public class Bot {
     @JoinColumn(name = "bot_status")
     private StatusBot status;
 
-    //    каждый бот имеет спикок опубликованных с него отзывов
-//    @OneToMany(mappedBy = "bot")
-//    List<Review> reviewList;
-
     //    каждый бот имеет Работника, который его добавлял
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "bot_worker")
     private Worker worker;
-
-//    @Enumerated(EnumType.STRING)
-//    @Column(name = "role")
-//    private Role roles;
 
 }

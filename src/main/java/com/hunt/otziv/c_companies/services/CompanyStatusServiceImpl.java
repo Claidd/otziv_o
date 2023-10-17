@@ -20,13 +20,12 @@ public class CompanyStatusServiceImpl implements CompanyStatusService {
     private final CompanyStatusRepository companyStatusRepository;
 
     @Override
-    public CompanyStatus getCompanyStatusById(Long id) {
+    public CompanyStatus getCompanyStatusById(Long id) { // Взять все статусы компаний по Id
         return companyStatusRepository.findById(id).orElse(null);
-    }
+    } // Взять все статусы компаний по Id
 
-    public CompanyStatus getStatusByTitle(String title){
+    public CompanyStatus getStatusByTitle(String title){ // Взять все статусы компаний
        return companyStatusRepository.findByTitle(title).orElse(null);
-    }
-
+    } // Взять все статусы компаний
 
 }

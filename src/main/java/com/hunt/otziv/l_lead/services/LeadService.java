@@ -28,27 +28,20 @@ public interface LeadService {
     // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
     public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal);
     // метод поиска одного лида по id и перевод его в дто
-
     List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
     // меняем статус с нового на отправленное
     void changeStatusLeadOnSend(Long leadId);
-
     // меняем статус с нового на напоминание
     void changeStatusLeadOnReSend(Long leadId);
-
     // меняем статус с напоминание на К рассылке
     void changeStatusLeadOnArchive(Long leadId);
-
     // меняем статус с К рассылке на В работе
     void changeStatusLeadOnInWork (Long leadId);
-
     // меняем статус с любого на Новый
     void changeStatusLeadOnNew (Long leadId);
-
-
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

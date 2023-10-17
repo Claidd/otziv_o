@@ -24,28 +24,26 @@ public class MarketologServiceImpl implements MarketologService {
     }
 
     @Override
-    public Marketolog getMarketologById(Long id) {
-        return marketologRepository.findById(id)
-           .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
-    }
+    public Marketolog getMarketologById(Long id) { // Взять маркетолога по Id
+        return marketologRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+    } // Взять маркетолога по Id
 
     @Override
-    public Marketolog getMarketologByUserId(Long id) {
+    public Marketolog getMarketologByUserId(Long id) { // Взять маркетолога по Id юзера
         return marketologRepository.findByUserId(id).orElse(null);
-    }
+    } // Взять маркетолога по Id юзера
 
     @Override
-    public Set<Marketolog> getAllMarketologs() {
+    public Set<Marketolog> getAllMarketologs() { // Взять всех маркетологов
         return marketologRepository.findAll();
-    }
+    } // Взять всех маркетологов
 
     @Override
     public void delete(Long userId, Long marketologId) {
-
     }
 
     @Override
-    public void saveNewMarketolog(User user) {
+    public void saveNewMarketolog(User user) { // Сохранить нового маркетолога
         if (marketologRepository.findByUserId(user.getId()).isPresent()){
             log.info("Не добавили оператора так как уже в списке");
         }
@@ -56,15 +54,15 @@ public class MarketologServiceImpl implements MarketologService {
             marketologRepository.save(marketolog);
             log.info("Добавили оператора");
         }
-    }
+    } // Сохранить нового маркетолога
 
     @Override
-    public Marketolog getMarketologByUserIdToDelete(Long id) {
+    public Marketolog getMarketologByUserIdToDelete(Long id) { // Найти маркетолога для удаления
         return marketologRepository.findByUserId(id).orElse(null);
-    }
+    } // Найти маркетолога для удаления
 
     @Override
-    public void deleteMarketolog(User user) {
+    public void deleteMarketolog(User user) { // Удалить маркетолога
         log.info("Вошли в проверку при удалении есть ли такой маркетолог при смене роли");
         Marketolog marketolog = getMarketologByUserIdToDelete(user.getId());
         log.info("Достали маркетолога");
@@ -75,6 +73,6 @@ public class MarketologServiceImpl implements MarketologService {
         else {
             log.info("Не удалили маркетолога так как такого нет в списке");
         }
-    }
+    } // Удалить маркетолога
 
 }

@@ -105,7 +105,7 @@
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                             <!-- Кнопка "Назад" -->
-                            <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
+                            <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                     </form>
                 </div>
             </div>

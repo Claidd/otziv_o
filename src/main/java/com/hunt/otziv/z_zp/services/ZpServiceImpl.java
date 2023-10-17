@@ -26,7 +26,7 @@ public class ZpServiceImpl implements ZpService{
     }
 
     @Transactional
-    public boolean save(Order order){
+    public boolean save(Order order){ // Сохранить ЗП и Чек в БД
         try {
             saveZpManager(order);
             saveZpWorker(order);
@@ -35,10 +35,10 @@ public class ZpServiceImpl implements ZpService{
         catch (Exception e){
             return false;
         }
-    }
+    } // Сохранить ЗП и Чек в БД
 
     @Transactional
-    public boolean saveLeadZp(Lead lead){
+    public boolean saveLeadZp(Lead lead){ // Сохранить ЗП за Лида
         try {
             saveZpMarketolog(lead);
             saveZpOperator(lead);
@@ -47,10 +47,10 @@ public class ZpServiceImpl implements ZpService{
         catch (Exception e){
             return false;
         }
-    }
+    } // Сохранить ЗП за Лида
 
     @Transactional
-    private void saveZpManager(Order order){
+    private void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
         System.out.println(order.getSum().multiply(order.getManager().getUser().getCoefficient()));
         Zp managerZp = new Zp();
         managerZp.setFio(order.getManager().getUser().getFio());
@@ -60,9 +60,9 @@ public class ZpServiceImpl implements ZpService{
         managerZp.setProfessionId(order.getManager().getId());
         managerZp.setActive(true);
         zpRepository.save(managerZp);
-    }
+    } // Сохранить ЗП Менеджера в БД
 @Transactional
-    private void saveZpWorker(Order order){
+    private void saveZpWorker(Order order){ // Сохранить ЗП Работника в БД
     System.out.println(order.getSum().multiply(order.getWorker().getUser().getCoefficient()));
         Zp workerZp = new Zp();
         workerZp.setFio(order.getWorker().getUser().getFio());
@@ -72,10 +72,9 @@ public class ZpServiceImpl implements ZpService{
         workerZp.setProfessionId(order.getWorker().getId());
         workerZp.setActive(true);
         zpRepository.save(workerZp);
-    }
-
+    } // Сохранить ЗП Работника в БД
     @Transactional
-    private void saveZpMarketolog(Lead lead){
+    private void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
         Zp marketologZp = new Zp();
         marketologZp.setFio(lead.getMarketolog().getUser().getFio());
         marketologZp.setSum(new BigDecimal("1000.00").multiply(lead.getMarketolog().getUser().getCoefficient()));
@@ -84,10 +83,10 @@ public class ZpServiceImpl implements ZpService{
         marketologZp.setProfessionId(lead.getMarketolog().getId());
         marketologZp.setActive(true);
         zpRepository.save(marketologZp);
-    }
+    } // Сохранить ЗП Маркетолога в БД
 
     @Transactional
-    private void saveZpOperator(Lead lead){
+    private void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
         Zp operatorZp = new Zp();
         operatorZp.setFio(lead.getOperator().getUser().getFio());
         operatorZp.setSum(new BigDecimal("1000.00").multiply(lead.getOperator().getUser().getCoefficient()));
@@ -96,11 +95,11 @@ public class ZpServiceImpl implements ZpService{
         operatorZp.setOrderId(0L);
         operatorZp.setActive(true);
         zpRepository.save(operatorZp);
-    }
+    } // Сохранить ЗП Оператора в БД
 
     private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO
         return zpList.stream().map(this::toDTO).collect(Collectors.toList());
-    }
+    } // Метод для преобразования из сущности Zp в ZpDTO
 
     private ZpDTO toDTO(Zp zp) { // Метод для преобразования из сущности Zp в ZpDTO
         ZpDTO zpDTO = new ZpDTO();
@@ -113,7 +112,7 @@ public class ZpServiceImpl implements ZpService{
         zpDTO.setActive(zp.isActive());
         zpDTO.setSum(zp.getSum());
         return zpDTO;
-    }
+    } // Метод для преобразования из сущности Zp в ZpDTO
 
 
     private Zp toEntity(ZpDTO zpDTO) { // Метод для преобразования из ZpDTO в сущность Zp
@@ -126,5 +125,5 @@ public class ZpServiceImpl implements ZpService{
         zp.setActive(zpDTO.isActive());
         zp.setSum(zpDTO.getSum());
         return zp;
-    }
+    } // Метод для преобразования из ZpDTO в сущность Zp
 }

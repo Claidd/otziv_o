@@ -30,10 +30,4 @@ public class Worker {
     @ToString.Exclude
     private List<Bot> bots;
 
-//    @OneToOne(mappedBy = "worker", cascade = CascadeType.PERSIST)
-//    Review review;
-
-
-//    @OneToMany(mappedBy = "worker", cascade = CascadeType.ALL, orphanRemoval = true)
-//    private List<Order> orders;
 }

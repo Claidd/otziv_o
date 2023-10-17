@@ -28,7 +28,6 @@ public class OrderDetailsController {
 
     private final ReviewService reviewService;
     private final OrderService orderService;
-    private final ReviewArchiveService reviewArchiveService;
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
@@ -40,7 +39,7 @@ public class OrderDetailsController {
         rm.addFlashAttribute("companyId", companyId);
         rm.addFlashAttribute("orderId", orderId);
         return "products/orders_detail_list";
-    }
+    } // Переход на страницу Просмотра  деталей заказа
 
     @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота
     public String changeBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, Model model){
@@ -48,8 +47,6 @@ public class OrderDetailsController {
         log.info("1. Заходим в Post метод замены бота");
         reviewService.changeBot(reviewId);
         log.info("5. Все прошло успешно, вернулись в контроллер");
-//
-        // Build the redirect URL by appending the context path
 
         if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
             log.info("Зашли список всех заказов для админа");
@@ -64,7 +61,7 @@ public class OrderDetailsController {
         }
         return "redirect:/worker/publish";
 //        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    }
+    } // Замена Бота
 
     @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}") // Деактивация и замена Бота
     public String deActivateBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
@@ -85,7 +82,7 @@ public class OrderDetailsController {
         }
         return "redirect:/worker/publish";
 //        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    }
+    } // Деактивация и замена Бота
 
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReview(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
@@ -99,7 +96,7 @@ public class OrderDetailsController {
 //            rm.addFlashAttribute("saveSuccess", "false");
         }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    }
+    } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 
     @PostMapping("/{companyId}/{orderId}/published_to_worker/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
@@ -113,10 +110,10 @@ public class OrderDetailsController {
 //            rm.addFlashAttribute("saveSuccess", "false");
         }
         return "redirect:/worker/publish";
-    }
+    } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 
 
-    private String gerRole(Principal principal){
+    private String gerRole(Principal principal){ // Берем роль пользователя
         // Получите текущий объект аутентификации
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Получите имя текущего пользователя (пользователя, не роль)

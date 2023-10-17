@@ -27,7 +27,7 @@ public class ReviewController {
     private final OrderService orderService;
 
     //    =========================================== REVIEW EDIT =======================================================
-    @GetMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Get
+    @GetMapping("/editReview/{reviewId}")
     String ReviewEdit(@PathVariable Long reviewId, Model model){
         System.out.println("Вошли в обновление " + reviewService.getReviewDTOById(reviewId));
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
@@ -36,7 +36,7 @@ public class ReviewController {
         model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
         model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getId());
         return "products/review_edit";
-    }
+    } // Страница редактирования Заказа - Get
 
     @PostMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Post
     String ReviewEditPost(@ModelAttribute("reviewDTO") ReviewDTO reviewDTO, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
@@ -45,7 +45,7 @@ public class ReviewController {
         log.info("5. Обновление Отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReview/{reviewId}";
-    }
+    } // Страница редактирования Заказа - Post
 
     @PostMapping("/addReviews/{companyId}/{orderId}") // Добавить новый отзыв - Post
     String ReviewAdd(@PathVariable Long orderId, @PathVariable Long companyId, RedirectAttributes rm, Model model){
@@ -57,7 +57,7 @@ public class ReviewController {
         }
         log.info("3. Неудачная попытка");
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    }
+    } // Добавить новый отзыв - Post
 
 
     @GetMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Удалить отзыв - Post
@@ -70,7 +70,7 @@ public class ReviewController {
         }
         log.info("2. Неудачная попытка удаления");
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    }
+    } // Удалить отзыв - Post
 
 
 //    ==========================================================================================================
@@ -78,15 +78,12 @@ public class ReviewController {
     //    =========================================== REVIEW'S EDIT =======================================================
     @GetMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Get
     String ReviewsEdit(@PathVariable UUID orderDetailId, Model model){
-
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
         model.addAttribute("orderDetailDTO", orderDetailsDTO);
         model.addAttribute("orderDetailId", orderDetailId);
         System.out.println(orderDetailsDTO);
-
-
         return "products/reviews_edit";
-    }
+    } // Страница редактирования Заказа - Get
 
     @PostMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Post - СОХРАНИТЬ
     String ReviewsEditPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
@@ -97,7 +94,7 @@ public class ReviewController {
         log.info("5. Обновление Отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReviews/{orderDetailId}";
-    }
+    } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
     @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
     String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
@@ -116,7 +113,7 @@ public class ReviewController {
             log.info("2. Произошла какая-то ошибка");
             return "redirect:/review/editReviews/{orderDetailId}";
         }
-    }
+    } // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
 
     @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
     String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
@@ -130,7 +127,7 @@ public class ReviewController {
         log.info("5. Обновление Отзыва прошло успешно2");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReviews/{orderDetailId}";
-    }
+    } // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
 
 
 //    ==========================================================================================================

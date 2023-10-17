@@ -16,13 +16,8 @@ import java.util.Set;
 public interface WorkerRepository extends CrudRepository<Worker, Long> {
     Optional<Worker> findById(Long id);
     Set<Worker> findAll();
-
     Set<Worker> findAllByUserId(Long id);
-
     List<Worker> findAllByUser(User user);
-
     Optional<Worker> findByUserId(Long id);
 
-//    @Query("SELECT w FROM Worker w WHERE w.user = :user AND w.user.active = :active")
-//    List<Worker> findAllByUserAndUserActive(User user, boolean active);
 }

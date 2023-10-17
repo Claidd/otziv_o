@@ -19,12 +19,12 @@ public class PromoTextServiceImpl implements PromoTextService{
     }
 
     @Override
-    public List<String> getAllPromoTexts() {
+    public List<String> getAllPromoTexts() { // Взять все текста
         List<String> result = new ArrayList<>();
         List<PromoText> textBD =  promoTextRepository.findAll();
         for ( PromoText textList : textBD) {
             result.add( textList.getPromoText().replace("lineSep", System.lineSeparator()));
         }
         return result;
-    }
+    } // Взять все текста
 }

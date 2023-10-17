@@ -27,6 +27,7 @@ public class LeadController {
         this.promoTextService = promoTextService;
     }
 
+    // Страница открытия всех лидов
     @GetMapping()
     public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal) {
 //        model.put("route", "lead");

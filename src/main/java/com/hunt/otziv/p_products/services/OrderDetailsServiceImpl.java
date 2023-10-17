@@ -28,18 +28,18 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
 
     private final OrderDetailsRepository orderDetailsRepository;
     @Override
-    public OrderDetails save(OrderDetails orderDetails) {
+    public OrderDetails save(OrderDetails orderDetails) { // Сохранить детали заказ в БД
         return orderDetailsRepository.save(orderDetails);
-    }
+    } // Сохранить детали заказ в БД
 
-    public OrderDetails getOrderDetailById(UUID orderDetailId){
+    public OrderDetails getOrderDetailById(UUID orderDetailId){ // Взять детали по Id
         return orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
-    }
-    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
+    } // Взять детали по Id
+    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){ // Взять детали дто по Id
         return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
-    }
+    } // Взять детали дто по Id
 
-    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей в дто
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
                 .amount(orderDetails.getAmount())
@@ -50,15 +50,15 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
                 .comment(orderDetails.getComment())
                 .build();
-    }
-    private ProductDTO convertToProductDTO(Product product){
+    } // перевод деталей в дто
+    private ProductDTO convertToProductDTO(Product product){ // перевод продукта в дто
         return ProductDTO.builder()
                 .id(product.getId())
                 .title(product.getTitle())
                 .price(product.getPrice())
                 .build();
-    }
-    private OrderDTO convertToOrderDTO(Order order){
+    } // перевод продукта в дто
+    private OrderDTO convertToOrderDTO(Order order){ // перевод заказа в дто
         return OrderDTO.builder()
                 .id(order.getId())
                 .company(convertToCompanyDTO(order.getCompany()))
@@ -66,19 +66,19 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .counter(order.getCounter())
                 .orderDetailsId(order.getDetails().iterator().next().getId())
                 .build();
-    }
+    } // перевод заказа в дто
 
-    private CompanyDTO convertToCompanyDTO(Company company){
+    private CompanyDTO convertToCompanyDTO(Company company){ // перевод компании в дто
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
                 .urlChat(company.getUrlChat())
                 .build();
-    }
-    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){
+    } // перевод компании в дто
+    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){ // перевод отзыва в дто
         return reviews.stream().map(this::convertToReviewsDTO).collect(Collectors.toList());
-    }
-    private ReviewDTO convertToReviewsDTO(Review review){
+    } // перевод отзыва в дто
+    private ReviewDTO convertToReviewsDTO(Review review){ // перевод отзыва в дто
         return ReviewDTO.builder()
                 .id(review.getId())
                 .text(review.getText())
@@ -87,5 +87,5 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .publish(review.isPublish())
                 .publishedDate(review.getPublishedDate())
                 .build();
-    }
+    } // перевод отзыва в дто
 }

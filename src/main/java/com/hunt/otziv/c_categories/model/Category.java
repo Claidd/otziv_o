@@ -4,6 +4,9 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 
 import java.util.List;
 
@@ -13,6 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Table(name = "categorys")
+@NamedEntityGraph(name = "Category.subCategoryTitle", attributeNodes = @NamedAttributeNode("subCategoryTitle"))
 public class Category {
 
     @Id
@@ -24,7 +28,9 @@ public class Category {
     private String categoryTitle;
 
     @OneToMany(mappedBy = "category",cascade = CascadeType.ALL)
-    @Column(name = "subcategory_title")
+//    @Column(name = "subcategory_title")
+//    @BatchSize(size = 10)
+//    @Fetch(FetchMode.JOIN)
     List<SubCategory> subCategoryTitle;
 
     @OneToMany(mappedBy = "categoryCompany",cascade = CascadeType.ALL)

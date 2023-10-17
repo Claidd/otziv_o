@@ -6,8 +6,7 @@
             <th:block th:insert="~{fragments/common :: meta}"></th:block>
             <!-- ==================== STYLE ======================== -->
             <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
-            <!-- ==================== TITLE ======================== -->
-            <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
+
             <title>Добавить новый продукт O! Company!</title>
         </head>
         <body>
@@ -18,13 +17,6 @@
 
                     <!-- ==================== MAIN START ======================== -->
 
-                    <!-- ==================== FRAGMENT: title ======================== -->
-<!--                    <th:block th:switch="${route}">>-->
-<!--                        <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>-->
-<!--                        &lt;!&ndash;        <th:block th:case="leads_list">Список 2 лидов</th:block>&ndash;&gt;-->
-<!--                        <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>-->
-
-<!--                    </th:block>-->
 
                     <!-- ===================== MAIN END ======================== -->
                     <section class="edit__lead">
@@ -57,20 +49,9 @@
                                         </select>
                                         <small class="form-text text-danger" th:each="err : ${#fields.errors('productCategory')}" th:text="${err}">Validation error</small>
                                     </div>
-
-                                    <!-- <div class="mb-3">
-                                        <label for="inputOperator" class="form-label">Оператор</label> <br>
-                                        <select th:field="*{operator}" id="inputOperator" name="operator"  class="form-control form-select form-select-lg">
-                                            
-                                            <option th:each="operator : ${operators}" th:value="${operator.id}" th:text="${operator.user.fio}" th:selected="${operator == editLeadDto.operator}"></option>
-                                            <option th:unless="${operators == null or operators.isEmpty() or operators.contains(editLeadDto.operator)}" th:value="${editLeadDto.operator}" th:text="${editLeadDto.operator}" th:selected="${editLeadDto.operator != null}"></option>
-                                        </select>
-                                        <small class="form-text text-danger" th:each="err : ${#fields.errors('operator')}" th:text="${err}">Validation error</small>
-                                    </div> -->
-
-                                
                           
-                                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                                    <button type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                                    <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 </form>
                                 

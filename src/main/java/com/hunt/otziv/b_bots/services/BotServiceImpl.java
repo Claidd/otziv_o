@@ -2,6 +2,7 @@ package com.hunt.otziv.b_bots.services;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -20,11 +21,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class BotServiceImpl implements BotService {
-
     private final UserService userService;
     private final StatusBotService statusBotService;
     private final BotsRepository botsRepository;
-
     private final WorkerService workerService;
 
     public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService) {
@@ -34,19 +33,16 @@ public class BotServiceImpl implements BotService {
         this.workerService = workerService;
     }
 
-    // Создать нового бота
     @Override
-    public boolean createBot(BotDTO botDTO, Principal principal) {
+    public boolean createBot(BotDTO botDTO, Principal principal) { // Создать нового бота
         botsRepository.save(toEntity(botDTO, principal));
-//        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-//        worker.setBots(worker);
         return true;
-    }
+    } // Создать нового бота
 
     // Обновить бота
     @Override
     @Transactional
-    public boolean updateBot(BotDTO botDTO, Long id) {
+    public boolean updateBot(BotDTO botDTO, Long id) { // Обновление бота
         log.info("Вошли в обновление бота и ищем бота по id");
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         Bot saveBot = findBotById(botDTO.getId());
@@ -108,26 +104,26 @@ public class BotServiceImpl implements BotService {
             log.info("Изменений не было, Бот в БД не изменена");
             return false;
         }
-    }
+    } // Обновление бота
 
     // Удалить бота
     @Override
-    public void deleteBot(Long id) {
+    public void deleteBot(Long id) { // Обновление бота
          botsRepository.deleteById(id);
-    }
+    } // Обновление бота
 
     // Найти бота по id
     @Override
-    public BotDTO findById(Long id) {
+    public BotDTO findById(Long id) { // Найти бота по id
         Bot bot = botsRepository.findById(id).orElse(null);
         if(bot == null){
             throw new UsernameNotFoundException("User not found with name: " + bot.getLogin());
         }
         return toDto(bot);
-    }
+    } // Найти бота по id
 
     @Override
-    public BotDTO findByWorker(Principal principal) {
+    public BotDTO findByWorker(Principal principal) { // Найти бота по Работнику
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         log.info("вошли в поиск бота по работнику");
         System.out.println(botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null));
@@ -143,54 +139,53 @@ public class BotServiceImpl implements BotService {
             else throw new UsernameNotFoundException("User not found with name: " + bot.getLogin());
         }
         else return new BotDTO();
-
-
-    }
+    } // Найти бота по Работнику
 
     @Override
-    public Bot findBotById(Long id) {
+    public Bot findBotById(Long id) { // Найти бота по id
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
         Bot saveBot = botsRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель с ID '%s' не найден", id)
         ));
         return saveBot;
-    }
+    } // Найти бота по id
 
-    // Взять всех юзеров - начало
     @Override
-    public List<BotDTO> getAllBots() {
+    public List<BotDTO> getAllBots() { // Найти всех ботов
         log.info("Берем все юзеров");
         return botsRepository.findAll().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
-    }
-    // Взять всех юзеров - конец
+    } // Найти всех ботов
 
-    public List<Bot> getAllBotsByWorkerId(Long id){
+    public List<Bot> getAllBotsByWorkerId(Long id){ // Взять всех ботов по id работника
         return botsRepository.findAllByWorkerId(id);
-    }
-    public List<Bot> getAllBotsByWorker(Principal principal){
+    } // Взять всех ботов по id работника
+    public List<Bot> getAllBotsByWorker(Principal principal){ // Взять всех ботов по работнику
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         return botsRepository.findAllByWorker(worker);
-    }
-
-    public List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id){
-        return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
-    }
-
-    public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal){
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
-    }
+    } // Взять всех ботов по работнику
 
     @Override
-    public Bot save(Bot bot) {
+    public StatusBot changeStatus(String status) { // взять статус бота по строке
+        return statusBotService.findByTitle(status);
+    } // взять статус бота по строке
+
+    public List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id){ // Взять всех ботов по id работнику и активности
+        return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
+    } // Взять всех ботов по id работнику и активности
+
+    public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal){ // Взять всех ботов по работнику и активности
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
+    } // Взять всех ботов по работнику и активности
+
+    @Override
+    public Bot save(Bot bot) { // Сохранение ботов
         return botsRepository.save(bot);
-    }
+    } // Сохранение ботов
 
-
-    // Перевод бота в дто - начало
-    private BotDTO toDto(Bot bot){
+    private BotDTO toDto(Bot bot){ // Перевод бота в дто - начало
         log.info("Перевод Бота в дто");
         return BotDTO.builder()
                 .id(bot.getId())
@@ -202,11 +197,10 @@ public class BotServiceImpl implements BotService {
                 .status(bot.getStatus().getBotStatusTitle())
                 .worker(bot.getWorker() != null ? bot.getWorker() : null)
                 .build();
-    }
-    // Перевод бота в дто - конец
+    } // Перевод бота в дто - конец
 
     //    =============================== ПЕРЕВОД ДТО В СУЩНОСТЬ - НАЧАЛО =========================================
-    public Bot toEntity(BotDTO botDTO, Principal principal){
+    public Bot toEntity(BotDTO botDTO, Principal principal){ // Перевод дто в сущность
         log.info("Заходим в метод перевода ДТО в Бота");
         User user = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null));
         Worker worker = workerService.getWorkerByUserId(user.getId());
@@ -221,20 +215,17 @@ public class BotServiceImpl implements BotService {
                 .build();
         log.info("БотДТО успешно переведен в Бот");
         return bot;
-    }
+    } // Перевод дто в сущность
     //    =============================== ПЕРЕВОД ДТО В СУЩНОСТЬ - КОНЕЦ =========================================
 
-
-    // Вспомогательный метод для корректировки номера телефона
-    public String changeNumberPhone(String phone){
+    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
         String[] a;
         a = phone.split("9");
         a[0] = "+79";
         String b = a[0] + a[1];
         System.out.println(b);
         return b;
-//        userDto.getPhoneNumber().replaceFirst("8", "+7")
-    }
+    } // Вспомогательный метод для корректировки номера телефона
 
 
 }

@@ -18,11 +18,10 @@
             <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
             <section class="company__lead__card">
                 <div class="container">
-                    <h2 class="company__section-title" th:text="${TitleName}">Добавление аккаунтов</h2>
+                    <h2 class="company__section-title" th:text="${TitleName}">Список аккаунтов</h2>
                     <div class="company__tabs__lead">
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                         <div class="company__tabs__btn__worker">
-                        <!-- <a class="company__tabs__btn-item" th:href="@{'/companies/allCompany'}" data-button="content-11">К компаниям</a> -->
                         <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/worker/new_orders'}">Новые</a>
                         <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/correct'}">Коррекция</a>
                         <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/worker/publish'}">Публикация</a>
@@ -32,25 +31,9 @@
                     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
 
-                                        <!-- ==================== BOT ADD ======================== -->
-            <div  class="company__card__content__button">
-                <div class="company__card__content__button__btn">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
-                    <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/bots/bot_add}" th:text="'ДОБАВИТЬ НОВОГО БОТА'">добавить бота</a>
-                </div>
-            </div>
-            <!-- ==================== BOT ADD ======================== -->
 
-            <!-- ==================== BOT ADD ======================== -->
-            <div  class="company__card__content__button">
-                <div class="company__card__content__button__btn">
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                    <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
-                    <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/worker/bot_list}" th:text="'СПИСОК ВСЕХ АККАУНТОВ'">список аккаунтов</a>
-                </div>
-            </div>
-            <!-- ==================== BOT ADD ======================== -->
+            <th:block th:insert="~{fragments/bot_workers :: bot_workers}" id="content-10"></th:block>
+
                 
                 </section> <!-- section -->
 

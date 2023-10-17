@@ -19,23 +19,16 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     List<Bot> findAllByWorkerId(Long workerId);
 
     List<Bot> findAllByWorker(Worker worker);
-
+    @Query("SELECT b FROM Bot b WHERE b.worker.id = :workerId AND b.active = true")
     List<Bot> findAllByWorkerIdAndActiveIsTrue(Long workerId);
+
+    @Query("SELECT b FROM Bot b WHERE b.worker = :worker AND b.active = true")
     List<Bot> findAllByWorkerAndActiveIsTrue(Worker worker);
 
-    Optional<Bot> findById(Long id);
+    @Query("SELECT b FROM Bot b WHERE b.worker = :worker ORDER BY b.id DESC")
     Optional<Bot> findFirstByWorkerOrderByIdDesc(Worker worker);
-//    Optional<Bot> findFirstDawnByWorker(Worker worker);
 
-
-//    Optional<Bot> findByWorkerOrderByBotIdDesc(Worker worker);
-
-//    @Query("SELECT LIMIT 1 b FROM Bot b WHERE b.worker = :worker")
-//    Optional<Bot> findLastByWorker(@Param("worker") Worker worker);
-
-
-
-//    Optional<Bot> findTopByWorkerOrderByBotIdDesc(Worker worker);
+    Optional<Bot> findById(Long id);
 
     List<Bot> findAll();
 }

@@ -24,7 +24,7 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     }
 
     @Transactional
-    public boolean save(Order order){
+    public boolean save(Order order){ // Сохранить Чек в БД
         try {
             saveCheckCompany(order);
             return true;
@@ -32,10 +32,10 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         catch (Exception e){
             return false;
         }
-    }
+    } // Сохранить Чек в БД
 
     @Transactional
-    private void saveCheckCompany(Order order){
+    private void saveCheckCompany(Order order){ // Сохранить Чек в БД
         log.info("Зашли в создание чека");
         System.out.println(order.getSum());
         PaymentCheck paymentCheck = new PaymentCheck();
@@ -49,13 +49,13 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         System.out.println(paymentCheck);
         paymentCheckRepository.save(paymentCheck);
         log.info("Чек сохранен");
-    }
+    } // Сохранить Чек в БД
 
-    private List<CheckDTO> toDTOList(List<PaymentCheck> paymentCheckList) { // Метод для преобразования из сущности Zp в ZpDTO
+    private List<CheckDTO> toDTOList(List<PaymentCheck> paymentCheckList) { // Метод для преобразования из сущности paymentCheck в checkDTO
         return paymentCheckList.stream().map(this::toDTO).collect(Collectors.toList());
-    }
+    } // Метод для преобразования из сущности paymentCheck в checkDTO
 
-    private CheckDTO toDTO(PaymentCheck paymentCheck) { // Метод для преобразования из сущности Zp в ZpDTO
+    private CheckDTO toDTO(PaymentCheck paymentCheck) { // Метод для преобразования из сущности paymentCheck в checkDTO
         CheckDTO checkDTO = new CheckDTO();
         checkDTO.setId(paymentCheck.getId());
         checkDTO.setTitle(paymentCheck.getTitle());
@@ -67,10 +67,10 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         checkDTO.setActive(paymentCheck.isActive());
         checkDTO.setSum(paymentCheck.getSum());
         return checkDTO;
-    }
+    } // Метод для преобразования из сущности paymentCheck в checkDTO
 
 
-    private PaymentCheck toEntity(CheckDTO checkDTO) { // Метод для преобразования из ZpDTO в сущность Zp
+    private PaymentCheck toEntity(CheckDTO checkDTO) { // Метод для преобразования из checkDTO в сущность Zp
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(checkDTO.getTitle());
         paymentCheck.setCompanyId(checkDTO.getCompanyId());
@@ -81,5 +81,5 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         paymentCheck.setActive(checkDTO.isActive());
         paymentCheck.setSum(checkDTO.getSum());
         return paymentCheck;
-    }
+    } // Метод для преобразования из checkDTO в сущность Z
 }

@@ -2,6 +2,7 @@ package com.hunt.otziv.b_bots.services;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 
 import java.security.Principal;
@@ -36,4 +37,5 @@ public interface BotService {
     Bot save(Bot bot);
 
     List<Bot> getAllBotsByWorker(Principal principal);
+    StatusBot changeStatus(String status);
 }

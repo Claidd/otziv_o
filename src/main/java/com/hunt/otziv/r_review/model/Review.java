@@ -32,7 +32,6 @@ public class Review {
     private String text;
     @Column(name = "review_answer")
     private String answer;
-
     @CreationTimestamp
     @Column(name = "review_created")
     private LocalDate created;
@@ -43,7 +42,6 @@ public class Review {
     private LocalDate publishedDate;
     @Column(name = "review_publish")
     private boolean publish;
-
     @OneToOne
     @JoinColumn(name = "review_category")
     private Category category;

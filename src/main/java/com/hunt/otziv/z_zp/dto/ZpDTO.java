@@ -18,9 +18,11 @@ public class ZpDTO {
     private Long id;
 
     private String fio;
+
     private BigDecimal sum;
 
     private Long userId;
+
     private Long professionId;
 
     private Long orderId;

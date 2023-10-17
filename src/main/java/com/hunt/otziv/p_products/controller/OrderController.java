@@ -112,6 +112,7 @@ public class OrderController {
             return "redirect:/ordersDetails/{companyID}/{orderID}";
         }
     } // смена статуса на "на проверке"
+
     @PostMapping ("/status_on_checking/{companyID}/{orderID}") // смена статуса на "на проверке"
     String changeStatusOnChecking( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "На проверке")) {
@@ -121,6 +122,7 @@ public class OrderController {
         }
         return "redirect:/orders/to_check";
     } // смена статуса на "на проверке"
+
     @PostMapping ("/status_for_correct/{companyID}/{orderID}") // смена статуса на "Коррекция"
     String changeStatusForCorrect( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
@@ -130,6 +132,7 @@ public class OrderController {
         }
         return "redirect:/orders/on_check";
     } // смена статуса на "Коррекция"
+
     @PostMapping ("/status_for_publish/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
@@ -139,6 +142,7 @@ public class OrderController {
         }
         return "redirect:/orders/on_check";
     } // смена статуса на "Публикация"
+
     @PostMapping ("/status_for_publish_ok/{companyID}/{orderID}") // смена статуса на "Опубликовано"
     String changeStatusForPublishOk( @PathVariable Long orderID, @PathVariable Long companyID, Model model) {
         Order order = orderService.getOrder(orderID);
@@ -151,6 +155,7 @@ public class OrderController {
         }
         return "redirect:/orders/to_published";
     } // смена статуса на "Опубликовано"
+
     @PostMapping ("/status_to_pay/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
     String changeStatusToPay( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
@@ -161,6 +166,7 @@ public class OrderController {
             return "products/orders_list";
         }
     } // смена статуса на "Выставлен счет"
+
     @PostMapping ("/remember/{companyID}/{orderID}") // смена статуса на "Напоминание"
     String changeStatusRemember( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
@@ -180,6 +186,7 @@ public class OrderController {
         }
         return "redirect:/orders/remember";
     } // смена статуса на "Не оплачено"
+
     @PostMapping ("/status_pay/{companyID}/{orderID}") // смена статуса на "Оплачено"
     String changeStatusPay( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         Order order = orderService.getOrder(orderID);
@@ -205,6 +212,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "на проверке"
+
     @PostMapping ("/status_on_checking2/{companyID}/{orderID}") // смена статуса на "на проверке"
     String changeStatusOnChecking2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "На проверке")) {
@@ -214,6 +222,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "на проверке"
+
     @PostMapping ("/status_for_correct2/{companyID}/{orderID}") // смена статуса на "Коррекция"
     String changeStatusForCorrect2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
@@ -223,6 +232,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Коррекция"
+
     @PostMapping ("/status_for_publish2/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
@@ -232,6 +242,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Публикация"
+
     @PostMapping ("/status_for_publish_ok2/{companyID}/{orderID}") // смена статуса на "Опубликовано"
     String changeStatusForPublishOk2( @PathVariable Long orderID, @PathVariable Long companyID, Model model) {
         Order order = orderService.getOrder(orderID);
@@ -244,6 +255,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Опубликовано"
+
     @PostMapping ("/status_to_pay2/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
     String changeStatusToPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
@@ -254,6 +266,7 @@ public class OrderController {
             return "redirect:/ordersCompany/ordersDetails/{companyID}";
         }
     } // смена статуса на "Выставлен счет"
+
     @PostMapping ("/remember2/{companyID}/{orderID}") // смена статуса на "Напоминание"
     String changeStatusRemember2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
@@ -273,6 +286,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Не оплачено"
+
     @PostMapping ("/status_pay2/{companyID}/{orderID}") // смена статуса на "Оплачено"
     String changeStatusPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         Order order = orderService.getOrder(orderID);

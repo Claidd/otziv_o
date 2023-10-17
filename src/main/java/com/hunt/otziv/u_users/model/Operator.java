@@ -19,15 +19,10 @@ public class Operator {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "operator_id")
-
     private Long id;
-
-//    @Column(name = "manager_id")
-//    private Long managerId;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-//    @Column(name = "user_id")
     private User user;
 
     @OneToMany(mappedBy = "operator")
@@ -47,12 +42,4 @@ public class Operator {
         return Objects.equals(id, operator.id); // или другие уникальные поля
     }
 
-
-//    @Override
-//    public String toString() {
-//        return "Operator{" +
-//                "id=" + id +
-//                // ... другие поля ...
-//                '}';
-//    }
 }

@@ -45,6 +45,7 @@ public class EditLeadController {
         return new LeadDTO();
     }
 
+    //Страница создания Лида
     @GetMapping("lead/new_lead")
     public ModelAndView createLead(final Map<String, Object> model){
         model.put("route", "create");
@@ -77,6 +78,7 @@ public class EditLeadController {
     }
     // ===============================  ДОБАВЛЕНИЕ НОВОГО ЛИДА - КОНЕЦ  ===============================
 
+    //Редактор лида
     @GetMapping("lead/edit/{leadId}")
     public String editLead(@PathVariable final Long leadId, Model model){
         System.out.println(leadId);

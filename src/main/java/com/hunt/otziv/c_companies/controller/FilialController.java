@@ -20,17 +20,17 @@ public class FilialController {
     private final FilialService filialService;
 
     @GetMapping("/edit/{filialId}")
-    String editCompanyDeleteFilial(@PathVariable Long filialId, Model model){
+    String editCompanyDeleteFilial(@PathVariable Long filialId, Model model){ // редакция филиала
         model.addAttribute("editFilialDTO", filialService.getFilialByIdToDTO(filialId));
         return "companies/filial_edit";
-    }
+    } // редакция филиала
 
     @PostMapping("/edit/{filialId}")
-    String editCompany(@ModelAttribute("editFilialDTO") FilialDTO filialDTO, Model model, RedirectAttributes rm){
+    String editCompany(@ModelAttribute("editFilialDTO") FilialDTO filialDTO, Model model, RedirectAttributes rm){ // Обновление филиала
         log.info("1. Начинаем обновлять данные филиала");
         filialService.updateFilial(filialDTO);
         log.info("5. Обновление филиала прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/filial/edit/{filialId}";
-    }
+    } // Обновление филиала
 }

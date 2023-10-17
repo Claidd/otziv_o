@@ -18,7 +18,7 @@ import java.io.ByteArrayInputStream;
 public class ImageController {
     private final ImageRepository imageRepository;
 
-    @GetMapping("/images/{id}")
+    @GetMapping("/images/{id}") // подгрузка фото
     private ResponseEntity<?> getImageById(@PathVariable Long id) {
         Image image = imageRepository.findById(id).orElse(null);
         assert image != null;
@@ -27,5 +27,5 @@ public class ImageController {
                 .contentType(MediaType.valueOf(image.getContentType()))
                 .contentLength(image.getSize())
                 .body(new InputStreamResource(new ByteArrayInputStream(image.getBytes())));
-    }
+    } // подгрузка фото
 }

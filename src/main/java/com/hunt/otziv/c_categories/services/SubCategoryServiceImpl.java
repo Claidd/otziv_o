@@ -27,23 +27,22 @@ public class SubCategoryServiceImpl implements SubCategoryService{
     }
 
     @Override
-    public SubCategoryDTO saveSubCategory(Long categoryId, SubCategoryDTO subCategoryDTO) {
+    public SubCategoryDTO saveSubCategory(Long categoryId, SubCategoryDTO subCategoryDTO) { // Сохранить новую подкатегорию
         Category category = categoryRepository.findById(categoryId).orElse(null);
         if (category == null) {
             // Handle category not found case
             return null;
         }
-
         SubCategory subCategory = new SubCategory();
         subCategory.setSubCategoryTitle(subCategoryDTO.getSubCategoryTitle());
         subCategory.setCategory(category);
 
         SubCategory savedSubCategory = subCategoryRepository.save(subCategory);
         return new SubCategoryDTO(savedSubCategory.getId(), savedSubCategory.getSubCategoryTitle());
-    }
+    } // Сохранить новую подкатегорию
 
     @Override
-    public SubCategoryDTO updateSubCategory(Long subCategoryId, SubCategoryDTO subCategoryDTO) {
+    public SubCategoryDTO updateSubCategory(Long subCategoryId, SubCategoryDTO subCategoryDTO) { // Обновить подкатегорию
         SubCategory subCategory = subCategoryRepository.findById(subCategoryId).orElse(null);
         if (subCategory == null) {
             // Handle subcategory not found case
@@ -54,21 +53,21 @@ public class SubCategoryServiceImpl implements SubCategoryService{
 
         SubCategory updatedSubCategory = subCategoryRepository.save(subCategory);
         return new SubCategoryDTO(updatedSubCategory.getId(), updatedSubCategory.getSubCategoryTitle());
-    }
+    } // Обновить подкатегорию
 
     @Override
-    public void deleteSubCategory(Long subCategoryId) {
+    public void deleteSubCategory(Long subCategoryId) { // Удалить подкатегорию
         subCategoryRepository.deleteById(subCategoryId);
-    }
+    } // Удалить подкатегорию
 
     @Override
-    public List<SubCategoryDTO> getAllSubCategories() {
+    public List<SubCategoryDTO> getAllSubCategories() { // Взять все подкатегории
         List<SubCategory> subCategories = (List<SubCategory>) subCategoryRepository.findAll();
         return subCategories.stream()
                 .map(this::convertToSubCategoryDTO)
                 .sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle))
                 .collect(Collectors.toList());
-    }
+    } // Взять все подкатегории
 
     // Метод для преобразования сущности SubCategory в DTO SubCategoryDTO
     private SubCategoryDTO convertToSubCategoryDTO(SubCategory subCategory) {
@@ -78,27 +77,27 @@ public class SubCategoryServiceImpl implements SubCategoryService{
         // Здесь можете заполнить другие поля DTO, если они есть
 
         return subCategoryDTO;
-    }
+    } // Метод для преобразования сущности SubCategory в DTO SubCategoryDTO
 
     @Override
-    public List<SubCategoryDTO> getSubcategoriesByCategoryId(Long categoryId) {
-        List<SubCategory> subCategories = subCategoryRepository.findAllByCategory(categoryId);
+    public List<SubCategoryDTO> getSubcategoriesByCategoryId(Long categoryId) { // Перевод подкатегории в ДТО
+        List<SubCategory> subCategories = subCategoryRepository.findAllByCategoryId(categoryId);
         return subCategories.stream()
                 .map(this::convertToSubCategoryDTO)
                 .collect(Collectors.toList());
-    }
+    } // Перевод подкатегории в ДТО
 
-    public SubCategoryDTO getCategoryById(Long categoryId) {
+    public SubCategoryDTO getCategoryById(Long categoryId) { // Перевод подкатегории в ДТО
         Optional<SubCategory> categoryOptional = subCategoryRepository.findById(categoryId);
         return categoryOptional.map(this::convertToSubCategoryDTO).orElse(null);
-    }
+    } // Перевод подкатегории в ДТО
 
-    public SubCategory getCategoryByIdSubCategory(Long categoryId) {
+    public SubCategory getCategoryByIdSubCategory(Long categoryId) { // Взять категорию по id подкатегории
         return subCategoryRepository.findById(categoryId).orElse(null);
-    }
+    } // Взять категорию по id подкатегории
 
-    public SubCategory getSubCategoryById(Long subCategoryId) {
+    public SubCategory getSubCategoryById(Long subCategoryId) { // Взять подкатегорию по id
         return subCategoryRepository.findById(subCategoryId).orElse(null);
-    }
+    } // Взять подкатегорию по id
 
 }

@@ -31,19 +31,24 @@ public class OrderDTO {
     private LocalDate payDay;
 
     private Integer amount;
+
     private Integer counter;
 
     private BigDecimal sum;
 
     private List<OrderDetailsDTO> details;
+
     private UUID orderDetailsId;
 
     private OrderStatusDTO status;
+
     private int dayToChangeStatusAgo;
 
     //    каждый бот имеет Работника, который его добавлял
     private WorkerDTO worker;
+
     private Set<WorkerDTO> workers;
+
     private ManagerDTO manager;
 
     //    каждый бот имеет Работника, который его добавлял

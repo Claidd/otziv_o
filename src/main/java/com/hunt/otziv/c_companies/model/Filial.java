@@ -32,9 +32,6 @@ public class Filial {
     @ToString.Exclude
     private Company company;
 
-//    @OneToOne(mappedBy = "filial", cascade = CascadeType.ALL, optional = false, fetch = FetchType.LAZY)
-//    Review review;
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

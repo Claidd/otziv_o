@@ -25,10 +25,6 @@ import java.util.UUID;
 @Table(name = "order_details")
 public class OrderDetails {
 
-//    @Id
-//    @GeneratedValue(strategy = GenerationType.IDENTITY)
-//    @Column(name = "order_detail_id")
-//    private Long id;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

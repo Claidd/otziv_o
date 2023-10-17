@@ -236,7 +236,7 @@ public class CompanyController {
 
 //    =========================================== COMPANY STATUS =======================================================
     @GetMapping("/editCompany/{companyId}")
-    String ordersDetailsToCompany(@PathVariable Long companyId,  Model model){
+    String ordersDetailsToCompany(@PathVariable Long companyId,  Model model) { // обновление компании -
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
         model.addAttribute("companyDTO", companyDTO);
         model.addAttribute("categories", categoryService.getAllCategories());
@@ -255,9 +255,9 @@ public class CompanyController {
         log.info("5. Обновление компании прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/companies/editCompany/{companyId}";
-    }
+    } // обновление компании - пост
 
-    @GetMapping("/editCompany/{companyId}/deleteWorker/{workerId}")// удалить работника в компании
+    @GetMapping("/editCompany/{companyId}/deleteWorker/{workerId}") // удалить работника в компании
     public String editCompanyDeleteWorker(@PathVariable Long companyId, @PathVariable Long workerId, Model model){
         log.info("1. Начинаем удалять работника из списка работников компании");
         if (companyService.deleteWorkers(companyId, workerId)){
@@ -268,9 +268,9 @@ public class CompanyController {
             log.info("4. Удаление работника из компании НЕ прошло успешно");
             return "redirect:/companies/editCompany/{companyId}";
         }
-    }
+    } // удалить работника в компании
 
-    @GetMapping("/editCompany/{companyId}/deleteFilial/{filialId}")// удалить филиал в компании
+    @GetMapping("/editCompany/{companyId}/deleteFilial/{filialId}") // удалить филиал в компании
     public String editCompanyDeleteFilial(@PathVariable Long companyId, @PathVariable Long filialId, Model model){
         log.info("1. Начинаем удалять филиал из списка филиалов компании");
         if (companyService.deleteFilial(companyId, filialId)){
@@ -281,7 +281,7 @@ public class CompanyController {
             log.info("4. Удаление филиала из компании НЕ прошло успешно");
             return "redirect:/companies/editCompany/{companyId}";
         }
-    }
+    } // удалить филиал в компании
 
     //    ==========================================================================================================
     @PostMapping ("/status_for_checking/{companyId}") // смена статуса на "Новая"
@@ -293,7 +293,7 @@ public class CompanyController {
             log.info("ошибка при изменении статуса заказа на Новая");
             return "products/orders_list";
         }
-    }
+    } // смена статуса на "Новая"
 
     @PostMapping ("/status_for_waiting/{companyId}") // смена статуса на "Ожидание"
     public String changeStatusForWaiting(@PathVariable Long companyId, Model model){
@@ -304,7 +304,7 @@ public class CompanyController {
             log.info("ошибка при изменении статуса заказа на Ожидание");
             return "redirect:/companies/new_order";
         }
-    }
+    } // смена статуса на "Ожидание"
 
     @PostMapping ("/status_for_waiting_send/{companyId}") // смена статуса на "Ожидание"
     public String changeStatusForWaitingSend(@PathVariable Long companyId, Model model){
@@ -315,7 +315,8 @@ public class CompanyController {
             log.info("ошибка при изменении статуса заказа на Ожидание");
             return "redirect:/companies/to_send";
         }
-    }
+    } // смена статуса на "Ожидание"
+
     @PostMapping ("/status_for_stop/{companyId}") // смена статуса на "На стопе"
     public String changeStatusForStop(@PathVariable Long companyId, Model model){
         if(companyService.changeStatusForCompany(companyId, "На стопе")) {
@@ -326,7 +327,7 @@ public class CompanyController {
             log.info("ошибка при изменении статуса заказа на На стопе");
             return "redirect:/companies/new_order";
         }
-    }
+    } // смена статуса на "На стопе"
 
     @PostMapping ("/status_for_ban/{companyId}") // смена статуса на "Бан"
     public String changeStatusForBan(@PathVariable Long companyId, Model model){
@@ -337,7 +338,7 @@ public class CompanyController {
             log.info("ошибка при изменении статуса заказа на Бан");
             return "redirect:/companies/new_order";
         }
-    }
+    } // смена статуса на "Бан"
 }
 
 

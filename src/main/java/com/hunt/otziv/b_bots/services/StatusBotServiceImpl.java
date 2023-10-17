@@ -18,12 +18,12 @@ public class StatusBotServiceImpl implements StatusBotService{
     }
 
     @Override
-    public StatusBot findByTitle(String botStatus) {
+    public StatusBot findByTitle(String botStatus) { // Найти статус по названию
         return statusBotRepository.findByBotStatusTitle(botStatus).orElse(null);
-    }
+    } // Найти статус по названию
 
     @Override
-    public List<String> findAllBotsStatus() {
+    public List<String> findAllBotsStatus() { // Взять все статусы
         return statusBotRepository.findAllByBotStatusTitle();
-    }
+    } // Взять все статусы
 }

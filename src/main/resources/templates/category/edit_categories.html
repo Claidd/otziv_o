@@ -37,7 +37,8 @@
                         <small class="form-text text-danger" th:each="err : ${#fields.errors('categoryTitle')}" th:text="${err}">Validation error</small>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <button type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                    <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                 </form>
             </div>

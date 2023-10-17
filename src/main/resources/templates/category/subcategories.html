@@ -38,6 +38,7 @@
                     </div>
                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                     <button  type="submit" class="btn btn-primary mt-3">Добавить</button>
+                    <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                 </form>
             </div>
         </div>
@@ -60,12 +61,6 @@
             <tr th:each="subcategory : ${subCategories}">
                 <th scope="row" th:text="${categoryTitle}">Название категории</th>
                 <th scope="row" th:text="${subcategory.subCategoryTitle}">Название подкатегории</th>
-<!--                <td>-->
-<!--                    <form th:method="get" th:action="'/subcategories/' + ${subcategory.id}">-->
-<!--                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
-<!--                        <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>-->
-<!--                    </form>-->
-<!--                </td>-->
                 <td>
                     <form th:method="get" th:action="'/subcategories/update/' + ${categoryId} + '/' + ${categoryTitle} + '/' + ${subcategory.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>

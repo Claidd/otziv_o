@@ -60,9 +60,6 @@ public class Lead {
     private LocalDate dateNewTry;
 
     //    привязка юзера-оператора
-//    @MapsId
-//    @OneToOne( fetch = FetchType.LAZY)
-//    @JoinColumn(name = "operator_id", unique = false, nullable = true)
     @ManyToOne (fetch = FetchType.LAZY)
     @JoinColumn(name = "operator_id", unique = false, nullable = true)
     private Operator operator;

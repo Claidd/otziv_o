@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class MarketologDTO {
+
     private Long marketologId;
 
     private Long userId;

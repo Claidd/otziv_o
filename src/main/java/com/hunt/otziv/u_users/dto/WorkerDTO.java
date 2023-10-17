@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class WorkerDTO {
+
     private Long workerId;
 
     private User user;

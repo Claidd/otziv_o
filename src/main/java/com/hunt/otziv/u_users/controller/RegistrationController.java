@@ -41,7 +41,6 @@ public class RegistrationController {
         return new RegistrationUserDTO();
     }
 
-
     //Пост запрос на регистрацию нового пользователя, его валидация и сохранение в БД.
     @PostMapping
     public String createUser(Model model, @ModelAttribute("newUser") @Valid RegistrationUserDTO userDto, BindingResult bindingResult, @RequestParam("file") MultipartFile file) throws IOException {
@@ -53,7 +52,6 @@ public class RegistrationController {
             log.info("1.1 Вошли в ошибку");
             return "1.Login_and_Register/register";
         }
-
         log.info("2.Передаем дто в сервис");
         if (userService.save(userDto, file) == null) {
             model.addAttribute("newUser", userDto);
@@ -61,7 +59,7 @@ public class RegistrationController {
         }
         log.info("6. Возвращаем вью");
         return "redirect:/login";
-    }
+    }   //Пост запрос на регистрацию нового пользователя, его валидация и сохранение в БД.
 
 
 }

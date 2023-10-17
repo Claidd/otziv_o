@@ -16,8 +16,8 @@ public class ZpController {
 
     private final ZpService zpService;
     @GetMapping
-    private String zpList(Model model){
+    private String zpList(Model model){ // Страница с ЗП
         model.addAttribute("zpList", zpService.getAllZpDTO());
         return "1.Login_and_Register/zp_list";
-    }
+    } // Страница с ЗП
 }

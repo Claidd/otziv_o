@@ -56,17 +56,18 @@
                                 Специалист
                             </a>
                         </li>
+                        <li class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/products/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
+                                Продукт
+                            </a>
+                        </li>
                         <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/bots}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Боты
                             </a>
                         </li>
                         
-                        <li class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/products/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
-                                Продукт
-                            </a>
-                        </li>
+                        
                         
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/payment_check}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
