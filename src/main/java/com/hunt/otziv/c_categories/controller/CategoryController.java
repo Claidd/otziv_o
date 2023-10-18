@@ -30,7 +30,7 @@ public class CategoryController {
 
     @GetMapping
     public String getAllCategories(Model model) { // Лист всех категорий
-        List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+        List<CategoryDTO> categories = categoryService.getAllCategories();
         model.addAttribute("categories", categories);
         model.addAttribute("categoryDTO", new CategoryDTO());
         return "category/categories";

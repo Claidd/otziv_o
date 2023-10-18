@@ -21,11 +21,11 @@ public class Operator {
     @Column(name = "operator_id")
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    @OneToMany(mappedBy = "operator")
+    @OneToMany(mappedBy = "operator",fetch = FetchType.LAZY)
     @ToString.Exclude
     private Set<Lead> leads;
 

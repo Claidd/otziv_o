@@ -15,4 +15,9 @@ public class AdminController {
         return "admin/admin_panel";
     }
 
+//    LocalDateTime startTime = LocalDateTime.now();
+//
+//    LocalDateTime stopTime = LocalDateTime.now();
+//    Duration duration = Duration.between(startTime, stopTime);
+//    System.out.println(duration);
 }

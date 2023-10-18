@@ -80,7 +80,6 @@ public class UserServiceImpl  implements UserService {
     } // Взять всех юзеров - конец
 
     private RegistrationUserDTO toDto(User user){ // Перевод юзера в дто - начало
-        log.info("Перевод юзера в дто");
         return RegistrationUserDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -408,8 +407,14 @@ public class UserServiceImpl  implements UserService {
         ));
         log.info("2. Нашли юзера");
         Set<Operator> operators = user.getOperators();
-        operators.remove(operatorService.getOperatorById(operatorId));
-
+        Iterator<Operator> iterator = operators.iterator();
+        while (iterator.hasNext()) {
+            Operator operator = iterator.next();
+            if (operator.getId().equals(operatorId)) {
+                iterator.remove();
+                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+            }
+        }
         user.setOperators(operators);
         log.info("3. Обновили список операторов");
         userRepository.save(user);
@@ -424,8 +429,14 @@ public class UserServiceImpl  implements UserService {
         ));
         log.info("2. Нашли юзера");
         Set<Manager> managers = user.getManagers();
-        managers.remove(managerService.getManagerById(managerId));
-
+        Iterator<Manager> iterator = managers.iterator();
+        while (iterator.hasNext()) {
+            Manager manager = iterator.next();
+            if (manager.getId().equals(managerId)) {
+                iterator.remove();
+                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+            }
+        }
         user.setManagers(managers);
         log.info("3. Обновили список менеджеров");
         userRepository.save(user);
@@ -440,8 +451,14 @@ public class UserServiceImpl  implements UserService {
         ));
         log.info("2. Нашли юзера");
         Set<Worker> workers = user.getWorkers();
-        workers.remove(workerService.getWorkerById(workerId));
-
+        Iterator<Worker> iterator = workers.iterator();
+        while (iterator.hasNext()) {
+            Worker worker = iterator.next();
+            if (worker.getId().equals(workerId)) {
+                iterator.remove();
+                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+            }
+        }
         user.setWorkers(workers);
         log.info("3. Обновили список работников");
         userRepository.save(user);
@@ -456,8 +473,14 @@ public class UserServiceImpl  implements UserService {
         ));
         log.info("2. Нашли юзера");
         Set<Marketolog> marketologs = user.getMarketologs();
-        marketologs.remove(marketologService.getMarketologById(marketologId));
-
+        Iterator<Marketolog> iterator = marketologs.iterator();
+        while (iterator.hasNext()) {
+            Marketolog marketolog = iterator.next();
+            if (marketolog.getId().equals(marketologId)) {
+                iterator.remove();
+                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+            }
+        }
         user.setMarketologs(marketologs);
         log.info("3. Обновили список работников");
         userRepository.save(user);

@@ -61,12 +61,12 @@ public class Company {
     private String operator;
 
     //   менеджер, который работает с компанией
-    @ManyToOne(cascade = {CascadeType.ALL})
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_manager")
     private Manager manager;
 
     //   список работников, которые работают с компанией
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "workers_companies",
         joinColumns = @JoinColumn(name = "company_id"),
@@ -80,13 +80,13 @@ public class Company {
     private CompanyStatus status;
 
     //    категория компании
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_category")
     @ToString.Exclude
     private Category categoryCompany;
 
     //    субкатегория компании
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_subcategory")
     @ToString.Exclude
     private SubCategory subCategory;

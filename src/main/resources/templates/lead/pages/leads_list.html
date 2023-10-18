@@ -62,8 +62,8 @@
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="card_remember-search__btn">Найти</button>
                                 </form>
-
                         </div>
+                        
                     </div>
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
                     
@@ -110,21 +110,36 @@
                                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                         <button type="submit" class="card__text__lead-button ">в работу</button>
                                     </form>
-<!--                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">-->
-<!--                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
-<!--                                        <button type="submit" class="card__text__lead-button ">в работу</button>-->
-<!--                                    </form>-->
+
                                     <!-- элементы карточки - конец -->
                                 </div> <!-- card__content_button -->
                             </div> <!-- card__content__lead -->
                             <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                    <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                    <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
+                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
                         </div> <!-- card -->
+                        <!-- Добавление блока пагинации -->
+                        
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 1 -->
+                    
+                        <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
+                            <ul class="pagination">
+                                <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
+                                </li>
+                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListNew.totalPages - 1)}"
+                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                                </li>
+                                <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
+                                </li>
+                            </ul>
+                        </div>
+                    
 
                     <!-- СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ-->
                     <div class="tabs__content__lead-item" id="content-2">
@@ -174,7 +189,22 @@
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
                         </div> <!-- card -->
+                        
                     </div> <!-- tabs__content-item -->
+                    <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-2">
+                        <ul class="pagination">
+                            <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListSend.totalPages - 1)}"
+                                th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                            <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
                     <!-- СПИСОК КАРТОЧЕК 2 -->
 
                     <!-- СПИСОК КАРТОЧЕК 3 С НАПОМИНАНИЕМ-->
@@ -225,8 +255,23 @@
                                 <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
                             </form>
                         </div> <!-- card -->
+                        
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 3 -->
+                    <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-3">
+                        <ul class="pagination">
+                            <li th:class="${leadListReSend.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListReSend.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListReSend.totalPages != null && leadListReSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListReSend.totalPages - 1)}"
+                                th:class="${leadListReSend.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                            <li th:class="${leadListReSend.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListReSend.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
 
                     <!-- СПИСОК КАРТОЧЕК 4 В АРХИВ-->
                     <div class="tabs__content__lead-item" id="content-4">
@@ -284,6 +329,20 @@
                             </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
+                    <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-4">
+                        <ul class="pagination">
+                            <li th:class="${leadListArchive.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListArchive.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListArchive.totalPages != null && leadListArchive.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListArchive.totalPages - 1)}"
+                                th:class="${leadListArchive.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                            <li th:class="${leadListArchive.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListArchive.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
                     <!-- СПИСОК КАРТОЧЕК 4 -->
 
                     <!-- СПИСОК КАРТОЧЕК 5 -->
@@ -335,6 +394,20 @@
                             </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
+                    <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-5">
+                        <ul class="pagination">
+                            <li th:class="${leadListInWork.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListInWork.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListInWork.totalPages != null && leadListInWork.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListInWork.totalPages - 1)}"
+                                th:class="${leadListInWork.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                            <li th:class="${leadListInWork.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListInWork.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
                     <!-- СПИСОК КАРТОЧЕК 5 -->
 
                     <!-- СПИСОК КАРТОЧЕК 6 -->
@@ -386,13 +459,28 @@
                             </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
+                    <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-6">
+                        <ul class="pagination">
+                            <li th:class="${leadListALL.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListALL.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListALL.totalPages != null && leadListALL.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListALL.totalPages - 1)}"
+                                th:class="${leadListALL.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                            <li th:class="${leadListALL.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListALL.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
                     <!-- СПИСОК КАРТОЧЕК 6 -->
-
+                    
 
 
                 </div> <!-- tabs__content -->
             </div> <!-- tabs -->
 <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
+                        
         </div> <!-- container -->
     </section> <!-- section -->
 

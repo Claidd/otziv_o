@@ -3,6 +3,10 @@ package com.hunt.otziv.l_lead.repository;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,15 +16,22 @@ import java.util.Optional;
 @Repository
 public interface LeadsRepository extends CrudRepository<Lead, Long> {
     Optional<Lead> findByTelephoneLead(String telephoneLead);
-    List<Lead> findAllByLidStatus(String status);
-    List<Lead> findAllByLidStatusAndManager(String status, Manager manager);
-    List<Lead> findAllByLidStatusAndMarketolog(String status, Marketolog marketolog);
-    List<Lead> findAll();
-    List<Lead> findAllByManager(Manager manager);
+
+    @Query("select l from Lead l where l.lidStatus = :status")
+    Page<Lead> findAllByLidStatus(String status, Pageable pageable);
+
+
+    @Query("select l from Lead l where l.lidStatus = :status and l.manager = :manager")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> findAllByLidStatusAndManager(String status, Manager manager, Pageable pageable);
+    @Query("select l from Lead l where l.lidStatus = :status and l.marketolog = :marketolog")
+    Page<Lead> findAllByLidStatusAndMarketolog(String status, Marketolog marketolog, Pageable pageable);
+    Page<Lead> findAll(Pageable pageable);
+    Page<Lead> findAllByManager(Manager manager, Pageable pageable);
     Optional<Lead> findById(Long leadId);
-    List<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword);
-    List<Lead> findByTelephoneLeadContainingIgnoreCase(String keyword);
-    List<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager);
-    List<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager);
-    List<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog);
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword, Pageable pageable);
+    Page<Lead> findByTelephoneLeadContainingIgnoreCase(String keyword, Pageable pageable);
+    Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog, Pageable pageable);
 }

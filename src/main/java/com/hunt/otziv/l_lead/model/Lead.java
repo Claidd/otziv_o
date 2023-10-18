@@ -20,6 +20,14 @@ import java.time.LocalDate;
 @Builder
 @JsonIgnoreProperties({"hibernateLazyInitializer"})
 @Table(name = "leads")
+@NamedEntityGraph(
+        name = "Lead.detail",
+        attributeNodes = {
+                @NamedAttributeNode("manager"),
+                @NamedAttributeNode("operator"),
+                @NamedAttributeNode("marketolog")
+        }
+)
 public class Lead {
 
     @Id
@@ -39,8 +47,6 @@ public class Lead {
     @Column(name = "comments_lead", length = 2000)
     private String commentsLead;
 
-    //    текущий статус лида ЕНАМ?????
-//    @Enumerated(EnumType.STRING)
     @Column(name = "lid_status", length = 30)
     private String lidStatus;
 
@@ -64,11 +70,11 @@ public class Lead {
     @JoinColumn(name = "operator_id", unique = false, nullable = true)
     private Operator operator;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private Manager manager;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "marketolog_id")
     private Marketolog marketolog;
 

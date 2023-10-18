@@ -21,17 +21,17 @@ public class Manager {
     @Column(name = "manager_id")
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    @JoinColumn(name = "pay_text")
+    @Column(name = "pay_text")
     private String payText;
 
-    @OneToMany(mappedBy = "manager")
+    @OneToMany(mappedBy = "manager", fetch = FetchType.LAZY)
     private Set<Company> companies;
 
-    @OneToMany(mappedBy = "manager")
+    @OneToMany(mappedBy = "manager", fetch = FetchType.LAZY)
     @ToString.Exclude
     private Set<Lead> leads;
 

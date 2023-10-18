@@ -42,10 +42,10 @@ public class Review {
     private LocalDate publishedDate;
     @Column(name = "review_publish")
     private boolean publish;
-    @OneToOne
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_category")
     private Category category;
-    @OneToOne
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_subcategory")
     private SubCategory subCategory;
     @ManyToOne

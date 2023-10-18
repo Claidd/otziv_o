@@ -4,13 +4,17 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
+@Repository
 public interface SubCategoryRepository extends CrudRepository<SubCategory, Long> {
 
+
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {"category"})
     List<SubCategory> findAll();
-    @Query("SELECT DISTINCT s FROM SubCategory s LEFT JOIN FETCH s.category c WHERE c.id = :categoryId")
-    @EntityGraph(attributePaths = {"category"})
+
     List<SubCategory> findAllByCategoryId(Long categoryId);
 }

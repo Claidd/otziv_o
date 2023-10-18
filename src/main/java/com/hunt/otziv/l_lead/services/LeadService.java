@@ -3,6 +3,7 @@ package com.hunt.otziv.l_lead.services;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
+import org.springframework.data.domain.Page;
 
 import java.security.Principal;
 import java.util.List;
@@ -24,11 +25,11 @@ public interface LeadService {
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
     // метод вывода всех лидов
-    List<LeadDTO> getAllLeads(String status, String keyword, Principal principal);
+    Page<LeadDTO> getAllLeads(String status, String keyword, Principal principal, int pageNumber, int pageSize);
     // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
-    public List<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal);
+    Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize);
     // метод поиска одного лида по id и перевод его в дто
-    List<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal);
+    Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================

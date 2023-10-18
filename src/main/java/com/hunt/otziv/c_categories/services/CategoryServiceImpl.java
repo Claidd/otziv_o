@@ -9,6 +9,7 @@ import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
@@ -77,23 +78,29 @@ public class CategoryServiceImpl implements CategoryService{
     } // Удаление категорий
 
     @Override
+    @Transactional
     public List<CategoryDTO> getAllCategories() { // Взять все категории
-        List<Category> categories = (List<Category>) categoryRepository.findAll();
-        return categories.stream()
+        long startTime = System.nanoTime();
+        List<Category> categories = categoryRepository.findAllCategoryAndSubcategory();
+        List<CategoryDTO> categoriesDto = categories.stream()
                 .map(this::convertToDTO)
                 .sorted(Comparator.comparing(CategoryDTO::getCategoryTitle))
-                .collect(Collectors.toList());
+                .toList();
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf("Список категорий: %.4f сек%n", timeElapsed);
+        return categoriesDto;
     } // Взять все категории
+
 
     private CategoryDTO convertToDTO(Category category) { // Перевод категории в ДТО
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId());
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
-        List<SubCategoryDTO> subCategoryDTOList = subCategoryRepository.findAllByCategoryId(category.getId()).stream()
+        List<SubCategoryDTO> subCategoryDTOList = category.getSubCategoryTitle().stream()
                 .map(subCategory -> new SubCategoryDTO(subCategory.getId(), subCategory.getSubCategoryTitle(), null))
                 .collect(Collectors.toList());
         categoryDTO.setSubCategories(subCategoryDTOList);
-
         return categoryDTO;
     } // Перевод категории в ДТО
 
@@ -105,6 +112,5 @@ public class CategoryServiceImpl implements CategoryService{
     public Category getCategoryByIdCategory(Long categoryId) { // Взять категорию по Id
        return categoryRepository.findById(categoryId).orElse(null);
     } // Взять категорию по Id
-
 
 }

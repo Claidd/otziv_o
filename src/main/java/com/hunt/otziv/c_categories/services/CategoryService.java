@@ -16,6 +16,5 @@ public interface CategoryService {
     List<CategoryDTO> getAllCategories();
     // Найти категорию по id
     CategoryDTO getCategoryById(Long categoryId);
-
     Category getCategoryByIdCategory(Long categoryId);
 }

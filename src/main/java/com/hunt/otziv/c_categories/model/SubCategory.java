@@ -15,7 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Table(name = "subcategoryes")
-@NamedEntityGraph(name = "Subcategory.category", attributeNodes = @NamedAttributeNode("category"))
+
 public class SubCategory {
 
 
@@ -27,17 +27,16 @@ public class SubCategory {
     @Column(name = "subcategory_title")
     private String subCategoryTitle;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     @ToString.Exclude
-    @Fetch(FetchMode.JOIN)
     private Category category;
 
-    @OneToMany(mappedBy = "subCategory",cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "subCategory",fetch = FetchType.LAZY)
     @ToString.Exclude
     List<Company> companyList;
 
-    @OneToMany(mappedBy = "subCategory", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "subCategory", fetch = FetchType.LAZY)
     @ToString.Exclude
     List<Review> reviews;
 

@@ -5,7 +5,6 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
 import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -16,7 +15,6 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-
 import java.security.Principal;
 import java.util.Comparator;
 
@@ -46,7 +44,7 @@ public class BotsController {
 
     //Открываем страницу добавления бота
     @GetMapping("/bot_add")
-    public String botAdd(Model model, BotDTO botsDto, Principal principal){
+    public String botAdd(Model model){
             model.addAttribute("bot", new BotDTO());
     return "bots/bot_add";
     } //Открываем страницу добавления бота

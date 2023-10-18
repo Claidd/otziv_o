@@ -39,17 +39,17 @@ public class WorkerOrderController {
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех ботов для админа");
             model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех заказов для Менеджера");
+            log.info("Зашли список всех ботов для Менеджера");
             model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника");
+            log.info("Зашли список всех ботов для Работника");
             model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }

@@ -409,6 +409,15 @@ body {
 }
 /* Меняет количество */
 
+/* Меняет количество */
+.tabs__content__lead-item2{
+    display: none;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 100px 40px;
+    margin-top: 5rem;
+}
+/* Меняет количество */
+
 
 .card__remember {
     display: flex;
@@ -510,6 +519,9 @@ body {
     display: grid;
 }
 
+.tabs__content__lead-item2.tabs__content__lead-item--active {
+    display: grid;
+}
 
 .card__link__lead__more {
     background: none;

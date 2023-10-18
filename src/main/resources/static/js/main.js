@@ -44,40 +44,40 @@ $("#category").change(function() {
     });
 });
 
+const tabsItems = document.querySelectorAll('.tabs__btn__lead-item');
+const tabsContents = document.querySelectorAll('.tabs__content__lead-item, .tabs__content__lead-item2');
 
-    // <!-- ==================== CHOOSE STRAT ====================== -->
+tabsItems.forEach(function(element) {
+  element.addEventListener('click', open);
+});
 
-  // создаем переменные
-  const tabsItem2 = document.querySelectorAll('.tabs__btn__lead-item');
-  const tabsContent2 = document.querySelectorAll('.tabs__content__lead-item');
+function open(evt) {
+  const tabTarget = evt.currentTarget;
+  const button = tabTarget.dataset.button;
 
-  // вышаем слушатель
-  tabsItem2.forEach(function(element){
-    element.addEventListener('click', open);
+  tabsItems.forEach(function(item) {
+    item.classList.remove('tabs__btn__lead-item--active');
   });
 
-  function open(evt) {
-    const tabTarget2 = evt.currentTarget;
-    // должны понять .что написано в дата атрибуте
-    const button = tabTarget2.dataset.button;
+  tabTarget.classList.add('tabs__btn__lead-item--active');
 
-    // удаляем класс
-    tabsItem2.forEach(function(item){
-      item.classList.remove('tabs__btn__lead-item--active')
-    });
+  tabsContents.forEach(function(item) {
+    item.classList.remove('tabs__content__lead-item--active');
+  });
 
-    // добавляем класс
-    tabTarget2.classList.add('tabs__btn__lead-item--active');
+  document.querySelector(`#${button}`).classList.add('tabs__content__lead-item--active');
+  document.querySelector(`#pagination-${button.slice(-1)}`).classList.add('tabs__content__lead-item--active');
 
-    // удаляем класс
-    tabsContent2.forEach(function(item){
-      item.classList.remove('tabs__content__lead-item--active');
-    });
+  sessionStorage.setItem('currentTab', button);
+}
 
-    // добавляем класс
-    document.querySelector(`#${button}`).classList.add('tabs__content__lead-item--active');
+document.addEventListener("DOMContentLoaded", function() {
+  const currentTab = sessionStorage.getItem('currentTab');
+  if (currentTab) {
+    document.querySelector(`[data-button="${currentTab}"]`).click();
   }
-  // <!-- ===================== CHOOSE END ======================= -->
+});
+
 
 
   // <!-- ==================== COPY TEXT ====================== -->
