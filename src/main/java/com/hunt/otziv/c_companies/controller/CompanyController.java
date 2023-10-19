@@ -42,30 +42,38 @@ public class CompanyController {
 //    СДЕЛАТЬ СОРТИРОВКУ ПО ВРЕМЕНИ ИЗМЕНЕНИЙ А НЕ СОЗДАНИЯ
 
     @GetMapping("/new_company") // Все компании - Новая
-    public String NewAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String NewAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 3; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
-
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "Новая", pageNumber, pageSize));
 //            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("urlFirst", "/companies/new_company");
+            checkTimeMethod("Время выполнения /new_company для Админа: ", startTime);
             return "companies/company/new_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "Новая", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/new_company");
+            checkTimeMethod("Время выполнения /new_company для Менеджера: ", startTime);
             return "companies/company/new_company_list";
         }
+
         else return "companies/company/company_list";
     } // Все компании - Новая
 
     @GetMapping("/on_work") // Все компании - В работе
-    public String OnWorkAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String OnWorkAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -73,22 +81,27 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "В работе");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "В работе".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
-//            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "В работе", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/on_work");
+            checkTimeMethod("Время выполнения /on_work для Админа: ", startTime);
             return "companies/company/on_work_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "В работе");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "В работе".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "В работе", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/on_work");
+            checkTimeMethod("Время выполнения /on_work для Менеджера: ", startTime);
             return "companies/company/on_work_company_list";
         }
         else return "companies/company/company_list";
     } // Все компании - В работе
 
     @GetMapping("/on_stop") // Все компании - На стопе
-    public String OnStopAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String OnStopAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -96,22 +109,27 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "На стопе");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "На стопе".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
-//            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "На стопе", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/on_stop");
+            checkTimeMethod("Время выполнения /on_work для Админа: ", startTime);
             return "companies/company/on_stop_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "В работе");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "На стопе".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "На стопе", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/on_stop");
+            checkTimeMethod("Время выполнения /on_work для Менеджера: ", startTime);
             return "companies/company/on_stop_company_list";
         }
         else return "companies/company/company_list";
     } // Все компании - На стопе
 
     @GetMapping("/new_order") // Все компании - Новый заказ
-    public String NewOrderAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String NewOrderAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -119,22 +137,27 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Предложение нового заказа");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новый заказ".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
-//            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "Новый заказ", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/new_order");
+            checkTimeMethod("Время выполнения /new_order для Админа: ", startTime);
             return "companies/company/new_order_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Предложение нового заказа");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "Новый заказ".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "Новый заказ", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/new_order");
+            checkTimeMethod("Время выполнения /new_order для Менеджера: ", startTime);
             return "companies/company/new_order_company_list";
         }
         else return "companies/company/company_list";
     } // Все компании - Новый заказ
 
     @GetMapping("/to_send") // Все компании - К рассылке
-    public String ToSendAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String ToSendAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -142,22 +165,27 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "К рассылке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "На стопе".equals(company.getStatus().getTitle())).filter(company -> LocalDate.now().isAfter(company.getDateNewTry())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
-//            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToListToSend(keyword, "К рассылке", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/to_send");
+            checkTimeMethod("Время выполнения /to_send для Админа: ", startTime);
             return "companies/company/to_send_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "К рассылке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "На стопе".equals(company.getStatus().getTitle())).filter(company -> LocalDate.now().isAfter(company.getDateNewTry())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManagerToSend(principal, keyword, "К рассылке", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/to_send");
+            checkTimeMethod("Время выполнения /to_send для Менеджера: ", startTime);
             return "companies/company/to_send_company_list";
         }
         else return "companies/company/company_list";
     } // Все компании - К рассылке
 
     @GetMapping("/ban_company") // Все компании - Бан
-    public String BanAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String BanAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -165,21 +193,27 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Бан");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Бан".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "Бан", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/ban_company");
+            checkTimeMethod("Время выполнения /ban_company для Админа: ", startTime);
             return "companies/company/ban_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Бан");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "Бан".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "Бан", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/ban_company");
+            checkTimeMethod("Время выполнения /ban_company для Менеджера: ", startTime);
             return "companies/company/ban_company_list";
         }
         else return "companies/company/company_list";
     } // Все компании - Бан
 
     @GetMapping("/waiting") // Все компании - Ожидание
-    public String WaitingAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String WaitingAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -187,36 +221,45 @@ public class CompanyController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Ожидание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Ожидание".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "Ожидание", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/waiting");
+            checkTimeMethod("Время выполнения /waiting для Админа: ", startTime);
             return "companies/company/waiting_company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Ожидание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(company -> "Ожидание".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "Ожидание", pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/waiting");
+            checkTimeMethod("Время выполнения /waiting для Менеджера: ", startTime);
             return "companies/company/ban_company_list";
         }
         else return "companies/company/waiting_company_list";
     } // Все компании - Ожидание
 
     @GetMapping("/allCompany") // список всех компаний
-    public String CompanyList(@RequestParam(defaultValue = "") String keyword, Principal principal, Model model){
+    public String CompanyList(@RequestParam(defaultValue = "") String keyword, Principal principal, Model model, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
-            model.addAttribute("TitleName", "Все компании");
+            model.addAttribute("TitleName", "Все компании, pageNumber, pageSize");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword).stream().sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
-//            System.out.println(companyService.getAllCompaniesDTOList(keyword).stream().filter(company -> "Новая".equals(company.getStatus().getTitle())).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList());
+            model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword, pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/allCompany");
+            checkTimeMethod("Время выполнения /allCompany для Админа: ", startTime);
             return "companies/company/company_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "Все компании");
+            model.addAttribute("TitleName", "Все компании, pageNumber, pageSize");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().sorted(Comparator.comparing(CompanyDTO::getUpdateStatus)).toList());
+            model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword, pageNumber, pageSize));
+            model.addAttribute("urlFirst", "/companies/allCompany");
+            checkTimeMethod("Время выполнения /allCompany для Менеджера: ", startTime);
             return "companies/company/company_list";
         }
         else return "companies/company/company_list";
@@ -339,6 +382,12 @@ public class CompanyController {
             return "redirect:/companies/new_order";
         }
     } // смена статуса на "Бан"
+
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf(text + "%.4f сек%n", timeElapsed);
+    }
 }
 
 

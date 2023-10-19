@@ -73,8 +73,9 @@ function open(evt) {
 
 document.addEventListener("DOMContentLoaded", function() {
   const currentTab = sessionStorage.getItem('currentTab');
-  if (currentTab) {
-    document.querySelector(`[data-button="${currentTab}"]`).click();
+  const element = document.querySelector(`[data-button="${currentTab}"]`);
+  if (currentTab && element) {
+    element.click();
   }
 });
 

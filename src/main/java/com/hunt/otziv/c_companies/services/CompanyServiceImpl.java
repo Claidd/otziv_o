@@ -8,6 +8,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
@@ -16,6 +17,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -35,6 +37,7 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,26 +69,115 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findAll();
     } // Взять все компании
 
-    @Override
-    public List<CompanyDTO> getAllCompaniesDTOList() { // Взять все компании ДТО
-        return companyRepository.findAll().stream().map(this::convertToDto).sorted(Comparator.comparing(CompanyDTO::getCreateDate).reversed()).toList();
-    } // Взять все компании ДТО
 
-    public List<CompanyDTO> getAllCompaniesDTOList(String keywords){ // Показ всех компаний + поиск
+// ======================================== JUST ADMIN ===============================================================
+    public Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            return convertToCompanyDTOList(companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords).stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
+            companyPage = companyRepository.findByTitleContainingIgnoreCaseAndStatus_TitleOrTelephoneContainingIgnoreCaseAndStatus_TitleOrderByUpdateStatusDesc(keywords, status, keywords, status,pageable);
+
         }
-        else return convertToCompanyDTOList(companyRepository.findAll().stream().sorted(Comparator.comparing(Company::getCreateDate).reversed()).collect(Collectors.toList()));
+        else companyPage = companyRepository.findAllByStatus_title(status,pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
+    } // Показ всех компаний + поиск + статус
+
+    public Page<CompanyListDTO> getAllCompaniesDTOListToListToSend(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус + для рассылки
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
+        if (!keywords.isEmpty()){
+            log.info("Отработал метод с keywords");
+            companyPage = companyRepository.findByTitleContainingIgnoreCaseAndStatus_TitleOrTelephoneContainingIgnoreCaseAndStatus_TitleOrderByUpdateStatusDesc(keywords, status, keywords, status,pageable);
+
+        }
+        else companyPage = companyRepository.findAllByStatus_title(status,pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .filter(company -> LocalDate.now().isAfter(company.getDateNewTry()))
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
+    } // Показ всех компаний + поиск + статус + для рассылки
+
+    public Page<CompanyListDTO> getAllCompaniesDTOList(String keywords, int pageNumber, int pageSize){ // Показ всех компаний + поиск
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
+        if (!keywords.isEmpty()){
+            log.info("Отработал метод с keywords");
+            companyPage = companyRepository.findALLByTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(keywords, keywords,pageable);
+        }
+        else companyPage = companyRepository.findAllToAdmin(pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
     } // Показ всех компаний + поиск
 
-    public List<CompanyDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
+// ======================================== WITH MANAGER ===============================================================
+
+    public Page<CompanyListDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы  Менеджера + поиск
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
         if (!keyword.isEmpty()){
-            return convertToCompanyDTOList(companyRepository.findAllByManagerAndTitleContainingIgnoreCaseOrManagerAndTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
+            companyPage = companyRepository.findAllByManagerAndTitleContainingIgnoreCaseOrManagerAndTelephoneContainingIgnoreCase(manager,keyword,  manager, keyword,pageable);
         }
-        else return convertToCompanyDTOList(companyRepository.findAllByManager(manager));
-    } // Берем все заказы с поиском для Менеджера
+        else companyPage = companyRepository.findAllByManager(manager,pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
+    } // Берем все заказы  Менеджера + поиск
+
+
+    public Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы Менеджера + поиск + статус
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
+        if (!keyword.isEmpty()){
+            companyPage = companyRepository.findByManagerAndTitleContainingIgnoreCaseAndStatus_TitleOrManagerAndTelephoneContainingIgnoreCaseAndStatus_TitleOrderByUpdateStatusDesc(manager,keyword, status, manager, keyword, status,pageable);
+        }
+        else companyPage = companyRepository.findAllByManagerAndStatus(manager, status, pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
+    } // Берем все заказы Менеджера + поиск + статус
+
+    public Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManagerToSend(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы Менеджера + поиск + статус
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        Page<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
+        if (!keyword.isEmpty()){
+            companyPage = companyRepository.findByManagerAndTitleContainingIgnoreCaseAndStatus_TitleOrManagerAndTelephoneContainingIgnoreCaseAndStatus_TitleOrderByUpdateStatusDesc(manager,keyword, status, manager, keyword, status,pageable);
+        }
+        else companyPage = companyRepository.findAllByManagerAndStatus(manager, status, pageable);
+        companyListDTOs = companyPage.getContent()
+                .stream()
+                .map(this::convertCompanyListDTO)
+                .filter(company -> LocalDate.now().isAfter(company.getDateNewTry()))
+                .collect(Collectors.toList());
+        return new PageImpl<>(companyListDTOs, pageable, companyPage.getTotalElements());
+    } // Берем все заказы Менеджера + поиск + статус
+
+    @Override
+    public List<CompanyDTO> getAllCompaniesDTOList(String keywords, String status) {
+        return null;
+    }
 
 
     public CompanyDTO getCompaniesDTOById(Long companyId){  // Берем компанию ДТО по Id
@@ -240,6 +332,32 @@ public class CompanyServiceImpl implements CompanyService{
         else {
             log.info("отработал нулл");
             return new CompanyDTO();
+        }
+    } // перевод компании в ДТО
+
+    private List<CompanyListDTO> convertToCompanyListDTO(List<Company> companies) {
+        return companies.stream().map(this::convertCompanyListDTO).collect(Collectors.toList());
+    }
+
+    public CompanyListDTO convertCompanyListDTO(Company company) { // перевод компании в ДТО
+        if (company.getId() != null) {
+            CompanyListDTO companyListDTO = new CompanyListDTO();
+            companyListDTO.setId(company.getId());
+            companyListDTO.setTitle(company.getTitle());
+            companyListDTO.setTelephone(company.getTelephone());
+            companyListDTO.setUrlChat(company.getUrlChat());
+            companyListDTO.setCountFilials(company.getFilial().size());
+            companyListDTO.setUrlFilial(company.getFilial().iterator().next().getUrl() != null ? company.getFilial().iterator().next().getUrl() : String.valueOf(new Filial(1, "нет филиала", "пусто")));
+            companyListDTO.setStatus(company.getStatus().getTitle());
+            companyListDTO.setManager(company.getManager().getUser().getFio());
+            companyListDTO.setCommentsCompany(company.getCommentsCompany());
+            companyListDTO.setDateNewTry(company.getDateNewTry());
+            System.out.println(companyListDTO);
+            return companyListDTO;
+        }
+        else {
+            log.info("отработал нулл");
+            return new CompanyListDTO();
         }
     } // перевод компании в ДТО
 

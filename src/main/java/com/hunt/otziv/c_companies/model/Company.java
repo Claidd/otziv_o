@@ -13,6 +13,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -51,7 +52,7 @@ public class Company {
     private String email;
 
     //     владелец компании
-    @ManyToOne(cascade = {CascadeType.ALL})
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_user")
     @ToString.Exclude
     private User user;
@@ -92,11 +93,11 @@ public class Company {
     private SubCategory subCategory;
 
     //    филиал содержащий название и url
-    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, orphanRemoval = true)
     private Set<Filial> filial;
 
     //    филиал содержащий название и url
-    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, orphanRemoval = true)
     private Set<Order> orderList;
 
     //    счетчик не оплаченных отзывов
@@ -121,9 +122,9 @@ public class Company {
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    @Temporal(TemporalType.DATE)
+    @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "update_status")
-    private LocalDate updateStatus;
+    private LocalDateTime updateStatus;
 
     //    дата и время нового отправления предложения
     @Temporal(TemporalType.DATE)
@@ -140,7 +141,7 @@ public class Company {
     @PrePersist
     protected void onCreate() {
         createDate = LocalDate.now();
-        updateStatus = LocalDate.now();
+        updateStatus = LocalDateTime.now();
         dateNewTry = LocalDate.now();
         System.out.println(LocalDate.now().plusDays(10));
     }

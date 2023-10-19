@@ -33,7 +33,7 @@ public class LeadController {
     @GetMapping()
     public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
-        int pageSize = 4; // Установите желаемый размер страницы здесь
+        int pageSize = 10; // желаемый размер страницы
         Page<LeadDTO> leadsNew = leadService.getAllLeads(LeadStatus.NEW.title, keyword, principal, pageNumber, pageSize);
         Page<LeadDTO> leadsSend = leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword, principal, pageNumber, pageSize);
         Page<LeadDTO> leadsReSend = leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword, principal, pageNumber, pageSize);

@@ -931,6 +931,59 @@ b{
     left: 0;
 }
 
+/* =========================================== */
+.company__button__add__order{
+    background: none;
+    border: none;
+    text-decoration: none;
+    padding: 0;
+    color: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 45%;
+    font-size: 22px;
+    cursor: pointer;
+    font-family: 'laptev_brush';
+    /* color: #218294; */
+    color: #000;
+    position: relative;
+    transition: .5s;
+    overflow: hidden;
+}
+
+
+.company__button__add__order::before,
+.company__button__add__order::after {
+    position: absolute;
+    content: '';
+    width: 100%;
+    height: 100%;
+    background:  #ff9500;
+    /* background:  #d45cec; */
+    top: 0;
+    left: -100%;
+    opacity: .5;
+    transition: .3s;
+    z-index: -1;
+}
+
+.company__button__add__order:after {
+    opacity: 1;
+    transition-delay: .2s;
+}
+
+.company__button__add__order:hover{
+    color: #000;
+}
+
+.company__button__add__order:hover::before, .butt:hover::after {
+    left: 0;
+}
+
 /* .company__telephone__button:hover  {
     background-color: #ff9500;
     background-color: #f7ce95;
@@ -2393,7 +2446,41 @@ main .recent-orders a{
 
     @media (max-width: 650px) {
 
-        
+        .company__card__lead{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+        .company__card_remember-content{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+        .pagination {
+            border-radius: 1.2rem;
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+        .company__card_remember-search{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+
+        .company__card__lead:hover{
+            box-shadow: none;
+        }
+
+        .company__card_remember-content:hover{
+            box-shadow: none;
+        }
+
+        .pagination:hover {
+            box-shadow: none; 
+        }
+
+        .company__card_remember-search:hover{
+            box-shadow: none;
+        }
+
+
 
         .company__tabs__btn__lead{
             grid-template-columns: repeat(4, 1fr);

@@ -19,6 +19,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Data
@@ -52,7 +53,6 @@ public class CompanyDTO {
     private String operator;
 
     //   менеджер, который работает с компанией
-
     private ManagerDTO manager;
 
     //   список работников, которые работают с компанией
@@ -76,6 +76,7 @@ public class CompanyDTO {
     private FilialDTO filial;
 
     private Set<FilialDTO> filials;
+
     private Set<OrderDTO> orders;
 
     //    счетчик не оплаченных отзывов
@@ -94,7 +95,7 @@ public class CompanyDTO {
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    private LocalDate updateStatus;
+    private LocalDateTime updateStatus;
 
     //    дата и время нового отправления предложения
     private LocalDate dateNewTry;

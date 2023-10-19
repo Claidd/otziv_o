@@ -818,6 +818,37 @@ body {
 
     @media (max-width: 650px) {
 
+
+        .card__lead{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+        .card_remember-content{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+
+        .card_remember-search{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+
+        .card__lead:hover{
+            box-shadow: none;
+        }
+
+        .card_remember-content:hover{
+            box-shadow: none;
+        }
+
+
+
+        .card_remember-search:hover{
+            box-shadow: none;
+        }
+
+
+
         .tabs__content-item {
             grid-template-columns: repeat(1, 1fr);
         }

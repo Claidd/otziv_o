@@ -27,10 +27,13 @@ public class Filial {
     @Column(name = "filial_url")
     private String url;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")
     @ToString.Exclude
     private Company company;
+
+    public Filial(int i, String нетФилиала, String пусто) {
+    }
 
     @Override
     public boolean equals(Object o) {

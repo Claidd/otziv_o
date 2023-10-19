@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_active BIT NULL,
       company_sum NUMERIC(10,2) NULL DEFAULT 0,
       create_date DATE NULL,
-      update_status DATE NULL,
+      update_status TIMESTAMP NULL,
       date_new_try DATE NULL,
       company_user bigint NOT NULL,
       company_manager bigint NULL,
@@ -280,15 +280,19 @@ ENGINE = InnoDB;
 CREATE TABLE IF NOT EXISTS filial (
   filial_id bigint NOT NULL AUTO_INCREMENT,
   filial_title VARCHAR(45) NULL,
-  filial_url VARCHAR(1000) NULL,
+  filial_url VARCHAR(750) NULL,
   company_id bigint NULL,
   CONSTRAINT fk_company_id
     FOREIGN KEY (company_id)
     REFERENCES companies (company_id)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
+    CONSTRAINT uc_filial_url UNIQUE (filial_url),
+    INDEX idx_filial_url (filial_url ASC),
+    INDEX idx_company_id (company_id ASC),
   PRIMARY KEY (filial_id))
 ENGINE = InnoDB;
+
 
 CREATE TABLE IF NOT EXISTS product_categorys (
   `product_category_id` bigint NOT NULL AUTO_INCREMENT,
