@@ -15,7 +15,7 @@ public interface OrderService {
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);
     List<OrderDTO> getAllOrderDTO();
-    List<OrderDTO> getAllOrderDTOAndKeyword(String keyword);
+    List<OrderDTO> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize);
     List<OrderDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword);
     List<OrderDTO> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword);
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);

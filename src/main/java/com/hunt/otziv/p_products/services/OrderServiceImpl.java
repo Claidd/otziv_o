@@ -9,6 +9,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -43,6 +44,7 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,6 +83,64 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
     private final CompanyStatusService companyStatusService;
+
+
+    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+    public List<OrderDTO> getAllOrderDTO(){
+        return convertToOrderDTOList(orderRepository.findAll());
+    }
+    public List<OrderDTO> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+//        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        List<Long> companyId;
+        List<Company> companyPage;
+        List<CompanyListDTO> companyListDTOs = null;
+        if (!keyword.isEmpty()){
+            return convertToOrderDTOList(orderRepository.findAllByCompanyTitleContainingIgnoreCaseOrCompanyTelephoneContainingIgnoreCase(keyword, keyword));
+        }
+        else{
+            return convertToOrderDTOList(orderRepository.findAll());
+        }
+
+    }  // Берем все заказы с поиском по названию компании или номеру
+    public List<OrderDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        if (!keyword.isEmpty()){
+            return convertToOrderDTOList(orderRepository.findAllByManagerAndCompanyTitleContainingIgnoreCaseOrManagerAndCompanyTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
+        }
+        else return convertToOrderDTOList(orderRepository.findAllByManager(manager));
+    } // Берем все заказы с поиском для Менеджера
+    public List<OrderDTO> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        if (!keyword.isEmpty()){
+            return convertToOrderDTOList(orderRepository.findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(worker,keyword, worker, keyword));
+        }
+        else return convertToOrderDTOList(orderRepository.findAllByWorker(worker));
+    } // Берем все заказы с поиском для Работника
+    public Order getOrder(Long orderId){ // Взять заказ
+        return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
+    } // Взять заказ
+    public OrderDTO getOrderDTO(Long orderId){ // Взять заказ DTO
+        return  toDTO(orderRepository.findById(orderId).orElseThrow());
+    } // Взять заказ DTO
+
+
+//    private Page<CompanyListDTO> getPage(List<Company> companyPage, int pageNumber, int pageSize) {
+//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+//        int start = (int)pageable.getOffset();
+//        int end = Math.min((start + pageable.getPageSize()), companyPage.size());
+//        List<CompanyListDTO> companyListDTOs = companyPage.subList(start, end)
+//                .stream()
+//                .map(this::convertCompanyListDTO)
+//                .collect(Collectors.toList());
+//        return new PageImpl<>(companyListDTOs, pageable, companyPage.size());
+//    }
+
+    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+
+
+
+
 
     //    ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ =========================================================
     @Override
@@ -407,38 +467,7 @@ public class OrderServiceImpl implements OrderService {
 
 
 
-//    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
-    public List<OrderDTO> getAllOrderDTO(){
-        return convertToOrderDTOList(orderRepository.findAll());
-    }
-    public List<OrderDTO> getAllOrderDTOAndKeyword(String keyword){ // Берем все заказы с поиском по названию компании или номеру
-        if (!keyword.isEmpty()){
-            return convertToOrderDTOList(orderRepository.findAllByCompanyTitleContainingIgnoreCaseOrCompanyTelephoneContainingIgnoreCase(keyword, keyword));
-        }
-        else return convertToOrderDTOList(orderRepository.findAll());
-    }  // Берем все заказы с поиском по названию компании или номеру
-    public List<OrderDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        if (!keyword.isEmpty()){
-            return convertToOrderDTOList(orderRepository.findAllByManagerAndCompanyTitleContainingIgnoreCaseOrManagerAndCompanyTelephoneContainingIgnoreCase(manager,keyword, manager, keyword));
-        }
-        else return convertToOrderDTOList(orderRepository.findAllByManager(manager));
-    } // Берем все заказы с поиском для Менеджера
-    public List<OrderDTO> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword){ // Берем все заказы с поиском для Менеджера
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        if (!keyword.isEmpty()){
-            return convertToOrderDTOList(orderRepository.findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(worker,keyword, worker, keyword));
-        }
-        else return convertToOrderDTOList(orderRepository.findAllByWorker(worker));
-    } // Берем все заказы с поиском для Работника
-    public Order getOrder(Long orderId){ // Взять заказ
-        return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
-    } // Взять заказ
-    public OrderDTO getOrderDTO(Long orderId){ // Взять заказ DTO
-        return  toDTO(orderRepository.findById(orderId).orElseThrow());
-    } // Взять заказ DTO
 
-    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
 
 
 

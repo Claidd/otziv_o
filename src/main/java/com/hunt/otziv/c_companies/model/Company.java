@@ -10,6 +10,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -94,10 +95,12 @@ public class Company {
 
     //    филиал содержащий название и url
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, orphanRemoval = true)
+    @BatchSize(size = 10)
     private Set<Filial> filial;
 
     //    филиал содержащий название и url
     @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, orphanRemoval = true)
+    @BatchSize(size = 10)
     private Set<Order> orderList;
 
     //    счетчик не оплаченных отзывов

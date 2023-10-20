@@ -8,6 +8,7 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

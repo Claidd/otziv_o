@@ -84,7 +84,9 @@ public class WorkerOrderController {
 
 
     @GetMapping("/new_orders") // Все заказы - Новые
-    public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -92,7 +94,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -113,7 +115,9 @@ public class WorkerOrderController {
     } // Все заказы - Новые
 
     @GetMapping("/correct") // Все заказы - Коррекция
-    public String CorrectAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String CorrectAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -121,7 +125,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -166,15 +170,16 @@ public class WorkerOrderController {
     } // Все заказы - Публикация
 
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
-    public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
-        System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
 //            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
             return "products/orders/all_orders_worker";
         }
