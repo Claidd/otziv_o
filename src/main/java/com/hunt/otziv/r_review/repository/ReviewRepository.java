@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -17,10 +18,21 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     List<Review> findAllByOrderDetailsId(UUID orderDetailsId);
 
-    @Query("SELECT r FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false")
-    List<Review> findAllByPublishedDateAndPublish(@Param("localDate") LocalDate localDate);
+    @Query("SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false")
+    List<Long> findAllByPublishedDateAndPublish(LocalDate localDate);
 
-    @Query("SELECT r FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
-    List<Review> findAllByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker, @Param("localDate") LocalDate localDate);
+    @Query("SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
+    List<Long> findAllByWorkerAndPublishedDateAndPublish(Worker worker, LocalDate localDate);
 
+
+    @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false")
+    List<Long> findAllByManagersAndPublishedDateAndPublish(Set<Worker> workers, LocalDate localDate);
+
+    @Query("SELECT r FROM Review r LEFT JOIN FETCH r.category LEFT JOIN FETCH r.subCategory LEFT JOIN FETCH r.bot LEFT JOIN FETCH r.filial LEFT JOIN FETCH r.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH r.orderDetails d LEFT JOIN FETCH d.product p LEFT JOIN FETCH p.productCategory LEFT JOIN FETCH d.order o LEFT JOIN FETCH o.company WHERE r.id IN :reviewId  ORDER BY r.changed")
+    List<Review> findAll(List<Long> reviewId);
+
+
+
+    @Query("SELECT r FROM Review r LEFT JOIN FETCH r.category LEFT JOIN FETCH r.subCategory LEFT JOIN FETCH r.bot LEFT JOIN FETCH r.filial LEFT JOIN FETCH r.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH r.orderDetails d LEFT JOIN FETCH d.product p LEFT JOIN FETCH p.productCategory LEFT JOIN FETCH d.order o LEFT JOIN FETCH o.company WHERE r.orderDetails.order.id = :orderId")
+    List<Review> getAllByOrderId(Long orderId);
 }

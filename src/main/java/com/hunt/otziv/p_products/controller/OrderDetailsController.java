@@ -31,13 +31,15 @@ public class OrderDetailsController {
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
-        model.addAttribute("companyId", companyId);
-        model.addAttribute("orderId", orderId);
-        Order order = orderService.getOrder(orderId);
-        model.addAttribute("orderDetailsId", order.getDetails().iterator().next().getId());
-        model.addAttribute("reviews", reviewService.getReviewsAllByOrderDetailsId(order));
-        rm.addFlashAttribute("companyId", companyId);
-        rm.addFlashAttribute("orderId", orderId);
+        long startTime = System.nanoTime();
+//        model.addAttribute("companyId", companyId);
+//        model.addAttribute("orderId", orderId);
+//        Order order = orderService.getOrder(orderId);
+//        model.addAttribute("orderDetailsId", order.getDetails().iterator().next().getId());
+        model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
+//        rm.addFlashAttribute("companyId", companyId);
+//        rm.addFlashAttribute("orderId", orderId);
+        checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
         return "products/orders_detail_list";
     } // Переход на страницу Просмотра  деталей заказа
 
@@ -121,6 +123,12 @@ public class OrderDetailsController {
         // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
+
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf(text + "%.4f сек%n", timeElapsed);
+    }
 
 
 }

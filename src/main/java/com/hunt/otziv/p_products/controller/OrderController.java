@@ -32,6 +32,8 @@ public class OrderController {
     private final AmountService amountService;
     private final PromoTextService promoTextService;
 
+    int pageSize = 10; // желаемый размер страницы
+
 //    ======================================== ПРОСМОТР И СОЗДАНИЕ ЗАКАЗОВ =============================================
     @GetMapping("/{companyID}") // страница выбора продукта для заказа
     String ProductListToCompany(@PathVariable Long companyID, Model model){
@@ -64,12 +66,13 @@ public class OrderController {
 
 //    ===================================== ПРОСМОТР ВСЕХ ЗАКАЗОВ ПО СТАТУСУ ===========================================
     @GetMapping("/ordersDetails/{companyId}") // Страница просмотра всех заказов компании по всем статусам
-    String OrderListToCompany(@PathVariable Long companyId, @RequestParam(defaultValue = "") String keyword, Model model){
-        CompanyDTO companyDTO = companyService.getCompaniesAllStatusByIdAndKeyword(companyId,keyword);
-        model.addAttribute("companyID", companyId);
+    String OrderListToCompany(@PathVariable Long companyId, @RequestParam(defaultValue = "") String keyword, Model model, @RequestParam(defaultValue = "0") int pageNumber){
+//        model.addAttribute("companyID", companyId);
+        long startTime = System.nanoTime();
         model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-        model.addAttribute("TitleName", companyDTO.getTitle());
-        model.addAttribute("orders", companyDTO.getOrders().stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+        model.addAttribute("TitleName", "Все заказы компании");
+        model.addAttribute("orders", orderService.getAllOrderDTOCompanyIdAndKeyword(companyId, keyword, pageNumber, pageSize));
+        checkTimeMethod("Время выполнения OrderController/ordersCompany/ordersDetails/{companyId} для всех: ", startTime);
         return "products/orders_list";
     } // Страница просмотра всех заказов компании по всем статусам
 
@@ -299,5 +302,12 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Оплачено"
+
+
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf(text + "%.4f сек%n", timeElapsed);
+    }
 //    =========================================== СМЕНА СТАТУСА ========================================================
 }

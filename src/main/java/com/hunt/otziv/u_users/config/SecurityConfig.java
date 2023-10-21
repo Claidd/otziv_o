@@ -60,7 +60,7 @@ public class SecurityConfig {
                                         .requestMatchers("/zp/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/payment_check/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN","MANAGER")
-                                        .requestMatchers("/worker/**").hasAnyRole("ADMIN","WORKER")
+                                        .requestMatchers("/worker/**").hasAnyRole("ADMIN","WORKER","MANAGER")
 
                 )
                 //    настройка логирования

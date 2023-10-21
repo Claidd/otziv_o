@@ -15,6 +15,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -23,15 +24,18 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
+import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,18 +60,53 @@ public class ReviewServiceImpl implements ReviewService{
     private final SubCategoryService subCategoryService;
     private final OrderDetailsService orderDetailsService;
     private final WorkerService workerService;
+    private final ManagerService managerService;
     private final UserService userService;
 
 
-    public List<ReviewDTO> getAllReviewDTOAndDateToAdmin(){ // Берем все заказы с поиском по названию компании или номеру
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
+        List<Long> reviewId;
+        List<Review> reviewPage;
         LocalDate localDate = LocalDate.now();
-        return (convertToReviewDTOList(reviewRepository.findAllByPublishedDateAndPublish(localDate)));
+        reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage,pageNumber,pageSize);
     }  // Берем все заказы с поиском по названию компании или номеру
-    public List<ReviewDTO> getAllReviewDTOByWorkerByPublish(Principal principal) { // Берем все отзывы с датой для Работника
-        LocalDate localDate = LocalDate.now();
+
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-            return convertToReviewDTOList(reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate));
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        LocalDate localDate = LocalDate.now();
+        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage,pageNumber,pageSize);
     } // Берем все отзывы с датой для Работника
+
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        LocalDate localDate = LocalDate.now();
+        reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
+        System.out.println(reviewId);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage,pageNumber,pageSize);
+    } // Берем все отзывы с датой для Менеджера
+
+    private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        int start = (int)pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), reviewPage.size());
+        List<ReviewDTOOne> ReviewDTOOnes = reviewPage.subList(start, end)
+                .stream()
+                .map(this::toReviewDTOOne)
+                .collect(Collectors.toList());
+        System.out.println(ReviewDTOOnes);
+        return new PageImpl<>(ReviewDTOOnes, pageable, reviewPage.size());
+    }
+
+
     public Review save(Review review){ // Сохранить отзыв в БД
        return reviewRepository.save(review);
     } // Сохранить отзыв в БД
@@ -75,12 +114,14 @@ public class ReviewServiceImpl implements ReviewService{
         reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
         return true;
     } // Удалить отзыв
+
     @Override
-    public List<Review> getReviewsAllByOrderId(UUID orderDetailsId) { // Взять все отзывы по Id
+    public List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId) { // Взять все отзывы по Id
         return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
     } // Вхять все отзывы по Id
-    public List<Review> getReviewsAllByOrderDetailsId(Order order){ // Взять все отзывы по Id заказа
-        return getReviewsAllByOrderId(order.getDetails().iterator().next().getId());
+
+    public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId){ // Взять все отзывы по Id заказа
+        return reviewRepository.getAllByOrderId(orderId).stream().map(this::toReviewDTOOne).collect(Collectors.toList());
     } // Взять все отзывы по Id заказа
 
 
@@ -319,6 +360,37 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("Что-то пошло не так и бот не деактивирован");
         }
     } // Деактивация бота
+
+
+    public ReviewDTOOne toReviewDTOOne(Review review){ // Взять дто отзыв по Id
+        return ReviewDTOOne.builder()
+                .id(review.getId())
+                .companyId(review.getOrderDetails().getOrder().getCompany().getId())
+                .orderDetailsId(review.getOrderDetails().getId())
+                .orderId(review.getOrderDetails().getOrder().getId())
+                .text(review.getText())
+                .answer(review.getAnswer())
+                .category(review.getCategory().getCategoryTitle())
+                .subCategory(review.getSubCategory().getSubCategoryTitle())
+                .botId(review.getBot().getId())
+                .botFio(review.getBot().getFio())
+                .botLogin(review.getBot().getLogin())
+                .botPassword(review.getBot().getPassword())
+                .botCounter(review.getBot().getCounter())
+                .companyTitle(review.getOrderDetails().getOrder().getCompany().getTitle())
+                .productTitle(review.getOrderDetails().getProduct().getTitle())
+                .filialTitle(review.getFilial().getTitle())
+                .filialUrl(review.getFilial().getUrl())
+                .workerFio(review.getWorker().getUser().getFio())
+                .created(review.getCreated())
+                .changed(review.getChanged())
+                .publishedDate(review.getPublishedDate())
+                .publish(review.isPublish())
+                .comment(review.getOrderDetails().getComment())
+                .build();
+    } // Взять дто отзыв по Id
+
+
     public ReviewDTO getReviewDTOById(Long reviewId){ // Взять дто отзыв по Id
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;

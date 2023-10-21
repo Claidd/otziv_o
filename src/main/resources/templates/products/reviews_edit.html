@@ -42,7 +42,7 @@
                         <div class="company__tabs__lead">
                             <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                             <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
-                                <div th:each="item, itemStat : *{reviews}" class="company__card__lead">
+                                <div th:each="item, itemStat : *{reviews}" class="review__card__lead">
                                     <div class="company__card__content__lead" >
                                         <!-- элементы карточки - начало -->
                                         <div class="company__card__content__subtitle">
@@ -85,7 +85,7 @@
                                 <div class="company__card__content__button__btn">
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
-                                    <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">в архив</button>
+                                    <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">Сохранить</button>
                                 </div>
                             </div>
                         </div> <!-- tabs -->

@@ -80,6 +80,23 @@ public class OrderServiceImpl implements OrderService {
 
 
     //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+
+    public Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize){ // Берем все заказы для выбранной компании по id
+//        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        List<Long> orderId;
+        List<Order> orderPage;
+        if (!keyword.isEmpty()){
+            orderId = orderRepository.findAllIdByCompanyIdAndKeyWord(companyId, keyword, keyword);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        else{
+            orderId = orderRepository.findAllIdByCompanyId(companyId);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        return getPageOrders(orderPage,pageNumber,pageSize);
+    }  // Берем все заказы для выбранной компании по id
+
+
     public List<OrderDTO> getAllOrderDTO(){
         return convertToOrderDTOList(orderRepository.findAll());
     }
@@ -144,8 +161,6 @@ public class OrderServiceImpl implements OrderService {
         return getPageOrders(orderPage,pageNumber,pageSize);
     } // Берем все заказы с поиском для Менеджера
 
-
-
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
@@ -160,6 +175,7 @@ public class OrderServiceImpl implements OrderService {
         }
         return getPageOrders(orderPage,pageNumber,pageSize);
     } // Берем все заказы с поиском для Работника
+
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());

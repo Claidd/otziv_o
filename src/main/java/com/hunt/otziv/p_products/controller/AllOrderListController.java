@@ -321,6 +321,7 @@ public class AllOrderListController {
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
 
+
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;

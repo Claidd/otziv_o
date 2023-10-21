@@ -17,27 +17,27 @@
             <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
             <section class="company__lead__card">
                 <div class="container">
-                        <h2 class="company__section-title2" th:utext="'Детали заказа ' + ${reviews[0].orderDetails.product.title}"></h2>
+                        <h2 class="company__section-title2" th:utext="'Детали заказа ' + ${reviews[0].productTitle}"></h2>
                             <div class="company__tabs__lead">
 
                                 <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->
                                     
                                     <div class="btn__cell">
-                                        <form th:method="get" th:action="'/review/editReviews/' + ${orderDetailsId}"  class="company__card__content__button3">
+                                        <form th:method="get" th:action="'/review/editReviews/' + ${reviews[0].orderDetailsId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" name="_csrf" value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
                                                 <button id="btn_editAll" type="submit" class="review__btn__review-editAll" th:text="'ИЗМЕНИТЬ ВСЕ ОТЗЫВЫ'">Изменить все отзывы</button>
                                             </div>
                                         </form>
-                                        <form th:method="post" th:action="'/review/addReviews/' + ${companyId} + '/' + ${orderId}"  class="company__card__content__button3">
+                                        <form th:method="post" th:action="'/review/addReviews/' + ${reviews[0].companyId} + '/' + ${reviews[0].orderId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" name="_csrf" value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
                                                 <button id="btn_add_review" type="submit" class="review__btn__review-add" th:text="'ДОБАВИТЬ НОВЫЙ ОТЗЫВ'">Изменить все отзывы</button>
                                             </div>
                                         </form>
-                                        <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${companyId} + '/' + ${orderId}"  class="company__card__content__button3">
+                                        <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${reviews[0].companyId} + '/' + ${reviews[0].orderId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" name="_csrf" value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>

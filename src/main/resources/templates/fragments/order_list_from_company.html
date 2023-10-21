@@ -41,12 +41,13 @@
 
                         <!-- элементы карточки - начало -->
                         <div class="company__card__content__phone"> <!-- Название компании + ссылка на филиал-->
-                            <a class="company__card__title__lead" th:text="${order.companyTitle} +' -  ' + ${order.filialTitle}" target="_blank"  th:href="@{${order.filialUrl}}">Текущий статус Лида</a>
+                            <a class="company__card__title__lead" th:text="${order.companyTitle} +' -  ' + ${order.filialTitle}" target="_blank"  th:href="@{${order.filialUrl}}">Название компании и филиала</a>
                         </div>
 
                         <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
                             <p class="company__card__text__city__lead" th:text="${order.status}">Статус заказа</p>
-                            <p class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p> 
+                            <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p>
+                            <p sec:authorize="hasRole('WORKER')" class="company__card__text__city__lead" th:text="${order.amount} + ' шт.'">Количество</p>  
                         </div>
 
                         <div class="company__card__content__phone"> <!-- Телефон + ссылка в WhatsApp -->
@@ -153,9 +154,6 @@
             </div>
             <!-- СПИСОК КАРТОЧЕК 1 КОНЕЦ -->
 
-
-
-                    
                     <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>

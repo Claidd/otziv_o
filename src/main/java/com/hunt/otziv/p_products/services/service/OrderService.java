@@ -25,5 +25,6 @@ public interface OrderService {
     Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
     boolean changeStatusAndOrderCounter(Long reviewId);
+    Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
 }

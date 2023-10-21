@@ -58,18 +58,18 @@
 
                 <!-- элементы карточки - начало -->
                 <div class="company__card__content__phone"> <!-- Название компании + ссылка на филиал-->
-                    <a class="company__card__title__lead" th:text="${order.company.title} +' -  ' + ${order.filial.title}" target="_blank"  th:href="@{${order.filial.url}}">Текущий статус Лида</a>
+                    <a class="company__card__title__lead" th:text="${order.companyTitle} +' -  ' + ${order.filialTitle}" target="_blank"  th:href="@{${order.filialUrl}}">Текущий статус Лида</a>
                 </div>
 
                 <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
-                    <p class="company__card__text__city__lead" th:text="${order.status.title}">Статус заказа</p>
+                    <p class="company__card__text__city__lead" th:text="${order.status}">Статус заказа</p>
                     <p class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p> 
                 </div>
 
                 <div class="company__card__content__phone"> <!-- Телефон + ссылка в WhatsApp -->
-                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${order.company.urlChat}">
+                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="${order.companyUrlChat}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                        <button type="submit" class="company__telephone__button" th:text="${order.company.telephone}">в архив</button>
+                        <button type="submit" class="company__telephone__button" th:text="${order.companyTelephone}">в архив</button>
                     </form>
                 </div>
 
@@ -84,10 +84,10 @@
                         <button type="submit" class="company__card__text__lead-button ">url</button>
                     </form>
                     <div class="company__card__text__lead">
-                        <textarea  class="company__card__remember-text" th:utext="${order.manager.payText} + ' К оплате: '" id="onPayment"></textarea>
+                        <textarea  class="company__card__remember-text" th:utext="${order.managerPayText} + ' К оплате: '" id="onPayment"></textarea>
                         <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}" onclick="onPayment(this)">счет</button>
                     </div>
-                    <form class="company__card__text__lead" target="_blank" th:action="@{${order.filial.url}}">
+                    <form class="company__card__text__lead" target="_blank" th:action="@{${order.filialUrl}}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit"  class="company__card__text__lead-button ">ссылка</button> 
                     </form>
@@ -103,60 +103,60 @@
                 <!-- КНОПКИ 2 -->
                 <div class="company__card__content_button"> <!-- card__content_button -->
                     
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">на проверку</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">коррекция</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">опублик.</button>
                     </form>
                 </div> <!-- card__content_button -->
                 <!-- КНОПКИ 3 -->
                 <div class="company__card__content_button"> <!-- card__content_button -->
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_to_pay2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_to_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">счет</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/remember2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/remember2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">напомнить</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_no_pay2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_no_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="company__card__text__lead-button ">не опл.</button>
                     </form>
-                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_pay2/' + ${order.company.id} + '/' + ${order.id}">
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit"  class="company__card__text__lead-button ">оплатили</button>
                     </form>
                 </div> <!-- card__content_button -->
                 <div class="company__card__content__product">
-                    <a class="company__card__title__worker" th:text="${order.worker.user.fio}">ФИО бота</a>
+                    <a class="company__card__title__worker" th:text="${order.workerUserFio}">ФИО бота</a>
                 </div>
                 <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
-                    <p class="company__card__text__city__lead" th:text="${order.company.categoryCompany.categoryTitle}">Категрия</p>
-                    <p class="company__card__text__city__lead" th:text="${order.company.subCategory.subCategoryTitle}">Под категория</p> 
+                    <p class="company__card__text__city__lead" th:text="${order.categoryTitle}">Категрия</p>
+                    <p class="company__card__text__city__lead" th:text="${order.subCategoryTitle}">Под категория</p> 
                 </div>
 
                 <!-- НИЖНИИ КНОПКИ -->
                 <div >
-                    <form  th:method="get" th:action="@{'/ordersDetails/'+ ${order.company.id} + '/' + ${order.id}}">
+                    <form  th:method="get" th:action="@{'/ordersDetails/'+ ${order.companyId} + '/' + ${order.id}}">
                         <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <div class="company__card__content__phone">
                             <button type="submit" class="company__card__text__lead-button" th:text="ПОДРОБНЕЕ">Подробнее</button>
                         </div>
                 </form>
             </div>      
-            <form class="company__card__content__author" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${order.company.id} + '/' + ${order.id}}">
+            <form class="company__card__content__author" th:method="get" th:action="@{'/ordersCompany/ordersDetails/'+ ${order.companyId} + '/' + ${order.id}}">
                     <div class="company__card__link__order">
                         <span th:utext="'Без изменений: '"></span>
                         <span class="digits" th:text="${order.dayToChangeStatusAgo != null ? order.dayToChangeStatusAgo : 'пусто'}"></span>

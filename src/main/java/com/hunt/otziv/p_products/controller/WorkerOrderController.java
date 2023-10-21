@@ -152,7 +152,7 @@ public class WorkerOrderController {
     } // Все заказы - Коррекция
 
     @GetMapping("/publish") // Все заказы - Публикация
-    public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);
@@ -162,16 +162,23 @@ public class WorkerOrderController {
 //            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin(pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Админа: ", startTime);
             return "products/orders/publish_orders_worker";
         }
-
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("TitleName", "Публикация");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublish(principal, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Менеджера: ", startTime);
+            return "products/orders/publish_orders_worker";
+        }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(principal));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime);
             return "products/orders/publish_orders_worker";
         }

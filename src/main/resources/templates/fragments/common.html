@@ -186,4 +186,22 @@
     </div>
 </th:block>
 
+<!-- ==================== REVIEWSPAGINATION ======================== -->
+<th:block th:fragment="reviewsPagination" xmlns:th="http://www.w3.org/1999/xhtml">
+    <div class="page__row2 " id="pagination-1">
+        <ul class="pagination">
+            <li th:class="${reviews.first ? 'disabled' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${reviews.number - 1})}" class="page-link">Предыдущая</a>
+            </li>
+            <li th:if="${reviews.totalPages != null && reviews.totalPages > 0}" th:each="i : ${#numbers.sequence(0, reviews.totalPages - 1)}"
+                th:class="${reviews.number == i ? 'active' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+            </li>
+            <li th:class="${reviews.last ? 'disabled' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${reviews.number + 1})}" class="page-link">Следующая</a>
+            </li>
+        </ul>
+    </div>
+</th:block>
+
 
