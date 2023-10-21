@@ -39,12 +39,13 @@ public class CompanyController {
     private final WorkerService workerService;
     private final PromoTextService promoTextService;
 
+    int pageSize = 10; // желаемый размер страницы
+
 //    СДЕЛАТЬ СОРТИРОВКУ ПО ВРЕМЕНИ ИЗМЕНЕНИЙ А НЕ СОЗДАНИЯ
 
     @GetMapping("/new_company") // Все компании - Новая
     public String NewAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 3; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)){
@@ -73,7 +74,6 @@ public class CompanyController {
     @GetMapping("/on_work") // Все компании - В работе
     public String OnWorkAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -101,7 +101,6 @@ public class CompanyController {
     @GetMapping("/on_stop") // Все компании - На стопе
     public String OnStopAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -129,7 +128,6 @@ public class CompanyController {
     @GetMapping("/new_order") // Все компании - Новый заказ
     public String NewOrderAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -157,7 +155,6 @@ public class CompanyController {
     @GetMapping("/to_send") // Все компании - К рассылке
     public String ToSendAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -185,7 +182,6 @@ public class CompanyController {
     @GetMapping("/ban_company") // Все компании - Бан
     public String BanAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -213,7 +209,6 @@ public class CompanyController {
     @GetMapping("/waiting") // Все компании - Ожидание
     public String WaitingAllCompanyList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -241,7 +236,6 @@ public class CompanyController {
     @GetMapping("/allCompany") // список всех компаний
     public String CompanyList(@RequestParam(defaultValue = "") String keyword, Principal principal, Model model, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 2; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)){

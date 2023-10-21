@@ -46,6 +46,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     List<Long> findAllByManagerAndStatusAndKeyWords(Manager manager, String keyword, String status_title, Manager manager2, String keyword2, String status_title2);
     // взять id по менеджеру + поиск + статус
 
+
     @Query("SELECT c FROM Company c LEFT JOIN FETCH c.status LEFT JOIN FETCH c.user LEFT JOIN FETCH c.filial LEFT JOIN FETCH c.manager m JOIN FETCH m.user WHERE c.id IN :companyId  ORDER BY c.updateStatus")
     List<Company> findAll(List<Long> companyId);
 

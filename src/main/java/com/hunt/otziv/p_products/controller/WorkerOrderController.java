@@ -33,6 +33,8 @@ public class WorkerOrderController {
     private final ReviewService reviewService;
     private final BotService botService;
 
+    int pageSize = 10; // желаемый размер страницы
+
     @GetMapping("/bot") // Страница с кнопками "Добавить акк" и "Список всех аккаунтов"
     public String BotAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
@@ -86,7 +88,6 @@ public class WorkerOrderController {
     @GetMapping("/new_orders") // Все заказы - Новые
     public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -94,21 +95,24 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Новый", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Админа: ", startTime);
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Новый",pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword,"Новый", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Работника: ", startTime);
             return "products/orders/new_orders_worker";
         }
         else return "redirect:/";
@@ -117,7 +121,6 @@ public class WorkerOrderController {
     @GetMapping("/correct") // Все заказы - Коррекция
     public String CorrectAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -125,21 +128,24 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Коррекция", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Админа: ", startTime);
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, "Коррекция", keyword, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Менеджера: ", startTime);
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, "Коррекция", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Работника: ", startTime);
             return "products/orders/correct_orders_worker";
         }
         else return "redirect:/";
@@ -147,6 +153,7 @@ public class WorkerOrderController {
 
     @GetMapping("/publish") // Все заказы - Публикация
     public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+        long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -156,6 +163,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin());
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Админа: ", startTime);
             return "products/orders/publish_orders_worker";
         }
 
@@ -164,6 +172,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(principal));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime);
             return "products/orders/publish_orders_worker";
         }
         else return "redirect:/";
@@ -172,29 +181,30 @@ public class WorkerOrderController {
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
     public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
-//            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Админа: ", startTime);
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Менеджера: ", startTime);
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Работника: ", startTime);
             return "products/orders/all_orders_worker";
         }
         else return "redirect:/";
@@ -208,4 +218,10 @@ public class WorkerOrderController {
         // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
+
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf(text + "%.4f сек%n", timeElapsed);
+    }
 }

@@ -77,7 +77,7 @@ public class Company {
     private Set<Worker> workers;
 
     //    статус компании
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_status")
     private CompanyStatus status;
 

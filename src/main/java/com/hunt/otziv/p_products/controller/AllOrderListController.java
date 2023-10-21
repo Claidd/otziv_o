@@ -26,12 +26,12 @@ public class AllOrderListController {
     private final PromoTextService promoTextService;
     private final OrderService orderService;
 
+    int pageSize = 10; // желаемый размер страницы
 
     //    =========================================== ORDER ALL =======================================================
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
     public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -39,8 +39,7 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для админа");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
-//            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize));
             checkTimeMethod("Время выполнения AllOrderListController/orders/all_orders для Админа: ", startTime);
             return "products/orders/all_orders_list";
         }
@@ -48,7 +47,7 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
             checkTimeMethod("Время выполнения AllOrderListController/orders/all_orders для Менеджера: ", startTime);
             return "products/orders/all_orders_list";
         }
@@ -58,7 +57,6 @@ public class AllOrderListController {
     @GetMapping("/new_orders") // Все заказы - Новые
     public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -66,7 +64,7 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Новый",pageNumber, pageSize));
             checkTimeMethod("Время выполнения AllOrderListController/orders/new_orders для Админа: ", startTime);
             return "products/orders/new_orders_list";
         }
@@ -74,7 +72,7 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Новый".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Новый", pageNumber, pageSize));
             checkTimeMethod("Время выполнения AllOrderListController/orders/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_list";
         }
@@ -82,7 +80,7 @@ public class AllOrderListController {
             log.info("Зашли список всех заказов для Работника");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword).stream().filter(order -> "Новые".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getCreated).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, "Новый", pageNumber, pageSize));
             checkTimeMethod("Время выполнения AllOrderListController/orders/new_orders для Работника: ", startTime);
             return "products/orders/new_orders_list";
         }
@@ -92,22 +90,23 @@ public class AllOrderListController {
     @GetMapping("/to_check") // Все заказы - В проверку
     public String ToCheckAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "В проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"В проверку", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/to_check для Админа: ", startTime);
             return "products/orders/to_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "В проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "В проверку".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "В проверку", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/to_check для Менеджера: ", startTime);
             return "products/orders/to_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -116,22 +115,23 @@ public class AllOrderListController {
     @GetMapping("/on_check") // Все заказы - На проверке
     public String OnCheckAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "На проверке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"На проверке", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/on_check для Админа: ", startTime);
             return "products/orders/on_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "На проверке");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "На проверке".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "На проверке", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/on_check для Менеджера: ", startTime);
             return "products/orders/on_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -140,22 +140,23 @@ public class AllOrderListController {
     @GetMapping("/correct") // Все заказы - Коррекция
     public String CorrectAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Коррекция", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/correct для Админа: ", startTime);
             return "products/orders/correct_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Коррекция".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Коррекция", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/correct для Менеджера: ", startTime);
             return "products/orders/correct_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -164,22 +165,23 @@ public class AllOrderListController {
     @GetMapping("/to_published") // Все заказы - Публикация
     public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Публикация", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/to_published для Админа: ", startTime);
             return "products/orders/to_published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Публикация".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Публикация", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/to_published для Менеджера: ", startTime);
             return "products/orders/to_published_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -188,22 +190,23 @@ public class AllOrderListController {
     @GetMapping("/published") // Все заказы - Опубликовано
     public String PublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Опубликовано");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Опубликовано", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/published для Админа: ", startTime);
             return "products/orders/published_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Опубликовано");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Опубликовано".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Опубликовано", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/published для Менеджера: ", startTime);
             return "products/orders/published_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -212,22 +215,23 @@ public class AllOrderListController {
     @GetMapping("/payment_check") // Все заказы - Выставлен счет
     public String PaymentCheckOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Выставлен счет", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/payment_check для Админа: ", startTime);
             return "products/orders/payment_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Выставлен счет");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Выставлен счет".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Выставлен счет", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/payment_check для Менеджера: ", startTime);
             return "products/orders/payment_check_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -236,22 +240,23 @@ public class AllOrderListController {
     @GetMapping("/remember") // Все заказы - Напоминание
     public String RememberAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Напоминание", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/remember для Админа: ", startTime);
             return "products/orders/remember_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Напоминание".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Напоминание",pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/remember для Менеджера: ", startTime);
             return "products/orders/remember_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -260,22 +265,23 @@ public class AllOrderListController {
     @GetMapping("/no_pay") // Все заказы - Не оплачено
     public String NoPayAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Не оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Не оплачено", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/no_pay для Админа: ", startTime);
             return "products/orders/no_pay_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Напоминание");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Не оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged)).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Не оплачено",pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/no_pay для Менеджера: ", startTime);
             return "products/orders/no_pay_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -284,22 +290,23 @@ public class AllOrderListController {
     @GetMapping("/pay") // Все заказы - Оплачено
     public String PayAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
-        int pageSize = 10; // желаемый размер страницы
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех заказов для Админа");
             model.addAttribute("TitleName", "Оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"Оплачено", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/pay для Админа: ", startTime);
             return "products/orders/pay_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             model.addAttribute("TitleName", "Оплачено");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword).stream().filter(order -> "Оплачено".equals(order.getStatus().getTitle())).sorted(Comparator.comparing(OrderDTO::getChanged).reversed()).toList());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "Оплачено", pageNumber, pageSize));
+            checkTimeMethod("Время выполнения AllOrderListController/orders/pay для Менеджера: ", startTime);
             return "products/orders/pay_orders_list";
         }
         else return "redirect:/companies/allCompany";
@@ -322,6 +329,11 @@ public class AllOrderListController {
 
 //    =========================================== ORDER ALL =======================================================
 }
+
+
+//Hibernate: select p1_0.id,p1_0.promo_text from text_promo p1_0
+//        Hibernate: select o1_0.order_id from orders o1_0 order by o1_0.order_changed
+//        Hibernate: select o1_0.order_id,o1_0.order_amount,o1_0.order_changed,c1_0.company_id,c1_0.company_active,c2_0.category_id,c2_0.category_title,c1_0.company_city,c1_0.company_comments,c1_0.company_counter_no_pay,c1_0.company_counter_pay,c1_0.create_date,c1_0.date_new_try,c1_0.company_email,c1_0.company_manager,c1_0.company_operator,s3_0.company_status_id,s3_0.status_title,s2_0.subcategory_id,s2_0.category_id,s2_0.subcategory_title,c1_0.company_sum,c1_0.company_phone,c1_0.company_title,c1_0.update_status,c1_0.company_url_chat,c1_0.company_user,o1_0.order_complete,o1_0.order_counter,o1_0.order_created,d1_0.order_detail_order,d1_0.order_detail_id,d1_0.order_detail_amount,d1_0.order_detail_comments,d1_0.order_detail_price,d1_0.order_detail_product,d1_0.order_detail_date_published,f1_0.filial_id,f1_0.company_id,f1_0.filial_title,f1_0.filial_url,m1_0.manager_id,m1_0.pay_text,u2_0.id,u2_0.activate_code,u2_0.active,u2_0.coefficient,u2_0.create_time,u2_0.email,u2_0.fio,u2_0.image,u2_0.password,u2_0.phone_number,u2_0.username,o1_0.order_pay_day,s1_0.order_status_id,s1_0.order_status_title,o1_0.order_sum,w1_0.worker_id,u1_0.id,u1_0.activate_code,u1_0.active,u1_0.coefficient,u1_0.create_time,u1_0.email,u1_0.fio,u1_0.image,u1_0.password,u1_0.phone_number,u1_0.username from orders o1_0 left join order_details d1_0 on o1_0.order_id=d1_0.order_detail_order left join order_statuses s1_0 on s1_0.order_status_id=o1_0.order_status left join filial f1_0 on f1_0.filial_id=o1_0.order_filial left join companies c1_0 on c1_0.company_id=o1_0.order_company left join categorys c2_0 on c2_0.category_id=c1_0.company_category left join subcategoryes s2_0 on s2_0.subcategory_id=c1_0.company_subcategory left join company_status s3_0 on s3_0.company_status_id=c1_0.company_status left join workers w1_0 on w1_0.worker_id=o1_0.order_worker left join users u1_0 on u1_0.id=w1_0.user_id left join managers m1_0 on m1_0.manager_id=o1_0.order_manager join users u2_0 on u2_0.id=m1_0.user_id where o1_0.order_id in(?,?) order by o1_0.order_changed
 
 //Hibernate: select p1_0.id,p1_0.promo_text from text_promo p1_0
 //        Hibernate: select o1_0.order_id,o1_0.order_amount,o1_0.order_changed,o1_0.order_company,o1_0.order_complete,o1_0.order_counter,o1_0.order_created,o1_0.order_filial,o1_0.order_manager,o1_0.order_pay_day,o1_0.order_status,o1_0.order_sum,o1_0.order_worker from orders o1_0

@@ -25,7 +25,6 @@ import java.util.UUID;
 @Table(name = "order_details")
 public class OrderDetails {
 
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "order_detail_id")
@@ -35,11 +34,8 @@ public class OrderDetails {
     @JoinColumn(name = "order_detail_order")
     private Order order;
 
-    @OneToMany(mappedBy = "orderDetails",cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "orderDetails",fetch = FetchType.LAZY)
     List<Review> reviews;
-
-//    @OneToOne(mappedBy = "orderDetails", cascade = CascadeType.ALL)
-//    Review review;
 
     @UpdateTimestamp
     @Column(name = "order_detail_date_published")

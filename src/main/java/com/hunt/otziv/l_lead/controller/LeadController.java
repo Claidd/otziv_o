@@ -65,30 +65,4 @@ public class LeadController {
     }
 
 
-    // Страница открытия всех лидов
-//    @GetMapping()
-//    public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal) {
-//        long startTime = System.nanoTime();
-////        model.put("route", "lead");
-//        model.put("promoTexts", promoTextService.getAllPromoTexts());
-//        log.info("загрузили промо тексты");
-//        model.put("leadListNew", leadService.getAllLeads(LeadStatus.NEW.title, keyword, principal));
-//        log.info("загрузили НОВЫЕ компании");
-//        model.put("leadListSend", leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword, principal));
-//        log.info("загрузили ОТПРАВЛЕННЫЕ компании");
-//        model.put("leadListReSend", leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword, principal));
-//        log.info("загрузили НАПОМНЕННЫЕ компании");
-//        model.put("leadListArchive", leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword, principal));
-//        log.info("загрузили АРХИВ компании");
-//        model.put("leadListInWork", leadService.getAllLeads(LeadStatus.INWORK.title, keyword, principal));
-//        log.info("загрузили В РАБОТЕ компании");
-//        model.put("leadListALL", leadService.getAllLeadsNoStatus(keyword, principal));
-//        log.info("загрузили ВСЕ компании");
-//
-//        long endTime = System.nanoTime();
-//        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-//        System.out.printf("Лид контроллер: %.4f сек%n", timeElapsed);
-//        return new ModelAndView("lead/layouts/lead", model);
-//    }
-
 }

@@ -43,7 +43,7 @@ public class Order {
     private BigDecimal sum;
     @Column(name = "order_counter")
     private int counter;
-    @OneToMany(mappedBy = "order",cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "order",fetch = FetchType.LAZY)
     private List<OrderDetails> details;
 
     @ManyToOne(fetch = FetchType.LAZY)
