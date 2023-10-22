@@ -51,14 +51,14 @@ public class WorkerServiceImpl implements WorkerService {
     } // Перевод работника в дто
 
     @Override
-    public Worker getWorkerByUserIdToDelete(Long id) { // Взять работника по Id  удалению
-        return workerRepository.findById(id).orElse(null);
+    public Worker getWorkerByUserIdToDelete(Long userId) { // Взять работника по Id  удалению
+        return workerRepository.findById(userId).orElse(null);
     } // Взять работника по Id  удалению
 
     @Override
     public void deleteWorker(User user) { // Удаление работника
         log.info("Вошли в проверку есть ли такой работник при смене роли");
-        Worker worker = getWorkerByUserIdToDelete(user.getId());
+        Worker worker = workerRepository.findByUserId(user.getId()).orElse(null);
         log.info("Достали работника");
         if (worker != null){
             workerRepository.delete(worker);

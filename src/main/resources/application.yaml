@@ -6,6 +6,10 @@ jwt:
   lifetime: 5m
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
   jpa:
     hibernate:
       ddl-auto: validate
@@ -14,10 +18,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # Настройки мультипарт загрузки
-    servlet:
-      multipart:
-        max-file-size: 50MB
-        max-request-size: 50MB
+
 
 #    база данных на рег ру
 #    url: jdbc:mysql://37.140.192.105:3306/u1215824_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC

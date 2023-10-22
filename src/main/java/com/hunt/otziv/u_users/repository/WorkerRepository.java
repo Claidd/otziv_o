@@ -15,6 +15,8 @@ import java.util.Set;
 @Repository
 public interface WorkerRepository extends CrudRepository<Worker, Long> {
     Optional<Worker> findById(Long id);
+
+    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user")
     Set<Worker> findAll();
     Set<Worker> findAllByUserId(Long id);
     List<Worker> findAllByUser(User user);

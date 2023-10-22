@@ -110,6 +110,7 @@ values
 
 
 
+
 --insert into operators_users (operator_id, user_id)
 --values (1,1), (1,3);
 --insert into managers_users (manager_id, user_id)

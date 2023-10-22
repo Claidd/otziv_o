@@ -11,12 +11,6 @@ import java.util.List;
 public interface CategoryRepository extends CrudRepository<Category, Long> {
 
 
-//    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, value = "category.subCategoryTitle")
-//    List<Category> findAll();
-
-//    @Override
-//    @Query("SELECT DISTINCT c FROM Category c LEFT JOIN FETCH c.subCategoryTitle sc")
-//    List<Category> findAll();
 
     @Query("SELECT c, sc.id, sc.subCategoryTitle FROM Category c LEFT JOIN FETCH c.subCategoryTitle sc GROUP BY c.categoryTitle")
     List<Category> findAllCategoryAndSubcategory();

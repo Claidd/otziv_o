@@ -7,8 +7,7 @@
     <th:block th:insert="~{fragments/common :: meta}"></th:block>
     <!-- ==================== STYLE ======================== -->
     <th:block th:insert="~{fragments/common :: styles_admin}"></th:block>
-    <!-- ================== FAVICON ======================= -->
-    <!-- <th:block th:insert="~{fragments/common :: favicon}"></th:block> -->
+->
     <title>Админ панель</title>
 </head>
 <body>
@@ -259,15 +258,14 @@
                             <h3>Добавить напоминание</h3>
                         </div>
                     </div>
-                </div>
-                <!-- Напоминания -->
-            </div>
-
-        </div>
+                </div><!-- Напоминания -->
+            </div><!-- Правая секция -->
+            
+        </div> <!-- container_admin -->
     <!-- ==================== JS ======================== -->  
 
         <header th:replace="~{fragments/footer :: footer}"></header>
-    </div>
+    </div> <!-- wrapper -->
     <th:block th:insert="~{fragments/common :: js_admin}"></th:block>
 
     <!-- <script src="D:\Java\Project\otziv\src\main\resources\js\orders.js"></script>

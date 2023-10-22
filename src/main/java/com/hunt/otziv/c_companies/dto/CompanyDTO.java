@@ -95,7 +95,7 @@ public class CompanyDTO {
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    private LocalDateTime updateStatus;
+    private LocalDate updateStatus;
 
     //    дата и время нового отправления предложения
     private LocalDate dateNewTry;

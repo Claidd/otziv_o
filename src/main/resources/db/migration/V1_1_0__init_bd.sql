@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS company_status (
       company_active BIT NULL,
       company_sum NUMERIC(10,2) NULL DEFAULT 0,
       create_date DATE NULL,
-      update_status TIMESTAMP NULL,
+      update_status DATE NULL,
       date_new_try DATE NULL,
       company_user bigint NOT NULL,
       company_manager bigint NULL,

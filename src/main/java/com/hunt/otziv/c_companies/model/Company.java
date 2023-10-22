@@ -125,9 +125,9 @@ public class Company {
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    @Temporal(TemporalType.TIMESTAMP)
+    @Temporal(TemporalType.DATE)
     @Column(name = "update_status")
-    private LocalDateTime updateStatus;
+    private LocalDate updateStatus;
 
     //    дата и время нового отправления предложения
     @Temporal(TemporalType.DATE)
@@ -144,7 +144,7 @@ public class Company {
     @PrePersist
     protected void onCreate() {
         createDate = LocalDate.now();
-        updateStatus = LocalDateTime.now();
+        updateStatus = LocalDate.now();
         dateNewTry = LocalDate.now();
         System.out.println(LocalDate.now().plusDays(10));
     }

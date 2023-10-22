@@ -91,7 +91,7 @@
 <!-- ==================== STYLE ADMIN ======================== -->
 <th:block th:fragment="styles_admin" xmlns:th="http://www.w3.org/1999/xhtml">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Sharp"rel="stylesheet">
-    <link rel="stylesheet" href="../../../static/css/lead.css" th:href="@{../../css/company.css}"/>
+    <link rel="stylesheet" href="../../../static/css/admin.css" th:href="@{../../css/admin.css}"/>
 </th:block>
 
 <!-- ==================== FRAGMENT: title ======================== -->
@@ -100,6 +100,7 @@
         <th:block th:case="lead">Список лидов</th:block>
         <th:block th:case="leads_list">Список 2 лидов</th:block>
         <th:block th:case="create">Добавление нового лида</th:block>
+        <th:block th:case="fast_analytics">Быстрая аналитика</th:block>
         <th:block th:case="*">Неизвестный</th:block>
         O! Company!
     </title>

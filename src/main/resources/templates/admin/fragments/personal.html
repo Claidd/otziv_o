@@ -1,0 +1,86 @@
+<section th:fragment="personal" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Работники</h2>
+            <div  class="user-list">
+                <div th:each="manager : ${managers}" class="user" >
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
+                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                    </a>
+                    <h2 th:text="${manager.fio}">Дмитрий С.</h2>
+                    <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
+                        <p>редактировать</p>
+                    </a>
+                </div>
+                <a th:href="@{/allUsers}" class="user">
+                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <h2>Добавить</h2>
+                    <p>Нового работника</p>
+                </a>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Работники</h2>
+            <div  class="user-list">
+                <div th:each="marketolog : ${marketologs}" class="user" >
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
+                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                    </a>
+                    <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
+                    <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
+                        <p>редактировать</p>
+                    </a>
+                </div>
+                <a th:href="@{/allUsers}" class="user">
+                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <h2>Добавить</h2>
+                    <p>Нового работника</p>
+                </a>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Работники</h2>
+            <div  class="user-list">
+                <div th:each="worker : ${workers}" class="user" >
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
+                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                    </a>
+                    <h2 th:text="${worker.fio}">Дмитрий С.</h2>
+                    <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
+                        <p>редактировать</p>
+                    </a>
+                </div>
+                <a th:href="@{/allUsers}" class="user">
+                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <h2>Добавить</h2>
+                    <p>Нового работника</p>
+                </a>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Работники</h2>
+            <div  class="user-list">
+                <div th:each="operator : ${operators}" class="user" >
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
+                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                    </a>
+                    <h2 th:text="${operator.fio}">Дмитрий С.</h2>
+                    <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
+                        <p>редактировать</p>
+                    </a>
+                </div>
+                <a th:href="@{/allUsers}" class="user">
+                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <h2>Добавить</h2>
+                    <p>Нового работника</p>
+                </a>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+</section>

@@ -1,0 +1,21 @@
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- Основной контент - Начало -->
+    <main>
+        
+        <!-- Аналитика -->
+        <th:block th:insert="~{admin/fragments/analyse :: analyse}"></th:block>
+        <!-- Аналитика -->
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/personal :: personal}"></th:block>
+        <!-- Пользователи конец -->
+
+        <!-- Таблица заказов -->
+        <th:block th:insert="~{admin/fragments/order_table :: order_table}"></th:block>
+        <!-- Таблица заказов конец -->
+    </main>
+    <!-- Основной контент - Конец -->
+    
+
+</th:block>
