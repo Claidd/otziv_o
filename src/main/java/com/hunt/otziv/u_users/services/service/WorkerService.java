@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services.service;
 
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
@@ -25,6 +26,8 @@ public interface WorkerService {
 //    List<WorkerDTO> getListAllWorkersByManagerId(Manager manager);
 
     Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers);
+
+    Worker getWorkerByUsername(String login);
 
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }

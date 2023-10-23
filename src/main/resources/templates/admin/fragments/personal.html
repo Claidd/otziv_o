@@ -1,10 +1,10 @@
 <section th:fragment="personal" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
     <!-- Пользователи -->
     <div class="new-users">
-        <h2>Работники</h2>
+        <h2>Менеджеры</h2>
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
-                    <a th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
+                    <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
                         <img th:src="@{/images/{id}(id=${manager.imageId})}" >
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
@@ -22,7 +22,7 @@
     <!-- Пользователи конец -->
     <!-- Пользователи -->
     <div class="new-users">
-        <h2>Работники</h2>
+        <h2>Маркетологи</h2>
             <div  class="user-list">
                 <div th:each="marketolog : ${marketologs}" class="user" >
                     <a th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
@@ -64,7 +64,7 @@
     <!-- Пользователи конец -->
     <!-- Пользователи -->
     <div class="new-users">
-        <h2>Работники</h2>
+        <h2>Операторы</h2>
             <div  class="user-list">
                 <div th:each="operator : ${operators}" class="user" >
                     <a th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">

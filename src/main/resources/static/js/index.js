@@ -18,6 +18,40 @@ darkMode.addEventListener('click', () => {
     darkMode.querySelector('span:nth-child(2)').classList.toggle('active');
 })
 
+
+
+function changeActive(event) {
+    // Удаляем класс .active у текущего активного элемента
+    let currentActive = document.querySelector('.active');
+    if (currentActive) {
+        currentActive.classList.remove('active');
+    }
+
+    // Добавляем класс .active для элемента, на который кликнули
+    let clickedElement = event.currentTarget;
+    clickedElement.classList.add('active');
+}
+
+const progressBars = document.querySelectorAll('.progress-bar');
+progressBars.forEach((progressBar) => {
+    console.log(progressBar.getAttribute('data-percent'));
+    const percentage = parseInt(progressBar.getAttribute('data-percent'));
+
+    // Проверьте, что вы получили правильное значение процента
+    console.log(percentage);
+
+    // Убедитесь, что значение процента имеет правильный формат, прежде чем использовать его для strokeDashoffset
+    if (!isNaN(percentage)) {
+        const perimeter = 2 * Math.PI * 36;
+        const dashOffset = perimeter - (percentage / 100) * perimeter;
+        progressBar.style.strokeDashoffset = dashOffset;
+    } else {
+        console.error('Invalid percentage value');
+    }
+});
+
+
+
 Orders.forEach(order =>{
     const tr = document.createElement('tr');
     const trContent = `

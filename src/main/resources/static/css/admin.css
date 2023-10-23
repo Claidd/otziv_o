@@ -449,6 +449,10 @@ main .analyse > div .status{
     justify-content: space-between;
 }
 
+main .analyse h1{
+    white-space: nowrap;
+}
+
 main .analyse h3{
     margin-left: 0.6rem;
     font-size: 1rem;
@@ -460,6 +464,8 @@ main .analyse .progresss{
     height: 92px;
     border-radius: 50%;
 }
+
+
 
 main .analyse svg{
     width: 7rem;
@@ -476,20 +482,55 @@ main .analyse svg circle{
 main .analyse .sales svg circle{
     stroke: var(--color-success);
     stroke-dashoffset: -30;
-    stroke-dasharray: 200;
+    stroke-dasharray: 225;
 }
 
 main .analyse .visits svg circle{
     stroke: var(--color-danger);
     stroke-dashoffset: -30;
-    stroke-dasharray: 200;
+    stroke-dasharray: 225;
 }
 
 main .analyse .searches svg circle{
     stroke: var(--color-primary);
     stroke-dashoffset: -30;
-    stroke-dasharray: 200;
+    stroke-dasharray: 225;
 }
+
+main .analyse .green svg circle{
+    stroke: var(--color-success);
+    stroke-dashoffset: -30;
+    stroke-dasharray: 225;
+}
+
+main .analyse .blue svg circle{
+    stroke: var(--color-primary);
+    stroke-dashoffset: -30;
+    stroke-dasharray: 225;
+}
+
+main .analyse .yellow svg circle{
+    stroke: var(--color-warning);
+    stroke-dashoffset: -30;
+    stroke-dasharray: 225;
+}
+
+main .analyse .red svg circle{
+    stroke: var(--color-danger);
+    stroke-dashoffset: -30;
+    stroke-dasharray: 225;
+}
+
+main .analyse .progress-bar {
+    /* fill: none; */
+    /* stroke: #564caf; */
+    stroke-dasharray: 220;
+    stroke-dashoffset: 0;
+    transform: rotate(-90deg);
+    transform-origin: 44% 39%;
+    transition: stroke-dashoffset 0.5s;
+}
+
 
 main .analyse .progresss .percentage{
     position: absolute;
@@ -501,6 +542,9 @@ main .analyse .progresss .percentage{
     height: 100%;
     width: 100%;
 }
+
+
+
 /* Анализ */
 
 /* Юзеры */

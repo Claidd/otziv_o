@@ -22,7 +22,8 @@
                     <th:block th:switch="${route}">
                         <th:block th:case="fast_analytics" th:insert="~{admin/pages/fast_analytics :: content(${route})}"></th:block>
                         <!--        <th:block th:case="leads_list">Список 2 лидов</th:block>-->
-                        <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>
+                        <th:block th:case="personal" th:insert="~{admin/pages/personal :: content(${route})}"></th:block>
+                        <th:block th:case="user_info" th:insert="~{admin/pages/user_info :: content(${route})}"></th:block>
 
                     </th:block>
 

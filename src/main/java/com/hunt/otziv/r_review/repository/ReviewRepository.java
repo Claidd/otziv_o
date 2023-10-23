@@ -35,4 +35,8 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("SELECT r FROM Review r LEFT JOIN FETCH r.category LEFT JOIN FETCH r.subCategory LEFT JOIN FETCH r.bot LEFT JOIN FETCH r.filial LEFT JOIN FETCH r.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH r.orderDetails d LEFT JOIN FETCH d.product p LEFT JOIN FETCH p.productCategory LEFT JOIN FETCH d.order o LEFT JOIN FETCH o.company WHERE r.orderDetails.order.id = :orderId")
     List<Review> getAllByOrderId(Long orderId);
+
+
+    @Query("SELECT r.id FROM Review r WHERE r.worker.id = :workerId")
+    List<Long> findAllIdByWorkerId(Long workerId);
 }

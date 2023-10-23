@@ -2,6 +2,8 @@ package com.hunt.otziv.z_zp.services;
 
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
@@ -20,6 +22,12 @@ import java.util.stream.Collectors;
 public class ZpServiceImpl implements ZpService{
 
     private final ZpRepository zpRepository;
+    private final UserService userService;
+
+    public List<Zp> getAllWorkerZp(String login){
+        Long userId = userService.findByUserName(login).orElseThrow().getId();
+        return zpRepository.getAllWorkerZp(userId);
+    }
 
     public List<ZpDTO> getAllZpDTO(){
         return toDTOList(zpRepository.findAll());

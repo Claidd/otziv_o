@@ -1,4 +1,4 @@
-package com.hunt.otziv.admin.dto;
+package com.hunt.otziv.admin.dto.presonal;
 
 
 import lombok.AllArgsConstructor;
@@ -14,6 +14,7 @@ public class OperatorsListDTO {
     private Long id;
     private Long userId;
     private String fio;
+    private String login;
     private Long imageId;
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;

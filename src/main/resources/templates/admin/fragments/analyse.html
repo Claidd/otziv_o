@@ -4,9 +4,9 @@
         <div class="analyse">
             <div class="sales">
                 <div class="status">
-                    <div class="info">
+                    <div class="info" th:object="${worker1}">
                         <h3>Сумма продаж</h3>
-                        <h1>$ 550,024</h1>
+                        <h1 th:text="'$ ' + ${worker1.sum1Day}">$ 550,024</h1>
                     </div>
                     <div class="progresss">
                         <svg>
@@ -22,7 +22,7 @@
                 <div class="status">
                     <div class="info">
                         <h3>Просмотр страниц</h3>
-                        <h1>24,981</h1>
+                        <h1 th:text="'$ ' + ${worker1.sum1Week}">24,981</h1>
                     </div>
                     <div class="progresss">
                         <svg>
@@ -38,7 +38,7 @@
                 <div class="status">
                     <div class="info">
                         <h3>Количество поисков</h3>
-                        <h1>$ 3,115</h1>
+                        <h1 th:text="'$ ' + ${worker1.sum1Month}">$ 3,115</h1>
                     </div>
                     <div class="progresss">
                         <svg>
@@ -46,6 +46,22 @@
                         </svg>
                         <div class="percentage">
                             <p>+21%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="sales">
+                <div class="status">
+                    <div class="info">
+                        <h3>Сумма продаж</h3>
+                        <h1 th:text="'$ ' + ${worker1.sum1Year}">$ 550,024</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p>+81%</p>
                         </div>
                     </div>
                 </div>

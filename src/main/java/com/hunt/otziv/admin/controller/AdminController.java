@@ -34,9 +34,18 @@ public class AdminController {
         model.put("workers", personalService.gerWorkers());
         model.put("operators", personalService.gerOperators());
 
-
         checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
         return new ModelAndView("admin/layouts/fast_analytics", model);
+    }
+
+    @GetMapping("/user_info")
+    public ModelAndView userInfo(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
+        long startTime = System.nanoTime();
+        System.out.println(staticFor);
+        model.put("route", "user_info");
+        model.put("workerZp", personalService.gerWorkerReviews(staticFor));
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        return new ModelAndView("admin/layouts/user_info", model);
     }
 
 

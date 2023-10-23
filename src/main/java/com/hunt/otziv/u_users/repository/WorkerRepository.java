@@ -22,4 +22,7 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     List<Worker> findAllByUser(User user);
     Optional<Worker> findByUserId(Long id);
 
+    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user WHERE w.user.username = :username")
+    Worker findByUsername(String username);
+
 }

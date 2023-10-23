@@ -1,4 +1,4 @@
-package com.hunt.otziv.admin.dto;
+package com.hunt.otziv.admin.dto.presonal;
 
 
 import lombok.AllArgsConstructor;
@@ -10,9 +10,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ManagersListDTO {
+public class MarketologsListDTO {
     private Long id;
     private Long userId;
+    private String login;
     private String fio;
     private Long imageId;
 //    private BigDecimal coefficient;

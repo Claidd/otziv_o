@@ -1,20 +1,13 @@
 package com.hunt.otziv.c_companies.services;
 
-import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
-import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
-import com.hunt.otziv.u_users.dto.WorkerDTO;
-import com.hunt.otziv.u_users.model.Worker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Service
 @Slf4j
@@ -95,4 +88,7 @@ public class FilialServiceImpl implements FilialService{
     } // Обновление филиала
 
 //    =====================================================================================================
+
+
+
 }

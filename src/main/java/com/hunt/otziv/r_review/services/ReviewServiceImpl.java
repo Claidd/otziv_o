@@ -120,6 +120,21 @@ public class ReviewServiceImpl implements ReviewService{
         return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
     } // Вхять все отзывы по Id
 
+    public List<Review> getAllWorkerReviews(Long workerId){
+        List<Long> reviewId = getReviewByWorkerId(workerId);
+        return findAllByListId(reviewId);
+    }
+
+    @Override
+    public List<Long> getReviewByWorkerId(Long workerId) {
+        return reviewRepository.findAllIdByWorkerId(workerId);
+    }
+
+    @Override
+    public List<Review> findAllByListId(List<Long> reviewId) {
+        return reviewRepository.findAll(reviewId);
+    }
+
     public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId){ // Взять все отзывы по Id заказа
         return reviewRepository.getAllByOrderId(orderId).stream().map(this::toReviewDTOOne).collect(Collectors.toList());
     } // Взять все отзывы по Id заказа

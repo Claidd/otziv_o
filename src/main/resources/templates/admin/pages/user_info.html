@@ -1,0 +1,17 @@
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- Основной контент - Начало -->
+    <main>
+        
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/user-zp :: user-zp}"></th:block>
+        <!-- Пользователи конец -->
+
+
+
+    </main>
+    <!-- Основной контент - Конец -->
+    
+
+</th:block>

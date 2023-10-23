@@ -1,9 +1,10 @@
 package com.hunt.otziv.admin.services;
 
-import com.hunt.otziv.admin.dto.ManagersListDTO;
-import com.hunt.otziv.admin.dto.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.OperatorsListDTO;
-import com.hunt.otziv.admin.dto.WorkersListDTO;
+import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
+import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
+import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
+import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
+import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 
 import java.util.List;
 
@@ -12,5 +13,7 @@ public interface PersonalService {
     List<MarketologsListDTO> getMarketologs();
     List<ManagersListDTO> getManagers();
     List<OperatorsListDTO> gerOperators();
+
+    UserStatDTO gerWorkerReviews(String login);
 
 }

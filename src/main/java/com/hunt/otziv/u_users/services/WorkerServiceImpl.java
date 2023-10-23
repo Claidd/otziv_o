@@ -4,24 +4,24 @@ import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
-import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.security.Principal;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class WorkerServiceImpl implements WorkerService {
+
     private final WorkerRepository workerRepository;
-    public WorkerServiceImpl(WorkerRepository workerRepository) {
-        this.workerRepository = workerRepository;
-    }
+
+
+
 
     @Override
     public Worker getWorkerById(Long workerId) {  // Взять работника по Id
@@ -42,6 +42,11 @@ public class WorkerServiceImpl implements WorkerService {
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
     } // Взять всех работников по Id менеджера
+
+    @Override
+    public Worker getWorkerByUsername(String login) {
+        return workerRepository.findByUsername(login);
+    }
 
     private WorkerDTO toDTO(Worker worker){ // Перевод работника в дто
         WorkerDTO workerDTO = new WorkerDTO();
