@@ -3,6 +3,7 @@ package com.hunt.otziv.z_zp.services;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
+import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,10 @@ import java.util.stream.Collectors;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
+
+    public List<PaymentCheck> findAll(){
+        return paymentCheckRepository.findAll();
+    }
 
     public List<CheckDTO> getAllCheckDTO(){
         return toDTOList(paymentCheckRepository.findAll());

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -20,18 +21,21 @@ public class UserStatDTO {
     private BigDecimal coefficient;
     private BigDecimal percentNoPay;
     private BigDecimal avgPublish1Day;
+    String zpPayMap;
 
     private int sum1Day;
     private int sum1Week;
     private int sum1Month;
     private int sum1Year;
     private int sumOrders1Month;
-    private int sumOrders1Year;
+    private int sumOrders2Month;
 
     private int percent1Day;
     private int percent1Week;
     private int percent1Month;
     private int percent1Year;
+    private int percent1MonthOrders;
+    private int percent2MonthOrders;
 
     private BigDecimal reviewsGet1Day;
     private BigDecimal reviewsGetWeek;

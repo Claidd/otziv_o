@@ -14,46 +14,46 @@
         </a>
 
         <div class="sidebar">
-            <a  href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="dashboard">
                 <span class="material-icons-sharp">dashboard</span>
                 <h3>Панель управления</h3>
             </a>
-            <a href="#" onclick="changeActive(event)" class="active">
+            <a href="/admin" th:onclick="changeActive(event)"  data-id="person_outline">
                 <span class="material-icons-sharp">person_outline</span>
                 <h3>Юзеры</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="receipt_long">
                 <span class="material-icons-sharp">receipt_long</span>
                 <h3>История</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
                 <span class="material-icons-sharp">insights</span>
                 <h3>Аналитика</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="mail_outline">
                 <span class="material-icons-sharp">mail_outline</span>
                 <h3>Билеты</h3>
                 <span class="message-count">27</span>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="inventory">
                 <span class="material-icons-sharp">inventory</span>
                 <h3>Продажи</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="report_gmailerrorred">
                 <span class="material-icons-sharp">report_gmailerrorred</span>
                 <h3>Отчеты</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="settings">
                 <span class="material-icons-sharp">settings</span>
                 <h3>Настройки</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
+            <a href="#" th:onclick="changeActive(event)" data-id="add">
                 <span class="material-icons-sharp">add</span>
                 <h3>Добавить</h3>
             </a>
-            <a href="#" onclick="changeActive(event)">
-                <span class="material-icons-sharp">logout</span>
-                <h3>Выйти</h3>
+            <a href="#" th:onclick="goBack(event)">
+                <span  class="material-icons-sharp">logout</span>
+                <h3>Назад</h3>
             </a>
         </div>
     </aside>

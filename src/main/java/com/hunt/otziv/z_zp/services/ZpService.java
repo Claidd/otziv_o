@@ -13,4 +13,5 @@ public interface ZpService {
     List<ZpDTO> getAllZpDTO();
     boolean saveLeadZp(Lead lead);
     List<Zp> getAllWorkerZp(String login);
+    List<Zp> findAll();
 }

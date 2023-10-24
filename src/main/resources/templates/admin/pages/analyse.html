@@ -1,0 +1,37 @@
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- Основной контент - Начало -->
+    <main>
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_pay}"></th:block>
+        <!-- Пользователи конец -->
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_pay :: grafic_pay}"></th:block>
+        <!-- График ЗП конец -->
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_orderPay}"></th:block>
+        <!-- Пользователи конец -->
+        
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_zp}"></th:block>
+        <!-- Пользователи конец -->
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_pay :: grafic_zp}"></th:block>
+        <!-- График ЗП конец -->
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_order}"></th:block>
+        <!-- Пользователи конец -->
+
+
+
+    </main>
+    <!-- Основной контент - Конец -->
+    
+
+</th:block>

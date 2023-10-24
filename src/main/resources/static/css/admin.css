@@ -544,7 +544,6 @@ main .analyse .progresss .percentage{
 }
 
 
-
 /* Анализ */
 
 /* Юзеры */
@@ -595,6 +594,44 @@ main .new-users .user-list .user img{
  }
 
 /* Юзеры */
+
+/* График ЗП */
+
+main .grafic_zp{
+    margin-top: 1.3rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+main .grafic_zp .grafic{
+    background-color: var(--color-white);
+    padding: var(--card-padding);
+    border-radius: var(--card-border-radius);
+    margin-top: 1rem;
+    box-shadow: var(--box-shadow);
+    gap: 1.4rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    width: 100%;
+    max-width: 1420px; /* Максимальная ширина, если нужно ограничить */
+    min-width: 300px; /* Минимальная ширина, если нужно ограничить */
+    max-height: 630px;
+}
+
+main .grafic_zp .grafic:hover{
+    box-shadow: none;
+}
+
+main .grafic_zp .grafic canvas {
+    max-height: 580px;
+    width: 100% !important;
+    height: auto !important;
+    
+}
+
+/* График ЗП */
 
 
 /* Таблица заказов */

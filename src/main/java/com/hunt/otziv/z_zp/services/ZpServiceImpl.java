@@ -29,6 +29,10 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.getAllWorkerZp(userId);
     }
 
+    public List<Zp> findAll(){
+        return zpRepository.findAll();
+    }
+
     public List<ZpDTO> getAllZpDTO(){
         return toDTOList(zpRepository.findAll());
     }

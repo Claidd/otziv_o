@@ -17,7 +17,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Override
     List<Order> findAll();
 
-    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.details LEFT JOIN FETCH o.status LEFT JOIN FETCH o.filial LEFT JOIN FETCH o.company c LEFT JOIN FETCH c.categoryCompany LEFT JOIN FETCH c.subCategory LEFT JOIN FETCH c.status LEFT JOIN FETCH o.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH o.manager m JOIN FETCH m.user WHERE o.id IN :orderId  ORDER BY o.changed")
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.details LEFT JOIN FETCH o.status LEFT JOIN FETCH o.filial LEFT JOIN FETCH o.company c LEFT JOIN FETCH c.categoryCompany LEFT JOIN FETCH c.subCategory LEFT JOIN FETCH c.status LEFT JOIN FETCH o.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH o.manager m JOIN FETCH m.user WHERE o.id IN :orderId  ORDER BY o.changed DESC")
     List<Order> findAll(List<Long> orderId);
 
 

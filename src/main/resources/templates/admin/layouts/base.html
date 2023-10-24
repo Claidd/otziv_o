@@ -8,23 +8,24 @@
             <th:block th:insert="~{fragments/common :: styles_admin}"></th:block>
             <!-- ==================== TITLE ======================== -->
             <th:block th:insert="~{fragments/common :: title(${route})}"></th:block>
+            
         </head>
-        <body>
+        <body class="dark-mode-variables">
             <!-- создаем внешнюю обертку -->
             <div class="wrapper">
                 <div class="container_admin">
                     <!-- Слайдер бар - Начало -->
                     <header th:replace="~{admin/fragments/side_bar :: side_bar}"></header>
                     
+                    
                     <!-- ==================== MAIN START ======================== -->
 
                     <!-- ==================== FRAGMENT: title ======================== -->
                     <th:block th:switch="${route}">
                         <th:block th:case="fast_analytics" th:insert="~{admin/pages/fast_analytics :: content(${route})}"></th:block>
-                        <!--        <th:block th:case="leads_list">Список 2 лидов</th:block>-->
                         <th:block th:case="personal" th:insert="~{admin/pages/personal :: content(${route})}"></th:block>
                         <th:block th:case="user_info" th:insert="~{admin/pages/user_info :: content(${route})}"></th:block>
-
+                        <th:block th:case="analyse" th:insert="~{admin/pages/analyse :: content(${route})}"></th:block>
                     </th:block>
 
                     <!-- ===================== MAIN END ======================== -->
