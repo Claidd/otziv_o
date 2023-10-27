@@ -6,6 +6,7 @@ import com.hunt.otziv.l_lead.model.Lead;
 import org.springframework.data.domain.Page;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,10 @@ public interface LeadService {
     Optional<Lead> findByIdAndToUpdate(Long id);
     public LeadDTO findById(Long id);
     Optional<User> findByFio(String operator);
+    List<Long> getAllLeadsByDate(LocalDate localDate);
+    List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
+    List<Long> getAllLeadsByDate2Month(LocalDate localDate);
+    List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status);
 
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================

@@ -19,6 +19,6 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     // найти оператора по id
     Set<Manager> findAll();
 
-//    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.user WHERE m.user.id = :id")
+    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.user WHERE m.user.id = :id")
     Optional<Manager> findByUserId(Long id);
 }

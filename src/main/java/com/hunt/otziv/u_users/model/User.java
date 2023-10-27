@@ -52,7 +52,7 @@ public class User {
     private BigDecimal coefficient;
 
     //    роль пользователя в системе. связь многие ко многим.
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "users_roles",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -74,11 +74,11 @@ public class User {
     private LocalDate createTime;
 
     //    картинка
-    @OneToOne(fetch = FetchType.EAGER)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "image")
     private Image image;
 
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "operators_users",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -87,7 +87,7 @@ public class User {
     @ToString.Exclude
     private Set<Operator> operators;
 
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "managers_users",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -96,7 +96,7 @@ public class User {
     @ToString.Exclude
     private Set<Manager> managers;
 
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "workers_users",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -105,7 +105,7 @@ public class User {
     @ToString.Exclude
     private Set<Worker> workers;
 
-    @ManyToMany(cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "marketologs_users",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -114,7 +114,7 @@ public class User {
     @ToString.Exclude
     private Set<Marketolog> marketologs;
 
-    @OneToMany(mappedBy = "user")
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private Set<Company> companies;
 
     @PrePersist

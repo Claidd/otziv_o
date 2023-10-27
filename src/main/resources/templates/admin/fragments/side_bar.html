@@ -14,11 +14,11 @@
         </a>
 
         <div class="sidebar">
-            <a href="#" th:onclick="changeActive(event)" data-id="dashboard">
+            <a href="/admin" th:onclick="changeActive(event)" data-id="dashboard">
                 <span class="material-icons-sharp">dashboard</span>
-                <h3>Панель управления</h3>
+                <h3>Личный кабинет</h3>
             </a>
-            <a href="/admin" th:onclick="changeActive(event)"  data-id="person_outline">
+            <a href="/admin/personal" th:onclick="changeActive(event)"  data-id="person_outline">
                 <span class="material-icons-sharp">person_outline</span>
                 <h3>Юзеры</h3>
             </a>

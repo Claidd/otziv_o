@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @Configuration
 @EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     private final UserServiceImpl userService;
@@ -38,13 +40,13 @@ public class SecurityConfig {
                                         .requestMatchers("/access-denied").permitAll()
                                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OPERATOR","MARKETOLOG")
                                         .requestMatchers("/").authenticated()
+                                        .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "MANAGER", "MARKETOLOG")
                                         .requestMatchers("/bots/**").hasAnyRole("ADMIN","WORKER")
                                         .requestMatchers("/categories/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/subcategories/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/operator/**").hasAnyRole("ADMIN", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/admin/**").hasRole("ADMIN")
                                         .requestMatchers("/companies/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/products/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/products").hasAnyRole("ADMIN","MANAGER")

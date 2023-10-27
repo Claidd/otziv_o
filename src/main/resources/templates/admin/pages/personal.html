@@ -4,11 +4,15 @@
     <main>
         
         <!-- Аналитика -->
-        <th:block th:insert="~{admin/fragments/analyse :: analyse}"></th:block>
+        <!-- <th:block th:insert="~{admin/fragments/analyse :: analyse}"></th:block> -->
         <!-- Аналитика -->
 
         <!-- Пользователи -->
-        <th:block th:insert="~{admin/fragments/personal :: personal}"></th:block>
+        <th:block sec:authorize="hasRole('ADMIN')" th:insert="~{admin/fragments/personal :: personal}"></th:block>
+        <!-- Пользователи конец -->
+
+        <!-- Пользователи -->
+        <th:block sec:authorize="hasRole('MANAGER')" th:insert="~{admin/fragments/personal :: personalToManager}"></th:block>
         <!-- Пользователи конец -->
 
         <!-- Таблица заказов -->

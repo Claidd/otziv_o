@@ -8,6 +8,8 @@ import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
 import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
 import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
+import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.*;
@@ -21,10 +23,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +42,7 @@ public class PersonalServiceImpl implements PersonalService {
     private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
+    private final LeadService leadService;
 
 
     //    ========================================== PERSONAL STAT START ==================================================
@@ -74,6 +79,11 @@ public class PersonalServiceImpl implements PersonalService {
 
 
 
+        //      СТАТИСТИКА новых лидов и тех, что поступили в работу
+        List<Long> newleadList = leadService.getAllLeadsByDate(localDate); // берем всех лидов за текущий месяц
+        List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatus(localDate, "В работе"); // берем всех лидов за текущий месяц + статус
+        List<Long> newleadList2Month = leadService.getAllLeadsByDate2Month(localDate); // берем всех лидов за текущий месяц
+        List<Long> inWorkleadList2Month = leadService.getAllLeadsByDateAndStatus2Month(localDate, "В работе"); // берем всех лидов за текущий месяц + статус
 
 
 
@@ -120,6 +130,10 @@ public class PersonalServiceImpl implements PersonalService {
         statDTO.setPercent1YearPay(percentageComparison(sum365Pay, sum730Pay).intValue());
         statDTO.setPercent1MonthOrdersPay(percentageComparison(sumCount1MonthPay, sumCount2MonthPay).intValue());
         statDTO.setPercent2MonthOrdersPay(percentageComparison(sumCount2MonthPay, sumCount3MonthPay).intValue());
+        statDTO.setNewLeads(newleadList.size());
+        statDTO.setLeadsInWork(inWorkleadList.size());
+        statDTO.setPercent1NewLeadsPay(percentageComparisonInt(newleadList.size(), newleadList2Month.size()));
+        statDTO.setPercent2InWorkLeadsPay(percentageComparisonInt(inWorkleadList.size(), inWorkleadList2Month.size()));
 
         statDTO.setZpPayMap(getJSON(getMapZp1Month(localDate, zps)));
         statDTO.setSum1Day(sum1.intValue());
@@ -267,6 +281,31 @@ public class PersonalServiceImpl implements PersonalService {
         }
     } // Оценка разницы 2х чисел в процентах
 
+    private int percentageComparisonInt(int sum1, int sum2) {
+        if (sum1 <= 0 && sum2 > 0) {
+            // Обработка случая, когда sum1 равно нулю
+            return (int) (((double) sum2 / sum2) * 100) * -1;
+        }
+        if (sum1 > 0 && sum2 <= 0) {
+            // Обработка случая, когда sum2 равно нулю
+            return (int) (((double) sum1 / sum1) * 100);
+        }
+        if (sum1 == 0 && sum2 == 0) {
+            // Обработка случая, когда оба значения равны нулю
+            return 0;
+        } else {
+            int difference = sum1 - sum2; // разница между суммами
+            if (difference > 0) {
+                return (int) (((double) difference / sum1) * 100);
+            }
+            if (difference < 0) {
+                return (int) (((double) difference / sum2) * 100);
+            } else {
+                return 0;
+            }
+        }
+    }
+
     private BigDecimal getPrice(Product product){
         return product.getPrice();
     }
@@ -319,6 +358,19 @@ public class PersonalServiceImpl implements PersonalService {
     }
     public List<OperatorsListDTO> gerOperators(){
         return operatorService.getAllOperators().stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
+    }
+
+    public List<ManagersListDTO> getManagersToManager(Principal principal){
+        return managerService.getAllManagers().stream().filter(p -> Objects.equals(p.getUser().getUsername(), principal.getName())).map(this::toManagersListDTO).collect(Collectors.toList());
+    }
+    public List<MarketologsListDTO> getMarketologsToManager(Manager manager){
+        return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTO).collect(Collectors.toList());
+    }
+    public List<WorkersListDTO> gerWorkersToManager(Manager manager){
+        return workerService.getAllWorkersToManager(manager).stream().map(this::toWorkersListDTO).collect(Collectors.toList());
+    }
+    public List<OperatorsListDTO> gerOperatorsToManager(Manager manager){
+        return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
     }
 
     private ManagersListDTO toManagersListDTO(Manager manager){

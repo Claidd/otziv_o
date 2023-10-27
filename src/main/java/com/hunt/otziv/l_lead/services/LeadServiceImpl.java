@@ -490,4 +490,21 @@ public class LeadServiceImpl implements LeadService{
         }
     } // Вспомогательный метод для корректировки номера телефона
 
+    public List<Long> getAllLeadsByDate(LocalDate localDate){
+        return leadsRepository.findIdListByDate(localDate);
+    }
+
+    public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status){
+        return leadsRepository.findIdListByDate(localDate, status);
+    }
+
+    public List<Long> getAllLeadsByDate2Month(LocalDate localDate){
+        LocalDate localDate1 = localDate.minusMonths(1);
+        return leadsRepository.findIdListByDate(localDate1);
+    }
+
+    public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status){
+        LocalDate localDate1 = localDate.minusMonths(1);
+        return leadsRepository.findIdListByDate(localDate1, status);
+    }
 }

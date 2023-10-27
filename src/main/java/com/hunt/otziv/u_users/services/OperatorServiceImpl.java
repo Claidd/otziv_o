@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.OperatorRepository;
@@ -72,5 +73,10 @@ public class OperatorServiceImpl implements OperatorService {
             log.info("Не удалили оператора так как такого нет в списке");
         }
     } // Удалить оператора
+
+    @Override
+    public List<Operator> getAllOperatorsToManager(Manager manager) {
+        return operatorRepository.findAllToManager(manager);
+    }
 
 }

@@ -17,12 +17,16 @@ public class StatDTO {
     String zpPayMap;
     String orderPayMap;
 
+//    Суммы Доходов и проценты за текущий месяц
+
     private int sum1DayPay;
     private int sum1WeekPay;
     private int sum1MonthPay;
     private int sum1YearPay;
     private int sumOrders1MonthPay;
     private int sumOrders2MonthPay;
+    private int newLeads;
+    private int leadsInWork;
 
     private int percent1DayPay;
     private int percent1WeekPay;
@@ -30,8 +34,10 @@ public class StatDTO {
     private int percent1YearPay;
     private int percent1MonthOrdersPay;
     private int percent2MonthOrdersPay;
+    private int percent1NewLeadsPay;
+    private int percent2InWorkLeadsPay;
 
-
+    //    Суммы ЗП и проценты за прошлый месяц
     private int sum1Day;
     private int sum1Week;
     private int sum1Month;
@@ -45,6 +51,8 @@ public class StatDTO {
     private int percent1Year;
     private int percent1MonthOrders;
     private int percent2MonthOrders;
+
+
 
 //    private BigDecimal reviewsGet1Day;
 //    private BigDecimal reviewsGetWeek;

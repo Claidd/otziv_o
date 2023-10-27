@@ -28,6 +28,7 @@ public interface WorkerService {
     Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers);
 
     Worker getWorkerByUsername(String login);
+    List<Worker> getAllWorkersToManager(Manager manager);
 
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }

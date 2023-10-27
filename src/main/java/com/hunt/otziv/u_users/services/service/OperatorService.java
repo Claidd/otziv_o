@@ -1,8 +1,10 @@
 package com.hunt.otziv.u_users.services.service;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -30,4 +32,5 @@ public interface OperatorService {
     void deleteOperator(User user);
 
 
+    List<Operator> getAllOperatorsToManager(Manager manager);
 }

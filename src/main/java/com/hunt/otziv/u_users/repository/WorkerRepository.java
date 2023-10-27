@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.repository;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -18,6 +19,9 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
 
     @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user")
     Set<Worker> findAll();
+
+    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user u WHERE :manager IN elements(u.managers)")
+    List<Worker> findAllToManager(Manager manager);
     Set<Worker> findAllByUserId(Long id);
     List<Worker> findAllByUser(User user);
     Optional<Worker> findByUserId(Long id);

@@ -1,0 +1,226 @@
+<section th:fragment="analyse_pay" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <h1>Аналитика</h1>
+        <!-- Аналитика -->
+        <div class="analyse">
+            <div th:class="${stats.percent1DayPay > 25} ? 'green' : (${stats.percent1DayPay >= 0} ?  'blue' : (${stats.percent1DayPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info" th:object="${stats}">
+                        <h3>За вчера</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1DayPay}">$ 550,024</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1DayPay}" th:append="${stats.percent1DayPay > 25} ? 'green' : (${stats.percent1DayPay >= 0} ?  'blue' : (${stats.percent1DayPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1DayPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1WeekPay > 25} ? 'green' : (${stats.percent1WeekPay >= 0} ?  'blue' : (${stats.percent1WeekPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За неделю</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1WeekPay}">24,981</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1WeekPay}" th:append="${stats.percent1WeekPay > 25} ? 'green' : (${stats.percent1WeekPay >= 0} ?  'blue' : (${stats.percent1WeekPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1WeekPay} + ' %'">-48%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1MonthPay > 25} ? 'green' : (${stats.percent1MonthPay >= 0} ?  'blue' : (${stats.percent1MonthPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За месяц</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1MonthPay}">$ 3,115</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1Month}" th:append="${stats.percent1MonthPay > 25} ? 'green' : (${stats.percent1MonthPay >= 0} ?  'blue' : (${stats.percent1MonthPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1MonthPay} + ' %'">+21%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <!-- Аналитика -->
+</section>
+<section th:fragment="analyse_orderPay" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <h1>Оборот</h1>
+        <!-- Аналитика -->
+        <div class="analyse">
+            <div th:class="${stats.percent1YearPay > 25} ? 'green' : (${stats.percent1YearPay >= 0} ?  'blue' : (${stats.percent1YearPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За год</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1YearPay}">$ 550,024</h1>
+                    </div>
+                    <div class="progresss">
+                    
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1YearPay}" th:append="${stats.percent1YearPay > 25} ? 'green' : (${stats.percent1YearPay >= 0} ?  'blue' : (${stats.percent1YearPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        
+                        <div class="percentage">
+                            <p th:text="${stats.percent1YearPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1NewLeadsPay > 25} ? 'green' : (${stats.percent1NewLeadsPay >= 0} ?  'blue' : (${stats.percent1NewLeadsPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>Отклики</h3>
+                        <h1 th:text=" ${stats.newLeads}">1 шт.</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1NewLeadsPay}" th:append="${stats.percent1NewLeadsPay > 25} ? 'green' : (${stats.percent1NewLeadsPay >= 0} ?  'blue' : (${stats.percent1NewLeadsPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1NewLeadsPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent2InWorkLeadsPay > 25} ? 'green' : (${stats.percent2InWorkLeadsPay >= 0} ?  'blue' : (${stats.percent2InWorkLeadsPay > 25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>Новые компании</h3>
+                        <h1 th:text="${stats.leadsInWork}">10 шт./h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent2InWorkLeadsPay}" th:append="${stats.percent2InWorkLeadsPay > 25} ? 'green' : (${stats.percent2InWorkLeadsPay >= 0} ?  'blue' : (${stats.percent2InWorkLeadsPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent2InWorkLeadsPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+            
+        <!-- Аналитика -->
+</section>
+
+<section th:fragment="analyse_zp" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <h1>Зарплаты</h1>
+        <!-- Аналитика -->
+        <div class="analyse">
+            <div th:class="${stats.percent1Day > 25} ? 'green' : (${stats.percent1Day >= 0} ?  'blue' : (${stats.percent1Day > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info" th:object="${stats}">
+                        <h3>За вчера</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1Day}">$ 550,024</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1Day}" th:append="${stats.percent1Day > 25} ? 'green' : (${stats.percent1Day >= 0} ?  'blue' : (${stats.percent1Day > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1Day} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1Week > 25} ? 'green' : (${stats.percent1Week >= 0} ?  'blue' : (${stats.percent1Week > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За неделю</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1Week}">24,981</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1Week}" th:append="${stats.percent1Week > 25} ? 'green' : (${stats.percent1Week >= 0} ?  'blue' : (${stats.percent1Week > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1Week} + ' %'">-48%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1Month > 25} ? 'green' : (${stats.percent1Month >= 0} ?  'blue' : (${stats.percent1Month > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За месяц</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1Month}">$ 3,115</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1Month}" th:append="${stats.percent1Month > 25} ? 'green' : (${stats.percent1Month >= 0} ?  'blue' : (${stats.percent1Month > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1Month} + ' %'">+21%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <!-- Аналитика -->
+</section>
+
+<section th:fragment="analyse_order" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <h1>Зарплаты</h1>
+        <!-- Аналитика -->
+        <div class="analyse">
+            <div th:class="${stats.percent1Year > 25} ? 'green' : (${stats.percent1Year >= 0} ?  'blue' : (${stats.percent1Year > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За год</h3>
+                        <h1 th:text="'$ ' + ${stats.sum1Year}">$ 550,024</h1>
+                    </div>
+                    <div class="progresss">
+                    
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1Year}" th:append="${stats.percent1Year > 25} ? 'green' : (${stats.percent1Year >= 0} ?  'blue' : (${stats.percent1Year > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        
+                        <div class="percentage">
+                            <p th:text="${stats.percent1Year} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent1MonthOrdersPay > 25} ? 'green' : (${stats.percent1MonthOrdersPay >= 0} ?  'blue' : (${stats.percent1MonthOrdersPay > -25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>Заказов за месяц</h3>
+                        <h1 th:text=" ${stats.sumOrders1MonthPay}">1 шт.</h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent1MonthOrdersPay}" th:append="${stats.percent1MonthOrdersPay > 25} ? 'green' : (${stats.percent1MonthOrdersPay >= 0} ?  'blue' : (${stats.percent1MonthOrdersPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent1MonthOrdersPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:class="${stats.percent2MonthOrdersPay > 25} ? 'green' : (${stats.percent2MonthOrdersPay >= 0} ?  'blue' : (${stats.percent2MonthOrdersPay > 25} ? 'yellow' : 'red'))">
+                <div class="status">
+                    <div class="info">
+                        <h3>За прошлый месяц</h3>
+                        <h1 th:text="${stats.sumOrders2MonthPay}">10 шт./h1>
+                    </div>
+                    <div class="progresss">
+                        <svg>
+                            <circle class="progress-bar" th:data-percent="${stats.percent2MonthOrdersPay}" th:append="${stats.percent2MonthOrdersPay > 25} ? 'green' : (${stats.percent2MonthOrdersPay >= 0} ?  'blue' : (${stats.percent2MonthOrdersPay > -25} ? 'yellow' : 'red'))"  cx="38" cy="38" r="36"></circle>
+                        </svg>
+                        <div class="percentage">
+                            <p th:text="${stats.percent2MonthOrdersPay} + ' %'">+81%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+           
+        <!-- Аналитика -->
+</section>

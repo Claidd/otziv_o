@@ -1,6 +1,7 @@
 package com.hunt.otziv.u_users.services;
 
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -37,6 +39,10 @@ public class WorkerServiceImpl implements WorkerService {
     @Override
     public Set<Worker> getAllWorkers() {
         return workerRepository.findAll();
+    } // Взять всех работников
+
+    public List<Worker> getAllWorkersToManager(Manager manager) {
+        return workerRepository.findAllToManager(manager);
     } // Взять всех работников
 
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера

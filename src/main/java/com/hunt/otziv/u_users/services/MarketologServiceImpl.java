@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
@@ -12,6 +13,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -36,6 +38,9 @@ public class MarketologServiceImpl implements MarketologService {
     @Override
     public Set<Marketolog> getAllMarketologs() { // Взять всех маркетологов
         return marketologRepository.findAll();
+    } // Взять всех маркетологов
+    public List<Marketolog> getAllMarketologsToManager(Manager manager) { // Взять всех маркетологов
+        return marketologRepository.findAllByManager(manager);
     } // Взять всех маркетологов
 
     @Override

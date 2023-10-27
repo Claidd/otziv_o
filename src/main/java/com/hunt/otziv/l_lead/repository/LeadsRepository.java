@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,15 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
     @Query("select l from Lead l where l.lidStatus = :status")
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
+
+    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
+    List<Long> findIdListByDate(LocalDate localDate);
+
+    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status")
+    List<Long> findIdListByDate(LocalDate localDate, String status);
+
+    @Query("SELECT l FROM Lead l  WHERE l.id IN (:leadId)")
+    List<Lead> findAllByDate(List<Long> leadId);
 
 
     @Query("select l from Lead l where l.lidStatus = :status and l.manager = :manager")

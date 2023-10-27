@@ -1,9 +1,11 @@
 package com.hunt.otziv.u_users.services.service;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 
+import java.util.List;
 import java.util.Set;
 
 public interface MarketologService {
@@ -28,6 +30,7 @@ public interface MarketologService {
 
     // Удалить определенного опретора по юзеру, если такой есть в таблице
     void deleteMarketolog(User user);
+    List<Marketolog> getAllMarketologsToManager(Manager manager);
 
 
 }
