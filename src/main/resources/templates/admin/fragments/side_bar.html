@@ -18,14 +18,15 @@
                 <span class="material-icons-sharp">dashboard</span>
                 <h3>Личный кабинет</h3>
             </a>
+            <a href="/admin/score" th:onclick="changeActive(event)" data-id="receipt_long">
+                <span class="material-icons-sharp">receipt_long</span>
+                <h3>Результаты</h3>
+            </a>
             <a href="/admin/personal" th:onclick="changeActive(event)"  data-id="person_outline">
                 <span class="material-icons-sharp">person_outline</span>
                 <h3>Юзеры</h3>
             </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="receipt_long">
-                <span class="material-icons-sharp">receipt_long</span>
-                <h3>История</h3>
-            </a>
+            
             <a href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
                 <span class="material-icons-sharp">insights</span>
                 <h3>Аналитика</h3>
@@ -33,7 +34,7 @@
             <a href="#" th:onclick="changeActive(event)" data-id="mail_outline">
                 <span class="material-icons-sharp">mail_outline</span>
                 <h3>Билеты</h3>
-                <span class="message-count">27</span>
+                <span th:text="${user.leadCount}" class="message-count">27</span>
             </a>
             <a href="#" th:onclick="changeActive(event)" data-id="inventory">
                 <span class="material-icons-sharp">inventory</span>

@@ -35,8 +35,8 @@ public class ManagerServiceImpl implements ManagerService {
     } // Взять менеджера по Id юзера
     
     @Override
-    public Set<Manager> getAllManagers() {
-        return managerRepository.findAll();
+    public List<Manager> getAllManagers() {
+        return managerRepository.findAllManagers();
     } // Взять всех менеджеров
 
     @Override

@@ -13,7 +13,7 @@ public interface ManagerService {
     Manager getManagerById (Long id);
 
     // взять из БД всех менеджеров
-    Set<Manager> getAllManagers();
+    List<Manager> getAllManagers();
 
     // Удалить определенного менеджера по юзеру
     void deleteManager(User user);

@@ -3,6 +3,7 @@ package com.hunt.otziv.admin.services;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
+import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
 import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
@@ -25,10 +26,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.Principal;
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +41,20 @@ public class PersonalServiceImpl implements PersonalService {
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
     private final LeadService leadService;
+    private final ReviewService reviewService;
+
+    public UserLKDTO getUserLK(Principal principal){
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
+        Long imageId = user.getImage() != null ? user.getImage().getId() : 1L;
+        UserLKDTO userLKDTO = new UserLKDTO();
+        userLKDTO.setUsername(user.getUsername());
+        userLKDTO.setRole(user.getRoles().iterator().next().getAuthority().substring("ROLE_".length()));
+        userLKDTO.setImage(imageId);
+        userLKDTO.setLeadCount(leadService.findAllByLidListStatus(principal.getName()).size());
+        userLKDTO.setReviewCount(reviewService.findAllByReviewListStatus(principal.getName()));
+        System.out.println(userLKDTO.getReviewCount());
+        return userLKDTO;
+    }
 
 
     //    ========================================== PERSONAL STAT START ==================================================
@@ -206,6 +218,7 @@ public class PersonalServiceImpl implements PersonalService {
 
         return userStatDTO;
     }
+
 
     private Map<Integer, BigDecimal> getMapZp1Month(LocalDate desiredDate, List<Zp> zps){ //Создание мапы день-сумма зп
         Map<Integer, BigDecimal> zpPayMapOnMonth = new HashMap<>();
@@ -373,6 +386,24 @@ public class PersonalServiceImpl implements PersonalService {
         return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
     }
 
+
+
+    public List<ManagersListDTO> getManagersAndCount(){
+        return managerService.getAllManagers().stream().map(this::toManagersListDTOAndCount).collect(Collectors.toList());
+    }
+    public List<MarketologsListDTO> getMarketologsAndCount(){
+        return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTOAndCount).collect(Collectors.toList());
+    }
+    public List<WorkersListDTO> gerWorkersToAndCount(){
+        return workerService.getAllWorkers().stream().map(this::toWorkersListDTOAndCount).collect(Collectors.toList());
+    }
+    public List<OperatorsListDTO> gerOperatorsAndCount(){
+        return operatorService.getAllOperators().stream().map(this::toOperatorsListDTOAndCount).collect(Collectors.toList());
+    }
+
+
+
+
     private ManagersListDTO toManagersListDTO(Manager manager){
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
         return ManagersListDTO.builder()
@@ -414,6 +445,90 @@ public class PersonalServiceImpl implements PersonalService {
                 .fio(operator.getUser().getFio())
                 .login(operator.getUser().getUsername())
                 .imageId(imageId)
+                .build();
+    }
+
+    private ManagersListDTO toManagersListDTOAndCount(Manager manager){
+        LocalDate localDate = LocalDate.now();
+        List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
+        return ManagersListDTO.builder()
+                .id(manager.getId())
+                .userId(manager.getUser().getId())
+                .fio(manager.getUser().getFio())
+                .login(manager.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .build();
+    }
+
+    private MarketologsListDTO toMarketologsListDTOAndCount(Marketolog marketolog){
+        LocalDate localDate = LocalDate.now();
+        List<Zp> zps = zpService.getAllWorkerZp(marketolog.getUser().getUsername());
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
+        int newListLeadsToMarketolog = leadService.findAllByLidListStatusNew(marketolog);
+        int inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWork(marketolog);
+        System.out.println(newListLeadsToMarketolog + " " + inWorkListLeadsToMarketolog);
+        System.out.println((inWorkListLeadsToMarketolog * 100) / (newListLeadsToMarketolog));
+        return MarketologsListDTO.builder()
+                .id(marketolog.getId())
+                .userId(marketolog.getUser().getId())
+                .fio(marketolog.getUser().getFio())
+                .login(marketolog.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .leadsNew(newListLeadsToMarketolog)
+                .leadsInWork(inWorkListLeadsToMarketolog)
+                .percentInWork((inWorkListLeadsToMarketolog * 100) / (newListLeadsToMarketolog))
+                .build();
+    }
+
+    private WorkersListDTO toWorkersListDTOAndCount(Worker worker){
+        LocalDate localDate = LocalDate.now();
+        List<Zp> zps = zpService.getAllWorkerZp(worker.getUser().getUsername());
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = worker.getUser().getImage() != null ? worker.getUser().getImage().getId() : 1L;
+        return WorkersListDTO.builder()
+                .id(worker.getId())
+                .userId(worker.getUser().getId())
+                .fio(worker.getUser().getFio())
+                .login(worker.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .build();
+    }
+
+    private OperatorsListDTO toOperatorsListDTOAndCount(Operator operator){
+        LocalDate localDate = LocalDate.now();
+        List<Zp> zps = zpService.getAllWorkerZp(operator.getUser().getUsername());
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
+        int newListLeadsToOperators = leadService.findAllByLidListStatusNew(operator);
+        int inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWork(operator);
+        int percentInWork = 0;
+        if (newListLeadsToOperators != 0 || inWorkListLeadsToOperators != 0){
+            percentInWork = (inWorkListLeadsToOperators * 100) / newListLeadsToOperators;
+        }
+        return OperatorsListDTO.builder()
+                .id(operator.getId())
+                .userId(operator.getUser().getId())
+                .fio(operator.getUser().getFio())
+                .login(operator.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .leadsNew(newListLeadsToOperators)
+                .leadsInWork(inWorkListLeadsToOperators)
+                .percentInWork(percentInWork)
                 .build();
     }
 

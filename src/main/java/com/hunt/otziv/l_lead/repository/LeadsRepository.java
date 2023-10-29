@@ -3,6 +3,7 @@ package com.hunt.otziv.l_lead.repository;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
+import com.hunt.otziv.u_users.model.Operator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -21,6 +22,15 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status")
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
 
+    @Query("select l from Lead l where l.lidStatus = :status AND l.manager = :manager")
+    List<Lead> findAllByLidListStatus(String status, Manager manager);
+
+    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.marketolog = :marketolog")
+    int findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate localDate);
+
+    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.operator = :operator")
+    int findAllByLidListStatusToOperator(String status, Operator operator, LocalDate localDate);
+
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
     List<Long> findIdListByDate(LocalDate localDate);
 
@@ -34,7 +44,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status and l.manager = :manager")
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatusAndManager(String status, Manager manager, Pageable pageable);
-    @Query("select l from Lead l where l.lidStatus = :status and l.marketolog = :marketolog")
+    @Query("select l from Lead l where  l.lidStatus = :status and l.marketolog = :marketolog")
     Page<Lead> findAllByLidStatusAndMarketolog(String status, Marketolog marketolog, Pageable pageable);
     Page<Lead> findAll(Pageable pageable);
     Page<Lead> findAllByManager(Manager manager, Pageable pageable);

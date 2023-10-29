@@ -22,11 +22,17 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
 
     @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user u WHERE :manager IN elements(u.managers)")
     List<Worker> findAllToManager(Manager manager);
+
+    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user u WHERE w IN (:workers)")
+    List<Worker> findAllToManagerWorkers(Set<Worker> workers);
     Set<Worker> findAllByUserId(Long id);
     List<Worker> findAllByUser(User user);
     Optional<Worker> findByUserId(Long id);
 
     @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user WHERE w.user.username = :username")
     Worker findByUsername(String username);
+
+    @Query("SELECT DISTINCT w FROM Worker w LEFT JOIN FETCH w.user u LEFT JOIN FETCH w.bots b LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
+    List<Worker> findAllWorkers();
 
 }

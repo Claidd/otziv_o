@@ -19,11 +19,11 @@
 
             <div class="profile">
                 <div class="info">
-                    <p>Привет, <b>Работник</b></p>
-                    <small class="text-muted">Admin</small>
+                    <p>Привет, <b th:text="${user.username}">Работник</b></p>
+                    <small class="text-muted" th:text="${user.role}">Admin</small>
                 </div>
                 <div class="profile-photo">
-                    <img th:src="@{/images/image/profile-1.jpg}"  alt="">
+                    <img th:src="@{/images/{id}(id=${user.image})}"  alt="">
                 </div>
             </div>
         </div>
@@ -31,7 +31,7 @@
         <div class="user-profile">
             <div class="logo">
                 <!-- <img th:src="@{/images/{id}(id=${manager.imageId})}" > -->
-                <img th:src="@{/images/image/profile-1.jpg}"  alt="">
+                <img th:src="@{/images/{id}(id=${user.image})}"  alt="">
                 <h2>Компания О!</h2>
                 <p>Повышение репутации</p>
             </div>

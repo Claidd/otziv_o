@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,6 +18,10 @@ public class ManagersListDTO {
     private String login;
     private String fio;
     private Long imageId;
+    private int sum1Month;
+    private int order1Month;
+    private int review1Month;
+
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;

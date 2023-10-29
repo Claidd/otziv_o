@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.u_users.model.Marketolog;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -48,6 +50,13 @@ public interface LeadService {
     void changeStatusLeadOnInWork (Long leadId);
     // меняем статус с любого на Новый
     void changeStatusLeadOnNew (Long leadId);
+
+    List<Lead> findAllByLidListStatus(String name);
+    int findAllByLidListStatusNew(Marketolog marketolog);
+    int findAllByLidListStatusInWork(Marketolog marketolog);
+
+    int findAllByLidListStatusInWork(Operator operator);
+    int findAllByLidListStatusNew(Operator operator);
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

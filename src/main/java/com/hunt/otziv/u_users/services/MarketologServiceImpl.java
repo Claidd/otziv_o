@@ -36,11 +36,11 @@ public class MarketologServiceImpl implements MarketologService {
     } // Взять маркетолога по Id юзера
 
     @Override
-    public Set<Marketolog> getAllMarketologs() { // Взять всех маркетологов
-        return marketologRepository.findAll();
+    public List<Marketolog> getAllMarketologs() { // Взять всех маркетологов
+        return marketologRepository.findAllMarketologs();
     } // Взять всех маркетологов
     public List<Marketolog> getAllMarketologsToManager(Manager manager) { // Взять всех маркетологов
-        return marketologRepository.findAllByManager(manager);
+        return marketologRepository.findAllToManagerMarketologs(manager.getUser().getMarketologs());
     } // Взять всех маркетологов
 
     @Override

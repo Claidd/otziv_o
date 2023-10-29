@@ -172,3 +172,80 @@
     </div>
     <!-- Пользователи конец -->
 </section>
+
+<section  th:fragment="score" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Менеджеры 2</h2>
+            <div  class="user-list">
+                <div th:each="manager : ${managers}" class="user" >
+                    <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
+                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                    </a>
+                    <h2 th:text="${manager.fio}">Дмитрий С.</h2>
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
+                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${manager.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${manager.order1Month} + ' заказов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${manager.review1Month} + ' отзывов'">редактировать</p>
+                    </a>
+                </div>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Маркетологи</h2>
+            <div  class="user-list">
+                <div th:each="marketolog : ${marketologs}" class="user" >
+                    <a th:href="@{/admin/user_info(staticFor=${marketolog.login})}" name="staticFor" id="staticFor">
+                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                    </a>
+                    <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
+                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${marketolog.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.leadsNew} + ' новых'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.leadsInWork} + ' в работе'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.percentInWork} + ' %'">редактировать</p>
+                    </a>
+                </div>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Работники</h2>
+            <div  class="user-list">
+                <div th:each="worker : ${workers}" class="user" >
+                    <a th:href="@{/admin/user_info(staticFor=${worker.login})}" name="staticFor" id="staticFor">
+                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                    </a>
+                    <h2 th:text="${worker.fio}">Дмитрий С.</h2>
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
+                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${worker.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${worker.order1Month} + ' заказов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${worker.review1Month} + ' отзывов'">редактировать</p>
+                    </a>
+                </div>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+    <!-- Пользователи -->
+    <div class="new-users">
+        <h2>Операторы</h2>
+            <div  class="user-list">
+                <div th:each="operator : ${operators}" class="user" >
+                    <a th:href="@{/admin/user_info(staticFor=${operator.login})}" name="staticFor" id="staticFor">
+                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                    </a>
+                    <h2 th:text="${operator.fio}">Дмитрий С.</h2>
+                    <a th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
+                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${operator.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.leadsNew} + ' новых'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.leadsInWork} + ' в работе'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.percentInWork} + ' %'">редактировать</p>
+                    </a>
+                </div>
+            </div>
+    </div>
+    <!-- Пользователи конец -->
+</section>

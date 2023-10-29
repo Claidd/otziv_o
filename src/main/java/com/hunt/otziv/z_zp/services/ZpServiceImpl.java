@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,8 +26,9 @@ public class ZpServiceImpl implements ZpService{
     private final UserService userService;
 
     public List<Zp> getAllWorkerZp(String login){
+        LocalDate localDate = LocalDate.now();
         Long userId = userService.findByUserName(login).orElseThrow().getId();
-        return zpRepository.getAllWorkerZp(userId);
+        return zpRepository.getAllWorkerZp(userId, localDate);
     }
 
     public List<Zp> findAll(){
@@ -70,6 +72,7 @@ public class ZpServiceImpl implements ZpService{
         managerZp.setOrderId(order.getId());
         managerZp.setUserId(order.getManager().getUser().getId());
         managerZp.setProfessionId(order.getManager().getId());
+        managerZp.setAmount(order.getAmount());
         managerZp.setActive(true);
         zpRepository.save(managerZp);
     } // Сохранить ЗП Менеджера в БД
@@ -82,6 +85,7 @@ public class ZpServiceImpl implements ZpService{
         workerZp.setOrderId(order.getId());
         workerZp.setUserId(order.getWorker().getUser().getId());
         workerZp.setProfessionId(order.getWorker().getId());
+        workerZp.setAmount(order.getAmount());
         workerZp.setActive(true);
         zpRepository.save(workerZp);
     } // Сохранить ЗП Работника в БД
@@ -93,6 +97,7 @@ public class ZpServiceImpl implements ZpService{
         marketologZp.setUserId(lead.getMarketolog().getUser().getId());
         marketologZp.setOrderId(0L);
         marketologZp.setProfessionId(lead.getMarketolog().getId());
+        marketologZp.setAmount(1);
         marketologZp.setActive(true);
         zpRepository.save(marketologZp);
     } // Сохранить ЗП Маркетолога в БД
@@ -105,6 +110,7 @@ public class ZpServiceImpl implements ZpService{
         operatorZp.setUserId(lead.getOperator().getUser().getId());
         operatorZp.setProfessionId(lead.getOperator().getId());
         operatorZp.setOrderId(0L);
+        operatorZp.setAmount(1);
         operatorZp.setActive(true);
         zpRepository.save(operatorZp);
     } // Сохранить ЗП Оператора в БД
@@ -122,6 +128,7 @@ public class ZpServiceImpl implements ZpService{
         zpDTO.setOrderId(zp.getOrderId());
         zpDTO.setCreated(zp.getCreated());
         zpDTO.setActive(zp.isActive());
+        zpDTO.setAmount(zp.getAmount());
         zpDTO.setSum(zp.getSum());
         return zpDTO;
     } // Метод для преобразования из сущности Zp в ZpDTO
@@ -135,6 +142,7 @@ public class ZpServiceImpl implements ZpService{
         zp.setProfessionId(zpDTO.getProfessionId());
         zp.setCreated(zpDTO.getCreated());
         zp.setActive(zpDTO.isActive());
+        zp.setAmount(zpDTO.getAmount());
         zp.setSum(zpDTO.getSum());
         return zp;
     } // Метод для преобразования из ZpDTO в сущность Zp

@@ -22,4 +22,10 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
 
     @Query("SELECT m FROM Marketolog m JOIN FETCH m.user u WHERE :manager IN elements(u.managers)")
     List<Marketolog> findAllByManager(Manager manager);
+
+    @Query("SELECT m FROM Marketolog m LEFT JOIN FETCH m.user u WHERE m IN (:marketologs)")
+    List<Marketolog> findAllToManagerMarketologs(Set<Marketolog> marketologs);
+
+    @Query("SELECT DISTINCT m FROM Marketolog m LEFT JOIN FETCH m.user u LEFT JOIN FETCH m.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
+    List<Marketolog> findAllMarketologs();
 }

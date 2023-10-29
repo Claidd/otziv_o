@@ -37,12 +37,13 @@ public class WorkerServiceImpl implements WorkerService {
     } // Взять работника по Id юзера
 
     @Override
-    public Set<Worker> getAllWorkers() {
-        return workerRepository.findAll();
+    public List<Worker> getAllWorkers() {
+        return workerRepository.findAllWorkers();
     } // Взять всех работников
 
     public List<Worker> getAllWorkersToManager(Manager manager) {
-        return workerRepository.findAllToManager(manager);
+        return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers());
+//        return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers().stream().map(Worker::getId).collect(Collectors.toList()));
     } // Взять всех работников
 
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера

@@ -13,7 +13,7 @@ import java.util.Set;
 
 public interface WorkerService {
     Worker getWorkerById (Long id);
-    Set<Worker> getAllWorkers();
+    List<Worker> getAllWorkers();
 
     Worker getWorkerByUserIdToDelete(Long id);
 

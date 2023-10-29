@@ -2,6 +2,7 @@ package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -437,6 +438,36 @@ public class LeadServiceImpl implements LeadService{
         lead.setUpdateStatus(LocalDate.now());
         leadsRepository.save(lead);
     } // меняем статус с любого на Новый - конец
+
+    @Override
+    public List<Lead> findAllByLidListStatus(String username) {
+        Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
+        return leadsRepository.findAllByLidListStatus("Новый", manager);
+    }
+
+    @Override
+    public int findAllByLidListStatusNew(Marketolog marketolog) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusInWork(Marketolog marketolog) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusNew(Operator operator) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusInWork(Operator operator) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
+    }
 
 //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 

@@ -479,6 +479,7 @@ CREATE TABLE IF NOT EXISTS zp (
   `zp_user` bigint NOT NULL,
   `zp_profession` bigint NOT NULL,
   `zp_order` bigint NOT NULL,
+  `zp_amount` int NOT NULL,
   `zp_date` DATE NOT NULL,
   `zp_active` BIT NULL DEFAULT 1,
   PRIMARY KEY (`zp_id`))

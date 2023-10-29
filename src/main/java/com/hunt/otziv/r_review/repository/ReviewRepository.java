@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.repository;
 
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
@@ -39,4 +40,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("SELECT r.id FROM Review r WHERE r.worker.id = :workerId")
     List<Long> findAllIdByWorkerId(Long workerId);
+
+    @Query("select COUNT(r) from Review r where r.publishedDate <= :localDate AND r.worker = :worker AND r.publish = false")
+    int findAllByReviewsListStatus(LocalDate localDate, Worker worker);
 }

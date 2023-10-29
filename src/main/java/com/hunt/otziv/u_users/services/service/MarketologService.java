@@ -17,7 +17,7 @@ public interface MarketologService {
     Marketolog getMarketologByUserId (Long id);
 
     // взять из БД всех опреторов
-    Set<Marketolog> getAllMarketologs();
+    List<Marketolog> getAllMarketologs();
 
     // удалить опретора по id оператора и юзера внутри записи
     void delete(Long userId, Long marketologId);

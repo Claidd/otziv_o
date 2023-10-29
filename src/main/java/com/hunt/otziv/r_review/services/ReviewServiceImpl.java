@@ -14,6 +14,7 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -123,6 +124,16 @@ public class ReviewServiceImpl implements ReviewService{
     public List<Review> getAllWorkerReviews(Long workerId){
         List<Long> reviewId = getReviewByWorkerId(workerId);
         return findAllByListId(reviewId);
+    }
+
+    @Override
+    public int findAllByReviewListStatus(String username) {
+        Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
+        LocalDate localDate = LocalDate.now();
+        System.out.println("======================================");
+         int i = reviewRepository.findAllByReviewsListStatus(localDate, worker);
+        System.out.println("======================================");
+        return i;
     }
 
     @Override

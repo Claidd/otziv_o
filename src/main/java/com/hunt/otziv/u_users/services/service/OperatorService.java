@@ -17,7 +17,7 @@ public interface OperatorService {
     Operator getOperatorByUserId (Long id);
 
     // взять из БД всех опреторов
-    Set<Operator> getAllOperators();
+    List<Operator> getAllOperators();
 
     // удалить опретора по id оператора и юзера внутри записи
     void delete(Long userId, Long operatorId);

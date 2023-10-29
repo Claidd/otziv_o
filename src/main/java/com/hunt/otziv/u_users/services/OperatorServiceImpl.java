@@ -33,8 +33,8 @@ public class OperatorServiceImpl implements OperatorService {
     } // Взять оператора по Id юзера
 
     @Override
-    public Set<Operator> getAllOperators() {
-        return operatorRepository.findAll();
+    public List<Operator> getAllOperators() {
+        return operatorRepository.findAllOperators();
     } // Взять всех операторов
 
     @Override
@@ -76,7 +76,7 @@ public class OperatorServiceImpl implements OperatorService {
 
     @Override
     public List<Operator> getAllOperatorsToManager(Manager manager) {
-        return operatorRepository.findAllToManager(manager);
+        return operatorRepository.findAllToManagerOperators(manager.getUser().getOperators());
     }
 
 }

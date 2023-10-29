@@ -32,6 +32,8 @@ public class Zp {
     private Long professionId;
     @Column(name = "zp_order")
     private Long orderId;
+    @Column(name = "zp_amount")
+    private int amount;
     @CreationTimestamp
     @Column(name = "zp_date")
     private LocalDate created;

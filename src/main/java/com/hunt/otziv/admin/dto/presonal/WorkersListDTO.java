@@ -19,6 +19,9 @@ public class WorkersListDTO {
     private String fio;
     private String login;
     private Long imageId;
+    private int sum1Month;
+    private int order1Month;
+    private int review1Month;
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;

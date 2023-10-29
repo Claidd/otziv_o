@@ -29,6 +29,6 @@ public interface ReviewService {
     List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
     List<Long> getReviewByWorkerId(Long workerId);
     List<Review> findAllByListId(List<Long> reviewId);
-
+    int findAllByReviewListStatus(String username);
     List<Review> getAllWorkerReviews(Long workerId);
 }

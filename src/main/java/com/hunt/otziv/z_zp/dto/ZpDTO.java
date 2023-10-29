@@ -27,6 +27,8 @@ public class ZpDTO {
 
     private Long orderId;
 
+    private int amount;
+
 
     private LocalDate created;
 
