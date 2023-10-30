@@ -16,4 +16,6 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 
     @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND YEAR(z.created) = YEAR(:localDate) AND MONTH(z.created) = MONTH(:localDate)")
     List<Zp> getAllWorkerZp(Long userId, LocalDate localDate);
+    @Query("SELECT z FROM Zp z WHERE YEAR(z.created) = YEAR(:localDate) AND MONTH(z.created) = MONTH(:localDate)")
+    List<Zp> findAllToDate(LocalDate localDate);
 }

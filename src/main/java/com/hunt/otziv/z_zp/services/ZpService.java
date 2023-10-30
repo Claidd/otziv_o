@@ -5,6 +5,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.model.Zp;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface ZpService {
@@ -14,4 +15,6 @@ public interface ZpService {
     boolean saveLeadZp(Lead lead);
     List<Zp> getAllWorkerZp(String login);
     List<Zp> findAll();
+    List<Zp> findAllToDate(LocalDate localDate);
+    List<Zp> getAllWorkerZpToDate(String login, LocalDate localDate);
 }

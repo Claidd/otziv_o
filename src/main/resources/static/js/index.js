@@ -11,6 +11,7 @@ closeBtn.addEventListener('click', () => {
     sideMenu.style.display = 'none';
 });
 
+
 function changeActive(event) {
     const sidebarLinks = document.querySelectorAll('.sidebar a');
     sidebarLinks.forEach(link => {
@@ -19,6 +20,7 @@ function changeActive(event) {
     let clickedElement = event.currentTarget;
     clickedElement.classList.add('active');
 }
+
 
 
 
@@ -155,6 +157,84 @@ document.addEventListener('DOMContentLoaded', function() {
     
     });
 
+    const dataTodayElement = document.getElementById('dataToday');
+    const formElement = document.getElementById('myForm');
+    
+    formElement.addEventListener('submit', function(event) {
+        event.preventDefault();
+        const selectedDate = new Date(dataTodayElement.value);
+        const year = selectedDate.getFullYear();
+        let month = selectedDate.getMonth() + 1;
+        let day = selectedDate.getDate();
+    
+        if (month < 10) {
+            month = `0${month}`;
+        }
+        if (day < 10) {
+            day = `0${day}`;
+        }
+    
+        const formattedDate = `${year}-${month}-${day}`;
+        localStorage.setItem('selectedDate', formattedDate);
+        formElement.setAttribute('action', window.location.href);
+        formElement.submit();
+    });
+    
+    window.addEventListener('load', function() {
+        const storedDate = localStorage.getItem('selectedDate');
+        const today = new Date();
+        if (storedDate) {
+            dataTodayElement.value = storedDate;
+            localStorage.setItem('selectedDate', formatDate(today)); // Изменение в этой строке
+        } else {
+            const year = today.getFullYear();
+            let month = today.getMonth() + 1;
+            let day = today.getDate();
+    
+            if (month < 10) {
+                month = `0${month}`;
+            }
+            if (day < 10) {
+                day = `0${day}`;
+            }
+    
+            const formattedDate = `${year}-${month}-${day}`;
+            dataTodayElement.value = formattedDate;
+        }
+    });
+    
+    function formatDate(date) {
+        const year = date.getFullYear();
+        let month = date.getMonth() + 1;
+        let day = date.getDate();
+    
+        if (month < 10) {
+            month = `0${month}`;
+        }
+        if (day < 10) {
+            day = `0${day}`;
+        }
+    
+        return `${year}-${month}-${day}`;
+    }
+    
+    
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+
+    
+    
 // const dates = ['1', '2', '3','4', '5', '6', '7', '8', '9', '10','11', '12', '13', '14', '15', '16', '17','18', '19', '20', '21', '22', '23', '24','25', '26', '27', '28', '29', '30', '31'];
 // const orders = [3, 4, 2, 6, 12, 1, 4];
 
@@ -169,4 +249,4 @@ Orders.forEach(order =>{
     `;
     tr.innerHTML = trContent;
     document.querySelector('table tbody').appendChild(tr);
-})
+});

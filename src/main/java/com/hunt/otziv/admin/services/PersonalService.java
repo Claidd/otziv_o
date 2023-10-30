@@ -11,6 +11,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface PersonalService {
@@ -30,4 +31,11 @@ public interface PersonalService {
 
     List<OperatorsListDTO> gerOperatorsToManager(Manager manager);
     UserLKDTO getUserLK(Principal principal);
+    StatDTO getStats2(LocalDate localDate);
+    UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
+
+    List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
+    List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);
+    List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);
+    List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate);
 }

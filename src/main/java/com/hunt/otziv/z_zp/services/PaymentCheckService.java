@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface PaymentCheckService {
@@ -11,4 +12,6 @@ public interface PaymentCheckService {
     boolean save(Order order);
     List<CheckDTO> getAllCheckDTO();
     List<PaymentCheck> findAll();
+
+    List<PaymentCheck> findAllToDate(LocalDate localDate);
 }

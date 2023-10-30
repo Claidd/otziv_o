@@ -456,6 +456,16 @@ public class LeadServiceImpl implements LeadService{
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
     }
+    @Override
+    public int findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate) {
+        return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate) {
+        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
+    }
+
 
     @Override
     public int findAllByLidListStatusNew(Operator operator) {
@@ -466,6 +476,16 @@ public class LeadServiceImpl implements LeadService{
     @Override
     public int findAllByLidListStatusInWork(Operator operator) {
         LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate) {
+        return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
+    }
+
+    @Override
+    public int findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
     }
 

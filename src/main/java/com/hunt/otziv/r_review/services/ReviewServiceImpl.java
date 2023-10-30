@@ -398,11 +398,11 @@ public class ReviewServiceImpl implements ReviewService{
                 .answer(review.getAnswer())
                 .category(review.getCategory().getCategoryTitle())
                 .subCategory(review.getSubCategory().getSubCategoryTitle())
-                .botId(review.getBot().getId())
-                .botFio(review.getBot().getFio())
-                .botLogin(review.getBot().getLogin())
-                .botPassword(review.getBot().getPassword())
-                .botCounter(review.getBot().getCounter())
+                .botId(review.getBot() != null && review.getBot().getId() != null ? review.getBot().getId() : 0)
+                .botFio(review.getBot() != null && review.getBot().getFio() != null? review.getBot().getFio() : "Добавьте ботов и нажмите сменить")
+                .botLogin(review.getBot() != null && review.getBot().getLogin() != null? review.getBot().getLogin() : "none")
+                .botPassword(review.getBot() != null && review.getBot().getPassword() != null? review.getBot().getPassword() : "none")
+                .botCounter(review.getBot() != null && review.getBot().getCounter() != 0 ? review.getBot().getCounter() : 0)
                 .companyTitle(review.getOrderDetails().getOrder().getCompany().getTitle())
                 .productTitle(review.getOrderDetails().getProduct().getTitle())
                 .filialTitle(review.getFilial().getTitle())
@@ -414,7 +414,7 @@ public class ReviewServiceImpl implements ReviewService{
                 .publish(review.isPublish())
                 .comment(review.getOrderDetails().getComment())
                 .build();
-    } // Взять дто отзыв по Id
+    }  // Взять дто отзыв по Id
 
 
     public ReviewDTO getReviewDTOById(Long reviewId){ // Взять дто отзыв по Id

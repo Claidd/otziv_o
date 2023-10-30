@@ -546,6 +546,8 @@ main .analyse .progresss .percentage{
 
 /* Анализ */
 
+
+
 /* Юзеры */
 
 main .new-users{
@@ -819,6 +821,22 @@ main .recent-orders a{
 .right-section .reminders .notification.deactive .icon{
     background-color: var(--color-danger);
 }
+/* Календарь */
+
+
+.right-section .reminders .notification.deactive .content .info .data {
+    background-color: var(--color-white);
+    color: var(--color-dark);
+    fill: white;
+}
+
+.right-section .reminders .notification.deactive .content .data2 {
+    background-color: var(--color-white);
+    color: var(--color-dark);
+    margin-left: 15px;
+    font-family: 'laptev_brush';
+}
+/* Календарь */
 
 .right-section .reminders .add-reminder{
     background-color: var(--color-white);

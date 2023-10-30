@@ -7,7 +7,7 @@
 
                 <div class="header__contact">
                     <div class="header__phone-number2">
-                        <a href="#" class="phone-number2">КОМПАНИЯ "О!"</a>
+                        <a href="/" class="phone-number2">КОМПАНИЯ "О!"</a>
                     </div>
                 </div>
 
@@ -56,11 +56,11 @@
                                 Специалист
                             </a>
                         </li>
-                        <li class="mev__item">
+                        <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/products/products}" class="nav__link  link" aria-label="Перейти на страницу продуктов">
                                 Продукт
                             </a>
-                        </li>
+                        </li> -->
                         <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/bots}" class="nav__link  link" aria-label="Перейти на страницу лазертаг">
                                 Боты
@@ -81,14 +81,14 @@
                         </li> -->
                         <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/admin}" class="nav__link  link" aria-label="Перейти на страницу квестов">
-                                Админ
+                                Личный кабинет
                             </a>
                         </li>
-                        <li class="mev__item">
+                        <!-- <li class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/allUsers}"  class="nav__link  link" aria-label="Перейти на страницу нерф">
                                 Пользователи
                             </a>
-                        </li>
+                        </li> -->
                         <div sec:authorize="!isAuthenticated()" class="header__contact">
                             <div class="header__phone-number">
                                 <div class="dws">

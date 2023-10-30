@@ -66,18 +66,24 @@
                 </div>
                 <div class="content">
                     <div class="info">
-                        <h3>Магазин</h3>
-                        <small class="text_muted">08:00 AM - 12:00 PM</small>
+                        <h3>Выберите месяц</h3>
+                        <!-- <small class="text_muted">08:00 AM - 12:00 PM</small> -->
+                        <form id="myForm" method="post">
+                            <input class="data" type="date" name="date" id="dataToday">
+                            <button  type="submit" class="data2">выбрать</button>
+                        </form>
                     </div>
                     <span class="material-icons-sharp">more_vert</span>
                 </div>
             </div>
-            <div class="notification add-reminder">
+            <a href="/" class="notification add-reminder">
                 <div>
-                    <span class="material-icons-sharp">add</span>
-                    <h3>Добавить напоминание</h3>
+                    <span class="material-icons-sharp">logout</span>
+                    <h3>На главную</h3>
                 </div>
-            </div>
+            </a>
+
+            
         </div><!-- Напоминания -->
     </div><!-- Правая секция -->
 </section>

@@ -106,6 +106,7 @@
         <th:block th:case="personal">Персонал</th:block>
         <th:block th:case="user_info">Личный кабинет</th:block>
         <th:block th:case="analyse">Аналитика</th:block>
+        <th:block th:case="score">Рейтинг</th:block>
         <th:block th:case="*">Неизвестный</th:block>
         O! Company!
     </title>
@@ -143,7 +144,9 @@
     <script type="text/javascript" th:src="@{/js/orders.js}"></script>
     <script type="text/javascript" th:src="@{/js/index.js}"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- <script>document.getElementById('dataToday').valueAsDate = new Date();</script> -->
 </th:block>
+
 
 
 <!-- ==================== BUTTON BACK DENIED ======================== -->

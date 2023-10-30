@@ -57,6 +57,10 @@ public interface LeadService {
 
     int findAllByLidListStatusInWork(Operator operator);
     int findAllByLidListStatusNew(Operator operator);
+    int findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate);
+    int findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
+    int findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate);
+    int findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

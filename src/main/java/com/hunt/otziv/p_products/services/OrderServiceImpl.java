@@ -778,7 +778,7 @@ public class OrderServiceImpl implements OrderService {
                 .text("Текст отзыва")
                 .answer("Ответ на отзыв")
                 .orderDetails(orderDetails)
-                .bot(bots.get(random.nextInt(bots.size())))
+                .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
                 .filial(convertFilialDTOToFilial(filialDTO))
                 .publish(false)
                 .worker(orderDetails.getOrder().getWorker())

@@ -18,41 +18,62 @@
                 <span class="material-icons-sharp">dashboard</span>
                 <h3>Личный кабинет</h3>
             </a>
-            <a href="/admin/score" th:onclick="changeActive(event)" data-id="receipt_long">
-                <span class="material-icons-sharp">receipt_long</span>
-                <h3>Результаты</h3>
+            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="/admin/personal" th:onclick="changeActive(event)"  data-id="groups">
+                <span class="material-icons-sharp">groups</span>
+                <h3>Моя команда</h3>
             </a>
-            <a href="/admin/personal" th:onclick="changeActive(event)"  data-id="person_outline">
-                <span class="material-icons-sharp">person_outline</span>
-                <h3>Юзеры</h3>
+            <a href="/admin/score" th:onclick="changeActive(event)" data-id="emoji_events">
+                <span class="material-icons-sharp">emoji_events</span>
+                <h3>Рейтинг</h3>
             </a>
             
-            <a href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
+            <a sec:authorize="hasRole('ADMIN')" href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
                 <span class="material-icons-sharp">insights</span>
                 <h3>Аналитика</h3>
             </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="mail_outline">
-                <span class="material-icons-sharp">mail_outline</span>
-                <h3>Билеты</h3>
+            <a sec:authorize="hasRole('ADMIN')" href="/zp" th:onclick="changeActive(event)" data-id="content_paste">
+                <span class="material-icons-sharp">content_paste</span>
+                <h3>Зарплаты</h3>
+            </a>
+            <a sec:authorize="hasRole('ADMIN')" href="/payment_check" th:onclick="changeActive(event)" data-id="inventory">
+                <span class="material-icons-sharp">inventory</span>
+                <h3>Чеки</h3>
+            </a>
+            <a sec:authorize="hasRole('ADMIN')" href="/worker/bot" th:onclick="changeActive(event)" data-id="settings_accessibility">
+                <span class="material-icons-sharp">settings_accessibility</span>
+                <h3>Аккаунты</h3>
+            </a>
+            <a sec:authorize="hasRole('ADMIN')" href="/categories" th:onclick="changeActive(event)" data-id="stacked_bar_chart">
+                <span class="material-icons-sharp">stacked_bar_chart</span>
+                <h3>Категории</h3>
+            </a>
+            <a sec:authorize="hasRole('ADMIN')" href="/products/products" th:onclick="changeActive(event)" data-id="local_mall">
+                <span class="material-icons-sharp">local_mall</span>
+                <h3>Продукты</h3>
+            </a>
+            <a sec:authorize="hasRole('ADMIN')" href="/allUsers" th:onclick="changeActive(event)" data-id="group_add">
+                <span class="material-icons-sharp">group_add</span>
+                <h3>Пользователи</h3>
+            </a>
+            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="/lead" th:onclick="changeActive(event)" data-id="notifications_active">
+                <span class="material-icons-sharp">notifications_active</span>
+                <h3>Новые лиды</h3>
                 <span th:text="${user.leadCount}" class="message-count">27</span>
             </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="inventory">
-                <span class="material-icons-sharp">inventory</span>
-                <h3>Продажи</h3>
+            <a sec:authorize="hasAnyRole('ADMIN', 'WORKER')" href="/worker/publish" th:onclick="changeActive(event)" data-id="notifications_active">
+                <span class="material-icons-sharp">notifications_active</span>
+                <h3>Публикации</h3>
+                <span th:text="${user.reviewCount}" class="message-count">27</span>
             </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="report_gmailerrorred">
-                <span class="material-icons-sharp">report_gmailerrorred</span>
-                <h3>Отчеты</h3>
+            <a href="#" th:onclick="changeActive(event)" data-id="school">
+                <span class="material-icons-sharp">school</span>
+                <h3>Обучение</h3>
             </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="settings">
-                <span class="material-icons-sharp">settings</span>
-                <h3>Настройки</h3>
-            </a>
-            <a href="#" th:onclick="changeActive(event)" data-id="add">
+            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="#" th:onclick="changeActive(event)" data-id="add">
                 <span class="material-icons-sharp">add</span>
                 <h3>Добавить</h3>
             </a>
-            <a href="#" th:onclick="goBack(event)">
+            <a  th:onclick="goBack(event)">
                 <span  class="material-icons-sharp">logout</span>
                 <h3>Назад</h3>
             </a>

@@ -31,8 +31,17 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.getAllWorkerZp(userId, localDate);
     }
 
+    public List<Zp> getAllWorkerZpToDate(String login, LocalDate localDate){
+        Long userId = userService.findByUserName(login).orElseThrow().getId();
+        return zpRepository.getAllWorkerZp(userId, localDate);
+    }
+
     public List<Zp> findAll(){
         return zpRepository.findAll();
+    }
+
+    public List<Zp> findAllToDate(LocalDate localDate){
+        return zpRepository.findAllToDate(localDate);
     }
 
     public List<ZpDTO> getAllZpDTO(){

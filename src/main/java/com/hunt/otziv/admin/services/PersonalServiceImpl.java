@@ -532,5 +532,259 @@ public class PersonalServiceImpl implements PersonalService {
                 .build();
     }
 
+    public StatDTO getStats2(LocalDate localDate) {
+        System.out.println(localDate);
+
+        //        ОПЛАТЫ Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
+        List<PaymentCheck> pcs = paymentCheckService.findAllToDate(localDate);
+        List<PaymentCheck> Pay1Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<PaymentCheck> Pay7Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<PaymentCheck> Pay30Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(30))).toList();
+        List<PaymentCheck> Pay365Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(365))).toList();
+        List<PaymentCheck> Pay2Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<PaymentCheck> Pay14Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(14)) && p.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<PaymentCheck> Pay60Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(60)) && p.getCreated().isBefore(localDate.minusDays(30))).toList();
+        List<PaymentCheck> Pay90Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(90)) && p.getCreated().isBefore(localDate.minusDays(60))).toList();
+        List<PaymentCheck> Pay730Day = pcs.stream().filter(p -> p.getCreated().isAfter(localDate.minusDays(730)) && p.getCreated().isBefore(localDate.minusDays(365))).toList();
+
+        //        ОПЛАТЫ Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
+        BigDecimal sum1Pay = Pay1Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7Pay = Pay7Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30Pay = Pay30Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365Pay = Pay365Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum2Pay = Pay2Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14Pay = Pay14Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60Pay = Pay60Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730Pay = Pay730Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        //        ОПЛАТЫ Сумма всех заказов за 30-60-90 дней
+        BigDecimal sumCount1MonthPay = BigDecimal.valueOf(Pay30Day.size()); // 1 сумма
+        BigDecimal sumCount2MonthPay = BigDecimal.valueOf(Pay60Day.size()); // 2 сумма
+        BigDecimal sumCount3MonthPay = BigDecimal.valueOf(Pay90Day.size()); // 3 сумма
+
+
+
+        //      СТАТИСТИКА новых лидов и тех, что поступили в работу
+        List<Long> newleadList = leadService.getAllLeadsByDate(localDate); // берем всех лидов за текущий месяц
+        List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatus(localDate, "В работе"); // берем всех лидов за текущий месяц + статус
+        List<Long> newleadList2Month = leadService.getAllLeadsByDate2Month(localDate); // берем всех лидов за текущий месяц
+        List<Long> inWorkleadList2Month = leadService.getAllLeadsByDateAndStatus2Month(localDate, "В работе"); // берем всех лидов за текущий месяц + статус
+
+
+
+        //        ЗП Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
+        List<Zp> zps = zpService.findAllToDate(localDate);
+        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<Zp> zpPay7Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<Zp> zpPay30Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(30))).toList();
+        List<Zp> zpPay365Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(365))).toList();
+        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<Zp> zpPay14Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(14)) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<Zp> zpPay60Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(60)) && z.getCreated().isBefore(localDate.minusDays(30))).toList();
+        List<Zp> zpPay90Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(90)) && z.getCreated().isBefore(localDate.minusDays(60))).toList();
+        List<Zp> zpPay730Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(730)) && z.getCreated().isBefore(localDate.minusDays(365))).toList();
+
+        //        ЗП Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
+        BigDecimal sum1 = zpPay1Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7 = zpPay7Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zpPay30Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365 = zpPay365Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum2 = zpPay2Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14 = zpPay14Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60 = zpPay60Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730 = zpPay730Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        //        ЗП Сумма всех заказов за 30-60-90 дней
+        BigDecimal sumCount1Month = BigDecimal.valueOf(zpPay30Day.size()); // 1 сумма
+        BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
+        BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
+
+
+        Long imageId = 1L;
+        StatDTO statDTO = new StatDTO();
+        statDTO.setOrderPayMap(getJSON(getMapPay1Month(localDate, pcs)));
+        statDTO.setSum1DayPay(sum1Pay.intValue());
+        statDTO.setSum1WeekPay(sum7Pay.intValue());
+        statDTO.setSum1MonthPay(sum30Pay.intValue());
+        statDTO.setSum1YearPay(sum365Pay.intValue());
+        statDTO.setSumOrders1MonthPay(Pay30Day.size());
+        statDTO.setSumOrders2MonthPay(Pay60Day.size());
+        statDTO.setPercent1DayPay(percentageComparison(sum1Pay, sum2Pay).intValue());
+        statDTO.setPercent1WeekPay(percentageComparison(sum7Pay, sum14Pay).intValue());
+        statDTO.setPercent1MonthPay(percentageComparison(sum30Pay, sum60Pay).intValue());
+        statDTO.setPercent1YearPay(percentageComparison(sum365Pay, sum730Pay).intValue());
+        statDTO.setPercent1MonthOrdersPay(percentageComparison(sumCount1MonthPay, sumCount2MonthPay).intValue());
+        statDTO.setPercent2MonthOrdersPay(percentageComparison(sumCount2MonthPay, sumCount3MonthPay).intValue());
+        statDTO.setNewLeads(newleadList.size());
+        statDTO.setLeadsInWork(inWorkleadList.size());
+        statDTO.setPercent1NewLeadsPay(percentageComparisonInt(newleadList.size(), newleadList2Month.size()));
+        statDTO.setPercent2InWorkLeadsPay(percentageComparisonInt(inWorkleadList.size(), inWorkleadList2Month.size()));
+
+        statDTO.setZpPayMap(getJSON(getMapZp1Month(localDate, zps)));
+        statDTO.setSum1Day(sum1.intValue());
+        statDTO.setSum1Week(sum7.intValue());
+        statDTO.setSum1Month(sum30.intValue());
+        statDTO.setSum1Year(sum365.intValue());
+        statDTO.setSumOrders1Month(zpPay30Day.size());
+        statDTO.setSumOrders2Month(zpPay60Day.size());
+        statDTO.setPercent1Day(percentageComparison(sum1, sum2).intValue());
+        statDTO.setPercent1Week(percentageComparison(sum7, sum14).intValue());
+        statDTO.setPercent1Month(percentageComparison(sum30, sum60).intValue());
+        statDTO.setPercent1Year(percentageComparison(sum365, sum730).intValue());
+        statDTO.setPercent1MonthOrders(percentageComparison(sumCount1Month, sumCount2Month).intValue());
+        statDTO.setPercent2MonthOrders(percentageComparison(sumCount2Month, sumCount3Month).intValue());
+        System.out.println(statDTO);
+        return statDTO;
+    }
+
+    public UserStatDTO getWorkerReviews2(String login, LocalDate localDate) {
+        //        разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
+        List<Zp> zps = zpService.getAllWorkerZpToDate(login, localDate);
+        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<Zp> zpPay7Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<Zp> zpPay30Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(30))).toList();
+        List<Zp> zpPay365Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(365))).toList();
+        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<Zp> zpPay14Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(14)) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<Zp> zpPay60Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(60)) && z.getCreated().isBefore(localDate.minusDays(30))).toList();
+        List<Zp> zpPay90Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(90)) && z.getCreated().isBefore(localDate.minusDays(60))).toList();
+        List<Zp> zpPay730Day = zps.stream().filter(z -> z.getCreated().isAfter(localDate.minusDays(730)) && z.getCreated().isBefore(localDate.minusDays(365))).toList();
+
+        //        Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
+        BigDecimal sum1 = zpPay1Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7 = zpPay7Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zpPay30Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365 = zpPay365Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum2 = zpPay2Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14 = zpPay14Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60 = zpPay60Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730 = zpPay730Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        //        Сумма всех заказов за 30-60-90 дней
+        BigDecimal sumCount1Month = BigDecimal.valueOf(zpPay30Day.size()); // 1 сумма
+        BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
+        BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
+
+
+        User user = userService.findByUserName(login).orElseThrow();
+        Long imageId = user.getImage() != null ? user.getImage().getId() : 1L;
+        UserStatDTO userStatDTO = new UserStatDTO();
+        userStatDTO.setId(user.getId());
+        userStatDTO.setImageId(imageId);
+        userStatDTO.setFio(user.getFio());
+        userStatDTO.setCoefficient(user.getCoefficient());
+        userStatDTO.setZpPayMap(getJSON(getMapZp1Month(localDate, zps)));
+        userStatDTO.setSum1Day(sum1.intValue());
+        userStatDTO.setSum1Week(sum7.intValue());
+        userStatDTO.setSum1Month(sum30.intValue());
+        userStatDTO.setSum1Year(sum365.intValue());
+        userStatDTO.setSumOrders1Month(zpPay30Day.size());
+        userStatDTO.setSumOrders2Month(zpPay60Day.size());
+        userStatDTO.setPercent1Day(percentageComparison(sum1, sum2).intValue());
+        userStatDTO.setPercent1Week(percentageComparison(sum7, sum14).intValue());
+        userStatDTO.setPercent1Month(percentageComparison(sum30, sum60).intValue());
+        userStatDTO.setPercent1Year(percentageComparison(sum365, sum730).intValue());
+        userStatDTO.setPercent1MonthOrders(percentageComparison(sumCount1Month, sumCount2Month).intValue());
+        userStatDTO.setPercent2MonthOrders(percentageComparison(sumCount2Month, sumCount3Month).intValue());
+
+        return userStatDTO;
+    }
+
+
+    public List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate){
+        return managerService.getAllManagers().stream().map(manager -> toManagersListDTOAndCountToDate(manager, localdate)).collect(Collectors.toList());
+    }
+    public List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate){
+        return marketologService.getAllMarketologs().stream().map(marketolog -> toMarketologsListDTOAndCountToDate(marketolog, localdate)).collect(Collectors.toList());
+    }
+    public List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate){
+        return workerService.getAllWorkers().stream().map(worker -> toWorkersListDTOAndCountToDate(worker, localdate)).collect(Collectors.toList());
+    }
+    public List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate){
+        return operatorService.getAllOperators().stream().map(operator -> toOperatorsListDTOAndCountToDate(operator, localdate)).collect(Collectors.toList());
+    }
+
+    private ManagersListDTO toManagersListDTOAndCountToDate(Manager manager, LocalDate localDate){
+        List<Zp> zps = zpService.getAllWorkerZpToDate(manager.getUser().getUsername(), localDate);
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
+        return ManagersListDTO.builder()
+                .id(manager.getId())
+                .userId(manager.getUser().getId())
+                .fio(manager.getUser().getFio())
+                .login(manager.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .build();
+    }
+
+    private MarketologsListDTO toMarketologsListDTOAndCountToDate(Marketolog marketolog, LocalDate localDate){
+        List<Zp> zps = zpService.getAllWorkerZpToDate(marketolog.getUser().getUsername(), localDate);
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
+        int newListLeadsToMarketolog = leadService.findAllByLidListStatusNewToDate(marketolog, localDate);
+        int inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWorkToDate(marketolog, localDate);
+        int percentInWork = 0;
+        if (newListLeadsToMarketolog != 0 || inWorkListLeadsToMarketolog != 0){
+            percentInWork = (inWorkListLeadsToMarketolog * 100) / newListLeadsToMarketolog;
+        }
+        return MarketologsListDTO.builder()
+                .id(marketolog.getId())
+                .userId(marketolog.getUser().getId())
+                .fio(marketolog.getUser().getFio())
+                .login(marketolog.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .leadsNew(newListLeadsToMarketolog)
+                .leadsInWork(inWorkListLeadsToMarketolog)
+                .percentInWork(percentInWork)
+                .build();
+    }
+
+    private WorkersListDTO toWorkersListDTOAndCountToDate(Worker worker, LocalDate localDate){
+        List<Zp> zps = zpService.getAllWorkerZpToDate(worker.getUser().getUsername(), localDate);
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = worker.getUser().getImage() != null ? worker.getUser().getImage().getId() : 1L;
+        return WorkersListDTO.builder()
+                .id(worker.getId())
+                .userId(worker.getUser().getId())
+                .fio(worker.getUser().getFio())
+                .login(worker.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .build();
+    }
+
+    private OperatorsListDTO toOperatorsListDTOAndCountToDate(Operator operator, LocalDate localDate){
+        List<Zp> zps = zpService.getAllWorkerZpToDate(operator.getUser().getUsername(), localDate);
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
+        int newListLeadsToOperators = leadService.findAllByLidListStatusNewToDate(operator, localDate);
+        int inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWorkToDate(operator, localDate);
+        int percentInWork = 0;
+        if (newListLeadsToOperators != 0 || inWorkListLeadsToOperators != 0){
+            percentInWork = (inWorkListLeadsToOperators * 100) / newListLeadsToOperators;
+        }
+        return OperatorsListDTO.builder()
+                .id(operator.getId())
+                .userId(operator.getUser().getId())
+                .fio(operator.getUser().getFio())
+                .login(operator.getUser().getUsername())
+                .imageId(imageId)
+                .sum1Month(sum30.intValue())
+                .order1Month(zps.size())
+                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .leadsNew(newListLeadsToOperators)
+                .leadsInWork(inWorkListLeadsToOperators)
+                .percentInWork(percentInWork)
+                .build();
+    }
+
 //    ========================================== PERSONAL LIST FINISH ==================================================
 }
