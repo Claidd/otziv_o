@@ -65,14 +65,18 @@
                 <h3>Публикации</h3>
                 <span th:text="${user.reviewCount}" class="message-count">27</span>
             </a>
+            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="/companies/add_company" th:onclick="changeActive(event)" data-id="notifications_active">
+                <span class="material-icons-sharp">add</span>
+                <h3>компания</h3>
+            </a>
             <a href="#" th:onclick="changeActive(event)" data-id="school">
                 <span class="material-icons-sharp">school</span>
                 <h3>Обучение</h3>
             </a>
-            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="#" th:onclick="changeActive(event)" data-id="add">
+            <!-- <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="#" th:onclick="changeActive(event)" data-id="add">
                 <span class="material-icons-sharp">add</span>
                 <h3>Добавить</h3>
-            </a>
+            </a> -->
             <a  th:onclick="goBack(event)">
                 <span  class="material-icons-sharp">logout</span>
                 <h3>Назад</h3>

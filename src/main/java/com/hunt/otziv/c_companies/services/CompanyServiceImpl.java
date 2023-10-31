@@ -310,6 +310,24 @@ public class CompanyServiceImpl implements CompanyService{
         return companyDTO;
     } //    Метод подготовки ДТО при создании компании из Лида менеджером
 
+    public CompanyDTO convertToDtoToManagerNotLead(Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
+        List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
+        var random = new SecureRandom();
+        //        находим лида по переданному id
+
+        //        Устанавливаем поля из лида в новый дто
+        CompanyDTO companyDTO = new CompanyDTO();
+        companyDTO.setTelephone("");
+        companyDTO.setCity("");
+        companyDTO.setUser(convertToUserDtoToManager(principal));
+        companyDTO.setOperator(null);
+        companyDTO.setManager(convertToManagerDto(managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId())));
+        companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
+        companyDTO.setFilial(new FilialDTO());
+        companyDTO.setWorker(workers.get(random.nextInt(workers.size())));
+        return companyDTO;
+    } //    Метод подготовки ДТО при создании компании из Лида менеджером
+
     private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){ // перевод компании в ДТО Сэт
         return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
     } // перевод компании в ДТО

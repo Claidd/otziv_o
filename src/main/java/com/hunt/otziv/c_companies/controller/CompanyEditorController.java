@@ -69,6 +69,33 @@ public class CompanyEditorController {
     public List<SubCategoryDTO> getSubcategoriesByCategoryId(@RequestParam Long categoryId) { // Подгрузка подкатегорий
         return subCategoryService.getSubcategoriesByCategoryId(categoryId).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
     } // Подгрузка подкатегорий
+
+
+    @GetMapping("/add_company")
+    String newCompany(Principal principal, Model model) { // Добавление новой компании из лида Менеджера
+        model.addAttribute("newCompany", companyService.convertToDtoToManagerNotLead(principal));
+        List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+        model.addAttribute("categories", categories);
+        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().toList());
+//        model.addAttribute("leadId", leadId);
+        return "companies/new_company";
+    } // Добавление новой компании из лида Менеджера
+
+
+    @PostMapping("/add_company")
+    String addCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO) { // Добавление новой компании из лида Менеджера
+        log.info("1.Начинаем сохранение компании");
+        if (companyService.save(companyDTO)) {
+            log.info("OK.Начинаем сохранение компании прошло успешно");
+            for (Company company : companyService.getAllCompaniesList()) {
+                System.out.println(company);
+            }
+            return "redirect:/companies/new_company";
+        } else {
+            log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
+            return "redirect:/lead";
+        }
+    } // Добавление новой компании из лида Менеджера
 }
 
 

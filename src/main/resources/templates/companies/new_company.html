@@ -23,7 +23,7 @@
         <div class="container">
             <div class="row py-2 pt-1 mt-1">
                 <div class="col-12 pt-5">
-                    <form th:action="@{/companies/new_company_to_manager}" method="post" th:object="${newCompany}">
+                    <form th:action="@{/companies/add_company}" method="post" th:object="${newCompany}">
                         <div class="form-group">
                             <label for="title">Название компании</label>
                             <input type="text" id="title" th:field="*{title}" class="form-control"
@@ -32,7 +32,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('title')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div class="form-group d-none">
+                        <div class="form-group">
                             <label for="telephone">Номер телефона</label>
                             <input type="text" id="telephone" th:field="*{telephone}" th:value="${telephone}" class="form-control"
                                    placeholder="">
@@ -47,9 +47,9 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('urlChat')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div class="form-group d-none">
+                        <div class="form-group">
                             <label for="city">Город</label>
-                            <input type="hidden" id="city" th:field="*{city}" th:value="${newCompany.getCity()}" class="form-control"
+                            <input type="text" id="city" th:field="*{city}" th:value="${newCompany.getCity()}" class="form-control"
                                    placeholder="">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('city')}"
                                    th:text="${err}">Validation error</small>
@@ -111,7 +111,7 @@
                         </div>
 
 
-                        <div class="form-group d-none">
+                        <div class="form-group  d-none">
                             <label for="status">Укажите статус компании</label>
                             <input type="hidden" id="status" th:field="*{status.title}" class="form-control"
                                    placeholder="">
