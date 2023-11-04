@@ -39,7 +39,7 @@ public class CompanyController {
     private final WorkerService workerService;
     private final PromoTextService promoTextService;
 
-    int pageSize = 2; // желаемый размер страницы
+    int pageSize = 10; // желаемый размер страницы
 
 //    СДЕЛАТЬ СОРТИРОВКУ ПО ВРЕМЕНИ ИЗМЕНЕНИЙ А НЕ СОЗДАНИЯ
 

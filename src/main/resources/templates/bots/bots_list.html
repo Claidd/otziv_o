@@ -56,13 +56,12 @@
                         <th scope="row" th:text="${bot.active}">Активность</th>
                         <td>
                             <form th:method="get" th:action="'/bots/edit/' + ${bot.id}">
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="btn btn-outline-primary">Изменить</button>
                             </form>
                         </td>
                         <td>
                             <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="btn btn-outline-danger">Удалить</button>
                             </form>
                         </td>

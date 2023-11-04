@@ -64,19 +64,17 @@
                 <th scope="row" th:text="${category.categoryTitle}">Логин</th>
                 <td>
                     <form th:method="get" th:action="'/subcategories/' + ${category.id} + '/' + ${category.categoryTitle}">
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-primary">Добавить подкатегорию</button>
                     </form>
                 </td>
                 <td>
                     <form th:method="get" th:action="'/categories/update/' + ${category.id}">
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-primary">Изменить</button>
                     </form>
                 </td>
                 <td>
                     <form th:method="delete" th:action="'/categories/delete/' + ${category.id}" >
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit" class="btn btn-outline-danger">Удалить</button>
                     </form>
                 </td>

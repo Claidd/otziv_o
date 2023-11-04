@@ -12,6 +12,8 @@ public interface CategoryRepository extends CrudRepository<Category, Long> {
 
 
 
-    @Query("SELECT c, sc.id, sc.subCategoryTitle FROM Category c LEFT JOIN FETCH c.subCategoryTitle sc GROUP BY c.categoryTitle")
+    @Query("SELECT c FROM Category c LEFT JOIN FETCH c.subCategoryTitle sc")
     List<Category> findAllCategoryAndSubcategory();
+
+//    @Query("SELECT c, sc.id, sc.subCategoryTitle FROM Category c LEFT JOIN FETCH c.subCategoryTitle sc GROUP BY c.categoryTitle")
 }

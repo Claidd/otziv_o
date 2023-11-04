@@ -25,21 +25,21 @@
                                     <div class="btn__cell">
                                         <form th:method="get" th:action="'/review/editReviews/' + ${reviews[0].orderDetailsId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
-                                                <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
                                                 <button id="btn_editAll" type="submit" class="review__btn__review-editAll" th:text="'ИЗМЕНИТЬ ВСЕ ОТЗЫВЫ'">Изменить все отзывы</button>
                                             </div>
                                         </form>
                                         <form th:method="post" th:action="'/review/addReviews/' + ${reviews[0].companyId} + '/' + ${reviews[0].orderId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
-                                                <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
                                                 <button id="btn_add_review" type="submit" class="review__btn__review-add" th:text="'ДОБАВИТЬ НОВЫЙ ОТЗЫВ'">Изменить все отзывы</button>
                                             </div>
                                         </form>
                                         <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${reviews[0].companyId} + '/' + ${reviews[0].orderId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
-                                                <input type="hidden" name="_csrf" value="${_csrf.token}">
+                                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                                 <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
                                                 <button id="btn_go_to_check" type="submit" class="review__btn__review-check" th:text="'ОТПРАВИТЬ НА ПРОВЕРКУ'">Изменить все отзывы</button>
                                             </div>

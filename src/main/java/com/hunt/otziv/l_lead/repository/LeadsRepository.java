@@ -26,10 +26,10 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     List<Lead> findAllByLidListStatus(String status, Manager manager);
 
     @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.marketolog = :marketolog")
-    int findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate localDate);
+    Long findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate localDate);
 
     @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.operator = :operator")
-    int findAllByLidListStatusToOperator(String status, Operator operator, LocalDate localDate);
+    Long findAllByLidListStatusToOperator(String status, Operator operator, LocalDate localDate);
 
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
     List<Long> findIdListByDate(LocalDate localDate);

@@ -7,6 +7,11 @@
 
 //   });
 
+function goBack(event) {
+  event.preventDefault();
+  window.history.back();
+}
+
 $(document).ready(function() {
   $(".btn-nav").on("click", function() {
       var target = $(this).data("target");
@@ -17,10 +22,7 @@ $(document).ready(function() {
   });
 });
 
-function goBack(event) {
-  event.preventDefault();
-  window.history.back();
-}
+
 
 
 // Обработчик события изменения значения в первом селекторе

@@ -59,9 +59,9 @@ public class UsersController {
     }
 
     //Сохранение отредактированного пользователя
-    @PostMapping("/{id}/edit")
+    @PostMapping("/{userId}/edit")
     @PreAuthorize("hasRole('ADMIN')")
-    public String editUser(@PathVariable(value = "id")  long id, Model model,
+    public String editUserPost(@PathVariable(value = "userId")  long userId, Model model,
                            @ModelAttribute("editUserDto")  RegistrationUserDTO userDto,
                            @RequestParam String role,
                            @RequestParam("imageFile") MultipartFile imageFile,
@@ -69,20 +69,6 @@ public class UsersController {
                            @ModelAttribute("managerDTO") ManagerDTO managerDTO,
                            @ModelAttribute("workerDTO") WorkerDTO workerDTO,
                            @ModelAttribute("marketologDTO") MarketologDTO marketologDTO) throws IOException {
-        log.info("0. Валидация на повторный мейл");
-        System.out.println("================================================================");
-        System.out.println(imageFile);
-        System.out.println("================================================================");
-//        userValidation.validate(userDto, bindingResult);
-//        log.info("1. Валидация данных");
-//        /*Проверяем на ошибки*/
-//        if (bindingResult.hasErrors()) {
-//            log.info("1.1 Вошли в ошибку");
-//            return "1.Login_and_Register/editUser";
-//        }
-//        for (Operator operator:userDto.getOperators()) {
-//            System.out.println(operator);
-//        }
         log.info("Начинаем обновлять юзера");
         userService.updateProfile(userDto, role, operatorDTO, managerDTO, workerDTO, marketologDTO, imageFile);
         log.info("Обновление юзера прошло успешно");
@@ -127,3 +113,15 @@ public class UsersController {
 
 
 }
+
+
+//        userValidation.validate(userDto, bindingResult);
+//        log.info("1. Валидация данных");
+//        /*Проверяем на ошибки*/
+//        if (bindingResult.hasErrors()) {
+//            log.info("1.1 Вошли в ошибку");
+//            return "1.Login_and_Register/editUser";
+//        }
+//        for (Operator operator:userDto.getOperators()) {
+//            System.out.println(operator);
+//        }

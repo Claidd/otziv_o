@@ -446,46 +446,46 @@ public class LeadServiceImpl implements LeadService{
     }
 
     @Override
-    public int findAllByLidListStatusNew(Marketolog marketolog) {
+    public Long findAllByLidListStatusNew(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
     }
 
     @Override
-    public int findAllByLidListStatusInWork(Marketolog marketolog) {
+    public Long findAllByLidListStatusInWork(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
     }
     @Override
-    public int findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate) {
+    public Long findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
     }
 
     @Override
-    public int findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate) {
+    public Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
     }
 
 
     @Override
-    public int findAllByLidListStatusNew(Operator operator) {
+    public Long findAllByLidListStatusNew(Operator operator) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
     }
 
     @Override
-    public int findAllByLidListStatusInWork(Operator operator) {
+    public Long findAllByLidListStatusInWork(Operator operator) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
     }
 
     @Override
-    public int findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate) {
+    public Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
     }
 
     @Override
-    public int findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
+    public Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
     }
 

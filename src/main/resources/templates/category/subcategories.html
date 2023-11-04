@@ -63,13 +63,12 @@
                 <th scope="row" th:text="${subcategory.subCategoryTitle}">Название подкатегории</th>
                 <td>
                     <form th:method="get" th:action="'/subcategories/update/' + ${categoryId} + '/' + ${categoryTitle} + '/' + ${subcategory.id}">
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-primary">Изменить</button>
                     </form>
                 </td>
                 <td>
                     <form th:method="delete" th:action="'/subcategories/delete/' + ${categoryId} + '/' + ${categoryTitle} + '/' + ${subcategory.id}" >
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit" class="btn btn-outline-danger">Удалить</button>
                     </form>
                 </td>

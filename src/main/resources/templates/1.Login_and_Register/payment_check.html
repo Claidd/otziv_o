@@ -45,13 +45,12 @@
                 <td th:text="${paymentCheck.active}">Активность</td>
                 <td>
                     <form th:method="get" th:action="'/payment_check/' + ${paymentCheck.id} + '/edit'">
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-primary">Изменить</button>
                     </form>
                 </td>
                 <td>
                     <form th:method="delete" th:action="'/payment_check/' + ${paymentCheck.id} + '/delete'" >
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit" class="btn btn-outline-danger">Удалить</button>
                     </form>
                 </td>

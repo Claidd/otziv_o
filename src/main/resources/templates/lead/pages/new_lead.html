@@ -24,7 +24,7 @@
                 <small class="form-text text-danger" th:each="err : ${#fields.errors('telephoneLead')}" th:text="${err}">Validation error</small>
                 <!--        ввод дополнительных данных        -->
                 <textarea class="form__textarea" th:field="*{commentsLead}" placeholder="Ваш Текст"></textarea>
-                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                 <button class="form__btn" type="submit">ОТПРАВИТЬ</button>
             </form>
         </div> <!-- container -->

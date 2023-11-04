@@ -37,7 +37,17 @@ body {
 	font-display: swap;
 	/* background-color: #f6f6f9; */
 	background-color: #fff;
-	
+}
+
+button {
+	padding: 0;
+  border: none;
+  font: inherit;
+  color: inherit;
+  background-color: transparent;
+  /* отображаем курсор в виде руки при наведении; некоторые
+  считают, что необходимо оставлять стрелочный вид для кнопок */
+  cursor: pointer;
 }
 
 .wrapper {
@@ -239,6 +249,7 @@ body {
     	border: 3px solid #696969;
     	font-size: 2rem;
     	color: #218294;
+		font-family: 'laptev_brush';
 		/* color: #ff8400; */
     	text-decoration: none;
     	text-transform: uppercase;

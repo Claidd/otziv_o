@@ -293,7 +293,6 @@ public class CompanyServiceImpl implements CompanyService{
     public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
         LeadDTO leadDTO = leadService.findById(leadId);
         List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
-        System.out.println(workers);
         var random = new SecureRandom();
     //        находим лида по переданному id
 
@@ -362,7 +361,6 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
             companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
             companyDTO.setOrders(convertToOrderDTOSet(company.getOrderList()));
-            System.out.println(companyDTO);
             return companyDTO;
         }
         else {

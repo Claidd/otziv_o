@@ -16,6 +16,10 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 
 @RequiredArgsConstructor
 @EnableWebSecurity
@@ -30,6 +34,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
+        HttpSessionCsrfTokenRepository csrfTokenRepository = new HttpSessionCsrfTokenRepository();
 
         http
                 .authorizeHttpRequests((authorizeRequests) ->
@@ -37,9 +42,10 @@ public class SecurityConfig {
                                         //    настройка доступа
                                         .requestMatchers("/auth","/login","/register").permitAll()
                                         .requestMatchers("/api/auth").permitAll()
+                                        .requestMatchers("/.well-known/acme-challenge/**").permitAll()
                                         .requestMatchers("/access-denied").permitAll()
                                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/").authenticated()
+                                        .requestMatchers("/").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasRole("ADMIN")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "MANAGER", "MARKETOLOG")
@@ -85,8 +91,14 @@ public class SecurityConfig {
                 .exceptionHandling((exceptionHandling) ->
                              exceptionHandling.accessDeniedPage("/access-denied"))
 //                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                .csrf(AbstractHttpConfigurer::disable)
+//                .csrf(AbstractHttpConfigurer::disable)
                 .cors(AbstractHttpConfigurer::disable)
+                .csrf((csrf) -> csrf
+                        .csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())
+                        .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
+//                                .requireCsrfProtectionMatcher()
+//                        .ignoringRequestMatchers("/**")
+                )
                 //добавляем передачу токена в контекст перед указанным фильтром
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -35,13 +35,7 @@ public class AdminController {
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
-    private final LeadService leadService;
 
-
-//    @GetMapping() //Открываем главную страницу
-//    String adminPanel(Model model){
-//        return "admin/admin_panel";
-//    }
 
     @GetMapping()
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")

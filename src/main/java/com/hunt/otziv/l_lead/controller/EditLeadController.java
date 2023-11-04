@@ -87,9 +87,6 @@ public class EditLeadController {
         model.addAttribute("operators", operatorService.getAllOperators());
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("marketologs", marketologService.getAllMarketologs());
-//        model.addAttribute("operators", userService.getAllUsersByFio("ROLE_CALLING"));
-//        model.addAttribute("managers", userService.getAllUsersByFio("ROLE_MANAGER"));
-        System.out.println(marketologService.getAllMarketologs());
         return "lead/pages/edit_lead";
     }
 
@@ -97,15 +94,15 @@ public class EditLeadController {
     @PostMapping("lead/edit/{leadId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public String editLead(@PathVariable final Long leadId,
-                           @ModelAttribute("editLeadDto") @Valid LeadDTO leadDTO, BindingResult bindingResult){
+                           @ModelAttribute("editLeadDto")LeadDTO leadDTO){
         log.info("0. Валидация на повторный телефон");
-        leadValidation.validate(leadDTO, bindingResult);
+//        leadValidation.validate(leadDTO, bindingResult);
         log.info("1. Валидация данных");
         /*Проверяем на ошибки*/
-        if (bindingResult.hasErrors()) {
-            log.info("1.1 Вошли в ошибку");
-            return "lead/pages/edit_lead";
-        }
+//        if (bindingResult.hasErrors()) {
+//            log.info("1.1 Вошли в ошибку");
+//            return "lead/pages/edit_lead";
+//        }
         log.info("Начинаем обновлять Лида");
         leadService.updateProfile(leadDTO, leadId);
         log.info("Обновление лида прошло успешно");

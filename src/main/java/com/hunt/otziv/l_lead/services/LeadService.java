@@ -52,15 +52,15 @@ public interface LeadService {
     void changeStatusLeadOnNew (Long leadId);
 
     List<Lead> findAllByLidListStatus(String name);
-    int findAllByLidListStatusNew(Marketolog marketolog);
-    int findAllByLidListStatusInWork(Marketolog marketolog);
+    Long findAllByLidListStatusNew(Marketolog marketolog);
+    Long findAllByLidListStatusInWork(Marketolog marketolog);
 
-    int findAllByLidListStatusInWork(Operator operator);
-    int findAllByLidListStatusNew(Operator operator);
-    int findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate);
-    int findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
-    int findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate);
-    int findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
+    Long findAllByLidListStatusInWork(Operator operator);
+    Long findAllByLidListStatusNew(Operator operator);
+    Long findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate);
+    Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
+    Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate);
+    Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

@@ -90,7 +90,6 @@ public class ReviewServiceImpl implements ReviewService{
         List<Review> reviewPage;
         LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-        System.out.println(reviewId);
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage,pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
@@ -130,10 +129,7 @@ public class ReviewServiceImpl implements ReviewService{
     public int findAllByReviewListStatus(String username) {
         Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
         LocalDate localDate = LocalDate.now();
-        System.out.println("======================================");
-         int i = reviewRepository.findAllByReviewsListStatus(localDate, worker);
-        System.out.println("======================================");
-        return i;
+        return reviewRepository.findAllByReviewsListStatus(localDate, worker);
     }
 
     @Override

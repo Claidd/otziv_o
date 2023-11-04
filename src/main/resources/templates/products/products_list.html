@@ -31,7 +31,6 @@
                                 <!-- The text field -->
                                 <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                 <!-- The button used to copy the text -->
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card_remember-search__btn">Найти</button>
                             </form>
 
@@ -89,7 +88,7 @@
                                         </div>
 
                                         <!-- <input type="hidden" name="amount" th:value="${amount}" /> -->
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <div class="company__card__content__phone">
                                             <button type="submit" class="company__card__text__lead-button" th:text="ЗАКАЗАТЬ">в архив</button>
                                         </div>
@@ -99,7 +98,6 @@
                               
                             <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${product.id}">
                                 <div class="company__card__link__lead" th:text="${product.title != null ? product.title : 'пусто'}">Имя Менеджера</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                 <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
                             </form>
                         </div> <!-- card -->

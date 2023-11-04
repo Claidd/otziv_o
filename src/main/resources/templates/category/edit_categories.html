@@ -36,10 +36,9 @@
                         <input type="text" name="inputCategory" th:field="*{categoryTitle}" th:value="${categoryTitle}" class="form-control" id="inputCategory" aria-describedby="categoryTitleHelp">
                         <small class="form-text text-danger" th:each="err : ${#fields.errors('categoryTitle')}" th:text="${err}">Validation error</small>
                     </div>
-
+                    <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                     <button type="submit" class="btn btn-primary mt-3">Сохранить</button>
                     <th:block th:insert="~{fragments/common :: backDen}"></th:block>
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                 </form>
             </div>
         </div> <!-- container -->

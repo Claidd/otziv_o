@@ -19,9 +19,9 @@ public class MarketologsListDTO {
     private int sum1Month;
     private int order1Month;
     private int review1Month;
-    private int leadsNew;
-    private int leadsInWork;
-    private int percentInWork;
+    private Long leadsNew;
+    private Long leadsInWork;
+    private Long percentInWork;
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;

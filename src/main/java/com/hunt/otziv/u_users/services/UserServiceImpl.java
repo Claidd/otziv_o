@@ -185,6 +185,10 @@ public class UserServiceImpl  implements UserService {
         log.info("Достали юзера по имени из дто");
         boolean isChanged = false;
 
+        System.out.println(saveUser.getRoles().iterator().next().getName());
+        System.out.println(role);
+
+        System.out.println("change Role: " + !Objects.equals(saveUser.getRoles().iterator().next().getName(), role));
         System.out.println("change operators: " + !Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
         System.out.println("change managers: " + !Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
         System.out.println("change workers: " + !Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
@@ -193,10 +197,8 @@ public class UserServiceImpl  implements UserService {
         System.out.println("image: " + (!imageFile.isEmpty()));
 
         /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getRoles(), saveUser.getRoles())){
+        if (!Objects.equals(saveUser.getRoles().iterator().next().getName(), role)){
             log.info("Вошли в обновление роли");
-            System.out.println(userDTO.getRoles());
-            System.out.println(saveUser.getRoles());
             List<Role> roles = new ArrayList<>();
             roles.add(roleService.getUserRole(role));
             saveUser.setRoles(roles);
@@ -323,7 +325,7 @@ public class UserServiceImpl  implements UserService {
         }
 
         /*Проверяем не равен ли менеджера предыдущему, если нет, то меняем флаг на тру*/
-        if (Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
+        if (!Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
             System.out.println(userDTO.getManagers()==null);
             System.out.println(saveUser.getManagers()==null);
             System.out.println(!Objects.equals(userDTO.getManagers(), saveUser.getManagers()));

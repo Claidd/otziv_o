@@ -38,7 +38,7 @@
                             <input type="password" class="form-control" id="password" name="password"
                                 placeholder="Введите пароль">
                         </div>
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit" class="btn btn-primary">Логин</button>
                         <a class="px-3" th:href="@{/register}">Зарегистрироваться</a>
                         <div th:if="${param.error}" class="form-text text-danger">

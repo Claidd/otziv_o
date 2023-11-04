@@ -51,7 +51,7 @@
                         <small class="form-text text-danger" th:each="err : ${#fields.errors('fio')}" th:text="${err}">Validation
                             error</small>
                     </div>
-                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                    <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                     <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                     <a th:href="@{'/worker/bot'}" class="btn btn-secondary mt-3">Назад</a>
                 </form>
