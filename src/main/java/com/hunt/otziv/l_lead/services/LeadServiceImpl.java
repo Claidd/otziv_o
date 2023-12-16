@@ -452,6 +452,12 @@ public class LeadServiceImpl implements LeadService{
     }
 
     @Override
+    public Long findAllByLidListNew(Marketolog marketolog) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
+    }
+
+    @Override
     public Long findAllByLidListStatusInWork(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
@@ -459,6 +465,11 @@ public class LeadServiceImpl implements LeadService{
     @Override
     public Long findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
+    }
+
+    @Override
+    public Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate) {
+        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
     }
 
     @Override
@@ -474,9 +485,20 @@ public class LeadServiceImpl implements LeadService{
     }
 
     @Override
+    public Long findAllByLidListNew(Operator operator) {
+        LocalDate localDate = LocalDate.now();
+        return leadsRepository.findAllByLidListToOperator(operator, localDate);
+    }
+
+    @Override
     public Long findAllByLidListStatusInWork(Operator operator) {
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
+    }
+
+    @Override
+    public Long findAllByLidListNewToDate(Operator operator, LocalDate localDate) {
+        return leadsRepository.findAllByLidListToOperator(operator, localDate);
     }
 
     @Override
@@ -535,7 +557,11 @@ public class LeadServiceImpl implements LeadService{
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "+79";
-            return a[0] + a[1];
+            String tel = a[0] + a[1];
+            String tel2 = tel.replace("-","");
+            String tel3 = tel2.replace("(", "");
+            String tel4 = tel3.replace(")","");
+            return tel4.replace(" ", "");
         } else {
             return phone;
         }

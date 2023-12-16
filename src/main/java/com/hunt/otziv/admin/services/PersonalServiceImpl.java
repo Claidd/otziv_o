@@ -213,10 +213,8 @@ public class PersonalServiceImpl implements PersonalService {
         userStatDTO.setPercent1Year(percentageComparison(sum365, sum730).intValue());
         userStatDTO.setPercent1MonthOrders(percentageComparison(sumCount1Month, sumCount2Month).intValue());
         userStatDTO.setPercent2MonthOrders(percentageComparison(sumCount2Month, sumCount3Month).intValue());
-
         return userStatDTO;
     }
-
 
     private Map<Integer, BigDecimal> getMapZp1Month(LocalDate desiredDate, List<Zp> zps){ //Создание мапы день-сумма зп
         Map<Integer, BigDecimal> zpPayMapOnMonth = new HashMap<>();
@@ -468,7 +466,7 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zps = zpService.getAllWorkerZp(marketolog.getUser().getUsername());
         BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
-        Long newListLeadsToMarketolog = leadService.findAllByLidListStatusNew(marketolog);
+        Long newListLeadsToMarketolog = leadService.findAllByLidListNew(marketolog);
         Long inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWork(marketolog);
         Long percentInWork = 0L;
         if (newListLeadsToMarketolog != 0 && inWorkListLeadsToMarketolog != 0){
@@ -511,7 +509,7 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zps = zpService.getAllWorkerZp(operator.getUser().getUsername());
         BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
-        Long newListLeadsToOperators = leadService.findAllByLidListStatusNew(operator);
+        Long newListLeadsToOperators = leadService.findAllByLidListNew(operator);
         Long inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWork(operator);
         Long percentInWork = 0L;
         if (newListLeadsToOperators != 0 && inWorkListLeadsToOperators != 0){
@@ -724,7 +722,7 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zps = zpService.getAllWorkerZpToDate(marketolog.getUser().getUsername(), localDate);
         BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
-        Long newListLeadsToMarketolog = leadService.findAllByLidListStatusNewToDate(marketolog, localDate);
+        Long newListLeadsToMarketolog = leadService.findAllByLidListNewToDate(marketolog, localDate);
         Long inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWorkToDate(marketolog, localDate);
         Long percentInWork = 0L;
         if (newListLeadsToMarketolog != 0 || inWorkListLeadsToMarketolog != 0){
@@ -765,7 +763,7 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zps = zpService.getAllWorkerZpToDate(operator.getUser().getUsername(), localDate);
         BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
-        Long newListLeadsToOperators = leadService.findAllByLidListStatusNewToDate(operator, localDate);
+        Long newListLeadsToOperators = leadService.findAllByLidListNewToDate(operator, localDate);
         Long inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWorkToDate(operator, localDate);
         Long percentInWork = 0L;
         if (newListLeadsToOperators != 0 || inWorkListLeadsToOperators != 0){

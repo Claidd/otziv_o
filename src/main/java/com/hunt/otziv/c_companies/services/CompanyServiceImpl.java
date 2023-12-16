@@ -386,7 +386,6 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setManager(company.getManager().getUser().getFio());
             companyListDTO.setCommentsCompany(company.getCommentsCompany());
             companyListDTO.setDateNewTry(company.getDateNewTry());
-            System.out.println(companyListDTO);
             return companyListDTO;
         }
         else {
@@ -447,9 +446,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .amount(orderDetails.getAmount())
                 .price(orderDetails.getPrice())
                 .publishedDate(orderDetails.getPublishedDate())
-//                .product(convertToProductDTO(orderDetails.getProduct()))
                 .order(convertToOrderDTO(orderDetails.getOrder()))
-//                .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
                 .comment(orderDetails.getComment())
                 .build();
     } // перевод деталей заказа в ДТО
@@ -775,7 +772,11 @@ public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "+79";
-            return a[0] + a[1];
+            String tel = a[0] + a[1];
+            String tel2 = tel.replace("-","");
+            String tel3 = tel2.replace("(", "");
+            String tel4 = tel3.replace(")","");
+            return tel4.replace(" ", "");
         } else {
             return phone;
         }

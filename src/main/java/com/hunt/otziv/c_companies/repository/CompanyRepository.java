@@ -28,7 +28,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
         // взять id по статусу
     List<Long> findAllIdByStatus(String status);
 
-    @Query("SELECT c FROM Company c  WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) ORDER BY c.updateStatus")
+    @Query("SELECT c.id FROM Company c  WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) ORDER BY c.updateStatus")
     List<Long> findAllIdByStatusAndKeyword(String keyword, String status_title, String keyword2, String status_title2); // взять id по статусу + поиск
 
     @Query("SELECT c.id FROM Company c WHERE c.manager = :manager ORDER BY c.updateStatus")
@@ -39,10 +39,10 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
         // взять id по менеджеру + статусу
     List<Long> findAllByManagerAndStatus(Manager manager, String status);
 
-    @Query("SELECT c FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE %:keyword%) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE %:keyword2%)")
+    @Query("SELECT c.id FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE %:keyword%) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE %:keyword2%)")
     List<Long> findAllByManagerAndKeyWord(Manager manager, String keyword, Manager manager2, String keyword2); // взять id по менеджеру + поиск
 
-    @Query("SELECT c FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) ORDER BY c.updateStatus")
+    @Query("SELECT c.id FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) ORDER BY c.updateStatus")
     List<Long> findAllByManagerAndStatusAndKeyWords(Manager manager, String keyword, String status_title, Manager manager2, String keyword2, String status_title2);
     // взять id по менеджеру + поиск + статус
 

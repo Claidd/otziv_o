@@ -38,6 +38,10 @@ public class FilialServiceImpl implements FilialService{
         return filialRepository.findByTitleAndUrl(title, url);
     } // Взять филиал по названию и ссылке
 
+    public Filial findFilialByUrl(String url) { // Взять филиал по названию и ссылке
+        return filialRepository.findByUrl(url);
+    } // Взять филиал по названию и ссылке
+
     public void deleteFilial(Long filialId){ // Удаление филиала
         filialRepository.deleteById(filialId);
     } // Удаление филиала

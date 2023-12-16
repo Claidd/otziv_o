@@ -50,6 +50,8 @@ public interface LeadService {
     void changeStatusLeadOnInWork (Long leadId);
     // меняем статус с любого на Новый
     void changeStatusLeadOnNew (Long leadId);
+    Long findAllByLidListNew(Marketolog marketolog);
+    Long findAllByLidListNew(Operator operator);
 
     List<Lead> findAllByLidListStatus(String name);
     Long findAllByLidListStatusNew(Marketolog marketolog);
@@ -61,6 +63,8 @@ public interface LeadService {
     Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
     Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate);
     Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
+    Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate);
+    Long findAllByLidListNewToDate(Operator operator, LocalDate localDate);
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

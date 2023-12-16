@@ -181,6 +181,8 @@ public class OrderServiceImpl implements OrderService {
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
         List<Order> orderPage;
+        System.out.println(worker.getId());
+        System.out.println(worker);
         if (!keyword.isEmpty()){
             orderId = orderRepository.findAllIdByWorkerAndKeyWordAndStatus(worker,keyword, status, keyword, status);
             orderPage = orderRepository.findAll(orderId);
@@ -203,7 +205,6 @@ public class OrderServiceImpl implements OrderService {
                 .stream()
                 .map(this::toDTOListOrders)
                 .collect(Collectors.toList());
-        System.out.println(orderListDTOs);
         return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
     }
 
@@ -254,14 +255,17 @@ public class OrderServiceImpl implements OrderService {
             Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
             OrderDetails orderDetails = saveOrder.getDetails().get(0);
             Company saveCompany = saveOrder.getCompany();
-            Review review = createNewReview(saveCompany, orderDetails, saveOrder);
+            log.info("2. Создаем новый отзыв");
+            Review review = reviewService.save(createNewReview(saveCompany, orderDetails, saveOrder));
             log.info("2. Создали новый отзыв");
             List<Review> newList = orderDetails.getReviews();
             newList.add(review);
             orderDetails.setReviews(newList);
             orderDetails.setAmount(orderDetails.getAmount() + 1);
             orderDetails.setPrice(orderDetails.getPrice().add(orderDetails.getProduct().getPrice()));
+            log.info("Before saving orderDetails: {}", orderDetails);
             orderDetailsService.save(orderDetails);
+            log.info("After saving orderDetails: {}", orderDetails);
             log.info("3. Сохранили его в детали");
             saveOrder.setAmount(saveOrder.getAmount() + 1);
             saveOrder.setSum(saveOrder.getSum().add(saveOrder.getDetails().get(0).getProduct().getPrice()));

@@ -74,7 +74,7 @@
                             <label>
                                 <textarea  class="company__card__remember-text" th:utext="@{${review.filialUrl}}" th:id="myInput6"></textarea>
                             </label>
-                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunction2Gis()">ссылка</button>
+                            <button type="submit" class="company__card__text__lead-button" th:attr="data-orderfilial=${review.filialUrl}" th:onclick="myFunction2Gis(this)">ссылка</button>
                         </div>
 
                         <!-- <form class="company__card__text__lead" target="_blank" th:action="@{${review.filial.url}}">

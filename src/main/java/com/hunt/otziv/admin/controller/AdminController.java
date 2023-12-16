@@ -158,6 +158,18 @@ public class AdminController {
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
+    @PostMapping("/user_info")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        long startTime = System.nanoTime();
+        System.out.println(staticFor);
+        model.put("route", "user_info");
+        model.put("user", personalService.getUserLK(principal));
+        model.put("workerZp", personalService.getWorkerReviews2(staticFor, date));
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        return new ModelAndView("admin/layouts/user_info", model);
+    }
+
     @GetMapping("/analyse")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {

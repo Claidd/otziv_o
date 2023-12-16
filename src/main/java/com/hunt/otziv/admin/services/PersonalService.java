@@ -34,6 +34,7 @@ public interface PersonalService {
     StatDTO getStats2(LocalDate localDate);
     UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
+
     List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
     List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);
     List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);

@@ -23,9 +23,9 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
 
     @Query("SELECT o.id FROM Order o ORDER BY o.changed")// взять все заказы по id
     List<Long> findAllIdToAdmin();
-    @Query("SELECT o.id FROM Order o WHERE o.manager = manager ORDER BY o.changed")// взять все заказы по id + manager
+    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed")// взять все заказы по id + manager
     List<Long> findAllIdToManager(Manager manager);
-    @Query("SELECT o.id FROM Order o WHERE o.worker = worker ORDER BY o.changed")// взять все заказы по id + worker
+    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed")// взять все заказы по id + worker
     List<Long> findAllIdToWorker(Worker worker);
 
 

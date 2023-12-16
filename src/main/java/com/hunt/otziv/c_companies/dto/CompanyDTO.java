@@ -15,6 +15,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -31,9 +32,11 @@ public class CompanyDTO {
     private Long id;
 
     //    название компании
+    @NotEmpty(message = "Название не может быть пустым")
     private String title;
 
     //    ссылка на чат
+    @NotEmpty(message = "Ссылка на чат не может быть пустой")
     private String urlChat;
 
     //    телефон нового компании

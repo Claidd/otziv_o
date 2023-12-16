@@ -30,28 +30,19 @@ public class BotValidation implements Validator {
         if (botsRepository.findByLogin(changeNumberPhone(botDTO.getLogin())).isPresent()){
             errors.rejectValue("login", "", "Такой login уже занят другим пользователем");
         }
-
-
-        /*Проверяем на имеющийся мейл в базе*/
-//        if (userRepository.findByEmail(userDto.getEmail()) != null){
-//            errors.rejectValue("email", "", "Такой email уже занят другим пользователем");
-//        }
-
-
-        /*Проверяем на совпадение паролей*/
-//        if (!userDto.getPassword().equals(userDto.getMatchingPassword())){
-//            errors.rejectValue("password", "", "Пароли не совпадают");
-//        }
     }
 
     // Вспомогательный метод для корректировки номера телефона
-    public String changeNumberPhone(String phone){
-        String[] a;
-        a = phone.split("9");
-        a[0] = "+79";
-        String b = a[0] + a[1];
-        System.out.println(b);
-        return b;
-//        userDto.getPhoneNumber().replaceFirst("8", "+7")
+    public String changeNumberPhone(String phone) {
+        String[] a = phone.split("9");
+
+        if (a.length >= 2) {
+            a[0] = "+79";
+            return a[0] + a[1];
+        } else {
+            // Возвращаем исходный номер телефона, если '9' не найден
+            return phone;
+        }
     }
+
 }

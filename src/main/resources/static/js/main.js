@@ -46,6 +46,8 @@ $("#category").change(function() {
     });
 });
 
+
+
 const tabsItems = document.querySelectorAll('.tabs__btn__lead-item');
 const tabsContents = document.querySelectorAll('.tabs__content__lead-item, .tabs__content__lead-item2');
 
@@ -96,7 +98,7 @@ document.addEventListener("DOMContentLoaded", function() {
     document.execCommand("copy");
   
     /* Alert the copied text */
-    alert("Copied the text: " + copyText1.value);
+    // alert("Copied the text: " + copyText1.value);
   }
 
   function myFunction2() {
@@ -112,7 +114,7 @@ document.addEventListener("DOMContentLoaded", function() {
     document.execCommand("copy");
   
     /* Alert the copied text */
-    alert("Copied the text: " + copyText2.value);
+    // alert("Copied the text: " + copyText2.value);
   }
 
   function myFunction3() {
@@ -127,7 +129,7 @@ document.addEventListener("DOMContentLoaded", function() {
     document.execCommand("copy");
   
     /* Alert the copied text */
-    alert("Copied the text: " + copyText3.value);
+    // alert("Copied the text: " + copyText3.value);
   }
 
   function myFunction4() {
@@ -142,7 +144,7 @@ document.addEventListener("DOMContentLoaded", function() {
     document.execCommand("copy");
   
     /* Alert the copied text */
-    alert("Copied the text: " + copyText4.value);
+    // alert("Copied the text: " + copyText4.value);
   }
 
   function myFunction5() {
@@ -157,8 +159,48 @@ document.addEventListener("DOMContentLoaded", function() {
     document.execCommand("copy");
 
     /* Alert the copied text */
-    alert("Copied the text: " + copyText5.value);
+    // alert("Copied the text: " + copyText5.value);
   }
+
+  function copyTelephone(button) {
+    /* Get the text field */
+    var phoneNumber = button.getAttribute("data-ordertel");
+
+    /* Create a temporary textarea element */
+    var tempTextArea = document.createElement("textarea");
+    tempTextArea.value = phoneNumber;
+
+    /* Append the textarea to the DOM */
+    document.body.appendChild(tempTextArea);
+
+    /* Select the text in the textarea */
+    tempTextArea.select();
+
+    /* Copy the text inside the textarea */
+    document.execCommand("copy");
+
+    /* Remove the temporary textarea from the DOM */
+    document.body.removeChild(tempTextArea);
+
+    /* Alert the copied text */
+    // alert("Copied the text: " + phoneNumber);
+}
+
+  // function copyTelephone(button) {
+  //   /* Get the text field */
+  //   var phoneNumber = button.getAttribute("data-ordertel");
+  //   // var copyTelephone2 = document.getElementById("copyPhone");
+
+  //   /* Select the text field */
+  //   phoneNumber.select();
+
+
+  //   /* Copy the text inside the text field */
+  //   document.execCommand("copy");
+
+  //   /* Alert the copied text */
+  //   alert("Copied the text: " + phoneNumber.value);
+  // }
 
   function checkAndUrl(button) {
     var orderId = button.getAttribute("data-orderid");
@@ -173,7 +215,7 @@ document.addEventListener("DOMContentLoaded", function() {
     checkAndUrl.select();
     document.execCommand("copy");
     // Оповестить пользователя
-    alert("Copied the text: " + newText);
+    // alert("Copied the text: " + newText);
     checkAndUrl.value = currentText;
 }
 
@@ -187,7 +229,7 @@ function onPayment(button) {
   onPayment.value = newText;
   onPayment.select();
   document.execCommand("copy");
-  alert("Copied the text: " + newText);
+  // alert("Copied the text: " + newText);
   onPayment.value = currentText;
 }
     // <!-- ==================== COPY BUTTON REVIEW ====================== -->
@@ -200,7 +242,7 @@ function onPayment(button) {
       /* Copy the text inside the text field */
       document.execCommand("copy");
       /* Alert the copied text */
-      alert("Copied the text: " + copyTextLogin.value);
+      // alert("Copied the text: " + copyTextLogin.value);
     }
   
     function myFunctionBotPassword(reviewId) { // BOT PASSWORD 
@@ -211,7 +253,7 @@ function onPayment(button) {
       /* Copy the text inside the text field */
       document.execCommand("copy");
       /* Alert the copied text */
-      alert("Copied the text: " + copyTextLogin.value);
+      // alert("Copied the text: " + copyTextLogin.value);
     }
   
     function myFunctionReviewText(reviewId) { // Review Text 
@@ -222,7 +264,7 @@ function onPayment(button) {
       /* Copy the text inside the text field */
       document.execCommand("copy");
       /* Alert the copied text */
-      alert("Copied the text: " + copyTextLogin.value);
+      // alert("Copied the text: " + copyTextLogin.value);
     }
   
     function myFunctionReviewAnswer(reviewId) { // Review Answer 
@@ -233,7 +275,7 @@ function onPayment(button) {
       /* Copy the text inside the text field */
       document.execCommand("copy");
       /* Alert the copied text */
-      alert("Copied the text: " + copyTextLogin.value);
+      // alert("Copied the text: " + copyTextLogin.value);
     }
 
     function myFunctionVk() {
@@ -244,19 +286,47 @@ function onPayment(button) {
       /* Copy the text inside the text field */
       document.execCommand("copy");
       /* Alert the copied text */
-      alert("Copied the text: " + copyText5.value);
+      // alert("Copied the text: " + copyText5.value);
     }
 
-    function myFunction2Gis() {
-      /* Get the text field */
-      var copyText6 = document.getElementById("myInput6");
-      /* Select the text field */
-      copyText6.select();
-      /* Copy the text inside the text field */
-      document.execCommand("copy");
-      /* Alert the copied text */
-      alert("Copied the text: " + copyText6.value);
+
+    function myFunction2Gis(button) {
+      /* Get the text field using the data-orderfilial attribute */
+      var copyText6 = button.getAttribute("data-orderfilial");
+      if (copyText6) {
+        /* Create a temporary textarea element */
+        var tempTextArea = document.createElement("textarea");
+        tempTextArea.value = copyText6;
+    
+        /* Append the textarea to the DOM */
+        document.body.appendChild(tempTextArea);
+    
+        /* Select the text in the textarea */
+        tempTextArea.select();
+    
+        /* Copy the text inside the textarea */
+        document.execCommand("copy");
+    
+        /* Remove the temporary textarea from the DOM */
+        document.body.removeChild(tempTextArea);
+    
+        /* Alert the copied text */
+        // alert("Copied the text: " + copyText6);
+      } else {
+        console.error("Element not found");
+      }
     }
+
+    // function myFunction2Gis(button) {
+    //   /* Get the text field */
+    //   var copyText6 = document.getElementById("myInput6");
+    //   /* Select the text field */
+    //   copyText6.select();
+    //   /* Copy the text inside the text field */
+    //   document.execCommand("copy");
+    //   /* Alert the copied text */
+    //   // alert("Copied the text: " + copyText6.value);
+    // }
   
     // <!-- ==================== COPY BUTTON REVIEW ====================== -->
 

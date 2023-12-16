@@ -89,7 +89,7 @@
 <section  th:fragment="personalToManager" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
     <!-- Пользователи -->
     <div class="new-users">
-        <h2>Менеджеры 2</h2>
+        <h2>Менеджеры</h2>
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
@@ -176,7 +176,7 @@
 <section  th:fragment="score" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
     <!-- Пользователи -->
     <div class="new-users">
-        <h2>МенеджерыS</h2>
+        <h2>Менеджеры</h2>
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">

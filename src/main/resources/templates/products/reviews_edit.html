@@ -30,15 +30,31 @@
         <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
 
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__cardsmoll">
+        <div class="container">
+            <div class="mb-3" th:if="${saveSuccess}">
+                <div class="alert alert-success">
+                    <!-- Данные успешно изменены и сохранены. -->
+ 
+
+                    <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${orderDetailDTO.order.company.id} + '/' + ${orderDetailDTO.order.id}"  class="company__card__content__button3">
+                        <div class="company__card__content__button__btn">
+                            <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                            <p class="company__label" >Отправить отзывы на проверку клиенту</p>
+                            <button id="btn_go_to_check" type="submit" class="review__btn__review-check" th:text="'ОТПРАВИТЬ НА ПРОВЕРКУ'">Изменить все отзывы</button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div> <!-- container -->
+    </section> <!-- section -->
+
         <section class="company__lead__cardsmoll">
             <div class="container">
                 <h2 class="company__section-title2">Редактор отзывов</h2>
                     <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
-                        <div class="mb-3" th:if="${saveSuccess}">
-                            <div class="alert alert-success">
-                                Данные успешно изменены и сохранены.
-                            </div>
-                        </div>
+                        
                         <div class="company__tabs__lead">
                             <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                             <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
@@ -168,7 +184,7 @@
                                 <div  class="company__card__content__button2">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <p class="company__label" >Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекци".</p>
+                                        <p class="company__label" >Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекции".</p>
                                         <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
                                     </div>
                                 </div>

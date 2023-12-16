@@ -10,13 +10,16 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.util.CompanyValidation;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -34,6 +37,7 @@ public class CompanyEditorController {
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final UserService userService;
+    private final CompanyValidation companyValidation;
 
 
     @GetMapping("/new_company_to_manager/{leadId}")
@@ -41,15 +45,27 @@ public class CompanyEditorController {
         model.addAttribute("newCompany", companyService.convertToDtoToManager(leadId, principal));
         List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         model.addAttribute("categories", categories);
-        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().toList());
+
         model.addAttribute("leadId", leadId);
         return "companies/new_company_to_manager";
     } // Добавление новой компании из лида Менеджера
 
     @PostMapping("/new_company_to_manager")
-    String saveNewCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO, @ModelAttribute("leadId") Long leadId) { // Добавление новой компании из лида Менеджера
+    String saveNewCompanyToManager(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, @ModelAttribute("leadId") Long leadId, Model model) { // Добавление новой компании из лида Менеджера
         log.info("1.Начинаем сохранение компании");
-        if (companyService.save(companyDTO)) {
+        companyValidation.validate(companyDTO, bindingResult);
+        if (bindingResult.hasErrors()) {
+            log.info("1.1 Вошли в ошибку");
+            CompanyDTO companyDTO1 = companyService.convertToDtoToManager(leadId, principal);
+            companyDTO.setUser(companyDTO1.getUser());
+            model.addAttribute("newCompany", companyDTO);
+            List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+            model.addAttribute("categories", categories);
+            model.addAttribute("leadId", leadId);
+            model.addAttribute("errorUrl", "Категории слетели из-за повтора филиала: обновите");
+            return "companies/new_company_to_manager";
+        }
+        else if (companyService.save(companyDTO)) {
             log.info("OK.Начинаем сохранение компании прошло успешно");
             for (Company company : companyService.getAllCompaniesList()) {
                 log.info("вход в меняем статус с К рассылке на В работе");
@@ -76,16 +92,26 @@ public class CompanyEditorController {
         model.addAttribute("newCompany", companyService.convertToDtoToManagerNotLead(principal));
         List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         model.addAttribute("categories", categories);
-        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().toList());
-//        model.addAttribute("leadId", leadId);
         return "companies/new_company";
     } // Добавление новой компании из лида Менеджера
 
 
     @PostMapping("/add_company")
-    String addCompanyToManager(Principal principal, @ModelAttribute("newCompany") CompanyDTO companyDTO) { // Добавление новой компании из лида Менеджера
+    String addCompanyToManager(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, Model model) { // Добавление новой компании из лида Менеджера
         log.info("1.Начинаем сохранение компании");
-        if (companyService.save(companyDTO)) {
+        companyValidation.validate(companyDTO, bindingResult);
+        if (bindingResult.hasErrors()) {
+            log.info("1.1 Вошли в ошибку");
+            CompanyDTO companyDTO1 = companyService.convertToDtoToManagerNotLead(principal);
+            companyDTO.setUser(companyDTO1.getUser());
+            model.addAttribute("newCompany", companyDTO);
+            List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+            model.addAttribute("categories", categories);
+            model.addAttribute("errorUrl", "Категории слетели из-за повтора филиала: обновите");
+            return "companies/new_company";
+        }
+
+        else if (companyService.save(companyDTO)) {
             log.info("OK.Начинаем сохранение компании прошло успешно");
             for (Company company : companyService.getAllCompaniesList()) {
                 System.out.println(company);

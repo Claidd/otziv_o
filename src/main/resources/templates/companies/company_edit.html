@@ -23,7 +23,7 @@
         <div class="container">
             <div class="row py-2 pt-1 mt-1">
                 <div class="col-12 pt-5">
-                    <form method="post" th:object="${companyDTO}">
+                    <form method="post" th:object="${companyDTO}" th:action="@{/companies/editCompany/{companyId}(companyId=${companyDTO.id})}">
                         <div class="mb-3" th:if="${saveSuccess}">
                             <div class="alert alert-success">
                                 Данные успешно изменены и сохранены.

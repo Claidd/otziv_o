@@ -15,4 +15,5 @@ public interface FilialService {
 
     FilialDTO getFilialByIdToDTO(Long id);
     void updateFilial(FilialDTO filialDTO);
+    Filial findFilialByUrl(String url);
 }

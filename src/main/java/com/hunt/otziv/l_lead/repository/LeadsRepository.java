@@ -28,14 +28,23 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.marketolog = :marketolog")
     Long findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate localDate);
 
+    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.marketolog = :marketolog")
+    Long findAllByLidListToMarketolog(Marketolog marketolog, LocalDate localDate);
+
     @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.operator = :operator")
     Long findAllByLidListStatusToOperator(String status, Operator operator, LocalDate localDate);
+
+    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.operator = :operator")
+    Long findAllByLidListToOperator(Operator operator, LocalDate localDate);
 
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
     List<Long> findIdListByDate(LocalDate localDate);
 
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status")
     List<Long> findIdListByDate(LocalDate localDate, String status);
+
+    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
+    List<Long> findIdListByDateNoStatus(LocalDate localDate);
 
     @Query("SELECT l FROM Lead l  WHERE l.id IN (:leadId)")
     List<Lead> findAllByDate(List<Long> leadId);

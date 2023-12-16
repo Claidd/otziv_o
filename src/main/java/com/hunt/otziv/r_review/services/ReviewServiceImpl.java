@@ -102,7 +102,6 @@ public class ReviewServiceImpl implements ReviewService{
                 .stream()
                 .map(this::toReviewDTOOne)
                 .collect(Collectors.toList());
-        System.out.println(ReviewDTOOnes);
         return new PageImpl<>(ReviewDTOOnes, pageable, reviewPage.size());
     }
 

@@ -70,6 +70,7 @@
                         <!-- <small class="text_muted">08:00 AM - 12:00 PM</small> -->
                         <form id="myForm" method="post">
                             <input class="data" type="date" name="date" id="dataToday">
+                            <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                             <button  type="submit" class="data2">выбрать</button>
                         </form>
                     </div>

@@ -4,11 +4,14 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.AmountDTO;
 import com.hunt.otziv.r_review.services.AmountService;
+import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -28,9 +31,10 @@ public class OrderController {
 
     private final ProductService productService;
     private final OrderService orderService;
-    private final CompanyService companyService;
+    private final ReviewService reviewService;
     private final AmountService amountService;
     private final PromoTextService promoTextService;
+    private final OrderDetailsService orderDetailsService;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -109,7 +113,8 @@ public class OrderController {
         if(orderService.changeStatusForOrder(orderID, "В проверку")) {
             log.info("статус заказа успешно изменен на на проверке");
             rm.addFlashAttribute("saveSuccess", "true");
-            return "redirect:/ordersDetails/{companyID}/{orderID}";
+//            return "redirect:/ordersDetails/{companyID}/{orderID}";
+            return "redirect:/worker/new_orders";
         } else {
             log.info("ошибка при изменении статуса заказа на на проверке");
             return "redirect:/ordersDetails/{companyID}/{orderID}";
@@ -138,7 +143,11 @@ public class OrderController {
 
     @PostMapping ("/status_for_publish/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
+            Order order = orderService.getOrder(orderID);
+            OrderDetailsDTO orderDetailDTO = orderDetailsService.getOrderDetailDTOById(order.getDetails().iterator().next().getId());
+            reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO);
             log.info("статус заказа успешно изменен на Публикация");
         } else {
             log.info("ошибка при изменении статуса заказа на Публикация");
@@ -239,6 +248,9 @@ public class OrderController {
     @PostMapping ("/status_for_publish2/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
+            Order order = orderService.getOrder(orderID);
+            OrderDetailsDTO orderDetailDTO = orderDetailsService.getOrderDetailDTOById(order.getDetails().iterator().next().getId());
+            reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO);
             log.info("статус заказа успешно изменен на Публикация");
         } else {
             log.info("ошибка при изменении статуса заказа на Публикация");

@@ -19,6 +19,11 @@
             <section class="company__lead__card">
                 <div class="container">
                     <h2 class="company__section-title" th:text="'Список заказов:  ' + ${TitleName}">Список заказов</h2>
+                    <div class="mb-3" th:if="${saveSuccess}">
+                        <div class="alert alert-success">
+                            Данные успешно изменены и сохранены.
+                        </div>
+                    </div>
                     <div class="company__tabs__lead">
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                         <div class="company__tabs__btn__worker">
