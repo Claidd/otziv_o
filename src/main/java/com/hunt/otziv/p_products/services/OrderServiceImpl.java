@@ -41,6 +41,7 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.weaver.World;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -367,12 +368,12 @@ public class OrderServiceImpl implements OrderService {
         /*Временная проверка сравнений*/
         System.out.println("filial id: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
         System.out.println("filial url: " + !Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl()));
-        System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()));
-        System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getWorker().getId()));
+        System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId()));
+        System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
 
 
-        if (!Objects.equals(orderDTO.getFilial().getTitle(), saveOrder.getFilial().getTitle())){ /*Проверка смены названия*/
+        if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
             log.info("Обновляем филиал");
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
             isChanged = true;
@@ -382,12 +383,19 @@ public class OrderServiceImpl implements OrderService {
             saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId())){ /*Проверка смены работника*/
+        if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) || !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId())){ /*Проверка смены работника*/
             log.info("Обновляем работника");
-            saveOrder.setWorker(convertWorkerDTOToWorker(orderDTO.getWorker()));
+            Worker newWorker = convertWorkerDTOToWorker(orderDTO.getWorker());
+            saveOrder.setWorker(newWorker);
+            // Обновляем работника в связанных отзывах
+            for (OrderDetails orderDetails : saveOrder.getDetails()) {
+                for (Review review : orderDetails.getReviews()) {
+                    review.setWorker(newWorker);
+                }
+            }
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getWorker().getId())){ /*Проверка смены работника*/
+        if (!Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId())){ /*Проверка смены работника*/
             log.info("Обновляем менеджера");
             saveOrder.setManager(convertManagerDTOToManager(orderDTO.getManager()));
             isChanged = true;
@@ -398,7 +406,6 @@ public class OrderServiceImpl implements OrderService {
             isChanged = true;
         }
 
-
         if  (isChanged){
             log.info("3. Начали сохранять обновленный Заказ в БД");
             orderRepository.save(saveOrder);
@@ -408,6 +415,11 @@ public class OrderServiceImpl implements OrderService {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
     } // Метод Обновления Заказа
+
+    public Review saveReviews(Review review, Worker newWorker) {
+        review.setWorker(newWorker);
+        return reviewService.save(review);
+    }
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title){ // смена статуса для заказа с проверкой на Оплачено
         try {

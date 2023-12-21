@@ -52,13 +52,13 @@ public class Review {
     @JoinColumn(name = "review_bot")
     private Bot bot;
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "review_order_details")
+    @JoinColumn(name = "review_order_details", updatable = false)
     private OrderDetails orderDetails;
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_filial")
     private Filial filial;
     //    каждый бот имеет Работника, который его добавлял
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_worker")
     private Worker worker;
 

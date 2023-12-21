@@ -38,7 +38,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="url">Дата изменений</label>
+                            <label for="url">Ссылка</label>
                             <input type="text" id="url" th:field="*{filial.url}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.url')}" th:text="${err}">Validation error</small>
                         </div>
@@ -96,8 +96,8 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('changed')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="inputLink" class="form-label">Активность</label>
+                        <div sec:authorize="hasAnyRole('ADMIN')" class="mb-3">
+                            <label for="inputLink" class="form-label">отмектка о выполнении</label>
                             <input type="checkbox" th:checked="${ordersDTO.isComplete()}" th:field="*{complete}" class="form-control form-paymentCheck" id="inputLink" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('complete')}" th:text="${err}">Validation error</small>
                         </div>

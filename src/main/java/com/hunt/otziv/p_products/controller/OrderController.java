@@ -87,10 +87,11 @@ public class OrderController {
 //    ============================================= ORDER EDIT =========================================================
     @GetMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Get
     String OrderEdit(@PathVariable Long companyId, @PathVariable Long orderId,  Model model){
+        long startTime = System.nanoTime();
         model.addAttribute("ordersDTO", orderService.getOrderDTO(orderId));
         model.addAttribute("companyId", companyId);
         model.addAttribute("orderId", orderId);
-        System.out.println(orderService.getOrderDTO(orderId));
+        checkTimeMethod("Время выполнения OrderController/ordersCompany/ordersDetails/{companyId}/{orderId} для всех: ", startTime);
         return "products/order_edit";
     } // Страница редактирования Заказа - Get
 
