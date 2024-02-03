@@ -68,7 +68,7 @@
                                             <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
                                         </div> 
                                         <div class="company__card__content__subtitle">
-                                            <a class="company__card__title__lead2" >текст ответа: </a>
+                                            <a class="company__card__title__lead2" >Замечания:</a>
                                         </div>
                                         <div >
                                             <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
@@ -184,7 +184,7 @@
                                 <div  class="company__card__content__button2">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <p class="company__label" >Нажмите если отзывы откорректироанны и вы даедет согласи на публикацию, по обговариваемому ранее графику. В случае существенных ошибок, щаполните форму комментария ниже, с указанием какие корективы требуется внести и нажмите кнопку отправци отзывов на "Коррекции".</p>
+                                        <p class="company__label" >Нажмите, если отзывы откорректированы, и вы согласны на публикацию в соответствии с обговоренным ранее графиком. В случае выявления существенных ошибок, заполните форму комментария ниже, указав, какие коррективы требуется внести, и нажмите кнопку отправить отзывы на "Коррекцию".</p>
                                         <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
                                     </div>
                                 </div>
@@ -258,7 +258,7 @@
                                         <div  class="reviews__btn__save">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                                <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
+                                                <p class="company__label" >Сохранить изменения, но пока, что не публиковать, а отправить на корректировку</p>
                                                 <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
                                             </div>
                                         </div>

@@ -64,6 +64,63 @@ public class CompanyServiceImpl implements CompanyService{
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
 
+    @Transactional
+    public void save(Company company){
+        companyRepository.save(company);
+    } // Сохранение компании в БД
+
+    //    Метод подготовки ДТО при создании компании из Лида менеджером
+
+    //      =====================================CREATE USERS - START=======================================================
+    // Создание нового пользователя "Клиент" - начало
+    @Transactional
+    public boolean save(CompanyDTO companyDTO){ // Сохранение новой компании из дто
+        log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
+        //        в начале сохранения устанавливаем поля из дто
+        Company company = Company.builder()
+                .title(companyDTO.getTitle())
+                .telephone(changeNumberPhone(companyDTO.getTelephone()))
+                .city(companyDTO.getCity())
+                .urlChat(companyDTO.getUrlChat())
+                .email(companyDTO.getEmail())
+                .user(convertUserDTOToUser(companyDTO.getUser()))
+                .operator(companyDTO.getOperator())
+                .manager(convertManagerDTOToManager(companyDTO.getManager()))
+                .workers(convertWorkerDTOToWorker(companyDTO.getWorker()))
+                .status(convertCompanyStatusDTOToCompanyStatus(companyDTO.getStatus()))
+                .categoryCompany(convertCategoryDTOToCategory(companyDTO.getCategoryCompany()))
+                .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
+                .active(true)
+                .commentsCompany(companyDTO.getCommentsCompany())
+                .counterNoPay(0)
+                .counterPay(0)
+                .sumTotal(new BigDecimal(0))
+                .build();
+
+        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+        Set<Filial> existingFilials = company.getFilial(); // пытаемся получить текущий список филиалов из компании
+        if (existingFilials == null) {
+            existingFilials = new HashSet<>();// если он пустой, то создаем новый set
+        }
+        Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial()); // берем список из дто
+        existingFilials.addAll(newFilials); // объединяем эти списки
+        company.setFilial(existingFilials); // устанавливаем компании объединенный список
+        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+        log.info("4. Компания успешно создана");
+        try {
+            Company company1 = companyRepository.save(company); // сохраняем новую компанию в БД
+            log.info("5. Компания успешно сохранена");
+            for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
+                filial.setCompany(company1); // Установка компании в филиале
+                filialService.save(filial); // Сохранение обновленного филиала
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Ошибка при сохранении компании: " + e.getMessage());
+            return false;
+        }
+    } // Создание нового пользователя "Клиент" - конец
+//      =====================================CREATE USERS - START=======================================================
 
     public List<Company> getAllCompaniesList(){ // Взять все компании
         return companyRepository.findAll();
@@ -231,63 +288,6 @@ public class CompanyServiceImpl implements CompanyService{
                 String.format("Компания '%d' не найден", companyId))));
     } // Взять компанию по Id и поиску
 
-    @Transactional
-    public void save(Company company){
-        companyRepository.save(company);
-    } // Сохранение компании в БД
-
-    //    Метод подготовки ДТО при создании компании из Лида менеджером
-
-    //      =====================================CREATE USERS - START=======================================================
-    // Создание нового пользователя "Клиент" - начало
-    @Transactional
-    public boolean save(CompanyDTO companyDTO){ // Сохранение новой компании из дто
-        log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
-    //        в начале сохранения устанавливаем поля из дто
-        Company company = Company.builder()
-                .title(companyDTO.getTitle())
-                .telephone(companyDTO.getTelephone())
-                .city(companyDTO.getCity())
-                .urlChat(companyDTO.getUrlChat())
-                .email(companyDTO.getEmail())
-                .user(convertUserDTOToUser(companyDTO.getUser()))
-                .operator(companyDTO.getOperator())
-                .manager(convertManagerDTOToManager(companyDTO.getManager()))
-                .workers(convertWorkerDTOToWorker(companyDTO.getWorker()))
-                .status(convertCompanyStatusDTOToCompanyStatus(companyDTO.getStatus()))
-                .categoryCompany(convertCategoryDTOToCategory(companyDTO.getCategoryCompany()))
-                .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
-                .active(true)
-                .commentsCompany(companyDTO.getCommentsCompany())
-                .counterNoPay(0)
-                .counterPay(0)
-                .sumTotal(new BigDecimal(0))
-                .build();
-
-        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-        Set<Filial> existingFilials = company.getFilial(); // пытаемся получить текущий список филиалов из компании
-        if (existingFilials == null) {
-            existingFilials = new HashSet<>();// если он пустой, то создаем новый set
-        }
-        Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial()); // берем список из дто
-        existingFilials.addAll(newFilials); // объединяем эти списки
-        company.setFilial(existingFilials); // устанавливаем компании объединенный список
-        //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-        log.info("4. Компания успешно создана");
-        try {
-            Company company1 = companyRepository.save(company); // сохраняем новую компанию в БД
-            log.info("5. Компания успешно сохранена");
-            for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
-                filial.setCompany(company1); // Установка компании в филиале
-                filialService.save(filial); // Сохранение обновленного филиала
-            }
-            return true;
-        } catch (Exception e) {
-            log.error("Ошибка при сохранении компании: " + e.getMessage());
-            return false;
-        }
-    } // Создание нового пользователя "Клиент" - конец
-//      =====================================CREATE USERS - START=======================================================
 
 
     public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером

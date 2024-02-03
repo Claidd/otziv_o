@@ -785,6 +785,10 @@ body {
     width: 100%;
 }
 
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+}
 /* =================== LEADS CARD END ================= */
 
 /* ==================== MAIN END =================== */

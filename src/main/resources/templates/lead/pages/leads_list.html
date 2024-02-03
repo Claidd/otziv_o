@@ -126,7 +126,7 @@
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 1 -->
                     
-                        <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
+                        <!-- <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
                             <ul class="pagination">
                                 <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
@@ -139,7 +139,37 @@
                                     <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
                                 </li>
                             </ul>
+                        </div> -->
+
+                        <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
+                            <ul class="pagination">
+                                <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
+                                </li>
+                        
+                                <!-- Отображаем первые пять страниц -->
+                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
+                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                                </li>
+                        
+                                <!-- Отображаем "..." только если есть более 5 страниц -->
+                                <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                        
+                                <!-- Отображаем последнюю страницу -->
+                                <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
+                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                                </li>
+                        
+                                <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
+                                </li>
+                            </ul>
                         </div>
+                        
                     
 
                     <!-- СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ-->
@@ -477,7 +507,7 @@
                             </form>
                         </div> <!-- card -->
                     </div> <!-- tabs__content-item -->
-                    <div class="tabs__content__lead-item2" id="pagination-6">
+                    <!-- <div class="tabs__content__lead-item2" id="pagination-6">
                         <ul class="pagination">
                             <li th:class="${leadListALL.first ? 'disabled' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${leadListALL.number - 1})}" class="page-link">Предыдущая</a>
@@ -490,8 +520,38 @@
                                 <a th:href="@{/lead(pageNumber=${leadListALL.number + 1})}" class="page-link">Следующая</a>
                             </li>
                         </ul>
-                    </div>
+                    </div> -->
                     <!-- СПИСОК КАРТОЧЕК 6 -->
+
+                    <div class="tabs__content__lead-item2" id="pagination-6">
+                        <ul class="pagination">
+                            <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                    
+                            <!-- Отображаем первые пять страниц -->
+                            <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
+                                th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                    
+                            <!-- Отображаем "..." только если есть более 5 страниц -->
+                            <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                    
+                            <!-- Отображаем последнюю страницу -->
+                            <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
+                                th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                            </li>
+                    
+                            <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                        </ul>
+                    </div>
+                    
                     
 
 

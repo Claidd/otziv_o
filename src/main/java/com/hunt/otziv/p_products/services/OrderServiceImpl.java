@@ -792,7 +792,7 @@ public class OrderServiceImpl implements OrderService {
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
                 .text("Текст отзыва")
-                .answer("Ответ на отзыв")
+                .answer("впишите сюда замечания к отзыву, если есть и нажмите кнопку <Корректировать>, ниже, под всеми отзывами")
                 .orderDetails(orderDetails)
                 .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
                 .filial(convertFilialDTOToFilial(filialDTO))
