@@ -274,6 +274,7 @@ public class CompanyController {
 //    =========================================== COMPANY STATUS =======================================================
     @GetMapping("/editCompany/{companyId}")
     String ordersDetailsToCompany(@PathVariable Long companyId,  Model model) { // обновление компании -
+        long startTime = System.nanoTime();
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
         model.addAttribute("companyDTO", companyDTO);
         model.addAttribute("categories", categoryService.getAllCategories());
@@ -281,6 +282,7 @@ public class CompanyController {
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("newWorkerDTO", new WorkerDTO());
         model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));
+        checkTimeMethod("Время выполнения CompanyController/editCompany/{companyId} для Всех: ", startTime);
         return "companies/company_edit";
     } // обновление компании -
 

@@ -20,7 +20,7 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
 
     // найти оператора по id
 
-    Set<Manager> findAll();
+    List<Manager> findAll();
 
     @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH m.companies c LEFT JOIN FETCH m.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
     List<Manager> findAllManagers();
