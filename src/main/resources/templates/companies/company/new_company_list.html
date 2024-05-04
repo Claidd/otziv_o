@@ -16,11 +16,11 @@
 
             <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
             <section class="company__lead__card">
-                <div class="container">
+                <!-- <div class="container">
                     <h2 class="company__section-title" th:text="${TitleName}"></h2>
-                    <div class="company__tabs__lead">
+                    <div class="company__tabs__lead"> -->
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                        <div class="company__tabs__btn__lead">
+                        <!-- <div class="company__tabs__btn__lead">
                             <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/lead'}">Лиды</a>
                             <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-10" th:href="@{'/companies/new_company'}">Новые</a>
                             <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/companies/on_work'}">В работе</a>
@@ -31,14 +31,15 @@
                             <a class="company__tabs__btn-item" data-button="content-16" th:href="@{'/companies/ban_company'}">Бан</a>
                             <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/companies/allCompany'}">Все</a>
                             <a class="company__tabs__btn-item" th:href="@{'/orders/new_orders'}" data-button="content-16">Заказы</a>
-                        </div>
+                        </div> -->
 
-
+                        <th:block th:insert="~{fragments/navigation :: navigation}"></th:block>
                         <th:block th:insert="~{fragments/company :: company}"></th:block>
                     
 
                     
-                </div> <!-- container -->
+                <!-- </div>  -->
+                <!-- container -->
             </section> <!-- section -->
 
                 <!-- ====================== CHOOSE END =========================== -->

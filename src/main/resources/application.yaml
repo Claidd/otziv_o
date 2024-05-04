@@ -1,15 +1,20 @@
 
 server:
   port: 8080
+#jwt:
+#  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+#  lifetime: 1800m
 jwt:
-  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
-  lifetime: 5m
+  access-token-key: '{"kty":"oct","k":"hi7S5RX5ZRZooHA0RKGctZ-KtR9FoESgCnH-3BNg5XI"}'
+  refresh-token-key: '{"kty":"oct","k":"956PBFst1FguLr5irJD-aQ"}'
 
 spring:
   servlet:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
+    session:
+      timeout: 50
   jpa:
     hibernate:
       ddl-auto: validate
@@ -17,6 +22,7 @@ spring:
     show-sql: false
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
+
     # Настройки мультипарт загрузки
 
 
@@ -31,14 +37,14 @@ spring:
 #    password: Rkfql54532111
 
 #    локальная база данных
-#    url: jdbc:mysql://localhost:3306/otziv
-#    username: hunt
-#    password: 545321
+    url: jdbc:mysql://localhost:3306/otziv
+    username: hunt
+    password: 545321
 
   #    Docker база данных
-    url: jdbc:mysql://mysql:3306/otziv
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
+#    url: jdbc:mysql://mysql:3306/otziv
+#    username: ${MYSQL_USER}
+#    password: ${MYSQL_PASSWORD}
 
   flyway:
     baseline-on-migrate: true

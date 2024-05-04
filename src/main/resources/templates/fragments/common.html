@@ -161,7 +161,7 @@
 
 <!-- ==================== COMPANY PAGINATION ======================== -->
 <th:block th:fragment="companyPagination" xmlns:th="http://www.w3.org/1999/xhtml">
-    <div class="page__row2 " id="pagination-1">
+    <div class="page__row2" id="pagination-1">
         <ul class="pagination">
             <li th:class="${allCompany.first ? 'disabled' : ''}" class="page-item">
                 <a th:href="@{${urlFirst}(pageNumber=${allCompany.number - 1})}" class="page-link">Предыдущая</a>
@@ -180,7 +180,7 @@
 
 <!-- ==================== ORDERS PAGINATION ======================== -->
 <th:block th:fragment="ordersPagination" xmlns:th="http://www.w3.org/1999/xhtml">
-    <div class="page__row2 " id="pagination-1">
+    <div class="page__row2" id="pagination-1">
         <ul class="pagination">
             <li th:class="${orders.first ? 'disabled' : ''}" class="page-item">
                 <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1})}" class="page-link">Предыдущая</a>

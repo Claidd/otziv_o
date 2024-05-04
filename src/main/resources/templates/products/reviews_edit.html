@@ -35,9 +35,9 @@
             <div class="mb-3" th:if="${saveSuccess}">
                 <div class="alert alert-success">
                     <!-- Данные успешно изменены и сохранены. -->
- 
+                    <p sec:authorize="not hasAnyRole('WORKER')" class="company__label" >Успешно сохранено </p>
 
-                    <form th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${orderDetailDTO.order.company.id} + '/' + ${orderDetailDTO.order.id}"  class="company__card__content__button3">
+                    <form sec:authorize="hasAnyRole('WORKER')"  th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${orderDetailDTO.order.company.id} + '/' + ${orderDetailDTO.order.id}"  class="company__card__content__button3">
                         <div class="company__card__content__button__btn">
                             <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                             <p class="company__label" >Отправить отзывы на проверку клиенту</p>
@@ -52,7 +52,12 @@
 
         <section class="company__lead__cardsmoll">
             <div class="container">
-                <h2 class="company__section-title2">Редактор отзывов</h2>
+                <span th:if="${statusCheck == null}">
+                    <h2  class="company__section-title2" >Не одобрено</h2>
+                </span>
+                <span th:if="${statusCheck != null}">
+                    <h2 class="company__section-title2" >Одобрено</h2>
+                </span>
                     <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
                         
                         <div class="company__tabs__lead">
@@ -73,6 +78,17 @@
                                         <div >
                                             <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
                                         </div> 
+
+
+                                        <div class="company__card__content__button">
+                                            <div class="review__button_save">
+                                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                                <!-- <p class="company__label" >Сохранить все изменения.</p> -->
+                                                <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">Сохранить</button>
+                                            </div>
+                                        </div>
+
+
                                         <div style="display: none;">
                                             <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].id}"></textarea>
                                         </div> 
@@ -97,17 +113,18 @@
                             <input class="company__card__content__review__answer" type="text" th:field="*{comment}">
                         </div> 
 
-                            <div  class="company__card__content__button">
+                            <!-- <div sec:authorize="hasAnyRole('ADMIN', 'WORKER')"   class="company__card__content__button">
                                 <div class="company__card__content__button__btn">
                                     <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                    <p class="company__label" >Сохранить изменения, но пока, что не публиковать</p>
+                                    <p class="company__label" >Сохранить все изменения.</p>
                                     <button id="btn_save" type="submit" class="company__card__text__review-button" th:text="СОХРАНИТЬ">Сохранить</button>
                                 </div>
-                            </div>
+                            </div> -->
                         </div> <!-- tabs -->
                     </form>
             </div> <!-- container -->
         </section> <!-- section -->
+        
 
         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
         <section class="company__lead__cardsmoll">
@@ -116,7 +133,7 @@
                     <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId} + '/publish'">
                         <div class="company__tabs__lead" >
                             <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
-                            <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
+                            <div  class="orderdetails__tabs__content-item2 orderdetails__tabs__content-item--active"  id="content-10">
                                 <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
                                     <div class="company__card__content__lead" >
                                         <!-- элементы карточки - начало -->
@@ -184,7 +201,7 @@
                                 <div  class="company__card__content__button2">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <p class="company__label" >Нажмите, если отзывы откорректированы, сохранены нажатием кнопки "Сохранить" и вы согласны на публикацию в соответствии с обговоренным ранее графиком. В случае выявления существенных ошибок, заполните форму комментария ниже, указав, какие коррективы требуется внести, и нажмите кнопку отправить отзывы на "Коррекцию".</p>
+                                        <p class="company__label" >Нажмите, если вы согласны на публикацию отзывов в соответствии с обговоренным ранее графиком. В случае существенных ошибок, заполните форму комментария ниже, указав, какие коррективы внести, и нажмите кнопку отправить отзывы на "Коррекцию".</p>
                                         <button id="btn_publish" type="submit" class="company__card__text__publish-button" th:text="'РАЗРЕШИТЬ ПУБЛИКАЦИЮ'">в архив</button>
                                     </div>
                                 </div>
@@ -202,7 +219,7 @@
                     <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviewses/' + ${orderDetailId}">
                         <div class="company__tabs__lead" >
                             <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
-                            <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active"  id="content-10">
+                            <div  class="orderdetails__tabs__content-item2 orderdetails__tabs__content-item--active"  id="content-10">
                                 <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
                                     <div class="company__card__content__lead" >
                                         <!-- элементы карточки - начало -->
@@ -258,7 +275,7 @@
                                         <div  class="reviews__btn__save">
                                             <div class="company__card__content__button__btn">
                                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                                <p class="company__label" >Сохранить изменения, но пока, что не публиковать, а отправить на корректировку</p>
+                                                <p class="company__label_correct">Сохранить изменения, но пока, что не публиковать, а отправить на корректировку</p>
                                                 <button id="btn_comment" type="submit" class="company__card__text__comment-button" th:text="КОРРЕКТИРОВАТЬ">в архив</button>
                                             </div>
                                         </div>

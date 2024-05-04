@@ -1,7 +1,9 @@
 package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -65,6 +67,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .amount(order.getAmount())
                 .counter(order.getCounter())
                 .orderDetailsId(order.getDetails().iterator().next().getId())
+                .filial(convertToFilialDTO(order.getFilial()))
                 .build();
     } // перевод заказа в дто
 
@@ -73,6 +76,12 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .id(company.getId())
                 .title(company.getTitle())
                 .urlChat(company.getUrlChat())
+                .build();
+    } // перевод компании в дто
+    private FilialDTO convertToFilialDTO(Filial filial){ // перевод компании в дто
+        return FilialDTO.builder()
+                .id(filial.getId())
+                .title(filial.getTitle())
                 .build();
     } // перевод компании в дто
     private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){ // перевод отзыва в дто

@@ -1,0 +1,78 @@
+<section th:fragment="navigation" xmlns:th="http://www.w3.org/1999/xhtml">
+    <div class="container">
+        <h2 class="company__section-title" th:text="${TitleName}"></h2>
+        <div class="navigation">
+
+            <select class="company__tabs__dropdown" name="company_status" onchange="redirect(this)">
+                <option value="lead" th:href="@{'/lead'}">Лиды</option>
+                <!-- <option value="companies/new_company" th:href="@{'/companies/new_company'}">Новые</option>
+                <option value="content-13" th:href="@{'/companies/on_work'}">В работе</option>
+                <option value="content-14" th:href="@{'/companies/new_order'}">Новый заказ</option>
+                <option value="content-12" th:href="@{'/companies/to_send'}">К рассылке</option>
+                <option value="content-12" th:href="@{'/companies/waiting'}">Ожидание</option>
+                <option value="content-14" th:href="@{'/companies/on_stop'}">На стопе</option>
+                <option value="content-16" th:href="@{'/companies/ban_company'}">Бан</option> -->
+                <option value="lead" th:href="@{'/companies/allCompany'}" selected>Лиды</option>
+                <!-- <option value="content-16" th:href="@{'/orders/new_orders'}">Заказы</option> -->
+            </select>
+
+            <select class="company__tabs__dropdown" name="company_status2" onchange="redirect(this)">
+                <option value="companies/allCompany" th:href="@{'/companies/allCompany'}" selected>Компании</option>
+                <option value="companies/allCompany" th:href="@{'/companies/allCompany'}">Все</option>
+                <option value="companies/new_company" th:href="@{'/companies/new_company'}">Новые</option>
+                <option value="companies/on_work" th:href="@{'/companies/on_work'}">В работе</option>
+                <option value="companies/new_order" th:href="@{'/companies/new_order'}">Новый заказ</option>
+                <option value="companies/to_send" th:href="@{'/companies/to_send'}">К рассылке</option>
+                <option value="companies/waiting" th:href="@{'/companies/waiting'}">Ожидание</option>
+                <option value="companies/on_stop" th:href="@{'/companies/on_stop'}">На стопе</option>
+                <option value="companies/ban_company" th:href="@{'/companies/ban_company'}">Бан</option>
+            </select>
+
+          <select class="company__tabs__dropdown" name="company_status3" onchange="redirect(this)">
+            <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Заказы</option>
+            <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Все</option>
+            <option value="orders/new_orders" th:href="@{'/orders/new_orders'}">Новые</option>
+            <option value="orders/to_check" th:href="@{'/orders/to_check'}">В проверку</option>
+            <option value="orders/on_check" th:href="@{'/orders/on_check'}">На проверке</option>
+            <option value="orders/correct" th:href="@{'/orders/correct'}">Коррекция</option>
+            <option value="orders/to_published" th:href="@{'/orders/to_published'}">Публикация</option>
+            <option value="orders/published" th:href="@{'/orders/published'}">Опубликовано</option>
+            <option value="orders/payment_check" th:href="@{'/orders/payment_check'}">Выставлен счет</option>
+            <option value="orders/remember" th:href="@{'/orders/remember'}">Напоминание</option>
+            <option value="orders/no_pay" th:href="@{'/orders/no_pay'}">Не опл.</option>
+            <option value="orders/pay" th:href="@{'/orders/pay'}">Оплачено</option>
+          </select>
+
+          <select class="company__tabs__dropdown" name="company_status4" onchange="redirect(this)">
+            <option value="companies/allCompany3" th:href="@{'/companies/allCompany'}">Прочее</option>
+            <option value="categories" th:href="@{'/categories'}">Категории</option>          
+        </select>
+
+          
+        </div>
+
+        <div class="company__tabs__lead">
+            
+          </div>
+      </div>
+</section>
+
+
+
+
+<!-- <div class="container">
+    <h2 class="company__section-title" th:text="${TitleName}"></h2>
+    <div class="company__tabs__lead"> -->
+        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+        <!-- <div class="company__tabs__btn__lead">
+    <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/lead'}">Лиды</a>
+    <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/companies/new_company'}">Новые</a>
+    <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/companies/on_work'}">В работе</a>
+    <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/companies/new_order'}">Новый заказ</a>
+    <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/companies/to_send'}">К рассылке</a>
+    <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/companies/waiting'}">Ожидание</a>
+    <a class="company__tabs__btn-item" data-button="content-14" th:href="@{'/companies/on_stop'}">На стопе</a>
+    <a class="company__tabs__btn-item" data-button="content-16" th:href="@{'/companies/ban_company'}">Бан</a>
+    <a class="company__tabs__btn-item  company__tabs__btn-item--active" data-button="content-15" th:href="@{'/companies/allCompany'}">Все</a>
+    <a class="company__tabs__btn-item" th:href="@{'/orders/new_orders'}" data-button="content-16">Заказы</a>
+</div> -->

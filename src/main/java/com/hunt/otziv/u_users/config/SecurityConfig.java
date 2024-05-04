@@ -15,9 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 
@@ -30,7 +28,10 @@ public class SecurityConfig {
 
     private final UserServiceImpl userService;
     private final BCryptPasswordEncoder passwordEncoder;
-    private final JwtRequestFilter jwtRequestFilter;
+
+//    private final JwtRequestFilter jwtRequestFilter;
+
+
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
@@ -69,6 +70,7 @@ public class SecurityConfig {
                                         .requestMatchers("/payment_check/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/worker/**").hasAnyRole("ADMIN","WORKER","MANAGER")
+                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
 
                 )
                 //    настройка логирования
@@ -98,9 +100,10 @@ public class SecurityConfig {
                         .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
 //                                .requireCsrfProtectionMatcher()
 //                        .ignoringRequestMatchers("/**")
-                )
+                );
+//                .apply(jwtAuthenticationConfigurer);
                 //добавляем передачу токена в контекст перед указанным фильтром
-                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+//                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
                 //обработчик ошибки ТОЛЬКО для режима отладки
 //                .exceptionHandling(exceptionHandling -> exceptionHandling
@@ -112,10 +115,10 @@ public class SecurityConfig {
     }
 
 //    настройка доступа к внутренним файлам
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer(){
-        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
-    }
+//    @Bean
+//    public WebSecurityCustomizer webSecurityCustomizer(){
+//        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
+//    }
 //    3
     @Bean
     public DaoAuthenticationProvider daoAuthenticationProvider(){
@@ -130,6 +133,9 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
+
+
+
 
 //    @Bean
 //    public PasswordEncoder passwordEncoder() {

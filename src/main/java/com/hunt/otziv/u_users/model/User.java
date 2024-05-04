@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.*;
+import org.springframework.security.core.GrantedAuthority;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -138,5 +139,6 @@ public class User {
     public String toString() {
         return "User(id=" + id + ", username=" + username + ", email=" + email + ", fio=" + fio + ")";
     }
+
 
 }

@@ -66,6 +66,11 @@ body{
     line-height: 1.3;
 }
 
+section{
+    margin-left: 5px;
+    margin-right: 5px;
+}
+
 a{
     color: var(--color-dark);
 }
@@ -122,6 +127,7 @@ b{
 .warning{
     color: var(--color-warning);
 }
+
 
 /* =========================== */
 
@@ -347,7 +353,23 @@ b{
 
 /* ==================== TOP END ==================== */
 
+/* ================= NAVIGATION START =============== */
 
+.navigation {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.company__tabs__dropdown{
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'laptev_brush';
+    margin-bottom: 20px;
+    width: 120px;
+}
+
+/* ================= NAVIGATION END =============== */
 
 
 /* ================= LEADS START =============== */
@@ -476,6 +498,12 @@ b{
     gap: 100px 40px;
 }
 
+.orderdetails__tabs__content-item2 {
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 100px 40px;
+}
+
 .orderdetails__tabs__content-item.orderdetails__tabs__content-item--active {
     display: grid;
 }
@@ -549,11 +577,11 @@ b{
 
 .company__lead__card {
     padding: 0px 0 100px;
-    
 }
 
+
 .company__tabs__review{
-    margin-top: 3rem;
+    /* margin-top: 3rem; */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -810,6 +838,7 @@ b{
     /* border: 1px solid #e418ff38; */
     /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
     border-radius: 1.2rem;
+    /* margin-left: 10px; */
 }
 
 .review__card__lead {
@@ -1096,11 +1125,24 @@ b{
 }
 
 .company__card__content__button__btn {
-    margin-top: 3rem;
+    margin-top: 0rem;
+    width: 100%; /* Удалите height: 70px; */
+}
+
+.review__button_save {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
     width: 100%; /* Удалите height: 70px; */
 }
 
 .company__label {
+    text-align: center;
+    display: block; /* Измените на display: block; */
+    width: 100%;
+    margin-bottom: 2rem; 
+}
+
+.company__label_correct {
     text-align: center;
     display: block; /* Измените на display: block; */
     width: 100%;
@@ -1433,7 +1475,7 @@ b{
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 336px;
+    height: 276px;
     width: 100%;
     font-family: 'laptev_brush';
 }
@@ -1446,7 +1488,7 @@ b{
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 136px;
+    height: 86px;
     width: 100%;
     text-align: center;
     padding: 5px 5px 8px 10px;
@@ -1454,6 +1496,7 @@ b{
     margin-bottom: 20px;
     font-family: 'laptev_brush';
     font-size: 1rem;
+    color: var(--color-dark-variant);
 }
 
 .company__card__content__review__comment{
@@ -1483,7 +1526,7 @@ b{
     border-radius: 1.2rem;
     text-align: center;
     font-family: 'laptev_brush';
-    font-size: 1rem;
+    font-size: 1.2rem;
     /* border-radius: 1.2rem; */
 }
 
@@ -1565,6 +1608,10 @@ b{
 }
 
 /* ================== PROGRESS BAR END ================= */
+
+/* ================= PAGINATION START ================ */
+
+/* ================= PAGINATION END ================ */
 
 /* ==================== MAIN END =================== */
 
@@ -2093,6 +2140,10 @@ main .recent-orders a{
     .orderdetails__tabs__content-item {
         grid-template-columns: repeat(4, 1fr);
     }
+
+    .orderdetails__tabs__content-item2 {
+        grid-template-columns: repeat(4, 1fr);
+    }
     
     .company__tabs__btn__lead{
         padding: 0 0 50px;
@@ -2201,6 +2252,10 @@ main .recent-orders a{
         grid-template-columns: repeat(3, 1fr);
     }
     .orderdetails__tabs__content-item {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .orderdetails__tabs__content-item2 {
         grid-template-columns: repeat(3, 1fr);
     }
 
@@ -2315,11 +2370,18 @@ main .recent-orders a{
     }
 
     .company__tabs__content-item {
-        grid-template-columns: repeat(2, 1fr);
+        /* grid-template-columns: repeat(2, 1fr); */
+        grid-template-columns: repeat(10, minmax(370px, 1fr));
+        overflow-x: scroll;
     }
 
     .orderdetails__tabs__content-item {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(10, minmax(365px, 1fr));
+        overflow-x: scroll;
+    }
+
+    .orderdetails__tabs__content-item {
+        grid-template-columns: repeat(10, minmax(365px, 1fr));
     }
 
     .company__tabs__content__lead-item {
@@ -2334,7 +2396,41 @@ main .recent-orders a{
         margin-bottom: 20px;
     }
 
-    /* .company__tabs__btn__lead{
+    /* ==================== секция редакции отзывов =================== */
+    .company__card__content__review__text {
+        height: 180px;
+    }
+
+    .company__card__content__review__answer {
+        height: 90px;
+    }
+
+    .company__card__content__button{
+        margin-top: 0rem;
+        margin-bottom: 0rem;
+    }
+
+    .company__card__content__button__btn {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .company__label {
+        margin-bottom: 1rem;
+    }
+
+    .company__label_correct {
+        margin-bottom: 2rem;
+        margin-top: 5rem;
+    }
+
+    .company__section-title2 {
+        margin-bottom: 30px;
+        font-size: 36px;
+    }
+ /* ==================== секция редакции отзывов =================== */
+    
+ /* .company__tabs__btn__lead{
         grid-template-columns: repeat(3, 1fr);
         margin-bottom: 20px;
     }  */
@@ -2549,7 +2645,6 @@ main .recent-orders a{
         }
 
 
-
         .company__tabs__btn__lead{
             grid-template-columns: repeat(4, 1fr);
         } 
@@ -2559,11 +2654,19 @@ main .recent-orders a{
         }
 
         .company__tabs__content-item {
-            grid-template-columns: repeat(1, 1fr);
+            grid-template-columns: repeat(10, minmax(370px, 1fr));
+            overflow-x: scroll; /* Или overflow-x: auto */
         }
 
         .orderdetails__tabs__content-item {
-            grid-template-columns: repeat(1, 1fr);
+            grid-template-columns: repeat(10, minmax(360px, 1fr));
+            overflow-x: scroll;
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18);
+        }
+
+        .orderdetails__tabs__content-item2 {
+            grid-template-columns: repeat(10, minmax(360px, 1fr));
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18);
         }
 
         .company__tabs__btn-item {
@@ -2623,6 +2726,65 @@ main .recent-orders a{
         .company__section-title{
             margin-top: 0;
         }
+
+            /* ==================== секция редакции отзывов =================== */
+    .company__card__content__review__text {
+        height: 165px;
+    }
+
+    .company__card__content__review__answer {
+        font-size: 0.8rem;
+        height: 50px;
+        color: var(--color-dark-variant);
+    }
+
+    .company__card__content__button{
+        margin-top: 1rem;
+        margin-bottom: 0rem;
+    }
+
+    .company__card__content__button__btn {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+
+    .company__label {
+        margin-bottom: 0.3rem;
+        font-size: 0.9rem;
+    }
+
+    .company__label_correct {
+        margin-bottom: 0.3rem;
+        margin-top: 5rem;
+        font-size: 0.9rem;
+    }
+
+    .company__card__content__subtitle {
+        margin-top: 1rem;
+    }
+
+    .company__card__text__review {
+        font-size: 1.2rem;
+    }
+
+    .company__section-title2 {
+        margin-bottom: 10px;
+        font-size: 28px;
+    }
+
+    .company__tabs__lead {
+        margin-bottom: 20px;
+    }
+
+    .company__card__text__review-button {
+        height: 60px;
+        /* box-shadow: 0 -2rem 3rem rgba(132, 139, 200, 0.18); */
+    }
+    .company__card__text__publish-button {
+        height: 60px;
+    }
+ /* ==================== секция редакции отзывов =================== */
 }
 
 
@@ -2759,6 +2921,60 @@ main .recent-orders a{
     /* ==================== 470 =================== */
     @media (max-width: 470px) {
    
+        .company__tabs__btn__lead{
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 20px;
+        } 
+
+        .company__tabs__btn__order{
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 20px;
+        }
+    }
+
+        /* ==================== 430 =================== */
+    @media (max-width: 431px) {
+
+            .company__tabs__content-item {
+                grid-template-columns: repeat(10, minmax(410px, 1fr));
+            }
+
+    
+            .orderdetails__tabs__content-item {
+                grid-template-columns: repeat(10, minmax(400px, 1fr));
+            }
+    
+            .orderdetails__tabs__content-item2 {
+                grid-template-columns: repeat(10, minmax(400px, 1fr));
+            }
+   
+            .company__tabs__btn__lead{
+                grid-template-columns: repeat(3, 1fr);
+                margin-bottom: 20px;
+            } 
+    
+            .company__tabs__btn__order{
+                grid-template-columns: repeat(3, 1fr);
+                margin-bottom: 20px;
+            }
+        }
+
+                /* ==================== 430 =================== */
+    @media (max-width: 391px) {
+
+        .company__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(365px, 1fr));
+        }
+
+
+        .orderdetails__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(360px, 1fr));
+        }
+
+        .orderdetails__tabs__content-item2 {
+            grid-template-columns: repeat(10, minmax(360px, 1fr));
+        }
+
         .company__tabs__btn__lead{
             grid-template-columns: repeat(3, 1fr);
             margin-bottom: 20px;

@@ -78,10 +78,13 @@ public class ReviewController {
     //    =========================================== REVIEW'S EDIT =======================================================
     @GetMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Get
     String ReviewsEdit(@PathVariable UUID orderDetailId, Model model){
+        long startTime = System.nanoTime();
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
         model.addAttribute("orderDetailDTO", orderDetailsDTO);
         model.addAttribute("orderDetailId", orderDetailId);
-        System.out.println(orderDetailsDTO);
+        model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());
+//        model.addAttribute("address", orderDetailsDTO.getOrder().getFilial().getTitle());
+        checkTimeMethod("Время выполнения страницы проверки отзыов для клиента /review/editReviews/{orderDetailId} для всех: ", startTime);
         return "products/reviews_edit";
     } // Страница редактирования Заказа - Get
 
@@ -131,7 +134,11 @@ public class ReviewController {
 
 
 //    ==========================================================================================================
-
+private void checkTimeMethod(String text, long startTime){
+    long endTime = System.nanoTime();
+    double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+    System.out.printf(text + "%.4f сек%n", timeElapsed);
+}
 
 
 }

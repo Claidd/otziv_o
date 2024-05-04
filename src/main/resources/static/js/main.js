@@ -23,6 +23,17 @@ $(document).ready(function() {
 });
 
 
+function redirect(element) {
+    const selectedValue = element.value;
+    window.location.href = '/' + selectedValue;
+}
+
+
+
+
+
+
+
 
 
 // Обработчик события изменения значения в первом селекторе
@@ -204,11 +215,13 @@ document.addEventListener("DOMContentLoaded", function() {
 
   function checkAndUrl(button) {
     var orderId = button.getAttribute("data-orderid");
+    var companyTitle= button.getAttribute("data-company");
+    var filialTitle = button.getAttribute("data-filial");
     var checkAndUrl = document.getElementById("checkAndUrl");
     // Получить текущее значение текстовой области
     var currentText = checkAndUrl.value;
     // Создать новую строку с добавленным orderId
-    var newText = currentText + orderId;
+    var newText = companyTitle + '. ' + filialTitle + '.' + '\n\n' + currentText + orderId;
     // Установить новое значение в текстовой области
     checkAndUrl.value = newText;
     // Выделить и скопировать текст

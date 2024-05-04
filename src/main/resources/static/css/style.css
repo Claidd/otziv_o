@@ -298,16 +298,20 @@ button {
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		position: relative;
-		margin-top: 100px; /* Adjust as needed */
+		/* position: relative;  */
+
+		margin-top: 100px; 
+		/* width: 100%; */
 	}
 	
-	.pagination {
+	.pagination { 
 		display: flex;
 		list-style: none;
 		padding: 0;
-		justify-content: center;
+		justify-content: flex-start;
 		align-items: center;
+		/* width: 50%;  */
+		overflow-x: scroll;
 	}
 	
 	.pagination .page-item {

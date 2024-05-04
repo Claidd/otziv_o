@@ -9,6 +9,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_INNODB_LOG_FILE_SIZE: "100MB"
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
@@ -30,6 +31,7 @@ services:
       - ./data/nginx/www:/var/www
       - ./data/nginx/logs/nginx:/var/log/nginx
       - ./data/proxy_cache:/var/lib/nginx/proxy_cache
+
       # nginx должен общаться с php контейнером
     command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
     links:
