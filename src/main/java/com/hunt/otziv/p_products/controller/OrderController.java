@@ -104,6 +104,20 @@ public class OrderController {
         return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
     } // Страница редактирования Заказа - Post
 
+    @PostMapping("/ordersDetails/{companyId}/{orderId}/delete") // Страница редактирования Заказа - Post
+    String OrderEditPostDelete(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm,  Model model){
+        log.info("1. Начинаем удалять Заказ");
+        if(orderService.deleteOrder(orderId)) {
+            rm.addFlashAttribute("saveSuccess", "true");
+            log.info("5. Заказ удален");
+            return "redirect:/ordersCompany/ordersDetails/{companyId}";
+        } else {
+            log.info("Заказ не удален");
+            return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
+        }
+
+    } // Страница редактирования Заказа - Post
+
 //    ============================================= ORDER EDIT =========================================================
 
 

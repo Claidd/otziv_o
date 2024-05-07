@@ -201,6 +201,11 @@ public class ReviewServiceImpl implements ReviewService{
         }
     } // Обновление отзывов
 
+    @Transactional
+    public void deleteReviewsByOrderId(Long reviewId){
+        reviewRepository.deleteReviewByReviewId(reviewId);
+    }
+
 //    =====================================================================================================
 
     //    ======================================== ORDER DETAIL AND REVIEW UPDATE =========================================================

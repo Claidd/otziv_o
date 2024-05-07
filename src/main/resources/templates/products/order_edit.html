@@ -107,6 +107,18 @@
                             <!-- Кнопка "Назад" -->
                             <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                     </form>
+                    <div class="container">
+                        <div class="row py-2 pt-1 mt-1">
+                            <div class="col-12 pt-5">
+
+                    <form method="post" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyId} + '/' + ${orderId}+ '/delete'}" th:object="${ordersDTO}">
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <button  type="submit" class="btn btn-primary mt-3">Удалить</button>
+                           
+                    </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -70,7 +70,7 @@ public class SecurityConfig {
                                         .requestMatchers("/payment_check/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN","MANAGER")
                                         .requestMatchers("/worker/**").hasAnyRole("ADMIN","WORKER","MANAGER")
-                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
+//                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
 
                 )
                 //    настройка логирования
@@ -115,10 +115,10 @@ public class SecurityConfig {
     }
 
 //    настройка доступа к внутренним файлам
-//    @Bean
-//    public WebSecurityCustomizer webSecurityCustomizer(){
-//        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
-//    }
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer(){
+        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
+    }
 //    3
     @Bean
     public DaoAuthenticationProvider daoAuthenticationProvider(){

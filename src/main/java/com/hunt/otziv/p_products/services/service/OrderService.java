@@ -27,4 +27,5 @@ public interface OrderService {
     boolean changeStatusAndOrderCounter(Long reviewId);
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
+    boolean deleteOrder(Long orderId);
 }

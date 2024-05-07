@@ -40,9 +40,9 @@ public class ReviewController {
 
     @PostMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Post
     String ReviewEditPost(@ModelAttribute("reviewDTO") ReviewDTO reviewDTO, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
-        log.info("1. Начинаем обновлять данные Отзыва");
+        log.info("1. Начинаем обновлять данные отзыва");
         reviewService.updateReview(reviewDTO, reviewId);
-        log.info("5. Обновление Отзыва прошло успешно");
+        log.info("5. Обновление отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReview/{reviewId}";
     } // Страница редактирования Заказа - Post

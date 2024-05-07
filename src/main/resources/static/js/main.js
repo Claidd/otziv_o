@@ -234,10 +234,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
 function onPayment(button) {
   var onPayment = document.getElementById("onPayment");
+  var companyTitle= button.getAttribute("data-company");
+  var filialTitle = button.getAttribute("data-filial");
   var sum = button.getAttribute("data-sum");
   var currentText = onPayment.value;
     // Создать новую строку с добавленным orderId
-  var newText = currentText + sum + ' руб.';
+  var newText = companyTitle + '. ' + filialTitle + '.' + '\n\n' + currentText + sum + ' руб.';
     // Установить новое значение в текстовой области
   onPayment.value = newText;
   onPayment.select();

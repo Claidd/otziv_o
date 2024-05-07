@@ -41,6 +41,7 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.weaver.ISourceContext;
 import org.aspectj.weaver.World;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -415,6 +416,24 @@ public class OrderServiceImpl implements OrderService {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
     } // Метод Обновления Заказа
+
+    @Transactional
+    public boolean deleteOrder(Long orderId){
+        Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+        List<Review> deleteReviews = deleteOrder.getDetails().get(0).getReviews();
+        if (deleteOrder.getStatus().getTitle().equals("Новый") || deleteOrder.getStatus().getTitle().equals("Не оплачено") ){
+            // Удаляем все отзывы, связанные с данным заказом
+            for (Review deleteReview : deleteReviews){
+                reviewService.deleteReviewsByOrderId(deleteReview.getId());
+            }
+            // Затем удаляем сам заказ
+            orderRepository.deleteById(orderId);
+            return true;
+        }
+        else
+            System.out.println("не удален из-за статуса");
+        return false;
+    }
 
     public Review saveReviews(Review review, Worker newWorker) {
         review.setWorker(newWorker);

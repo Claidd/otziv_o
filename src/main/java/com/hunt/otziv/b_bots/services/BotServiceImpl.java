@@ -186,7 +186,6 @@ public class BotServiceImpl implements BotService {
     } // Сохранение ботов
 
     private BotDTO toDto(Bot bot){ // Перевод бота в дто - начало
-        log.info("Перевод Бота в дто");
         return BotDTO.builder()
                 .id(bot.getId())
                 .login(bot.getLogin())

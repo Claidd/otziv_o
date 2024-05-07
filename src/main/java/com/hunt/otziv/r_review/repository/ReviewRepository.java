@@ -4,6 +4,7 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -43,4 +44,9 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("select COUNT(r) from Review r where r.publishedDate <= :localDate AND r.worker = :worker AND r.publish = false")
     int findAllByReviewsListStatus(LocalDate localDate, Worker worker);
+
+
+    @Modifying
+    @Query("DELETE FROM Review r WHERE r.id = :reviewId")
+    void deleteReviewByReviewId(Long reviewId);
 }

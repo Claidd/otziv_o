@@ -18,9 +18,9 @@
             <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
             <section class="company__lead__card">
                 <div class="container">
-             <h2 class="company__section-title" th:text="${TitleName}"></h2>
+             <!-- <h2 class="company__section-title" th:text="${TitleName}"></h2> -->
 
-
+             <th:block th:insert="~{fragments/navigation :: navigation}"></th:block>
             <th:block th:insert="~{fragments/orders_to_company :: orders_to_company}" id="content-10"></th:block>
             <th:block th:insert="~{fragments/common :: ordersPagination}"></th:block>
             

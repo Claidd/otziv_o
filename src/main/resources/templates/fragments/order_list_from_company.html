@@ -68,7 +68,7 @@
                             </form>
                             <div class="company__card__text__lead">
                                 <textarea  class="company__card__remember-text" th:utext="${order.managerPayText} + ' К оплате: '" id="onPayment"></textarea>
-                                <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}" onclick="onPayment(this)">счет</button>
+                                <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}, data-company=${order.companyTitle}, data-filial=${order.filialTitle}" onclick="onPayment(this)">счет</button>
                             </div>
                             <form class="company__card__text__lead" target="_blank" th:action="@{${order.filialUrl}}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
