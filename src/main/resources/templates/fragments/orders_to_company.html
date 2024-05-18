@@ -74,14 +74,14 @@
                 <div class="company__card__content_button"> <!-- card__content_button -->
                     <div class="company__card__text__lead">
                         <textarea class="company__card__remember-text" th:utext="${promoTexts[4]} + ' Ссылка на проверку отзывов: ' + 'https://o-ogo.ru/review/editReviews/'" id="checkAndUrl"></textarea>
-                        <button class="company__card__text__lead-button" th:attr="data-orderid=${order.orderDetailsId}" onclick="checkAndUrl(this)">текст+url</button>
+                        <button class="company__card__text__lead-button" th:attr="data-orderid=${order.orderDetailsId}, data-company=${order.companyTitle}, data-filial=${order.filialTitle}" onclick="checkAndUrl(this)">текст+url</button>
                     </div>
                     <form class="company__card__text__lead" th:method="get" th:action="'/review/editReviews/' + ${order.orderDetailsId}">
                         <button type="submit" class="company__card__text__lead-button ">url</button>
                     </form>
                     <div class="company__card__text__lead">
                         <textarea  class="company__card__remember-text" th:utext="${order.managerPayText} + ' К оплате: '" id="onPayment"></textarea>
-                        <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}" onclick="onPayment(this)">счет</button>
+                        <button class="company__card__text__lead-button" th:attr="data-sum=${order.sum}, data-company=${order.companyTitle}, data-filial=${order.filialTitle}" onclick="onPayment(this)">счет</button>
                     </div>
                     <form class="company__card__text__lead" target="_blank" th:action="@{${order.filialUrl}}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">

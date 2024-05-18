@@ -2744,7 +2744,7 @@ main .recent-orders a{
     }
 
     .company__card__content__button__btn {
-        margin-top: 1.5rem;
+        margin-top: 1rem;
         margin-bottom: 1rem;
     }
     
@@ -2973,6 +2973,51 @@ main .recent-orders a{
 
         .orderdetails__tabs__content-item2 {
             grid-template-columns: repeat(10, minmax(360px, 1fr));
+        }
+
+        .company__tabs__btn__lead{
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 20px;
+        } 
+
+        .company__tabs__btn__order{
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 20px;
+        }
+    }
+
+                    /* ==================== 360 =================== */
+    @media (max-width: 361px) {
+
+        .company__card__content__review__text {
+            height: 100px;
+        }
+    
+        .company__card__content__review__answer {
+            font-size: 0.8rem;
+            height: 50px;
+        }
+
+        .company__label{
+            font-size: 0.7rem;
+        }
+
+        .company__card__content__button__btn {
+            margin-top: 0rem;
+        }
+    }
+
+        .company__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(335px, 1fr));
+        }
+
+
+        .orderdetails__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(330px, 1fr));
+        }
+
+        .orderdetails__tabs__content-item2 {
+            grid-template-columns: repeat(10, minmax(330px, 1fr));
         }
 
         .company__tabs__btn__lead{

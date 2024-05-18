@@ -99,6 +99,7 @@ public class CategoryServiceImpl implements CategoryService{
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
         List<SubCategoryDTO> subCategoryDTOList = category.getSubCategoryTitle().stream()
                 .map(subCategory -> new SubCategoryDTO(subCategory.getId(), subCategory.getSubCategoryTitle(), null))
+                .sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)) // Сортировка подкатегорий
                 .collect(Collectors.toList());
         categoryDTO.setSubCategories(subCategoryDTOList);
         return categoryDTO;
