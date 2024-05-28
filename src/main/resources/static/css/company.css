@@ -2959,7 +2959,25 @@ main .recent-orders a{
             }
         }
 
-                /* ==================== 430 =================== */
+            /* ==================== 413 =================== */
+    @media (max-width: 413px) {
+
+        .company__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(385px, 1fr));
+        }
+
+
+        .orderdetails__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(380px, 1fr));
+        }
+
+        .orderdetails__tabs__content-item2 {
+            grid-template-columns: repeat(10, minmax(380px, 1fr));
+        }
+
+    }
+
+                /* ==================== 391 =================== */
     @media (max-width: 391px) {
 
         .company__tabs__content-item {
@@ -2973,16 +2991,6 @@ main .recent-orders a{
 
         .orderdetails__tabs__content-item2 {
             grid-template-columns: repeat(10, minmax(360px, 1fr));
-        }
-
-        .company__tabs__btn__lead{
-            grid-template-columns: repeat(3, 1fr);
-            margin-bottom: 20px;
-        } 
-
-        .company__tabs__btn__order{
-            grid-template-columns: repeat(3, 1fr);
-            margin-bottom: 20px;
         }
     }
 
@@ -3005,8 +3013,6 @@ main .recent-orders a{
         .company__card__content__button__btn {
             margin-top: 0rem;
         }
-    }
-
         .company__tabs__content-item {
             grid-template-columns: repeat(10, minmax(335px, 1fr));
         }
@@ -3019,17 +3025,8 @@ main .recent-orders a{
         .orderdetails__tabs__content-item2 {
             grid-template-columns: repeat(10, minmax(330px, 1fr));
         }
-
-        .company__tabs__btn__lead{
-            grid-template-columns: repeat(3, 1fr);
-            margin-bottom: 20px;
-        } 
-
-        .company__tabs__btn__order{
-            grid-template-columns: repeat(3, 1fr);
-            margin-bottom: 20px;
-        }
     }
+
 
     /* ==================== 300 =================== */
 @media (max-width: 300px) {
