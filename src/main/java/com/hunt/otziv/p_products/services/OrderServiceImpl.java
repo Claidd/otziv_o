@@ -430,7 +430,6 @@ public class OrderServiceImpl implements OrderService {
 //                reviewService.deleteReviewsByOrderId(deleteReview.getId());
 //            }
             // Затем удаляем сам заказ
-
 //            orderDetailsService.deleteOrderDetailsById(deleteOrder.getDetails().get(0));
             orderRepository.deleteOrderById(deleteOrder.getDetails());
             return true;
