@@ -23,3 +23,8 @@ FOREIGN KEY (review_worker)
 REFERENCES workers (worker_id)
 ON DELETE CASCADE
 ON UPDATE NO ACTION;
+
+
+
+
+

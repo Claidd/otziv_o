@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 @Controller
@@ -36,11 +39,22 @@ public class OrderDetailsController {
 //        model.addAttribute("orderId", orderId);
 //        Order order = orderService.getOrder(orderId);
 //        model.addAttribute("orderDetailsId", order.getDetails().iterator().next().getId());
-        model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
+        List<ReviewDTOOne> reviews = reviewService.getReviewsAllByOrderId(orderId);
+//        List<ReviewDTOOne> reviews2 = new ArrayList<>(){};
+//        reviews2.add(new ReviewDTOOne());
+        if (reviews.isEmpty()) {
+            model.addAttribute("errorMessage", "Список отзывов пуст. Сообщите менеджеру об этом");
+            model.addAttribute("reviews", reviews);
+            checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
+            return "products/orders_detail_list";
+        } else {
+            model.addAttribute("reviews", reviews);
+            checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
+            return "products/orders_detail_list";
+        }
+//        model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
 //        rm.addFlashAttribute("companyId", companyId);
 //        rm.addFlashAttribute("orderId", orderId);
-        checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
-        return "products/orders_detail_list";
     } // Переход на страницу Просмотра  деталей заказа
 
     @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота

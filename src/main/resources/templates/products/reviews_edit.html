@@ -37,7 +37,7 @@
                     <!-- Данные успешно изменены и сохранены. -->
                     <p sec:authorize="not hasAnyRole('WORKER')" class="company__label" >Успешно сохранено </p>
 
-                    <form sec:authorize="hasAnyRole('WORKER')"  th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${orderDetailDTO.order.company.id} + '/' + ${orderDetailDTO.order.id}"  class="company__card__content__button3">
+                    <form sec:authorize="hasAnyRole('WORKER', 'ADMIN')"  th:method="post" th:action="'/ordersCompany/status_for_checking/' + ${orderDetailDTO.order.company.id} + '/' + ${orderDetailDTO.order.id}"  class="company__card__content__button3">
                         <div class="company__card__content__button__btn">
                             <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                             <p class="company__label" >Отправить отзывы на проверку клиенту</p>
@@ -58,8 +58,16 @@
                 <span th:if="${statusCheck != null}">
                     <h2 class="company__section-title2" >Одобрено</h2>
                 </span>
-                    <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
-                        
+
+                <!-- Отображение сообщения об ошибке, если список пуст -->
+                <div th:if="${errorMessage}" class="mb-3"  >
+                    <p th:text="${errorMessage}" class="alert alert-success"  style="color: red;"></p>
+                </div>
+
+
+            <div th:if="${not #lists.isEmpty(orderDetailDTO.reviews)}">
+                <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">
+
                         <div class="company__tabs__lead">
                             <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                             <div  class="orderdetails__tabs__content-item orderdetails__tabs__content-item--active" id="content-10">
@@ -123,10 +131,12 @@
                         </div> <!-- tabs -->
                     </form>
             </div> <!-- container -->
-        </section> <!-- section -->
-        
+        </div>
+    </section> <!-- section -->
+
 
         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+        <div th:if="${not #lists.isEmpty(orderDetailDTO.reviews)}">
         <section class="company__lead__cardsmoll">
             <div class="container">
                 <!-- <h2 class="company__section-title">Детали заказа</h2> -->
@@ -210,9 +220,10 @@
                     </form>
             </div> <!-- container -->
         </section> <!-- section --> <!-- СПИСОК КАРТОЧЕК 2 НОВЫЕ-->
-
+        </div>
 
         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО --><!-- СПИСОК КАРТОЧЕК 3 НОВЫЕ-->
+        <div th:if="${not #lists.isEmpty(orderDetailDTO.reviews)}">
         <section class="company__lead__cardsmoll">
             <div class="container">
                 <!-- <h2 class="company__section-title">Детали заказа</h2> -->
@@ -284,11 +295,11 @@
                             </div>
                         </div> <!-- tabs -->
                     </form>
-            
+
 
 </section> <!-- section -->
 
-
+        </div>
 
 
 

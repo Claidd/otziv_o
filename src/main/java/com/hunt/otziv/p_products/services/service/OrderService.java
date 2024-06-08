@@ -28,4 +28,10 @@ public interface OrderService {
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
     boolean deleteOrder(Long orderId);
+
+    boolean deleteOrderById(Long orderId);
+
+    int getAllOrderDTOByStatus(String status);
+
+    int getAllOrderDTOByStatusToManager(Principal principal, String status);
 }

@@ -9,6 +9,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -38,6 +39,7 @@ public class CompanyController {
     private final ManagerService managerService;
     private final WorkerService workerService;
     private final PromoTextService promoTextService;
+    private final OrderService orderService;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -50,6 +52,10 @@ public class CompanyController {
         System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех новых компаний для админа");
+            model.addAttribute("to_check", createCheckNotification("В проверку"));
+            model.addAttribute("published", createCheckNotification("Опубликовано"));
+            model.addAttribute("new_order", createCheckNotificationCompany("Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationCompany("В работе"));
             model.addAttribute("TitleName", "Новые компании");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllCompaniesDTOListToList(keyword, "Новая", pageNumber, pageSize));
@@ -61,6 +67,10 @@ public class CompanyController {
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех новых компаний для Менеджера");
+            model.addAttribute("to_check", createCheckNotificationToManager(principal,"В проверку"));
+            model.addAttribute("published", createCheckNotificationToManager(principal,"Опубликовано"));
+            model.addAttribute("new_order", createCheckNotificationToManagerCompany(principal,"Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationToManagerCompany(principal,"В работе"));
             model.addAttribute("TitleName", "Новые компании");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllCompanyDTOAndKeywordByManager(principal, keyword, "Новая", pageNumber, pageSize));
@@ -247,6 +257,10 @@ public class CompanyController {
         System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех компаний для админа");
+            model.addAttribute("to_check", createCheckNotification("В проверку"));
+            model.addAttribute("published", createCheckNotification("Опубликовано"));
+            model.addAttribute("new_order", createCheckNotificationCompany("Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationCompany("В работе"));
             model.addAttribute("TitleName", "Все компании");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllCompaniesDTOList(keyword, pageNumber, pageSize));
@@ -257,6 +271,10 @@ public class CompanyController {
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех компаний для Менеджера");
+            model.addAttribute("to_check", createCheckNotificationToManager(principal,"В проверку"));
+            model.addAttribute("published", createCheckNotificationToManager(principal,"Опубликовано"));
+            model.addAttribute("new_order", createCheckNotificationToManagerCompany(principal,"Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationToManagerCompany(principal,"В работе"));
             model.addAttribute("TitleName", "Все компании");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("allCompany", companyService.getAllOrderDTOAndKeywordByManager(principal, keyword, pageNumber, pageSize));
@@ -391,6 +409,23 @@ public class CompanyController {
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
         System.out.printf(text + "%.4f сек%n", timeElapsed);
+    }
+
+
+    private int createCheckNotification(String status) {
+        return orderService.getAllOrderDTOByStatus(status);
+    }
+
+    private int createCheckNotificationToManager(Principal principal, String status) {
+        return orderService.getAllOrderDTOByStatusToManager(principal, status);
+    }
+
+    private int createCheckNotificationCompany(String status) {
+        return companyService.getAllCompanyDTOByStatus(status);
+    }
+
+    private int createCheckNotificationToManagerCompany(Principal principal, String status) {
+        return companyService.getAllCompanyDTOByStatusToManager(principal, status);
     }
 }
 

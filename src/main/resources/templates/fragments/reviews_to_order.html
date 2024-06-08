@@ -13,11 +13,16 @@
             </div>
         </div>
 
+        <!-- Отображение сообщения об ошибке, если список пуст -->
+        <div th:if="${errorMessage}" class="mb-3"  >
+            <p th:text="${errorMessage}" class="alert alert-success"  style="color: red;"></p>
+        </div>
+
         <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+    <div th:if="${not #lists.isEmpty(reviews)}">
         <div  class="reviews__details">
             <div th:each="review : ${reviews}" class="company__card__review">
                 <div class="company__card__content__lead">
-
                     <div  th:class="${review.isPublish} ? reviewTitleRed :  reviewTitleGreen"  >
                         <a  class="company__card__title__lead" target="_blank" th:href="@{${review.filialUrl}}" th:text="${review.companyTitle}">Название компании</a>
                     </div>
@@ -63,7 +68,7 @@
                         <div class="company__card__text__lead"> <!-- Review Text -->
                             <textarea  class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewAnswer(' + ${review.id} + ')'" >ответ</button>
-                        </div>   
+                        </div>
                         <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/change_bot/' + ${review.id}}">
                             <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                             <input style="display: none;" class="company__card_remember-search__text" type="text" value="Заказ_Отзыв" name="pageName" id="pageName">
@@ -90,7 +95,7 @@
                 </div> <!-- card -->
             </div> <!-- tabs__content-item -->
             <!-- СПИСОК КАРТОЧЕК 1 -->
-
+        </div>
             <!-- <th:block th:insert="~{fragments/common :: js}"></th:block> -->
 
 </section>

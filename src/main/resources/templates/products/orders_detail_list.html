@@ -21,7 +21,8 @@
                             <div class="company__tabs__lead">
 
                                 <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->
-                                    
+
+                                <div th:if="${not #lists.isEmpty(reviews)}">
                                     <div class="btn__cell">
                                         <form th:method="get" th:action="'/review/editReviews/' + ${reviews[0].orderDetailsId}"  class="company__card__content__button3">
                                             <div class="company__card__content__button__btn">
@@ -45,6 +46,7 @@
                                             </div>
                                         </form>
                                     </div>
+                                </div>
                             
                 </div><!-- container -->
             </section> <!-- section -->

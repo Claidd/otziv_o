@@ -37,6 +37,19 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
     public OrderDetails getOrderDetailById(UUID orderDetailId){ // Взять детали по Id
         return orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
     } // Взять детали по Id
+
+    @Override
+    public void deleteOrderDetailsById(UUID orderDetailId) {
+        orderDetailsRepository.deleteById(orderDetailId);
+    }
+
+    @Override
+    public void deleteOrderDetails(OrderDetails orderDetails) {
+        orderDetailsRepository.delete(orderDetails);
+    }
+
+
+
     public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){ // Взять детали дто по Id
         return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
     } // Взять детали дто по Id

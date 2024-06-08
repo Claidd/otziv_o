@@ -11,4 +11,8 @@ public interface OrderDetailsService {
 
     OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId);
     OrderDetails getOrderDetailById(UUID orderDetailId);
+
+    void deleteOrderDetailsById(UUID orderDetailId);
+
+    void deleteOrderDetails(OrderDetails orderDetails);
 }

@@ -327,6 +327,17 @@ public class CompanyServiceImpl implements CompanyService{
         return companyDTO;
     } //    Метод подготовки ДТО при создании компании из Лида менеджером
 
+    @Override
+    public int getAllCompanyDTOByStatus(String status) {
+        return companyRepository.findAllIdByStatus(status).size();
+    }
+
+    @Override
+    public int getAllCompanyDTOByStatusToManager(Principal principal, String status) {
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        return companyRepository.findAllByManagerAndStatus(manager, status).size();
+    }
+
     private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){ // перевод компании в ДТО Сэт
         return companies.stream().map(this::convertToDto).collect(Collectors.toSet());
     } // перевод компании в ДТО

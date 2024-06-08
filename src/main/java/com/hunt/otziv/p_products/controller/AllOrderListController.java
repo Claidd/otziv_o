@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.security.Principal;
 import java.util.Comparator;
+import java.util.List;
 
 @Controller
 @Slf4j
@@ -96,13 +97,18 @@ public class AllOrderListController {
             log.info("Зашли в список всех заказов в проверку для Админа");
             model.addAttribute("TitleName", "Заказы в проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("to_check", createCheckNotification("В проверку"));
+            model.addAttribute("published", createCheckNotification("Опубликовано"));
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword,"В проверку", pageNumber, pageSize));
+
             checkTimeMethod("Время выполнения AllOrderListController/orders/to_check для Админа: ", startTime);
             return "products/orders/order_page";
 //            return "products/orders/to_check_orders_list";
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли в список всех заказов в проверку для Менеджера");
+            model.addAttribute("to_check", createCheckNotificationToManager(principal,"В проверку"));
+            model.addAttribute("published", createCheckNotificationToManager(principal,"Опубликовано"));
             model.addAttribute("TitleName", "Заказы в проверку");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, "В проверку", pageNumber, pageSize));
@@ -111,6 +117,9 @@ public class AllOrderListController {
         }
         else return "products/orders/order_page";
     } // Все заказы - В проверку
+
+
+
 
     @GetMapping("/on_check") // Все заказы - На проверке
     public String OnCheckAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
@@ -328,8 +337,21 @@ public class AllOrderListController {
         System.out.printf(text + "%.4f сек%n", timeElapsed);
     }
 
+
+
+    private int createCheckNotification(String status) {
+        return orderService.getAllOrderDTOByStatus(status);
+    }
+
+    private int createCheckNotificationToManager(Principal principal, String status) {
+        return orderService.getAllOrderDTOByStatusToManager(principal, status);
+    }
+
+
 //    =========================================== ORDER ALL =======================================================
 }
+
+
 
 
 //Hibernate: select p1_0.id,p1_0.promo_text from text_promo p1_0

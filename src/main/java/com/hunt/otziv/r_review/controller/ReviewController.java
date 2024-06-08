@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
+import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Controller
@@ -60,7 +63,7 @@ public class ReviewController {
     } // Добавить новый отзыв - Post
 
 
-    @GetMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Удалить отзыв - Post
+    @PostMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Удалить отзыв - Post
     String ReviewDelete(@PathVariable Long orderId, @PathVariable Long companyId, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
         log.info("1. Начинаем удалять новый Отзыв");
         if (orderService.deleteNewReview(orderId, reviewId)){
@@ -80,12 +83,25 @@ public class ReviewController {
     String ReviewsEdit(@PathVariable UUID orderDetailId, Model model){
         long startTime = System.nanoTime();
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
-        model.addAttribute("orderDetailDTO", orderDetailsDTO);
-        model.addAttribute("orderDetailId", orderDetailId);
-        model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());
+        if (orderDetailsDTO.getReviews().isEmpty()) {
+//            List<ReviewDTO> dtoOnes = new ArrayList<>();
+//            dtoOnes.add(new ReviewDTO());
+//            orderDetailsDTO.setReviews(dtoOnes);
+            model.addAttribute("orderDetailDTO", orderDetailsDTO);
+            model.addAttribute("orderDetailId", orderDetailId);
+//            model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());
+            model.addAttribute("errorMessage", "Список отзывов пуст. Сообщите менеджеру об этом");
+            checkTimeMethod("Время выполнения страницы проверки отзыов для клиента /review/editReviews/{orderDetailId} для всех: ", startTime);
+            return "products/reviews_edit";
+        } else {
+            model.addAttribute("orderDetailDTO", orderDetailsDTO);
+            model.addAttribute("orderDetailId", orderDetailId);
+            model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());
 //        model.addAttribute("address", orderDetailsDTO.getOrder().getFilial().getTitle());
-        checkTimeMethod("Время выполнения страницы проверки отзыов для клиента /review/editReviews/{orderDetailId} для всех: ", startTime);
-        return "products/reviews_edit";
+            checkTimeMethod("Время выполнения страницы проверки отзыов для клиента /review/editReviews/{orderDetailId} для всех: ", startTime);
+            return "products/reviews_edit";
+        }
+
     } // Страница редактирования Заказа - Get
 
     @PostMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Post - СОХРАНИТЬ

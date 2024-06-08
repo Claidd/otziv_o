@@ -20,8 +20,8 @@
                 <option value="companies/allCompany" th:href="@{'/companies/allCompany'}" selected>Компании</option>
                 <option value="companies/allCompany" th:href="@{'/companies/allCompany'}">Все</option>
                 <option value="companies/new_company" th:href="@{'/companies/new_company'}">Новые</option>
-                <option value="companies/on_work" th:href="@{'/companies/on_work'}">В работе</option>
-                <option value="companies/new_order" th:href="@{'/companies/new_order'}">Новый заказ</option>
+                <option value="companies/on_work" th:href="@{'/companies/on_work'}">В работе: <span th:text="${on_work}"></span></option>
+                <option value="companies/new_order" th:href="@{'/companies/new_order'}">Новый заказ: <span th:text="${new_order}"></span></option>
                 <option value="companies/to_send" th:href="@{'/companies/to_send'}">К рассылке</option>
                 <option value="companies/waiting" th:href="@{'/companies/waiting'}">Ожидание</option>
                 <option value="companies/on_stop" th:href="@{'/companies/on_stop'}">На стопе</option>
@@ -32,11 +32,11 @@
             <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Заказы</option>
             <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Все</option>
             <option value="orders/new_orders" th:href="@{'/orders/new_orders'}">Новые</option>
-            <option value="orders/to_check" th:href="@{'/orders/to_check'}">В проверку</option>
+            <option value="orders/to_check" th:href="@{'/orders/to_check'}">В проверку: <span th:text="${to_check}"></span></option>
             <option value="orders/on_check" th:href="@{'/orders/on_check'}">На проверке</option>
             <option value="orders/correct" th:href="@{'/orders/correct'}">Коррекция</option>
             <option value="orders/to_published" th:href="@{'/orders/to_published'}">Публикация</option>
-            <option value="orders/published" th:href="@{'/orders/published'}">Опубликовано</option>
+            <option value="orders/published" th:href="@{'/orders/published'}">Опубликовано: <span th:text="${published}"></span></option>
             <option value="orders/payment_check" th:href="@{'/orders/payment_check'}">Выставлен счет</option>
             <option value="orders/remember" th:href="@{'/orders/remember'}">Напоминание</option>
             <option value="orders/no_pay" th:href="@{'/orders/no_pay'}">Не опл.</option>

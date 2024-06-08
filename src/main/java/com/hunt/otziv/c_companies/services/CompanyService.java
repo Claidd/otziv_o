@@ -36,6 +36,7 @@ public interface CompanyService {
     CompanyDTO convertToDtoToManagerNotLead(Principal principal);
 
 
+    int getAllCompanyDTOByStatus(String status);
 
-
+    int getAllCompanyDTOByStatusToManager(Principal principal, String status);
 }

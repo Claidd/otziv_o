@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.repository;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.jpa.repository.Modifying;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public interface OrderRepository extends CrudRepository<Order, Long> {
@@ -74,7 +76,11 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
 
 
 
+//    @Modifying
+//    @Query("DELETE FROM Order o WHERE o.details = :orderId")
+//    void deleteOrderById(UUID orderId);
+
     @Modifying
-    @Query("DELETE FROM Order o WHERE o.id = :orderId")
-    void deleteOrderById(Long orderId);
+    @Query("DELETE FROM Order o WHERE o.details IN :orderDetails")
+    void deleteOrderById(List<OrderDetails> orderDetails);
 }

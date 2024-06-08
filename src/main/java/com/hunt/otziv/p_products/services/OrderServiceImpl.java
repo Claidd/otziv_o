@@ -39,6 +39,7 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.weaver.ISourceContext;
@@ -183,8 +184,6 @@ public class OrderServiceImpl implements OrderService {
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
         List<Order> orderPage;
-        System.out.println(worker.getId());
-        System.out.println(worker);
         if (!keyword.isEmpty()){
             orderId = orderRepository.findAllIdByWorkerAndKeyWordAndStatus(worker,keyword, status, keyword, status);
             orderPage = orderRepository.findAll(orderId);
@@ -376,13 +375,16 @@ public class OrderServiceImpl implements OrderService {
 
         if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
             log.info("Обновляем филиал");
+            System.out.println(saveOrder.getFilial());
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
+//            saveOrder.getFilial().setId(orderDTO.getFilial().getId());
+//            System.out.println(saveOrder.getFilial());
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены названия*/
+        if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/
             log.info("Обновляем url филиала");
-            saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
-            isChanged = true;
+//            saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
+//            isChanged = true;
         }
         if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) || !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId())){ /*Проверка смены работника*/
             log.info("Обновляем работника");
@@ -420,19 +422,58 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public boolean deleteOrder(Long orderId){
         Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
-        List<Review> deleteReviews = deleteOrder.getDetails().get(0).getReviews();
+//        List<Review> deleteReviews = deleteOrder.getDetails().get(0).getReviews();
         if (deleteOrder.getStatus().getTitle().equals("Новый") || deleteOrder.getStatus().getTitle().equals("Не оплачено") ){
             // Удаляем все отзывы, связанные с данным заказом
-            for (Review deleteReview : deleteReviews){
-                reviewService.deleteReviewsByOrderId(deleteReview.getId());
-            }
+//            for (Review deleteReview : deleteReviews){
+//                System.out.println(deleteReview.getId());
+//                reviewService.deleteReviewsByOrderId(deleteReview.getId());
+//            }
             // Затем удаляем сам заказ
-            orderRepository.deleteById(orderId);
+//            orderDetailsService.deleteOrderDetailsById(deleteOrder.getDetails().get(0));
+            orderRepository.deleteOrderById(deleteOrder.getDetails());
             return true;
         }
         else
             System.out.println("не удален из-за статуса");
         return false;
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteOrderById(Long orderId) {
+        // Найти заказ по его ID
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order with id " + orderId + " not found"));
+
+        // Удалить все связанные с ним детали заказа
+//        List<OrderDetails> orderDetails = order.getDetails();
+//        List<Review> deleteReviews = orderDetails.get(0).getReviews();
+//        for (Review review : deleteReviews) {
+//
+//            review.setOrderDetails(null); // Убираем связь с заказом
+//            reviewService.deleteReview(review.getId());
+//            System.out.println(review);
+//        }
+//        for (OrderDetails details : orderDetails) {
+//            details.setOrder(null); // Убираем связь с заказом
+//            orderDetailsService.deleteOrderDetails(details);
+//        }
+
+        // Удалить сам заказ
+        orderRepository.delete(order);
+        return true;
+    }
+
+    @Override
+    public int getAllOrderDTOByStatus(String status) {
+        return orderRepository.findAllIdByStatus(status).size();
+    }
+
+    @Override
+    public int getAllOrderDTOByStatusToManager(Principal principal, String status) {
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        return orderRepository.findAllIdByManagerAndStatus(manager, status).size();
     }
 
     public Review saveReviews(Review review, Worker newWorker) {
@@ -772,7 +813,6 @@ public class OrderServiceImpl implements OrderService {
     } // Конвертер из DTO для филиала
     private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // Конвертер из DTO для заказа
         Product product1 = productService.findById(productId);
-        System.out.println(orderDTO);
         return Order.builder()
                 .amount(orderDTO.getAmount())
                 .complete(false)
