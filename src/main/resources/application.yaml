@@ -1,6 +1,6 @@
 
 server:
-  port: 8081
+  port: 8080
 #jwt:
 #  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 #  lifetime: 1800m
