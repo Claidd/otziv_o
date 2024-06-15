@@ -35,4 +35,6 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     @Query("SELECT DISTINCT w FROM Worker w LEFT JOIN FETCH w.user u LEFT JOIN FETCH w.bots b LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
     List<Worker> findAllWorkers();
 
+    @Query("SELECT DISTINCT w FROM Worker w LEFT JOIN FETCH w.user u LEFT JOIN FETCH w.bots b LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers m WHERE m IN :managerList")
+    Set<Worker> findAllToManagerList(List<Manager> managerList);
 }

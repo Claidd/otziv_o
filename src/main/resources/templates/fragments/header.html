@@ -24,22 +24,22 @@
                                 Главная
                             </a>
                         </li>
-                        <li sec:authorize="hasAnyRole('ADMIN', 'OPERATOR')" class="mev__item">
+                        <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')" class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Оператор
                             </a>
                         </li>
-                        <li  sec:authorize="hasAnyRole('ADMIN', 'MARKETOLOG')" class="mev__item">
+                        <li  sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MARKETOLOG')" class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Маркетолог
                             </a>
                         </li>
-                        <li sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/companies/new_company}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                        <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MANAGER')" class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/companies/company}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Менеджер
                             </a>
                         </li>
-                        <li sec:authorize="hasAnyRole('ADMIN', 'WORKER')" class="mev__item">
+                        <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'WORKER')" class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/worker/new_orders}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
                                 Специалист
                             </a>

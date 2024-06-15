@@ -17,30 +17,32 @@
             </select>
 
             <select class="company__tabs__dropdown" name="company_status2" onchange="redirect(this)">
-                <option value="companies/allCompany" th:href="@{'/companies/allCompany'}" selected>Компании</option>
-                <option value="companies/allCompany" th:href="@{'/companies/allCompany'}">Все</option>
-                <option value="companies/new_company" th:href="@{'/companies/new_company'}">Новые</option>
-                <option value="companies/on_work" th:href="@{'/companies/on_work'}">В работе: <span th:text="${on_work}"></span></option>
-                <option value="companies/new_order" th:href="@{'/companies/new_order'}">Новый заказ: <span th:text="${new_order}"></span></option>
-                <option value="companies/to_send" th:href="@{'/companies/to_send'}">К рассылке</option>
-                <option value="companies/waiting" th:href="@{'/companies/waiting'}">Ожидание</option>
-                <option value="companies/on_stop" th:href="@{'/companies/on_stop'}">На стопе</option>
-                <option value="companies/ban_company" th:href="@{'/companies/ban_company'}">Бан</option>
+                <option value="companies/company?status=Компании" selected>Компании</option>
+                <option value="companies/company?status=Все">Все</option>
+                <option value="companies/company?status=Новые">Новые</option>
+                <option value="companies/company?status=В работе">В работе: <span th:text="${on_work}" style="color: red;"></span></option>
+                <option value="companies/new_order?status=Новый заказ">Новый заказ: <span th:text="${new_order}" style="color: red;"></span></option>
+                <option value="companies/to_send?status=К рассылке">К рассылке</option>
+                <option value="companies/waiting?status=Ожидание">Ожидание</option>
+                <option value="companies/on_stop?status=На стопе">На стопе</option>
+                <option value="companies/ban_company?status=Бан">Бан</option>
             </select>
 
+
+
           <select class="company__tabs__dropdown" name="company_status3" onchange="redirect(this)">
-            <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Заказы</option>
-            <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Все</option>
-            <option value="orders/new_orders" th:href="@{'/orders/new_orders'}">Новые</option>
-            <option value="orders/to_check" th:href="@{'/orders/to_check'}">В проверку: <span th:text="${to_check}"></span></option>
-            <option value="orders/on_check" th:href="@{'/orders/on_check'}">На проверке</option>
-            <option value="orders/correct" th:href="@{'/orders/correct'}">Коррекция</option>
-            <option value="orders/to_published" th:href="@{'/orders/to_published'}">Публикация</option>
-            <option value="orders/published" th:href="@{'/orders/published'}">Опубликовано: <span th:text="${published}"></span></option>
-            <option value="orders/payment_check" th:href="@{'/orders/payment_check'}">Выставлен счет</option>
-            <option value="orders/remember" th:href="@{'/orders/remember'}">Напоминание</option>
-            <option value="orders/no_pay" th:href="@{'/orders/no_pay'}">Не опл.</option>
-            <option value="orders/pay" th:href="@{'/orders/pay'}">Оплачено</option>
+                <option value="orders/all_orders?status=Заказы">Заказы</option>
+                <option value="orders/all_orders?status=Все">Все</option>
+                <option value="orders/all_orders?status=Новый">Новые</option>
+                <option value="orders/all_orders?status=В проверку">В проверку: <span th:text="${to_check}"></span></option>
+                <option value="orders/all_orders?status=На проверке">На проверке</option>
+                <option value="orders/all_orders?status=Коррекция">Коррекция</option>
+                <option value="orders/all_orders?status=Публикация">Публикация</option>
+                <option value="orders/all_orders?status=Опубликовано">Опубликовано: <span th:text="${published}"></span></option>
+                <option value="orders/all_orders?status=Выставлен счет">Выставлен счет</option>
+                <option value="orders/all_orders?status=Напоминание">Напоминание</option>
+                <option value="orders/all_orders?status=Не опл.">Не опл.</option>
+                <option value="orders/all_orders?status=Оплачено">Оплачено</option>
           </select>
 
           <select class="company__tabs__dropdown" name="company_status4" onchange="redirect(this)">
@@ -57,7 +59,30 @@
       </div>
 </section>
 
+<!-- <select class="company__tabs__dropdown" name="company_status2" onchange="redirect(this)">
+    <option value="companies/allCompany" th:href="@{'/companies/allCompany'}" selected>Компании</option>
+    <option value="companies/allCompany" th:href="@{'/companies/allCompany'}">Все</option>
+    <option value="companies/new_company" th:href="@{'/companies/new_company'}">Новые</option>
+    <option value="companies/on_work" th:href="@{'/companies/on_work'}">В работе: <span th:text="${on_work}"></span></option>
+    <option value="companies/new_order" th:href="@{'/companies/new_order'}">Новый заказ: <span th:text="${new_order}"></span></option>
+    <option value="companies/to_send" th:href="@{'/companies/to_send'}">К рассылке</option>
+    <option value="companies/waiting" th:href="@{'/companies/waiting'}">Ожидание</option>
+    <option value="companies/on_stop" th:href="@{'/companies/on_stop'}">На стопе</option>
+    <option value="companies/ban_company" th:href="@{'/companies/ban_company'}">Бан</option>
+</select> -->
 
+<!-- <option value="orders/all_orders" th:href="@{'/orders/all_orders'}">Заказы</option>
+<option value="orders/all_orders?status='Все'" th:href="@{'/orders/all_orders'}">Все</option>
+<option value="orders/new_orders" th:href="@{'/orders/new_orders'}">Новые</option>
+<option value="orders/to_check" th:href="@{'/orders/to_check'}">В проверку: <span th:text="${to_check}"></span></option>
+<option value="orders/on_check" th:href="@{'/orders/on_check'}">На проверке</option>
+<option value="orders/correct" th:href="@{'/orders/correct'}">Коррекция</option>
+<option value="orders/to_published" th:href="@{'/orders/to_published'}">Публикация</option>
+<option value="orders/published" th:href="@{'/orders/published'}">Опубликовано: <span th:text="${published}"></span></option>
+<option value="orders/payment_check" th:href="@{'/orders/payment_check'}">Выставлен счет</option>
+<option value="orders/remember" th:href="@{'/orders/remember'}">Напоминание</option>
+<option value="orders/no_pay" th:href="@{'/orders/no_pay'}">Не опл.</option>
+<option value="orders/pay" th:href="@{'/orders/pay'}">Оплачено</option> -->
 
 
 <!-- <div class="container">

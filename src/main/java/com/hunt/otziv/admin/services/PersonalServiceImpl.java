@@ -60,7 +60,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     public StatDTO getStats() {
         LocalDate localDate = LocalDate.now();
-
+        System.out.println(localDate);
         //        ОПЛАТЫ Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
         List<PaymentCheck> pcs = paymentCheckService.findAll();
         List<PaymentCheck> Pay1Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(1))).toList();
@@ -382,6 +382,32 @@ public class PersonalServiceImpl implements PersonalService {
         return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
     }
 
+    @Override
+    public List<Manager> findAllManagersWorkers(List<Manager> managerList) {
+        return managerService.findAllManagersWorkers(managerList);
+    }
+
+    public List<ManagersListDTO> getManagersToOwner(List<Manager> managers){
+        return managers.stream().map(this::toManagersListDTO).toList();
+//        return managerService.getAllManagersToOwner(managers).stream().map(this::toManagersListDTO).collect(Collectors.toList());
+//        return managerService.getAllManagers().stream().filter(p -> Objects.equals(p.getUser().getUsername(), principal.getName())).map(this::toManagersListDTO).collect(Collectors.toList());
+    }
+    public List<MarketologsListDTO> getMarketologsToOwner(List<Marketolog> allMarketologs){
+        return allMarketologs.stream().map(this::toMarketologsListDTO).toList();
+    }
+
+    @Override
+    public List<OperatorsListDTO> gerOperatorsToOwner(List<Operator> allOperators) {
+        return allOperators.stream().map(this::toOperatorsListDTO).toList();
+    }
+
+    public List<WorkersListDTO> getWorkersToOwner(List<Worker> allWorkers){
+        return allWorkers.stream().map(this::toWorkersListDTO).toList();
+    }
+    public List<OperatorsListDTO> gerOperatorsToOwner(Manager manager){
+        return operatorService.getAllOperatorsToManager(manager).stream().map(this::toOperatorsListDTO).collect(Collectors.toList());
+    }
+
 
 
     public List<ManagersListDTO> getManagersAndCount(){
@@ -395,6 +421,20 @@ public class PersonalServiceImpl implements PersonalService {
     }
     public List<OperatorsListDTO> gerOperatorsAndCount(){
         return operatorService.getAllOperators().stream().map(this::toOperatorsListDTOAndCount).collect(Collectors.toList());
+    }
+
+// Списки менеджеров со статичтикой и счетчиками для Владельцев.
+    public List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managers) {
+        return managers.stream().map(this::toManagersListDTOAndCount).toList();
+    }
+    public List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs){
+        return allMarketologs.stream().map(this::toMarketologsListDTOAndCount).toList();
+    }
+    public List<WorkersListDTO> getWorkersToAndCountToOwner(List<Worker> allWorkers) {
+        return allWorkers.stream().map(this::toWorkersListDTOAndCount).toList();
+    }
+    public List<OperatorsListDTO> getOperatorsAndCountToOwner(List<Operator> allOperators) {
+        return allOperators.stream().map(this::toOperatorsListDTOAndCount).toList();
     }
 
 

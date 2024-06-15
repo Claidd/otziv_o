@@ -164,6 +164,42 @@ public class OrderServiceImpl implements OrderService {
         return getPageOrders(orderPage,pageNumber,pageSize);
     } // Берем все заказы с поиском для Менеджера
 
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwnerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Long> orderId;
+        List<Order> orderPage;
+        if (!keyword.isEmpty()){
+            orderId = orderRepository.findAllIdByOwnerAndKeyWord(managerList, keyword, keyword);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        else {
+            orderId = orderRepository.findAllIdToOwner(managerList);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        return getPageOrders(orderPage,pageNumber,pageSize);
+    } // Берем все заказы с поиском для Менеджера
+
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Long> orderId;
+        List<Order> orderPage;
+        if (!keyword.isEmpty()){
+            System.out.println("отработал метод с ключевым словом");
+            orderId = orderRepository.findAllIdByOwnerAndKeyWordAndStatus(managerList,keyword, status, keyword, status);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        else {
+            System.out.println("отработал метод с БЕЗ ключевго слова");
+            orderId = orderRepository.findAllIdByOwnerAndStatus(managerList, status);
+            orderPage = orderRepository.findAll(orderId);
+        }
+        return getPageOrders(orderPage,pageNumber,pageSize);
+    } // Берем все заказы с поиском для Менеджера
+
+
+
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
@@ -422,47 +458,13 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public boolean deleteOrder(Long orderId){
         Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
-//        List<Review> deleteReviews = deleteOrder.getDetails().get(0).getReviews();
         if (deleteOrder.getStatus().getTitle().equals("Новый") || deleteOrder.getStatus().getTitle().equals("Не оплачено") ){
-            // Удаляем все отзывы, связанные с данным заказом
-//            for (Review deleteReview : deleteReviews){
-//                System.out.println(deleteReview.getId());
-//                reviewService.deleteReviewsByOrderId(deleteReview.getId());
-//            }
-            // Затем удаляем сам заказ
-//            orderDetailsService.deleteOrderDetailsById(deleteOrder.getDetails().get(0));
-            orderRepository.deleteOrderById(deleteOrder.getDetails());
+            orderRepository.delete(deleteOrder);
             return true;
         }
         else
             System.out.println("не удален из-за статуса");
         return false;
-    }
-
-    @Override
-    @Transactional
-    public boolean deleteOrderById(Long orderId) {
-        // Найти заказ по его ID
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new EntityNotFoundException("Order with id " + orderId + " not found"));
-
-        // Удалить все связанные с ним детали заказа
-//        List<OrderDetails> orderDetails = order.getDetails();
-//        List<Review> deleteReviews = orderDetails.get(0).getReviews();
-//        for (Review review : deleteReviews) {
-//
-//            review.setOrderDetails(null); // Убираем связь с заказом
-//            reviewService.deleteReview(review.getId());
-//            System.out.println(review);
-//        }
-//        for (OrderDetails details : orderDetails) {
-//            details.setOrder(null); // Убираем связь с заказом
-//            orderDetailsService.deleteOrderDetails(details);
-//        }
-
-        // Удалить сам заказ
-        orderRepository.delete(order);
-        return true;
     }
 
     @Override
@@ -474,6 +476,12 @@ public class OrderServiceImpl implements OrderService {
     public int getAllOrderDTOByStatusToManager(Principal principal, String status) {
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         return orderRepository.findAllIdByManagerAndStatus(manager, status).size();
+    }
+
+    @Override
+    public int getAllOrderDTOByStatusToOwner(Principal principal, String status) {
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        return orderRepository.findAllIdByOwnerAndStatus(managerList, status).size();
     }
 
     public Review saveReviews(Review review, Worker newWorker) {

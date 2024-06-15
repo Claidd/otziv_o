@@ -19,13 +19,17 @@
                             </div>
                     </div>
                     <div class="company__card__remember__box-serch">
-                        <form class="company__card_remember-search" th:method="get">
+                        <form class="company__card_remember-search" th:method="get" th:action="@{/companies/company}">
                             <!-- The text field -->
-                            <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
-                            <!-- The button used to copy the text -->
+                            <input class="company__card_remember-search__text" type="text" name="keyword" id="keyword">
+                            <!-- Hidden input field for status parameter -->
+                            <input type="hidden" name="status" th:value="${status}">
+                            <!-- The button used to submit the form -->
                             <button type="submit" class="company__card_remember-search__btn">Найти</button>
                         </form>
                     </div>
+                    
+                    
             </div>
             <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 

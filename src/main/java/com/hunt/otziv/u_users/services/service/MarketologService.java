@@ -5,6 +5,7 @@ import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -33,4 +34,5 @@ public interface MarketologService {
     List<Marketolog> getAllMarketologsToManager(Manager manager);
 
 
+    List<Marketolog> getAllMarketologsToOwner(List<Manager> managers);
 }

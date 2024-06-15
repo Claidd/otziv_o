@@ -30,5 +30,7 @@ public interface WorkerService {
     Worker getWorkerByUsername(String login);
     List<Worker> getAllWorkersToManager(Manager manager);
 
+    Set<Worker> getAllWorkersToManagerList(List<Manager> managerList);
+
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }

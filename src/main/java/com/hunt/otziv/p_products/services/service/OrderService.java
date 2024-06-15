@@ -23,15 +23,21 @@ public interface OrderService {
     Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize);
+    Page<OrderDTOList> getAllOrderDTOAndKeywordByOwnerAll(Principal principal, String keyword, int pageNumber, int pageSize);
+    Page<OrderDTOList>  getAllOrderDTOAndKeywordByOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize);
+
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
     boolean changeStatusAndOrderCounter(Long reviewId);
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
     boolean deleteOrder(Long orderId);
 
-    boolean deleteOrderById(Long orderId);
-
     int getAllOrderDTOByStatus(String status);
 
     int getAllOrderDTOByStatusToManager(Principal principal, String status);
+
+    int getAllOrderDTOByStatusToOwner(Principal principal, String status);
+
+
+
 }

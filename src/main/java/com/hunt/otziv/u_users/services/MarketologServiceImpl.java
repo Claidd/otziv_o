@@ -44,6 +44,11 @@ public class MarketologServiceImpl implements MarketologService {
     } // Взять всех маркетологов
 
     @Override
+    public List<Marketolog> getAllMarketologsToOwner(List<Manager> managers) {
+        return marketologRepository.findAllByMarketologsToOwner(managers);
+    }
+
+    @Override
     public void delete(Long userId, Long marketologId) {
     }
 

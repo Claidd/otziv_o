@@ -33,10 +33,14 @@ public interface CompanyService {
     Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompaniesDTOListToListToSend(String keywords, String status, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManagerToSend(Principal principal, String keyword, String status, int pageNumber, int pageSize);
+    Page<CompanyListDTO>getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize);
+    Page<CompanyListDTO> getAllCompaniesDTOListOwner(Principal principal, String keyword, int pageNumber, int pageSize);
+
     CompanyDTO convertToDtoToManagerNotLead(Principal principal);
-
-
     int getAllCompanyDTOByStatus(String status);
 
     int getAllCompanyDTOByStatusToManager(Principal principal, String status);
+
+
+    int getAllCompanyDTOByStatusToOwner(Principal principal, String status);
 }

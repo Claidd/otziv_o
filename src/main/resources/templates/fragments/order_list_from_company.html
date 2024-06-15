@@ -15,9 +15,11 @@
                             </div>
                         </div>
                             <div class="company__card__remember__box-serch">
-                                <form class="company__card_remember-search" th:method="get">
+                                <form class="company__card_remember-search" th:method="get" th:action="@{/orders/all_orders}">
                                     <!-- The text field -->
                                     <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                                    <!-- Hidden input field for status parameter -->
+                            <input type="hidden" name="status" th:value="${status}">
                                     <!-- The button used to copy the text -->
                                     <button type="submit" class="company__card_remember-search__btn">Найти</button>
                                 </form>
@@ -45,7 +47,7 @@
 
                         <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
                             <p class="company__card__text__city__lead" th:text="${order.status}">Статус заказа</p>
-                            <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p>
+                            <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="company__card__text__city__lead" th:text="${order.sum} + ' руб.'">Сумма заказа</p>
                             <p sec:authorize="hasRole('WORKER')" class="company__card__text__city__lead" th:text="${order.amount} + ' шт.'">Количество</p>  
                         </div>
 

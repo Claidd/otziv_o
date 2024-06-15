@@ -66,4 +66,19 @@ public class ManagerServiceImpl implements ManagerService {
             log.info("Добавили менеджера так как уже в списке");
         }
     } // Сохранить менеджера
+
+    @Override
+    public List<Manager> getAllManagersToOwner(List<Manager> managers) {
+        return managerRepository.findAllManagersToOwner(managers);
+    }
+
+    @Override
+    public List<Manager> findAllManagersWorkers(List<Manager> managers) {
+        return managerRepository.findAllManagersWorkers(managers);
+    }
+
+//    @Override
+//    public List<Manager> getAllManagersToOwner(List<Manager> managers) {
+//        return managerRepository.findAllManagersToOwner(managers);
+//    }
 }

@@ -16,7 +16,7 @@
                     <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
                     <button class="tabs__btn__lead-item" data-button="content-6">Все</button>
                     <a class="tabs__btn__lead__a-item" th:href="@{'/categories'}" data-button="content-7">Категории</a>
-                    <a class="tabs__btn__lead__a-item" th:href="@{'/companies/new_company'}" data-button="content-8">Компании</a>
+                    <a class="tabs__btn__lead__a-item" th:href="@{'/companies/company'}" data-button="content-8">Компании</a>
                 </div>
                 <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
@@ -141,34 +141,51 @@
                             </ul>
                         </div> -->
 
-                        <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
+                        
+                            <div class="tabs__content__lead-item2" id="pagination-1">
+                                <ul class="pagination">
+                                    <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
+                                        <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                                    </li>
+                                    <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListSend.totalPages - 1)}"
+                                        th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
+                                        <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                                    </li>
+                                    <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
+                                        <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        
+
+                        <!-- <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
                             <ul class="pagination">
                                 <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
                                 </li>
                         
-                                <!-- Отображаем первые пять страниц -->
-                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
+                                Отображаем первые пять страниц
+                                <!-- <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
                                     th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li>
+                                </li> -->
                         
                                 <!-- Отображаем "..." только если есть более 5 страниц -->
-                                <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
+                                <!-- <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
                                     <span class="page-link">...</span>
-                                </li>
+                                </li> -->
                         
                                 <!-- Отображаем последнюю страницу -->
-                                <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
+                                <!-- <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
                                     th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li>
+                                </li> -->
                         
-                                <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                                <!-- <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
                                 </li>
                             </ul>
-                        </div>
+                        </div> ->
                         
                     
 
@@ -224,6 +241,8 @@
                         </div> <!-- card -->
                         
                     </div> <!-- tabs__content-item -->
+
+                    
                     <div class="tabs__content__lead-item2" id="pagination-2">
                         <ul class="pagination">
                             <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
@@ -238,6 +257,7 @@
                             </li>
                         </ul>
                     </div>
+                
                     <!-- СПИСОК КАРТОЧЕК 2 -->
 
                     <!-- СПИСОК КАРТОЧЕК 3 С НАПОМИНАНИЕМ-->
@@ -523,34 +543,58 @@
                     </div> -->
                     <!-- СПИСОК КАРТОЧЕК 6 -->
 
+                    
+                        <div class="tabs__content__lead-item2" id="pagination-6">
+                            
+                            <ul class="pagination">
+                                <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                                </li>
+                                <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListALL.totalPages - 1)}"
+                                    th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                                </li>
+                                <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
+                                    <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
+                                </li>
+                            </ul>
+                        
+                        
+                    </div>
+
+
+
+
+                    <!-- <div class="page__row2">
                     <div class="tabs__content__lead-item2" id="pagination-6">
                         <ul class="pagination">
                             <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
-                            </li>
+                            </li> -->
                     
                             <!-- Отображаем первые пять страниц -->
-                            <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
+                            <!-- <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
                                 th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
+                            </li> -->
                     
                             <!-- Отображаем "..." только если есть более 5 страниц -->
-                            <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
+                            <!-- <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
                                 <span class="page-link">...</span>
-                            </li>
+                            </li> -->
                     
                             <!-- Отображаем последнюю страницу -->
-                            <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
+                            <!-- <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
                                 th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
+                            </li> -->
                     
-                            <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                            <!-- <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
                             </li>
                         </ul>
                     </div>
+                </div> -->
                     
                     
 

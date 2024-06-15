@@ -18,7 +18,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -61,7 +63,7 @@ public class OrderController {
     String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, RedirectAttributes rm, @PathVariable Long id, Model model){
         orderService.createNewOrderWithReviews(companyID, id, orderDTO);
         rm.addFlashAttribute("saveSuccess", "true");
-        return "redirect:/companies/new_company";
+        return "redirect:/companies/company";
     } // Пост запрос на создание нового заказа и редирект на оформление нового заказа
 
 //    ======================================== ПРОСМОТР И СОЗДАНИЕ ЗАКАЗОВ =============================================
@@ -107,7 +109,7 @@ public class OrderController {
     @PostMapping("/ordersDetails/{companyId}/{orderId}/delete") // Страница редактирования Заказа - Post
     String OrderEditPostDelete(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm,  Model model){
         log.info("1. Начинаем удалять Заказ");
-        if(orderService.deleteOrderById(orderId)) {
+        if(orderService.deleteOrder(orderId)) {
             rm.addFlashAttribute("saveSuccess", "true");
             log.info("5. Заказ удален");
             return "redirect:/ordersCompany/ordersDetails/{companyId}";
@@ -137,27 +139,30 @@ public class OrderController {
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_on_checking/{companyID}/{orderID}") // смена статуса на "на проверке"
-    String changeStatusOnChecking( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusOnChecking( @PathVariable Long orderID, @RequestParam(defaultValue = "В проверку") String status){
         if(orderService.changeStatusForOrder(orderID, "На проверке")) {
             log.info("статус заказа успешно изменен на на проверке");
         } else {
             log.info("ошибка при изменении статуса заказа на на проверке");
         }
-        return "redirect:/orders/to_check";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//        return "redirect:/orders/to_check";
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_for_correct/{companyID}/{orderID}") // смена статуса на "Коррекция"
-    String changeStatusForCorrect( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusForCorrect( @PathVariable Long orderID, @RequestParam(defaultValue = "На проверке") String status){
         if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
             log.info("статус заказа успешно изменен на Коррекция");
         } else {
             log.info("ошибка при изменении статуса заказа на Коррекция");
         }
-        return "redirect:/orders/on_check";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
     } // смена статуса на "Коррекция"
 
     @PostMapping ("/status_for_publish/{companyID}/{orderID}") // смена статуса на "Публикация"
-    String changeStatusForPublish( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusForPublish(@PathVariable Long orderID, @RequestParam(defaultValue = "На проверке") String status){
 
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
             Order order = orderService.getOrder(orderID);
@@ -167,11 +172,13 @@ public class OrderController {
         } else {
             log.info("ошибка при изменении статуса заказа на Публикация");
         }
-        return "redirect:/orders/on_check";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//         return "redirect:/orders/on_check";
     } // смена статуса на "Публикация"
 
     @PostMapping ("/status_for_publish_ok/{companyID}/{orderID}") // смена статуса на "Опубликовано"
-    String changeStatusForPublishOk( @PathVariable Long orderID, @PathVariable Long companyID, Model model) {
+    String changeStatusForPublishOk(@PathVariable Long orderID, @RequestParam(defaultValue = "Публикация") String status) {
         Order order = orderService.getOrder(orderID);
         if (order.getAmount() <= order.getCounter()) {
             orderService.changeStatusForOrder(orderID, "Опубликовано");
@@ -180,14 +187,18 @@ public class OrderController {
          else {
             log.info("ошибка при изменении статуса заказа на Опубликовано");
         }
-        return "redirect:/orders/to_published";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//        return "redirect:/orders/to_published";
     } // смена статуса на "Опубликовано"
 
     @PostMapping ("/status_to_pay/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
-    String changeStatusToPay( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusToPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Публикация") String status){
         if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
             log.info("статус заказа успешно изменен на Выставлен счет");
-            return "redirect:/orders/published";
+            String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+            return "redirect:/orders/all_orders?status=" + encodedStatus;
+//            return "redirect:/orders/published";
         } else {
             log.info("ошибка при изменении статуса заказа на Выставлен счет");
             return "products/orders_list";
@@ -195,27 +206,31 @@ public class OrderController {
     } // смена статуса на "Выставлен счет"
 
     @PostMapping ("/remember/{companyID}/{orderID}") // смена статуса на "Напоминание"
-    String changeStatusRemember( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusRemember(@PathVariable Long orderID, @RequestParam(defaultValue = "Выставлен счет") String status){
         if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
             log.info("статус заказа успешно изменен на Напоминание");
         } else {
             log.info("ошибка при изменении статуса заказа на Напоминание");
         }
-        return "redirect:/orders/payment_check";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//        return "redirect:/orders/payment_check";
     } // смена статуса на "Напоминание"
 
     @PostMapping ("/status_no_pay/{companyID}/{orderID}") // смена статуса на "Не оплачено"
-    String changeStatusNoPay( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusNoPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Напоминание") String status){
         if(orderService.changeStatusForOrder(orderID, "Не оплачено")) {
             log.info("статус заказа успешно изменен на Не оплачено");
         } else {
             log.info("ошибка при изменении статуса заказа на Не оплачено");
         }
-        return "redirect:/orders/remember";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//        return "redirect:/orders/remember";
     } // смена статуса на "Не оплачено"
 
     @PostMapping ("/status_pay/{companyID}/{orderID}") // смена статуса на "Оплачено"
-    String changeStatusPay( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+    String changeStatusPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Выставлен счет") String status){
         Order order = orderService.getOrder(orderID);
         if (order.getAmount() <= order.getCounter()){
             orderService.changeStatusForOrder(orderID, "Оплачено");
@@ -224,7 +239,9 @@ public class OrderController {
         else {
             log.info("ошибка при изменении статуса заказа на Выставлен счет");
         }
-        return "redirect:/orders/payment_check";
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+//        return "redirect:/orders/payment_check";
     } // смена статуса на "Оплачено"
 
 

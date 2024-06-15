@@ -11,6 +11,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdToManager(Manager manager);
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed")// взять все заказы по id + worker
     List<Long> findAllIdToWorker(Worker worker);
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers ORDER BY o.changed")// взять все заказы по id + managers
+    List<Long> findAllIdToOwner(List<Manager> managers);
 
 
     @Query("SELECT o.id FROM Order o WHERE o.status.title = :status ORDER BY o.changed")// взять все заказы по id + status
@@ -38,6 +41,9 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByManagerAndStatus(Manager manager, String status);
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed")// взять все заказы по id + worker + status
     List<Long> findAllIdByWorkerAndStatus(Worker worker, String status);
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
+    List<Long> findAllIdByOwnerAndStatus(List<Manager> managers, String status);
+
 
 
     @Query("SELECT o.id FROM Order o WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) ORDER BY o.changed")// взять все заказы по id + поиск
@@ -46,6 +52,9 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByByManagerAndKeyWord(Manager manager, String keyword, String keyword2); //// взять все заказы по id + manager + keyword
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) ORDER BY o.changed")// взять все заказы по id + поиск
     List<Long> findAllIdByByWorkerAndKeyWord(Worker worker, String keyword, String keyword2); //// взять все заказы по id + worker + keyword
+    @Query("SELECT o.id FROM Order o WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))) ORDER BY o.changed")
+    List<Long> findAllIdByOwnerAndKeyWord(List<Manager> managers, String keyword, String keyword2);
+
 
 
     @Query("SELECT o.id FROM Order o WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status) OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2) ORDER BY o.changed")// взять все заказы по id + поиск
@@ -54,7 +63,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByManagerAndKeyWordAndStatus(Manager manager, String keyword, String status, String keyword2, String status2); // взять все заказы по id + manager  + keyword + status
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status) OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2) ORDER BY o.changed")// взять все заказы по id + поиск
     List<Long> findAllIdByWorkerAndKeyWordAndStatus(Worker worker, String keyword, String status, String keyword2, String status2); // взять все заказы по id + worker + keyword + status
-
+    @Query("SELECT o.id FROM Order o WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)) OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)) ORDER BY o.changed")
+    List<Long> findAllIdByOwnerAndKeyWordAndStatus(List<Manager> managers, String keyword, String status, String keyword2, String status2); // взять все заказы по id + managers + keyword + status
 
 
     // Список всех отзывов компании
@@ -83,4 +93,5 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Modifying
     @Query("DELETE FROM Order o WHERE o.details IN :orderDetails")
     void deleteOrderById(List<OrderDetails> orderDetails);
+
 }

@@ -43,7 +43,7 @@ public class UsersController {
 
     //Открытие страницы редактирования пользователя
     @GetMapping("/{userId}/edit")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public String editUser(@PathVariable(value = "userId")  long userId, Model model){
         model.addAttribute("editUserDto", userService.findById(userId));
         model.addAttribute("roles", roleService.getAllRoles());
@@ -60,7 +60,7 @@ public class UsersController {
 
     //Сохранение отредактированного пользователя
     @PostMapping("/{userId}/edit")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public String editUserPost(@PathVariable(value = "userId")  long userId, Model model,
                            @ModelAttribute("editUserDto")  RegistrationUserDTO userDto,
                            @RequestParam String role,

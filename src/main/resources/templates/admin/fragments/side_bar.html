@@ -18,7 +18,7 @@
                 <span class="material-icons-sharp">dashboard</span>
                 <h3>Личный кабинет</h3>
             </a>
-            <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" href="/admin/personal" th:onclick="changeActive(event)"  data-id="groups">
+            <a sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MANAGER')" href="/admin/personal" th:onclick="changeActive(event)"  data-id="groups">
                 <span class="material-icons-sharp">groups</span>
                 <h3>Моя команда</h3>
             </a>
@@ -27,7 +27,7 @@
                 <h3>Рейтинг</h3>
             </a>
             
-            <a sec:authorize="hasRole('ADMIN')" href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
+            <a sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  href="/admin/analyse" th:onclick="changeActive(event)" data-id="insights">
                 <span class="material-icons-sharp">insights</span>
                 <h3>Аналитика</h3>
             </a>

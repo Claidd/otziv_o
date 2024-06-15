@@ -44,10 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -93,6 +90,18 @@ public class ReviewServiceImpl implements ReviewService{
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage,pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        LocalDate localDate = LocalDate.now();
+        reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage,pageNumber,pageSize);
+    } // Берем все отзывы с датой для Владельца
 
     private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
@@ -157,11 +166,11 @@ public class ReviewServiceImpl implements ReviewService{
         boolean isChanged = false;
 
         /*Временная проверка сравнений*/
-        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-        System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
-        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
+//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+//        System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
+//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+//        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
@@ -220,11 +229,11 @@ public class ReviewServiceImpl implements ReviewService{
         boolean isChanged = false;
 
         /*Временная проверка сравнений*/
-        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-        System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
-        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
+//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+//        System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
+//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+//        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
@@ -309,11 +318,11 @@ public class ReviewServiceImpl implements ReviewService{
         log.info("Достали Отзыв");
         boolean isChanged = false;
         /*Временная проверка сравнений*/
-        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-        System.out.println("publish date: " + (!saveReview.isPublish()));
-        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+//        System.out.println("publish date: " + (!saveReview.isPublish()));
+//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+//        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
 
         if (!saveReview.isPublish()){ /*Проверка смены даты публикации*/
             log.info("Обновляем дату публикации");

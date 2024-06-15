@@ -8,6 +8,8 @@ import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
 import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Marketolog;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.Worker;
 
 import java.security.Principal;
@@ -34,9 +36,22 @@ public interface PersonalService {
     StatDTO getStats2(LocalDate localDate);
     UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
+    List<Manager> findAllManagersWorkers(List<Manager> managerList);
 
     List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
     List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);
     List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);
     List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate);
+
+    List<ManagersListDTO> getManagersToOwner(List<Manager> managerList);
+    List<WorkersListDTO>  getWorkersToOwner(List<Worker> allWorkers);
+    List<MarketologsListDTO> getMarketologsToOwner(List<Marketolog> allMarketologs);
+    List<OperatorsListDTO> gerOperatorsToOwner(List<Operator> allOperators);
+
+
+
+    List<OperatorsListDTO> getOperatorsAndCountToOwner(List<Operator> allOperators);
+    List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managerList);
+    List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs);
+    List<WorkersListDTO>  getWorkersToAndCountToOwner(List<Worker> allWorkers);
 }

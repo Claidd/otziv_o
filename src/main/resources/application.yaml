@@ -19,7 +19,7 @@ spring:
     hibernate:
       ddl-auto: validate
       dialect: org.hibernate.dialect.MySQLDialect
-    show-sql: true
+    show-sql: false
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
 

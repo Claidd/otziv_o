@@ -46,6 +46,11 @@ public class WorkerServiceImpl implements WorkerService {
 //        return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers().stream().map(Worker::getId).collect(Collectors.toList()));
     } // Взять всех работников
 
+    @Override
+    public Set<Worker> getAllWorkersToManagerList(List<Manager> managerList) {
+        return workerRepository.findAllToManagerList(managerList);
+    }
+
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
     } // Взять всех работников по Id менеджера

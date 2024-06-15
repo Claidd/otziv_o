@@ -7,6 +7,9 @@ import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Marketolog;
+import com.hunt.otziv.u_users.model.Operator;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +28,10 @@ import org.springframework.web.servlet.ModelAndView;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Controller
 @RequiredArgsConstructor
@@ -38,7 +44,7 @@ public class AdminController {
 
 
     @GetMapping()
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView lK(final Map<String, Object> model,  Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         model.put("route", "user_info");
@@ -49,7 +55,7 @@ public class AdminController {
     }
 
     @PostMapping()
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView lKPost(final Map<String, Object> model,  Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
         model.put("route", "user_info");
@@ -60,7 +66,7 @@ public class AdminController {
     }
 
     @GetMapping("/personal")
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER')")
     public ModelAndView personal(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
@@ -68,10 +74,15 @@ public class AdminController {
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "personal");
             model.put("user", personalService.getUserLK(principal));
+            System.out.println(personalService.getUserLK(principal));
             model.put("managers", personalService.getManagers());
+            System.out.println(personalService.getManagers());
             model.put("marketologs", personalService.getMarketologs());
+            System.out.println(personalService.getMarketologs());
             model.put("workers", personalService.gerWorkers());
+            System.out.println(personalService.gerWorkers());
             model.put("operators", personalService.gerOperators());
+            System.out.println(personalService.gerOperators());
             checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
             return new ModelAndView("admin/layouts/personal", model);
         }
@@ -87,16 +98,70 @@ public class AdminController {
             checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime);
             return new ModelAndView("admin/layouts/personal", model);
         }
+
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+            List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
+            // Получение списка всех маркетологов
+            List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();
+            // Получение списка всех операторов
+            List<Operator> allOperators = managerList2.stream().flatMap(manager -> manager.getUser().getOperators().stream()).toList();
+            // Получение списка всех работников
+            List<Worker> allWorkers = managerList2.stream().flatMap(manager -> manager.getUser().getWorkers().stream()).toList();// Вывод списков
+            System.out.println("All Marketologs: " + allMarketologs);
+            System.out.println("All Operators: " + allOperators);
+            System.out.println("All Workers: " + allWorkers);
+            model.put("route", "personal");
+            model.put("user", personalService.getUserLK(principal));
+            System.out.println(personalService.getUserLK(principal));
+            model.put("managers", personalService.getManagersAndCountToOwner(managerList));
+            System.out.println(personalService.getManagersAndCountToOwner(managerList));
+            model.put("marketologs", personalService.getMarketologsAndCountToOwner(allMarketologs));
+            System.out.println(personalService.getMarketologsAndCountToOwner(allMarketologs));
+            model.put("workers", personalService.getWorkersToAndCountToOwner(allWorkers));
+            System.out.println(personalService.getWorkersToAndCountToOwner(allWorkers));
+            model.put("operators", personalService.getOperatorsAndCountToOwner(allOperators));
+            System.out.println(personalService.getOperatorsAndCountToOwner(allOperators));
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
+            return new ModelAndView("admin/layouts/personal", model);
+        }
+//        Вариант без счетчиков
+//        if ("ROLE_OWNER".equals(userRole)) {
+//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+//            List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
+//            // Получение списка всех маркетологов
+//            List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();
+//            // Получение списка всех операторов
+//            List<Operator> allOperators = managerList2.stream().flatMap(manager -> manager.getUser().getOperators().stream()).toList();
+//            // Получение списка всех работников
+//            List<Worker> allWorkers = managerList2.stream().flatMap(manager -> manager.getUser().getWorkers().stream()).toList();// Вывод списков
+//            System.out.println("All Marketologs: " + allMarketologs);
+//            System.out.println("All Operators: " + allOperators);
+//            System.out.println("All Workers: " + allWorkers);
+//            model.put("route", "personal");
+//            model.put("user", personalService.getUserLK(principal));
+//            System.out.println(personalService.getUserLK(principal));
+//            model.put("managers", personalService.getManagersToOwner(managerList));
+//            System.out.println(personalService.getManagersToOwner(managerList));
+//            model.put("marketologs", personalService.getMarketologsToOwner(allMarketologs));
+//            System.out.println(personalService.getMarketologsToOwner(allMarketologs));
+//            model.put("workers", personalService.getWorkersToOwner(allWorkers));
+//            System.out.println(personalService.getWorkersToOwner(allWorkers));
+//            model.put("operators", personalService.gerOperatorsToOwner(allOperators));
+//            System.out.println(personalService.gerOperatorsToOwner(allOperators));
+//            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
+//            return new ModelAndView("admin/layouts/personal", model);
+//        }
         else return new ModelAndView("admin/layouts/personal", model);
     }
 
     @GetMapping("/score")
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView score(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);
-        if ("ROLE_ADMIN".equals(userRole)) {
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             model.put("user", personalService.getUserLK(principal));
             model.put("route", "score");
             model.put("managers", personalService.getManagersAndCount().stream().sorted(Comparator.comparing(ManagersListDTO:: getSum1Month).reversed()));
@@ -119,12 +184,12 @@ public class AdminController {
     }
 
     @PostMapping("/score")
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView scorePost(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);
-        if ("ROLE_ADMIN".equals(userRole)) {
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             model.put("user", personalService.getUserLK(principal));
             model.put("route", "score");
             model.put("managers", personalService.getManagersAndCountToDate(date).stream().sorted(Comparator.comparing(ManagersListDTO:: getSum1Month).reversed()));
@@ -147,7 +212,7 @@ public class AdminController {
     }
 
     @GetMapping("/user_info")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView userInfo(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         System.out.println(staticFor);
@@ -159,7 +224,7 @@ public class AdminController {
     }
 
     @PostMapping("/user_info")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
         System.out.println(staticFor);
@@ -171,7 +236,7 @@ public class AdminController {
     }
 
     @GetMapping("/analyse")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
 //        System.out.println(date);
         System.out.println(LocalDate.now());
@@ -183,7 +248,7 @@ public class AdminController {
         return new ModelAndView("admin/layouts/analyse", model);
     }
     @PostMapping("/analyse")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
         model.put("route", "analyse");

@@ -19,6 +19,7 @@ public interface ReviewService {
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(int pageNumber, int pageSize);
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(Principal principal, int pageNumber, int pageSize);
     Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(Principal principal, int pageNumber, int pageSize);
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(Principal principal, int pageNumber, int pageSize);
     void changeBot(Long id);
     void deActivateAndChangeBot(Long reviewId, Long botId);
     ReviewDTO getReviewDTOById(Long reviewId);

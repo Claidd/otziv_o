@@ -225,6 +225,39 @@ public class CompanyServiceImpl implements CompanyService{
         return getPageIsAfter(companyPage,pageNumber,pageSize);
     } // Берем все заказы Менеджера + поиск + статус
 
+    @Override
+    public Page<CompanyListDTO> getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize) { // Берем все заказы Владельца + поиск + статус
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Long> companyId;
+        List<Company> companyPage;
+        if (!keyword.isEmpty()){
+            companyId = companyRepository.findAllByOwnerListAndStatusAndKeyWords(managerList, keyword, status, keyword, status);
+            companyPage = companyRepository.findAll(companyId);
+        }
+        else{
+            companyId = companyRepository.findAllByManagerListAndStatus(managerList, status);
+            companyPage = companyRepository.findAll(companyId);
+        }
+        return getPageIsAfter(companyPage,pageNumber,pageSize);
+    } // Берем все заказы Владельца + поиск + статус
+
+    @Override
+    public Page<CompanyListDTO> getAllCompaniesDTOListOwner(Principal principal, String keyword, int pageNumber, int pageSize) {
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Long> companyId;
+        List<Company> companyPage;
+        if (!keyword.isEmpty()){
+            log.info("Отработал метод с keywords");
+            companyId = companyRepository.findAllByOwnerAndKeyWord(managerList, keyword,keyword);
+            companyPage = companyRepository.findAll(companyId);
+        }
+        else {
+            companyId = companyRepository.findAllIdToOwner(managerList);
+            companyPage = companyRepository.findAll(companyId);
+        }
+        return getPage(companyPage,pageNumber,pageSize);
+    }
+
 
     private Page<CompanyListDTO> getPage(List<Company> companyPage, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
@@ -336,6 +369,12 @@ public class CompanyServiceImpl implements CompanyService{
     public int getAllCompanyDTOByStatusToManager(Principal principal, String status) {
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         return companyRepository.findAllByManagerAndStatus(manager, status).size();
+    }
+
+    @Override
+    public int getAllCompanyDTOByStatusToOwner(Principal principal, String status) {
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        return companyRepository.findAllByOwnerAndStatus(managerList, status).size();
     }
 
     private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){ // перевод компании в ДТО Сэт

@@ -63,4 +63,23 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog, Pageable pageable);
+
+
+
+    @Query("SELECT l FROM Lead l WHERE l.manager IN :managers")
+    Page<Lead> findAllByManagerToOwner(List<Manager> managers, Pageable pageable);
+
+
+
+    @Query("SELECT l FROM Lead l WHERE LOWER(l.telephoneLead) LIKE %:keyword% AND l.manager IN :managers")
+    Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String keyword, List<Manager> managers, Pageable pageable);
+
+
+    @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) AND l.manager IN :managers")
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String status, String keyword, List<Manager> managers, Pageable pageable);
+
+
+    @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
+    Page<Lead> findAllByLidStatusAndManagerToOwner(String status, List<Manager> managers, Pageable pageable);
+
 }

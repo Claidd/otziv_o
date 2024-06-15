@@ -115,6 +115,14 @@ public class WorkerOrderController {
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Работника: ", startTime);
             return "products/orders/new_orders_worker";
         }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех заказов для Владельца");
+            model.addAttribute("TitleName", "Новые");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
+            return "products/orders/new_orders_worker";
+        }
         else return "redirect:/";
     } // Все заказы - Новые
 
@@ -146,6 +154,14 @@ public class WorkerOrderController {
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, "Коррекция", pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Работника: ", startTime);
+            return "products/orders/correct_orders_worker";
+        }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("TitleName", "Коррекция");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Коррекция",  pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Владельца: ", startTime);
             return "products/orders/correct_orders_worker";
         }
         else return "redirect:/";
@@ -182,6 +198,14 @@ public class WorkerOrderController {
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime);
             return "products/orders/publish_orders_worker";
         }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех заказов для Менеджера");
+            model.addAttribute("TitleName", "Публикация");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublish(principal, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Владельца: ", startTime);
+            return "products/orders/publish_orders_worker";
+        }
         else return "redirect:/";
     } // Все заказы - Публикация
 
@@ -200,7 +224,7 @@ public class WorkerOrderController {
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("TitleName", "все");
+            model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Менеджера: ", startTime);
@@ -208,10 +232,18 @@ public class WorkerOrderController {
         }
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех заказов для Работника");
-            model.addAttribute("TitleName", "все");
+            model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Работника: ", startTime);
+            return "products/orders/all_orders_worker";
+        }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех заказов для Работника");
+            model.addAttribute("TitleName", "Все");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwnerAll(principal, keyword, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Владельца: ", startTime);
             return "products/orders/all_orders_worker";
         }
         else return "redirect:/";
