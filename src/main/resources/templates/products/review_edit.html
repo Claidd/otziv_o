@@ -86,7 +86,11 @@
                             
                             <!-- <a th:href="@{'/ordersDetails/'+ ${companyId} + '/' + ${orderId}}" class="btn btn-secondary mt-3">Назад</a> -->
                             <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
-                            <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3 ml-5">Удалить</a>
+                            <!-- <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3 ml-5">Удалить</a> -->
+                    </form>
+                    <form th:action="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post">
+                        <input type="hidden" name="_csrf" th:value="${_csrf.token}" />
+                        <button type="submit" class="btn btn-secondary mt-3 ml-5">Удалить</button>
                     </form>
                 </div>
             </div>

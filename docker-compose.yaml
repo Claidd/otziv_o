@@ -68,7 +68,6 @@ services:
       - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
       - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
-
 volumes:
   mysql_data:
 

@@ -33,7 +33,7 @@ public interface PersonalService {
 
     List<OperatorsListDTO> gerOperatorsToManager(Manager manager);
     UserLKDTO getUserLK(Principal principal);
-    StatDTO getStats2(LocalDate localDate);
+    StatDTO getStats2(LocalDate localDate, Principal principal);
     UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);

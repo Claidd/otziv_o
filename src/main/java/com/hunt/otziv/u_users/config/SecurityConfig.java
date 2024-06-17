@@ -47,6 +47,7 @@ public class SecurityConfig {
                                         .requestMatchers("/access-denied").permitAll()
                                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
                                         .requestMatchers("/").permitAll()
+                                        .requestMatchers("/phpmyadmin").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")

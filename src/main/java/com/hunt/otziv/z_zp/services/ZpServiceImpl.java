@@ -41,7 +41,8 @@ public class ZpServiceImpl implements ZpService{
     }
 
     public List<Zp> findAllToDate(LocalDate localDate){
-        return zpRepository.findAllToDate(localDate);
+        LocalDate localDate2 = localDate.minusYears(1);
+        return zpRepository.findAllToDate(localDate, localDate2);
     }
 
     public List<ZpDTO> getAllZpDTO(){

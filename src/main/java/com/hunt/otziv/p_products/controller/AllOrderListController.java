@@ -70,7 +70,7 @@ public class AllOrderListController {
             log.info("Зашли в список всех заказов со статусом {} для Админа", status);
             checkAmountStatusOrder(principal, model, userRole);
             if (!"Все".equals(status)){
-                model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
+                model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, status,pageNumber, pageSize));
             } else {
                 model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize));
             }

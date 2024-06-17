@@ -7,6 +7,7 @@ import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +21,15 @@ import java.util.stream.Collectors;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
+    private final MessageSource messageSource;
 
     public List<PaymentCheck> findAll(){
         return paymentCheckRepository.findAll();
     }
 
     public List<PaymentCheck> findAllToDate(LocalDate localDate){
-        return paymentCheckRepository.findAllToDate(localDate);
+        LocalDate localDate2 = localDate.minusYears(1);
+        return paymentCheckRepository.findAllToDate(localDate, localDate2);
     }
 
     public List<CheckDTO> getAllCheckDTO(){

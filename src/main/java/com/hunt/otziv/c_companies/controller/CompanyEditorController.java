@@ -71,9 +71,9 @@ public class CompanyEditorController {
                 log.info("вход в меняем статус с К рассылке на В работе");
                 leadService.changeStatusLeadOnInWork(leadId);
                 log.info("статус успешно сменен К рассылке на В работе");
-                System.out.println(company);
+//                System.out.println(company);
             }
-            return "redirect:/companies/new_company";
+            return "redirect:/companies/company";
         } else {
             log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
             return "redirect:/lead";
@@ -113,9 +113,9 @@ public class CompanyEditorController {
 
         else if (companyService.save(companyDTO)) {
             log.info("OK.Начинаем сохранение компании прошло успешно");
-            for (Company company : companyService.getAllCompaniesList()) {
-                System.out.println(company);
-            }
+//            for (Company company : companyService.getAllCompaniesList()) {
+//                System.out.println(company);
+//            }
             return "redirect:/companies/new_company";
         } else {
             log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
