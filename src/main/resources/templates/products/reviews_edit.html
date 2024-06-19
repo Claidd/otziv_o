@@ -65,6 +65,10 @@
                     <p th:text="${errorMessage}" class="alert alert-success"  style="color: red;"></p>
                 </div>
 
+                <div th:if="${orderDetailDTO.companyComments != null && !orderDetailDTO.companyComments.isEmpty()}" sec:authorize="hasAnyRole('WORKER', 'MANAGER', 'ADMIN', 'OWNER')" class="company__card__content__comments__tocompanyComments">
+                    <div class="company__card__text__companyComments" th:utext="${orderDetailDTO.companyComments}">Комментарий для компании</div>
+                </div>
+                
 
             <div th:if="${not #lists.isEmpty(orderDetailDTO.reviews)}">
                 <form th:object="${orderDetailDTO}" th:method="post" th:action="'/review/editReviews/' + ${orderDetailId}">

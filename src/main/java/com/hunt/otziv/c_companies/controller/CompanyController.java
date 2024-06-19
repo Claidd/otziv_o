@@ -74,6 +74,7 @@ public class CompanyController {
         model.addAttribute("TitleName", status);
         model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
         model.addAttribute("status", status);
+        model.addAttribute("urlFirst", "/companies/company");
         if ("ROLE_ADMIN".equals(userRole)){
             checkAmountStatusCompany(principal, model, userRole);
             if (!"Все".equals(status)){

@@ -401,6 +401,7 @@ public class ReviewServiceImpl implements ReviewService{
         return ReviewDTOOne.builder()
                 .id(review.getId())
                 .companyId(review.getOrderDetails().getOrder().getCompany().getId())
+                .commentCompany(review.getOrderDetails().getOrder().getCompany().getCommentsCompany())
                 .orderDetailsId(review.getOrderDetails().getId())
                 .orderId(review.getOrderDetails().getOrder().getId())
                 .text(review.getText())

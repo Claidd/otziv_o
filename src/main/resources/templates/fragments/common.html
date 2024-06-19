@@ -159,19 +159,20 @@
     <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
 </th:block>
 
+
 <!-- ==================== COMPANY PAGINATION ======================== -->
 <th:block th:fragment="companyPagination" xmlns:th="http://www.w3.org/1999/xhtml">
     <div class="page__row2" id="pagination-1">
         <ul class="pagination">
             <li th:class="${allCompany.first ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number - 1})}" class="page-link">Предыдущая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number - 1}, status = ${status})}" class="page-link">Предыдущая</a>
             </li>
             <li th:if="${allCompany.totalPages != null && allCompany.totalPages > 0}" th:each="i : ${#numbers.sequence(0, allCompany.totalPages - 1)}"
                 th:class="${allCompany.number == i ? 'active' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                <a th:href="@{${urlFirst}(pageNumber=${i}, status = ${status})}" class="page-link" th:text="${i}">1</a>
             </li>
             <li th:class="${allCompany.last ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number + 1})}" class="page-link">Следующая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number + 1}, status = ${status})}" class="page-link">Следующая</a>
             </li>
         </ul>
     </div>
@@ -183,18 +184,19 @@
     <div class="page__row2" id="pagination-1">
         <ul class="pagination">
             <li th:class="${orders.first ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1})}" class="page-link">Предыдущая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1}, status = ${status})}" class="page-link">Предыдущая</a>
             </li>
             <li th:if="${orders.totalPages != null && orders.totalPages > 0}" th:each="i : ${#numbers.sequence(0, orders.totalPages - 1)}"
                 th:class="${orders.number == i ? 'active' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                <a th:href="@{${urlFirst}(pageNumber=${i}, status = ${status})}" class="page-link" th:text="${i}">1</a>
             </li>
             <li th:class="${orders.last ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${orders.number + 1})}" class="page-link">Следующая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${orders.number + 1}, status = ${status})}" class="page-link">Следующая</a>
             </li>
         </ul>
     </div>
 </th:block>
+
 
 <!-- ==================== REVIEWSPAGINATION ======================== -->
 <th:block th:fragment="reviewsPagination" xmlns:th="http://www.w3.org/1999/xhtml">
@@ -213,5 +215,39 @@
         </ul>
     </div>
 </th:block>
+
+
+<!-- ==================== LEAD PAGINATION ======================== -->
+<th:block th:fragment="leadPagination" xmlns:th="http://www.w3.org/1999/xhtml">
+    <div class="page__row2" id="pagination-1">
+        <ul class="pagination">
+            <li th:class="${allCompany.first ? 'disabled' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number - 1})}" class="page-link">Предыдущая</a>
+            </li>
+            <li th:if="${allCompany.totalPages != null && allCompany.totalPages > 0}" th:each="i : ${#numbers.sequence(0, allCompany.totalPages - 1)}"
+                th:class="${allCompany.number == i ? 'active' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+            </li>
+            <li th:class="${allCompany.last ? 'disabled' : ''}" class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${allCompany.number + 1})}" class="page-link">Следующая</a>
+            </li>
+        </ul>
+    </div>
+</th:block>
+
+<div class="tabs__content__lead-item2" id="pagination-5">
+    <ul class="pagination">
+        <li th:class="${leadListInWork.first ? 'disabled' : ''}" class="page-item">
+            <a th:href="@{/lead(pageNumber=${leadListInWork.number - 1})}" class="page-link">Предыдущая</a>
+        </li>
+        <li th:if="${leadListInWork.totalPages != null && leadListInWork.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListInWork.totalPages - 1)}"
+            th:class="${leadListInWork.number == i ? 'active' : ''}" class="page-item">
+            <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+        </li>
+        <li th:class="${leadListInWork.last ? 'disabled' : ''}" class="page-item">
+            <a th:href="@{/lead(pageNumber=${leadListInWork.number + 1})}" class="page-link">Следующая</a>
+        </li>
+    </ul>
+</div>
 
 

@@ -48,7 +48,7 @@ public class Company {
     private String urlChat;
 
     //    мейл пользователя
-    @Column(name = "company_email", unique = true, updatable = false)
+    @Column(name = "company_email", unique = true, updatable = true)
     @Email
     private String email;
 

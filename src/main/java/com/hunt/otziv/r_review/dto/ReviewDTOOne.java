@@ -48,6 +48,8 @@ public class ReviewDTOOne {
 
     private String companyTitle;
 
+    private String commentCompany;
+
     private String filialTitle;
 
     private String filialUrl;

@@ -400,17 +400,18 @@ public class OrderServiceImpl implements OrderService {
         Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
         log.info("Достали Заказ");
         boolean isChanged = false;
-
+        System.out.println(orderDTO.getCommentsCompany());
         /*Временная проверка сравнений*/
         System.out.println("filial id: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
         System.out.println("filial url: " + !Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl()));
         System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId()));
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
+        System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
 
 
         if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
-            log.info("Обновляем филиал");
+            log.info("Обновляем филиал заказа");
             System.out.println(saveOrder.getFilial());
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
 //            saveOrder.getFilial().setId(orderDTO.getFilial().getId());
@@ -418,12 +419,12 @@ public class OrderServiceImpl implements OrderService {
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/
-            log.info("Обновляем url филиала");
+            log.info("Обновляем url филиала заказа");
 //            saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
 //            isChanged = true;
         }
         if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) || !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId())){ /*Проверка смены работника*/
-            log.info("Обновляем работника");
+            log.info("Обновляем работника заказа");
             Worker newWorker = convertWorkerDTOToWorker(orderDTO.getWorker());
             saveOrder.setWorker(newWorker);
             // Обновляем работника в связанных отзывах
@@ -435,13 +436,18 @@ public class OrderServiceImpl implements OrderService {
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId())){ /*Проверка смены работника*/
-            log.info("Обновляем менеджера");
+            log.info("Обновляем менеджера заказа");
             saveOrder.setManager(convertManagerDTOToManager(orderDTO.getManager()));
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.isComplete(), saveOrder.isComplete())){ /*Проверка статус заказа*/
-            log.info("Обновляем выполнение Заказа");
+            log.info("Обновляем статус выполнения Заказа");
             saveOrder.setComplete(orderDTO.isComplete());
+            isChanged = true;
+        }
+        if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
+            log.info("Обновляем выполнение комментария заказа");
+            saveOrder.getCompany().setCommentsCompany(orderDTO.getCommentsCompany());
             isChanged = true;
         }
 
@@ -640,6 +646,8 @@ public class OrderServiceImpl implements OrderService {
     private List<OrderDTOList> toOrderDTOList(List<Order> orders){ // Конвертер DTO для списка заказов AllOrderListController/orders/
         return orders.stream().map(this::toDTOListOrders).collect(Collectors.toList());
     } // Конвертер DTO для списка заказов
+
+
     private OrderDTOList toDTOListOrders (Order order){// Конвертер DTO для заказа
         LocalDate now = LocalDate.now();
         LocalDate changedDate = order.getChanged();
@@ -652,6 +660,7 @@ public class OrderServiceImpl implements OrderService {
                 .companyId(order.getCompany().getId())
                 .orderDetailsId(order.getDetails().iterator().next().getId())
                 .companyTitle(order.getCompany().getTitle())
+                .companyComments(order.getCompany().getCommentsCompany())
                 .filialTitle(order.getFilial().getTitle())
                 .filialUrl(order.getFilial().getUrl())
                 .status(order.getStatus().getTitle())
@@ -679,6 +688,8 @@ public class OrderServiceImpl implements OrderService {
     private List<OrderDTO> convertToOrderDTOList(List<Order> orders){ // Конвертер DTO для списка заказов
         return orders.stream().map(this::toDTO).collect(Collectors.toList());
     } // Конвертер DTO для списка заказов
+
+
     private OrderDTO toDTO (Order order){// Конвертер DTO для заказа
         LocalDate now = LocalDate.now();
         LocalDate changedDate = order.getChanged();
@@ -694,6 +705,7 @@ public class OrderServiceImpl implements OrderService {
                 .changed(order.getChanged())
                 .status(convertToOrderDTO(order.getStatus()))
                 .company(convertToCompanyDTO(order.getCompany()))
+                .commentsCompany(order.getCompany().getCommentsCompany())
                 .filial(convertToFilialDTO(order.getFilial()))
                 .manager(convertToManagerDTO(order.getManager()))
                 .worker(convertToWorkerDTO(order.getWorker()))

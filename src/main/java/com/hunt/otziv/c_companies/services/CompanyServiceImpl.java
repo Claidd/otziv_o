@@ -269,6 +269,8 @@ public class CompanyServiceImpl implements CompanyService{
                 .collect(Collectors.toList());
         return new PageImpl<>(companyListDTOs, pageable, companyPage.size());
     }
+
+
     private Page<CompanyListDTO> getPageIsAfter(List<Company> companyPage, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
         int start = (int)pageable.getOffset();
@@ -667,7 +669,10 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if (!Objects.equals(companyDTO.getEmail(), saveCompany.getEmail())){ /*Проверка смены мейл*/
             log.info("Обновляем мейл");
+            System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
+            System.out.println(companyDTO.getEmail());
             saveCompany.setEmail(companyDTO.getEmail());
+            System.out.println(saveCompany.getEmail());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.isActive(), saveCompany.isActive())){ /*Проверка активности*/
@@ -732,6 +737,7 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if  (isChanged){
             log.info("3. Начали сохранять обновленную компанию в БД");
+            System.out.println(saveCompany.getEmail());
             companyRepository.save(saveCompany);
             log.info("4. Сохранили обновленную компанию в БД");
         }

@@ -193,7 +193,7 @@ public class OrderController {
     } // смена статуса на "Опубликовано"
 
     @PostMapping ("/status_to_pay/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
-    String changeStatusToPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Публикация") String status){
+    String changeStatusToPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Опубликовано") String status){
         if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
             log.info("статус заказа успешно изменен на Выставлен счет");
             String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);

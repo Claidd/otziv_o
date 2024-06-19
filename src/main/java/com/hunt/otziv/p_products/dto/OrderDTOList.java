@@ -41,6 +41,8 @@ public class OrderDTOList {
 
     private String companyTelephone;
 
+    private String companyComments;
+
     private String managerPayText;
 
     private Integer amount;

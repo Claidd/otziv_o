@@ -34,4 +34,6 @@ public class OrderDetailsDTO {
 
     private String comment;
 
+    private String companyComments;
+
 }

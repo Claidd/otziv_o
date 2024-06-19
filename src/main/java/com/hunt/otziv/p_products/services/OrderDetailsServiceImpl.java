@@ -64,6 +64,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .order(convertToOrderDTO(orderDetails.getOrder()))
                 .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
                 .comment(orderDetails.getComment())
+                .companyComments(orderDetails.getOrder().getCompany().getCommentsCompany())
                 .build();
     } // перевод деталей в дто
     private ProductDTO convertToProductDTO(Product product){ // перевод продукта в дто

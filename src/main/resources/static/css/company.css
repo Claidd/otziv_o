@@ -165,7 +165,7 @@ b{
 
 /* настройки всеъ заголовков */
 .company__section-title2 {
-    margin-bottom: 50px;
+    /* margin-bottom: 50px; */
     font-size: 48px;
     font-weight: 700;
     text-align: center;
@@ -1460,6 +1460,30 @@ b{
     overflow-x:hidden; 
 }
 
+.company__card__content__comments__tocompanyComments {
+    /* margin-top: -2rem; */
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 46px;
+    width: 100%;
+    font-family: 'laptev_brush';
+}
+
+.company__card__text__companyComments {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    text-align: center;
+    overflow-x:hidden; 
+}
+
+
+
+
 .company__card__text__review2 {
     height: 240px;
     padding: 5px;
@@ -2327,6 +2351,10 @@ main .recent-orders a{
 
 @media (max-width: 860px) {
 
+    .company__card__text__companyComments {
+        align-items: flex-start;
+    }
+
     /* настраиваем бургер меню */
     .company__menu__btn {
         display: flex;
@@ -2440,6 +2468,14 @@ main .recent-orders a{
 
 @media (max-width: 768px) {
 
+    .company__card__content__comments__tocompanyComments {
+        height: 66px;
+    }
+    
+    .company__card__text__companyComments  {
+        height: 60px;
+    }
+
     .reviews__details{
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -2490,6 +2526,7 @@ main .recent-orders a{
         grid-template-columns: 1fr;
         padding: 0 var(--padding-1);
     }
+
 
     aside{
         position: fixed;
@@ -2602,6 +2639,15 @@ main .recent-orders a{
     /* ==================== 650 =================== */
 
     @media (max-width: 650px) {
+        .company__card__content__comments__tocompanyComments {
+            margin-top: 0rem;
+            height: 76px;
+        }
+        
+        .company__card__text__companyComments  {
+            height: 70px;
+        }
+
         .review__card__lead{
             box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
         }
@@ -2792,6 +2838,15 @@ main .recent-orders a{
 
 @media (max-width: 540px) {
 
+    
+    .company__card__content__comments__tocompanyComments {
+        height: 96px;
+    }
+    
+    .company__card__text__companyComments  {
+        height: 90px;
+    }
+
     .reviews__details{
         grid-template-columns: repeat(1, minmax(0, 1fr));
     }
@@ -2920,6 +2975,7 @@ main .recent-orders a{
 
     /* ==================== 470 =================== */
     @media (max-width: 470px) {
+
    
         .company__tabs__btn__lead{
             grid-template-columns: repeat(3, 1fr);

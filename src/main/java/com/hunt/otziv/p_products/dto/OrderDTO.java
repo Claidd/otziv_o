@@ -38,6 +38,8 @@ public class OrderDTO {
 
     private List<OrderDetailsDTO> details;
 
+    private String commentsCompany;
+
     private UUID orderDetailsId;
 
     private OrderStatusDTO status;

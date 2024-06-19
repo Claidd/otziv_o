@@ -116,7 +116,7 @@ public class CompanyEditorController {
 //            for (Company company : companyService.getAllCompaniesList()) {
 //                System.out.println(company);
 //            }
-            return "redirect:/companies/new_company";
+            return "redirect:/companies/company";
         } else {
             log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
             return "redirect:/lead";
