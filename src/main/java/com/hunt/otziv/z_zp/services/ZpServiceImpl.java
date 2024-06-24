@@ -50,16 +50,16 @@ public class ZpServiceImpl implements ZpService{
     }
 
     @Transactional
-    public boolean save(Order order){ // Сохранить ЗП и Чек в БД
+    public boolean save(Order order) { // Сохранить ЗП и Чек в БД
         try {
             saveZpManager(order);
             saveZpWorker(order);
             return true;
+        } catch (Exception e) {
+            log.error("Ошибка при сохранении ЗП и Чека в БД", e);
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
-        catch (Exception e){
-            return false;
-        }
-    } // Сохранить ЗП и Чек в БД
+    }// Сохранить ЗП и Чек в БД
 
     @Transactional
     public boolean saveLeadZp(Lead lead){ // Сохранить ЗП за Лида
@@ -69,60 +69,78 @@ public class ZpServiceImpl implements ZpService{
             return true;
         }
         catch (Exception e){
-            return false;
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
     } // Сохранить ЗП за Лида
 
     @Transactional
-    private void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
-        System.out.println(order.getSum().multiply(order.getManager().getUser().getCoefficient()));
-        Zp managerZp = new Zp();
-        managerZp.setFio(order.getManager().getUser().getFio());
-        managerZp.setSum(order.getSum().multiply(order.getManager().getUser().getCoefficient()));
-        managerZp.setOrderId(order.getId());
-        managerZp.setUserId(order.getManager().getUser().getId());
-        managerZp.setProfessionId(order.getManager().getId());
-        managerZp.setAmount(order.getAmount());
-        managerZp.setActive(true);
-        zpRepository.save(managerZp);
+    protected void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
+        try {
+            Zp managerZp = new Zp();
+            managerZp.setFio(order.getManager().getUser().getFio());
+            managerZp.setSum(order.getSum().multiply(order.getManager().getUser().getCoefficient()));
+            managerZp.setOrderId(order.getId());
+            managerZp.setUserId(order.getManager().getUser().getId());
+            managerZp.setProfessionId(order.getManager().getId());
+            managerZp.setAmount(order.getAmount());
+            managerZp.setActive(true);
+            zpRepository.save(managerZp);
+        } catch (Exception e){
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        }
+
     } // Сохранить ЗП Менеджера в БД
-@Transactional
-    private void saveZpWorker(Order order){ // Сохранить ЗП Работника в БД
-    System.out.println(order.getSum().multiply(order.getWorker().getUser().getCoefficient()));
-        Zp workerZp = new Zp();
-        workerZp.setFio(order.getWorker().getUser().getFio());
-        workerZp.setSum(order.getSum().multiply(order.getWorker().getUser().getCoefficient()));
-        workerZp.setOrderId(order.getId());
-        workerZp.setUserId(order.getWorker().getUser().getId());
-        workerZp.setProfessionId(order.getWorker().getId());
-        workerZp.setAmount(order.getAmount());
-        workerZp.setActive(true);
-        zpRepository.save(workerZp);
+    @Transactional
+    protected void saveZpWorker(Order order){ // Сохранить ЗП Работника в БД
+        try {
+            Zp workerZp = new Zp();
+            workerZp.setFio(order.getWorker().getUser().getFio());
+            workerZp.setSum(order.getSum().multiply(order.getWorker().getUser().getCoefficient()));
+            workerZp.setOrderId(order.getId());
+            workerZp.setUserId(order.getWorker().getUser().getId());
+            workerZp.setProfessionId(order.getWorker().getId());
+            workerZp.setAmount(order.getAmount());
+            workerZp.setActive(true);
+            zpRepository.save(workerZp);
+        } catch (Exception e){
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        }
+
     } // Сохранить ЗП Работника в БД
     @Transactional
-    private void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
-        Zp marketologZp = new Zp();
-        marketologZp.setFio(lead.getMarketolog().getUser().getFio());
-        marketologZp.setSum(new BigDecimal("1000.00").multiply(lead.getMarketolog().getUser().getCoefficient()));
-        marketologZp.setUserId(lead.getMarketolog().getUser().getId());
-        marketologZp.setOrderId(0L);
-        marketologZp.setProfessionId(lead.getMarketolog().getId());
-        marketologZp.setAmount(1);
-        marketologZp.setActive(true);
-        zpRepository.save(marketologZp);
+    protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
+        try {
+            Zp marketologZp = new Zp();
+            marketologZp.setFio(lead.getMarketolog().getUser().getFio());
+            marketologZp.setSum(new BigDecimal("1000.00").multiply(lead.getMarketolog().getUser().getCoefficient()));
+            marketologZp.setUserId(lead.getMarketolog().getUser().getId());
+            marketologZp.setOrderId(0L);
+            marketologZp.setProfessionId(lead.getMarketolog().getId());
+            marketologZp.setAmount(1);
+            marketologZp.setActive(true);
+            zpRepository.save(marketologZp);
+        } catch (Exception e){
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        }
+
     } // Сохранить ЗП Маркетолога в БД
 
     @Transactional
-    private void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
-        Zp operatorZp = new Zp();
-        operatorZp.setFio(lead.getOperator().getUser().getFio());
-        operatorZp.setSum(new BigDecimal("1000.00").multiply(lead.getOperator().getUser().getCoefficient()));
-        operatorZp.setUserId(lead.getOperator().getUser().getId());
-        operatorZp.setProfessionId(lead.getOperator().getId());
-        operatorZp.setOrderId(0L);
-        operatorZp.setAmount(1);
-        operatorZp.setActive(true);
-        zpRepository.save(operatorZp);
+    protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
+        try {
+            Zp operatorZp = new Zp();
+            operatorZp.setFio(lead.getOperator().getUser().getFio());
+            operatorZp.setSum(new BigDecimal("1000.00").multiply(lead.getOperator().getUser().getCoefficient()));
+            operatorZp.setUserId(lead.getOperator().getUser().getId());
+            operatorZp.setProfessionId(lead.getOperator().getId());
+            operatorZp.setOrderId(0L);
+            operatorZp.setAmount(1);
+            operatorZp.setActive(true);
+            zpRepository.save(operatorZp);
+        } catch (Exception e){
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        }
+
     } // Сохранить ЗП Оператора в БД
 
     private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO

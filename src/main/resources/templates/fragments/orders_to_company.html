@@ -111,6 +111,10 @@
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
                     </form>
+                    <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/order_to_archive2/' + ${order.companyId} + '/' + ${order.id}">
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <button type="submit" class="company__card__text__lead-button ">архив</button>
+                    </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button type="submit" class="company__card__text__lead-button ">опублик.</button>

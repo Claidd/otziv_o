@@ -35,13 +35,7 @@ public class OrderDetailsController {
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
         long startTime = System.nanoTime();
-//        model.addAttribute("companyId", companyId);
-//        model.addAttribute("orderId", orderId);
-//        Order order = orderService.getOrder(orderId);
-//        model.addAttribute("orderDetailsId", order.getDetails().iterator().next().getId());
         List<ReviewDTOOne> reviews = reviewService.getReviewsAllByOrderId(orderId);
-//        List<ReviewDTOOne> reviews2 = new ArrayList<>(){};
-//        reviews2.add(new ReviewDTOOne());
         if (reviews.isEmpty()) {
             model.addAttribute("errorMessage", "Список отзывов пуст. Сообщите менеджеру об этом");
             model.addAttribute("reviews", reviews);
@@ -52,9 +46,6 @@ public class OrderDetailsController {
             checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
             return "products/orders_detail_list";
         }
-//        model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(orderId));
-//        rm.addFlashAttribute("companyId", companyId);
-//        rm.addFlashAttribute("orderId", orderId);
     } // Переход на страницу Просмотра  деталей заказа
 
     @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота

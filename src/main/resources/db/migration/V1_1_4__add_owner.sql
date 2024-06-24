@@ -15,8 +15,6 @@ VALUES
 ('masha', '$2a$10$CBere4wkN3qfJH/ZZYXRcOGe9XdtMuUHwLwEpt5/9qeq56kQQci56', 'Мария Р.', 'maw-rad@пmail.сщь', '89041256289', 'f9869242-3fd0-4464-a299-56f4e2c60e42', 1, '2024-06-12');
 
 
-
-
 -- insert into roles (name)
 -- values ('ROLE_OWNER');
 --

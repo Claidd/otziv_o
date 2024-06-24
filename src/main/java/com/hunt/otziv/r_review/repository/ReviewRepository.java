@@ -52,4 +52,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Modifying
     @Query("DELETE FROM Review r WHERE r.id = :reviewId")
     void deleteReviewByReviewId(Long reviewId);
+
+    // Проверка наличия записи с таким же текстом
+    boolean existsByText(String text);
 }

@@ -17,12 +17,32 @@
 
     <!-- ==================== MAIN START ======================== -->
 
+    
+    
+
+    <div class="container">
+        <form class="form-group row" th:method="get">
+            <div class="col">
+                <input class="form-control" type="text" value="" name="keyword" id="keyword">
+            </div>
+            <div class="col-auto">
+                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                <button type="submit" class="btn btn-primary">Найти</button>
+            </div>
+        </form>
+    </div>
+
+    
+        <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
     <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
-    <div class="container mt-5">
+    
+    
+    
+    <div class="container">
         <h2 class="section-title">СОЗДАТЬ НОВУЮ КАТЕГОРИЮ</h2>
         <div class="row py-2 pt-1 mt-1">
-            <div class="col-12 pt-5">
+            <div class="col-12 ">
                 <div class="mb-3" th:if="${saveSuccess}">
                     <div class="alert alert-success">
                         Данные успешно изменены и сохранены.
@@ -46,8 +66,11 @@
     </div>
     <!-------------------------------------- ФОРМА ВВОДА ДАННЫХ ------------------------------------------------------>
 
+    
+
+
 <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
-<div class="container mt-5">
+<div class="container">
     <h2 class="section-title">СПИСОК КАТЕГОРИЙ</h2>
     <div class="table-responsive">
         <table class="table table-striped">

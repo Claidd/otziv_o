@@ -86,9 +86,6 @@ public class ReviewController {
         long startTime = System.nanoTime();
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
         if (orderDetailsDTO.getReviews().isEmpty()) {
-//            List<ReviewDTO> dtoOnes = new ArrayList<>();
-//            dtoOnes.add(new ReviewDTO());
-//            orderDetailsDTO.setReviews(dtoOnes);
             model.addAttribute("orderDetailDTO", orderDetailsDTO);
             model.addAttribute("orderDetailId", orderDetailId);
 //            model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());

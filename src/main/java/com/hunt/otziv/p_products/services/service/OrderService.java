@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.services.service;
 
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -30,7 +31,7 @@ public interface OrderService {
     boolean changeStatusAndOrderCounter(Long reviewId);
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
-    boolean deleteOrder(Long orderId);
+    boolean deleteOrder(Long orderId, Principal principal);
 
     int getAllOrderDTOByStatus(String status);
 
@@ -39,5 +40,7 @@ public interface OrderService {
     int getAllOrderDTOByStatusToOwner(Principal principal, String status);
 
 
+    Company checkStatusToCompany(Company company);
 
+    OrderDTO convertToOrderDTOToRepeat(Order order);
 }

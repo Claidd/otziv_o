@@ -119,7 +119,7 @@
                         <div class="row py-2 pt-1 mt-1">
                             <div class="col-12 pt-5">
 
-                    <form method="post" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyId} + '/' + ${orderId}+ '/delete'}" th:object="${ordersDTO}">
+                    <form sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" method="post" th:action="@{'/ordersCompany/ordersDetails/'+ ${companyId} + '/' + ${orderId}+ '/delete'}" th:object="${ordersDTO}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                         <button  type="submit" class="btn btn-primary mt-3">Удалить</button>
                            

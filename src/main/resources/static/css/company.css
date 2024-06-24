@@ -7,6 +7,12 @@
          url('../font/laptev_brush.otf');
 }
 
+@font-face {
+    font-family: 'borders';
+    src:
+         url('../font/borders.ttf');
+}
+
 
 /* ширина блока складывается из ширины контента (width), значений отступов (margin), полей (padding) и границ (border). Аналогично обстоит и с высотой блока. Свойство box-sizing позволяет изменить этот алгоритм, чтобы свойства width и height задавали размеры не контента, а размеры блока. устанавливаем наследование как у родителя */
 html {
@@ -1167,8 +1173,10 @@ b{
     align-items: center;
     height: 100%;
     width: 100%;
-    font-size: 24px;
-    font-weight: 700;
+    font-family: 'borders';
+    font-size: 22px;
+    font-weight: 500;
+    color: #414141;
 }
 
 .company__card__title__review {
@@ -1438,7 +1446,7 @@ b{
     align-items: center;
     border: 1px solid #5b5a5a38;
     border-radius: 1.2rem;
-    height: 240px;
+    height: 150px;
     width: 100%;
     font-family: 'laptev_brush';
 }
@@ -1485,7 +1493,7 @@ b{
 
 
 .company__card__text__review2 {
-    height: 240px;
+    height: 150px;
     padding: 5px;
     overflow-x:hidden; 
     font-family: 'laptev_brush';
@@ -2397,6 +2405,11 @@ main .recent-orders a{
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .reviews__details{
+        grid-template-columns: repeat(10, minmax(370px, 1fr));
+        overflow-x: scroll;
+    }
+
     .company__tabs__content-item {
         /* grid-template-columns: repeat(2, 1fr); */
         grid-template-columns: repeat(10, minmax(370px, 1fr));
@@ -2476,9 +2489,6 @@ main .recent-orders a{
         height: 60px;
     }
 
-    .reviews__details{
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 
     .company__title {
         font-size: 70px;
@@ -2699,6 +2709,11 @@ main .recent-orders a{
             grid-template-columns: repeat(4, 1fr);
         }
 
+        .reviews__details {
+            grid-template-columns: repeat(10, minmax(370px, 1fr));
+            overflow-x: scroll; /* Или overflow-x: auto */
+        }
+
         .company__tabs__content-item {
             grid-template-columns: repeat(10, minmax(370px, 1fr));
             overflow-x: scroll; /* Или overflow-x: auto */
@@ -2847,11 +2862,6 @@ main .recent-orders a{
         height: 90px;
     }
 
-    .reviews__details{
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-    }
-
-
     .company__title {
         font-size: 60px;
     }
@@ -2943,6 +2953,10 @@ main .recent-orders a{
         padding: 50px 0;
     }
 
+    .reviews__details {
+        gap: 40px;
+    }
+
     .company__tabs__content-item {
         gap: 40px;
     }
@@ -2976,6 +2990,10 @@ main .recent-orders a{
     /* ==================== 470 =================== */
     @media (max-width: 470px) {
 
+        .reviews__details {
+            grid-template-columns: repeat(10, minmax(395px, 1fr));
+        }
+
    
         .company__tabs__btn__lead{
             grid-template-columns: repeat(3, 1fr);
@@ -2990,6 +3008,10 @@ main .recent-orders a{
 
         /* ==================== 430 =================== */
     @media (max-width: 431px) {
+
+        .reviews__details {
+            grid-template-columns: repeat(10, minmax(390px, 1fr));
+        }
 
             .company__tabs__content-item {
                 grid-template-columns: repeat(10, minmax(410px, 1fr));
@@ -3016,7 +3038,15 @@ main .recent-orders a{
         }
 
             /* ==================== 413 =================== */
-    @media (max-width: 413px) {
+    @media (max-width: 415px) {
+
+        .company__card__content__review__text {
+            height: 100px;
+        }
+
+        .reviews__details {
+            grid-template-columns: repeat(10, minmax(370px, 1fr));
+        }
 
         .company__tabs__content-item {
             grid-template-columns: repeat(10, minmax(385px, 1fr));
@@ -3035,6 +3065,10 @@ main .recent-orders a{
 
                 /* ==================== 391 =================== */
     @media (max-width: 391px) {
+
+        .reviews__details {
+            grid-template-columns: repeat(10, minmax(340px, 1fr));
+        }
 
         .company__tabs__content-item {
             grid-template-columns: repeat(10, minmax(365px, 1fr));
@@ -3069,10 +3103,14 @@ main .recent-orders a{
         .company__card__content__button__btn {
             margin-top: 0rem;
         }
+
+        .reviews__details{
+            grid-template-columns: repeat(10, minmax(320px, 1fr));
+        }
+
         .company__tabs__content-item {
             grid-template-columns: repeat(10, minmax(335px, 1fr));
         }
-
 
         .orderdetails__tabs__content-item {
             grid-template-columns: repeat(10, minmax(330px, 1fr));

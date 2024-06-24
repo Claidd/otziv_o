@@ -88,15 +88,19 @@
                         <!-- КНОПКИ 2 -->
                         <div class="company__card__content_button"> <!-- card__content_button -->
                             
-                            <form th:if="${order.status == 'В проверку' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking/' + ${order.companyId} + '/' + ${order.id}">
+                            <form th:if="${order.status == 'В проверку' || order.status == 'Все' || order.status == 'Архив'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="company__card__text__lead-button ">на проверку</button>
                             </form>
-                            <form th:if="${order.status == 'На проверку' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct/' + ${order.companyId} + '/' + ${order.id}">
+                            <form th:if="${order.status == 'На проверке' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="company__card__text__lead-button ">коррекция</button>
                             </form>
-                            <form th:if="${order.status == 'На проверку' || order.status == 'Коррекция' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish/' + ${order.companyId} + '/' + ${order.id}">
+                            <form th:if="${order.status == 'На проверке' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/order_to_archive/' + ${order.companyId} + '/' + ${order.id}">
+                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <button type="submit" class="company__card__text__lead-button ">архив</button>
+                            </form>
+                            <form th:if="${order.status == 'На проверке' || order.status == 'Коррекция' || order.status == 'Все' || order.status == 'Архив'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
                             </form>

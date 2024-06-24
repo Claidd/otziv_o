@@ -114,4 +114,18 @@ public class CategoryServiceImpl implements CategoryService{
        return categoryRepository.findById(categoryId).orElse(null);
     } // Взять категорию по Id
 
+    @Override
+    public List<CategoryDTO> getAllCategoriesKeywords(String keyword) {
+        long startTime = System.nanoTime();
+        List<Category> categories = categoryRepository.findAllCategoryAndSubcategoryByKeywords(keyword);
+        List<CategoryDTO> categoriesDto = categories.stream()
+                .map(this::convertToDTO)
+                .sorted(Comparator.comparing(CategoryDTO::getCategoryTitle))
+                .toList();
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf("Список категорий: %.4f сек%n", timeElapsed);
+        return categoriesDto;
+    }
+
 }

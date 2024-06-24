@@ -1,7 +1,5 @@
 package com.hunt.otziv.p_products.controller;
 
-import com.hunt.otziv.c_companies.dto.CompanyDTO;
-import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -9,7 +7,6 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
-import com.hunt.otziv.r_review.dto.AmountDTO;
 import com.hunt.otziv.r_review.services.AmountService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +18,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.security.Principal;
 
 @Controller
 @Slf4j
@@ -107,9 +102,9 @@ public class OrderController {
     } // Страница редактирования Заказа - Post
 
     @PostMapping("/ordersDetails/{companyId}/{orderId}/delete") // Страница редактирования Заказа - Post
-    String OrderEditPostDelete(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm,  Model model){
+    String OrderEditPostDelete(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Principal principal, Model model){
         log.info("1. Начинаем удалять Заказ");
-        if(orderService.deleteOrder(orderId)) {
+        if(orderService.deleteOrder(orderId, principal)) {
             rm.addFlashAttribute("saveSuccess", "true");
             log.info("5. Заказ удален");
             return "redirect:/ordersCompany/ordersDetails/{companyId}";
@@ -161,6 +156,18 @@ public class OrderController {
         return "redirect:/orders/all_orders?status=" + encodedStatus;
     } // смена статуса на "Коррекция"
 
+    @PostMapping ("/order_to_archive/{companyID}/{orderID}") // смена статуса на "Архив"
+    String changeStatusForArchive( @PathVariable Long orderID, @RequestParam(defaultValue = "На проверке") String status){
+        if(orderService.changeStatusForOrder(orderID, "Архив")) {
+            log.info("статус заказа успешно изменен на Архив");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Архив");
+        }
+        String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+        return "redirect:/orders/all_orders?status=" + encodedStatus;
+    } // смена статуса на "Архив"
+
+
     @PostMapping ("/status_for_publish/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish(@PathVariable Long orderID, @RequestParam(defaultValue = "На проверке") String status){
 
@@ -191,6 +198,7 @@ public class OrderController {
         return "redirect:/orders/all_orders?status=" + encodedStatus;
 //        return "redirect:/orders/to_published";
     } // смена статуса на "Опубликовано"
+
 
     @PostMapping ("/status_to_pay/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
     String changeStatusToPay(@PathVariable Long orderID, @RequestParam(defaultValue = "Опубликовано") String status){
@@ -277,6 +285,16 @@ public class OrderController {
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Коррекция"
 
+    @PostMapping ("/order_to_archive2/{companyID}/{orderID}") // смена статуса на "Коррекция"
+    String changeStatusForArchive2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
+        if(orderService.changeStatusForOrder(orderID, "Архив")) {
+            log.info("статус заказа успешно изменен на Архив");
+        } else {
+            log.info("ошибка при изменении статуса заказа на Архив");
+        }
+        return "redirect:/ordersCompany/ordersDetails/{companyID}";
+    } // смена статуса на "Коррекция"
+
     @PostMapping ("/status_for_publish2/{companyID}/{orderID}") // смена статуса на "Публикация"
     String changeStatusForPublish2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){
         if(orderService.changeStatusForOrder(orderID, "Публикация")) {
@@ -302,6 +320,7 @@ public class OrderController {
         }
         return "redirect:/ordersCompany/ordersDetails/{companyID}";
     } // смена статуса на "Опубликовано"
+
 
     @PostMapping ("/status_to_pay2/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
     String changeStatusToPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model){

@@ -17,4 +17,6 @@ public interface CategoryService {
     // Найти категорию по id
     CategoryDTO getCategoryById(Long categoryId);
     Category getCategoryByIdCategory(Long categoryId);
+
+    List<CategoryDTO> getAllCategoriesKeywords(String keyword);
 }

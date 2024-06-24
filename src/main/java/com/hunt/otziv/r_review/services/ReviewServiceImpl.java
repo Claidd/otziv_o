@@ -116,8 +116,14 @@ public class ReviewServiceImpl implements ReviewService{
 
 
     public Review save(Review review){ // Сохранить отзыв в БД
-       return reviewRepository.save(review);
+        if (!reviewRepository.existsByText(review.getText())) {
+            log.info("1. Отзыв в БД отзывы сохранен");
+            return reviewRepository.save(review);
+        }
+        log.info("1. Отзыв в БД отзывы НЕ сохранен, так как такой текст уже есть");
+        return review;
     } // Сохранить отзыв в БД
+
     public boolean deleteReview(Long reviewId){ // Удалить отзыв
         reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
         return true;
@@ -275,28 +281,26 @@ public class ReviewServiceImpl implements ReviewService{
 //    =====================================================================================================
 
 //    ============================== ORDER DETAIL AND REVIEW UPDATE AND SET PUBLISH DATE ===============================
+
     @Override
     @Transactional
     public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) { // Обновление Деталей и Отзывов, Разрешение к публикации
         log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
-        System.out.println(orderDetailsDTO);
-        System.out.println(orderDetailsDTO.getAmount());
-        int plusDays = (30 / orderDetailsDTO.getAmount());
-        LocalDate localDate = LocalDate.now();
-        System.out.println(localDate);
-        System.out.println(plusDays);
+        log.info("{}", orderDetailsDTO);
+        log.info("{}", orderDetailsDTO.getAmount());
         try {
             OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
+            int plusDays = (30 / orderDetailsDTO.getAmount());
+            LocalDate localDate = LocalDate.now();
 
+            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
                 checkUpdateReview(reviewDTO, localDate);
-                log.info("Начинаем обновлять дату");
                 localDate = localDate.plusDays(plusDays);
-                log.info(" Обновили дату");
-                System.out.println(localDate);
+                log.info(" Обновили дату " + localDate);
+
             }
             /*Замена комментария*/
-            System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
+            log.info("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
             if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())){ /*Проверка статус заказа*/
                 log.info("Обновляем комментарий отзыва и Деталей Заказа");
                 saveOrderDetails.setComment(orderDetailsDTO.getComment());
@@ -306,7 +310,7 @@ public class ReviewServiceImpl implements ReviewService{
             return true;
         }
         catch (Exception e){
-            log.info("Все прошло успешно вернулось FALSE");
+            log.error("Все прошло успешно вернулось FALSE: {}", e.getMessage());
             return false;
         }
     } // Обновление Деталей и Отзывов, Разрешение к публикации

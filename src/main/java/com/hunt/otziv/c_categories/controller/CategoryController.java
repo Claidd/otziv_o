@@ -29,10 +29,16 @@ public class CategoryController {
     }
 
     @GetMapping
-    public String getAllCategories(Model model) { // Лист всех категорий
-        List<CategoryDTO> categories = categoryService.getAllCategories();
-        model.addAttribute("categories", categories);
-        model.addAttribute("categoryDTO", new CategoryDTO());
+    public String getAllCategories(Model model, @RequestParam(defaultValue = "") String keyword) { // Лист всех категорий
+        if (keyword.isEmpty()) {
+            List<CategoryDTO> categories = categoryService.getAllCategories();
+            model.addAttribute("categories", categories);
+            model.addAttribute("categoryDTO", new CategoryDTO());
+        } else {
+            List<CategoryDTO> categories = categoryService.getAllCategoriesKeywords(keyword);
+            model.addAttribute("categories", categories);
+            model.addAttribute("categoryDTO", new CategoryDTO());
+        }
         return "category/categories";
     } // Лист всех категорий
 

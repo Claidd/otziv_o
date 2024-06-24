@@ -7,7 +7,7 @@
         <!-- ==================== STYLE ======================== -->
         <th:block th:insert="~{fragments/common :: styles}"></th:block>
 
-        <title>Редактор отзывов O! Company!</title>
+        <title th:text="${orderDetailDTO.order.company.title} + ' - ' + ${orderDetailDTO.order.filial.title} ">Редактор отзывов O! Company!</title>
     </head>
     <body>
 
