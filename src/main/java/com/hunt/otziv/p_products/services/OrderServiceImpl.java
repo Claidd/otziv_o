@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
@@ -1075,15 +1076,16 @@ public class OrderServiceImpl implements OrderService {
     } // Конвертер из DTO для деталей заказа
     private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // Конвертер из DTO для списка отзывов
         List<Review> reviewList = new ArrayList<>();
+        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
+
         for (int i = 0; i < orderDTO.getAmount(); i++) {
-            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getWorker(), orderDTO.getFilial());
+            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getFilial(), bots);
             Review review2 = reviewService.save(review);
             reviewList.add(review2);
         }
         return reviewList;
     } // Конвертер из DTO для списка отзывов
-    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, WorkerDTO workerDTO, FilialDTO filialDTO){ // Конвертер из DTO для отзыва
-        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(workerDTO.getWorkerId());
+    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, FilialDTO filialDTO, List<Bot> bots){ // Конвертер из DTO для отзыва
         var random = new SecureRandom();
         return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
@@ -1097,6 +1099,15 @@ public class OrderServiceImpl implements OrderService {
                 .worker(orderDetails.getOrder().getWorker())
                 .build();
     }// Конвертер из DTO для отзыва
+
+    private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
+        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(orderDTO.getWorker().getWorkerId());
+        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
+        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+        bots.removeAll(botsCompany);
+        return bots;
+    }
+
     private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
     } // Конвертер из DTO для категории

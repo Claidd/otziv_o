@@ -120,7 +120,11 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("1. Отзыв в БД отзывы сохранен");
             return reviewRepository.save(review);
         }
-        log.info("1. Отзыв в БД отзывы НЕ сохранен, так как такой текст уже есть");
+        if (review.getText().equals("Текст отзыва")){
+            log.info("1. Отзыв в БД отзывы сохранен как шаблон");
+            return reviewRepository.save(review);
+        }
+        log.info("1. Отзыв в БД отзывы НЕ сохранен, так как такой текст уже есть и это не шаблон");
         return review;
     } // Сохранить отзыв в БД
 
@@ -219,6 +223,11 @@ public class ReviewServiceImpl implements ReviewService{
     @Transactional
     public void deleteReviewsByOrderId(Long reviewId){
         reviewRepository.deleteReviewByReviewId(reviewId);
+    }
+
+    @Override
+    public List<Review> findAllByFilial(Filial filial) {
+        return reviewRepository.findAllByFilial(filial);
     }
 
 //    =====================================================================================================
@@ -362,37 +371,42 @@ public class ReviewServiceImpl implements ReviewService{
     @Override
     public void changeBot(Long id) { // Замена бота
         Review review = reviewRepository.findById(id).orElse(null);
+        assert review != null;
+        List<Bot> bots = findAllBotsMinusFilial(review);
         log.info("2. Достали отзыв по id" + id);
-        if (review != null){
-            List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
-            var random = new SecureRandom();
-            review.setBot(bots.get(random.nextInt(bots.size())));
-            log.info("3. Установили нового рандомного бота");
-            reviewRepository.save(review);
-            log.info("4. Сохранили нового бота в отзыве в БД");
-        }
+
+        var random = new SecureRandom();
+        review.setBot(bots.get(random.nextInt(bots.size())));
+        log.info("3. Установили нового рандомного бота");
+        reviewRepository.save(review);
+        log.info("4. Сохранили нового бота в отзыве в БД");
     } // Замена бота
+
+    private List<Bot> findAllBotsMinusFilial(Review review){
+        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
+        List<Review> reviewListFilial = reviewRepository.findAllByFilial(review.getFilial());
+        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+        bots.removeAll(botsCompany);
+        return bots;
+    }
+
     @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) { // Деактивация бота
         try {
         Review review = reviewRepository.findById(reviewId).orElse(null);
+        assert review != null;
+        List<Bot> bots = findAllBotsMinusFilial(review);
         log.info("2. Достали отзыв по id" + reviewId);
 
-            if (review != null){
-                Bot bot = botService.findBotById(botId);
-                bot.setActive(false);
-                botService.save(bot);
-                log.info("3. Дективировали бота" + reviewId);
-                List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
-                var random = new SecureRandom();
-                review.setBot(bots.get(random.nextInt(bots.size())));
-                log.info("4. Установили нового рандомного бота");
-                reviewRepository.save(review);
-                log.info("5. Сохранили нового бота в отзыве в БД");
-            }
-            else {
-                log.info("Что-то пошло не так и бот не деактивирован");
-            }
+            Bot bot = botService.findBotById(botId);
+            bot.setActive(false);
+            botService.save(bot);
+            log.info("3. Дективировали бота {}", botId);
+            var random = new SecureRandom();
+            review.setBot(bots.get(random.nextInt(bots.size())));
+            log.info("4. Установили нового рандомного бота");
+            reviewRepository.save(review);
+            log.info("5. Сохранили нового бота в отзыве в БД");
         }
         catch (Exception e){
             System.out.println(e);

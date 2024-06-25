@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.services;
 
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -34,4 +35,6 @@ public interface ReviewService {
     List<Review> getAllWorkerReviews(Long workerId);
 
     void deleteReviewsByOrderId(Long orderId);
+
+    List<Review> findAllByFilial(Filial filial);
 }

@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.repository;
 
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
@@ -55,4 +56,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     // Проверка наличия записи с таким же текстом
     boolean existsByText(String text);
+
+    @Query("SELECT r FROM Review r WHERE r.filial = :filial")
+    List<Review> findAllByFilial(@Param("filial") Filial filial);
 }

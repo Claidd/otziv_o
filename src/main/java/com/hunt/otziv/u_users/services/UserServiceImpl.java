@@ -9,6 +9,8 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 
 import com.hunt.otziv.u_users.services.service.*;
 import lombok.extern.slf4j.Slf4j;
+import net.coobird.thumbnailator.Thumbnails;
+import net.coobird.thumbnailator.geometry.Positions;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
@@ -489,17 +492,43 @@ public class UserServiceImpl  implements UserService {
         log.info("4. Сохранили юзера");
     } // Удаление маркетолога
 
-    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность
-        System.out.println(file);
+//    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (старый вариант)
+//        System.out.println(file);
+//        Image image = new Image();
+//        image.setName(file.getName());
+//        image.setOriginalFileName(file.getOriginalFilename());
+//        image.setContentType(file.getContentType());
+//        image.setSize(file.getSize());
+//        image.setBytes(file.getBytes());
+//        imageRepository.save(image);
+//        return image;
+//    } // Перевод картинки в сущность
+
+
+    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (новый вариант)
+
+        // Создаем ByteArrayOutputStream для хранения сжатого изображения
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        // Обрезаем изображение до квадратной формы и изменяем его размер до 512x512 пикселей
+        Thumbnails.of(file.getInputStream())
+                .size(512, 512)
+                .crop(Positions.CENTER)
+                .outputFormat("jpg") // Вы можете выбрать другой формат, например, "png"
+                .outputQuality(0.7) // Опционально: установите качество сжатия (0.0 - 1.0)
+                .toOutputStream(baos);
+
+        // Создаем сущность Image с обновленными данными
         Image image = new Image();
         image.setName(file.getName());
         image.setOriginalFileName(file.getOriginalFilename());
         image.setContentType(file.getContentType());
-        image.setSize(file.getSize());
-        image.setBytes(file.getBytes());
+        image.setSize((long) baos.size());
+        image.setBytes(baos.toByteArray());
+
         imageRepository.save(image);
         return image;
-    } // Перевод картинки в сущность
+    } // Перевод картинки в сущность (новый вариант)
 
 
 }
