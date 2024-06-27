@@ -844,6 +844,8 @@ b{
     /* border: 1px solid #e418ff38; */
     /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
     border-radius: 1.2rem;
+    /* background-color: #ff000002; */
+    /* background-color: #00ff4017; */
     /* margin-left: 10px; */
 }
 
@@ -1175,8 +1177,9 @@ b{
     width: 100%;
     font-family: 'borders';
     font-size: 22px;
-    font-weight: 500;
-    color: #414141;
+    font-weight: 600;
+    /* color: #414141; */
+    color: #4f4f4f;
 }
 
 .company__card__title__review {

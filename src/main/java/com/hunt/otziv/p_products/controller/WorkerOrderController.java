@@ -174,7 +174,7 @@ public class WorkerOrderController {
         System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех заказов для админа");
+            log.info("Зашли список всех отзывов к публикации для админа");
 //            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
@@ -183,7 +183,7 @@ public class WorkerOrderController {
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех заказов для Менеджера");
+            log.info("Зашли список всех отзывов к публикации для Менеджера");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublish(principal, pageNumber, pageSize));
@@ -191,7 +191,7 @@ public class WorkerOrderController {
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника");
+            log.info("Зашли список всех отзывов к публикации для Работника");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(principal, pageNumber, pageSize));
@@ -199,7 +199,7 @@ public class WorkerOrderController {
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех заказов для Менеджера");
+            log.info("Зашли список всех отзывов к публикации для Владельца");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublish(principal, pageNumber, pageSize));
@@ -239,7 +239,7 @@ public class WorkerOrderController {
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника");
+            log.info("Зашли список всех заказов для Владельца");
             model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwnerAll(principal, keyword, pageNumber, pageSize));

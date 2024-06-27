@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
@@ -28,6 +29,7 @@ public class SecurityConfig {
 
     private final UserServiceImpl userService;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final RequestValidationFilter requestValidationFilter;
 
 //    private final JwtRequestFilter jwtRequestFilter;
 
@@ -102,15 +104,8 @@ public class SecurityConfig {
 //                                .requireCsrfProtectionMatcher()
 //                        .ignoringRequestMatchers("/**")
                 );
-//                .apply(jwtAuthenticationConfigurer);
-                //добавляем передачу токена в контекст перед указанным фильтром
-//                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
-
-                //обработчик ошибки ТОЛЬКО для режима отладки
-//                .exceptionHandling(exceptionHandling -> exceptionHandling
-//                        .accessDeniedHandler(((request, response, accessDeniedException) ->
-//                                accessDeniedException.printStackTrace())));
-
+                // Добавляем наш фильтр перед другими фильтрами безопасности
+                http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
 
     }
@@ -144,7 +139,14 @@ public class SecurityConfig {
 //    }
 
 
+//                .apply(jwtAuthenticationConfigurer);
+    //добавляем передачу токена в контекст перед указанным фильтром
+//                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
+    //обработчик ошибки ТОЛЬКО для режима отладки
+//                .exceptionHandling(exceptionHandling -> exceptionHandling
+//                        .accessDeniedHandler(((request, response, accessDeniedException) ->
+//                                accessDeniedException.printStackTrace())));
 
 
 

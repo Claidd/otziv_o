@@ -11,6 +11,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
     restart: always
     ports:
       - '3306:3306'
@@ -21,6 +24,7 @@ services:
     ports:
       - '80:80'
       - '443:443'
+      - '9000:9000'
     restart:
       always
     volumes:
@@ -34,8 +38,12 @@ services:
       - ./data/certbot/www:/var/www/certbot
       # nginx должен общаться с php контейнером
     command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    depends_on:
+      - app
+      - phpmyadmin
     links:
       - app
+      - phpmyadmin
 
 
   app:
@@ -67,6 +75,11 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
 
 volumes:
   mysql_data:

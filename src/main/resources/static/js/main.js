@@ -326,7 +326,7 @@ function onPayment(button) {
         document.body.removeChild(tempTextArea);
     
         /* Alert the copied text */
-        // alert("Copied the text: " + copyText6);
+        alert("Не забудьте нагулять аккаунт в 2ГИС. Для это нужно сделать разные рандомные действия, погулять по карте, понажимать организации, почитать отзывы, посмотреть график работы и тд.");
       } else {
         console.error("Element not found");
       }

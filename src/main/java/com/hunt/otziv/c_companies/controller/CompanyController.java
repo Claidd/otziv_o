@@ -109,18 +109,21 @@ public class CompanyController {
     private void checkAmountStatusCompany(Principal principal, Model model, String userRole){
         if ("ROLE_ADMIN".equals(userRole)){
             model.addAttribute("to_check", createCheckNotification("В проверку"));
+            model.addAttribute("on_check", createCheckNotification("На проверке"));
             model.addAttribute("published", createCheckNotification("Опубликовано"));
             model.addAttribute("new_order", createCheckNotificationCompany("Новый заказ"));
             model.addAttribute("on_work", createCheckNotificationCompany("В работе"));
         }
         if ("ROLE_MANAGER".equals(userRole)){
             model.addAttribute("to_check", createCheckNotificationToManager(principal,"В проверку"));
+            model.addAttribute("on_check", createCheckNotification("На проверке"));
             model.addAttribute("published", createCheckNotificationToManager(principal,"Опубликовано"));
             model.addAttribute("new_order", createCheckNotificationToManagerCompany(principal,"Новый заказ"));
             model.addAttribute("on_work", createCheckNotificationToManagerCompany(principal,"В работе"));
         }
         if ("ROLE_OWNER".equals(userRole)){
             model.addAttribute("to_check", createCheckNotificationToOwner(principal,"В проверку"));
+            model.addAttribute("on_check", createCheckNotification("На проверке"));
             model.addAttribute("published", createCheckNotificationToOwner(principal,"Опубликовано"));
             model.addAttribute("new_order", createCheckNotificationToOwnerCompany(principal,"Новый заказ"));
             model.addAttribute("on_work", createCheckNotificationToOwnerCompany(principal,"В работе"));

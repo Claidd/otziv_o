@@ -39,9 +39,9 @@
                     <div class="company__card__content_button">
                         <div class="company__card__text__lead"> <!-- Bot Login -->
                             <label>
-                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>
+                                <textarea  class="company__card__remember-text" th:utext="@{${review.filialUrl}}" th:id="myInput6"></textarea>
                             </label>
-                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>
+                            <button type="submit" class="company__card__text__lead-button" th:attr="data-orderfilial=${review.filialUrl}" th:onclick="myFunction2Gis(this)">ссылка</button>
                         </div>
                         <div class="company__card__text__lead"> <!-- Bot Login -->
                             <label>
@@ -53,17 +53,18 @@
                             <textarea  class="company__card__remember-text" th:utext="${review.botPassword}" th:id="'botPassword_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
                         </div>
+                        
                         <div class="company__card__text__lead"> <!-- Bot Login -->
                             <label>
-                                <textarea  class="company__card__remember-text" th:utext="@{${review.filialUrl}}" th:id="myInput6"></textarea>
+                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>
                             </label>
-                            <button type="submit" class="company__card__text__lead-button" th:attr="data-orderfilial=${review.filialUrl}" th:onclick="myFunction2Gis(this)">ссылка</button>
+                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>
                         </div>
                     </div> <!-- card__content_button -->
                     <div class="company__card__content_button">
                         <div class="company__card__text__lead"> <!-- Review Text -->
                             <textarea  class="company__card__remember-text" th:utext="${review.text}" th:id="'ReviewText_' + ${review.id}"></textarea>
-                            <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewText(' + ${review.id} + ')'" >отзыв</button>
+                            <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewText(' + ${review.id} + ')'" >текст</button>
                         </div>
                         <div class="company__card__text__lead"> <!-- Review Text -->
                             <textarea  class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>

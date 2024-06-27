@@ -1,4 +1,6 @@
 version: '3'
+networks:
+  network2:
 
 services:
   mysql:
@@ -16,8 +18,8 @@ services:
       - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
       - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
     restart: always
-    ports:
-      - '3306:3306'
+    networks:
+      - network2
 
   nginx:
     image: nginx:latest
@@ -36,13 +38,12 @@ services:
     command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
     depends_on:
       - app
-    links:
-      - app
+      - mysql
+    networks:
+      - network2
 
   app:
     image: claid38/otziv-app
-    ports:
-      - "8080:8080"
     restart: always
     depends_on:
       - mysql
@@ -50,12 +51,14 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - network2
 
   phpmyadmin:
     image: phpmyadmin:latest
     restart: always
     ports:
-      - '9000:80'
+      - '6571:80'
     depends_on:
       - mysql
     environment:
@@ -68,6 +71,9 @@ services:
       - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
       - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+    networks:
+      - network2
+
 volumes:
   mysql_data:
 

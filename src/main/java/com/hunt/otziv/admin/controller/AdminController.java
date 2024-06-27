@@ -67,7 +67,6 @@ public class AdminController {
     public ModelAndView personal(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
-        System.out.println(userRole);
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "personal");
             model.put("user", personalService.getUserLK(principal));
