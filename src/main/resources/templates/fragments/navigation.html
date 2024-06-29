@@ -35,14 +35,14 @@
                 <option value="orders/all_orders?status=Все">Все</option>
                 <option value="orders/all_orders?status=Новый">Новые</option>
                 <option value="orders/all_orders?status=В проверку">В проверку: <span th:text="${to_check}"></span></option>
-                <option value="orders/all_orders?status=На проверке">На проверке: <span th:text="${on_check}"></option>
-                <option value="orders/all_orders?status=Коррекция">Коррекция</option>
+                <option value="orders/all_orders?status=На проверке">На проверке: <span th:text="${on_check}"></span></option>
+                <option value="orders/all_orders?status=Коррекция">Коррекция: <span th:text="${correct}"></span></option>
                 <option value="orders/all_orders?status=Публикация">Публикация</option>
                 <option value="orders/all_orders?status=Опубликовано">Опубликовано: <span th:text="${published}"></span></option>
                 <option value="orders/all_orders?status=Выставлен счет">Выставлен счет</option>
                 <option value="orders/all_orders?status=Напоминание">Напоминание</option>
                 <option value="orders/all_orders?status=Не опл.">Не опл.</option>
-                <option value="orders/all_orders?status=Архив">Архив</option>
+                <option value="orders/all_orders?status=Архив">Архив: <span th:text="${archive}"></span></option>
                 <option value="orders/all_orders?status=Оплачено">Оплачено</option>
           </select>
 

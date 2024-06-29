@@ -290,9 +290,8 @@ public class LeadServiceImpl implements LeadService{
 //
     @Override
     public Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов без статуса - конец
-        log.info("Берем все лиды");
         String userRole = getRole(principal);
-        System.out.println(userRole);
+        log.info("Берем все лиды" + userRole);
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
@@ -441,6 +440,9 @@ public class LeadServiceImpl implements LeadService{
         leadsRepository.save(lead);
     } // меняем статус с любого на Новый - конец
 
+
+
+
     @Override
     public List<Lead> findAllByLidListStatus(String username) {
         Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
@@ -502,6 +504,8 @@ public class LeadServiceImpl implements LeadService{
     public Long findAllByLidListNewToDate(Operator operator, LocalDate localDate) {
         return leadsRepository.findAllByLidListToOperator(operator, localDate);
     }
+
+
 
     @Override
     public Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate) {
@@ -573,8 +577,16 @@ public class LeadServiceImpl implements LeadService{
         return leadsRepository.findIdListByDate(localDate);
     }
 
+    public List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList){
+        return leadsRepository.findIdListByDateToOwner(localDate, managerList);
+    }
+
     public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status){
         return leadsRepository.findIdListByDate(localDate, status);
+    }
+
+    public List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList){
+        return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
     }
 
     public List<Long> getAllLeadsByDate2Month(LocalDate localDate){
@@ -586,4 +598,6 @@ public class LeadServiceImpl implements LeadService{
         LocalDate localDate1 = localDate.minusMonths(1);
         return leadsRepository.findIdListByDate(localDate1, status);
     }
+
+
 }

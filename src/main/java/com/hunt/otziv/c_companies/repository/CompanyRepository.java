@@ -77,6 +77,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     @Query("SELECT DISTINCT c.id FROM Company c JOIN c.manager m WHERE m IN :managers AND c.status.title = :status ORDER BY c.updateStatus")
     List<Long> findAllByOwnerAndStatus(List<Manager> managers, String status);
+    @Query("SELECT DISTINCT c.id FROM Company c JOIN c.manager m WHERE m IN :managers AND c.status.title = :status ORDER BY c.updateStatus")
+    List<Long> findAllByOwnerAndStatus(Set<Manager> managers, String status);
 
 
 

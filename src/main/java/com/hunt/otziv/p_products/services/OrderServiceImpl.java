@@ -604,14 +604,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public int getAllOrderDTOByStatusToManager(Principal principal, String status) {
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+    public int getAllOrderDTOByStatusToManager(Manager manager, String status) {
         return orderRepository.findAllIdByManagerAndStatus(manager, status).size();
     }
 
     @Override
-    public int getAllOrderDTOByStatusToOwner(Principal principal, String status) {
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+    public int getAllOrderDTOByStatusToOwner(Set<Manager> managerList, String status) {
         return orderRepository.findAllIdByOwnerAndStatus(managerList, status).size();
     }
 

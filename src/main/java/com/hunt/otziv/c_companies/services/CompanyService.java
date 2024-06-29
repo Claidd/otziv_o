@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Manager;
 import org.springframework.data.domain.Page;
 
 import java.security.Principal;
@@ -39,8 +40,8 @@ public interface CompanyService {
     CompanyDTO convertToDtoToManagerNotLead(Principal principal);
     int getAllCompanyDTOByStatus(String status);
 
-    int getAllCompanyDTOByStatusToManager(Principal principal, String status);
+    int getAllCompanyDTOByStatusToManager(Manager manager, String status);
 
 
-    int getAllCompanyDTOByStatusToOwner(Principal principal, String status);
+    int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status);
 }

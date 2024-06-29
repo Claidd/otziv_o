@@ -368,14 +368,12 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     @Override
-    public int getAllCompanyDTOByStatusToManager(Principal principal, String status) {
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+    public int getAllCompanyDTOByStatusToManager(Manager manager, String status) {
         return companyRepository.findAllByManagerAndStatus(manager, status).size();
     }
 
     @Override
-    public int getAllCompanyDTOByStatusToOwner(Principal principal, String status) {
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+    public int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status) {
         return companyRepository.findAllByOwnerAndStatus(managerList, status).size();
     }
 

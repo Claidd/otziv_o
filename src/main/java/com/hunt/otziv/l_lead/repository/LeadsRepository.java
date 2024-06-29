@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface LeadsRepository extends CrudRepository<Lead, Long> {
@@ -42,6 +43,14 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status")
     List<Long> findIdListByDate(LocalDate localDate, String status);
+
+    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.manager IN :managerList")
+    List<Long> findIdListByDateToOwner(LocalDate localDate, Set<Manager> managerList);
+
+    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.manager IN :managerList")
+    List<Long> findIdListByDateToOwner(LocalDate localDate, String status, Set<Manager> managerList);
+
+
 
     @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
     List<Long> findIdListByDateNoStatus(LocalDate localDate);

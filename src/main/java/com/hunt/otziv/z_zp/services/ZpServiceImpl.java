@@ -2,6 +2,7 @@ package com.hunt.otziv.z_zp.services;
 
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
@@ -13,9 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -40,10 +45,26 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.findAll();
     }
 
-    public List<Zp> findAllToDate(LocalDate localDate){
+    public List<Zp> findAllToDate(LocalDate localDate){ // Берем все ЗП для админа
         LocalDate localDate2 = localDate.minusYears(1);
         return zpRepository.findAllToDate(localDate, localDate2);
-    }
+    }  // Берем все ЗП для админа
+
+    public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) { // Берем все ЗП для всех менеджеров Владельца
+        LocalDate localDate2 = localDate.minusYears(1);
+        return zpRepository.findAllToDateByOwner(localDate, localDate2, getPeopleIdToZp(managerList));
+    } // Берем все ЗП для всех менеджеров Владельца
+
+    private Set<Long> getPeopleIdToZp(Set<Manager> managerList) { // Составление списка ид всех менеджеров и их работников Владельца
+        Set<Long> managerIds = managerList.stream().map(Manager::getUser).map(User::getId).collect(Collectors.toSet());
+        Set<Long> workersIds = managerList.stream().map(Manager::getUser).map(User::getWorkers).flatMap(workers -> workers.stream().map(Worker::getUser)).map(User::getId).collect(Collectors.toSet());
+        Set<Long> operatorIds = managerList.stream().map(Manager::getUser).map(User::getOperators).flatMap(operators -> operators.stream().map(Operator::getUser)).map(User::getId).collect(Collectors.toSet());
+        Set<Long> marketologIds = managerList.stream().map(Manager::getUser).map(User::getMarketologs).flatMap(marketologs -> marketologs.stream().map(Marketolog::getUser)).map(User::getId).collect(Collectors.toSet());
+        Set<Long> peopleId;
+        return peopleId = Stream.of(managerIds, operatorIds, marketologIds, workersIds)
+                .flatMap(Set::stream)
+                .collect(Collectors.toSet());
+    } // Составление списка ид всех менеджеров и их работников Владельца
 
     public List<ZpDTO> getAllZpDTO(){
         return toDTOList(zpRepository.findAll());

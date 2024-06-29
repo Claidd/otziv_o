@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+
 @Repository
 public interface ZpRepository extends CrudRepository<Zp, Long>  {
     @NotNull
@@ -22,4 +24,7 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 
     @Query("SELECT z FROM Zp z WHERE YEAR(z.created) = YEAR(:localDate) OR YEAR(z.created) = YEAR(:localDate2)")
     List<Zp> findAllToDate(LocalDate localDate, LocalDate localDate2);
+
+    @Query("SELECT z FROM Zp z WHERE (YEAR(z.created) = YEAR(:localDate) OR YEAR(z.created) = YEAR(:localDate2)) AND z.userId IN :peopleId")
+    List<Zp> findAllToDateByOwner(LocalDate localDate, LocalDate localDate2, Set<Long> peopleId);
 }

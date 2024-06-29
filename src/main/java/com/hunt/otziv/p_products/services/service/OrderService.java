@@ -4,10 +4,12 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.u_users.model.Manager;
 import org.springframework.data.domain.Page;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Set;
 
 public interface OrderService {
     OrderDTO newOrderDTO(Long id);
@@ -35,9 +37,9 @@ public interface OrderService {
 
     int getAllOrderDTOByStatus(String status);
 
-    int getAllOrderDTOByStatusToManager(Principal principal, String status);
+    int getAllOrderDTOByStatusToManager(Manager manager, String status);
 
-    int getAllOrderDTOByStatusToOwner(Principal principal, String status);
+    int getAllOrderDTOByStatusToOwner(Set<Manager> managerList, String status);
 
 
     Company checkStatusToCompany(Company company);

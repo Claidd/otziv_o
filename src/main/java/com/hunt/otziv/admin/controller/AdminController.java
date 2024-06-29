@@ -66,7 +66,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER')")
     public ModelAndView personal(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
-        String userRole = gerRole(principal);
+        String userRole = getRole(principal);
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "personal");
             model.put("user", personalService.getUserLK(principal));
@@ -143,7 +143,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView score(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
-        String userRole = gerRole(principal);
+        String userRole = getRole(principal);
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             model.put("user", personalService.getUserLK(principal));
@@ -171,7 +171,7 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView scorePost(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
-        String userRole = gerRole(principal);
+        String userRole = getRole(principal);
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             model.put("user", personalService.getUserLK(principal));
@@ -223,19 +223,19 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(value = "date", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) {
         LocalDate localDate = date.orElse(LocalDate.now());
-        String userRole = gerRole(principal);
+        String userRole = getRole(principal);
         long startTime = System.nanoTime();
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats2(localDate, principal));
+            model.put("stats", personalService.getStats2(localDate, principal, userRole));
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
         if ("ROLE_OWNER".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats());
+            model.put("stats", personalService.getStats2(localDate, principal, userRole));
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
@@ -250,9 +250,10 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
+        String userRole = getRole(principal);
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
-        model.put("stats", personalService.getStats2(date, principal));
+        model.put("stats", personalService.getStats2(date, principal, userRole));
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }
@@ -286,7 +287,7 @@ public class AdminController {
 
 
 
-    private String gerRole(Principal principal){
+    private String getRole(Principal principal){
         // Получите текущий объект аутентификации
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Получите имя текущего пользователя (пользователя, не роль)

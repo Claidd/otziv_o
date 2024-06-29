@@ -2,8 +2,11 @@ package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.PromoTextService;
-import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -16,8 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.security.Principal;
-import java.util.Comparator;
-import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 @Controller
 @Slf4j
@@ -28,30 +31,38 @@ public class AllOrderListController {
     private final PromoTextService promoTextService;
     private final OrderService orderService;
     private final CompanyService companyService;
+    private final UserService userService;
+    private final ManagerService managerService;
+
+    private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String ROLE_OWNER = "ROLE_OWNER";
+    private static final String ROLE_MANAGER = "ROLE_MANAGER";
 
     int pageSize = 10; // желаемый размер страницы
 
     //    =========================================== ORDER ALL =======================================================
+
+
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
     public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, @RequestParam(defaultValue = "Все") String status,Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
 
-        if ("ROLE_ADMIN".equals(userRole)){
+        if (ROLE_ADMIN.equals(userRole)){
             log.info("Зашли список всех заказов для админа");
             getOrderInfo(principal, model, userRole, keyword, status, pageNumber);
             checkTimeMethod("Время выполнения AllOrderListController/orders/all_orders для Админа: ", startTime);
             return "products/orders/order_page";
 //            return "products/orders/all_orders_list";
         }
-        if ("ROLE_MANAGER".equals(userRole)){
+        if (ROLE_MANAGER.equals(userRole)){
             log.info("Зашли список всех заказов для Менеджера");
             getOrderInfo(principal, model, userRole, keyword, status, pageNumber);
             checkTimeMethod("Время выполнения AllOrderListController/orders/all_orders для Менеджера: ", startTime);
             return "products/orders/order_page";
         }
 
-        if ("ROLE_OWNER".equals(userRole)){
+        if (ROLE_OWNER.equals(userRole)){
             log.info("Зашли список всех заказов для Владельца");
             getOrderInfo(principal, model, userRole, keyword, status, pageNumber);
             checkTimeMethod("Время выполнения AllOrderListController/orders/all_orders для Менеджера: ", startTime);
@@ -85,7 +96,6 @@ public class AllOrderListController {
             } else {
                 model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
             }
-
         }
 
         if ("ROLE_OWNER".equals(userRole)){
@@ -100,26 +110,34 @@ public class AllOrderListController {
     }
 
     private void checkAmountStatusOrder(Principal principal, Model model, String userRole){
-        if ("ROLE_ADMIN".equals(userRole)){
+        if (ROLE_ADMIN.equals(userRole)){
             model.addAttribute("to_check", createCheckNotification("В проверку"));
             model.addAttribute("on_check", createCheckNotification("На проверке"));
+            model.addAttribute("correct", createCheckNotification("Коррекция"));
             model.addAttribute("published", createCheckNotification("Опубликовано"));
+            model.addAttribute("archive", createCheckNotification("Архив"));
             model.addAttribute("new_order", createCheckNotificationCompany("Новый заказ"));
             model.addAttribute("on_work", createCheckNotificationCompany("В работе"));
         }
-        if ("ROLE_MANAGER".equals(userRole)){
-            model.addAttribute("to_check", createCheckNotificationToManager(principal,"В проверку"));
-            model.addAttribute("on_check", createCheckNotification("На проверке"));
-            model.addAttribute("published", createCheckNotificationToManager(principal,"Опубликовано"));
-            model.addAttribute("new_order", createCheckNotificationToManagerCompany(principal,"Новый заказ"));
-            model.addAttribute("on_work", createCheckNotificationToManagerCompany(principal,"В работе"));
+        if (ROLE_MANAGER.equals(userRole)){
+            Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+            model.addAttribute("to_check", createCheckNotificationToManager(manager,"В проверку"));
+            model.addAttribute("on_check", createCheckNotificationToManager(manager,"На проверке"));
+            model.addAttribute("correct", createCheckNotificationToManager(manager,"Коррекция"));
+            model.addAttribute("published", createCheckNotificationToManager(manager,"Опубликовано"));
+            model.addAttribute("archive", createCheckNotificationToManager(manager,"Архив"));
+            model.addAttribute("new_order", createCheckNotificationToManagerCompany(manager,"Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationToManagerCompany(manager,"В работе"));
         }
-        if ("ROLE_OWNER".equals(userRole)){
-            model.addAttribute("to_check", createCheckNotificationToOwner(principal,"В проверку"));
-            model.addAttribute("on_check", createCheckNotification("На проверке"));
-            model.addAttribute("published", createCheckNotificationToOwner(principal,"Опубликовано"));
-            model.addAttribute("new_order", createCheckNotificationToOwnerCompany(principal,"Новый заказ"));
-            model.addAttribute("on_work", createCheckNotificationToOwnerCompany(principal,"В работе"));
+        if (ROLE_OWNER.equals(userRole)){
+            Set<Manager> managerList = userService.findByUserName(principal.getName()).orElseThrow().getManagers();
+            model.addAttribute("to_check", createCheckNotificationToOwner(managerList,"В проверку"));
+            model.addAttribute("on_check", createCheckNotificationToOwner(managerList,"На проверке"));
+            model.addAttribute("correct", createCheckNotificationToOwner(managerList,"Коррекция"));
+            model.addAttribute("published", createCheckNotificationToOwner(managerList,"Опубликовано"));
+            model.addAttribute("archive", createCheckNotificationToOwner(managerList,"Архив"));
+            model.addAttribute("new_order", createCheckNotificationToOwnerCompany(managerList,"Новый заказ"));
+            model.addAttribute("on_work", createCheckNotificationToOwnerCompany(managerList,"В работе"));
         }
     }
 
@@ -129,25 +147,24 @@ public class AllOrderListController {
         return orderService.getAllOrderDTOByStatus(status);
     }
 
-    private int createCheckNotificationToManager(Principal principal, String status) {
-        return orderService.getAllOrderDTOByStatusToManager(principal, status);
+    private int createCheckNotificationToManager(Manager manager, String status) {
+        return orderService.getAllOrderDTOByStatusToManager(manager, status);
     }
-
 
     private int createCheckNotificationCompany(String status) {
         return companyService.getAllCompanyDTOByStatus(status);
     }
 
-    private int createCheckNotificationToManagerCompany(Principal principal, String status) {
-        return companyService.getAllCompanyDTOByStatusToManager(principal, status);
+    private int createCheckNotificationToManagerCompany(Manager manager, String status) {
+        return companyService.getAllCompanyDTOByStatusToManager(manager, status);
     }
 
-    private int createCheckNotificationToOwner(Principal principal, String status) {
-        return orderService.getAllOrderDTOByStatusToOwner(principal, status);
+    private int createCheckNotificationToOwner(Set<Manager> managerList, String status) {
+        return orderService.getAllOrderDTOByStatusToOwner(managerList, status);
     }
 
-    private int createCheckNotificationToOwnerCompany(Principal principal, String status) {
-        return companyService.getAllCompanyDTOByStatusToOwner(principal, status);
+    private int createCheckNotificationToOwnerCompany(Set<Manager> managerList, String status) {
+        return companyService.getAllCompanyDTOByStatusToOwner(managerList, status);
     }
 
 

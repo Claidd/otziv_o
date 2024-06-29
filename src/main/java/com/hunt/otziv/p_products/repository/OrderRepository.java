@@ -11,10 +11,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Repository
 public interface OrderRepository extends CrudRepository<Order, Long> {
@@ -43,6 +40,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByWorkerAndStatus(Worker worker, String status);
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByOwnerAndStatus(List<Manager> managers, String status);
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
+    List<Long> findAllIdByOwnerAndStatus(Set<Manager> managers, String status);
 
 
 

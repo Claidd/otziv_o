@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
@@ -11,6 +12,7 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface LeadService {
     //    =============================== СОЗДАНИЕ И ОБНОВЛЕНИЕ =========================================
@@ -65,6 +67,10 @@ public interface LeadService {
     Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
     Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate);
     Long findAllByLidListNewToDate(Operator operator, LocalDate localDate);
+
+    List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList);
+
+    List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList);
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

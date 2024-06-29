@@ -294,9 +294,9 @@
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
-                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${manager.sum1Month} + ' руб.'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${manager.order1Month} + ' заказов'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${manager.review1Month} + ' отзывов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${manager.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${manager.order1Month} + ' заказов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${manager.review1Month} + ' отзывов'">редактировать</p>
                     </a>
                 </div>
             </div>
@@ -312,10 +312,10 @@
                     </a>
                     <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
-                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${marketolog.sum1Month} + ' руб.'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.leadsNew} + ' новых'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.leadsInWork} + ' в работе'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${marketolog.percentInWork} + ' %'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${marketolog.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${marketolog.leadsNew} + ' новых'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${marketolog.leadsInWork} + ' в работе'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${marketolog.percentInWork} + ' %'">редактировать</p>
                     </a>
                 </div>
             </div>
@@ -331,9 +331,9 @@
                     </a>
                     <h2 th:text="${worker.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
-                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${worker.sum1Month} + ' руб.'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${worker.order1Month} + ' заказов'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${worker.review1Month} + ' отзывов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${worker.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${worker.order1Month} + ' заказов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${worker.review1Month} + ' отзывов'">редактировать</p>
                     </a>
                 </div>
             </div>
@@ -349,10 +349,10 @@
                     </a>
                     <h2 th:text="${operator.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
-                        <p sec:authorize="hasAnyRole('ADMIN')"  th:text="${operator.sum1Month} + ' руб.'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.leadsNew} + ' новых'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.leadsInWork} + ' в работе'">редактировать</p>
-                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR')"  th:text="${operator.percentInWork} + ' %'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${operator.sum1Month} + ' руб.'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${operator.leadsNew} + ' новых'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${operator.leadsInWork} + ' в работе'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${operator.percentInWork} + ' %'">редактировать</p>
                     </a>
                 </div>
             </div>

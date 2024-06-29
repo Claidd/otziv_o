@@ -1,18 +1,22 @@
 package com.hunt.otziv.z_zp.services;
 
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
-import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -21,16 +25,24 @@ import java.util.stream.Collectors;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
-    private final MessageSource messageSource;
+    private final UserService userService;
 
     public List<PaymentCheck> findAll(){
         return paymentCheckRepository.findAll();
     }
 
-    public List<PaymentCheck> findAllToDate(LocalDate localDate){
+    public List<PaymentCheck> findAllToDate(LocalDate localDate){ // Взять все чеки из БД
         LocalDate localDate2 = localDate.minusYears(1);
         return paymentCheckRepository.findAllToDate(localDate, localDate2);
-    }
+    } // Взять все чеки из БД
+
+    public List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList){ // Взять все чеки из БД с определенных менеджеров
+        LocalDate localDate2 = localDate.minusYears(1);
+        List<Long> managerListLong = managerList.stream().map(Manager::getUser).map(User::getId).toList();
+//        System.out.println("Чеки для менеджеров - " + managerList);
+//        System.out.println(paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong));
+        return paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong);
+    } // Взять все чеки из БД с определенных менеджеров
 
     public List<CheckDTO> getAllCheckDTO(){
         return toDTOList(paymentCheckRepository.findAll());
@@ -48,7 +60,7 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     } // Сохранить Чек в БД
 
     @Transactional
-    private void saveCheckCompany(Order order){ // Сохранить Чек в БД
+    protected void saveCheckCompany(Order order){ // Сохранить Чек в БД
         log.info("Зашли в создание чека");
         System.out.println(order.getSum());
         PaymentCheck paymentCheck = new PaymentCheck();
@@ -59,7 +71,7 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         paymentCheck.setManagerId(order.getManager().getUser().getId());
         paymentCheck.setWorkerId(order.getManager().getUser().getId());
         paymentCheck.setActive(true);
-        System.out.println(paymentCheck);
+//        System.out.println(paymentCheck);
         paymentCheckRepository.save(paymentCheck);
         log.info("Чек сохранен");
     } // Сохранить Чек в БД
