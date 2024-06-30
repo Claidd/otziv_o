@@ -36,9 +36,9 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.getAllWorkerZp(userId, localDate);
     }
 
-    public List<Zp> getAllWorkerZpToDate(String login, LocalDate localDate){
+    public List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth){
         Long userId = userService.findByUserName(login).orElseThrow().getId();
-        return zpRepository.getAllWorkerZp(userId, localDate);
+        return zpRepository.getAllWorkerZp(userId, firstDayOfMonth, lastDayOfMonth);
     }
 
     public List<Zp> findAll(){
@@ -49,6 +49,11 @@ public class ZpServiceImpl implements ZpService{
         LocalDate localDate2 = localDate.minusYears(1);
         return zpRepository.findAllToDate(localDate, localDate2);
     }  // Берем все ЗП для админа
+
+    public List<Zp> findAllToDateByUser(LocalDate localDate, Long userId) { // Берем все ЗП для Работника
+        LocalDate localDate2 = localDate.minusYears(1);
+        return zpRepository.findAllToDateByUser(localDate, localDate2, userId);
+    } // Берем все ЗП для Работника
 
     public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) { // Берем все ЗП для всех менеджеров Владельца
         LocalDate localDate2 = localDate.minusYears(1);

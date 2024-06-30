@@ -47,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.weaver.ISourceContext;
 import org.aspectj.weaver.World;
 import org.springframework.data.domain.*;
+import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -217,7 +218,7 @@ public class OrderServiceImpl implements OrderService {
             orderId = orderRepository.findAllIdToWorker(worker);
             orderPage = orderRepository.findAll(orderId);
         }
-        return getPageOrders(orderPage,pageNumber,pageSize);
+        return getPageOrdersToWorkers(orderPage,pageNumber,pageSize);
     } // Берем все заказы с поиском для Работника
 
 
@@ -237,17 +238,52 @@ public class OrderServiceImpl implements OrderService {
     } // Берем все заказы с поиском для Работника
 
 
-
-
     private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
-        int start = (int)pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), orderPage.size());
-        List<OrderDTOList> orderListDTOs = orderPage.subList(start, end)
+        Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, orderPage.size());
+
+        List<OrderDTOList> orderListDTOs = orderPage.subList(startAndEnd.getFirst(), startAndEnd.getSecond())
                 .stream()
                 .map(this::toDTOListOrders)
                 .collect(Collectors.toList());
         return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
+    }
+
+    private Pair<Integer, Integer> calculateStartAndEnd(Pageable pageable, int size) {
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), size);
+        return Pair.of(start, end);
+    }
+
+//    private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
+//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+//        int start = (int)pageable.getOffset();
+//        int end = Math.min((start + pageable.getPageSize()), orderPage.size());
+//        List<OrderDTOList> orderListDTOs = orderPage.subList(start, end)
+//                .stream()
+//                .map(this::toDTOListOrders)
+//                .collect(Collectors.toList());
+//        return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
+//    }
+
+
+    private Page<OrderDTOList> getPageOrdersToWorkers(List<Order> orderPage, int pageNumber, int pageSize) {
+        // Сортируем список заказов по статусу "В работе"
+        List<Order> sortedOrderPage = orderPage.stream()
+                .sorted(Comparator.comparing(order -> "Публикация".equals(order.getStatus().getTitle()) ? 0 : 1))
+                .toList();
+        // Создаем Pageable для разбиения на страницы
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("status").descending());
+        // Определяем начальный и конечный индексы для текущей страницы
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), sortedOrderPage.size());
+        // Преобразуем подсписок в DTO
+        List<OrderDTOList> orderListDTOs = sortedOrderPage.subList(start, end)
+                .stream()
+                .map(this::toDTOListOrders)
+                .collect(Collectors.toList());
+        // Возвращаем страницу с DTO
+        return new PageImpl<>(orderListDTOs, pageable, sortedOrderPage.size());
     }
 
     public Order getOrder(Long orderId){ // Взять заказ

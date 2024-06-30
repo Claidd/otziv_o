@@ -6,10 +6,7 @@ import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.l_lead.services.LeadService;
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Marketolog;
-import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -44,8 +41,10 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView lK(final Map<String, Object> model,  Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
+        LocalDate localDate = LocalDate.now();
         model.put("route", "user_info");
-        model.put("workerZp", personalService.getWorkerReviews(principal.getName()));
+        model.put("workerZp", personalService.getWorkerReviews(user, localDate));
         model.put("user", personalService.getUserLK(principal));
         checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
         return new ModelAndView("admin/layouts/user_info", model);
@@ -55,8 +54,9 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView lKPost(final Map<String, Object> model,  Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
         model.put("route", "user_info");
-        model.put("workerZp", personalService.getWorkerReviews2(principal.getName(), date));
+        model.put("workerZp", personalService.getWorkerReviews(user, date));
         model.put("user", personalService.getUserLK(principal));
         checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
         return new ModelAndView("admin/layouts/user_info", model);
@@ -199,22 +199,26 @@ public class AdminController {
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
     public ModelAndView userInfo(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
+        LocalDate localDate = LocalDate.now();
         System.out.println(staticFor);
+        User user = userService.findByUserName(staticFor).orElseThrow();;
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
-        model.put("workerZp", personalService.getWorkerReviews(staticFor));
+        model.put("workerZp", personalService.getWorkerReviews(user, localDate));
         checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
     @PostMapping("/user_info")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
-    public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+    public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) {
         long startTime = System.nanoTime();
+        LocalDate localDate = date.orElse(LocalDate.now());
         System.out.println(staticFor);
+        User user = userService.findByUserName(staticFor).orElseThrow();
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
-        model.put("workerZp", personalService.getWorkerReviews2(staticFor, date));
+        model.put("workerZp", personalService.getWorkerReviews(user, localDate));
         checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
         return new ModelAndView("admin/layouts/user_info", model);
     }
@@ -228,14 +232,14 @@ public class AdminController {
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats2(localDate, principal, userRole));
+            model.put("stats", personalService.getStats(localDate, principal, userRole));
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
         if ("ROLE_OWNER".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats2(localDate, principal, userRole));
+            model.put("stats", personalService.getStats(localDate, principal, userRole));
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
@@ -253,7 +257,7 @@ public class AdminController {
         String userRole = getRole(principal);
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
-        model.put("stats", personalService.getStats2(date, principal, userRole));
+        model.put("stats", personalService.getStats(date, principal, userRole));
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }
@@ -262,9 +266,10 @@ public class AdminController {
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ModelAndView reportToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
+        LocalDate localDate = LocalDate.now();
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
-        model.put("stats", personalService.getStats());
+        model.put("stats", personalService.getStats(localDate, principal, "ROLE_ADMIN"));
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }

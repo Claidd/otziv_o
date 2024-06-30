@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
-    private final UserService userService;
 
     public List<PaymentCheck> findAll(){
         return paymentCheckRepository.findAll();

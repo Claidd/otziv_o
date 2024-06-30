@@ -14,22 +14,22 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class UserStatDTO {
+    //  Общая информация
     private Long id;
-//    private Long userId;
     private String fio;
     private Long imageId;
     private BigDecimal coefficient;
     private BigDecimal percentNoPay;
     private BigDecimal avgPublish1Day;
     String zpPayMap;
-
+    //  Заработанные суммы за период
     private int sum1Day;
     private int sum1Week;
     private int sum1Month;
     private int sum1Year;
     private int sumOrders1Month;
     private int sumOrders2Month;
-
+    //  Проценты сумм за период
     private int percent1Day;
     private int percent1Week;
     private int percent1Month;

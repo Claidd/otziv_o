@@ -20,7 +20,9 @@ public interface ZpService {
     List<Zp> getAllWorkerZp(String login);
     List<Zp> findAll();
     List<Zp> findAllToDate(LocalDate localDate);
-    List<Zp> getAllWorkerZpToDate(String login, LocalDate localDate);
+    List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+
+    List<Zp> findAllToDateByUser(LocalDate localDate, Long id);
 }

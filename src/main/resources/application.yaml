@@ -1,6 +1,6 @@
 telegram:
   bot:
-    token: 7341392436:AAHBSTE6P-5oEeLDI9LgFsvXOg4wcQ8oi7I
+    token:
     username: O_Company_Bot
 
 server:
@@ -9,9 +9,9 @@ server:
 #jwt:
 #  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 #  lifetime: 1800m
-jwt:
-  access-token-key: '{"kty":"oct","k":"hi7S5RX5ZRZooHA0RKGctZ-KtR9FoESgCnH-3BNg5XI"}'
-  refresh-token-key: '{"kty":"oct","k":"956PBFst1FguLr5irJD-aQ"}'
+#jwt:
+#  access-token-key: '{"kty":"oct","k":"hi7S5RX5ZRZooHA0RKGctZ-KtR9FoESgCnH-3BNg5XI"}'
+#  refresh-token-key: '{"kty":"oct","k":"956PBFst1FguLr5irJD-aQ"}'
 
 spring:
 

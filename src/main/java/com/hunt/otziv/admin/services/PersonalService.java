@@ -7,14 +7,12 @@ import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
 import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
 import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Marketolog;
-import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.model.*;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface PersonalService {
     List<WorkersListDTO> gerWorkers();
@@ -25,16 +23,16 @@ public interface PersonalService {
     List<ManagersListDTO> getManagersAndCount();
     List<OperatorsListDTO> gerOperators();
     List<OperatorsListDTO> gerOperatorsAndCount();
-    StatDTO getStats();
-    UserStatDTO getWorkerReviews(String login);
+//    StatDTO getStats();
+    UserStatDTO getWorkerReviews(User user, LocalDate localDate);
     List<MarketologsListDTO> getMarketologsToManager(Manager manager);
 
     List<WorkersListDTO> gerWorkersToManager(Manager manager);
 
     List<OperatorsListDTO> gerOperatorsToManager(Manager manager);
     UserLKDTO getUserLK(Principal principal);
-    StatDTO getStats2(LocalDate localDate, Principal principal, String userRole);
-    UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
+//    StatDTO getStats2(LocalDate localDate, Principal principal, String userRole);
+//    UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);
 
@@ -54,4 +52,6 @@ public interface PersonalService {
     List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managerList);
     List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs);
     List<WorkersListDTO>  getWorkersToAndCountToOwner(List<Worker> allWorkers);
+
+    StatDTO getStats(LocalDate date, Principal principal, String userRole);
 }

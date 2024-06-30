@@ -441,8 +441,6 @@ public class LeadServiceImpl implements LeadService{
     } // меняем статус с любого на Новый - конец
 
 
-
-
     @Override
     public List<Lead> findAllByLidListStatus(String username) {
         Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
