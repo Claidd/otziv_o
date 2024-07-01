@@ -14,7 +14,10 @@
         <!-- Пользователи -->
         <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_orderPay}"></th:block>
         <!-- Пользователи конец -->
-        
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_pay_month :: grafic_pay_month}"></th:block>
+        <!-- График ЗП конец -->
 
         <!-- Пользователи -->
         <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_zp}"></th:block>
@@ -27,6 +30,10 @@
         <!-- Пользователи -->
         <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_order}"></th:block>
         <!-- Пользователи конец -->
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_pay_month :: grafic_zp_month}"></th:block>
+        <!-- График ЗП конец -->
 
 
     </main>

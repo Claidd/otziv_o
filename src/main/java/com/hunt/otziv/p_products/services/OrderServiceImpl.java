@@ -1,6 +1,5 @@
 package com.hunt.otziv.p_products.services;
 
-import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
@@ -10,7 +9,6 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
-import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -29,7 +27,6 @@ import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.model.ReviewArchive;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
@@ -42,10 +39,10 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.aspectj.weaver.ISourceContext;
-import org.aspectj.weaver.World;
+import org.springframework.context.MessageSource;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
@@ -87,11 +84,26 @@ public class OrderServiceImpl implements OrderService {
     private final UserService userService;
     private final CompanyStatusService companyStatusService;
 
+    public static final String ADMIN = "ROLE_ADMIN";
+    public static final String OWNER = "ROLE_OWNER";
+    public static final String MANAGER = "ROLE_MANAGER";
+    public static final String STATUS_NEW = "Новый";
+    public static final String STATUS_PAYMENT = "Оплачено";
+    public static final String STATUS_PUBLIC = "Опубликовано";
+    public static final String STATUS_ARCHIVE = "Архив";
+    public static final String STATUS_COMPANY_IN_WORK = "В работе";
+    public static final String STATUS_COMPANY_IN_STOP = "На стопе";
+    public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
+    private static final int MEDIUM_COUNTER_THRESHOLD = 10;
+    private static final int HIGH_COUNTER_THRESHOLD = 20;
+    private static final String MEDIUM_STATUS = "Средний";
+    private static final String HIGH_STATUS = "Высокий";
+    private final MessageSource messageSource;
+
 
     //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
 
     public Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize){ // Берем все заказы для выбранной компании по id
-//        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
         List<Order> orderPage;
         if (!keyword.isEmpty()){
@@ -110,7 +122,6 @@ public class OrderServiceImpl implements OrderService {
         return convertToOrderDTOList(orderRepository.findAll());
     }
     public Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
-//        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> orderId;
         List<Order> orderPage;
         if (!keyword.isEmpty()){
@@ -255,17 +266,6 @@ public class OrderServiceImpl implements OrderService {
         return Pair.of(start, end);
     }
 
-//    private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
-//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
-//        int start = (int)pageable.getOffset();
-//        int end = Math.min((start + pageable.getPageSize()), orderPage.size());
-//        List<OrderDTOList> orderListDTOs = orderPage.subList(start, end)
-//                .stream()
-//                .map(this::toDTOListOrders)
-//                .collect(Collectors.toList());
-//        return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
-//    }
-
 
     private Page<OrderDTOList> getPageOrdersToWorkers(List<Order> orderPage, int pageNumber, int pageSize) {
         // Сортируем список заказов по статусу "В работе"
@@ -311,7 +311,8 @@ public class OrderServiceImpl implements OrderService {
         orderDTO.setStatus(orderStatusService.getOrderStatusDTOByTitle("Новый"));
         return orderDTO;
     } // Создание DTO заготовки для создания нового Отзыва
-    private Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // Создание нового отзыва
+    @Transactional
+    protected Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // Создание нового отзыва
         List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId());
         var random = new SecureRandom();
         return Review.builder()
@@ -419,62 +420,70 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+//============================= СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS==================================
+    /**
+     * Создает новый заказ с отзывами для указанной компании и продукта.
+     * @param companyId Идентификатор компании.
+     * @param productId Идентификатор продукта.
+     * @param orderDTO  DTO объекта заказа, содержащий детали заказа.
+     * @return true, если заказ успешно создан, иначе false.
+     * @throws RuntimeException если происходит ошибка при создании заказа.
+     */
     @Transactional
     @Override
-    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) { // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
+    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
         try {
-            Order order = toEntityOrderFromDTO(orderDTO, productId);
-            Order saveOrder = orderRepository.save(order);
+            Order order = saveOrder(orderDTO, productId);
             log.info("1. Сохранили ORDER");
-
-            OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, saveOrder, productId);
-            OrderDetails orderDetailsSave = orderDetailsService.save(orderDetails);
-            log.info("2. Сохранили ORDER-DETAIL");
-
-            List<Review> reviews = toEntityListReviewsFromDTO(orderDTO, orderDetailsSave);
-            log.info("3. Сохранили REVIEWS");
-
-            orderDetailsSave.setReviews(reviews);
-            log.info("4. Установили REVIEWS в ORDER-DETAIL");
-
-            OrderDetails orderDetails2 = orderDetailsService.save(orderDetailsSave);
+            OrderDetails orderDetails = saveOrderDetails(order, orderDTO, productId);
             log.info("5. Сохранили ORDER-DETAIL с REVIEWS");
-
-            List<OrderDetails> detailsList;
-            if (saveOrder.getDetails() != null) {
-                detailsList = saveOrder.getDetails();
-                log.info("6. Взяли ORDER-DETAIL лист");
-            } else {
-                detailsList = new ArrayList<>();
-                log.info("6. Создали пустой ORDER-DETAIL лист");
-            }
-
-            detailsList.add(orderDetails2);
-            log.info("7. Добавили ORDER-DETAIL лист");
-
-            saveOrder.setDetails(detailsList);
-            log.info("8. Установили его в ORDER");
-
-            Order saveOrder2 = orderRepository.save(saveOrder);
+            log.info("6. Установили его в ORDER");
+            updateOrder(order, orderDetails);
             log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
-
             log.info("10. Обновляем счетчик компании в БД");
-
-            Company company = companyService.getCompaniesById(companyId);
-            company.setCounterNoPay(company.getCounterNoPay() + (saveOrder2.getAmount() - company.getCounterNoPay()));
-            company.setStatus(companyStatusService.getStatusByTitle("В работе"));
-            companyService.save(company);
-
+            updateCompanyCounter(order, companyId);
             return true;
-        } catch (Exception e) {
+        } catch (PersistenceException | NumberFormatException e) {  //replace these with exceptions you expect
             log.error("Ошибка при создании нового заказа с отзывами", e);
-            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e); // убеждаемся, что транзакция откатывается при ошибке
+            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
         }
     }
 
+    private Order saveOrder(OrderDTO orderDTO, Long productId) {
+        Order order = toEntityOrderFromDTO(orderDTO, productId);
+        return orderRepository.save(order);
+    }
 
-//    @Override
+    private OrderDetails saveOrderDetails(Order order, OrderDTO orderDTO, Long productId) {
+        OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, order, productId);
+        OrderDetails savedOrderDetails = orderDetailsService.save(orderDetails);
+        List<Review> reviews = toEntityListReviewsFromDTO(orderDTO, savedOrderDetails);
+        savedOrderDetails.setReviews(reviews);
+        return orderDetailsService.save(savedOrderDetails);
+    }
+
+    private void updateOrder(Order order, OrderDetails orderDetails) {
+        List<OrderDetails> detailsList = Optional.ofNullable(order.getDetails()).orElse(new ArrayList<>());
+        detailsList.add(orderDetails);
+        order.setDetails(detailsList);
+        orderRepository.save(order);
+    }
+
+    private void updateCompanyCounter(Order order, Long companyId) {
+        Company company = companyService.getCompaniesById(companyId);
+        company.setCounterNoPay(calculateCounterNoPayValue(order, company));
+        company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
+        companyService.save(company);
+    }
+
+    private int calculateCounterNoPayValue(Order order, Company company){
+        return company.getCounterNoPay() + (order.getAmount() - company.getCounterNoPay());
+    }
+
+
+
 //    @Transactional
+//    @Override
 //    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) { // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
 //        try {
 //            Order order = toEntityOrderFromDTO(orderDTO, productId);
@@ -512,7 +521,6 @@ public class OrderServiceImpl implements OrderService {
 //            Order saveOrder2 = orderRepository.save(saveOrder);
 //            log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
 //
-//            System.out.println(saveOrder2);
 //            log.info("10. Обновляем счетчик компании в БД");
 //
 //            Company company = companyService.getCompaniesById(companyId);
@@ -523,9 +531,11 @@ public class OrderServiceImpl implements OrderService {
 //            return true;
 //        } catch (Exception e) {
 //            log.error("Ошибка при создании нового заказа с отзывами", e);
-//            throw e; // убеждаемся, что транзакция откатывается при ошибке
+//            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e); // убеждаемся, что транзакция откатывается при ошибке
 //        }
-//    } // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
+//    }
+//============================ СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS КОНЕЦ ============================
+//
 
 
 //    ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ =========================================================
@@ -556,14 +566,10 @@ public class OrderServiceImpl implements OrderService {
             log.info("Обновляем филиал заказа");
             System.out.println(saveOrder.getFilial());
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
-//            saveOrder.getFilial().setId(orderDTO.getFilial().getId());
-//            System.out.println(saveOrder.getFilial());
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/
             log.info("Обновляем url филиала заказа");
-//            saveOrder.getFilial().setUrl(orderDTO.getFilial().getUrl());
-//            isChanged = true;
         }
         if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) || !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId())){ /*Проверка смены работника*/
             log.info("Обновляем работника заказа");
@@ -603,27 +609,57 @@ public class OrderServiceImpl implements OrderService {
         }
     } // Метод Обновления Заказа
 
-    @Transactional
-    public boolean deleteOrder(Long orderId, Principal principal){
-        String userRole = getRole(principal);
-        Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
-            orderRepository.delete(deleteOrder);
-            log.info("заказ удален Админом или Владельцем");
-            return true;
-        }
-        if ("ROLE_MANAGER".equals(userRole)){
-            if (deleteOrder.getStatus().getTitle().equals("Новый")){
-                orderRepository.delete(deleteOrder);
-                log.info("заказ удален Менеджером");
-                return true;
-            } else
-                System.out.println("не удален из-за статуса");
-        }
-        else
-            System.out.println("не удален из-за отсутсвия прав доступа");
-        return false;
+//============================================ УДАЛЕНИЕ ЗАКАЗА =========================================================
+@Transactional
+public boolean deleteOrder(Long orderId, Principal principal){
+    String userRole = getRole(principal);
+    Order orderToDelete = orderRepository.findById(orderId)
+            .orElseThrow(() -> new UsernameNotFoundException(String.format("Order '%d' not found", orderId)));
+    if (canDeleteOrder(userRole, orderToDelete)) {
+        orderRepository.delete(orderToDelete);
+        log.info("Заказ удален Админом или Владельцем");
+        return true;
     }
+    log.info("Заказ не удален из-за статуса или роли");
+    return false;
+}
+
+    private boolean isAdminOrOwner(String role) {
+        return ADMIN.equals(role) || OWNER.equals(role);
+    }
+
+    private boolean isNewlyCreatedOrder(Order order) {
+        return STATUS_NEW.equals(order.getStatus().getTitle());
+    }
+
+    private boolean canDeleteOrder(String role, Order orderToDelete) {
+        return isAdminOrOwner(role) || (MANAGER.equals(role) && isNewlyCreatedOrder(orderToDelete));
+    }
+
+
+//    @Transactional
+//    public boolean deleteOrder(Long orderId, Principal principal){
+//        String userRole = getRole(principal);
+//        Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+//        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
+//            orderRepository.delete(deleteOrder);
+//            log.info("заказ удален Админом или Владельцем");
+//            return true;
+//        }
+//        if ("ROLE_MANAGER".equals(userRole)){
+//            if (deleteOrder.getStatus().getTitle().equals("Новый")){
+//                orderRepository.delete(deleteOrder);
+//                log.info("заказ удален Менеджером");
+//                return true;
+//            } else
+//                System.out.println("не удален из-за статуса");
+//        }
+//        else
+//            System.out.println("не удален из-за отсутсвия прав доступа");
+//        return false;
+//    }
+
+//========================================= УДАЛЕНИЕ ЗАКАЗА КОНЕЦ ======================================================
 
     private String getRole(Principal principal){
         // Получите текущий объект аутентификации
@@ -654,37 +690,40 @@ public class OrderServiceImpl implements OrderService {
         return reviewService.save(review);
     }
 
+//========================= СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО================================================
+
+
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title){ // смена статуса для заказа с проверкой на Оплачено
         try {
             Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
-            if (title.equals("Оплачено")){
+            if (title.equals(STATUS_PAYMENT)){
                 log.info("1. Вошли в смену статуса в оплачено");
-                System.out.println("orderIsComplete: " + !order.isComplete());
-                System.out.println("order.getAmount() <= order.getCounter(): " + Objects.equals(order.getAmount(), order.getCounter()));
+                log.info("orderIsComplete: {}", !order.isComplete());
+                log.info("order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
 
                 if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
                     log.info("2. Проверили, что заказ еще не бьл выполнен");
                     if (zpService.save(order)){
                         log.info("3. Сохранили ЗП");
                         boolean chek = paymentCheckService.save(order);
-                        System.out.println(chek);
+                        log.info(String.valueOf(chek));
                         log.info("4. Сохранили Чек компании");
                         Company company = companyService.getCompaniesById(order.getCompany().getId());
 
                         try {
                             company.setCounterPay(company.getCounterPay() + order.getAmount());
-                            System.out.println("счетчик: " + company.getCounterPay() + order.getAmount());
+                            log.info("счетчик: {}{}", company.getCounterPay(), order.getAmount());
                             company.setSumTotal(company.getSumTotal().add(order.getSum()));
-                            System.out.println("сумма: " + company.getSumTotal().add(order.getSum()));
+                            log.info("сумма: {}", company.getSumTotal().add(order.getSum()));
                             log.info("5. Успешно установили суммы");
                             order.setComplete(true);
                             order.setPayDay(LocalDate.now());
-                            System.out.println("PayDay: " + order.getPayDay());
+                            log.info("Дата оплаты: {}", order.getPayDay());
                             orderRepository.save(order);
                             log.info("6. Заказ обновлен и сохранен");
                             companyService.save(checkStatusToCompany(company));
-                            log.info("7. Компания сохранена, статус сменен на Готов к новому заказу");
+                            log.info("7. Компания сохранена, статус сменен на Готов к Новому заказу");
 //                             Создание нового заказа с отзывами
                             if (!createNewOrderWithReviews(company.getId(), order.getDetails().get(0).getProduct().getId(), convertToOrderDTOToRepeat(order))) {
                                 log.info("8. Новый заказ создался автоматически - НЕ Успешно");
@@ -696,7 +735,6 @@ public class OrderServiceImpl implements OrderService {
                         catch (Exception e){
                             log.info("4. НЕ Успешно установили суммы");
                         }
-
                     }
                     else {
                         log.info("2. Оплата поступила, но при сохранении какие-то проблемы");
@@ -705,14 +743,22 @@ public class OrderServiceImpl implements OrderService {
                 else {
                     log.info("3. Что-то пошло не так и выбросило в момент Зачисления");
                 }
+
                 log.info("2. Проверили, что заказ УЖЕ был выполнен и просто меняем статус");
                 order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                 orderRepository.save(order);
                 return true;
             }
-            if (title.equals("Архив")){
+            if (order.getStatus().getTitle().equals(STATUS_ARCHIVE)){
+                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
+                log.info("Сменили статус компании на В работе");
+                orderRepository.save(order);
+            }
+            if (title.equals(STATUS_ARCHIVE)){
                 saveReviewsToArchive(order.getDetails().get(0).getReviews());
                 order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
                 orderRepository.save(order);
                 return true;
             }
@@ -726,6 +772,9 @@ public class OrderServiceImpl implements OrderService {
             return false;
         }
     } // смена статуса для заказа с проверкой на Оплачено
+
+
+//====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
 
     private void saveReviewsToArchive(List<Review> reviews) { // сохранение отзывов в архив при отправке заказа в статус архив
         for (Review review : reviews) {
@@ -744,7 +793,7 @@ public class OrderServiceImpl implements OrderService {
             }
         }
         if (result == 0){
-            company.setStatus(companyStatusService.getStatusByTitle("Новый заказ"));
+            company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_NEW_ORDER));
         }
         return company;
     }
@@ -778,7 +827,7 @@ public class OrderServiceImpl implements OrderService {
             checkOrderCounterAndAmount(savedOrder);
             log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
 
-            changeBotCounterAndStatus(review.getBot());
+            updateBotCounterAndStatus(review.getBot());
             review.setPublish(true);
             log.info("7. Установили Publish на true - опубликовано");
 
@@ -790,59 +839,46 @@ public class OrderServiceImpl implements OrderService {
             log.error("Ошибка при выполнении метода changeStatusAndOrderCounter", e);
             throw e; // Убедитесь, что транзакция откатывается при ошибке
         }
-//        Review review = reviewService.getReviewById(reviewId);
-//        log.info("2. Достали отзыв по id{}", reviewId);
-//        if (review != null){
-//            Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
-//            if(order != null && !review.isPublish()){
-//                log.info("3. Прошли проверку что заказ не пустой и его статус не опуьликован - order != null && !review.isPublish()");
-//                    reviewArchiveService.saveNewReviewArchive(reviewId);
-//                log.info("4. Сохранили опубликованный отзыв компании в отзыв в архив");
-//                    order.setCounter(order.getCounter() + 1);
-//                    Order saveOrder = orderRepository.save(order);
-//                log.info("5. Увеличили, обновили и сохранили счетчик публикаций в заказе. Итого теперь: {}", saveOrder.getCounter());
-//                checkOrderCounterAndAmount(saveOrder);
-//                log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
-//                changeBotCounterAndStatus(review.getBot());
-//                review.setPublish(true);
-//                log.info("7. Установили Publish на тру - опубликовано");
-//                reviewService.save(review);
-//                log.info("8. Сохранили отзыв в БД");
-//                return true;
-//            }
-//            else {
-//                log.info("3. Счетчик не увеличен, проверка не пройдена");
-//                log.info(("order: " + (order != null)));
-//                log.info("publish status: {}", !review.isPublish());
-//                return false;
-//            }
-//
-//        }
-//        else {
-//            log.info("2. Что-то пошло не так и метод changeStatusAndOrderCounter не отработал правильно ");
-//            return false;
-//        }
     } // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
 
 
     @Transactional
-    protected void changeBotCounterAndStatus(Bot bot) { // обновление счетчика и статуса у бота
+    public void updateBotCounterAndStatus(Bot bot) {// обновление счетчика и статуса у бота
         try {
             bot.setCounter(bot.getCounter() + 1);
-            if (bot.getCounter() >= 10) {
-                log.info("6. меняем статус бота от 10 отзывов");
-                bot.setStatus(botService.changeStatus("Средний"));
-            }
-            if (bot.getCounter() >= 20) {
-                log.info("6. меняем статус бота от 20 отзывов");
-                bot.setStatus(botService.changeStatus("Высокий"));
+            if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
+                log.info("Меняем статус бота от 20 отзывов");
+                bot.setStatus(botService.changeStatus(HIGH_STATUS));
+            } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
+                log.info("Меняем статус бота от 10 отзывов");
+                bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
             }
             botService.save(bot);
         } catch (Exception e) {
             log.error("Ошибка при обновлении счетчика и статуса у бота", e);
-            throw e; // Убедитесь, что транзакция откатывается при ошибке
+            throw e;
         }
-    } // обновление счетчика и статуса у бота
+    }// обновление счетчика и статуса у бота
+
+
+//    @Transactional
+//    protected void changeBotCounterAndStatus(Bot bot) { // обновление счетчика и статуса у бота
+//        try {
+//            bot.setCounter(bot.getCounter() + 1);
+//            if (bot.getCounter() >= 10) {
+//                log.info("6. меняем статус бота от 10 отзывов");
+//                bot.setStatus(botService.changeStatus("Средний"));
+//            }
+//            if (bot.getCounter() >= 20) {
+//                log.info("6. меняем статус бота от 20 отзывов");
+//                bot.setStatus(botService.changeStatus("Высокий"));
+//            }
+//            botService.save(bot);
+//        } catch (Exception e) {
+//            log.error("Ошибка при обновлении счетчика и статуса у бота", e);
+//            throw e; // Убедитесь, что транзакция откатывается при ошибке
+//        }
+//    } // обновление счетчика и статуса у бота
 
 
 
@@ -850,7 +886,7 @@ public class OrderServiceImpl implements OrderService {
     protected void checkOrderCounterAndAmount(Order order) { // проверка счетчиков заказа
         try {
             if (order.getAmount() <= order.getCounter()) {
-                changeStatusForOrder(order.getId(), "Опубликовано");
+                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
                 log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
             } else {
                 log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");

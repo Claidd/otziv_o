@@ -109,33 +109,6 @@ public class AdminController {
             checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
             return new ModelAndView("admin/layouts/personal", model);
         }
-//        Вариант без счетчиков
-//        if ("ROLE_OWNER".equals(userRole)) {
-//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-//            List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
-//            // Получение списка всех маркетологов
-//            List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();
-//            // Получение списка всех операторов
-//            List<Operator> allOperators = managerList2.stream().flatMap(manager -> manager.getUser().getOperators().stream()).toList();
-//            // Получение списка всех работников
-//            List<Worker> allWorkers = managerList2.stream().flatMap(manager -> manager.getUser().getWorkers().stream()).toList();// Вывод списков
-//            System.out.println("All Marketologs: " + allMarketologs);
-//            System.out.println("All Operators: " + allOperators);
-//            System.out.println("All Workers: " + allWorkers);
-//            model.put("route", "personal");
-//            model.put("user", personalService.getUserLK(principal));
-//            System.out.println(personalService.getUserLK(principal));
-//            model.put("managers", personalService.getManagersToOwner(managerList));
-//            System.out.println(personalService.getManagersToOwner(managerList));
-//            model.put("marketologs", personalService.getMarketologsToOwner(allMarketologs));
-//            System.out.println(personalService.getMarketologsToOwner(allMarketologs));
-//            model.put("workers", personalService.getWorkersToOwner(allWorkers));
-//            System.out.println(personalService.getWorkersToOwner(allWorkers));
-//            model.put("operators", personalService.gerOperatorsToOwner(allOperators));
-//            System.out.println(personalService.gerOperatorsToOwner(allOperators));
-//            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
-//            return new ModelAndView("admin/layouts/personal", model);
-//        }
         else return new ModelAndView("admin/layouts/personal", model);
     }
 
@@ -243,11 +216,6 @@ public class AdminController {
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
-//        model.put("route", "analyse");
-//        model.put("user", personalService.getUserLK(principal));
-//        model.put("stats", personalService.getStats());
-//        checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
-//        return new ModelAndView("admin/layouts/analyse", model);
         return new ModelAndView("admin/layouts/analyse", model);
     }
     @PostMapping("/analyse")
@@ -273,22 +241,6 @@ public class AdminController {
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }
-
-
-
-//    @GetMapping("/personal")
-//    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_MANAGER')")
-//    public ModelAndView personal(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
-//        long startTime = System.nanoTime();
-//        int pageSize = 10; // желаемый размер страницы
-//        model.put("route", "fast_analytics");
-//        model.put("managers", personalService.getManagers());
-//        model.put("marketologs", personalService.getMarketologs());
-//        model.put("workers", personalService.gerWorkers());
-//        model.put("operators", personalService.gerOperators());
-//        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
-//        return new ModelAndView("admin/layouts/fast_analytics", model);
-//    }
 
 
 

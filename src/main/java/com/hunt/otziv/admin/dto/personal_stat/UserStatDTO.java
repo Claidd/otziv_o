@@ -21,7 +21,10 @@ public class UserStatDTO {
     private BigDecimal coefficient;
     private BigDecimal percentNoPay;
     private BigDecimal avgPublish1Day;
+
+    String zpPayMapMonth;
     String zpPayMap;
+
     //  Заработанные суммы за период
     private int sum1Day;
     private int sum1Week;

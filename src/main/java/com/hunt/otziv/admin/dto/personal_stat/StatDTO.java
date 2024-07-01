@@ -15,7 +15,10 @@ import java.math.BigDecimal;
 public class StatDTO {
 
     String zpPayMap;
+    String zpPayMapMonth;
     String orderPayMap;
+    String orderPayMapMonth;
+
 
 //    Суммы Доходов и проценты за текущий месяц
 

@@ -157,6 +157,158 @@ document.addEventListener('DOMContentLoaded', function() {
     
     });
 
+    // График по месяцам
+    document.addEventListener('DOMContentLoaded', function() {
+        const monthlyCanvas = document.getElementById('grafic_pay_month');
+        const map = monthlyCanvas.getAttribute('data-map');
+        const parsedMap = JSON.parse(map);
+    
+        const ctx = monthlyCanvas.getContext('2d');
+        const months = Array.from({ length: 12 }, (_, i) => i + 1);
+        
+        const datasets = Object.keys(parsedMap).map((year, index) => {
+            const monthlyData = parsedMap[year];
+            const data = months.map(month => monthlyData[month] || 0);
+            const colors = ['#ea3362', '#4a9a86', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+    
+            return {
+                label: `Год: ${year}`,
+                data: data,
+                backgroundColor: colors[index % colors.length],
+                borderColor: colors[index % colors.length],
+                fill: false,
+                borderWidth: 2
+            };
+        });
+    
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: datasets
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Месяца'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+
+    // График ЗП по месяцам
+    document.addEventListener('DOMContentLoaded', function() {
+        const monthlyCanvas = document.getElementById('grafic_zp_month');
+        const map = monthlyCanvas.getAttribute('data-map');
+        const parsedMap = JSON.parse(map);
+    
+        const ctx = monthlyCanvas.getContext('2d');
+        const months = Array.from({ length: 12 }, (_, i) => i + 1);
+        
+        const datasets = Object.keys(parsedMap).map((year, index) => {
+            const monthlyData = parsedMap[year];
+            const data = months.map(month => monthlyData[month] || 0);
+            const colors = ['#ea3362', '#4a9a86', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+    
+            return {
+                label: `Год: ${year}`,
+                data: data,
+                backgroundColor: colors[index % colors.length],
+                borderColor: colors[index % colors.length],
+                fill: false,
+                borderWidth: 2
+            };
+        });
+    
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: datasets
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Месяца'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+
+
+
+
+
+//     document.addEventListener('DOMContentLoaded', function() {
+//     const monthlyCanvas = document.getElementById('grafic_pay_month');
+//     const monthlyMap = monthlyCanvas.getAttribute('data-map');
+//     const parsedMonthlyMap = JSON.parse(monthlyMap);
+    
+//     const ctxMonthly = monthlyCanvas.getContext('2d');
+//     const months = Object.keys(parsedMonthlyMap).map(key => key.toString());
+//     const monthlySums = Object.values(parsedMonthlyMap);
+
+//     new Chart(ctxMonthly, {
+//         type: 'line',
+//         data: {
+//             labels: months,
+//             datasets: [{
+//                 label: 'Общая сумма платежей по месяцам',
+//                 data: monthlySums,
+//                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
+//                 borderColor: 'rgba(75, 192, 192, 1)',
+//                 borderWidth: 1
+//             }]
+//         },
+//         options: {
+//             scales: {
+//                 y: {
+//                     beginAtZero: true
+//                 }
+//             }
+//         }
+//     });
+// });
+
+
+
+
+
+
     const dataTodayElement = document.getElementById('dataToday');
     const formElement = document.getElementById('myForm');
     

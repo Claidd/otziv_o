@@ -1,0 +1,19 @@
+<section th:fragment="grafic_zp_month" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <!-- Пользователи -->
+    <div class="grafic_zp">
+        <!-- <h2>График</h2> -->
+        <div class="grafic">
+                <canvas th:data-map="${stats.zpPayMapMonth}"  th:id="grafic_zp_month"></canvas>     
+        </div> 
+    </div>
+</section>
+
+<section th:fragment="grafic_pay_month" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+    <!-- Пользователи -->
+    <div class="grafic_zp">
+        <!-- <h2>График</h2> -->
+        <div class="grafic">
+                <canvas th:data-map="${stats.orderPayMapMonth}"  th:id="grafic_pay_month"></canvas>     
+        </div> 
+    </div>
+</section>

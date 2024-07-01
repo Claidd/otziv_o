@@ -75,6 +75,7 @@ public class PersonalServiceImpl implements PersonalService {
         List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerList);
         List<Zp> zps = getZarplataChecks(localDate, role, managerList);
 
+
         //      СТАТИСТИКА новых лидов и тех, что поступили в работу
         List<Long> newleadList = getNewLeadList(role, localDate, managerList); // берем всех лидов за текущий месяц
         List<Long> inWorkleadList = getInWorkLeadList(role, localDate, managerList);// берем всех лидов за текущий месяц + статус
@@ -151,10 +152,12 @@ public class PersonalServiceImpl implements PersonalService {
         BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
         BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
 
-
         Long imageId = 1L;
         StatDTO statDTO = new StatDTO();
         statDTO.setOrderPayMap(getJSON(getDailySalarySumMap(localDate, pcs)));
+        statDTO.setOrderPayMapMonth(getJSONMonth(getYearlyMonthlySalarySumMap(pcs)));
+        statDTO.setZpPayMapMonth(getJSONMonth(getYearlyMonthlyZpSumMap(zps)));
+
         statDTO.setSum1DayPay(sum1Pay.intValue());
         statDTO.setSum1WeekPay(sum7Pay.intValue());
         statDTO.setSum1MonthPay(sum30Pay.intValue());
@@ -243,6 +246,8 @@ public class PersonalServiceImpl implements PersonalService {
     } //Создание мапы день-сумма зп
 
 
+
+
     private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<PaymentCheck> pcs) { //Создание мапы день-сумма Чеки
         Map<Integer, BigDecimal> dailySalarySumMap = IntStream.rangeClosed(1, desiredDate.lengthOfMonth())
                 .boxed()
@@ -260,6 +265,61 @@ public class PersonalServiceImpl implements PersonalService {
 
 //===================================== ПЕРЕВОД В МАПУ ЗП И ЧЕКОВ -  КОНЕЦ =============================================
 
+
+
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMap(List<PaymentCheck> pcs) {
+        Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlySalarySumMap = new HashMap<>();
+
+        pcs.forEach(pc -> {
+            LocalDate createdDate = pc.getCreated();
+            int year = createdDate.getYear();
+            int month = createdDate.getMonthValue();
+
+            yearlyMonthlySalarySumMap.putIfAbsent(year, new HashMap<>());
+            Map<Integer, BigDecimal> monthlySumMap = yearlyMonthlySalarySumMap.get(year);
+            monthlySumMap.merge(month, pc.getSum(), BigDecimal::add);
+        });
+
+        return yearlyMonthlySalarySumMap;
+    }
+
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlyZpSumMap(List<Zp> zps) {
+        Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlyZpSumMap = new HashMap<>();
+
+        zps.forEach(zp -> {
+            LocalDate createdDate = zp.getCreated();
+            int year = createdDate.getYear();
+            int month = createdDate.getMonthValue();
+
+            yearlyMonthlyZpSumMap.putIfAbsent(year, new HashMap<>());
+            Map<Integer, BigDecimal> monthlySumMap = yearlyMonthlyZpSumMap.get(year);
+            monthlySumMap.merge(month, zp.getSum(), BigDecimal::add);
+        });
+
+        return yearlyMonthlyZpSumMap;
+    }
+
+
+
+
+
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMapZp(List<Zp> pcs) {
+        Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlySalarySumMap = new HashMap<>();
+
+        pcs.forEach(pc -> {
+            LocalDate createdDate = pc.getCreated();
+            int year = createdDate.getYear();
+            int month = createdDate.getMonthValue();
+
+            yearlyMonthlySalarySumMap.putIfAbsent(year, new HashMap<>());
+            Map<Integer, BigDecimal> monthlySumMap = yearlyMonthlySalarySumMap.get(year);
+            monthlySumMap.merge(month, pc.getSum(), BigDecimal::add);
+        });
+
+        return yearlyMonthlySalarySumMap;
+    }
+
+
     //========================================== ПЕРЕВОД ГРАФИКА В JSON ====================================================
     private String getJSON(Map<Integer, BigDecimal> zpPayMapOnMonth) { // Перевод мапы в JSON
         // Инициализируем ObjectMapper
@@ -271,7 +331,20 @@ public class PersonalServiceImpl implements PersonalService {
             throw new RuntimeException("Произошла ошибка при преобразовании карты в JSON", exception);
         }
     } // Перевод мапы в JSON
+
+    private String getJSONMonth(Map<Integer, Map<Integer, BigDecimal>> zpPayMapOnMonth) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        try {
+            return objectMapper.writeValueAsString(zpPayMapOnMonth);
+        } catch (JsonProcessingException exception) {
+            throw new RuntimeException("Произошла ошибка при преобразовании карты в JSON", exception);
+        }
+    }
+
 //====================================== ПЕРЕВОД ГРАФИКА В JSON -  КОНЕЦ ===============================================
+
+
+
 
 
     //==================================== ОЦЕНКА РАЗНИЦЫ 2Х ЧИСЕЛ В ПРОЦЕНТАХ =============================================
@@ -349,7 +422,7 @@ public class PersonalServiceImpl implements PersonalService {
         //        выбираем даты месяца
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate firstDayOfMonthAgo = firstDayOfMonth.minusMonths(1).withDayOfMonth(1);
-        LocalDate firstDayOf3MonthAgo = firstDayOfMonth.minusMonths(3).withDayOfMonth(1);
+        LocalDate firstDayOf3MonthAgo = firstDayOfMonth.minusMonths(2).withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
         LocalDate lastDayOfMonthAgo = firstDayOfMonthAgo.withDayOfMonth(firstDayOfMonthAgo.lengthOfMonth());
         LocalDate lastDayOf3MonthAgo = firstDayOf3MonthAgo.withDayOfMonth(firstDayOf3MonthAgo.lengthOfMonth());
@@ -371,7 +444,6 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zpPay730Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf1YearAgo) || z.getCreated().isAfter(firstDayOf1YearAgo)) && (z.getCreated().isEqual(localDate.minusYears(1)) || z.getCreated().isBefore(localDate.minusYears(1)))).toList();
 
 
-
         //        ЗП Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
         BigDecimal sum1 = zpPay1Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         BigDecimal sum7 = zpPay7Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
@@ -387,6 +459,7 @@ public class PersonalServiceImpl implements PersonalService {
         BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
         BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
 
+
         Long imageId = user.getImage() != null ? user.getImage().getId() : 1L;
         UserStatDTO userStatDTO = new UserStatDTO();
         //  Общая информация
@@ -394,7 +467,9 @@ public class PersonalServiceImpl implements PersonalService {
         userStatDTO.setImageId(imageId);
         userStatDTO.setFio(user.getFio());
         userStatDTO.setCoefficient(user.getCoefficient());
+
         userStatDTO.setZpPayMap(getJSON(calculateDailyZpSumForMonth(localDate, zps)));
+        userStatDTO.setZpPayMapMonth(getJSONMonth(getYearlyMonthlyZpSumMap(zps)));
         //  Заработанные суммы за период
         userStatDTO.setSum1Day(sum1.intValue());
         userStatDTO.setSum1Week(sum7.intValue());
