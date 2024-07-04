@@ -59,4 +59,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("SELECT r FROM Review r WHERE r.filial = :filial")
     List<Review> findAllByFilial(@Param("filial") Filial filial);
+
+    @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
+    List<Review> findAllByFilials(Set<Filial> filials);
 }

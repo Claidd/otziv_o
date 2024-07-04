@@ -124,6 +124,8 @@ const myChart = new Chart(ctx, {
 
 });
 
+//  ========================== ГРАФИКИ ===========================
+
 document.addEventListener('DOMContentLoaded', function() {
     const canvas = document.getElementById('grafic_pay');
     const map = canvas.getAttribute('data-map');
@@ -270,39 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-
-
-
-//     document.addEventListener('DOMContentLoaded', function() {
-//     const monthlyCanvas = document.getElementById('grafic_pay_month');
-//     const monthlyMap = monthlyCanvas.getAttribute('data-map');
-//     const parsedMonthlyMap = JSON.parse(monthlyMap);
-    
-//     const ctxMonthly = monthlyCanvas.getContext('2d');
-//     const months = Object.keys(parsedMonthlyMap).map(key => key.toString());
-//     const monthlySums = Object.values(parsedMonthlyMap);
-
-//     new Chart(ctxMonthly, {
-//         type: 'line',
-//         data: {
-//             labels: months,
-//             datasets: [{
-//                 label: 'Общая сумма платежей по месяцам',
-//                 data: monthlySums,
-//                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
-//                 borderColor: 'rgba(75, 192, 192, 1)',
-//                 borderWidth: 1
-//             }]
-//         },
-//         options: {
-//             scales: {
-//                 y: {
-//                     beginAtZero: true
-//                 }
-//             }
-//         }
-//     });
-// });
+//  ========================== ГРАФИКИ КОНЕЦ ===========================
 
 
 

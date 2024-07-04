@@ -27,6 +27,10 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.r_review.model.ReviewArchive;
+import com.hunt.otziv.r_review.services.ReviewArchiveService;
+import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
@@ -63,6 +67,8 @@ public class CompanyServiceImpl implements CompanyService{
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
+    private final ReviewService reviewService;
+    private final ReviewArchiveService reviewArchiveService;
 
     @Transactional
     public void save(Company company){
@@ -691,11 +697,15 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId())){ /*Проверка категорию*/
             log.info("Обновляем категорию");
             saveCompany.setCategoryCompany(categoryService.getCategoryByIdCategory(companyDTO.getCategoryCompany().getId()));
+            Set<Filial> filials = saveCompany.getFilial();
+            reviewService.updateReviewByFilials(filials, companyDTO.getCategoryCompany().getId(), companyDTO.getSubCategory().getId());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId())){ /*Проверка субкатегорию*/
             log.info("Обновляем субкатегорию");
             saveCompany.setSubCategory(subCategoryService.getSubCategoryById(companyDTO.getSubCategory().getId()));
+            Set<Filial> filials = saveCompany.getFilial();
+            reviewService.updateReviewByFilials(filials, companyDTO.getCategoryCompany().getId(), companyDTO.getSubCategory().getId());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId())){ /*Проверка менеджера*/

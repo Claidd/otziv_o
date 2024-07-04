@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ReviewService {
@@ -37,4 +38,6 @@ public interface ReviewService {
     void deleteReviewsByOrderId(Long orderId);
 
     List<Review> findAllByFilial(Filial filial);
+
+    void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId);
 }

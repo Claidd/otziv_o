@@ -5,7 +5,7 @@ import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
 import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
-import com.hunt.otziv.l_lead.services.LeadService;
+//import com.hunt.otziv.u_users.config.DockerService;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -22,10 +22,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.io.IOException;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Controller
 @RequiredArgsConstructor
@@ -35,6 +35,8 @@ public class AdminController {
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
+//    private final DockerService dockerService;
+
 
 
     @GetMapping()
@@ -198,14 +200,16 @@ public class AdminController {
 
     @GetMapping("/analyse")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
-    public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(value = "date", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) {
+    public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(value = "date", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) throws IOException {
         LocalDate localDate = date.orElse(LocalDate.now());
         String userRole = getRole(principal);
         long startTime = System.nanoTime();
+
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
             model.put("stats", personalService.getStats(localDate, principal, userRole));
+//            dockerService.createMysqlBackup("mysql_container", "tmp/backup-otziv.sql");
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }

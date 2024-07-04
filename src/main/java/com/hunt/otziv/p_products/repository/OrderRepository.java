@@ -89,8 +89,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
 //    @Query("DELETE FROM Order o WHERE o.details = :orderId")
 //    void deleteOrderById(UUID orderId);
 
-    @Modifying
-    @Query("DELETE FROM Order o WHERE o.details IN :orderDetails")
-    void deleteOrderById(List<OrderDetails> orderDetails);
+//    @Modifying
+//    @Query("DELETE FROM Order o WHERE o.details IN :orderDetails")
+//    void deleteOrderById(List<OrderDetails> orderDetails);
 
 }

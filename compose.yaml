@@ -1,88 +1,480 @@
-version: '3'
+version: '3.8'
+#networks:
+#  network2:
 
 services:
+#  mysql:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.mysql
+#    container_name: mymysql
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#      - ./data/mysql/my.cnf:/etc/my.cnf:ro
+#      - ./data/mysql_backup:/backup
+#    restart: always
+#    ports:
+#      - '3306:3306'
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
   mysql:
     image: mysql:latest
-    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+#      - ./data/mysql/my.cnf:/etc/my.cnf:ro
+      - ./data/mysql_backup:/backup
+    restart: always
+    ports:
+      - '3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
-      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
-      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
-    restart: always
-    ports:
-      - '3306:3306'
-
+#    networks:
+#      - network2
 
   nginx:
     image: nginx:latest
     ports:
       - '80:80'
       - '443:443'
-      - '9000:9000'
-    restart:
-      always
+    restart: always
     volumes:
       - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./data/nginx/o-ogo.crt:/etc/ssl
-      - ./data/nginx/ca.crt:/etc/ssl
-      - ./data/nginx/o-ogo.key:/etc/ssl
+      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
       - ./data/nginx/www:/var/www
       - ./data/nginx/logs/nginx:/var/log/nginx
-      - ./data/certbot/conf:/etc/letsencrypt
-      - ./data/certbot/www:/var/www/certbot
-      # nginx должен общаться с php контейнером
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+      - ./data/proxy_cache:/var/lib/nginx/proxy_cache
+    #    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
     depends_on:
-      - app
-      - phpmyadmin
-    links:
-      - app
-      - phpmyadmin
-
+      - mysql
+#    networks:
+#      - network2
 
   app:
+#    image: claid38/otziv-app
     build:
       context: .
       dockerfile: Dockerfile
       args:
         BUILD_NO_CACHE: 1
+    restart: always
     ports:
       - "8080:8080"
+    depends_on:
+      - mysql
     environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    restart: always
-    depends_on:
-      - mysql
-
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_USERNAME: ${BOT_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      DATABASE_URL: ${DATABASE_URL}
+    env_file:
+      - .env
+#    networks:
+#      - network2
 
   phpmyadmin:
     image: phpmyadmin:latest
-    restart: always
+#    container_name: my-phpmyadmin
     ports:
-      - '9000:80'
-    depends_on:
-      - mysql
-    environment:
-      PMA_HOST: mysql
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      - "6571:80"
     volumes:
-      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
-      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
-      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+#    networks:
+#    - network2
 
 volumes:
   mysql_data:
+
+
+#  docker exec -i my-mysql mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
+#  docker exec -i d7a0df4ea753 mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
+
+        #  mysql:
+        #    image: mysql:latest
+        #    container_name: mymysql
+        #    volumes:
+        #      - mysql_data:/var/lib/mysql
+        #      - ./data/mysql/my.cnf:/etc/my.cnf:ro
+        #      - ./data/share:/share
+        #      - ./data/mysql_backup:/backup  # новая директория для бэкапов
+        #    restart: always
+        #    ports:
+        #      - '3306:3306'
+        #    environment:
+        #      MYSQL_ROOT_PASSWORD: Rkfql54532111
+        #      MYSQL_DATABASE: otziv
+        #      MYSQL_USER: hunt
+        #      MYSQL_PASSWORD: Rkfql54532111
+        #      command: >
+        #        bash -c "
+        #          (crontab -l 2>/dev/null;
+        #          echo '0 3 * * * mysqldump -uhunt -pRkfql54532111 otziv > /backup/backup-otziv-\$(date +\%Y\%m\%d).sql') | crontab -"
+        #      command: >
+        #        bash -c "
+        #          apk update &&
+        #          apk add mariadb-client &&
+        #          exec mysqld --innodb-flush-method=O_DIRECT"
+        #        # Устанавливаем права доступа к файлу my.cnf
+        # Устанавливаем права доступа к файлу my.cnf
+        #    command: ["--innodb-flush-method=O_DIRECT"]
+        #  mysqldump -uroot -pRkfql54532111 otziv > /share/backup-otziv.sql
+      #  mysqldump -uhunt -pRkfql54532111 otziv > /backup/backup-otziv.sql
+
+
+#      command: >
+#        /bin/sh -c "
+#        chmod 644 /etc/phpmyadmin/config.inc.php &&
+#        apache2-foreground"
+
+
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '9000:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: Rkfql54532111
+#      MYSQL_USER: hunt
+#      MYSQL_PASSWORD: Rkfql54532111
+#      file_mode: "0644"  # Установите права доступа по вашему выбору, например, 0644
+#    volumes:
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+
+
+
+
+
+#    - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+#    - MYSQL_DATABASE=${MYSQL_DATABASE}
+#    - MYSQL_USER=${MYSQL_USER}
+#    - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+#    - BOT_TOKEN=${BOT_TOKEN}
+#    - BOT_USERNAME=${BOT_USERNAME}
+#    - MAIL_PASSWORD=${MAIL_PASSWORD}
+#    - MAIL_USERNAME=${MAIL_USERNAME}
+#version: '3.9'
+#networks:
+#  network2:
+#
+#services:
+#  mysql:
+#    image: mysql:latest
+#    command: --default-authentication-plugin=mysql_native_password
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#      MYSQL_INNODB_LOG_FILE_SIZE: "100MB"
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#    restart: always
+#    networks:
+#      - network2
+#
+#  nginx:
+#    image: nginx:latest
+#    ports:
+#      - '80:80'
+#      - '443:443'
+#    restart: always
+#    volumes:
+#      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/nginx/www:/var/www
+#      - ./data/nginx/logs/nginx:/var/log/nginx
+#      - ./data/proxy_cache:/var/lib/nginx/proxy_cache
+#    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+#    depends_on:
+#      - app
+#      - mysql
+#    networks:
+#      - network2
+#
+#  app:
+#    image: claid38/otziv-app
+#    restart: always
+#    depends_on:
+#      - mysql
+#    environment:
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#      BOT_TOKEN: ${BOT_TOKEN}
+#      BOT_USERNAME: ${BOT_USERNAME}
+#      MAIL_PASSWORD: ${MAIL_PASSWORD}
+#      MAIL_USERNAME: ${MAIL_USERNAME}
+#    networks:
+#      - network2
+#
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '6571:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#    volumes:
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+#    networks:
+#      - network2
+#
+#volumes:
+#  mysql_data:
+
+
+
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '9000:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+
+#    network_mode: "host"
+
+#networks:
+#  mynetwork:
+#    driver: host
+
+
+
+
+
+#
+
+
+
+
+#networks:
+#  mynetwork:
+#    driver: bridge
+
+
+
+
+
+
+#version: '3'
+#
+#services:
+#  mysql:
+#    image: mysql:latest
+#    command: --default-authentication-plugin=mysql_native_password
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#      MYSQL_INNODB_LOG_FILE_SIZE: "100MB"
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#      - - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#    restart: always
+#    ports:
+#      - '3306:3306'
+#
+#  nginx:
+#    image: nginx:latest
+#    ports:
+#      - '80:80'
+#      - '443:443'
+#    restart:
+#      always
+#    volumes:
+#      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/nginx/www:/var/www
+#      - ./data/nginx/logs/nginx:/var/log/nginx
+#      - ./data/proxy_cache:/var/lib/nginx/proxy_cache
+#
+#      # nginx должен общаться с php контейнером
+#    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+#    links:
+#      - app
+#
+#  app:
+#    image: claid38/otziv-app
+#    ports:
+#      - "8080:8080"
+#    restart: always
+#    depends_on:
+#      - mysql
+#    environment:
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '9000:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#    volumes:
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+#
+#volumes:
+#  mysql_data:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#version: '3'
+#
+#services:
+#  mysql:
+#    image: mysql:latest
+#    command: --default-authentication-plugin=mysql_native_password
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#    restart: always
+#    ports:
+#      - '3306:3306'
+#
+#
+#  nginx:
+#    image: nginx:latest
+#    ports:
+#      - '80:80'
+#      - '443:443'
+#    restart:
+#      always
+#    volumes:
+#      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+#      - ./data/nginx/o-ogo.crt:/etc/ssl
+#      - ./data/nginx/ca.crt:/etc/ssl
+#      - ./data/nginx/o-ogo.key:/etc/ssl
+#      - ./data/nginx/www:/var/www
+#      - ./data/nginx/logs/nginx:/var/log/nginx
+##      - ./data/certbot/conf:/etc/letsencrypt
+##      - ./data/certbot/www:/var/www/certbot
+#      # nginx должен общаться с php контейнером
+#    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+#    depends_on:
+#      - app
+#      - phpmyadmin
+#    links:
+#      - app
+#      - phpmyadmin
+#
+#
+#  app:
+#    build:
+#      context: src
+#      dockerfile: Dockerfile
+#      args:
+#        BUILD_NO_CACHE: 1
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      MYSQL_DATABASE: ${MYSQL_DATABASE}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#    restart: always
+#    depends_on:
+#      - mysql
+#
+#
+#  phpmyadmin:
+#    image: phpmyadmin:latest
+#    restart: always
+#    ports:
+#      - '9000:80'
+#    depends_on:
+#      - mysql
+#    environment:
+#      PMA_HOST: mysql
+#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#      MYSQL_USER: ${MYSQL_USER}
+#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#    volumes:
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+#      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+#
+#volumes:
+#  mysql_data:
 
 
 #  certbot:

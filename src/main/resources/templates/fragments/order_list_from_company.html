@@ -5,11 +5,15 @@
                     <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
                     <div class="company__card__remember">
                         <div class="company__card__remember__box">
-                            <div class="company__card_remember-content2">
+                            <div class="company__card_remember-content">
+                                <textarea class="company__card__remember-text" th:utext="${promoTexts[10]}" id="myInput1"></textarea>
+                                <button class="company__card_remember-content__btn" onclick="myFunction1()">пояснение</button>
+                            </div>
+                            <div class="company__card_remember-content">
                                 <textarea class="company__card__remember-text" th:utext="${promoTexts[5]}" id="myInput1"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction1()">напоминание счет</button>
                             </div>
-                            <div class="company__card_remember-content2">
+                            <div class="company__card_remember-content">
                                 <textarea class="company__card__remember-text"th:utext="${promoTexts[6]}" id="myInput2"></textarea>
                                 <button class="company__card_remember-content__btn" onclick="myFunction2()">угроза</button>
                             </div>

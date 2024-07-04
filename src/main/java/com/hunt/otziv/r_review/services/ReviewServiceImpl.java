@@ -27,6 +27,8 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.model.ReviewArchive;
+import com.hunt.otziv.r_review.repository.ReviewArchiveRepository;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -53,6 +55,7 @@ import java.util.stream.Collectors;
 public class ReviewServiceImpl implements ReviewService{
 
     private final ReviewRepository reviewRepository;
+    private final ReviewArchiveRepository reviewArchiveRepository;
     private final BotService botService;
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
@@ -228,6 +231,26 @@ public class ReviewServiceImpl implements ReviewService{
     @Override
     public List<Review> findAllByFilial(Filial filial) {
         return reviewRepository.findAllByFilial(filial);
+    }
+
+    @Override
+    public void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId) {
+        List<Review> reviews = reviewRepository.findAllByFilials(filials);
+        Iterable<ReviewArchive> reviewArchives = reviewArchiveRepository.findAll();
+        for (Review review : reviews) {
+            review.setCategory(categoryService.getCategoryByIdCategory(categoryId));
+            review.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
+            reviewRepository.save(review);
+        }
+        for (ReviewArchive reviewArchive : reviewArchives) {
+            for (Review review : reviews) {
+                if (review.getText().equals(reviewArchive.getText()) && !reviewArchive.getText().equals("Текст отзыва")){
+                    reviewArchive.setCategory(categoryService.getCategoryByIdCategory(categoryId));
+                    reviewArchive.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
+                    reviewArchiveRepository.save(reviewArchive);
+                }
+            }
+        }
     }
 
 //    =====================================================================================================

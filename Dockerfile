@@ -13,19 +13,22 @@
 
 
 # Многоэтапная сборка
+
 # Этап 1: Сборка приложения с помощью Maven
-FROM maven:3.8.5-openjdk-18 AS build
+FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
+#RUN apt-get update && apt-get install -y maven
 RUN mvn clean package -DskipTests
+# ENTRYPOINT команда, указывающая, какой shell использовать
+ENTRYPOINT ["/bin/sh", "-c", "java -jar your-application.jar"]
 
 # Этап 2: Создание контейнера для выполнения приложения
-FROM openjdk:19-jdk-alpine
+FROM maven:3.9.8-eclipse-temurin-22-alpine
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
 EXPOSE 8080
-
 # Установите метку BUILD_NO_CACHE
 LABEL BUILD_NO_CACHE="1"
 
@@ -34,7 +37,47 @@ CMD ["java", "-jar", "app.jar"]
 
 
 
+
+
+#FROM mysql:latest
+#
+## Установка необходимых пакетов
+#RUN apt-get update && apt-get install -y \
+#    mariadb-client \
+#    && rm -rf /var/lib/apt/lists/*
+
+# Любые другие настройки или команды, если нужно
+
+
+# Установка Maven
+#RUN apt-get update && apt-get install -y maven
+
+
+
+#maven:3.9.8-eclipse-temurin-22-jammy
+
+
 #FROM ubuntu:latest
 #LABEL authors="Hunt"
 #
 #ENTRYPOINT ["top", "-b"]
+
+
+#Как изменить dockerfile на java 22? # Многоэтапная сборка
+## Этап 1: Сборка приложения с помощью Maven
+#FROM maven:3.8.5-openjdk-18 AS build
+#WORKDIR /app
+#COPY pom.xml .
+#COPY src ./src
+#RUN mvn clean package -DskipTests
+#
+## Этап 2: Создание контейнера для выполнения приложения
+#FROM openjdk:19-jdk-alpine
+#WORKDIR /app
+#COPY --from=build /app/target/otziv-1.jar /app/app.jar
+#EXPOSE 8080
+#
+## Установите метку BUILD_NO_CACHE
+#LABEL BUILD_NO_CACHE="1"
+#
+#CMD ["java", "-jar", "app.jar"]
