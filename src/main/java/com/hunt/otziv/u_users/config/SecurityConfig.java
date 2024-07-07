@@ -50,6 +50,8 @@ public class SecurityConfig {
                                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
                                         .requestMatchers("/").permitAll()
                                         .requestMatchers("/phpmyadmin").permitAll()
+                                        .requestMatchers("/send-message").permitAll()
+                                        .requestMatchers("/sendEmail").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
