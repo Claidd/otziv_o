@@ -1,72 +1,55 @@
 version: '3.8'
-#networks:
-#  network2:
+networks:
+  network2:
 
 services:
-#  mysql:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.mysql
-#    container_name: mymysql
-#    volumes:
-#      - mysql_data:/var/lib/mysql
-#      - ./data/mysql/my.cnf:/etc/my.cnf:ro
-#      - ./data/mysql_backup:/backup
-#    restart: always
-#    ports:
-#      - '3306:3306'
-#    environment:
-#      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-#      MYSQL_DATABASE: ${MYSQL_DATABASE}
-#      MYSQL_USER: ${MYSQL_USER}
-#      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
   mysql:
     image: mysql:latest
     volumes:
       - mysql_data:/var/lib/mysql
-#      - ./data/mysql/my.cnf:/etc/my.cnf:ro
       - ./data/mysql_backup:/backup
     restart: always
-    ports:
-      - '3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-#    networks:
-#      - network2
+    networks:
+      - network2
 
   nginx:
-    image: nginx:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     ports:
       - '80:80'
       - '443:443'
     restart: always
     volumes:
+      - ./data/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
-      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
-      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
       - ./data/nginx/www:/var/www
       - ./data/nginx/logs/nginx:/var/log/nginx
-      - ./data/proxy_cache:/var/lib/nginx/proxy_cache
-    #    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+#      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
     depends_on:
       - mysql
-#    networks:
-#      - network2
+      - phpmyadmin
+      - app
+    networks:
+      - network2
 
   app:
-#    image: claid38/otziv-app
     build:
       context: .
       dockerfile: Dockerfile
       args:
         BUILD_NO_CACHE: 1
     restart: always
-    ports:
-      - "8080:8080"
+#    ports:
+#      - '8080:8080'
     depends_on:
       - mysql
     environment:
@@ -81,25 +64,55 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     env_file:
       - .env
-#    networks:
-#      - network2
+    networks:
+      - network2
 
   phpmyadmin:
     image: phpmyadmin:latest
-#    container_name: my-phpmyadmin
-    ports:
-      - "6571:80"
+    environment:
+      PMA_PORT: 90
     volumes:
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
-#    networks:
-#    - network2
+      - ./data/phpmyadmin/apache2.conf:/etc/apache2/conf-available/servername.conf
+    networks:
+      - network2
 
 volumes:
   mysql_data:
 
 
-#  docker exec -i my-mysql mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
+
+  #  docker exec -i my-mysql mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
 #  docker exec -i d7a0df4ea753 mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
+
+
+
+  #  mysql:
+  #    build:
+  #      context: .
+  #      dockerfile: Dockerfile.mysql
+  #    container_name: mymysql
+  #    volumes:
+  #      - mysql_data:/var/lib/mysql
+  #      - ./data/mysql/my.cnf:/etc/my.cnf:ro
+  #      - ./data/mysql_backup:/backup
+  #    restart: always
+  #    ports:
+  #      - '3306:3306'
+  #    environment:
+  #      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  #      MYSQL_DATABASE: ${MYSQL_DATABASE}
+  #      MYSQL_USER: ${MYSQL_USER}
+  #      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+
+
+
+
+
+
+
+
 
         #  mysql:
         #    image: mysql:latest

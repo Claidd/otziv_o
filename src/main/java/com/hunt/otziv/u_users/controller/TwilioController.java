@@ -1,7 +1,7 @@
 package com.hunt.otziv.u_users.controller;
 
 
-import com.hunt.otziv.u_users.config.ExampleTwilio;
+import com.hunt.otziv.config.twilio.ExampleTwilio;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 

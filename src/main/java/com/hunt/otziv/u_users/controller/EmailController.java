@@ -1,6 +1,6 @@
 package com.hunt.otziv.u_users.controller;
 
-import com.hunt.otziv.u_users.config.EmailService;
+import com.hunt.otziv.config.email.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;

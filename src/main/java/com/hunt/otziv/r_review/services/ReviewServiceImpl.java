@@ -13,17 +13,13 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.dto.OrderDTO;
-import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
@@ -390,45 +386,23 @@ public class ReviewServiceImpl implements ReviewService{
         else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
+
+//    =================================== ЗАМЕНА И БЛОИРОКА БОТОВ ДЛЯ ЗАКАЗА ===========================================
+
     } // Проверка обновлений отзыва
     @Override
-    public void changeBot(Long id) { // Замена бота
-        Review review = reviewRepository.findById(id).orElse(null);
-        assert review != null;
-        List<Bot> bots = findAllBotsMinusFilial(review);
-        log.info("2. Достали отзыв по id" + id);
-
-        var random = new SecureRandom();
-        review.setBot(bots.get(random.nextInt(bots.size())));
+    public void changeBot(Long botId) { // Замена бота
         log.info("3. Установили нового рандомного бота");
-        reviewRepository.save(review);
+        reviewRepository.save(getReviewToChangeBot(botId));
         log.info("4. Сохранили нового бота в отзыве в БД");
     } // Замена бота
 
-    private List<Bot> findAllBotsMinusFilial(Review review){
-        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
-        List<Review> reviewListFilial = reviewRepository.findAllByFilial(review.getFilial());
-        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        bots.removeAll(botsCompany);
-        return bots;
-    }
-
     @Override
-    public void deActivateAndChangeBot(Long reviewId, Long botId) { // Деактивация бота
+    public void deActivateAndChangeBot(Long reviewId, Long botId) { // метод деактивации бота
         try {
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        assert review != null;
-        List<Bot> bots = findAllBotsMinusFilial(review);
-        log.info("2. Достали отзыв по id" + reviewId);
-
-            Bot bot = botService.findBotById(botId);
-            bot.setActive(false);
-            botService.save(bot);
-            log.info("3. Дективировали бота {}", botId);
-            var random = new SecureRandom();
-            review.setBot(bots.get(random.nextInt(bots.size())));
+            botActiveToFalse(botId);
             log.info("4. Установили нового рандомного бота");
-            reviewRepository.save(review);
+            reviewRepository.save(getReviewToChangeBot(reviewId));
             log.info("5. Сохранили нового бота в отзыве в БД");
         }
         catch (Exception e){
@@ -436,6 +410,41 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("Что-то пошло не так и бот не деактивирован");
         }
     } // Деактивация бота
+
+    private Review getReviewToChangeBot(Long reviewId) { // Установка нового бота в отзыв
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        assert review != null;
+        log.info("2. Достали отзыв по id{}", reviewId);
+        List<Bot> bots = findAllBotsMinusFilial(review);
+        log.info("3. Достали ботов минус филиал");
+        var random = new SecureRandom();
+        review.setBot(bots.get(random.nextInt(bots.size())));
+        return review;
+    } // Установка нового бота в отзыв
+
+    private void botActiveToFalse(Long botId){ // Изменение статуса бота как НЕ активный
+        try {
+            Bot bot = botService.findBotById(botId);
+            bot.setActive(false);
+            botService.save(bot);
+            log.info("3. Дективировали бота {}", botId);
+        }
+        catch (Exception e){
+            System.out.println(e);
+            log.info("Что-то пошло не так и деактивация бота не случилась");
+        }
+    } // Изменение статуса бота как НЕ активный
+
+    private List<Bot> findAllBotsMinusFilial(Review review){ // Найти всех ботов за исключением тех, что уже есть у филиала
+        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
+        List<Review> reviewListFilial = reviewRepository.findAllByFilial(review.getFilial());
+        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+        bots.removeAll(botsCompany);
+        return bots;
+    } // Найти всех ботов за исключением тех, что уже есть у филиала
+
+//    ================================ ЗАМЕНА И БЛОИРОКА БОТОВ ДЛЯ ЗАКАЗА КОНЕЦ ========================================
+
 
 
     public ReviewDTOOne toReviewDTOOne(Review review){ // Взять дто отзыв по Id
