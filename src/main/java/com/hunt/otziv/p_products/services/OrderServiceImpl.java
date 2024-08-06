@@ -314,6 +314,11 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     protected Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // Создание нового отзыва
         List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId());
+        Bot selectedBot = null;
+        if (!bots.isEmpty()) {
+            var random = new SecureRandom();
+            selectedBot = bots.get(random.nextInt(bots.size()));
+        }
         var random = new SecureRandom();
         return Review.builder()
                 .category(company.getCategoryCompany())
@@ -321,7 +326,7 @@ public class OrderServiceImpl implements OrderService {
                 .text("Текст отзыва")
                 .answer(" ")
                 .orderDetails(orderDetails)
-                .bot(bots.get(random.nextInt(bots.size())))
+                .bot(selectedBot)
                 .filial(order.getFilial())
                 .publish(false)
                 .worker(order.getWorker())
@@ -756,7 +761,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 orderRepository.save(order);
             }
             if (title.equals(STATUS_ARCHIVE)){
-                saveReviewsToArchive(order.getDetails().get(0).getReviews());
+                saveReviewsToArchive(order.getDetails().getFirst().getReviews());
                 order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                 order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
                 orderRepository.save(order);

@@ -76,7 +76,6 @@ public class SecurityConfig {
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                                         .requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER","MANAGER")
 //                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
-
                 )
                 //    настройка логирования
                 .formLogin((formLogin) ->

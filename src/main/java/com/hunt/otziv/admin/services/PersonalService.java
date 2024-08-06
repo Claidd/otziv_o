@@ -54,4 +54,12 @@ public interface PersonalService {
     List<WorkersListDTO>  getWorkersToAndCountToOwner(List<Worker> allWorkers);
 
     StatDTO getStats(LocalDate date, Principal principal, String userRole);
+
+    Object getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate date);
+
+    Object getMarketologsAndCountToDateToOwner(List<Marketolog> allMarketologs, LocalDate date);
+
+    Object gerWorkersToAndCountToDateToOwner(List<Worker> allWorkers, LocalDate date);
+
+    Object gerOperatorsAndCountToDateToOwner(List<Operator> allOperators, LocalDate date);
 }

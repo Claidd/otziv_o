@@ -3007,10 +3007,22 @@ main .recent-orders a{
             grid-template-columns: repeat(3, 1fr);
             margin-bottom: 20px;
         }
+
+        .orderdetails__tabs__content-item {
+            grid-template-columns: repeat(10, minmax(280px, 1fr));
+        }
+
+
     }
+
 
         /* ==================== 430 =================== */
     @media (max-width: 431px) {
+
+        .company__tabs__btn__worker{
+            padding: 0 0px 0px;
+            grid-template-columns: repeat(3, 1fr);
+        }
 
         .reviews__details {
             grid-template-columns: repeat(10, minmax(390px, 1fr));
@@ -3022,7 +3034,7 @@ main .recent-orders a{
 
     
             .orderdetails__tabs__content-item {
-                grid-template-columns: repeat(10, minmax(400px, 1fr));
+                grid-template-columns: repeat(10, minmax(250px, 1fr));
             }
     
             .orderdetails__tabs__content-item2 {
@@ -3057,7 +3069,7 @@ main .recent-orders a{
 
 
         .orderdetails__tabs__content-item {
-            grid-template-columns: repeat(10, minmax(380px, 1fr));
+            grid-template-columns: repeat(10, minmax(250px, 1fr));
         }
 
         .orderdetails__tabs__content-item2 {
@@ -3079,7 +3091,7 @@ main .recent-orders a{
 
 
         .orderdetails__tabs__content-item {
-            grid-template-columns: repeat(10, minmax(360px, 1fr));
+            grid-template-columns: repeat(10, minmax(200px, 1fr));
         }
 
         .orderdetails__tabs__content-item2 {

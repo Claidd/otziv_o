@@ -12,7 +12,7 @@
                 <option value="content-12" th:href="@{'/companies/waiting'}">Ожидание</option>
                 <option value="content-14" th:href="@{'/companies/on_stop'}">На стопе</option>
                 <option value="content-16" th:href="@{'/companies/ban_company'}">Бан</option> -->
-                <option value="lead" th:href="@{'/companies/company'}" selected>Лиды</option>
+                <option value="lead" th:href="@{'/lead'}" selected>Лиды</option>
                 <!-- <option value="content-16" th:href="@{'/orders/new_orders'}">Заказы</option> -->
             </select>
 
@@ -48,7 +48,8 @@
 
           <select class="company__tabs__dropdown" name="company_status4" onchange="redirect(this)">
             <option value="companies/company" th:href="@{'/companies/company'}">Прочее</option>
-            <option value="categories" th:href="@{'/categories'}">Категории</option>          
+            <option value="categories" th:href="@{'/categories'}">Категории</option>
+            <option sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MANAGER')"  value="worker/new_orders" th:href="@{/worker/new_orders}">Специалисты</option>            
         </select>
 
           

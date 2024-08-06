@@ -120,6 +120,7 @@ public class ReviewServiceImpl implements ReviewService{
             return reviewRepository.save(review);
         }
         if (review.getText().equals("Текст отзыва")){
+            System.out.println(review.getText());
             log.info("1. Отзыв в БД отзывы сохранен как шаблон");
             return reviewRepository.save(review);
         }

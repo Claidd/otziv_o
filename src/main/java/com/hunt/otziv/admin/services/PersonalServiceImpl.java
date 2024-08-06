@@ -727,6 +727,19 @@ public class PersonalServiceImpl implements PersonalService {
         return operatorService.getAllOperators().stream().map(operator -> toOperatorsListDTOAndCountToDate(operator, localdate)).collect(Collectors.toList());
     }
 
+    public List<ManagersListDTO> getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate localdate){
+        return managerList.stream().map(manager -> toManagersListDTOAndCountToDate(manager, localdate)).collect(Collectors.toList());
+    }
+    public List<MarketologsListDTO> getMarketologsAndCountToDateToOwner(List<Marketolog> marketologList, LocalDate localdate){
+        return marketologList.stream().map(marketolog -> toMarketologsListDTOAndCountToDate(marketolog, localdate)).collect(Collectors.toList());
+    }
+    public List<WorkersListDTO> gerWorkersToAndCountToDateToOwner(List<Worker> workerList, LocalDate localdate){
+        return workerList.stream().map(worker -> toWorkersListDTOAndCountToDate(worker, localdate)).collect(Collectors.toList());
+    }
+    public List<OperatorsListDTO> gerOperatorsAndCountToDateToOwner(List<Operator> operatorList, LocalDate localdate){
+        return operatorList.stream().map(operator -> toOperatorsListDTOAndCountToDate(operator, localdate)).collect(Collectors.toList());
+    }
+
     private ManagersListDTO toManagersListDTOAndCountToDate(Manager manager, LocalDate localDate){
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
@@ -820,6 +833,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .percentInWork(percentInWork)
                 .build();
     }
+
 
     //    ========================================== PERSONAL LIST FINISH ==================================================
     private String getRole(Principal principal){

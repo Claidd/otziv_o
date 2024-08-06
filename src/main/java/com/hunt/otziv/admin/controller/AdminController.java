@@ -35,7 +35,6 @@ public class AdminController {
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
-//    private final DockerService dockerService;
 
 
 
@@ -108,7 +107,57 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologsAndCountToOwner(allMarketologs));
             model.put("workers", personalService.getWorkersToAndCountToOwner(allWorkers));
             model.put("operators", personalService.getOperatorsAndCountToOwner(allOperators));
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime);
+            return new ModelAndView("admin/layouts/personal", model);
+        }
+        else return new ModelAndView("admin/layouts/personal", model);
+    }
+
+    @PostMapping("/personal")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER')")
+    public ModelAndView personalPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        long startTime = System.nanoTime();
+        String userRole = getRole(principal);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            model.put("route", "personal");
+            model.put("user", personalService.getUserLK(principal));
+            model.put("managers", personalService.getManagers());
+            model.put("marketologs", personalService.getMarketologs());
+            model.put("workers", personalService.gerWorkers());
+            model.put("operators", personalService.gerOperators());
             checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
+            return new ModelAndView("admin/layouts/personal", model);
+        }
+
+        if ("ROLE_MANAGER".equals(userRole)) {
+            model.put("route", "personal");
+            model.put("user", personalService.getUserLK(principal));
+            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
+//            model.put("managers", personalService.getManagersToManager(manager));
+            model.put("marketologs", personalService.getMarketologsToManager(manager));
+            model.put("workers", personalService.gerWorkersToManager(manager));
+            model.put("operators", personalService.gerOperatorsToManager(manager));
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime);
+            return new ModelAndView("admin/layouts/personal", model);
+        }
+
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+            List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
+            // Получение списка всех маркетологов
+            List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();
+            // Получение списка всех операторов
+            List<Operator> allOperators = managerList2.stream().flatMap(manager -> manager.getUser().getOperators().stream()).toList();
+            // Получение списка всех работников
+            List<Worker> allWorkers = managerList2.stream().flatMap(manager -> manager.getUser().getWorkers().stream()).toList();// Вывод списков
+
+            model.put("route", "personal");
+            model.put("user", personalService.getUserLK(principal));
+            model.put("managers", personalService.getManagersAndCountToDateToOwner(managerList, date));
+            model.put("marketologs", personalService.getMarketologsAndCountToDateToOwner(allMarketologs, date));
+            model.put("workers", personalService.gerWorkersToAndCountToDateToOwner(allWorkers, date));
+            model.put("operators", personalService.gerOperatorsAndCountToDateToOwner(allOperators, date));
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime);
             return new ModelAndView("admin/layouts/personal", model);
         }
         else return new ModelAndView("admin/layouts/personal", model);

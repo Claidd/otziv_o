@@ -5,8 +5,8 @@ $user = 'root';
 $pass = 'Rkfql54532111';
 $backup_dir = '/docker/backup'; // замените на фактический путь к директории для бэкапов
 $email_to = '2.12nps@mail.ru';
-$email_subject = 'Daily Database Backup';
-$email_body = 'Please find the attached database backup.';
+$email_subject = 'Ежеденевная копия БД';
+$email_body = 'Бэкап БД';
 $email_from = 'O-Company@o-ogo.ru';
 
 // Create backup file
