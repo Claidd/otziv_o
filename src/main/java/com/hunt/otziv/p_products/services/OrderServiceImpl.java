@@ -388,7 +388,7 @@ public class OrderServiceImpl implements OrderService {
             Order saveOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
 
-            OrderDetails orderDetails = saveOrder.getDetails().get(0);
+            OrderDetails orderDetails = saveOrder.getDetails().getFirst();
             Company saveCompany = saveOrder.getCompany();
             log.info("1. Найден заказ и его детали");
 
@@ -571,6 +571,15 @@ public class OrderServiceImpl implements OrderService {
             log.info("Обновляем филиал заказа");
             System.out.println(saveOrder.getFilial());
             saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
+            log.info("Сменили филиал заказа");
+            Filial filial = filialService.getFilial(orderDTO.getFilial().getId());
+            List<Review> reviews = saveOrder.getDetails().getFirst().getReviews();
+            for (Review review : reviews)   {
+                review.setFilial(filial);
+                reviewService.save(review);
+                log.info("Сменили филиал у отзыва в заказе");
+            }
+
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/

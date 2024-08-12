@@ -53,11 +53,11 @@
         <section class="company__lead__cardsmoll">
             <div class="container">
                 <span th:if="${statusCheck == null}">
-                    <h2  class="company__section-title2" >Не одобрено</h2>
+                    <h2  class="company__section-title2" >Не одобрено. </h2>
                     <p class="company__label" >(для просмотреа всех отзывов с телефона сделайте СВАЙП СПРАВА НАЛЕВО. Не забудьте нажать "разрешить публикацию")</p>
                 </span>
                 <span th:if="${statusCheck != null}">
-                    <h2 class="company__section-title2" >Одобрено</h2>
+                    <h2 class="company__section-title2" >Одобрено. </h2>
                 </span>
 
                 <!-- Отображение сообщения об ошибке, если список пуст -->
@@ -140,6 +140,7 @@
     </section> <!-- section -->
 
 
+
         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
         <div th:if="${not #lists.isEmpty(orderDetailDTO.reviews)}">
         <section class="company__lead__cardsmoll">
@@ -213,7 +214,7 @@
                                 </div> 
                             
                             <!-- СПИСОК КАРТОЧЕК 1 -->
-                                <div  class="company__card__content__button2">
+                                <div sec:authorize="!hasRole('WORKER')" class="company__card__content__button2">
                                     <div class="company__card__content__button__btn">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <p class="company__label" >Нажмите, если вы согласны на публикацию отзывов в соответствии с обговоренным ранее графиком. В случае существенных ошибок, заполните форму комментария ниже, указав, какие коррективы внести, и нажмите кнопку отправить отзывы на "Коррекцию".</p>
@@ -306,8 +307,44 @@
 
         </div>
 
+                    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                    <!-- <section class="company__lead__card">
+                        <div class="container">
+                            <div class="company__tabs__lead">
+                                    <div class="btn__cell">
+                                        <form th:method="get" th:action="'/review/editReviews/'" class="company__card__content__button3">
+                                            <div class="company__card__content__button__btn">
+                                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                                <p class="company__label">Сохранить изменения, но пока, что не публиковать</p>
+                                                <button id="btn_editAll" type="submit" class="review__btn__review-editAll" th:text="'ИЗМЕНИТЬ ВСЕ ОТЗЫВЫ'">Изменить все отзывы</button>
+                                            </div>
+                                        </form>
+                                        <form th:method="post" th:action="'/review/addReviews/'" class="company__card__content__button3">
+                                            <div class="company__card__content__button__btn">
+                                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                                <p class="company__label">Сохранить изменения, но пока, что не публиковать</p>
+                                                <button id="btn_add_review" type="submit" class="review__btn__review-add" th:text="'ДОБАВИТЬ НОВЫЙ ОТЗЫВ'">Добавить новый отзыв</button>
+                                            </div>
+                                        </form>
+                                        <form th:method="post" th:action="'/ordersCompany/status_for_checking/'" class="company__card__content__button3">
+                                            <div class="company__card__content__button__btn">
+                                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                                                <p class="company__label">Сохранить изменения, но пока, что не публиковать</p>
+                                                <button id="btn_go_to_check" type="submit" class="review__btn__review-check" th:text="'ОТПРАВИТЬ НА ПРОВЕРКУ'">Отправить на проверку</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                
+                            </div>
+                        </div> -->
+                        <!-- container -->
+                    <!-- </section>  -->
+                    <!-- section -->
 
 
+        <span >
+            <h2 class="company__section-title2" th:text="${orderDetailDTO.workerFio}">ФИО Специалиста</h2>
+        </span>
 
         <!-- ===================== MAIN END ======================== -->
 

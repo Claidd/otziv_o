@@ -81,7 +81,7 @@ public class CompanyServiceImpl implements CompanyService{
     // Создание нового пользователя "Клиент" - начало
     @Transactional
     public boolean save(CompanyDTO companyDTO){ // Сохранение новой компании из дто
-        log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
+        log.info("1. Заходим в создание новой компаниии");
         //        в начале сохранения устанавливаем поля из дто
         Company company = Company.builder()
                 .title(companyDTO.getTitle())
@@ -103,6 +103,8 @@ public class CompanyServiceImpl implements CompanyService{
                 .sumTotal(new BigDecimal(0))
                 .build();
 
+        log.info("2. Собрали компания из ДТО");
+
         //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
         Set<Filial> existingFilials = company.getFilial(); // пытаемся получить текущий список филиалов из компании
         if (existingFilials == null) {
@@ -111,18 +113,19 @@ public class CompanyServiceImpl implements CompanyService{
         Set<Filial> newFilials = convertFilialDTOToFilial(companyDTO.getFilial()); // берем список из дто
         existingFilials.addAll(newFilials); // объединяем эти списки
         company.setFilial(existingFilials); // устанавливаем компании объединенный список
+        log.info("2. Добавили список филиалов");
         //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-        log.info("4. Компания успешно создана");
+        log.info("3. Компания успешно создана");
         try {
             Company company1 = companyRepository.save(company); // сохраняем новую компанию в БД
-            log.info("5. Компания успешно сохранена");
+            log.info("3. Компания успешно сохранена");
             for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
                 filial.setCompany(company1); // Установка компании в филиале
                 filialService.save(filial); // Сохранение обновленного филиала
             }
             return true;
         } catch (Exception e) {
-            log.error("Ошибка при сохранении компании: " + e.getMessage());
+            log.error("ОШИБКА при сохранении компании: " + e.getMessage());
             return false;
         }
     } // Создание нового пользователя "Клиент" - конец

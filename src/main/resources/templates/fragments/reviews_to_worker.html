@@ -109,11 +109,18 @@
                                 <button type="submit"  class="company__card__text__lead-button ">блок</button>
                             </form>
                         </div> <!-- card__content_button -->
+
+                        <div>
+                            <div class="company__card__content__phone">
+                                <button type="submit" class="company__card__text__lead-fioWorker" th:text="${review.workerFio}">ФИО Работника</button>
+                            </div>
+                    </div> 
+
                         <div>
                             <form  th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/published_to_worker/' + ${review.id}}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <div class="company__card__content__phone">
-                                    <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">в архив</button>
+                                    <button type="submit" class="company__card__text__lead-button" th:text="ОПУБЛИКОВАНО">Опубликовано</button>
                                 </div>
                             </form>
                         </div>
