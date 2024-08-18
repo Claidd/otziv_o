@@ -454,6 +454,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+
     private Order saveOrder(OrderDTO orderDTO, Long productId) {
         Order order = toEntityOrderFromDTO(orderDTO, productId);
         return orderRepository.save(order);
@@ -713,7 +714,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
             Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
             if (title.equals(STATUS_PAYMENT)){
                 log.info("1. Вошли в смену статуса в оплачено");
-                log.info("orderIsComplete: {}", !order.isComplete());
+                log.info("orderIsComplete: {}", order.isComplete());
                 log.info("order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
 
                 if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
@@ -739,7 +740,11 @@ public boolean deleteOrder(Long orderId, Principal principal){
                             companyService.save(checkStatusToCompany(company));
                             log.info("7. Компания сохранена, статус сменен на Готов к Новому заказу");
 //                             Создание нового заказа с отзывами
-                            if (!createNewOrderWithReviews(company.getId(), order.getDetails().get(0).getProduct().getId(), convertToOrderDTOToRepeat(order))) {
+                            if (createNewOrderWithReviews(company.getId(), order.getDetails().getFirst().getProduct().getId(), convertToOrderDTOToRepeat(order))) {
+                                log.info("8. Новый заказ создался автоматически - Успешно");
+                                log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
+                            }
+                            else {
                                 log.info("8. Новый заказ создался автоматически - НЕ Успешно");
                                 throw new Exception("8. Новый заказ создался автоматически - НЕ успешно");
                             }

@@ -45,4 +45,5 @@ public interface OrderService {
     Company checkStatusToCompany(Company company);
 
     OrderDTO convertToOrderDTOToRepeat(Order order);
+
 }

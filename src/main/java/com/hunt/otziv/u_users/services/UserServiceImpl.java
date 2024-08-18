@@ -196,6 +196,7 @@ public class UserServiceImpl  implements UserService {
         System.out.println("change managers: " + !Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
         System.out.println("change workers: " + !Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
         System.out.println("change marketologs: " + !Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
+        System.out.println("name: " + !Objects.equals(userDTO.getUsername(), saveUser.getUsername()));
         System.out.println("coefficient: " + !Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient()));
         System.out.println("image: " + (!imageFile.isEmpty()));
 
@@ -255,17 +256,23 @@ public class UserServiceImpl  implements UserService {
                 log.info("Создали нового маркетолога");
             }
         }
-
+        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getEmail(), saveUser.getEmail())){
             saveUser.setEmail(userDTO.getEmail());
             isChanged = true;
             log.info("Обновили мейл");
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
+        /*Проверяем не равен ли телефон предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getPhoneNumber(), saveUser.getPhoneNumber())){
             saveUser.setPhoneNumber(userDTO.getPhoneNumber());
             isChanged = true;
             log.info("Обновили телефон");
+        }
+        /*Проверяем не равен ли имя предыдущему, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(userDTO.getUsername(), saveUser.getUsername())){
+            saveUser.setUsername(userDTO.getUsername());
+            isChanged = true;
+            log.info("Обновили Имя");
         }
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.isActive(), saveUser.isActive())){
@@ -286,7 +293,7 @@ public class UserServiceImpl  implements UserService {
         }
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
         if (!Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient())){
-            if (userDTO.getCoefficient().compareTo(new BigDecimal("0.30")) < 0){
+            if (userDTO.getCoefficient().compareTo(new BigDecimal("0.30")) <= 0){
                 saveUser.setCoefficient(userDTO.getCoefficient());
                 System.out.println(userDTO.getCoefficient());
                 isChanged = true;

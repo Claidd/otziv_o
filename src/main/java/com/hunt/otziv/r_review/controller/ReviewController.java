@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.controller;
 
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -82,7 +83,7 @@ public class ReviewController {
 
     //    =========================================== REVIEW'S EDIT =======================================================
     @GetMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Get
-    String ReviewsEdit(@PathVariable UUID orderDetailId, Model model){
+    String ReviewsEdit(@PathVariable UUID orderDetailId, Model model, @RequestParam(defaultValue = "") String keyword, @RequestParam(defaultValue = "Все") String status){
         long startTime = System.nanoTime();
         OrderDetailsDTO orderDetailsDTO = orderDetailsService.getOrderDetailDTOById(orderDetailId);
         if (orderDetailsDTO.getReviews().isEmpty()) {
@@ -95,7 +96,8 @@ public class ReviewController {
         } else {
             model.addAttribute("orderDetailDTO", orderDetailsDTO);
             model.addAttribute("orderDetailId", orderDetailId);
-            model.addAttribute("statusCheck", orderDetailsDTO.getReviews().get(0).getPublishedDate());
+            model.addAttribute("statusCheck", orderDetailsDTO.getReviews().getFirst().getPublishedDate());
+            model.addAttribute("companyKeyword", orderDetailsDTO.getOrder().getCompany().getTitle());
 //        model.addAttribute("address", orderDetailsDTO.getOrder().getFilial().getTitle());
             checkTimeMethod("Время выполнения страницы проверки отзыов для клиента /review/editReviews/{orderDetailId} для всех: ", startTime);
             return "products/reviews_edit";
@@ -110,6 +112,22 @@ public class ReviewController {
             reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
         }
         log.info("5. Обновление Отзыва прошло успешно");
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/review/editReviews/{orderDetailId}";
+    } // Страница редактирования Заказа - Post - СОХРАНИТЬ
+
+    @PostMapping("/editReviews/{orderDetailId}/payOk") // Страница редактирования Заказа - Post - СОХРАНИТЬ
+    String OrderPayOkPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, @PathVariable String orderDetailId){
+        log.info("1. Начинаем менять статус заказа на ОПлачено");
+        Order order = orderDetailsService.getOrderDetailById(UUID.fromString(orderDetailId)).getOrder();
+        if (order.getAmount() <= order.getCounter()){
+            orderService.changeStatusForOrder(order.getId(), "Оплачено");
+            log.info("статус заказа успешно изменен на Оплачено");
+        }
+        else {
+            log.info("ошибка при изменении статуса заказа на Выставлен счет");
+        }
+        log.info("5. Отметка об оплате заказа и смена статуса прошли успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReviews/{orderDetailId}";
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
