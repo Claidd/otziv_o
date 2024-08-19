@@ -1,35 +1,35 @@
-#server:
-#  port: 8080
-#  servlet:
-#    session:
-#      timeout: 28800
-#spring:
-#  servlet:
-#    multipart:
-#      max-file-size: 15MB
-#      max-request-size: 15MB
-#  mail:
-#    host: ${MAIL_HOST}
-#    port: ${MAIL_PORT}
-#    username: ${MAIL_USERNAME}
-#    password: ${MAIL_PASSWORD}
-#    properties:
-#      mail:
-#        smtp:
-#          auth: true
-#          starttls:
-#            enable: true
-#  jpa:
-#    properties:
-#      hibernate:
-#        ddl-auto: validate
-#      show-sql: false
-#  datasource:
-#    url: ${DATABASE_URL}
-#    username: ${MYSQL_USER}
-#    password: ${MYSQL_PASSWORD}
-#  flyway:
-#    baseline-on-migrate: true
+server:
+  port: 8080
+  servlet:
+    session:
+      timeout: 28800
+spring:
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 15MB
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  jpa:
+    properties:
+      hibernate:
+        ddl-auto: validate
+      show-sql: false
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  flyway:
+    baseline-on-migrate: true
 
 
 
