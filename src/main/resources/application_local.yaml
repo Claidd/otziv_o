@@ -1,0 +1,128 @@
+server:
+  port: 8080
+  servlet:
+    session:
+      timeout: 28800
+spring:
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 15MB
+  mail:
+    host: smtp.mail.selcloud.ru
+    port: 1126
+    username: 1854
+    password: 0WgVTPRwxUtLFQo2uI
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  jpa:
+    properties:
+      hibernate:
+        ddl-auto: validate
+      show-sql: false
+  datasource:
+      url: jdbc:mysql://localhost:3306/otziv
+      name: otziv
+      username: hunt
+      password: 545321
+  flyway:
+    baseline-on-migrate: true
+
+
+
+
+
+    #telegram:
+    #  bot:
+    #    token: ${TELEGRAM_BOT_TOKEN}
+    #    username: ${TELEGRAM_BOT_USERNAME}
+#telegram:
+#  bot:
+#    token:
+#    username: O_Company_Bot
+#
+#server:
+#  port: 8080
+
+#jwt:
+#  secret: SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+#  lifetime: 1800m
+#jwt:
+#  access-token-key: '{"kty":"oct","k":"hi7S5RX5ZRZooHA0RKGctZ-KtR9FoESgCnH-3BNg5XI"}'
+#  refresh-token-key: '{"kty":"oct","k":"956PBFst1FguLr5irJD-aQ"}'
+#Порт для SSL: 465.
+#spring:
+#  mail:
+#    host: smtp.mail.ru
+#    port: 465
+#    username: ${MAIL_USERNAME}
+#    password: ${MAIL_PASSWORD}
+#    properties:
+#      mail:
+#        smtp:
+#          auth: true
+#          starttls:
+#            enable: true
+#  servlet:
+#    multipart:
+#      max-file-size: 5MB
+#      max-request-size: 5MB
+#    session:
+#      timeout: 200
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate
+#      dialect: org.hibernate.dialect.MySQLDialect
+#    show-sql: false
+#  datasource:
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    #    локальная база данных
+#    url: jdbc:mysql://localhost:3306/otziv
+#    name: otziv
+#    username: hunt
+#    password: 545321
+
+    #    Docker база данных
+#    url: jdbc:mysql://mysql:3306/otziv
+#    username: ${MYSQL_USER}
+#    password: ${MYSQL_PASSWORD}
+#
+#
+#  flyway:
+#    baseline-on-migrate: true
+
+    # Настройки мультипарт загрузки
+
+
+#    база данных на рег ру
+#    url: jdbc:mysql://37.140.192.105:3306/u1215824_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#    username: u1215824
+#    password: Rkfql54532111
+
+#    база данных на в игру ру
+#    url: jdbc:mysql://46.254.20.38:3306/p478535_otziv?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#    username: p478535_hunt
+#    password: Rkfql54532111
+
+
+
+
+#  TUm4cbTMe8cPDxTxD1ph
+#    username: hunt
+#    password: 545321
+
+#logging:
+ # level:
+  #  org.springframework.security: trace
+
+#  thymeleaf:
+##    prefix: D:\Java\otziv\src\main\resources\templates
+#    resources:
+#        static-locations: D:\Java\otziv\src\main\resources\static\
+#    cache-period: 0
+#  cache: false

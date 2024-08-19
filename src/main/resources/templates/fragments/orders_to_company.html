@@ -101,22 +101,27 @@
                     
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">на проверку</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">коррекция</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/order_to_archive2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">архив</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">опублик.</button>
                     </form>
                 </div> <!-- card__content_button -->
@@ -124,18 +129,22 @@
                 <div class="company__card__content_button"> <!-- card__content_button -->
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_to_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">счет</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/remember2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">напомнить</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_no_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit" class="company__card__text__lead-button ">не опл.</button>
                     </form>
                     <form class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_pay2/' + ${order.companyId} + '/' + ${order.id}">
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
                         <button type="submit"  class="company__card__text__lead-button ">оплатили</button>
                     </form>
                 </div> <!-- card__content_button -->

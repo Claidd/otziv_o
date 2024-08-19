@@ -26,7 +26,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
@@ -66,6 +68,7 @@ public class CompanyController {
         model.addAttribute("TitleName", status);
         model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
         model.addAttribute("status", status);
+        model.addAttribute("pageNumber", pageNumber);
         model.addAttribute("urlFirst", "/companies/company");
         if ("ROLE_ADMIN".equals(userRole)){
             checkAmountStatusCompany(principal, model, userRole);
@@ -470,56 +473,60 @@ public class CompanyController {
     @PostMapping ("/status_for_checking/{companyId}") // смена статуса на "Новая"
     public String changeStatusForChecking(@PathVariable Long companyId, Model model){
         if(companyService.changeStatusForCompany(companyId, "Новая")) {
-            log.info("статус заказа успешно изменен на Новая");
+            log.info("статус Компании успешно изменен на Новая");
             return "redirect:/ordersCompany/ordersDetails/{companyID}";
         } else {
-            log.info("ошибка при изменении статуса заказа на Новая");
+            log.info("ошибка при изменении статуса Компании на Новая");
             return "products/orders_list";
         }
     } // смена статуса на "Новая"
 
     @PostMapping ("/status_for_waiting/{companyId}") // смена статуса на "Ожидание"
-    public String changeStatusForWaiting(@PathVariable Long companyId, Model model){
+    public String changeStatusForWaiting(@PathVariable Long companyId, Model model, @RequestParam(defaultValue = "Все") String status, @RequestParam(defaultValue = "0") int pageNumber){
         if(companyService.changeStatusForCompany(companyId, "Ожидание")) {
-            log.info("статус заказа успешно изменен на Ожидание");
-            return "redirect:/companies/new_order";
+            log.info("статус Компании успешно изменен на Ожидание");
+            String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+            return "redirect:/companies/company?pageNumber=" + pageNumber + "&status=" + encodedStatus;
         } else {
-            log.info("ошибка при изменении статуса заказа на Ожидание");
-            return "redirect:/companies/new_order";
+            log.info("ошибка при изменении статуса Компании на Ожидание");
+            return "redirect:/companies/company";
         }
     } // смена статуса на "Ожидание"
 
-    @PostMapping ("/status_for_waiting_send/{companyId}") // смена статуса на "Ожидание"
-    public String changeStatusForWaitingSend(@PathVariable Long companyId, Model model){
+    @PostMapping ("/status_for_waiting_send/{companyId}") // смена статуса на "К рассылке"
+    public String changeStatusForWaitingSend(@PathVariable Long companyId, Model model, @RequestParam(defaultValue = "Все") String status, @RequestParam(defaultValue = "0") int pageNumber){
         if(companyService.changeStatusForCompany(companyId, "Ожидание")) {
-            log.info("статус заказа успешно изменен на Ожидание");
-            return "redirect:/companies/to_send";
+            log.info("статус Компании успешно изменен на Ожидание");
+            String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+            return "redirect:/companies/company?pageNumber=" + pageNumber + "&status=" + encodedStatus;
         } else {
-            log.info("ошибка при изменении статуса заказа на Ожидание");
-            return "redirect:/companies/to_send";
+            log.info("ошибка при изменении статуса Компании на Ожидание");
+            return "redirect:/companies/company";
         }
     } // смена статуса на "Ожидание"
 
     @PostMapping ("/status_for_stop/{companyId}") // смена статуса на "На стопе"
-    public String changeStatusForStop(@PathVariable Long companyId, Model model){
+    public String changeStatusForStop(@PathVariable Long companyId, Model model, @RequestParam(defaultValue = "Все") String status, @RequestParam(defaultValue = "0") int pageNumber){
         if(companyService.changeStatusForCompany(companyId, "На стопе")) {
             companyService.changeDataTry(companyId);
-            log.info("статус заказа успешно изменен на На стопе");
-            return "redirect:/companies/to_send";
+            log.info("статус Компании успешно изменен на На стопе");
+            String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+            return "redirect:/companies/company?pageNumber=" + pageNumber + "&status=" + encodedStatus;
         } else {
-            log.info("ошибка при изменении статуса заказа на На стопе");
-            return "redirect:/companies/new_order";
+            log.info("ошибка при изменении статуса Компании на На стопе");
+            return "redirect:/companies/company";
         }
     } // смена статуса на "На стопе"
 
     @PostMapping ("/status_for_ban/{companyId}") // смена статуса на "Бан"
-    public String changeStatusForBan(@PathVariable Long companyId, Model model){
+    public String changeStatusForBan(@PathVariable Long companyId, Model model, @RequestParam(defaultValue = "Все") String status, @RequestParam(defaultValue = "0") int pageNumber ){
         if(companyService.changeStatusForCompany(companyId, "Бан")) {
-            log.info("статус заказа успешно изменен на Бан");
-            return "redirect:/companies/to_send";
+            log.info("статус Компании успешно изменен на Бан");
+            String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
+            return "redirect:/companies/company?pageNumber=" + pageNumber + "&status=" + encodedStatus;
         } else {
-            log.info("ошибка при изменении статуса заказа на Бан");
-            return "redirect:/companies/new_order";
+            log.info("ошибка при изменении статуса Компании на Бан");
+            return "redirect:/companies/company";
         }
     } // смена статуса на "Бан"
 

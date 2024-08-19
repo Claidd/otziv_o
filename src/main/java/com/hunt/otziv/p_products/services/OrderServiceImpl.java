@@ -562,7 +562,9 @@ public class OrderServiceImpl implements OrderService {
         /*Временная проверка сравнений*/
         System.out.println("filial id: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
         System.out.println("filial url: " + !Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl()));
-        System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId()));
+        try {System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId()));} catch (Exception e) {// Логируем ошибку и пропускаем выполнение блока
+            log.error("Ошибка при обновлении работника заказа: ", e);}
+        System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId()));
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
         System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
@@ -586,17 +588,28 @@ public class OrderServiceImpl implements OrderService {
         if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/
             log.info("Обновляем url филиала заказа");
         }
-        if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) || !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().get(0).getReviews().get(0).getWorker().getId())){ /*Проверка смены работника*/
-            log.info("Обновляем работника заказа");
-            Worker newWorker = convertWorkerDTOToWorker(orderDTO.getWorker());
-            saveOrder.setWorker(newWorker);
-            // Обновляем работника в связанных отзывах
-            for (OrderDetails orderDetails : saveOrder.getDetails()) {
-                for (Review review : orderDetails.getReviews()) {
-                    review.setWorker(newWorker);
+        try {
+            // Проверяем, изменился ли работник
+            if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) ||
+                    !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId())) {
+
+                log.info("Обновляем работника заказа");
+                Worker newWorker = convertWorkerDTOToWorker(orderDTO.getWorker());
+
+                // Обновляем основного работника в заказе
+                saveOrder.setWorker(newWorker);
+
+                // Обновляем работника в связанных отзывах
+                for (OrderDetails orderDetails : saveOrder.getDetails()) {
+                    for (Review review : orderDetails.getReviews()) {
+                        review.setWorker(newWorker);
+                    }
                 }
+                isChanged = true;
             }
-            isChanged = true;
+        } catch (Exception e) {
+            // Логируем ошибку и пропускаем выполнение блока
+            log.error("Ошибка при обновлении работника заказа: ", e);
         }
         if (!Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId())){ /*Проверка смены работника*/
             log.info("Обновляем менеджера заказа");

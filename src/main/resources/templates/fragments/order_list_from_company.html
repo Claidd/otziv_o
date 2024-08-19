@@ -94,22 +94,32 @@
                             
                             <form th:if="${order.status == 'В проверку' || order.status == 'Все' || order.status == 'Архив'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_on_checking/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">на проверку</button>
                             </form>
                             <form th:if="${order.status == 'На проверке' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_correct/' + ${order.companyId} + '/' + ${order.id}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="company__card__text__lead-button ">коррекция</button>
                             </form>
                             <form th:if="${order.status == 'На проверке' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/order_to_archive/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">архив</button>
                             </form>
                             <form th:if="${order.status == 'На проверке' || order.status == 'Коррекция' || order.status == 'Все' || order.status == 'Архив'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit"  class="company__card__text__lead-button ">одобрено</button>
                             </form>
                             <form th:if="${order.status == 'одобрено' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_for_publish_ok/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">опублик.</button>
                             </form>
                         </div> <!-- card__content_button -->
@@ -117,18 +127,26 @@
                         <div class="company__card__content_button"> <!-- card__content_button -->
                             <form th:if="${order.status == 'Опубликовано' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_to_pay/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">счет</button>
                             </form>
                             <form th:if="${order.status == 'Выставлен счет' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/remember/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">напомнить</button>
                             </form>
                             <form th:if="${order.status == 'Выставлен счет' || order.status == 'Напоминание' || order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_no_pay/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit" class="company__card__text__lead-button ">не опл.</button>
                             </form>
                             <form th:if="${order.status == 'Выставлен счет' || order.status == 'Напоминание' || order.status == 'Не оплачено' ||  order.status == 'Все'}" class="company__card__text__lead" th:method="post" th:action="'/ordersCompany/status_pay/' + ${order.companyId} + '/' + ${order.id}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <input type="hidden" data-th-name="pageNumber" th:value="${pageNumber}">
+                                <input type="hidden" data-th-name="status" th:value="${status}">
                                 <button type="submit"  class="company__card__text__lead-button ">оплатили</button>
                             </form>
                         </div> <!-- card__content_button -->

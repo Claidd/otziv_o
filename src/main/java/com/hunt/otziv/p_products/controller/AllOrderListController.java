@@ -78,6 +78,7 @@ public class AllOrderListController {
         model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
         model.addAttribute("status", status);
         model.addAttribute("urlFirst", "/orders/all_orders");
+        model.addAttribute("pageNumber", pageNumber);
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли в список всех заказов со статусом {} для Админа", status);
             checkAmountStatusOrder(principal, model, userRole);

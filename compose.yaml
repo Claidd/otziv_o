@@ -86,6 +86,8 @@ volumes:
 #  docker exec -i d7a0df4ea753 mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
 
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /backup/backup-otziv.sql
+  #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/backup-otziv.sql
+  #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/data/mysql_backup/backup-otziv.sql
 
 
 
