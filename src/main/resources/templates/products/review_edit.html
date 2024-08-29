@@ -45,13 +45,13 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('comment')}" th:text="${err}">Validation error</small>
                         </div>
                         
-                        <div class="form-group">
+                        <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="form-group">
                             <label for="created">Дата создания</label>
                             <input type="text" id="created" th:field="*{created}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('created')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div class="form-group">
+                        <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="form-group">
                             <label for="changed">Дата изменений</label>
                             <input type="text" id="changed" th:field="*{changed}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('changed')}" th:text="${err}">Validation error</small>
@@ -63,7 +63,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('publishedDate')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div class="mb-3">
+                        <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="mb-3">
                             <label for="publish" class="form-label">Активность</label>
                             <input type="checkbox" th:checked="${reviewDTO.isPublish()}" th:field="*{publish}" class="form-control form-paymentCheck" id="publish" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('publish')}" th:text="${err}">Validation error</small>

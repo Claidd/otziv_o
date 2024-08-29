@@ -69,8 +69,10 @@ services:
 
   phpmyadmin:
     image: phpmyadmin:latest
-    environment:
-      PMA_PORT: 90
+    ports:
+      - "6571:80"
+#    environment:
+#      PMA_PORT: 90
     volumes:
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
       - ./data/phpmyadmin/apache2.conf:/etc/apache2/conf-available/servername.conf
@@ -88,6 +90,7 @@ volumes:
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /backup/backup-otziv.sql
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/backup-otziv.sql
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/data/mysql_backup/backup-otziv.sql
+  #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /data/mysql_backup/backup-otziv.sql
 
 
 

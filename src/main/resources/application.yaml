@@ -35,29 +35,6 @@ spring:
 
 
 
-  #  twilio:
-  #    account_sid: ${ACCOUNT_SID}
-  #    auth_token: ${AUTH_TOKEN}
-#  mail:
-#    host: ${MAIL_HOST}
-#    port: ${MAIL_PORT}
-#    username: ${MAIL_USERNAME}
-#    password: ${MAIL_PASSWORD}
-#    properties:
-#      mail:
-#        smtp:
-#          auth: true
-#          starttls:
-#            enable: true
-
-
-
-
-    #      url: jdbc:mysql://localhost:3306/otziv
-    #      name: otziv
-    #      username: hunt
-    #      password: 545321
-
     #telegram:
     #  bot:
     #    token: ${TELEGRAM_BOT_TOKEN}

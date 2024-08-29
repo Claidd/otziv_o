@@ -80,7 +80,7 @@
                 <th scope="col">Подкатегории</th>
                 <th scope="col">Добавить подкатегорию</th>
                 <th scope="col">Изменить</th>
-                <th scope="col">Удалить</th>
+                <th sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  scope="col">Удалить</th>
             </tr>
             </thead>
             <tbody>
@@ -101,7 +101,7 @@
                         <button type="submit" class="btn btn-outline-primary">Изменить</button>
                     </form>
                 </td>
-                <td>
+                <td sec:authorize="hasAnyRole('ADMIN', 'OWNER')" >
                     <form th:method="delete" th:action="'/categories/delete/' + ${category.id}">
                         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                         <button type="submit" class="btn btn-outline-danger">Удалить</button>

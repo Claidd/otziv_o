@@ -2,13 +2,13 @@
 $cfg['blowfish_secret'] = 'HunT@Ivan'; /* YOU MUST FILL IN THIS FOR COOKIE AUTH! */
 $i = 0;
 $i++;
-// $cfg['Servers'][$i]['auth_type'] = 'cookie';
-// $cfg['Servers'][$i]['host'] = 'mysql';
-// $cfg['Servers'][$i]['compress'] = true;
-// $cfg['Servers'][$i]['AllowNoPassword'] = false;
-// $cfg['ForceSSL'] = true;
-// $cfg['Servers'][$i]['ssl'] = false;
-// $cfg['ExecTimeLimit'] = 0;
+$cfg['Servers'][$i]['auth_type'] = 'cookie';
+$cfg['Servers'][$i]['host'] = 'mysql';
+$cfg['Servers'][$i]['compress'] = true;
+$cfg['Servers'][$i]['AllowNoPassword'] = false;
+$cfg['ForceSSL'] = true;
+$cfg['Servers'][$i]['ssl'] = false;
+$cfg['ExecTimeLimit'] = 0;
 // $cfg['PmaAbsoluteUri'] = 'https://o-ogo.ru/myphpadminroute';
 
 
