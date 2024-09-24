@@ -78,6 +78,12 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('amount')}" th:text="${err}">Validation error</small>
                         </div>
 
+                        <div sec:authorize="hasAnyRole('ADMIN','OWNER')" class="form-group">
+                            <label for="counter">Счетчик опубликованных</label>
+                            <input type="text" id="counter" th:field="*{counter}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('counter')}" th:text="${err}">Validation error</small>
+                        </div>
+
                         <div class="form-group d-none">
                             <label for="sum">Сумма</label>
                             <input type="text" id="sum" th:field="*{sum}" class="form-control">
@@ -103,6 +109,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"
                                    th:text="${err}">Validation error</small>
                         </div>
+
 
                         <div sec:authorize="hasAnyRole('ADMIN')" class="mb-3">
                             <label for="inputLink" class="form-label">отмектка о выполнении</label>

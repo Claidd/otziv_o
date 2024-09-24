@@ -25,16 +25,30 @@
         <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
         <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
-        <div class="mb-3" th:if="${saveSuccess}">
+        <!-- <div class="mb-3" th:if="${saveSuccess}">
             <div class="alert alert-success">
                 Данные успешно изменены и сохранены.
             </div>
-        </div>
+        </div> -->
 
         <!-- Отображение сообщения об ошибке, если список пуст -->
         <div th:if="${errorMessage}" class="mb-3"  >
             <p th:text="${errorMessage}" class="alert alert-success"  style="color: red;"></p>
         </div>
+
+        <!-- Сообщение об успешном сохранении -->
+            <!-- <div class="mb-3" th:if="${saveSuccess == true}">
+                <div class="alert alert-success">
+                    Данные успешно изменены и сохранены.
+                </div>
+            </div> -->
+
+            <!-- Сообщение об ошибке -->
+            <!-- <div class="mb-3" th:if="${saveSuccess == false}">
+                <div class="alert alert-danger">
+                    Ошибка: [[${errorMessage}]]
+                </div>
+            </div> -->
 
         <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
         <div th:if="${not #lists.isEmpty(reviews)}">

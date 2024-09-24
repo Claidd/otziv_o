@@ -94,28 +94,50 @@ public class OrderDetailsController {
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReview(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
         log.info("1. Заходим в Post метод Изменение статуса");
-        if(orderService.changeStatusAndOrderCounter(reviewId)){
-            log.info("8. Все прошло успешно, вернулись в контроллер");
+        try {
+            orderService.changeStatusAndOrderCounter(reviewId);
             rm.addFlashAttribute("saveSuccess", "true");
-        }
-        else {
+            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+        } catch (Exception e) {
             log.info("8. Все прошло плохо, вернулись в контроллер");
-//            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ ОПУБЛИКОВАН.");
         }
+//        if(orderService.changeStatusAndOrderCounter(reviewId)){
+//            log.info("8. Все прошло успешно, вернулись в контроллер");
+//            rm.addFlashAttribute("saveSuccess", "true");
+//            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+//        }
+//        else {
+//            log.info("8. Все прошло плохо, вернулись в контроллер");
+//            rm.addFlashAttribute("saveSuccess", "false");
+//            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ ОПУБЛИКОВАН.");
+//        }
         return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 
     @PostMapping("/{companyId}/{orderId}/published_to_worker/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
         log.info("1. Заходим в Post метод Изменение статуса");
-        if(orderService.changeStatusAndOrderCounter(reviewId)){
-            log.info("8. Все прошло успешно, вернулись в контроллер");
+        try {
+            orderService.changeStatusAndOrderCounter(reviewId);
             rm.addFlashAttribute("saveSuccess", "true");
-        }
-        else {
+            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+        } catch (Exception e) {
             log.info("8. Все прошло плохо, вернулись в контроллер");
-//            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ ОПУБЛИКОВАН.");
         }
+
+
+//        if(orderService.changeStatusAndOrderCounter(reviewId)){
+//            log.info("8. Все прошло успешно, вернулись в контроллер");
+//            rm.addFlashAttribute("saveSuccess", "true");
+//        }
+//        else {
+//            log.info("8. Все прошло плохо, вернулись в контроллер");
+////            rm.addFlashAttribute("saveSuccess", "false");
+//        }
         return "redirect:/worker/publish";
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 

@@ -29,12 +29,12 @@ public class ReviewArchiveServiceImpl implements ReviewArchiveService{
                 reviewArchive.setCategory(review.getCategory());
                 reviewArchive.setSubCategory(review.getSubCategory());
                 reviewArchiveRepository.save(reviewArchive);
-                log.info("7. Отзыв в архив сохранен");
+                log.info("4. Отзыв в архив сохранен");
             } else {
-                log.info("7. Отзыв с таким текстом уже существует, отзыв в архив не сохранен");
+                log.info("4. Отзыв с таким текстом уже существует, отзыв в архив не сохранен");
             }
         } else {
-            log.info("7. Отзыв по id не был найден, отзыв в архив не сохранен");
+            log.info("4. Отзыв по id не был найден, отзыв в архив не сохранен");
         }
     }
 

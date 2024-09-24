@@ -28,7 +28,18 @@
                         <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/worker/all_orders'}">Все</a>
                     </div>
 
-                    
+                    <div class="mb-3" th:if="${saveSuccess == true}">
+                        <div class="alert alert-success">
+                            Данные успешно изменены и сохранены.
+                        </div>
+                    </div>
+        
+                    <!-- Сообщение об ошибке -->
+                    <div class="mb-3" th:if="${saveSuccess == false}">
+                        <div class="alert alert-danger">
+                            Ошибка: [[${errorMessage}]]
+                        </div>
+                    </div>
                     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
                     <th:block th:insert="~{fragments/reviews_to_worker :: reviews_to_worker}" id="content-10"></th:block>

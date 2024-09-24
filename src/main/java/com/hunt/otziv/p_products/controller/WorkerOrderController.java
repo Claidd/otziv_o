@@ -18,6 +18,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.util.Comparator;
@@ -168,7 +169,7 @@ public class WorkerOrderController {
     } // Все заказы - Коррекция
 
     @GetMapping("/publish") // Все заказы - Публикация
-    public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+    public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, RedirectAttributes rm, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);

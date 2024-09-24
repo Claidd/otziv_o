@@ -15,6 +15,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.dto.*;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -83,6 +84,7 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
     private final CompanyStatusService companyStatusService;
+    private final EmailService emailService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -568,6 +570,7 @@ public class OrderServiceImpl implements OrderService {
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
         System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
+        System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
 
 
         if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
@@ -624,6 +627,12 @@ public class OrderServiceImpl implements OrderService {
         if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
             log.info("Обновляем выполнение комментария заказа");
             saveOrder.getCompany().setCommentsCompany(orderDTO.getCommentsCompany());
+            isChanged = true;
+        }
+
+        if (!Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())){ /*Проверка комментария заказа*/
+            log.info("Обновляем выполнение счетчик опубликованных текстов в заказе");
+            saveOrder.setCounter(orderDTO.getCounter());
             isChanged = true;
         }
 
@@ -726,12 +735,12 @@ public boolean deleteOrder(Long orderId, Principal principal){
         try {
             Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
             if (title.equals(STATUS_PAYMENT)){
-                log.info("1. Вошли в смену статуса в оплачено");
-                log.info("orderIsComplete: {}", order.isComplete());
-                log.info("order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
+                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
+                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
+                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
 
                 if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
-                    log.info("2. Проверили, что заказ еще не бьл выполнен");
+                    log.info("2. Проверили, что заказ еще не бьл выполнен и что счетчкики совпадают");
                     if (zpService.save(order)){
                         log.info("3. Сохранили ЗП");
                         boolean chek = paymentCheckService.save(order);
@@ -830,67 +839,193 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return company;
     }
 
+
     @Override
     @Transactional
-    public boolean changeStatusAndOrderCounter(Long reviewId) { // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+    public boolean changeStatusAndOrderCounter(Long reviewId) {
+        boolean isChanged = false;
         try {
+
             Review review = reviewService.getReviewById(reviewId);
-            log.info("2. Достали отзыв по id " + reviewId);
+            log.info("2. Достали отзыв по id {}", reviewId);
 
             if (review == null) {
-                log.info("2. Что-то пошло не так и метод changeStatusAndOrderCounter не отработал правильно: отзыв не найден");
-                return false;
+                log.error("2. Отзыв с id {} не найден", reviewId);
+                throw new IllegalStateException("Проблема с отсутвием отзыва по ид, транзакция должна быть откатана");
+//                return false;
             }
 
-            Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
+            OrderDetails orderDetails = review.getOrderDetails();
+            if (orderDetails == null || orderDetails.getOrder() == null) {
+                log.error("3. OrderDetails или Order отсутствуют для отзыва с ID: {}", reviewId);
+                throw new IllegalStateException("Проблема с отсутвием деталей заказа по ид, транзакция должна быть откатана");
+//                return false;
+            }
+
+            Order order = orderRepository.findById(orderDetails.getOrder().getId()).orElse(null);
             if (order == null || review.isPublish()) {
-                log.info("3. Счетчик не увеличен, проверка не пройдена: order = " + (order != null) + ", publish status = " + (!review.isPublish()));
-                return false;
+                log.info("3. Проверка не пройдена: пустой order = {}, или отзыв уже опубликован publish = {}", order != null, review.isPublish());
+                throw new IllegalStateException("Проблема с отсутвием заказа по ид и статуса уже опубликован, транзакция должна быть откатана");
+//                return false;
             }
 
-            log.info("3. Прошли проверку что заказ не пустой и его статус не опубликован - order != null && !review.isPublish()");
+            log.info("3. Заказ найден, и отзыв еще не опубликован. Продолжаем выполнение.");
+
             reviewArchiveService.saveNewReviewArchive(reviewId);
-            log.info("4. Сохранили опубликованный отзыв компании в отзыв в архив");
+            log.info("4. Сохранили отзыв в архив");
+
+            updateBotCounterAndStatus(review.getBot());
+            log.info("5. Увеличили кол-во публикаций у бота");
+
+            review.setPublish(true);
+            log.info("6. Установили статус публикации отзыва на true");
+            reviewService.save(review);
+            log.info("7. Сохранили отзыв в базе данных");
 
             order.setCounter(order.getCounter() + 1);
             Order savedOrder = orderRepository.save(order);
-            log.info("5. Увеличили, обновили и сохранили счетчик публикаций в заказе. Итого теперь: {}", savedOrder.getCounter());
+            log.info("8. Обновили счетчик публикаций заказа. Новый счетчик: {}", savedOrder.getCounter());
 
+            int reviewCounter = counterReviewIsPublish(savedOrder);
+            
+            log.info("9. reviewCounter: {}", reviewCounter);
+            
+            if (savedOrder.getCounter() != reviewCounter){
+                log.info("9. !!!!!!!!!!! ЧТО-ТО НЕ ТАК !!!!!! Проверка savedOrder.getCounter() != reviewCounter не пройдена: savedOrder.getCounter() = {},  reviewCounter = {}", savedOrder.getCounter(), reviewCounter);
+                emailService.sendSimpleEmail("2.12nps@mail.ru", "Ошибка проверки счетчика", "Срочно проверь. Что-то пошло не так при нажатии кнопки опубликовать у отзыва");
+                isChanged = true;
+                log.info("isChanged {}", isChanged);
+                throw new IllegalStateException("Проблема с проверкой счетчиков, транзакция должна быть откатана");
+            }
             checkOrderCounterAndAmount(savedOrder);
-            log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
+            log.info("10. Проверили счетчик заказа на выполнение заказа");
 
-            updateBotCounterAndStatus(review.getBot());
-            review.setPublish(true);
-            log.info("7. Установили Publish на true - опубликовано");
-
-            reviewService.save(review);
-            log.info("8. Сохранили отзыв в БД");
-
-            return true;
+            if  (isChanged){
+                return false;
+            }
+            else {
+                return true;
+            }
         } catch (Exception e) {
-            log.error("Ошибка при выполнении метода changeStatusAndOrderCounter", e);
-            throw e; // Убедитесь, что транзакция откатывается при ошибке
+            log.error("Ошибка при выполнении метода changeStatusAndOrderCounter для отзыва с id {}", reviewId, e);
+//            return false;
+            throw e; // Транзакция откатится при исключении
         }
-    } // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+    }
 
 
-    @Transactional
-    public void updateBotCounterAndStatus(Bot bot) {// обновление счетчика и статуса у бота
+
+    protected int counterReviewIsPublish(Order savedOrder){
+        int reviewCounter = 0;
+        List<Review> reviewList = savedOrder.getDetails().getFirst().getReviews();
+        for (Review review1 : reviewList) {
+            if (review1.isPublish()) {
+                reviewCounter++;
+            }
+        }
+        return reviewCounter;
+    }
+
+
+    public void updateBotCounterAndStatus(Bot bot) {
         try {
             bot.setCounter(bot.getCounter() + 1);
+
             if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
-                log.info("Меняем статус бота от 20 отзывов");
+                log.info("Меняем статус бота при достижении 20 отзывов");
                 bot.setStatus(botService.changeStatus(HIGH_STATUS));
             } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
-                log.info("Меняем статус бота от 10 отзывов");
+                log.info("Меняем статус бота при достижении 10 отзывов");
                 bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
             }
+
             botService.save(bot);
         } catch (Exception e) {
-            log.error("Ошибка при обновлении счетчика и статуса у бота", e);
+            log.error("Ошибка при обновлении счетчика и статуса у бота с id {}", bot.getId(), e);
             throw e;
         }
-    }// обновление счетчика и статуса у бота
+    }
+
+    @Transactional
+    protected void checkOrderCounterAndAmount(Order order) {
+        try {
+            if (order.getAmount() <= order.getCounter()) {
+                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
+                log.info("4. Счетчик совпадает с количеством заказа. Статус заказа с id {} сменен на Опубликовано", order.getId());
+            } else {
+                log.info("4. Счетчик не совпадает с количеством заказа с id {}. Статус заказа не изменён", order.getId());
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при проверке счетчиков заказа с id {}", order.getId(), e);
+            throw e;
+        }
+    }
+
+
+
+
+
+//    @Override
+//    @Transactional
+//    public boolean changeStatusAndOrderCounter(Long reviewId) { // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+//        try {
+//            Review review = reviewService.getReviewById(reviewId);
+//            log.info("2. Достали отзыв по id " + reviewId);
+//
+//            if (review == null) {
+//                log.info("2. Что-то пошло не так и метод changeStatusAndOrderCounter не отработал правильно: отзыв не найден");
+//                return false;
+//            }
+//
+//            Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
+//            if (order == null || review.isPublish()) {
+//                log.info("3. Счетчик не увеличен, проверка не пройдена: order = " + (order != null) + ", publish status = " + (!review.isPublish()));
+//                return false;
+//            }
+//
+//            log.info("3. Прошли проверку что заказ не пустой и его статус не опубликован - order != null && !review.isPublish()");
+//            reviewArchiveService.saveNewReviewArchive(reviewId);
+//            log.info("4. Сохранили опубликованный отзыв компании в отзыв в архив");
+//
+//            order.setCounter(order.getCounter() + 1);
+//            Order savedOrder = orderRepository.save(order);
+//            log.info("5. Увеличили, обновили и сохранили счетчик публикаций в заказе. Итого теперь: {}", savedOrder.getCounter());
+//
+//            checkOrderCounterAndAmount(savedOrder);
+//            log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
+//
+//            updateBotCounterAndStatus(review.getBot());
+//            review.setPublish(true);
+//            log.info("7. Установили Publish на true - опубликовано");
+//
+//            reviewService.save(review);
+//            log.info("8. Сохранили отзыв в БД");
+//
+//            return true;
+//        } catch (Exception e) {
+//            log.error("Ошибка при выполнении метода changeStatusAndOrderCounter, который  делал - смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен", e);
+//            throw e; // Убедитесь, что транзакция откатывается при ошибке
+//        }
+//    } // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
+
+
+//    @Transactional
+//    public void updateBotCounterAndStatus(Bot bot) {// обновление счетчика и статуса у бота
+//        try {
+//            bot.setCounter(bot.getCounter() + 1);
+//            if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
+//                log.info("Меняем статус бота от 20 отзывов");
+//                bot.setStatus(botService.changeStatus(HIGH_STATUS));
+//            } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
+//                log.info("Меняем статус бота от 10 отзывов");
+//                bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
+//            }
+//            botService.save(bot);
+//        } catch (Exception e) {
+//            log.error("Ошибка при обновлении счетчика и статуса у бота", e);
+//            throw e;
+//        }
+//    }// обновление счетчика и статуса у бота
 
 
 //    @Transactional
@@ -914,20 +1049,20 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
 
 
-    @Transactional
-    protected void checkOrderCounterAndAmount(Order order) { // проверка счетчиков заказа
-        try {
-            if (order.getAmount() <= order.getCounter()) {
-                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
-                log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
-            } else {
-                log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при проверке счетчиков заказа", e);
-            throw e; // проверка счетчиков заказа
-        }
-    }
+//    @Transactional
+//    protected void checkOrderCounterAndAmount(Order order) { // проверка счетчиков заказа
+//        try {
+//            if (order.getAmount() <= order.getCounter()) {
+//                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
+//                log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
+//            } else {
+//                log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");
+//            }
+//        } catch (Exception e) {
+//            log.error("Ошибка при проверке счетчиков заказа", e);
+//            throw e; // проверка счетчиков заказа
+//        }
+//    }
 
 
     //    ======================================== ЗАКАЗ UPDATE =========================================================
