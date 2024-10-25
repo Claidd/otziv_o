@@ -891,8 +891,9 @@ public boolean deleteOrder(Long orderId, Principal principal){
             log.info("9. reviewCounter: {}", reviewCounter);
             
             if (savedOrder.getCounter() != reviewCounter){
+                String textMail = "Компания: " + savedOrder.getCompany().getTitle() + ". Заказ № " + savedOrder.getId() + ". Работник " + savedOrder.getWorker().getUser().getFio();
                 log.info("9. !!!!!!!!!!! ЧТО-ТО НЕ ТАК !!!!!! Проверка savedOrder.getCounter() != reviewCounter не пройдена: savedOrder.getCounter() = {},  reviewCounter = {}", savedOrder.getCounter(), reviewCounter);
-                emailService.sendSimpleEmail("2.12nps@mail.ru", "Ошибка проверки счетчика", "Срочно проверь. Что-то пошло не так при нажатии кнопки опубликовать у отзыва");
+                emailService.sendSimpleEmail("2.12nps@mail.ru", "Ошибка проверки счетчика", "Срочно проверь. Что-то пошло не так при нажатии кнопки опубликовать у отзыва. " + textMail);
                 isChanged = true;
                 log.info("isChanged {}", isChanged);
                 throw new IllegalStateException("Проблема с проверкой счетчиков, транзакция должна быть откатана");

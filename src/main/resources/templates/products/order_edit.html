@@ -78,7 +78,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('amount')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div sec:authorize="hasAnyRole('ADMIN','OWNER')" class="form-group">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="form-group">
                             <label for="counter">Счетчик опубликованных</label>
                             <input type="text" id="counter" th:field="*{counter}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('counter')}" th:text="${err}">Validation error</small>
