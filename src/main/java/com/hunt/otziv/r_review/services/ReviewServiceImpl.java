@@ -67,7 +67,7 @@ public class ReviewServiceImpl implements ReviewService{
         LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
         reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage,pageNumber,pageSize);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     }  // Берем все заказы с поиском по названию компании или номеру
 
     public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
@@ -77,7 +77,7 @@ public class ReviewServiceImpl implements ReviewService{
         LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
         reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage,pageNumber,pageSize);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Работника
 
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
@@ -87,7 +87,7 @@ public class ReviewServiceImpl implements ReviewService{
         LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
         reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage,pageNumber,pageSize);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
 
     @Override
@@ -99,11 +99,11 @@ public class ReviewServiceImpl implements ReviewService{
         LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
         reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage,pageNumber,pageSize);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Владельца
 
     private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
         int start = (int)pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), reviewPage.size());
         List<ReviewDTOOne> ReviewDTOOnes = reviewPage.subList(start, end)

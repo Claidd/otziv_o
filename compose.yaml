@@ -5,6 +5,7 @@ networks:
 services:
   mysql:
     image: mysql:latest
+    container_name: my-mysql
     volumes:
       - mysql_data:/var/lib/mysql
       - ./data/mysql_backup:/backup
@@ -87,10 +88,10 @@ volumes:
   #  docker exec -i my-mysql mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
 #  docker exec -i d7a0df4ea753 mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql
 
+  #  на сервере удаление старого файла и установка нового архива БД
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /backup/backup-otziv.sql
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/backup-otziv.sql
   #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /docker/data/mysql_backup/backup-otziv.sql
-  #  docker exec -i my-mysql mysql -uhunt -pRkfql54532111 otziv < /data/mysql_backup/backup-otziv.sql
 
 
 
