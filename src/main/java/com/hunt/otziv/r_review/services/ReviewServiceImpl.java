@@ -413,6 +413,15 @@ public class ReviewServiceImpl implements ReviewService{
     } // Деактивация бота
 
     private Review getReviewToChangeBot(Long reviewId) { // Установка нового бота в отзыв
+//        Review review = reviewRepository.findById(reviewId).orElse(null);
+//        assert review != null;
+//        log.info("2. Достали отзыв по id{}", reviewId);
+//        List<Bot> bots = findAllBotsMinusFilial(review);
+//        log.info("3. Достали ботов минус филиал");
+//        var random = new SecureRandom();
+//        review.setBot(bots.get(random.nextInt(bots.size())));
+//        return review;
+
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;
         log.info("2. Достали отзыв по id{}", reviewId);
@@ -437,10 +446,14 @@ public class ReviewServiceImpl implements ReviewService{
     } // Изменение статуса бота как НЕ активный
 
     private List<Bot> findAllBotsMinusFilial(Review review){ // Найти всех ботов за исключением тех, что уже есть у филиала
-        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
+//        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
+        List<Bot> bots = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId());
+        System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
         List<Review> reviewListFilial = reviewRepository.findAllByFilial(review.getFilial());
         List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+        System.out.println("Боты вытащенные из базы по определнному городу для удаления: " +  botsCompany.size());
         bots.removeAll(botsCompany);
+        System.out.println("Оставшиеся: " + bots.size());
         return bots;
     } // Найти всех ботов за исключением тех, что уже есть у филиала
 

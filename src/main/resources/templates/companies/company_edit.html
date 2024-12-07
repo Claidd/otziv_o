@@ -102,16 +102,6 @@
 <!--                            <a th:href="@{/allUsers/delete/manager/{username}/{managerId}(username = ${editUserDto.username}, managerId=${manager.id})}">Удалить</a>-->
                         </div>
 
-                        <div class="mb-3" th:each="filial1 : ${companyDTO.filials}">
-                            <label for="inputManagers" class="form-label">Филиалы</label> <br>
-                            <input type="text" th:value="${filial1.title}" class="form-control"
-                                   placeholder="Введите номер компании">
-                            <input type="hidden" th:value="${filial1.id}" class="form-control"
-                                   placeholder="Введите номер компании"> 
-                            <a th:href="@{/filial/edit/{filialId} (filialId = ${filial1.id})}">редактировать</a>   
-                            <a th:href="@{/companies/editCompany/{companyId}/deleteFilial/{filialId}(companyId = ${companyDTO.id}, filialId=${filial1.id})}">Удалить</a>                              
-                        </div>
-
 
                         <div class="form-group d-none">
                             <label for="manager">Укажите менеджера</label>
@@ -144,10 +134,36 @@
                                    th:text="${err}">Validation error</small>
                         </div>
 
+                        <br><br>
 
-                        
+
+
+
+
+                        <div class="mb-3" th:each="filial1 : ${companyDTO.filials}">
+                            <label for="inputManagers" class="form-label">Филиалы</label> <br>
+                            <input type="text" th:value="${filial1.city.title + ': ' + filial1.title}" class="form-control"
+                                   placeholder="адрес филиала">
+                            <input type="hidden" th:value="${filial1.id}" class="form-control"
+                                   placeholder="id филиала"> 
+                            <a th:href="@{/filial/edit/{filialId} (filialId = ${filial1.id})}">редактировать</a>   
+                            <a th:href="@{/companies/editCompany/{companyId}/deleteFilial/{filialId}(companyId = ${companyDTO.id}, filialId=${filial1.id})}">Удалить</a>                              
+                        </div>
+
+                        <br><br>
+
                         <div class="form-group">
-                            <label for="filial_title">Добавить новый филиал</label>
+                            <label for="filial_title">Добавить новый филиал</label> 
+                            <br>
+                            <label for="filial_city">Город филиала:</label> <br>
+                            <select  class="form-control" th:field="*{filial.city.id}" id="city" name="selectedCity.id">
+                                <option value="">Выберите город...</option>
+                                <option th:each="city : ${cities}" th:value="${city.id}" th:text="${city.cityTitle}"></option>
+                            </select>
+                            <small class="form-text text-danger" th:text="${errorUrl}"
+                                   >Validation error</small>
+                                   
+                                   <label for="filial_city">Адрес филиала:</label> <br>
                             <input type="text" id="filial_title" th:field="*{filial.title}" class="form-control"
                                    placeholder="название филиала">
                             <label for="filial_url">Укажите ссылку 2ГИС</label>
@@ -156,6 +172,8 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.url')}"
                                    th:text="${err}">Validation error</small>
                         </div>
+
+                        <br><br>
 
                         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
                         

@@ -42,12 +42,13 @@ public class Review {
     private LocalDate publishedDate;
     @Column(name = "review_publish")
     private boolean publish;
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_category")
     private Category category;
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_subcategory")
     private SubCategory subCategory;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_bot")
     private Bot bot;

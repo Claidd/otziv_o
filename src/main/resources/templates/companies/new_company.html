@@ -124,14 +124,31 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('status')}"
                                    th:text="${err}">Validation error</small>
                         </div>
+<!-- 
+                        <div class="form-group">
+                            <label for="filial_title">Укажите город первого филиала</label>
+                            <input type="text" id="filial_title" th:field="*{filial.title}" class="form-control"
+                                   placeholder="например: Москва">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.title')}"
+                                   th:text="${err}">Validation error</small>         
+                        </div> -->
 
                         <div class="form-group">
-                            <label for="filial_title">Укажите первый филиала</label>
+                            <label for="filial_city">Город филиала:</label>
+                            <select  class="form-control" th:field="*{filial.city.id}" id="city" name="selectedCity.id">
+                                <option value="">Выберите город...</option>
+                                <option th:each="city : ${cities}" th:value="${city.id}" th:text="${city.cityTitle}"></option>
+                            </select>
+                            <small class="form-text text-danger" th:text="${errorUrl}"
+                                   >Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filial_title">Укажите адрес первого филиала</label>
                             <input type="text" id="filial_title" th:field="*{filial.title}" class="form-control"
-                                   placeholder="например: Филиал 1 или Юбиленый, 17">
+                                   placeholder="например: Юбиленый, 17">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.title')}"
-                                   th:text="${err}">Validation error</small>
-                                   
+                                   th:text="${err}">Validation error</small>         
                         </div>
 
                         <div class="form-group">

@@ -3,6 +3,8 @@ package com.hunt.otziv.c_companies.controller;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
+import com.hunt.otziv.c_cities.dto.CityDTO;
+import com.hunt.otziv.c_cities.sevices.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
@@ -47,6 +49,7 @@ public class CompanyController {
     private final PromoTextService promoTextService;
     private final OrderService orderService;
     private final UserService userService;
+    private final CityService cityService;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -429,6 +432,8 @@ public class CompanyController {
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("newWorkerDTO", new WorkerDTO());
         model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));
+        List<CityDTO> citiesList = cityService.getAllCities().stream().sorted(Comparator.comparing(CityDTO::getCityTitle)).toList();
+        model.addAttribute("cities", citiesList);
         checkTimeMethod("Время выполнения CompanyController/editCompany/{companyId} для Всех: ", startTime);
         return "companies/company_edit";
     } // обновление компании -

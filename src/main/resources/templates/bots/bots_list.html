@@ -40,8 +40,9 @@
                         <th scope="col">Владелец</th>
                         <th scope="col">Статус</th>
                         <th scope="col">Активность</th>
+                        <th scope="col">Город</th>
                         <th scope="col">Изменить</th>
-                        <th scope="col">Удалить</th>
+                        <th sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  scope="col">Удалить</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -54,12 +55,13 @@
                         <th scope="row" th:text="${bot.worker.user.fio}">Владелец</th>
                         <th scope="row" th:text="${bot.status}">Статус</th>
                         <th scope="row" th:text="${bot.active}">Активность</th>
+                        <th scope="row" th:text="${bot.botCity.title}">Город</th>
                         <td>
                             <form th:method="get" th:action="'/bots/edit/' + ${bot.id}">
                                 <button type="submit" class="btn btn-outline-primary">Изменить</button>
                             </form>
                         </td>
-                        <td>
+                        <td sec:authorize="hasAnyRole('ADMIN', 'OWNER')">
                             <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="btn btn-outline-danger">Удалить</button>

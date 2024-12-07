@@ -36,7 +36,7 @@ public class Category {
     @ToString.Exclude
     List<Company> companyCategory;
 
-    @OneToMany(mappedBy = "category",fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
     @ToString.Exclude
     List<Review> reviews;
 

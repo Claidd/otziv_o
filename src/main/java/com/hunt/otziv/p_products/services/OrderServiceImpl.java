@@ -1314,6 +1314,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
     } // Конвертер из DTO для деталей заказа
     private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // Конвертер из DTO для списка отзывов
         List<Review> reviewList = new ArrayList<>();
+//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
         List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
 
         for (int i = 0; i < orderDTO.getAmount(); i++) {
@@ -1339,11 +1340,23 @@ public boolean deleteOrder(Long orderId, Principal principal){
     }// Конвертер из DTO для отзыва
 
     private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
-        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(orderDTO.getWorker().getWorkerId());
-        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
-        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        bots.removeAll(botsCompany);
-        return bots;
+//        Так было раньше когда назначались только боты привязанные за человеком без сопоставления городов
+//        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(orderDTO.getWorker().getWorkerId());
+//        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
+//        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+//        bots.removeAll(botsCompany);
+//        return bots;
+//        Так было раньше когда назначались только боты привязанные за человеком без сопоставления городов
+
+            List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
+        System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
+            List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
+
+            List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
+        System.out.println("Боты вытащенные из базы по определнному городу для удаления: " +  botsCompany.size());
+            bots.removeAll(botsCompany);
+        System.out.println("Оставшиеся: " + bots.size());
+            return bots;
     }
 
     private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории

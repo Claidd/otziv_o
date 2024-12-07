@@ -1,8 +1,11 @@
 package com.hunt.otziv.c_companies.services;
 
+import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
+import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -14,15 +17,18 @@ import java.util.Objects;
 public class FilialServiceImpl implements FilialService{
 
     private final FilialRepository filialRepository;
+    private final CityRepository cityRepository;
 
-    public FilialServiceImpl(FilialRepository filialRepository) {
+    public FilialServiceImpl(FilialRepository filialRepository, CityRepository cityRepository) {
         this.filialRepository = filialRepository;
+        this.cityRepository = cityRepository;
     }
 
     public Filial save(FilialDTO filialDTO){ // Сохранение филиала в БД
         Filial filial = new Filial();
         filial.setTitle(filialDTO.getTitle());
         filial.setUrl(filialDTO.getUrl());
+        filial.setCity(cityRepository.findById(filialDTO.getCity().getId()));
         return filialRepository.save(filial);
     } // Сохранение филиала в БД
 
@@ -54,6 +60,7 @@ public class FilialServiceImpl implements FilialService{
         filialDTO.setId(filial.getId());
         filialDTO.setTitle(filial.getTitle());
         filialDTO.setUrl(filial.getUrl());
+        filialDTO.setCity(filial.getCity());
         return filialDTO; // перевод филиала в дто
     }
 
@@ -69,10 +76,16 @@ public class FilialServiceImpl implements FilialService{
         /*Временная проверка сравнений*/
         System.out.println("title: " + !Objects.equals(filialDTO.getTitle(), saveFilial.getTitle()));
         System.out.println("url: " + !Objects.equals(filialDTO.getUrl(), saveFilial.getUrl()));
+        System.out.println("Город: " + !Objects.equals(filialDTO.getCity().getId(), saveFilial.getCity().getId()));
 
         if (!Objects.equals(filialDTO.getTitle(), saveFilial.getTitle())){ /*Проверка смены названия*/
             log.info("Обновляем названия филиала");
             saveFilial.setTitle(filialDTO.getTitle());
+            isChanged = true;
+        }
+        if (!Objects.equals(filialDTO.getCity().getId(), saveFilial.getCity().getId())){ /*Проверка смены URL*/
+            log.info("Обновляем Город");
+            saveFilial.setCity(cityRepository.findById(filialDTO.getCity().getId()));
             isChanged = true;
         }
         if (!Objects.equals(filialDTO.getUrl(), saveFilial.getUrl())){ /*Проверка смены URL*/

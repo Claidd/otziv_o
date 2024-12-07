@@ -9,6 +9,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./data/mysql_backup:/backup
+      - ./data/bots:/var/lib/mysql-files/
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}

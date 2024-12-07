@@ -7,6 +7,7 @@ services:
       - mysql_data:/var/lib/mysql
 #      - ./data/mysql/my.cnf:/etc/my.cnf:ro
       - ./data/mysql_backup:/backup
+      - ./data/bots:/var/lib/mysql-files/
     restart: always
     ports:
       - '3306:3306'
@@ -36,8 +37,8 @@ services:
   app:
     image: claid38/otziv-app
     restart: always
-    ports:
-      - "8080:8080"
+#    ports:
+#      - "8080:8080"
     depends_on:
       - mysql
     environment:

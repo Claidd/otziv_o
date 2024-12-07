@@ -25,14 +25,26 @@
                 <div class="col-12 pt-5">
                     <form method="post" th:object="${editFilialDTO}">
 
-                        <div class="mb-3" th:if="${saveSuccess}">
+                        <div class="mb-3" th:if="${saveSuccess ?: false}">
                             <div class="alert alert-success">
                                 Данные успешно изменены и сохранены.
                             </div>
                         </div>
 
                         <div class="mb-3" >
-                            <label for="inputFilial" class="form-label">Название</label> <br>
+                            <!-- <label for="cityTitle" class="form-label">Город:</label> <br>
+                            <input id="cityTitle" type="text" th:field="*{city.title}" class="form-control" placeholder="Введите номер компании"> -->
+
+                            <div class="form-group">
+                                <label for="city">Город:</label>
+                                <select  class="form-control" th:field="*{city.id}" id="city" name="selectedCity.id">
+                                    <!-- <option value="">Выберите категорию...</option> -->
+                                    <option th:each="city1 : ${cities}" th:value="${city1.id}" th:text="${city1.cityTitle}"></option>
+                                    <option th:unless="${!cities.contains(city1)}" th:value="${city1.id}" th:text="${city1.cityTitle}" th:selected="${city1.cityTitle != null}"></option>
+                                </select>
+                            </div>
+
+                            <label for="inputFilial" class="form-label">Адрес:</label> <br>
                             <input id="inputFilial" type="text" th:field="*{title}" class="form-control" placeholder="Введите номер компании">
                             <label for="inputUrl" class="form-label">URL</label> <br>
                             <input id="inputUrl" type="text" th:field="*{url}"  class="form-control" placeholder="Введите ссылку компании">
@@ -40,7 +52,8 @@
                                    placeholder="Введите номер компании">
                         </div>
 
-                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <!-- <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}"> -->
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                         <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
                         <th:block th:insert="~{fragments/common :: backDen}"></th:block>
                     </form>

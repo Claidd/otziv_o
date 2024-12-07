@@ -1,6 +1,7 @@
 package com.hunt.otziv.b_bots.dto;
 
 import com.hunt.otziv.b_bots.model.StatusBot;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
@@ -36,4 +37,6 @@ public class BotDTO {
     private String status;
 
     private Worker worker;
+
+    private City botCity;
 }

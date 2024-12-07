@@ -28,6 +28,9 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     @Query("SELECT b FROM Bot b WHERE b.worker = :worker ORDER BY b.id DESC")
     Optional<Bot> findFirstByWorkerOrderByIdDesc(Worker worker);
 
+    @Query("SELECT b FROM Bot b WHERE b.botCity.id = :cityId AND b.active = true")
+    List<Bot> findAllByFilialCityId(Long cityId);
+
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();

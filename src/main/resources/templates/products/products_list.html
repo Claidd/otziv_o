@@ -83,7 +83,7 @@
                                         <div class="mb-3 mt-3">
                                             <label for="inputWorker" class="form-label">Укажите филиал:</label> <br>
                                             <select th:field="*{filial.id}" id="inputWorker" name="worker"  class="form-control form-select form-select-lg company__card__content__product">  
-                                                <option th:each="filial : ${newOrder.company.filials}" name="filial" th:value="${filial.id}" th:text="${filial.title}"></option>
+                                                <option th:each="filial : ${newOrder.company.filials}" name="filial" th:value="${filial.id}" th:text="${filial.city.title + ': ' + filial.title}"></option>
                                             </select>
                                         </div>
 

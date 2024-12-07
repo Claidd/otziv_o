@@ -361,7 +361,7 @@ public class CompanyServiceImpl implements CompanyService{
         //        Устанавливаем поля из лида в новый дто
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone("");
-        companyDTO.setCity("");
+        companyDTO.setCity("Не задан");
         companyDTO.setUser(convertToUserDtoToManager(principal));
         companyDTO.setOperator(null);
         companyDTO.setManager(convertToManagerDto(managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId())));
@@ -532,6 +532,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
+                .city(filial.getCity())
                 .build();
     } // перевод филиала в ДТО
 
@@ -626,6 +627,7 @@ public class CompanyServiceImpl implements CompanyService{
         filialDTO.setId(filial.getId());
         filialDTO.setTitle(filial.getTitle());
         filialDTO.setUrl(filial.getUrl());
+        filialDTO.setCity(filial.getCity());
         // Other fields if needed
         return filialDTO;
     }

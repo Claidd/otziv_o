@@ -75,6 +75,7 @@ public class SecurityConfig {
                                         .requestMatchers("/payment_check/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                                         .requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER","MANAGER")
+                                        .requestMatchers("/cities/**").hasAnyRole("ADMIN", "OWNER","MANAGER")
 //                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
                 )
                 //    настройка логирования

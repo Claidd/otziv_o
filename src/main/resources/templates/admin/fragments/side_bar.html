@@ -69,6 +69,10 @@
                 <span class="material-icons-sharp">add</span>
                 <h3>компания</h3>
             </a>
+            <a sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MANAGER')" href="/cities" th:onclick="changeActive(event)" data-id="school">
+                <span class="material-icons-sharp">school</span>
+                <h3>Города</h3>
+            </a>
             <a href="#" th:onclick="changeActive(event)" data-id="school">
                 <span class="material-icons-sharp">school</span>
                 <h3>Обучение</h3>

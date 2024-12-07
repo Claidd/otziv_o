@@ -1,5 +1,6 @@
 package com.hunt.otziv.b_bots.model;
 
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
@@ -52,5 +53,10 @@ public class Bot {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "bot_worker")
     private Worker worker;
+
+    //    за каждым ботом закреплен город
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "bot_city_id")
+    private City botCity;
 
 }

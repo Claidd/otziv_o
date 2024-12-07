@@ -92,6 +92,12 @@ public class BotServiceImpl implements BotService {
             isChanged = true;
             log.info("Обновили Активность");
         }
+        /*Проверяем не равен ли флаг города, если нет, то меняем флаг на тру*/
+        if (!Objects.equals(botDTO.getBotCity(), saveBot.getBotCity())){
+            saveBot.setBotCity(botDTO.getBotCity());
+            isChanged = true;
+            log.info("Обновили Город");
+        }
         /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
          * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
         if  (isChanged){
@@ -180,6 +186,11 @@ public class BotServiceImpl implements BotService {
         return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
     } // Взять всех ботов по работнику и активности
 
+    public List<Bot> getFindAllByFilialCityId(Long cityId){ // Взять всех ботов по id работнику и активности
+        return botsRepository.findAllByFilialCityId(cityId);
+    } // Взять всех ботов по id работнику и активности
+
+
     @Override
     public Bot save(Bot bot) { // Сохранение ботов
         return botsRepository.save(bot);
@@ -195,6 +206,7 @@ public class BotServiceImpl implements BotService {
                 .counter(bot.getCounter())
                 .status(bot.getStatus().getBotStatusTitle())
                 .worker(bot.getWorker() != null ? bot.getWorker() : null)
+                .botCity(bot.getBotCity())
                 .build();
     } // Перевод бота в дто - конец
 

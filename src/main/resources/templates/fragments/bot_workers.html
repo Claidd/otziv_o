@@ -30,12 +30,13 @@
                         <th scope="col">Логин</th>
                         <th scope="col">Пароль</th>
                         <th scope="col">ФИО</th>
+                        <th scope="col">Город</th>
                         <th scope="col">Публикаций</th>
                         <th scope="col">Владелец</th>
                         <th scope="col">Статус</th>
                         <th scope="col">Активность</th>
                         <th scope="col">Изменить</th>
-                        <th scope="col">Удалить</th>
+                        <th sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  scope="col">Удалить</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -44,6 +45,7 @@
                         <th scope="row" th:text="${bot.login}">Логин</th>
                         <th scope="row" th:text="${bot.password}">Пароль</th>
                         <th scope="row" th:text="${bot.fio}">ФИО</th>
+                        <th scope="row" th:text="${bot.botCity.title}">Город</th>
                         <th scope="row" th:text="${bot.counter}">Публикаций</th>
                         <th scope="row" th:text="${bot.worker.user.fio}">Владелец</th>
                         <th scope="row" th:text="${bot.status}">Статус</th>
@@ -53,7 +55,7 @@
                                 <button type="submit" class="btn btn-outline-primary">Изменить</button>
                             </form>
                         </td>
-                        <td>
+                        <td sec:authorize="hasAnyRole('ADMIN', 'OWNER')">
                             <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="btn btn-outline-danger">Удалить</button>

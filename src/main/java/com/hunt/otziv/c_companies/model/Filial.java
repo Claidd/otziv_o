@@ -1,5 +1,6 @@
 package com.hunt.otziv.c_companies.model;
 
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
@@ -26,6 +27,11 @@ public class Filial {
     //    url
     @Column(name = "filial_url")
     private String url;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "city_id")
+    @ToString.Exclude
+    private City city;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")

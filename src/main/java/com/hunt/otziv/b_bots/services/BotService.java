@@ -38,4 +38,6 @@ public interface BotService {
 
     List<Bot> getAllBotsByWorker(Principal principal);
     StatusBot changeStatus(String status);
+
+    public List<Bot> getFindAllByFilialCityId(Long cityId);
 }
