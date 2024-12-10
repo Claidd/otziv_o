@@ -40,6 +40,8 @@ public class Review {
     private LocalDate changed;
     @Column(name = "review_publish_date")
     private LocalDate publishedDate;
+    @Column(name = "review_vigul")
+    private boolean vigul;
     @Column(name = "review_publish")
     private boolean publish;
     @ManyToOne(fetch = FetchType.LAZY)

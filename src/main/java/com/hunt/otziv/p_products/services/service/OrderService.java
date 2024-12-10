@@ -46,4 +46,5 @@ public interface OrderService {
 
     OrderDTO convertToOrderDTOToRepeat(Order order);
 
+    void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId);
 }

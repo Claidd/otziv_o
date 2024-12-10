@@ -37,6 +37,8 @@ public class ReviewDTO {
 
     private BotDTO bot;
 
+    private String botName;
+
     private OrderDetailsDTO orderDetails;
 
     private UUID orderDetailsId;

@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -11,6 +12,9 @@ import com.hunt.otziv.r_review.services.AmountService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +23,7 @@ import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
+import java.util.Comparator;
 
 @Controller
 @Slf4j
@@ -94,12 +99,22 @@ public class OrderController {
     } // Страница редактирования Заказа - Get
 
     @PostMapping("/ordersDetails/{companyId}/{orderId}") // Страница редактирования Заказа - Post
-    String OrderEditPost(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm,  Model model){
-        log.info("1. Начинаем обновлять данные Заказа");
-        orderService.updateOrder(orderDTO, companyId, orderId);
-        log.info("5. Обновление Заказа прошло успешно");
-        rm.addFlashAttribute("saveSuccess", "true");
-        return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
+    String OrderEditPost(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Principal principal, Model model){
+        String userRole = getRole(principal);
+        if ("ROLE_WORKER".equals(userRole)){
+            log.info("1. Начинаем обновлять данные Заказа ДЛЯ Работника");
+            orderService.updateOrderToWorker(orderDTO, companyId, orderId);
+            log.info("5. Обновление Заказа прошло успешно");
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
+        }
+        else {
+            log.info("1. Начинаем обновлять данные Заказа");
+            orderService.updateOrder(orderDTO, companyId, orderId);
+            log.info("5. Обновление Заказа прошло успешно");
+            rm.addFlashAttribute("saveSuccess", "true");
+            return "redirect:/ordersCompany/ordersDetails/{companyId}/{orderId}";
+        }
     } // Страница редактирования Заказа - Post
 
     @PostMapping("/ordersDetails/{companyId}/{orderId}/delete") // Страница редактирования Заказа - Post
@@ -374,4 +389,13 @@ public class OrderController {
         System.out.printf(text + "%.4f сек%n", timeElapsed);
     }
 //    =========================================== СМЕНА СТАТУСА ========================================================
+private String getRole(Principal principal){ // Берем роль пользователя
+    // Получите текущий объект аутентификации
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    // Получите имя текущего пользователя (пользователя, не роль)
+    String username = principal.getName();
+    // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
+    return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+} // Берем роль пользователя
+
 }

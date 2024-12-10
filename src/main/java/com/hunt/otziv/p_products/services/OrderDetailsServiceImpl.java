@@ -83,7 +83,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .company(convertToCompanyDTO(order.getCompany()))
                 .amount(order.getAmount())
                 .counter(order.getCounter())
-                .orderDetailsId(order.getDetails().iterator().next().getId())
+                .orderDetailsId(order.getDetails().getFirst().getId())
                 .filial(convertToFilialDTO(order.getFilial()))
                 .build();
     } // перевод заказа в дто
@@ -112,6 +112,9 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .orderDetailsId(review.getOrderDetails().getId())
                 .publish(review.isPublish())
                 .publishedDate(review.getPublishedDate())
+                .botName(review.getBot().getFio())
                 .build();
     } // перевод отзыва в дто
+
+
 }

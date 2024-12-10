@@ -61,42 +61,38 @@ public class ReviewServiceImpl implements ReviewService{
     private final UserService userService;
 
 
-    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
         List<Long> reviewId;
         List<Review> reviewPage;
-        LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     }  // Берем все заказы с поиском по названию компании или номеру
 
-    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> reviewId;
         List<Review> reviewPage;
-        LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Работника
 
-    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         List<Long> reviewId;
         List<Review> reviewPage;
-        LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
 
     @Override
-    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
         List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
         List<Long> reviewId;
         List<Review> reviewPage;
-        LocalDate localDate = LocalDate.now();
         reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
         reviewPage = reviewRepository.findAll(reviewId);
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
@@ -479,6 +475,7 @@ public class ReviewServiceImpl implements ReviewService{
                 .botCounter(review.getBot() != null && review.getBot().getCounter() != 0 ? review.getBot().getCounter() : 0)
                 .companyTitle(review.getOrderDetails().getOrder().getCompany().getTitle())
                 .productTitle(review.getOrderDetails().getProduct().getTitle())
+                .filialCity(review.getFilial().getCity().getTitle())
                 .filialTitle(review.getFilial().getTitle())
                 .filialUrl(review.getFilial().getUrl())
                 .workerFio(review.getWorker().getUser().getFio())
@@ -486,6 +483,7 @@ public class ReviewServiceImpl implements ReviewService{
                 .changed(review.getChanged())
                 .publishedDate(review.getPublishedDate())
                 .publish(review.isPublish())
+                .vigul(review.isVigul())
                 .comment(review.getOrderDetails().getComment())
                 .build();
     }  // Взять дто отзыв по Id
@@ -623,4 +621,57 @@ public class ReviewServiceImpl implements ReviewService{
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
     } // Перевод подкатегории дто в сущность
     //    ============================================ CONVERTER TO ENTITY =============================================
+
+
+
+
+
+
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList(),pageNumber,pageSize);
+    }  // Берем все заказы с поиском по названию компании или номеру
+
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList(),pageNumber,pageSize);
+    } // Берем все отзывы с датой для Работника
+
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
+        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList(),pageNumber,pageSize);
+    } // Берем все отзывы с датой для Менеджера
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
+        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList(), pageNumber, pageSize);
+
+    }
+
+    @Override
+    public void changeNagulReview(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        assert review != null;
+        review.setVigul(true);
+        reviewRepository.save(review);
+    }
+
+
 }

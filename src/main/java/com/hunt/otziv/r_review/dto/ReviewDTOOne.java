@@ -50,6 +50,8 @@ public class ReviewDTOOne {
 
     private String commentCompany;
 
+    private String filialCity;
+
     private String filialTitle;
 
     private String filialUrl;
@@ -65,6 +67,7 @@ public class ReviewDTOOne {
     private LocalDate publishedDate;
 
     private boolean publish;
+    private boolean vigul;
 
     private String comment;
 

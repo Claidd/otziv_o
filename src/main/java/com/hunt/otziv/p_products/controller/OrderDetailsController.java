@@ -141,6 +141,21 @@ public class OrderDetailsController {
         return "redirect:/worker/publish";
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 
+    @PostMapping("/{companyId}/{orderId}/nagul_to_worker/{reviewId}") // Нажатие кнопки выгула.
+    public String nagulReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){
+        log.info("1. Заходим в Post метод Изменение статуса");
+        try {
+            reviewService.changeNagulReview(reviewId);
+            rm.addFlashAttribute("saveSuccess", "true");
+            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+        } catch (Exception e) {
+            log.info("8. Все прошло плохо, вернулись в контроллер");
+            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ НАГУЛЕН.");
+        }
+        return "redirect:/worker/nagul";
+    } // Нажатие кнопки выгула.
+
 
     private String gerRole(Principal principal){ // Берем роль пользователя
         // Получите текущий объект аутентификации

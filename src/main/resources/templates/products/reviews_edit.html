@@ -80,7 +80,7 @@
                                     <div class="company__card__content__lead" >
                                         <!-- элементы карточки - начало -->
                                         <div class="company__card__content__subtitle">
-                                            <p >ТЕКСТ ОТЗЫВА:</p>
+                                            <p th:text="*{reviews[__${itemStat.index}__].botName}">ТЕКСТ ОТЗЫВА:</p>
                                         </div>
                                         <div  class="company__card__content__review__text">
                                             <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
@@ -91,6 +91,9 @@
                                         <div >
                                             <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
                                         </div> 
+                                        <!-- <div >
+                                            <p type="text" th:text="*{reviews[__${itemStat.index}__].botName}"></p>
+                                        </div> -->
 
 
                                         <div class="company__card__content__button">

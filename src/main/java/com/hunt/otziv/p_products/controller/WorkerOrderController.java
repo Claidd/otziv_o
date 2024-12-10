@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.Comparator;
 
 @Controller
@@ -173,13 +174,14 @@ public class WorkerOrderController {
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
         System.out.println(userRole);
+        LocalDate localDate = LocalDate.now();
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех отзывов к публикации для админа");
 //            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin(pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Админа: ", startTime);
             return "products/orders/publish_orders_worker";
         }
@@ -187,7 +189,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к публикации для Менеджера");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublish(principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublish(localDate,principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Менеджера: ", startTime);
             return "products/orders/publish_orders_worker";
         }
@@ -195,7 +197,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к публикации для Работника");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(localDate,principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime);
             return "products/orders/publish_orders_worker";
         }
@@ -203,12 +205,55 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к публикации для Владельца");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublish(principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Владельца: ", startTime);
             return "products/orders/publish_orders_worker";
         }
         else return "redirect:/";
     } // Все заказы - Публикация
+
+    @GetMapping("/nagul") // Все заказы - Нагул
+    public String ToNagulOrdersList(@RequestParam(defaultValue = "") String keyword, RedirectAttributes rm, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
+        long startTime = System.nanoTime();
+        String userRole = gerRole(principal);
+        System.out.println(userRole);
+        LocalDate localDate = LocalDate.now();
+
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех отзывов к нагулу для админа");
+//            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
+            model.addAttribute("TitleName", "Выгул");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(2), pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Админа: ", startTime);
+            return "products/orders/nagul_orders_worker";
+        }
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех отзывов к нагулу для Менеджера");
+            model.addAttribute("TitleName", "Выгул");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime);
+            return "products/orders/nagul_orders_worker";
+        }
+        if ("ROLE_WORKER".equals(userRole)){
+            log.info("Зашли список всех отзывов к нагулу для Работника");
+            model.addAttribute("TitleName", "Выгул");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime);
+            return "products/orders/nagul_orders_worker";
+        }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех отзывов к нагулу для Владельца");
+            model.addAttribute("TitleName", "Выгул");
+            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Владельца: ", startTime);
+            return "products/orders/nagul_orders_worker";
+        }
+        else return "redirect:/";
+    } // Все заказы - Нагул
 
     @GetMapping("/all_orders") // Страница просмотра всех заказов компании по всем статусам
     public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){

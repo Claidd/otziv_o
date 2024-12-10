@@ -570,7 +570,10 @@ public class OrderServiceImpl implements OrderService {
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
         System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
-        System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
+        if (orderDTO.getCounter() != null){
+            System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
+        }
+
 
 
         if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
@@ -630,9 +633,41 @@ public class OrderServiceImpl implements OrderService {
             isChanged = true;
         }
 
-        if (!Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())){ /*Проверка комментария заказа*/
-            log.info("Обновляем выполнение счетчик опубликованных текстов в заказе");
-            saveOrder.setCounter(orderDTO.getCounter());
+        if (orderDTO.getCounter() != null) {
+            if (!Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())) { /*Проверка комментария заказа*/
+                log.info("Обновляем выполнение счетчик опубликованных текстов в заказе");
+                saveOrder.setCounter(orderDTO.getCounter());
+                isChanged = true;
+            }
+        }
+
+        if  (isChanged){
+            log.info("3. Начали сохранять обновленный Заказ в БД");
+            orderRepository.save(saveOrder);
+            log.info("4. Сохранили обновленный Заказ в БД");
+        }
+        else {
+            log.info("3. Изменений не было, сущность в БД не изменена");
+        }
+    } // Метод Обновления Заказа
+
+    // Обновить профиль юзера - начало
+    @Override
+    @Transactional
+    public void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId) { // Метод Обновления Заказа
+        log.info("2. Вошли в обновление данных Заказа Для работника");
+        Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+        log.info("Достали Заказ");
+        boolean isChanged = false;
+        System.out.println(orderDTO.getCommentsCompany());
+        /*Временная проверка сравнений*/
+
+        System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
+
+
+        if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
+            log.info("Обновляем выполнение комментария заказа");
+            saveOrder.getCompany().setCommentsCompany(orderDTO.getCommentsCompany());
             isChanged = true;
         }
 
