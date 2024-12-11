@@ -232,7 +232,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Менеджера");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime);
             return "products/orders/nagul_orders_worker";
         }
@@ -240,7 +240,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Работника");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime);
             return "products/orders/nagul_orders_worker";
         }

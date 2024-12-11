@@ -61,7 +61,7 @@ public class OrderDTOList {
 
     private LocalDate payDay;
 
-    private int dayToChangeStatusAgo;
+    private long dayToChangeStatusAgo;
 
 
 

@@ -59,6 +59,7 @@ import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -1122,9 +1123,9 @@ public boolean deleteOrder(Long orderId, Principal principal){
         LocalDate now = LocalDate.now();
         LocalDate changedDate = order.getChanged();
         // Вычисляем разницу между датами
-        Period period = Period.between(changedDate, now);
+//        Period period = Period.between(changedDate, now);
         // Преобразуем период в дни
-        int daysDifference = period.getDays();
+        long daysDifference = ChronoUnit.DAYS.between(changedDate, now);;
         return OrderDTOList.builder()
                 .id(order.getId())
                 .companyId(order.getCompany().getId())
@@ -1146,7 +1147,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .created(order.getCreated())
                 .changed(order.getChanged())
                 .payDay(order.getPayDay())
-                .dayToChangeStatusAgo(period.getDays())
+                .dayToChangeStatusAgo(daysDifference)
                 .build();
     } // Конвертер DTO для заказа на AllOrderListController/orders/
 
