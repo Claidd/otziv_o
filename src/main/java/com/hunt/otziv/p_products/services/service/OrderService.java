@@ -16,7 +16,7 @@ public interface OrderService {
     boolean addNewReview(Long orderId);
     boolean deleteNewReview(Long orderId, Long reviewId);
     boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
-    boolean changeStatusForOrder(Long orderID, String title);
+    boolean changeStatusForOrder(Long orderID, String title) throws Exception;
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);
     List<OrderDTO> getAllOrderDTO();
@@ -30,7 +30,7 @@ public interface OrderService {
     Page<OrderDTOList>  getAllOrderDTOAndKeywordByOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize);
 
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
-    boolean changeStatusAndOrderCounter(Long reviewId);
+    boolean changeStatusAndOrderCounter(Long reviewId) throws Exception;
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
 
     boolean deleteOrder(Long orderId, Principal principal);

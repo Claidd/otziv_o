@@ -575,8 +575,6 @@ public class OrderServiceImpl implements OrderService {
             System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
         }
 
-
-
         if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
             log.info("Обновляем филиал заказа");
             System.out.println(saveOrder.getFilial());
@@ -767,7 +765,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
 
     @Transactional
-    public boolean changeStatusForOrder(Long orderID, String title){ // смена статуса для заказа с проверкой на Оплачено
+    public boolean changeStatusForOrder(Long orderID, String title) throws Exception { // смена статуса для заказа с проверкой на Оплачено
         try {
             Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
             if (title.equals(STATUS_PAYMENT)){
@@ -786,7 +784,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
                         try {
                             company.setCounterPay(company.getCounterPay() + order.getAmount());
-                            log.info("счетчик: {}{}", company.getCounterPay(), order.getAmount());
+                            log.info("счетчик: {} - {}", company.getCounterPay(), order.getAmount());
                             company.setSumTotal(company.getSumTotal().add(order.getSum()));
                             log.info("сумма: {}", company.getSumTotal().add(order.getSum()));
                             log.info("5. Успешно установили суммы");
@@ -809,12 +807,13 @@ public boolean deleteOrder(Long orderId, Principal principal){
                             log.info("8. Новый заказ создался автоматически - Успешно");
                             log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
                         }
-                        catch (Exception e){
-                            log.info("4. НЕ Успешно установили суммы");
+                        catch (Exception e) {
+                            log.error("Ошибка при обновлении данных компании не успешно установлены суммы", e);
+                            throw e;
                         }
                     }
                     else {
-                        log.info("2. Оплата поступила, но при сохранении какие-то проблемы");
+                        log.error("2. Оплата поступила, но при сохранении какие-то проблемы");
                     }
                 }
                 else {
@@ -844,16 +843,16 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 orderRepository.save(order);
                 return true;
             }
-        } catch (Exception e){
-            log.info("При смене статуса произошли какие-то проблемы");
-            return false;
+        } catch (Exception e) {
+            log.error("При смене статуса произошли какие-то проблемы", e);
+            throw e; // Исключение пробрасывается для отката транзакции
         }
     } // смена статуса для заказа с проверкой на Оплачено
 
 
 //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
-
-    private void saveReviewsToArchive(List<Review> reviews) { // сохранение отзывов в архив при отправке заказа в статус архив
+    @Transactional
+    protected void saveReviewsToArchive(List<Review> reviews) { // сохранение отзывов в архив при отправке заказа в статус архив
         for (Review review : reviews) {
             reviewArchiveService.saveNewReviewArchive(review.getId());
         }
@@ -878,33 +877,12 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
     @Override
     @Transactional
-    public boolean changeStatusAndOrderCounter(Long reviewId) {
+    public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
         boolean isChanged = false;
         try {
-
             Review review = reviewService.getReviewById(reviewId);
-            log.info("2. Достали отзыв по id {}", reviewId);
-
-            if (review == null) {
-                log.error("2. Отзыв с id {} не найден", reviewId);
-                throw new IllegalStateException("Проблема с отсутвием отзыва по ид, транзакция должна быть откатана");
-//                return false;
-            }
-
-            OrderDetails orderDetails = review.getOrderDetails();
-            if (orderDetails == null || orderDetails.getOrder() == null) {
-                log.error("3. OrderDetails или Order отсутствуют для отзыва с ID: {}", reviewId);
-                throw new IllegalStateException("Проблема с отсутвием деталей заказа по ид, транзакция должна быть откатана");
-//                return false;
-            }
-
-            Order order = orderRepository.findById(orderDetails.getOrder().getId()).orElse(null);
-            if (order == null || review.isPublish()) {
-                log.info("3. Проверка не пройдена: пустой order = {}, или отзыв уже опубликован publish = {}", order != null, review.isPublish());
-                throw new IllegalStateException("Проблема с отсутвием заказа по ид и статуса уже опубликован, транзакция должна быть откатана");
-//                return false;
-            }
-
+            Order order = validateAndRetrieveOrder(review, reviewId);
+            log.info("2. Достали отзыв по id {} для компании: {}", reviewId, review.getOrderDetails().getOrder().getCompany().getTitle());
             log.info("3. Заказ найден, и отзыв еще не опубликован. Продолжаем выполнение.");
 
             reviewArchiveService.saveNewReviewArchive(reviewId);
@@ -915,6 +893,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
             review.setPublish(true);
             log.info("6. Установили статус публикации отзыва на true");
+            
             reviewService.save(review);
             log.info("7. Сохранили отзыв в базе данных");
 
@@ -935,14 +914,9 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 throw new IllegalStateException("Проблема с проверкой счетчиков, транзакция должна быть откатана");
             }
             checkOrderCounterAndAmount(savedOrder);
-            log.info("10. Проверили счетчик заказа на выполнение заказа");
+            log.info("10. Проверили счетчик заказа на выполнение заказа - он еще не выполнен");
 
-            if  (isChanged){
-                return false;
-            }
-            else {
-                return true;
-            }
+            return true;
         } catch (Exception e) {
             log.error("Ошибка при выполнении метода changeStatusAndOrderCounter для отзыва с id {}", reviewId, e);
 //            return false;
@@ -950,8 +924,30 @@ public boolean deleteOrder(Long orderId, Principal principal){
         }
     }
 
+    protected Order validateAndRetrieveOrder(Review review, Long reviewId) {
+
+        if (review == null) {
+            log.error("2. Отзыв с id {} не найден", reviewId);
+            throw new IllegalStateException("Проблема с отсутвием отзыва по ид, транзакция должна быть откатана");
+//                return false;
+        }
+
+        OrderDetails orderDetails = review.getOrderDetails();
+        if (orderDetails == null || orderDetails.getOrder() == null) {
+            throw new IllegalStateException("OrderDetails или Order отсутствуют для отзыва с ID: " + reviewId);
+        }
+
+        Order order = orderRepository.findById(orderDetails.getOrder().getId()).orElse(null);
+        if (order == null || review.isPublish()) {
+            log.info("3. Проверка не пройдена: пустой order = {}, или отзыв уже опубликован publish = {}", order != null, review.isPublish());
+            throw new IllegalStateException("Проблема с отсутвием заказа по ид и статуса уже опубликован, транзакция должна быть откатана");
+//                return false;
+        }
+        else return order;
+    }
 
 
+    @Transactional
     protected int counterReviewIsPublish(Order savedOrder){
         int reviewCounter = 0;
         List<Review> reviewList = savedOrder.getDetails().getFirst().getReviews();
@@ -963,7 +959,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return reviewCounter;
     }
 
-
+    @Transactional
     public void updateBotCounterAndStatus(Bot bot) {
         try {
             bot.setCounter(bot.getCounter() + 1);
@@ -984,7 +980,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
     }
 
     @Transactional
-    protected void checkOrderCounterAndAmount(Order order) {
+    protected void checkOrderCounterAndAmount(Order order) throws Exception {
         try {
             if (order.getAmount() <= order.getCounter()) {
                 changeStatusForOrder(order.getId(), STATUS_PUBLIC);

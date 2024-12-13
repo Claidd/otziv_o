@@ -12,11 +12,15 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +40,6 @@ public class ReviewController {
     String ReviewEdit(@PathVariable Long reviewId, Model model){
         System.out.println("Вошли в обновление " + reviewService.getReviewDTOById(reviewId));
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
-        System.out.println(reviewDTO.getOrderDetailsId());
         model.addAttribute("reviewDTO", reviewDTO);
         model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
         model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getId());
@@ -44,9 +47,10 @@ public class ReviewController {
     } // Страница редактирования Заказа - Get
 
     @PostMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Post
-    String ReviewEditPost(@ModelAttribute("reviewDTO") ReviewDTO reviewDTO, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
+    String ReviewEditPost(@ModelAttribute("reviewDTO") ReviewDTO reviewDTO, @PathVariable Long reviewId, RedirectAttributes rm, Model model, Principal principal){
+        String userRole = getRole(principal);
         log.info("1. Начинаем обновлять данные отзыва");
-        reviewService.updateReview(reviewDTO, reviewId);
+        reviewService.updateReview(userRole, reviewDTO, reviewId);
         log.info("5. Обновление отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/review/editReview/{reviewId}";
@@ -117,7 +121,7 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
     @PostMapping("/editReviews/{orderDetailId}/payOk") // Страница редактирования Заказа - Post - СОХРАНИТЬ
-    String OrderPayOkPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, @PathVariable String orderDetailId){
+    String OrderPayOkPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, @PathVariable String orderDetailId) throws Exception {
         log.info("1. Начинаем менять статус заказа на ОПлачено");
         Order order = orderDetailsService.getOrderDetailById(UUID.fromString(orderDetailId)).getOrder();
         if (order.getAmount() <= order.getCounter()){
@@ -133,7 +137,7 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
     @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
-    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
+    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model) throws Exception {
         log.info("1. Начинаем обновлять данные Отзыва3");
         if (reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO)){
             log.info("Начинаем обновлять статус заказа");
@@ -152,7 +156,7 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
 
     @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
-    String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
+    String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model) throws Exception {
         log.info("1. Начинаем обновлять данные Отзыва2");
         for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
             reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
@@ -173,5 +177,13 @@ private void checkTimeMethod(String text, long startTime){
     System.out.printf(text + "%.4f сек%n", timeElapsed);
 }
 
+    private String getRole(Principal principal){ // Берем роль пользователя
+        // Получите текущий объект аутентификации
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Получите имя текущего пользователя (пользователя, не роль)
+        String username = principal.getName();
+        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
+        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+    } // Берем роль пользователя
 
 }

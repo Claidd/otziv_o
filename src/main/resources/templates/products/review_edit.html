@@ -63,7 +63,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('publishedDate')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="mb-3">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  class="mb-3">
                             <label for="publish" class="form-label">Активность</label>
                             <input type="checkbox" th:checked="${reviewDTO.isPublish()}" th:field="*{publish}" class="form-control form-paymentCheck" id="publish" aria-describedby="emailHelp">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('publish')}" th:text="${err}">Validation error</small>

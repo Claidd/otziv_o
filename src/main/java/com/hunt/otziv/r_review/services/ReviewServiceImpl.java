@@ -165,18 +165,18 @@ public class ReviewServiceImpl implements ReviewService{
     // Обновить профиль отзыв - начало
     @Override
     @Transactional
-    public void updateReview(ReviewDTO reviewDTO, Long reviewId) { // Обновление отзывов
+    public void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId) { // Обновление отзывов
         log.info("2. Вошли в обновление данных Отзыв");
         Review saveReview = reviewRepository.findById(reviewId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         log.info("Достали Отзыв");
         boolean isChanged = false;
 
         /*Временная проверка сравнений*/
-//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-//        System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
-//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-//        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
+        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+        System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
+        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
+        System.out.println("date isPublish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
@@ -195,10 +195,15 @@ public class ReviewServiceImpl implements ReviewService{
             orderDetailsService.save(orderDetails);
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())){ /*Проверка статус заказа*/
-            log.info("Обновляем публикацию отзыва");
-            saveReview.setPublish(reviewDTO.isPublish());
-            isChanged = true;
+
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) { /*Проверка статус заказа*/
+                System.out.println(reviewDTO.isPublish());
+                System.out.println(saveReview.isPublish());
+                log.info("Обновляем публикацию отзыва");
+                saveReview.setPublish(reviewDTO.isPublish());
+                isChanged = true;
+            }
         }
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
             log.info("Обновляем дату публикации отзыва");

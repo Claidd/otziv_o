@@ -27,7 +27,7 @@ public interface ReviewService {
     void deActivateAndChangeBot(Long reviewId, Long botId);
     ReviewDTO getReviewDTOById(Long reviewId);
     Review getReviewById(Long reviewId);
-    void updateReview(ReviewDTO reviewDTO, Long reviewId);
+    void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId);
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
     List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
