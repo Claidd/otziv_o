@@ -226,7 +226,7 @@ public class PersonalServiceImpl implements PersonalService {
     //========================================= ПЕРЕВОД В МАПУ ЗП И ЧЕКОВ ==================================================
     private Map<Integer, BigDecimal> calculateDailyZpSumForMonth(LocalDate targetMonthDate, List<Zp> zps) { //Создание мапы день-сумма зп
         Map<Integer, BigDecimal> dailyZpSumMap = initializeDailyZpSumMap(targetMonthDate);
-        return updateDailyZpSumMap(dailyZpSumMap, zps, targetMonthDate.getMonth());
+        return updateDailyZpSumMap(dailyZpSumMap, zps, targetMonthDate.getMonth(), targetMonthDate.getYear());
     }
 
     private Map<Integer, BigDecimal> initializeDailyZpSumMap(LocalDate date) {
@@ -235,9 +235,10 @@ public class PersonalServiceImpl implements PersonalService {
                 .collect(Collectors.toMap(i -> i, i -> BigDecimal.ZERO, (existing, replacement) -> existing, LinkedHashMap::new));
     }
 
-    private Map<Integer, BigDecimal> updateDailyZpSumMap(Map<Integer, BigDecimal> dailyZpSumMap, List<Zp> zps, Month targetMonth) {
+    private Map<Integer, BigDecimal> updateDailyZpSumMap(Map<Integer, BigDecimal> dailyZpSumMap, List<Zp> zps, Month targetMonth, int year) {
         zps.stream()
                 .filter(zp -> zp.getCreated().getMonth() == targetMonth)
+                .filter(zp -> zp.getCreated().getYear() == year)
                 .forEach(zp -> {
                     int dayOfMonth = zp.getCreated().getDayOfMonth();
                     dailyZpSumMap.computeIfPresent(dayOfMonth, (k, currentSum) -> currentSum.add(zp.getSum()));
@@ -246,22 +247,46 @@ public class PersonalServiceImpl implements PersonalService {
     } //Создание мапы день-сумма зп
 
 
+    private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<PaymentCheck> pcs) {
+        if (pcs == null || pcs.isEmpty()) {
+            // Возвращаем пустую карту, если список чеков пустой или null
+            return IntStream.rangeClosed(1, desiredDate.lengthOfMonth())
+                    .boxed()
+                    .collect(Collectors.toMap(Function.identity(), day -> BigDecimal.ZERO));
+        }
 
-
-    private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<PaymentCheck> pcs) { //Создание мапы день-сумма Чеки
+        // Создаем карту день -> сумма и сразу заполняем её значениями 0
         Map<Integer, BigDecimal> dailySalarySumMap = IntStream.rangeClosed(1, desiredDate.lengthOfMonth())
                 .boxed()
                 .collect(Collectors.toMap(Function.identity(), day -> BigDecimal.ZERO));
 
+        // Фильтруем и добавляем суммы
         pcs.stream()
-                .filter(pc -> pc.getCreated().getMonth() == desiredDate.getMonth())
+                .filter(pc -> pc.getCreated().getYear() == desiredDate.getYear()) // Фильтр по году
+                .filter(pc -> pc.getCreated().getMonth() == desiredDate.getMonth()) // Фильтр по месяцу
                 .forEach(pc -> {
                     int dayOfMonth = pc.getCreated().getDayOfMonth();
-                    dailySalarySumMap.computeIfPresent(dayOfMonth, (day, currentSum) -> currentSum.add(pc.getSum()));
+                    dailySalarySumMap.merge(dayOfMonth, pc.getSum(), BigDecimal::add); // Удобное обновление суммы
                 });
 
         return dailySalarySumMap;
-    } // Создание мапы день-сумма Чеки
+    }
+
+
+//    private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<PaymentCheck> pcs) { //Создание мапы день-сумма Чеки
+//        Map<Integer, BigDecimal> dailySalarySumMap = IntStream.rangeClosed(1, desiredDate.lengthOfMonth())
+//                .boxed()
+//                .collect(Collectors.toMap(Function.identity(), day -> BigDecimal.ZERO));
+//
+//        pcs.stream()
+//                .filter(pc -> pc.getCreated().getMonth() == desiredDate.getMonth())
+//                .forEach(pc -> {
+//                    int dayOfMonth = pc.getCreated().getDayOfMonth();
+//                    dailySalarySumMap.computeIfPresent(dayOfMonth, (day, currentSum) -> currentSum.add(pc.getSum()));
+//                });
+//
+//        return dailySalarySumMap;
+//    } // Создание мапы день-сумма Чеки
 
 //===================================== ПЕРЕВОД В МАПУ ЗП И ЧЕКОВ -  КОНЕЦ =============================================
 

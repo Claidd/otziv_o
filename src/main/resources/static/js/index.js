@@ -126,16 +126,18 @@ const myChart = new Chart(ctx, {
 
 //  ========================== ГРАФИКИ ===========================
 
-document.addEventListener('DOMContentLoaded', function() {
+// График за месяц
+
+
+document.addEventListener('DOMContentLoaded', function () {
     const canvas = document.getElementById('grafic_pay');
     const map = canvas.getAttribute('data-map');
     const parsedMap = JSON.parse(map);
-    
-        const ctx = document.getElementById('grafic_pay').getContext('2d');
-        const dates = Object.keys(parsedMap);
-        const orders = Object.values(parsedMap);
-    console.log(dates);
-        console.log(orders);
+
+    const ctx = canvas.getContext('2d');
+    const dates = Object.keys(parsedMap);
+    const orders = Object.values(parsedMap);
+
     const myChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -145,19 +147,81 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: orders,
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
+                borderWidth: 1,
+                pointRadius: 3,
+                pointHoverRadius: 5,
             }]
         },
         options: {
+            responsive: true,
+            plugins: {
+                tooltip: {
+                    enabled: true,
+                    position: 'nearest',
+                    callbacks: {
+                        label: function (tooltipItem) {
+                            return `День ${tooltipItem.label}: ${tooltipItem.raw} ₽`;
+                        }
+                    }
+                    
+                }
+            },
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Сумма, ₽'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Дни месяца'
+                    }
                 }
             }
         }
     });
+});
+
+
+
+
+
+
+// document.addEventListener('DOMContentLoaded', function() {
+//     const canvas = document.getElementById('grafic_pay');
+//     const map = canvas.getAttribute('data-map');
+//     const parsedMap = JSON.parse(map);
     
-    });
+//         const ctx = document.getElementById('grafic_pay').getContext('2d');
+//         const dates = Object.keys(parsedMap);
+//         const orders = Object.values(parsedMap);
+//     console.log(dates);
+//         console.log(orders);
+//     const myChart = new Chart(ctx, {
+//         type: 'line',
+//         data: {
+//             labels: dates,
+//             datasets: [{
+//                 label: 'Оборот по дням',
+//                 data: orders,
+//                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
+//                 borderColor: 'rgba(75, 192, 192, 1)',
+//                 borderWidth: 1
+//             }]
+//         },
+//         options: {
+//             scales: {
+//                 y: {
+//                     beginAtZero: true
+//                 }
+//             }
+//         }
+//     });
+    
+//     });
 
     // График по месяцам
     document.addEventListener('DOMContentLoaded', function() {
@@ -179,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 backgroundColor: colors[index % colors.length],
                 borderColor: colors[index % colors.length],
                 fill: false,
-                borderWidth: 2
+                borderWidth: 1
             };
         });
     
@@ -235,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 backgroundColor: colors[index % colors.length],
                 borderColor: colors[index % colors.length],
                 fill: false,
-                borderWidth: 2
+                borderWidth: 1
             };
         });
     

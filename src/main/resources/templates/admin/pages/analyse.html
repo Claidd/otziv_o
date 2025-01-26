@@ -3,17 +3,17 @@
     <!-- Основной контент - Начало -->
     <main>
 
-        <!-- Пользователи -->
+        <!-- Аналитика За вчера, неделю, месяц -->
         <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_pay}"></th:block>
-        <!-- Пользователи конец -->
+        <!-- Аналитика За вчера, неделю, месяц конец -->
 
-        <!-- График ЗП - Начало -->
+        <!-- График Обоорот по дням - Начало -->
         <th:block th:insert="~{admin/fragments/grafics/grafic_pay :: grafic_pay}"></th:block>
-        <!-- График ЗП конец -->
+        <!-- График Обоорот по дням конец -->
 
-        <!-- Пользователи -->
+        <!-- Круги оборот за год, отклики, новые компании -->
         <th:block th:insert="~{admin/fragments/circle/analyse :: analyse_orderPay}"></th:block>
-        <!-- Пользователи конец -->
+        <!-- Круги оборот за год, отклики, новые компании конец -->
 
         <!-- График ЗП - Начало -->
         <th:block th:insert="~{admin/fragments/grafics/grafic_pay_month :: grafic_pay_month}"></th:block>

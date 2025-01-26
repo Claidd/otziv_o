@@ -13,6 +13,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -59,6 +60,7 @@ public class ReviewServiceImpl implements ReviewService{
     private final WorkerService workerService;
     private final ManagerService managerService;
     private final UserService userService;
+    private final EmailService emailService;
 
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
@@ -402,9 +404,22 @@ public class ReviewServiceImpl implements ReviewService{
     @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) { // метод деактивации бота
         try {
+            Review review = reviewRepository.findById(reviewId).orElse(null);
+            log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ");
+            try {
+                assert review != null;
+                String textMail = "Деактивация бота: " + review.getBot().getFio() + " id: " + review.getBot().getId() + " счетчик: " + review.getBot().getCounter() + " логин: " + review.getBot().getLogin() + " пароль: " + review.getBot().getPassword() + ". Для компании: " + review.getOrderDetails().getOrder().getCompany().getTitle()  + ". Работник: " + review.getWorker().getUser().getFio() +  ". Менеджер: " + review.getOrderDetails().getOrder().getManager().getUser().getFio() + ". Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
+                emailService.sendSimpleEmail("2.12nps@mail.ru", "Деактивация Бота", "Опять удаляют бота" + textMail);
+                log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ - УСПЕХ");
+            }
+            catch (Exception e){
+                System.out.println("Сообщение о деактивации бота не отправилось - ПРОВАЛ");
+            }
+
             botActiveToFalse(botId);
             log.info("4. Установили нового рандомного бота");
             reviewRepository.save(getReviewToChangeBot(reviewId));
+
             log.info("5. Сохранили нового бота в отзыве в БД");
         }
         catch (Exception e){
