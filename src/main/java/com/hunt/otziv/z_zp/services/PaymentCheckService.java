@@ -19,4 +19,6 @@ public interface PaymentCheckService {
     List<PaymentCheck> findAllToDate(LocalDate localDate);
 
     List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+
+    List<PaymentCheck> getAllWorkerPaymentToDate(Long id, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

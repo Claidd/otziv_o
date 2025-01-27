@@ -21,6 +21,7 @@ public class ManagersListDTO {
     private int sum1Month;
     private int order1Month;
     private int review1Month;
+    private int payment1Month;
 
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;

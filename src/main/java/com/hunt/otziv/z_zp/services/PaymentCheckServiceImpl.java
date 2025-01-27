@@ -43,6 +43,11 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         return paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong);
     } // Взять все чеки из БД с определенных менеджеров
 
+    @Override
+    public List<PaymentCheck> getAllWorkerPaymentToDate(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return paymentCheckRepository.getAllWorkerPayments(managerId, firstDayOfMonth, lastDayOfMonth);
+    }
+
     public List<CheckDTO> getAllCheckDTO(){
         return toDTOList(paymentCheckRepository.findAll());
     }

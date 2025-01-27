@@ -647,8 +647,12 @@ public class PersonalServiceImpl implements PersonalService {
 
     private ManagersListDTO toManagersListDTOAndCount(Manager manager){
         LocalDate localDate = LocalDate.now();
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
         List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
+        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+        BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
         return ManagersListDTO.builder()
                 .id(manager.getId())
@@ -659,6 +663,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .sum1Month(sum30.intValue())
                 .order1Month(zps.size())
                 .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .payment1Month(sum30Payments.intValue())
                 .build();
     }
 
@@ -769,8 +774,9 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
         List<Zp> zps = zpService.getAllWorkerZpToDate(manager.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
+        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, localDate);
+        BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
         return ManagersListDTO.builder()
                 .id(manager.getId())
@@ -781,6 +787,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .sum1Month(sum30.intValue())
                 .order1Month(zps.size())
                 .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .payment1Month(sum30Payments.intValue())
                 .build();
     }
 

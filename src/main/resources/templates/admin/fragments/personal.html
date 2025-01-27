@@ -297,6 +297,7 @@
                         <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${manager.sum1Month} + ' руб.'">редактировать</p>
                         <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${manager.order1Month} + ' заказов'">редактировать</p>
                         <p sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'MARLETOLOG', 'OPERATOR', 'OWNER')"  th:text="${manager.review1Month} + ' отзывов'">редактировать</p>
+                        <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${manager.payment1Month} + ' руб.'">редактировать</p>
                     </a>
                 </div>
             </div>

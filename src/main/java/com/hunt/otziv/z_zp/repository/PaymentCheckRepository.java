@@ -27,4 +27,7 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
 
     @Query("SELECT p FROM PaymentCheck p WHERE (YEAR(p.created) = YEAR(:localDate) OR YEAR(p.created) = YEAR(:localDate2)) AND p.managerId IN :managers")
     List<PaymentCheck> findAllToDateByManagers(LocalDate localDate, LocalDate localDate2, List<Long> managers);
+
+    @Query("SELECT p FROM PaymentCheck p WHERE p.managerId = :managerId AND p.created >= :firstDayOfMonth AND p.created <= :lastDayOfMonth")
+    List<PaymentCheck> getAllWorkerPayments(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }
