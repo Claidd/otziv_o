@@ -317,12 +317,13 @@ public class ReviewServiceImpl implements ReviewService{
     @Override
     @Transactional
     public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) { // Обновление Деталей и Отзывов, Разрешение к публикации
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
-        log.info("{}", orderDetailsDTO);
-        log.info("{}", orderDetailsDTO.getAmount());
+        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации ");
+//        log.info("{}", orderDetailsDTO);
+//        log.info("{}", orderDetailsDTO.getAmount());
         try {
             OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-            int plusDays = (30 / orderDetailsDTO.getAmount());
+            // Рассчитываем plusDays с минимальным значением 1
+            int plusDays = Math.max(30 / orderDetailsDTO.getAmount(), 1);
             LocalDate localDate = LocalDate.now();
 
             for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {

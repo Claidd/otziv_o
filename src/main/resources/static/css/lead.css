@@ -345,6 +345,44 @@ body {
     font-family: 'laptev_brush';
 }
 
+
+
+ /* Контейнер меню */
+ .menu-container {
+    text-align: center;
+    /* margin: 10px; */
+    
+}
+/* Стрелка-кнопка */
+.menu-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    font-size: 24px;
+    /* padding: 10px; */
+    cursor: pointer;
+    /* display: flex;
+    justify-content: center;
+    align-items: center; */
+    /* position: relative; */
+}
+.menu-toggle::after {
+    content: "▼"; /* Стрелка вниз */
+    font-size: 24px;
+    transition: transform 0.3s ease;
+}
+.menu-toggle.active::after {
+    transform: rotate(180deg); /* Поворот стрелки вверх */
+}
+/* Контент меню */
+.menu-content {
+    display: none; /* По умолчанию скрыто */
+    /* padding: 10px; */
+    /* border: 1px solid #ccc; */
+    border-radius: 5px;
+    /* background-color: #f9f9f9; */
+    /* margin-top: 5px; */
+}
 /* =================== CHOOSE END ================= */
 
 /* ================== LEADS EDIT START ================ */
@@ -921,6 +959,9 @@ body {
 
         .tabs__content__lead-item {
             grid-template-columns: repeat(1, 1fr);
+            margin-top: 10px;
+            grid-template-columns: repeat(10, minmax(370px, 1fr));
+            overflow-x: scroll;
         }
 
         .tabs__btn__lead-item{
@@ -945,6 +986,15 @@ body {
         .company__section-title{
             margin-top: 0;
         }
+
+        .company__section-title{
+            margin: 0px;
+        }
+    
+        .tabs__btn__lead-item{
+            margin-top: 0px;
+            margin-bottom: 0px;
+        }
 }
 
 
@@ -955,6 +1005,8 @@ body {
     .tabs__btn__lead{
         grid-template-columns: repeat(3, 1fr);
     }
+
+   
 
 
     .section-title {
@@ -982,6 +1034,7 @@ body {
 
     .tabs__content__lead-item {
         gap: 40px;
+        grid-template-columns: repeat(10, minmax(330px, 1fr));
     }
 
     .company__lead__card {

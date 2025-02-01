@@ -32,6 +32,39 @@ spring:
     baseline-on-migrate: true
 
 
+#server:
+#  port: 8080
+#  servlet:
+#    session:
+#      timeout: 28800
+#spring:
+#  servlet:
+#    multipart:
+#      max-file-size: 15MB
+#      max-request-size: 15MB
+#  mail:
+#    host: smtp.mail.selcloud.ru
+#    port: 1126
+#    username: 1854
+#    password: 0WgVTPRwxUtLFQo2uI
+#    properties:
+#      mail:
+#        smtp:
+#          auth: true
+#          starttls:
+#            enable: true
+#  jpa:
+#    properties:
+#      hibernate:
+#        ddl-auto: validate
+#      show-sql: false
+#  datasource:
+#    url: jdbc:mysql://localhost:3306/otziv
+#    username: hunt
+#    password: 545321
+#  flyway:
+#    baseline-on-migrate: true
+
 
 
 

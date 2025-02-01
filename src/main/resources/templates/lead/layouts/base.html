@@ -31,5 +31,19 @@
                     <th:block th:insert="~{fragments/common :: js}"></th:block>
                 </div> <!-- wrapper --> 
         </body>
+        <script>
+            function toggleMenu() {
+                let menu = document.getElementById("menu");
+                let toggleButton = document.querySelector(".menu-toggle");
+        
+                if (menu.style.display === "none" || menu.style.display === "") {
+                    menu.style.display = "block";
+                    toggleButton.classList.add("active"); // Поворачиваем стрелку
+                } else {
+                    menu.style.display = "none";
+                    toggleButton.classList.remove("active"); // Возвращаем стрелку обратно
+                }
+            }
+        </script>
     </html>
 </th:block>

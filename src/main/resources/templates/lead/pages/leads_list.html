@@ -2,71 +2,83 @@
 
     <!-- ===================== CHOOSE START ========================== -->
 
+
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
     <section class="company__lead__card">
         <div class="container">
             <h2 class="company__section-title">Лид кабинет</h2>
-            <div class="company__tabs__lead">
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                <div class="tabs__btn__lead">
-                    <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Отправить</button>
-                    <button class="tabs__btn__lead-item" data-button="content-2">Напомнить</button>
-                    <button class="tabs__btn__lead-item" data-button="content-3">Решают</button>
-                    <button class="tabs__btn__lead-item" data-button="content-4">Напомнить еще</button>
-                    <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
-                    <button class="tabs__btn__lead-item" data-button="content-6">Все</button>
-                    <a class="tabs__btn__lead__a-item" th:href="@{'/categories'}" data-button="content-7">Категории</a>
-                    <a class="tabs__btn__lead__a-item" th:href="@{'/companies/company'}" data-button="content-8">Компании</a>
-                </div>
-                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
-                <div class="tabs__content-lead">
-                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
-                    <div class="card__remember">
-                        <div class="card__remember__box">
-                            <div class="card_remember-content">
-                                <!-- The text field -->
-                                <textarea class="card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+            <div class="menu-container">
+                <button class="menu-toggle" onclick="toggleMenu()">Меню</button>
+                <div class="menu-content" id="menu">
 
-                                <!-- The button used to copy the text -->
-                                <button class="card_remember-content__btn" onclick="myFunction1()">предложение</button>
-                            </div>
-                            <div class="card_remember-content">
-                                <!-- The text field -->
-                                <textarea class="card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>
-
-                                <!-- The button used to copy the text -->
-                                <button class="card_remember-content__btn" onclick="myFunction2()">напоминание</button>
-                            </div>
-                            <div class="card_remember-content">
-                                <!-- The text field -->
-                                <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>
-
-                                <!-- The button used to copy the text -->
-                                <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>
-                            </div>
-                            <div class="card_remember-content">
-                                <!-- The text field -->
-                                <textarea class="card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>
-
-                                <!-- The button used to copy the text -->
-                                <button class="card_remember-content__btn" onclick="myFunction4()">ответы</button>
-                            </div>
+             
+                    <div class="company__tabs__lead">
+                        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+                        <div class="tabs__btn__lead">
+                            <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Отправить</button>
+                            <button class="tabs__btn__lead-item" data-button="content-2">Напомнить</button>
+                            <button class="tabs__btn__lead-item" data-button="content-3">Решают</button>
+                            <button class="tabs__btn__lead-item" data-button="content-4">Напомнить еще</button>
+                            <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
+                            <button class="tabs__btn__lead-item" data-button="content-6">Все</button>
+                            <a class="tabs__btn__lead__a-item" th:href="@{'/categories'}" data-button="content-7">Категории</a>
+                            <a class="tabs__btn__lead__a-item" th:href="@{'/companies/company'}" data-button="content-8">Компании</a>
                         </div>
-                        <div class="card__remember__box-serch">
+                        <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
+
+                        <div class="tabs__content-lead">
+                            <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
+                            <div class="card__remember">
+                                <div class="card__remember__box">
+                                    <div class="card_remember-content">
+                                        <!-- The text field -->
+                                        <textarea class="card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+
+                                        <!-- The button used to copy the text -->
+                                        <button class="card_remember-content__btn" onclick="myFunction1()">предложение</button>
+                                    </div>
+                                    <div class="card_remember-content">
+                                        <!-- The text field -->
+                                        <textarea class="card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>
+
+                                        <!-- The button used to copy the text -->
+                                        <button class="card_remember-content__btn" onclick="myFunction2()">напоминание</button>
+                                    </div>
+                                    <div class="card_remember-content">
+                                        <!-- The text field -->
+                                        <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>
+
+                                        <!-- The button used to copy the text -->
+                                        <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>
+                                    </div>
+                                    <div class="card_remember-content">
+                                        <!-- The text field -->
+                                        <textarea class="card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>
+
+                                        <!-- The button used to copy the text -->
+                                        <button class="card_remember-content__btn" onclick="myFunction4()">ответы</button>
+                                    </div>
+                                </div>
+                                <div class="card__remember__box-serch">
+                                    
+                                        <form class="card_remember-search" th:method="get" th:action="@{/lead}">
+                                            <!-- The text field -->
+                                            <input class="card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                                            <!-- The button used to copy the text -->
+                                            <button type="submit" class="card_remember-search__btn">Найти</button>
+                                        </form>
+                                </div>
+                                
+                            </div>
+                            <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
                             
-                                <form class="card_remember-search" th:method="get" th:action="@{/lead}">
-                                    <!-- The text field -->
-                                    <input class="card_remember-search__text" type="text" value="" name="keyword" id="keyword">
-                                    <!-- The button used to copy the text -->
-                                    <button type="submit" class="card_remember-search__btn">Найти</button>
-                                </form>
+                            <!-- <button onclick="alert('Фильтр применен')">Применить фильтр</button> -->
                         </div>
-                        
                     </div>
-                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
-                    
-                    
+                </div>
+
+
     
                     <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                     <div class="tabs__content__lead-item tabs__content__lead-item--active" id="content-1">
@@ -165,7 +177,7 @@
                                 </li>
                         
                                 Отображаем первые пять страниц
-                                <!-- <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
+                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
                                     th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                     <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
                                 </li> -->
@@ -185,7 +197,7 @@
                                     <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
                                 </li>
                             </ul>
-                        </div> ->
+                        </div> -->
                         
                     
 
@@ -600,7 +612,7 @@
 
 
                 </div> <!-- tabs__content -->
-            </div> <!-- tabs -->
+            <!-- </div> tabs -->
 <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
                         
         </div> <!-- container -->
