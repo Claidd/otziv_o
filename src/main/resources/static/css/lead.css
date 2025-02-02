@@ -347,11 +347,9 @@ body {
 
 
 
- /* Контейнер меню */
- .menu-container {
+.menu-container {
     text-align: center;
     /* margin: 10px; */
-    
 }
 /* Стрелка-кнопка */
 .menu-toggle {
@@ -359,12 +357,11 @@ body {
     background: none;
     border: none;
     font-size: 24px;
-    /* padding: 10px; */
+    padding: 10px;
     cursor: pointer;
-    /* display: flex;
+    display: none; /* Скрыта по умолчанию */
     justify-content: center;
-    align-items: center; */
-    /* position: relative; */
+    align-items: center;
 }
 .menu-toggle::after {
     content: "▼"; /* Стрелка вниз */
@@ -376,13 +373,15 @@ body {
 }
 /* Контент меню */
 .menu-content {
-    display: none; /* По умолчанию скрыто */
-    /* padding: 10px; */
+    padding: 10px;
     /* border: 1px solid #ccc; */
     border-radius: 5px;
     /* background-color: #f9f9f9; */
-    /* margin-top: 5px; */
+    margin-top: 5px;
 }
+
+
+
 /* =================== CHOOSE END ================= */
 
 /* ================== LEADS EDIT START ================ */
@@ -938,8 +937,6 @@ body {
             box-shadow: none;
         }
 
-
-
         .tabs__content-item {
             grid-template-columns: repeat(1, 1fr);
         }
@@ -994,6 +991,21 @@ body {
         .tabs__btn__lead-item{
             margin-top: 0px;
             margin-bottom: 0px;
+        }
+
+        .menu-toggle {
+            display: flex; /* Показываем кнопку */
+        }
+        .menu-content {
+            display: none; /* Меню скрыто по умолчанию */
+        }
+
+        .header {
+            padding: 0px;
+        }
+
+        .page__row-footer{
+            margin-top: 1rem;
         }
 }
 

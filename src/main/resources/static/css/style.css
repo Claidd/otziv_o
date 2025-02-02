@@ -37,6 +37,10 @@ body {
 	font-display: swap;
 	/* background-color: #f6f6f9; */
 	background-color: #fff;
+
+    display: flex;
+    flex-direction: column;
+	
 }
 
 button {
@@ -580,3 +584,53 @@ button {
     font-weight: 700;
     text-align: center;
 }
+
+
+@media (max-width: 650px) {
+	.header {
+		padding: 0px;
+	}
+
+	.footer {
+		position: sticky;
+		top: 100vh;
+		background-color: #ffffff;
+		text-align: center;
+		padding: 10px;
+	}
+
+	/* .footer {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		width: 100%;
+		background-color: #f1c40f;
+		text-align: center;
+	} */
+
+	/* .footer {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		width: 100%;
+		background-color: #ffffff;
+		text-align: center;
+
+	} */
+
+
+
+	.page__row-footer{
+		margin-top: 1rem;
+	}
+
+	.headline {
+		display: block;
+		margin-bottom: 70px;
+	}
+
+	.text {
+		display: none;
+	}
+}
+

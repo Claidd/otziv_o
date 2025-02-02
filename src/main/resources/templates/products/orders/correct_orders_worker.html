@@ -20,12 +20,16 @@
                 <div class="container">
                     <h2 class="company__section-title" th:text="'Список заказов:  ' + ${TitleName}">Список заказов</h2>
                     <div class="company__tabs__lead">
+                        <div class="menu-container">
+                            <button class="menu-toggle" onclick="toggleMenu()">Меню</button>
+                            <div class="menu-content" id="menu">
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                         <div class="company__tabs__btn__worker">
                         <a class="company__tabs__btn-item" data-button="content-10" th:href="@{'/worker/new_orders'}">Новые</a>
                         <a class="company__tabs__btn-item company__tabs__btn-item--active" data-button="content-11" th:href="@{'/worker/correct'}">Коррекция</a>
+                        <a class="company__tabs__btn-item" data-button="content-15" th:href="@{'/worker/nagul'}">Выгул</a>
                         <a class="company__tabs__btn-item" data-button="content-12" th:href="@{'/worker/publish'}">Публикация</a>
-                        <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/bot'}">Аккаунты</a>
+                        <!-- <a class="company__tabs__btn-item" data-button="content-11" th:href="@{'/worker/bot'}">Аккаунты</a> -->
                         <a class="company__tabs__btn-item" data-button="content-13" th:href="@{'/worker/all_orders'}">Все</a>
                     </div>
                     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
@@ -39,5 +43,19 @@
                 <header th:replace="~{fragments/footer :: footer}"></header>
                 <th:block th:insert="~{fragments/common :: js}"></th:block>
             </div><!-- wrapper -->
+            <script>
+                function toggleMenu() {
+                    let menu = document.getElementById("menu");
+                    let toggleButton = document.querySelector(".menu-toggle");
+            
+                    if (menu.style.display === "none" || menu.style.display === "") {
+                        menu.style.display = "block";
+                        toggleButton.classList.add("active"); // Поворачиваем стрелку
+                    } else {
+                        menu.style.display = "none";
+                        toggleButton.classList.remove("active"); // Возвращаем стрелку обратно
+                    }
+                }
+            </script>
     </body>
     </html>

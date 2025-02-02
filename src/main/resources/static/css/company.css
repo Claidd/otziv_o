@@ -380,6 +380,42 @@ b{
 
 /* ================= LEADS START =============== */
 
+.menu-container {
+    text-align: center;
+    /* margin: 10px; */
+}
+/* Стрелка-кнопка */
+.menu-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    font-size: 24px;
+    padding: 10px;
+    cursor: pointer;
+    display: none; /* Скрыта по умолчанию */
+    justify-content: center;
+    align-items: center;
+}
+.menu-toggle::after {
+    content: "▼"; /* Стрелка вниз */
+    font-size: 24px;
+    transition: transform 0.3s ease;
+    color: white; /* Цвет заливки (делаем белым) */
+    -webkit-text-stroke: 1px black; /* Черная граница */
+}
+.menu-toggle.active::after {
+    transform: rotate(180deg); /* Поворот стрелки вверх */
+}
+/* Контент меню */
+.menu-content {
+    padding: 10px;
+    /* border: 1px solid #ccc; */
+    border-radius: 5px;
+    /* background-color: #f9f9f9; */
+    margin-top: 5px;
+}
+
+
 .leads {
     padding: 100px 0 150px;
 }
@@ -1622,6 +1658,8 @@ b{
     width: 100%;
 }
 
+
+
 /* =================== LEADS CARD END ================= */
 
 /* ================= PROGRESS BAR START ================ */
@@ -2806,6 +2844,17 @@ main .recent-orders a{
             margin-top: 0;
         }
 
+        .menu-toggle {
+            display: flex; /* Показываем кнопку */
+        }
+        .menu-content {
+            display: none; /* Меню скрыто по умолчанию */
+        }
+
+        .company__tabs__content-item {
+            margin-top: 1rem;
+        }
+
             /* ==================== секция редакции отзывов =================== */
     .company__card__content__review__text {
         height: 165px;
@@ -2854,6 +2903,10 @@ main .recent-orders a{
 
     .company__tabs__lead {
         margin-bottom: 20px;
+    }
+
+    .company__section-title {
+        margin-bottom: 0rem;
     }
 
     .company__card__text__review-button {
@@ -3049,7 +3102,7 @@ main .recent-orders a{
 
     
             .orderdetails__tabs__content-item {
-                grid-template-columns: repeat(10, minmax(250px, 1fr));
+                grid-template-columns: repeat(10, minmax(280px, 1fr));
             }
     
             .orderdetails__tabs__content-item2 {
@@ -3065,13 +3118,25 @@ main .recent-orders a{
                 grid-template-columns: repeat(3, 1fr);
                 margin-bottom: 20px;
             }
+
+            .company__card__content__review__text {
+                height: 280px;
+            }
+
+            .company__card__content__comments {
+                height: 100px;
+            }
+    
+            .company__card__text__review2 {
+                height: 100px;
+            }
         }
 
             /* ==================== 413 =================== */
     @media (max-width: 415px) {
 
         .company__card__content__review__text {
-            height: 100px;
+            height: 200px;
         }
 
         .reviews__details {
@@ -3084,11 +3149,19 @@ main .recent-orders a{
 
 
         .orderdetails__tabs__content-item {
-            grid-template-columns: repeat(10, minmax(250px, 1fr));
+            grid-template-columns: repeat(10, minmax(280px, 1fr));
         }
 
         .orderdetails__tabs__content-item2 {
             grid-template-columns: repeat(10, minmax(380px, 1fr));
+        }
+
+        .company__card__content__comments {
+            height: 100px;
+        }
+
+        .company__card__text__review2 {
+            height: 100px;
         }
 
     }
@@ -3114,11 +3187,26 @@ main .recent-orders a{
         }
     }
 
+    @media (max-width: 376px) {
+        .company__card__content__review__text {
+            height: 150px;
+        }
+
+        /* .company__card__content__comments {
+            height: 100px;
+        }
+
+        .company__card__text__review2 {
+            height: 100px;
+        } */
+
+    }
+
                     /* ==================== 360 =================== */
     @media (max-width: 361px) {
 
         .company__card__content__review__text {
-            height: 100px;
+            height: 120px;
         }
     
         .company__card__content__review__answer {
