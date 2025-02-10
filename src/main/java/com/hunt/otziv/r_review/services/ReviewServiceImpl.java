@@ -179,11 +179,19 @@ public class ReviewServiceImpl implements ReviewService{
         System.out.println("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
         System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
         System.out.println("date isPublish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+        System.out.println("botName: " + !Objects.equals(reviewDTO.getBotName(), saveReview.getBot().getFio()));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
             saveReview.setText(reviewDTO.getText());
             isChanged = true;
+        }
+        if (!Objects.equals(reviewDTO.getBotName(), saveReview.getBot().getFio())){ /*Проверка смены названия*/
+            log.info("Обновляем Имя Бота");
+            Bot bot = saveReview.getBot();
+            bot.setFio(reviewDTO.getBotName());
+            botService.save(bot);
+//            isChanged = true;
         }
         if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())){ /*Проверка смены работника*/
             log.info("Обновляем ответ на отзыв");
@@ -200,13 +208,12 @@ public class ReviewServiceImpl implements ReviewService{
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) { /*Проверка статус заказа*/
-                System.out.println(reviewDTO.isPublish());
-                System.out.println(saveReview.isPublish());
                 log.info("Обновляем публикацию отзыва");
                 saveReview.setPublish(reviewDTO.isPublish());
                 isChanged = true;
             }
         }
+
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
@@ -410,7 +417,7 @@ public class ReviewServiceImpl implements ReviewService{
             try {
                 assert review != null;
                 String textMail = "Деактивация бота: " + review.getBot().getFio() + " id: " + review.getBot().getId() + " счетчик: " + review.getBot().getCounter() + " логин: " + review.getBot().getLogin() + " пароль: " + review.getBot().getPassword() + ". Для компании: " + review.getOrderDetails().getOrder().getCompany().getTitle()  + ". Работник: " + review.getWorker().getUser().getFio() +  ". Менеджер: " + review.getOrderDetails().getOrder().getManager().getUser().getFio() + ". Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
-                emailService.sendSimpleEmail("2.12nps@mail.ru", "Деактивация Бота", "Опять удаляют бота" + textMail);
+                emailService.sendSimpleEmail("o-company-server@mail.ru", "Деактивация Бота", "Опять удаляют бота" + textMail);
                 log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ - УСПЕХ");
             }
             catch (Exception e){
@@ -524,6 +531,7 @@ public class ReviewServiceImpl implements ReviewService{
                 .category(convertToCategoryDto(review.getCategory()))
                 .subCategory(convertToSubCategoryDto(review.getSubCategory()))
                 .bot(convertToBotDTO(review.getBot()))
+                .botName(review.getBot().getFio())
                 .filial(convertToFilialDTO(review.getFilial()))
                 .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
                 .worker(convertToWorkerDTO(review.getWorker()))

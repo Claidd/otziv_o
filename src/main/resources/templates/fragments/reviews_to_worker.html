@@ -5,26 +5,7 @@
     <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
 
-    <div class="company__tabs__content-lead">
-        <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
-        <div class="company__card__remember">
-            <div class="company__card__remember__box">
-                <div class="company__card__remember__box-serch">
-
-                    <form class="company__card_remember-search2" th:method="get">
-                        <!-- The text field -->
-                        <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
-                        <!-- The button used to copy the text -->
-                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                        <button type="submit" class="company__card_remember-search__btn">Найти</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>
-</div>
+  
     
         <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
 
@@ -117,15 +98,31 @@
                                 <textarea  class="company__card__remember-text" th:utext="${review.answer}" th:id="'ReviewAnswer_' + ${review.id}"></textarea>
                                 <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionReviewAnswer(' + ${review.id} + ')'" >ответ</button>
                             </div>
-                            <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/change_bot/' + ${review.id}}">
+                            <!-- <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/change_bot/' + ${review.id}}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
                                 <button type="submit" class="company__card__text__lead-button ">смена</button>
+                            </form> -->
+                            <form class="company__card__text__lead"  onsubmit="changeBot(event, this)">
+                                <input type="hidden" name="_csrf" th:value="${_csrf.token}">
+                                <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
+                                <input type="hidden" name="orderId" th:value="${review.orderId}">
+                                <input type="hidden" name="reviewId" th:value="${review.id}">
+                                <button type="submit" class="company__card__text__lead-button">смена</button>
                             </form>
-                            <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/deactivate_bot/' + ${review.id} + '/' + ${review.botId}}">
+                            <!-- <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/deactivate_bot/' + ${review.id} + '/' + ${review.botId}}">
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit"  class="company__card__text__lead-button ">блок</button>
+                            </form> -->
+                            <form class="company__card__text__lead"  onsubmit="deActivateBot(event, this)">
+                                <input type="hidden" name="_csrf" th:value="${_csrf.token}">
+                                <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
+                                <input type="hidden" name="orderId" th:value="${review.orderId}">
+                                <input type="hidden" name="reviewId" th:value="${review.id}">
+                                <input type="hidden" name="botId" th:value="${review.botId}">
+                                <button type="submit"  class="company__card__text__lead-button ">блок</button>
                             </form>
+
                         </div> <!-- card__content_button -->
 
                         <div>

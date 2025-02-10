@@ -8,6 +8,8 @@ import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -48,48 +51,216 @@ public class OrderDetailsController {
         }
     } // Переход на страницу Просмотра  деталей заказа
 
-    @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота
-    public String changeBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, Model model){
-        System.out.println(pageName);
-        log.info("1. Заходим в Post метод замены бота");
+
+    @PostMapping("/{orderId}/change_bot/{reviewId}")
+    public String changeBot(
+            @RequestParam(defaultValue = "") String pageName,
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Principal principal,
+            Model model) {
+        long startTime = System.nanoTime();
+        String userRole = gerRole(principal);
+        int pageSize = 10; // желаемый размер страницы
+        LocalDate localDate = LocalDate.now();
         reviewService.changeBot(reviewId);
-        log.info("5. Все прошло успешно, вернулись в контроллер");
+        System.out.println(pageName);
 
-        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
-            log.info("Зашли список всех заказов для админа");
-            return "redirect:/worker/publish";
-        }
         if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("companyID", companyId);
-            model.addAttribute("orderID", orderId);
-            model.addAttribute("reviewID", orderId);
-            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+            List<ReviewDTOOne> updatedReviews = reviewService.getReviewsAllByOrderId(orderId);
+            model.addAttribute("reviews", updatedReviews);
+            checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  orders_detail_list + fragments/reviews_to_order", startTime);
+            return "fragments/reviews_to_order :: reviews_to_order";
         }
-        return "redirect:/worker/publish";
-//        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
-    } // Замена Бота
+        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+            if ("ROLE_ADMIN".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
 
-    @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}") // Деактивация и замена Бота
-    public String deActivateBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
-        log.info("1. Заходим в Post метод замены бота");
+            if ("ROLE_MANAGER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublish(localDate,principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+
+            if ("ROLE_WORKER".equals(userRole)) {
+                log.info("Зашли список всех заказов для работника");
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+
+            if ("ROLE_OWNER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+        }
+
+        if ("Выгул".equals(pageName)) { // возврат на страницу публикации с Рабочего
+            if ("ROLE_ADMIN".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(2), pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_MANAGER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_WORKER".equals(userRole)) {
+                log.info("Зашли список всех заказов для работника");
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_OWNER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+        }
+        return "fragments/reviews_to_worker :: reviews_to_worker";
+    }
+
+    @PostMapping("/{orderId}/deactivate_bot/{reviewId}/{botId}") // Деактивация и замена Бота
+    public String deActivateBot(@RequestParam(defaultValue = "0") int pageNumber, @RequestParam(defaultValue = "") String pageName, Principal principal,@PathVariable Long reviewId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
+        long startTime = System.nanoTime();
+        String userRole = gerRole(principal);
+        int pageSize = 10; // желаемый размер страницы
+        LocalDate localDate = LocalDate.now();
         reviewService.deActivateAndChangeBot(reviewId, botId);
-        log.info("6. Все прошло успешно, вернулись в контроллер");
 
-        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
-            log.info("Зашли список всех заказов для админа");
-            return "redirect:/worker/publish";
-        }
         if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
             log.info("Зашли список всех заказов для Менеджера");
-            model.addAttribute("companyID", companyId);
-            model.addAttribute("orderID", orderId);
-            model.addAttribute("reviewID", orderId);
-            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+            List<ReviewDTOOne> updatedReviews = reviewService.getReviewsAllByOrderId(orderId);
+            model.addAttribute("reviews", updatedReviews);
+            checkTimeMethod("Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  orders_detail_list + fragments/reviews_to_order", startTime);
+            return "fragments/reviews_to_order :: reviews_to_order";
         }
-        return "redirect:/worker/publish";
-//        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+            if ("ROLE_ADMIN".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+
+            if ("ROLE_MANAGER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublish(localDate,principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+
+            if ("ROLE_WORKER".equals(userRole)) {
+                log.info("Зашли список всех заказов для работника");
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+
+            if ("ROLE_OWNER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/reviews_to_worker :: reviews_to_worker";
+            }
+        }
+
+        if ("Выгул".equals(pageName)) { // возврат на страницу публикации с Рабочего
+            if ("ROLE_ADMIN".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(2), pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_MANAGER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_WORKER".equals(userRole)) {
+                log.info("Зашли список всех заказов для работника");
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+
+            if ("ROLE_OWNER".equals(userRole)){
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
+                model.addAttribute("reviews", updatedReviews);
+                checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
+                return "fragments/nagul_to_worker :: nagul_to_worker";
+            }
+        }
+        return "fragments/reviews_to_worker :: reviews_to_worker";
     } // Деактивация и замена Бота
+
+
+
+//    @PostMapping("/{companyId}/{orderId}/change_bot/{reviewId}") // Замена Бота
+//    public String changeBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, Model model){
+//        System.out.println(pageName);
+//        log.info("1. Заходим в Post метод замены бота");
+//        reviewService.changeBot(reviewId);
+//        log.info("5. Все прошло успешно, вернулись в контроллер");
+//
+//        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+//            log.info("Зашли список всех заказов для админа");
+//            return "redirect:/worker/publish";
+//        }
+//        if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
+//            log.info("Зашли список всех заказов для Менеджера");
+//            model.addAttribute("companyID", companyId);
+//            model.addAttribute("orderID", orderId);
+//            model.addAttribute("reviewID", orderId);
+//            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+//        }
+//        return "redirect:/worker/publish";
+////        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+//    } // Замена Бота
+
+//    @PostMapping("/{companyId}/{orderId}/deactivate_bot/{reviewId}/{botId}") // Деактивация и замена Бота
+//    public String deActivateBot(@RequestParam(defaultValue = "") String pageName, @PathVariable Long reviewId, @PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long botId, Model model){
+//        log.info("1. Заходим в Post метод замены бота");
+//        reviewService.deActivateAndChangeBot(reviewId, botId);
+//        log.info("6. Все прошло успешно, вернулись в контроллер");
+//
+//        if ("Работник_Публикация".equals(pageName)){ // возврат на страницу публикации с Рабочего
+//            log.info("Зашли список всех заказов для админа");
+//            return "redirect:/worker/publish";
+//        }
+//        if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
+//            log.info("Зашли список всех заказов для Менеджера");
+//            model.addAttribute("companyID", companyId);
+//            model.addAttribute("orderID", orderId);
+//            model.addAttribute("reviewID", orderId);
+//            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+//        }
+//        return "redirect:/worker/publish";
+////        return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+//    } // Деактивация и замена Бота
 
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReview(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model){

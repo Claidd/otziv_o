@@ -80,17 +80,23 @@
                             <input type="text" id="orderDetailsId" th:field="*{orderDetailsId}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('orderDetailsId')}" th:text="${err}">Validation error</small>
                         </div>
+
+                        <div class="form-group">
+                            <label for="botName">Имя Бота</label>
+                            <input type="text" id="botFIO" th:field="*{botName}" class="form-control">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('botName')}" th:text="${err}">Validation error</small>
+                        </div>
                         
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                        <button  type="submit" class="btn btn-primary mt-3">Сохранить</button>
+                        <button  type="submit" class="btn btn-warning mt-3">Сохранить</button>
                             
                             <!-- <a th:href="@{'/ordersDetails/'+ ${companyId} + '/' + ${orderId}}" class="btn btn-secondary mt-3">Назад</a> -->
                             <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
                             <!-- <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3 ml-5">Удалить</a> -->
                     </form>
-                    <form th:action="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post">
+                    <form class="mt-5" th:action="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post">
                         <input type="hidden" name="_csrf" th:value="${_csrf.token}" />
-                        <button type="submit" class="btn btn-secondary mt-3 ml-5">Удалить</button>
+                        <button type="submit" class="btn btn-danger mt-5">Удалить</button>
                     </form>
                 </div>
             </div>

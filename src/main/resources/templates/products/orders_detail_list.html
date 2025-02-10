@@ -22,7 +22,9 @@
                         <div class="company__card__text__companyComments" th:utext="${reviews != null and not #lists.isEmpty(reviews)} ? ${reviews[0].commentCompany} : ' '">Комментарий для компании</div>
                     </div>        
                     <div class="company__tabs__lead">
-                        <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->
+                        <div id="reviewsContainer">
+                            <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->
+                        </div>
                         <div th:if="${reviews != null and not #lists.isEmpty(reviews)}">
                             <div class="btn__cell">
                                 <form th:method="get" th:action="'/review/editReviews/' + ${reviews[0].orderDetailsId}" class="company__card__content__button3">
@@ -51,6 +53,28 @@
                     </div>
                 </div><!-- container -->
             </section> <!-- section -->
+
+
+            <!-- Смена бота -->
+            <script> 
+                // function changeBot(event, form) {
+                //     event.preventDefault();
+                //     let formData = new FormData(form);
+                //     let orderId = formData.get("orderId");
+                //     let reviewId = formData.get("reviewId");
+                //     let pageName = formData.get("pageName");
+                //     fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
+                //         method: "POST",
+                //         body: formData
+                //     })
+                //     .then(response => response.text())  // Получаем HTML с сервера
+                //     .then(updatedReviewsHtml => {
+                //         document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+                //     })
+                //     .catch(error => console.error("Ошибка при смене бота:", error));
+                // }
+            </script> <!-- Смена бота -->
+            
             
 
             <!-- ====================== CHOOSE END =========================== -->

@@ -306,31 +306,72 @@ function onPayment(button) {
 
 
     function myFunction2Gis(button) {
-      /* Get the text field using the data-orderfilial attribute */
       var copyText6 = button.getAttribute("data-orderfilial");
       if (copyText6) {
-        /* Create a temporary textarea element */
-        var tempTextArea = document.createElement("textarea");
-        tempTextArea.value = copyText6;
-    
-        /* Append the textarea to the DOM */
-        document.body.appendChild(tempTextArea);
-    
-        /* Select the text in the textarea */
-        tempTextArea.select();
-    
-        /* Copy the text inside the textarea */
-        document.execCommand("copy");
-    
-        /* Remove the temporary textarea from the DOM */
-        document.body.removeChild(tempTextArea);
-    
-        /* Alert the copied text */
-        alert("Не забудьте нагулять аккаунт в 2ГИС. Для это нужно сделать разные рандомные действия, погулять по карте, понажимать организации, почитать отзывы, посмотреть график работы и тд.");
+          navigator.clipboard.writeText(copyText6)
+              .then(() => {
+                  alert("Не забудьте нагулять аккаунт в 2ГИС. Для этого нужно сделать разные рандомные действия, погулять по карте, понажимать организации, почитать отзывы, посмотреть график работы и т. д.");
+              })
+              .catch(err => {
+                  console.error("Ошибка копирования: ", err);
+              });
       } else {
-        console.error("Element not found");
+          console.error("Атрибут data-orderfilial не найден");
       }
-    }
+  }
+  
+/* Открытие и закрытие меню*/
+    function toggleMenu() {
+      let menu = document.getElementById("menu");
+      let toggleButton = document.querySelector(".menu-toggle");
+
+      if (menu.style.display === "none" || menu.style.display === "") {
+          menu.style.display = "block";
+          toggleButton.classList.add("active"); // Поворачиваем стрелку
+      } else {
+          menu.style.display = "none";
+          toggleButton.classList.remove("active"); // Возвращаем стрелку обратно
+      }
+  }
+
+/* Замена бота*/
+  function changeBot(event, form) {
+    event.preventDefault();
+    let formData = new FormData(form);
+    let orderId = formData.get("orderId");
+    let reviewId = formData.get("reviewId");
+    let pageName = formData.get("pageName");
+    fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.text())  // Получаем HTML с сервера
+    .then(updatedReviewsHtml => {
+        document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+    })
+    .catch(error => console.error("Ошибка при смене бота:", error));
+}
+
+/* Замена бота*/
+function deActivateBot(event, form) {
+  event.preventDefault();
+  let formData = new FormData(form);
+  let orderId = formData.get("orderId");
+  let reviewId = formData.get("reviewId");
+  let botId = formData.get("botId");
+  let pageName = formData.get("pageName");
+  fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
+      method: "POST",
+      body: formData
+  })
+  .then(response => response.text())  // Получаем HTML с сервера
+  .then(updatedReviewsHtml => {
+      document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+  })
+  .catch(error => console.error("Ошибка при блокировке бота:", error));
+}
+
+
 
     // function myFunction2Gis(button) {
     //   /* Get the text field */

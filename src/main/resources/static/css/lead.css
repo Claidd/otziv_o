@@ -442,7 +442,7 @@ body {
     display: none;
     grid-template-columns: repeat(5, 1fr);
     gap: 100px 40px;
-    margin-top: 5rem;
+    /* margin-top: 5rem; */
 }
 /* Меняет количество */
 
