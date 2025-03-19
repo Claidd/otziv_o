@@ -41,6 +41,9 @@ public class CompanyListDTO {
     //    комментарий
     private String commentsCompany;
 
+    //    город
+    private String city;
+
     //    дата и время нового отправления предложения
     private LocalDate dateNewTry;
 }

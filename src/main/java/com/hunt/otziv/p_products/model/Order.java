@@ -43,6 +43,10 @@ public class Order {
     private BigDecimal sum;
     @Column(name = "order_counter")
     private int counter;
+
+    @Column(name = "order_zametka")
+    private String zametka;
+
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY)
     private List<OrderDetails> details;
 

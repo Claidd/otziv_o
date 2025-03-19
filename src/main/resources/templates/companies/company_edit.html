@@ -29,6 +29,14 @@
                                 Данные успешно изменены и сохранены.
                             </div>
                         </div>
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="form-group">
+                            <label for="createDate">Дата создания:</label>
+                            <input type="text" id="createDate" th:field="*{createDate}" class="form-control"
+                                   placeholder="">
+                            <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('createDate')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
                         <div class="form-group">
                             <label for="title">Название компании</label>
                             <input type="text" id="title" th:field="*{title}" class="form-control"
@@ -37,7 +45,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('title')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="form-group">
                             <label for="urlChat">Ссылка на чат</label>
                             <input type="text" id="urlChat" th:field="*{urlChat}" class="form-control"
                                    placeholder="">
@@ -45,7 +53,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('urlChat')}" th:text="${err}">Validation
                                 error</small>
                         </div>
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="form-group">
                             <label for="telephone">Номер телефона</label>
                             <input type="text" id="telephone" th:field="*{telephone}" th:value="${telephone}" class="form-control"
                                    placeholder="Введите номер компании">
@@ -85,7 +93,7 @@
                         </div>
 
 
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3" th:each="worker1 : ${companyDTO.getWorkers()}">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="mb-3" th:each="worker1 : ${companyDTO.getWorkers()}">
                             <label for="inputWorkers2" class="form-label">Специалист</label> <br>
                             <select id="inputWorkers2" name="workerId2" class="form-control form-select form-select-lg">
                                 <option  th:value="${worker1.workerId}" th:text="${worker1.user.fio}" ></option>
@@ -124,7 +132,7 @@
 
 
                 
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="form-group ">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER' , 'OWNER')" class="form-group ">
                             <label for="status">Укажите статус компании</label>
                             <input type="text" id="status" th:field="*{status.title}" class="form-control"
                                    placeholder="">
@@ -178,7 +186,7 @@
                         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->
                         
                     
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" class="mb-3" th:object="${newWorkerDTO}">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER' , 'OWNER')" class="mb-3" th:object="${newWorkerDTO}">
                             <label for="inputAddWorkers" class="form-label">Специалист</label> <br>
                             <select id="inputAddWorkers" name="workerId" th:field="*{workerId}"  class="form-control form-select form-select-lg">
                                 <option value="0">Добавить специалиста</option>

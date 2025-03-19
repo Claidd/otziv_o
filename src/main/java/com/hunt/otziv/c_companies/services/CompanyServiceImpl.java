@@ -444,6 +444,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setStatus(company.getStatus().getTitle());
             companyListDTO.setManager(company.getManager().getUser().getFio());
             companyListDTO.setCommentsCompany(company.getCommentsCompany());
+            companyListDTO.setCity(company.getFilial().iterator().next().getCity().getTitle());
             companyListDTO.setDateNewTry(company.getDateNewTry());
             return companyListDTO;
         }

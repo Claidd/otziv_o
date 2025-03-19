@@ -90,7 +90,7 @@ public class OrderDetailsController {
             }
 
             if ("ROLE_WORKER".equals(userRole)) {
-                log.info("Зашли список всех заказов для работника");
+                log.info("Зашли список всех заказов для работника" + principal.getName());
                 Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
@@ -121,7 +121,7 @@ public class OrderDetailsController {
             }
 
             if ("ROLE_WORKER".equals(userRole)) {
-                log.info("Зашли список всех заказов для работника");
+                log.info("Зашли список всех заказов для работника" + principal.getName());
                 Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
@@ -169,7 +169,7 @@ public class OrderDetailsController {
             }
 
             if ("ROLE_WORKER".equals(userRole)) {
-                log.info("Зашли список всех заказов для работника");
+                log.info("Зашли список всех заказов для работника" + principal.getName());
                 Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);
@@ -200,7 +200,7 @@ public class OrderDetailsController {
             }
 
             if ("ROLE_WORKER".equals(userRole)) {
-                log.info("Зашли список всех заказов для работника");
+                log.info("Зашли список всех заказов для работника" + principal.getName());
                 Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime);

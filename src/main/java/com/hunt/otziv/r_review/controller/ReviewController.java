@@ -72,7 +72,7 @@ public class ReviewController {
     @PostMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Удалить отзыв - Post
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER')")
     String ReviewDelete(@PathVariable Long orderId, @PathVariable Long companyId, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
-        log.info("1. Начинаем удалять новый Отзыв");
+        log.info("1. Начинаем удалять новый Отзыв" );
         if (orderService.deleteNewReview(orderId, reviewId)){
             log.info("2. Удалили отзыв");
             rm.addFlashAttribute("saveSuccess", "true");

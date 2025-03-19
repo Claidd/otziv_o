@@ -40,6 +40,8 @@ public class OrderDTO {
 
     private String commentsCompany;
 
+    private String zametka;
+
     private UUID orderDetailsId;
 
     private OrderStatusDTO status;

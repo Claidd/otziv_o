@@ -103,7 +103,15 @@
                         </div>
 
                         <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'OWNER')" class="form-group">
-                            <label class="form-label" for="commentsCompany" >Укажите комментарий</label>
+                            <label class="form-label" for="zametka" >Укажите комментарий для уровня ЗАКАЗА</label>
+                            <input type="text" id="zametka" th:field="*{zametka}" class="form-control"
+                                   placeholder="* необязательное поле">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('zametka')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'OWNER')" class="form-group">
+                            <label class="form-label" for="commentsCompany" >Укажите комментарий для уровня КОМПАНИИ</label>
                             <input type="text" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
                                    placeholder="* необязательное поле">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"

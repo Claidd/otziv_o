@@ -102,7 +102,7 @@ public class OrderController {
     String OrderEditPost(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Principal principal, Model model){
         String userRole = getRole(principal);
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("1. Начинаем обновлять данные Заказа ДЛЯ Работника");
+            log.info("1. Начинаем обновлять данные Заказа ДЛЯ Работника" + principal.getName());
             orderService.updateOrderToWorker(orderDTO, companyId, orderId);
             log.info("5. Обновление Заказа прошло успешно");
             rm.addFlashAttribute("saveSuccess", "true");

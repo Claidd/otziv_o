@@ -323,37 +323,98 @@ public class ReviewServiceImpl implements ReviewService{
 
     @Override
     @Transactional
-    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) { // Обновление Деталей и Отзывов, Разрешение к публикации
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации ");
-//        log.info("{}", orderDetailsDTO);
-//        log.info("{}", orderDetailsDTO.getAmount());
-        try {
-            OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-            // Рассчитываем plusDays с минимальным значением 1
-            int plusDays = Math.max(30 / orderDetailsDTO.getAmount(), 1);
-            LocalDate localDate = LocalDate.now();
+    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
 
+        try {
+            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+
+            // Проверяем, есть ли отзывы
+            List<Review> reviews = saveOrderDetails.getReviews();
+            if (reviews.isEmpty()) {
+                log.error("Ошибка: список отзывов пуст");
+                return false;
+            }
+
+            // Рассчитываем plusDays, избегаем деления на 0
+            int botCounter = reviews.getFirst().getBot().getCounter();
+            int plusDays = orderDetailsDTO.getAmount() > 0 ? Math.max(30 / orderDetailsDTO.getAmount(), 1) : 1;
+            LocalDate localDate = getLocalDate(botCounter);
+
+            // Устанавливаем дату публикации каждому отзыву
             for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
                 checkUpdateReview(reviewDTO, localDate);
                 localDate = localDate.plusDays(plusDays);
-                log.info(" Обновили дату " + localDate);
-
+                log.info("Обновили дату: {}", localDate);
             }
-            /*Замена комментария*/
-            log.info("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
-            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())){ /*Проверка статус заказа*/
+
+            // Обновляем комментарий, если он изменился
+            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
                 log.info("Обновляем комментарий отзыва и Деталей Заказа");
                 saveOrderDetails.setComment(orderDetailsDTO.getComment());
                 orderDetailsService.save(saveOrderDetails);
             }
-            log.info("Все прошло успешно вернулось TRUE");
+
+            log.info("Все прошло успешно, даты публикаций установлены, возвращаем TRUE");
             return true;
-        }
-        catch (Exception e){
-            log.error("Все прошло успешно вернулось FALSE: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Ошибка обновления данных, , даты публикаций НЕ установлены: ", e);
             return false;
         }
-    } // Обновление Деталей и Отзывов, Разрешение к публикации
+    }
+
+    // Улучшенная версия метода getLocalDate
+    private LocalDate getLocalDate(int botCounter) {
+        return botCounter < 2 ? LocalDate.now().plusDays(2) : LocalDate.now();
+    }
+
+
+
+
+//    @Override
+//    @Transactional
+//    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) { // Обновление Деталей и Отзывов, Разрешение к публикации
+//        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации ");
+//        log.info("{}", orderDetailsDTO);
+//       log.info("{}", orderDetailsDTO.getAmount());
+//        try {
+//            OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+//            // Рассчитываем plusDays с минимальным значением 1
+//            int botCounter = saveOrderDetails.getReviews().getFirst().getBot().getCounter();
+//            int plusDays = Math.max(30 / orderDetailsDTO.getAmount(), 1);
+//            LocalDate localDate = getLocalDate(botCounter);
+//
+//            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
+//                checkUpdateReview(reviewDTO, localDate);
+//                localDate = localDate.plusDays(plusDays);
+//                log.info(" Обновили дату " + localDate);
+//
+//            }
+//            /*Замена комментария*/
+//            log.info("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
+//            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())){ /*Проверка статус заказа*/
+//                log.info("Обновляем комментарий отзыва и Деталей Заказа");
+//                saveOrderDetails.setComment(orderDetailsDTO.getComment());
+//                orderDetailsService.save(saveOrderDetails);
+//            }
+//            log.info("Все прошло успешно вернулось TRUE");
+//            return true;
+//        }
+//        catch (Exception e){
+//            log.error("Все прошло успешно вернулось FALSE: {}", e.getMessage());
+//            return false;
+//        }
+//    } // Обновление Деталей и Отзывов, Разрешение к публикации
+//
+//    private LocalDate getLocalDate( int botCounter){
+//        LocalDate localDate;
+//        if (botCounter < 2) {
+//            return localDate = LocalDate.now().plusDays(2);
+//        }
+//        else {
+//            return localDate = LocalDate.now();
+//        }
+//    }
 
 //    =====================================================================================================
 
@@ -410,42 +471,73 @@ public class ReviewServiceImpl implements ReviewService{
     } // Замена бота
 
     @Override
-    public void deActivateAndChangeBot(Long reviewId, Long botId) { // метод деактивации бота
+    public void deActivateAndChangeBot(Long reviewId, Long botId) { // Деактивация бота
         try {
             Review review = reviewRepository.findById(reviewId).orElse(null);
-            log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ");
-            try {
-                assert review != null;
-                String textMail = "Деактивация бота: " + review.getBot().getFio() + " id: " + review.getBot().getId() + " счетчик: " + review.getBot().getCounter() + " логин: " + review.getBot().getLogin() + " пароль: " + review.getBot().getPassword() + ". Для компании: " + review.getOrderDetails().getOrder().getCompany().getTitle()  + ". Работник: " + review.getWorker().getUser().getFio() +  ". Менеджер: " + review.getOrderDetails().getOrder().getManager().getUser().getFio() + ". Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
-                emailService.sendSimpleEmail("o-company-server@mail.ru", "Деактивация Бота", "Опять удаляют бота" + textMail);
-                log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ - УСПЕХ");
+            if (review == null) {
+                log.warn("Отзыв с id {} не найден", reviewId);
+                return;
             }
-            catch (Exception e){
-                System.out.println("Сообщение о деактивации бота не отправилось - ПРОВАЛ");
+
+//            log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ");
+            try {
+                int botCount = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
+                if (botCount < 20) {
+                    String textMail = "Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botCount;
+                    emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить ботов для: " + textMail);
+                    log.info("ОТПРАВКА МЕЙЛА О МАЛОМ КОЛИЧЕСТВЕ БОТОВ - УСПЕХ");
+                } else {
+                    log.info("ПИСЬМО не отправлялось - у города достаточно аккаунтов");
+                }
+            } catch (Exception e){
+                log.error("Сообщение о деактивации бота не отправилось", e);
             }
 
             botActiveToFalse(botId);
             log.info("4. Установили нового рандомного бота");
-            reviewRepository.save(getReviewToChangeBot(reviewId));
 
+            reviewRepository.save(getReviewToChangeBot(reviewId));
             log.info("5. Сохранили нового бота в отзыве в БД");
-        }
-        catch (Exception e){
-            System.out.println(e);
-            log.info("Что-то пошло не так и бот не деактивирован");
+
+        } catch (Exception e){
+            log.error("Что-то пошло не так и бот не деактивирован", e);
         }
     } // Деактивация бота
 
-    private Review getReviewToChangeBot(Long reviewId) { // Установка нового бота в отзыв
-//        Review review = reviewRepository.findById(reviewId).orElse(null);
-//        assert review != null;
-//        log.info("2. Достали отзыв по id{}", reviewId);
-//        List<Bot> bots = findAllBotsMinusFilial(review);
-//        log.info("3. Достали ботов минус филиал");
-//        var random = new SecureRandom();
-//        review.setBot(bots.get(random.nextInt(bots.size())));
-//        return review;
 
+//    @Override
+//    public void deActivateAndChangeBot(Long reviewId, Long botId) { // метод деактивации бота
+//        try {
+//            Review review = reviewRepository.findById(reviewId).orElse(null);
+//            log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ");
+//            try {
+//                assert review != null;
+//                if (botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size() < 20) {
+//                  String textMail = "Деактивация бота: " + review.getBot().getFio() + " id: " + review.getBot().getId() + " счетчик: " + review.getBot().getCounter() + " логин: " + review.getBot().getLogin() + " пароль: " + review.getBot().getPassword() + ". Для компании: " + review.getOrderDetails().getOrder().getCompany().getTitle()  + ". Работник: " + review.getWorker().getUser().getFio() +  ". Менеджер: " + review.getOrderDetails().getOrder().getManager().getUser().getFio() + ". Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
+//                    String textMail = "Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
+//                   emailService.sendSimpleEmail("o-company-server@mail.ru", "Деактивация Бота", "Опять удаляют бота" + textMail);
+//                    emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить ботов для: " + textMail);
+//                    log.info("ОТПРАВКА МЕЙЛА О МАЛОМ КОЛИЧЕСТВЕ БОТОВ - УСПЕХ");
+//                }
+//                log.info("ПИСЬМО не отправлялось у города достаточно аккаунтов - УСПЕХ");
+//            }
+//            catch (Exception e){
+//                System.out.println("Сообщение о деактивации бота не отправилось - ПРОВАЛ");
+//            }
+//
+//            botActiveToFalse(botId);
+//            log.info("4. Установили нового рандомного бота");
+//            reviewRepository.save(getReviewToChangeBot(reviewId));
+//
+//            log.info("5. Сохранили нового бота в отзыве в БД");
+//        }
+//        catch (Exception e){
+//            System.out.println(e);
+//            log.info("Что-то пошло не так и бот не деактивирован");
+//        }
+//    } // Деактивация бота
+
+    private Review getReviewToChangeBot(Long reviewId) { // Установка нового бота в отзыв
         Review review = reviewRepository.findById(reviewId).orElse(null);
         assert review != null;
         log.info("2. Достали отзыв по id{}", reviewId);
@@ -464,7 +556,7 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("3. Дективировали бота {}", botId);
         }
         catch (Exception e){
-            System.out.println(e);
+            log.error("e: ", e);
             log.info("Что-то пошло не так и деактивация бота не случилась");
         }
     } // Изменение статуса бота как НЕ активный
@@ -486,6 +578,13 @@ public class ReviewServiceImpl implements ReviewService{
 
 
     public ReviewDTOOne toReviewDTOOne(Review review){ // Взять дто отзыв по Id
+        OrderDetails orderDetails = review.getOrderDetails();
+        if (orderDetails == null) {
+            log.warn("Review ID {} has no associated OrderDetails", review.getId());
+            log.warn("Review ID {} has no associated OrderDetails", review.getOrderDetails().getId());
+
+            return null; // или обработать это иначе
+        }
         return ReviewDTOOne.builder()
                 .id(review.getId())
                 .companyId(review.getOrderDetails().getOrder().getCompany().getId())
