@@ -71,8 +71,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByCompanyId(long companyId); //// взять все заказы по id + keyword
     @Query("SELECT o.id FROM Order o WHERE o.company.id = :companyId AND LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) ORDER BY o.changed")// взять все заказы по id + поиск
     List<Long> findAllIdByCompanyIdAndKeyWord(long companyId, String keyword, String keyword2); //// взять все заказы по id + keyword
+    ///
+    ///
 
+//    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed")// взять все заказы по id + поиск
+//    List<Long> findAllIdByWorkerAndKeyWordAndStatusForTelegram(Worker worker, String status); // найти все заказы работника со статусом "новый" для телеграм
 
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker AND o.status.title = :status")
+    int countByWorkerAndStatus(Worker worker, String status);
 
 
     List<Order> findAllByManager(Manager manager);

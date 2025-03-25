@@ -13,11 +13,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
 
 @Service
 @Slf4j
@@ -46,6 +50,19 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     @Override
     public List<PaymentCheck> getAllWorkerPaymentToDate(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         return paymentCheckRepository.getAllWorkerPayments(managerId, firstDayOfMonth, lastDayOfMonth);
+    }
+
+
+    @Override
+    public Map<String, Long> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return paymentCheckRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
+                .stream()
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],  // ФИО пользователя
+                        obj -> ((BigDecimal) obj[1]).longValue(), // Сумма чеков
+                        Long::sum, // Если у пользователя несколько чеков
+                        LinkedHashMap::new // Сохраняем порядок сортировки
+                ));
     }
 
     public List<CheckDTO> getAllCheckDTO(){

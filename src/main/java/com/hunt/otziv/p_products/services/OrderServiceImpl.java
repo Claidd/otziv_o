@@ -686,7 +686,8 @@ public class OrderServiceImpl implements OrderService {
         }
     } // Метод Обновления Заказа
 
-//============================================ УДАЛЕНИЕ ЗАКАЗА =========================================================
+
+    //============================================ УДАЛЕНИЕ ЗАКАЗА =========================================================
 @Transactional
 public boolean deleteOrder(Long orderId, Principal principal){
     String userRole = getRole(principal);
@@ -999,6 +1000,21 @@ public boolean deleteOrder(Long orderId, Principal principal){
             throw e;
         }
     }
+
+//    @Override
+//    public int findAllIdByWorkerAndKeyWordAndStatusForTelegram(Worker worker, String status) { // найти все заказы работника со статусом "новый" для телеграм
+//        int x = orderRepository.findAllIdByWorkerAndKeyWordAndStatusForTelegram(worker, status).size();
+//        System.out.println(worker.getUser().getFio() + " " + x);
+//        return x;
+//    }
+
+    public int countOrdersByWorkerAndStatus(Worker worker, String status) {
+        int count = orderRepository.countByWorkerAndStatus(worker, status);
+//        System.out.println(worker.getUser().getFio() + " " + count);
+        return count;
+    }
+
+
 
 
 

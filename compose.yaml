@@ -78,8 +78,15 @@ services:
     volumes:
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
       - ./data/phpmyadmin/apache2.conf:/etc/apache2/conf-available/servername.conf
+    environment:
+      - PMA_HOST=mysql
+      - UPLOAD_LIMIT=512M
+    depends_on:
+      - mysql
+    command: /bin/sh -c "chmod 644 /etc/phpmyadmin/config.inc.php && apache2-foreground"
     networks:
       - network2
+
 
 volumes:
   mysql_data:

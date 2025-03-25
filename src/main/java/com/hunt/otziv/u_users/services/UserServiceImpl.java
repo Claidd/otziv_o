@@ -499,6 +499,16 @@ public class UserServiceImpl  implements UserService {
         log.info("4. Сохранили юзера");
     } // Удаление маркетолога
 
+    @Override
+    public void save(User user) {
+        userRepository.save(user);
+    }
+
+    @Override
+    public Optional<User> findByChatId(long chatId) {
+            return userRepository.findByTelegramChatId(chatId);
+    }
+
 //    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (старый вариант)
 //        System.out.println(file);
 //        Image image = new Image();

@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 
 import java.security.Principal;
@@ -47,4 +48,8 @@ public interface ReviewService {
     Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
 
     void changeNagulReview(Long reviewId);
+
+    int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
+
+    int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate);
 }

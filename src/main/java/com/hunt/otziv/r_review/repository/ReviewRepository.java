@@ -62,4 +62,10 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
     List<Review> findAllByFilials(Set<Filial> filials);
+
+    @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
+    int countByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
+
+
+
 }

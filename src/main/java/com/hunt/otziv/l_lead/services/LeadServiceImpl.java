@@ -579,6 +579,8 @@ public class LeadServiceImpl implements LeadService{
         return leadsRepository.findIdListByDateToOwner(localDate, managerList);
     }
 
+
+
     public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status){
         return leadsRepository.findIdListByDate(localDate, status);
     }
@@ -595,6 +597,12 @@ public class LeadServiceImpl implements LeadService{
     public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status){
         LocalDate localDate1 = localDate.minusMonths(1);
         return leadsRepository.findIdListByDate(localDate1, status);
+    }
+
+
+    @Override
+    public List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList) {
+        return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
     }
 
 

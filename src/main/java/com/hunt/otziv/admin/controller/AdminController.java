@@ -252,12 +252,13 @@ public class AdminController {
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(value = "date", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) throws IOException {
         LocalDate localDate = date.orElse(LocalDate.now());
         String userRole = getRole(principal);
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
         long startTime = System.nanoTime();
 
         if ("ROLE_ADMIN".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats(localDate, principal, userRole));
+            model.put("stats", personalService.getStats(localDate, user, userRole));
 //            dockerService.createMysqlBackup("mysql_container", "tmp/backup-otziv.sql");
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
@@ -265,7 +266,7 @@ public class AdminController {
         if ("ROLE_OWNER".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
-            model.put("stats", personalService.getStats(localDate, principal, userRole));
+            model.put("stats", personalService.getStats(localDate, user, userRole));
             checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
             return new ModelAndView("admin/layouts/analyse", model);
         }
@@ -276,9 +277,10 @@ public class AdminController {
     public ModelAndView analyseToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         long startTime = System.nanoTime();
         String userRole = getRole(principal);
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
-        model.put("stats", personalService.getStats(date, principal, userRole));
+        model.put("stats", personalService.getStats(date, user, userRole));
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }
@@ -288,9 +290,10 @@ public class AdminController {
     public ModelAndView reportToAdmin(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         LocalDate localDate = LocalDate.now();
+        User user = userService.findByUserName(principal.getName()).orElseThrow();
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
-        model.put("stats", personalService.getStats(localDate, principal, "ROLE_ADMIN"));
+        model.put("stats", personalService.getStats(localDate, user, "ROLE_ADMIN"));
         checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
         return new ModelAndView("admin/layouts/analyse", model);
     }

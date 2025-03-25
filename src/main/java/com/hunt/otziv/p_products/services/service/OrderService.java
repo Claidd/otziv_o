@@ -5,6 +5,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 
 import java.security.Principal;
@@ -47,4 +48,8 @@ public interface OrderService {
     OrderDTO convertToOrderDTOToRepeat(Order order);
 
     void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId);
+
+    int countOrdersByWorkerAndStatus(Worker worker, String status);
+
+
 }

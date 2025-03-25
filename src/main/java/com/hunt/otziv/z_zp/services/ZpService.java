@@ -6,10 +6,12 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.model.Zp;
+import org.springframework.data.util.Pair;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public interface ZpService {
@@ -25,4 +27,6 @@ public interface ZpService {
     List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
     List<Zp> findAllToDateByUser(LocalDate localDate, Long id);
+
+    Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

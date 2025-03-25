@@ -72,5 +72,8 @@ public interface LeadService {
 
     List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList);
 
+    List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList);
+
+
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

@@ -37,6 +37,10 @@ public interface UserService extends UserDetailsService{
     void deleteWorker(String username, Long workerId);
     void deleteMarketolog(String username, Long marketologId);
 
+    void save(User user);
+
+    Optional<User> findByChatId(long chatId);
+
 
 //
 //    Object getUserByPrincipal(Principal principal);

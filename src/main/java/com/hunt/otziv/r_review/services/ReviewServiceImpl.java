@@ -801,5 +801,21 @@ public class ReviewServiceImpl implements ReviewService{
         reviewRepository.save(review);
     }
 
+    public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate){
+        int count = reviewRepository.countByWorkerAndStatusPublish(worker, localDate);
+//        System.out.println(worker.getUser().getFio() + " " + count);
+        return count;
+    }
+
+    public int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate){
+        List<Long> reviewId;
+        List<Review> reviewPage;
+        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        reviewPage = reviewRepository.findAll(reviewId);
+        int count = reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList().size();
+//        System.out.println(worker.getUser().getFio() + " " + count);
+        return count;
+    }
+
 
 }

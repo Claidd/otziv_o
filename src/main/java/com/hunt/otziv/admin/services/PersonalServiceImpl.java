@@ -5,11 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
-import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
+import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.*;
@@ -19,16 +18,22 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Triple;
+import org.springframework.data.domain.Page;
+import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -47,6 +52,7 @@ public class PersonalServiceImpl implements PersonalService {
     private final UserService userService;
     private final LeadService leadService;
     private final ReviewService reviewService;
+    private final OrderService orderService;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_OWNER = "ROLE_OWNER";
@@ -66,10 +72,12 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
 //    ========================================== PERSONAL STAT START ==================================================
-
-    public StatDTO getStats(LocalDate localDate, Principal principal, String role) {
-        User user = userService.findByUserName(principal.getName()).orElseThrow();
-        Set<Manager> managerList = user.getManagers();
+@Transactional
+    public StatDTO getStats(LocalDate localDate, User user, String role) {
+//        User user = userService.findByUserName(principal.getName()).orElseThrow();
+        User user1 = userService.findByUserName(user.getUsername()).orElseThrow();
+        Set<Manager> managerList = user1.getManagers();
+//        System.out.println(managerList);
 
         //      СТАТИСТИКА берем все чеки и зп
         List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerList);
@@ -570,19 +578,205 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
 
-
+    @Transactional
     public List<ManagersListDTO> getManagersAndCount(){
         return managerService.getAllManagers().stream().map(this::toManagersListDTOAndCount).collect(Collectors.toList());
     }
     public List<MarketologsListDTO> getMarketologsAndCount(){
         return marketologService.getAllMarketologs().stream().map(this::toMarketologsListDTOAndCount).collect(Collectors.toList());
     }
+    @Transactional
     public List<WorkersListDTO> gerWorkersToAndCount(){
         return workerService.getAllWorkers().stream().map(this::toWorkersListDTOAndCount).collect(Collectors.toList());
     }
     public List<OperatorsListDTO> gerOperatorsAndCount(){
         return operatorService.getAllOperators().stream().map(this::toOperatorsListDTOAndCount).collect(Collectors.toList());
     }
+
+
+    public String getPersonalsAndCountToMap(){
+        LocalDate localDate = LocalDate.now();
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        // Получаем данные о зарплатах
+        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о платежах
+        Map<String, Long> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+
+        // Объединяем данные в Map<String, Triple<String, Long, Long>>
+        Map<String, Triple<String, Long, Long>> result = new HashMap<>();
+
+        zps.forEach((fio, pair) -> {
+            Long sum = pcs.get(fio);
+            if (sum != null) {
+                result.put(fio, Triple.of(pair.getFirst(), pair.getSecond(), sum));
+            } else {
+                result.put(fio, Triple.of(pair.getFirst(), pair.getSecond(), 0L));
+            }
+        });
+
+        // Разделяем на три группы
+        List<Map.Entry<String, Triple<String, Long, Long>>> managers = result.entrySet().stream()
+                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getLeft()))
+                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getRight(), entry1.getValue().getRight())) // Сортировка по сумме (убывание)
+                .toList();
+
+        List<Map.Entry<String, Triple<String, Long, Long>>> workers = result.entrySet().stream()
+                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getLeft()))
+                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getMiddle(), entry1.getValue().getMiddle())) // Сортировка по зарплате (убывание)
+                .toList();
+
+        List<Map.Entry<String, Triple<String, Long, Long>>> others = result.entrySet().stream()
+                .filter(entry -> !"ROLE_MANAGER".equals(entry.getValue().getLeft()) && !"ROLE_WORKER".equals(entry.getValue().getLeft()))
+                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getMiddle(), entry1.getValue().getMiddle())) // Сортировка по зарплате (убывание)
+                .toList();
+
+        // Объединяем все списки
+        List<Map.Entry<String, Triple<String, Long, Long>>> finalList = new ArrayList<>();
+        finalList.addAll(managers);
+        finalList.addAll(workers);
+        finalList.addAll(others);
+
+        // Создаём StringBuilder для объединения строк
+        StringBuilder resultBuilder = new StringBuilder();
+
+        // Вычисляем общую выручку всех менеджеров
+        long totalManagerRevenue = managers.stream()
+                .mapToLong(entry -> entry.getValue().getRight()) // Берем сумму для каждого менеджера
+                .sum();
+
+        // Добавляем общую выручку менеджеров в начало
+        resultBuilder.append("Общая выручка всех менеджеров: ").append(totalManagerRevenue).append("\n\n");
+
+        // Используем AtomicReference для хранения предыдущей роли
+        AtomicReference<String> previousRole = new AtomicReference<>("");
+
+        // Проходим по каждой записи
+        finalList.forEach(entry -> {
+            String fio = entry.getKey();
+            String role = entry.getValue().getLeft();
+            Long salary = entry.getValue().getMiddle();
+            Long sum = entry.getValue().getRight();
+
+            // Если текущая роль отличается от предыдущей, добавляем перенос строки
+            if (!previousRole.get().isEmpty() && !previousRole.get().equals(role)) {
+                resultBuilder.append("\n"); // Перенос строки между группами
+            }
+
+            String resultText = fio + ", ЗП: " + salary;
+
+            // Если сумма не равна 0, добавляем её к результату
+            if (sum != 0) {
+                resultText += ", Сумма: " + sum;
+            }
+
+            // Добавляем строку в результат
+            resultBuilder.append(resultText).append(" \n");
+
+            // Обновляем предыдущую роль
+            previousRole.set(role);
+        });
+
+        // Возвращаем результат как одну строку
+        String finalResult = resultBuilder.toString().trim();
+
+        // Выводим финальный результат
+        System.out.println(finalResult);
+
+        return finalResult;
+
+
+//        // Создаём StringBuilder для объединения строк
+//        StringBuilder resultBuilder = new StringBuilder();
+//
+//        // Проходим по каждой записи и добавляем в StringBuilder
+//        finalList.forEach(entry -> {
+//            // Извлекаем данные из Triple
+//            String fio = entry.getKey();
+//            String role = entry.getValue().getLeft();
+//            Long salary = entry.getValue().getMiddle();
+//            Long sum = entry.getValue().getRight();
+//
+//            // Формируем строку вывода
+//            String resultText = fio + ", ЗП: " + salary;
+//
+//            // Если сумма не равна 0, добавляем её к результату
+//            if (sum != 0) {
+//                resultText += ", Сумма: " + sum;
+//            }
+//
+//            // Добавляем результат в StringBuilder с разделением через пробел
+//            resultBuilder.append(resultText).append(" \n");
+//        });
+//
+//        // Добавляем дополнительный перенос между менеджерами и работниками
+//        if (!managers.isEmpty() && !workers.isEmpty()) {
+//            resultBuilder.append("\n");  // Добавляем два переноса между группами
+//        }
+//
+//        // Возвращаем результат как одну строку
+//        String finalResult = resultBuilder.toString().trim();
+//
+//        // Выводим финальный результат
+//        System.out.println(finalResult);
+//
+//        return finalResult;
+
+
+
+
+
+
+        // Выводим результат
+//        finalList.forEach(entry ->
+//                System.out.println("ФИО: " + entry.getKey() + ", Роль: " + entry.getValue().getLeft() +
+//                        ", ЗП: " + entry.getValue().getMiddle() + ", Сумма: " + entry.getValue().getRight())
+//        );
+
+
+
+//        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
+//        zps.forEach((fio, pair) ->
+//                System.out.println("ФИО: " + fio + ", Роль: " + pair.getFirst() + ", Сумма: " + pair.getSecond())
+//        );
+//        Map<String, Long> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+//        pcs.forEach((fio, sum) ->
+//                System.out.println("ФИО: " + fio +  ", Сумма: " + sum)
+//        );
+//        return
+    }
+
+//    private ManagersListDTO toManagersListDTOAndCount(Manager manager){
+//        LocalDate localDate = LocalDate.now();
+//        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+//        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+//        List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
+//        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
+//        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+//        BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
+//        Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
+//        Set<Manager> managerList = new HashSet<>();
+//        managerList.add(manager);
+//        List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatusToOwnerForTelegram(localDate, "В работе", managerList);// берем всех лидов за текущий месяц + статус
+//        System.out.println(inWorkleadList.size());
+//        return ManagersListDTO.builder()
+//                .id(manager.getId())
+//                .userId(manager.getUser().getId())
+//                .fio(manager.getUser().getFio())
+//                .login(manager.getUser().getUsername())
+//                .imageId(imageId)
+//                .sum1Month(sum30.intValue())
+//                .order1Month(zps.size())
+//                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+//                .payment1Month(sum30Payments.intValue())
+//                .leadsInWorkInMonth(inWorkleadList.size())
+//                .build();
+//    }
+
+
+
+
 
 // Списки менеджеров со статичтикой и счетчиками для Владельцев.
     public List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managers) {
@@ -654,6 +848,10 @@ public class PersonalServiceImpl implements PersonalService {
         List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
         BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
+        Set<Manager> managerList = new HashSet<>();
+        managerList.add(manager);
+        List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatusToOwnerForTelegram(localDate, "В работе", managerList);// берем всех лидов за текущий месяц + статус
+        System.out.println(inWorkleadList.size());
         return ManagersListDTO.builder()
                 .id(manager.getId())
                 .userId(manager.getUser().getId())
@@ -664,6 +862,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .order1Month(zps.size())
                 .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
                 .payment1Month(sum30Payments.intValue())
+                .leadsInWorkInMonth(inWorkleadList.size())
                 .build();
     }
 
@@ -698,6 +897,10 @@ public class PersonalServiceImpl implements PersonalService {
         List<Zp> zps = zpService.getAllWorkerZp(worker.getUser().getUsername());
         BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = worker.getUser().getImage() != null ? worker.getUser().getImage().getId() : 1L;
+        int newOrderInt = orderService.countOrdersByWorkerAndStatus(worker, "Новый");
+        int inCorrectInt = orderService.countOrdersByWorkerAndStatus(worker, "Коррекция");
+        int inVigulInt = reviewService.countOrdersByWorkerAndStatusVigul(worker, localDate);
+        int inPublishInt = reviewService.countOrdersByWorkerAndStatusPublish(worker, localDate);
         return WorkersListDTO.builder()
                 .id(worker.getId())
                 .userId(worker.getUser().getId())
@@ -707,8 +910,15 @@ public class PersonalServiceImpl implements PersonalService {
                 .sum1Month(sum30.intValue())
                 .order1Month(zps.size())
                 .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .newOrder(newOrderInt)
+                .inCorrect(inCorrectInt)
+                .intVigul(inVigulInt)
+                .publish(inPublishInt)
                 .build();
     }
+
+
+
 
     private OperatorsListDTO toOperatorsListDTOAndCount(Operator operator){
         LocalDate localDate = LocalDate.now();
@@ -735,6 +945,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .percentInWork(percentInWork)
                 .build();
     }
+
 
 
 

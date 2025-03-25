@@ -53,7 +53,7 @@ public interface PersonalService {
     List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs);
     List<WorkersListDTO>  getWorkersToAndCountToOwner(List<Worker> allWorkers);
 
-    StatDTO getStats(LocalDate date, Principal principal, String userRole);
+    StatDTO getStats(LocalDate date, User user, String userRole);
 
     Object getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate date);
 
@@ -62,4 +62,6 @@ public interface PersonalService {
     Object gerWorkersToAndCountToDateToOwner(List<Worker> allWorkers, LocalDate date);
 
     Object gerOperatorsAndCountToDateToOwner(List<Operator> allOperators, LocalDate date);
+
+    String getPersonalsAndCountToMap();
 }

@@ -10,15 +10,14 @@ import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,6 +53,38 @@ public class ZpServiceImpl implements ZpService{
         LocalDate localDate2 = localDate.minusYears(1);
         return zpRepository.findAllToDateByUser(localDate, localDate2, userId);
     } // Берем все ЗП для Работника
+
+
+
+    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте **/
+    @Override
+    public Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return zpRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
+                .stream()
+                .sorted(Comparator.comparing((Object[] obj) -> {
+                                    String role = (String) obj[2];
+                                    return rolePriority(role); // Сортируем сначала по приоритету роли
+                                })
+                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
+                )
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],   // ФИО
+                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new // Сохраняем порядок сортировки
+                ));
+    }
+
+    // Метод для присваивания приоритета ролям
+    private int rolePriority(String role) {
+        if ("ROLE_MANAGER".equals(role)) return 1; // Менеджеры первыми
+        if ("ROLE_WORKER".equals(role)) return 2;  // Потом воркеры
+        return 3; // Все остальные в конце
+    }
+
+
+
+
 
     public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) { // Берем все ЗП для всех менеджеров Владельца
         LocalDate localDate2 = localDate.minusYears(1);
@@ -200,4 +231,5 @@ public class ZpServiceImpl implements ZpService{
         zp.setSum(zpDTO.getSum());
         return zp;
     } // Метод для преобразования из ZpDTO в сущность Zp
+
 }

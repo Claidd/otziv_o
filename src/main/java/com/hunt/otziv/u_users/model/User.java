@@ -52,6 +52,10 @@ public class User {
     @Column(name = "coefficient")
     private BigDecimal coefficient;
 
+    //    TelegramID
+    @Column(name = "telegram_chat_id", unique = true)
+    private Long telegramChatId;
+
     //    роль пользователя в системе. связь многие ко многим.
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

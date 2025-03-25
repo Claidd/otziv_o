@@ -8,6 +8,7 @@ import com.hunt.otziv.z_zp.model.PaymentCheck;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public interface PaymentCheckService {
@@ -21,4 +22,6 @@ public interface PaymentCheckService {
     List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
     List<PaymentCheck> getAllWorkerPaymentToDate(Long id, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    Map<String, Long> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

@@ -8,6 +8,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -30,4 +31,18 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
 
     @Query("SELECT p FROM PaymentCheck p WHERE p.managerId = :managerId AND p.created >= :firstDayOfMonth AND p.created <= :lastDayOfMonth")
     List<PaymentCheck> getAllWorkerPayments(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    @Query("""
+    SELECT u.fio, SUM(pc.sum)
+    FROM PaymentCheck pc
+    JOIN User u ON (pc.managerId = u.id OR pc.workerId = u.id)
+    WHERE pc.created BETWEEN :startDate AND :endDate
+    AND pc.active = true
+    GROUP BY u.fio
+    ORDER BY SUM(pc.sum) DESC
+""")
+    List<Object[]> findAllToDateToMap( LocalDate startDate, LocalDate endDate);
+
+
+
 }

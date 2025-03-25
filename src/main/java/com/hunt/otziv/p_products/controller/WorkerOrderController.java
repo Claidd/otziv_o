@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
@@ -34,6 +35,7 @@ public class WorkerOrderController {
     private final OrderService orderService;
     private final ReviewService reviewService;
     private final BotService botService;
+    private final PersonalService personalService;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -122,6 +124,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
+            personalService.getPersonalsAndCountToMap();
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }

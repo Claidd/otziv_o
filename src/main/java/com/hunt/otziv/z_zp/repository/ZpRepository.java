@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Repository
@@ -35,4 +36,22 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 
     @Query("SELECT z FROM Zp z WHERE (YEAR(z.created) = YEAR(:localDate) OR YEAR(z.created) = YEAR(:localDate2)) AND z.userId = :userId")
     List<Zp> findAllToDateByUser(LocalDate localDate, LocalDate localDate2, Long userId);
+
+
+//    @Query("SELECT z.fio, SUM(z.sum) as totalSum FROM Zp z WHERE z.created BETWEEN :startDate AND :endDate GROUP BY z.fio ORDER BY totalSum DESC")
+//    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);
+
+
+    @Query("SELECT z.fio, SUM(z.sum) as totalSum, " +
+            "(SELECT MIN(r.name) FROM User u JOIN u.roles r WHERE u.id = z.userId) as role " +
+            "FROM Zp z " +
+            "WHERE z.created BETWEEN :startDate AND :endDate " +
+            "GROUP BY z.fio, z.userId " +
+            "ORDER BY totalSum DESC")
+    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);
+
+
+
+
+
 }
