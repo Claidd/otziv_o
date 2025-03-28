@@ -1,5 +1,6 @@
 package com.hunt.otziv.z_zp.services;
 
+import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -10,6 +11,7 @@ import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ import java.util.LinkedHashMap;
 public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
+    private final CompanyService companyService;
 
     public List<PaymentCheck> findAll(){
         return paymentCheckRepository.findAll();
@@ -54,16 +57,55 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
 
 
     @Override
-    public Map<String, Long> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return paymentCheckRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
+    public Map<String, Pair<Long, Long>> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        // Получаем карту с суммами чеков
+        Map<String, Long> check = paymentCheckRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
                 .stream()
                 .collect(Collectors.toMap(
                         obj -> (String) obj[0],  // ФИО пользователя
                         obj -> ((BigDecimal) obj[1]).longValue(), // Сумма чеков
-                        Long::sum, // Если у пользователя несколько чеков
+                        Long::sum, // Если у пользователя несколько чеков, складываем суммы
                         LinkedHashMap::new // Сохраняем порядок сортировки
                 ));
+
+        // Получаем карту с количеством новых компаний
+        Map<String, Long> newCompanies = companyService.getAllNewCompanies2(firstDayOfMonth, lastDayOfMonth).stream()
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],   // ФИО менеджера
+                        obj -> (Long) obj[1]      // Количество компаний
+                ));
+
+        // Объединяем две карты в одну с использованием Pair<Long, Long>
+        Map<String, Pair<Long, Long>> result = new LinkedHashMap<>();
+
+        // Обрабатываем первую карту (с суммами чеков)
+        for (Map.Entry<String, Long> entry : check.entrySet()) {
+            String fio = entry.getKey();
+            Long totalSum = entry.getValue();
+
+            // Получаем количество новых компаний для этого ФИО из второй карты
+            Long newCompaniesCount = newCompanies.getOrDefault(fio, 0L);
+
+            // Добавляем в результат
+            result.put(fio, Pair.of(totalSum, newCompaniesCount));
+        }
+
+        // Обрабатываем оставшиеся записи из второй карты (если такие есть)
+        for (Map.Entry<String, Long> entry : newCompanies.entrySet()) {
+            String fio = entry.getKey();
+
+            // Если этого ФИО нет в первой карте, добавляем с суммой чеков 0
+            result.putIfAbsent(fio, Pair.of(0L, entry.getValue()));
+        }
+
+        return result;
     }
+
+
+
+
+
+
 
     public List<CheckDTO> getAllCheckDTO(){
         return toDTOList(paymentCheckRepository.findAll());

@@ -8,9 +8,12 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.Query;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public interface CompanyService {
@@ -22,6 +25,10 @@ public interface CompanyService {
     List<CompanyDTO> getAllCompaniesDTOList(String keywords, String status);
     CompanyDTO getCompaniesDTOById(Long id); // взять одну компанию по id с переводом их в DTO
     Company getCompaniesById(Long id); // взять одну компанию по id
+
+    List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
     void updateCompany(CompanyDTO companyDTO, WorkerDTO workerDTO, Long companyId);
     boolean deleteWorkers(Long companyId, Long workerId);
     boolean deleteFilial(Long companyId, Long filialId);
@@ -44,4 +51,7 @@ public interface CompanyService {
 
 
     int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status);
+
+
+
 }

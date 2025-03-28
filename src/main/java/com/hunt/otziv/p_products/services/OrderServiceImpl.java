@@ -1014,9 +1014,16 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return count;
     }
 
+    @Override
+    public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
+        List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect);
 
-
-
+        return results.stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],  // ФИО
+                        row -> Pair.of((Long) row[1], (Long) row[2]) // Кол-во по статусу "Новый" и "Коррекция"
+                ));
+    }
 
 
 

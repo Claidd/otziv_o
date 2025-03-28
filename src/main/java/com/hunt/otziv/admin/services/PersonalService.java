@@ -3,15 +3,13 @@ package com.hunt.otziv.admin.services;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
-import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
+import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.u_users.model.*;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface PersonalService {
@@ -63,5 +61,10 @@ public interface PersonalService {
 
     Object gerOperatorsAndCountToDateToOwner(List<Operator> allOperators, LocalDate date);
 
-    String getPersonalsAndCountToMap();
+    Map<String, UserData> getPersonalsAndCountToMap();
+
+
+    String displayResult(Map<String, UserData> personalsAndCountToMap);
+
+
 }

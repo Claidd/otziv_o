@@ -41,7 +41,8 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
     GROUP BY u.fio
     ORDER BY SUM(pc.sum) DESC
 """)
-    List<Object[]> findAllToDateToMap( LocalDate startDate, LocalDate endDate);
+    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);
+
 
 
 

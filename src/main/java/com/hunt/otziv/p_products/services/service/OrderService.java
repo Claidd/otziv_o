@@ -7,9 +7,12 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
+import org.springframework.data.util.Pair;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public interface OrderService {
@@ -52,4 +55,5 @@ public interface OrderService {
     int countOrdersByWorkerAndStatus(Worker worker, String status);
 
 
+    Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect);
 }

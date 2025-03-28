@@ -8,9 +8,11 @@ import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.util.Pair;
 import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.*;
 
 @Repository
@@ -88,7 +90,25 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Order> findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(
             Worker worker, String keyword1, Worker worker2, String keyword2); //взять все заказы по названию и телефону компании определенного менеджера
 
-
+    @Query("SELECT w.user.fio, " +
+            "COUNT(CASE WHEN o.status.title  = :statusNew THEN 1 END), " +
+            "COUNT(CASE WHEN o.status.title  = :statusCorrect THEN 1 END) " +
+            "FROM Order o " +
+            "LEFT JOIN o.details " +
+            "LEFT JOIN o.status " +
+            "LEFT JOIN o.filial " +
+            "LEFT JOIN o.company c " +
+            "LEFT JOIN c.categoryCompany " +
+            "LEFT JOIN c.subCategory " +
+            "LEFT JOIN c.status " +
+            "LEFT JOIN o.worker w " +
+            "LEFT JOIN w.user " +
+            "LEFT JOIN o.manager m " +
+            "JOIN m.user " +
+            "GROUP BY w.user.fio " +
+            "ORDER BY MAX(o.changed) DESC")
+    List<Object[]> findAllIdByNewOrderAllStatus(String statusNew,
+                                                String statusCorrect);
 
 
 //    @Modifying

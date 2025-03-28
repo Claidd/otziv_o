@@ -1,6 +1,5 @@
 package com.hunt.otziv.c_companies.services;
 
-import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.model.Category;
@@ -15,9 +14,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.repository.FilialRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
-import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -27,13 +24,10 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.services.service.ProductService;
-import com.hunt.otziv.r_review.model.ReviewArchive;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -384,6 +378,20 @@ public class CompanyServiceImpl implements CompanyService{
     @Override
     public int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status) {
         return companyRepository.findAllByOwnerAndStatus(managerList, status).size();
+    }
+
+    @Override
+    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+    }
+
+    @Override
+    public Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth).stream()
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],   // ФИО менеджера
+                        obj -> (Long) obj[1]      // Количество компаний
+                ));
     }
 
     private Set<CompanyDTO> convertToCompanyDTOSet(Set<Company> companies){ // перевод компании в ДТО Сэт

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -89,4 +90,13 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     Optional<Company> findByIdAndTitleContainingIgnoreCaseOrTelephoneContainingIgnoreCase(Long id, String keyword, String keyword2);
 
+    @Query("""
+    SELECT u.fio, COUNT(c.id)
+    FROM Company c
+    JOIN c.manager m
+    JOIN m.user u
+    WHERE c.createDate BETWEEN :firstDayOfMonth AND :lastDayOfMonth
+    GROUP BY u.fio
+""")
+    List<Object[]> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

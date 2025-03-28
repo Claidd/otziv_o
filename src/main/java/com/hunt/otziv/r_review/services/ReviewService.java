@@ -8,10 +8,12 @@ import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
+import org.springframework.data.util.Pair;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,4 +54,6 @@ public interface ReviewService {
     int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 
     int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate);
+
+    Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
 }

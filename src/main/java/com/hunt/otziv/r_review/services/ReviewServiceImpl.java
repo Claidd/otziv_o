@@ -36,6 +36,7 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
+import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -816,6 +817,18 @@ public class ReviewServiceImpl implements ReviewService{
 //        System.out.println(worker.getUser().getFio() + " " + count);
         return count;
     }
+
+    @Override
+    public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
+        List<Object[]> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate);
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],  // ФИО
+                        row -> Pair.of((Long) row[2], (Long) row[1]) // Количество всего, количество с isVigul = false
+                ));
+    }
+
 
 
 }

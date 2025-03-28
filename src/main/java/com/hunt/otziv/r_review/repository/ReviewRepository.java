@@ -9,10 +9,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,6 +68,17 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
     int countByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 
-
-
+    @Query("""
+    SELECT 
+        u.fio, 
+        COUNT(r.id), 
+        SUM(CASE WHEN r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE 0 END) 
+    FROM Review r 
+    LEFT JOIN r.worker w 
+    LEFT JOIN w.user u 
+    WHERE r.publishedDate BETWEEN :firstDayOfMonth AND :localDate 
+      AND r.publish = false 
+    GROUP BY u.fio
+""")
+    List<Object[]> findAllByPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
 }

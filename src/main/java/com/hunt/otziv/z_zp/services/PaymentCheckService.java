@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
+import org.springframework.data.util.Pair;
 
 import java.security.Principal;
 import java.time.LocalDate;
@@ -23,5 +24,5 @@ public interface PaymentCheckService {
 
     List<PaymentCheck> getAllWorkerPaymentToDate(Long id, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
-    Map<String, Long> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    Map<String, Pair<Long, Long>>  getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

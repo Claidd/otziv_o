@@ -79,7 +79,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
-                        sendMessage(chatId, getStatsForAdmin(user, role));
+                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()));
                         break;
                     }
 
@@ -92,12 +92,11 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     if (role.equals("ROLE_ADMIN")) {
 //                        User user1 = userService.findByUserName("hunt").orElse(null);
 //                        sendMessage(chatId, getStatsForAdmin(user1, role));
-                         sendMessage(chatId, personalService.getPersonalsAndCountToMap());
+                         sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()));
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
-                    User user1 = userService.findByUserName("mia").orElse(null);
-                    sendMessage(chatId, getStatsForAdmin(user1, role));
+                        sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()));
                         break;
                 }
                     else {
