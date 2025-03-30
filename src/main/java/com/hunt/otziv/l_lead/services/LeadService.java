@@ -7,10 +7,12 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import org.springframework.data.domain.Page;
+import org.springframework.data.util.Pair;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -73,6 +75,8 @@ public interface LeadService {
     List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList);
 
     List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList);
+
+    Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================

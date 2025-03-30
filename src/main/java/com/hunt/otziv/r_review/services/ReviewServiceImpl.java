@@ -829,6 +829,40 @@ public class ReviewServiceImpl implements ReviewService{
                 ));
     }
 
+    @Override
+    public Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        List<Object[]> results = reviewRepository.getAllReviewsToMonth(firstDayOfMonth, lastDayOfMonth);
+
+        // Создадим две карты: одну для работников, другую для менеджеров
+        Map<String, Long> workerReviews = new HashMap<>();
+        Map<String, Long> managerReviews = new HashMap<>();
+
+        // Проходим по результатам и заполняем карты
+        for (Object[] row : results) {
+            String workerFio = (String) row[0];  // ФИО работника
+            Long workerReviewCount = (Long) row[1];  // Количество отзывов работника
+
+            String managerFio = (String) row[2];  // ФИО менеджера
+            Long managerReviewCount = (Long) row[3];  // Количество отзывов менеджера
+
+            // Обновляем карту работников
+            workerReviews.merge(workerFio, workerReviewCount, Long::sum);
+
+            // Обновляем карту менеджеров
+            managerReviews.merge(managerFio, managerReviewCount, Long::sum);
+        }
+
+//         Для отладки выводим результаты
+//        System.out.println("Отзывы по работникам: " + workerReviews);
+//        System.out.println("Отзывы по менеджерам: " + managerReviews);
+
+        // Возвращаем карту с результатами по работникам и менеджерам
+        Map<String, Long> allReviews = new HashMap<>();
+        allReviews.putAll(workerReviews);
+        allReviews.putAll(managerReviews);
+        return allReviews;
+    }
+
 
 
 }

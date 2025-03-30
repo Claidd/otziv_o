@@ -1025,6 +1025,41 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 ));
     }
 
+    @Override
+    public Map<String, Long> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        List<Object[]> results = orderRepository.getAllOrdersToMonth(status, firstDayOfMonth, lastDayOfMonth);
+
+        // Создадим две карты: одну для работников, другую для менеджеров
+        Map<String, Long> workerOrders = new HashMap<>();
+        Map<String, Long> managerOrders = new HashMap<>();
+
+        // Проходим по результатам и заполняем карты
+        for (Object[] row : results) {
+            String workerFio = (String) row[0];  // ФИО работника
+            Long workerOrderCount = (Long) row[1];  // Количество заказов работника
+
+            // Здесь добавляем логику для обработки заказов по менеджерам, если они есть в вашем запросе
+            String managerFio = (String) row[2];  // ФИО менеджера
+            Long managerOrderCount = (Long) row[3];  // Количество заказов менеджера
+
+            // Обновляем карту работников
+            workerOrders.merge(workerFio, workerOrderCount, Long::sum);
+
+            // Обновляем карту менеджеров
+            managerOrders.merge(managerFio, managerOrderCount, Long::sum);
+        }
+
+        // Для отладки выводим результаты
+//        System.out.println("Заказы по работникам: " + workerOrders);
+//        System.out.println("Заказы по менеджерам: " + managerOrders);
+
+        // Возвращаем объединенные результаты для работников и менеджеров
+        Map<String, Long> allOrders = new HashMap<>();
+        allOrders.putAll(workerOrders);
+        allOrders.putAll(managerOrders);
+        return allOrders;
+    }
+
 
 
 //    @Override

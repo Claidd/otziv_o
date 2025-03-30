@@ -509,6 +509,11 @@ public class UserServiceImpl  implements UserService {
             return userRepository.findByTelegramChatId(chatId);
     }
 
+    @Override
+    public User findByIdToUserInfo(Long staticFor) {
+        return userRepository.findById(staticFor).orElseThrow();
+    }
+
 //    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (старый вариант)
 //        System.out.println(file);
 //        Image image = new Image();

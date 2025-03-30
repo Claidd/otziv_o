@@ -56,4 +56,6 @@ public interface OrderService {
 
 
     Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect);
+
+    Map<String, Long> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

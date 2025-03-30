@@ -17,6 +17,7 @@ import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
+import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -604,6 +605,38 @@ public class LeadServiceImpl implements LeadService{
     public List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList) {
         return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
     }
+
+
+    @Override
+    public Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        // Получаем результат из базы данных (например, используя @Query)
+        List<Object[]> results = leadsRepository.getAllLeadsToMonth(statusInWork, firstDayOfMonth, lastDayOfMonth);
+
+        Map<String, Pair<Long, Long>> resultMap = new HashMap<>();
+
+        for (Object[] row : results) {
+            String operatorFio = (String) row[0];
+            Long allLeadsOperator = (Long) row[1];
+            Long statusInWorkOperator = (Long) row[2];
+
+            String marketologFio = (String) row[3];
+            Long allLeadsMarketolog = (Long) row[4];
+            Long statusInWorkMarketolog = (Long) row[5];
+
+            // Обрабатываем оператора
+            resultMap.put(operatorFio, Pair.of(allLeadsOperator, statusInWorkOperator));
+
+            // Обрабатываем маркетолога
+            resultMap.put(marketologFio, Pair.of(allLeadsMarketolog, statusInWorkMarketolog));
+        }
+//        System.out.println(resultMap);
+        return resultMap;
+    }
+
+
+
+
+
 
 
 }

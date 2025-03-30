@@ -54,12 +54,34 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.findAllToDateByUser(localDate, localDate2, userId);
     } // Берем все ЗП для Работника
 
-
+    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
+    @Override
+    public Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
+                .stream()
+                .filter(obj -> {
+                    String role = (String) obj[2];
+                    // Фильтруем только по ролям
+                    return "ROLE_MANAGER".equals(role) || "ROLE_WORKER".equals(role);
+                })
+                .sorted(Comparator.comparing((Object[] obj) -> {
+                                    String role = (String) obj[2];
+                                    return rolePriority(role); // Сортируем сначала по приоритету роли
+                                })
+                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
+                )
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],   // ФИО
+                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new // Сохраняем порядок сортировки
+                ));
+    }
 
     /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте **/
     @Override
     public Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return zpRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
+        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
                 .stream()
                 .sorted(Comparator.comparing((Object[] obj) -> {
                                     String role = (String) obj[2];
@@ -75,11 +97,14 @@ public class ZpServiceImpl implements ZpService{
                 ));
     }
 
+
     // Метод для присваивания приоритета ролям
     private int rolePriority(String role) {
         if ("ROLE_MANAGER".equals(role)) return 1; // Менеджеры первыми
         if ("ROLE_WORKER".equals(role)) return 2;  // Потом воркеры
-        return 3; // Все остальные в конце
+        if ("ROLE_OPERATOR".equals(role)) return 3;  // Потом воркеры
+        if ("ROLE_MARKETOLOG".equals(role)) return 4;  // Потом воркеры
+        return 5; // Все остальные в конце
     }
 
 

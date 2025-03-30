@@ -56,4 +56,6 @@ public interface ReviewService {
     int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate);
 
     Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
+
+    Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

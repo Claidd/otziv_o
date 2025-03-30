@@ -111,6 +111,26 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                 String statusCorrect);
 
 
+    @Query("""
+    SELECT 
+        w.user.fio AS workerFio, 
+        COUNT(CASE WHEN o.status.title = :status THEN 1 END) AS workerOrderCount, 
+        m_user.fio AS managerFio, 
+        COUNT(CASE WHEN o.status.title = :status THEN 1 END) AS managerOrderCount
+    FROM Order o 
+    LEFT JOIN o.worker w 
+    LEFT JOIN w.user 
+    LEFT JOIN o.manager m 
+    JOIN m.user m_user 
+    WHERE o.complete = true 
+    AND o.payDay BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
+    GROUP BY w.user.fio, m_user.fio
+""")
+    List<Object[]> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+
+
+
 //    @Modifying
 //    @Query("DELETE FROM Order o WHERE o.details = :orderId")
 //    void deleteOrderById(UUID orderId);

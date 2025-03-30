@@ -56,6 +56,8 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     }
 
 
+
+
     @Override
     public Map<String, Pair<Long, Long>> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         // Получаем карту с суммами чеков

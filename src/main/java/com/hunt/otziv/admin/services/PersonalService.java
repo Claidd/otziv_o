@@ -67,4 +67,5 @@ public interface PersonalService {
     String displayResult(Map<String, UserData> personalsAndCountToMap);
 
 
+    List<UserData> getPersonalsAndCountToScore(LocalDate localDate);
 }

@@ -91,4 +91,29 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
     Page<Lead> findAllByLidStatusAndManagerToOwner(String status, List<Manager> managers, Pageable pageable);
 
+
+
+    @Query("""
+    SELECT 
+        u.fio AS operatorFio, 
+        COUNT(l.id) AS allLeadsOperator, 
+        SUM(CASE WHEN l.lidStatus = :statusInWork THEN 1 ELSE 0 END) AS statusInWorkOperator, 
+
+        m_user.fio AS marketologFio, 
+        COUNT(l.id) AS allLeadsMarketolog, 
+        SUM(CASE WHEN l.lidStatus = :statusInWork THEN 1 ELSE 0 END) AS statusInWorkMarketolog 
+    FROM Lead l 
+    LEFT JOIN l.operator o 
+    LEFT JOIN o.user u 
+    LEFT JOIN l.marketolog m 
+    LEFT JOIN m.user m_user 
+    WHERE l.createDate BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
+    GROUP BY u.fio, m_user.fio
+""")
+    List<Object[]> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+
+
+
+
 }

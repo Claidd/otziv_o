@@ -46,6 +46,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     @Override
 
     public void onUpdateReceived(Update update) {
+        long startTime = System.nanoTime();
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
@@ -63,10 +64,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                         .orElse("Без роли");
 
                 // Обработка сообщения
-                System.out.println("Received message from chat ID: " + chatId);
-                System.out.println("Message text: " + messageText);
-                System.out.println("username: " + username);
-                System.out.println("role: " + role);
+//                System.out.println("Received message from chat ID: " + chatId);
+//                System.out.println("Message text: " + messageText);
+//                System.out.println("username: " + username);
+//                System.out.println("role: " + role);
             } else {
                 return; // если пользователя нет — дальше не идём
             }
@@ -75,7 +76,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 case "1":
                     // Отправляем сообщение
                     if (role.equals("ROLE_ADMIN")) {
-                        sendMessage(chatId, getStatsForAdmin(user, role));
+                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()));
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
@@ -90,8 +91,6 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
                 case ("2"):
                     if (role.equals("ROLE_ADMIN")) {
-//                        User user1 = userService.findByUserName("hunt").orElse(null);
-//                        sendMessage(chatId, getStatsForAdmin(user1, role));
                          sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()));
                         break;
                     }
@@ -114,6 +113,7 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, "You said not need symbol: " + messageText);
                     break;
             }
+            checkTimeMethod("Время выполнения Запроса для телеграмм отработал за: ",startTime);
 
             // Пример отправки ответа
 //            sendMessage(chatId, "You said: " + messageText);
@@ -175,80 +175,10 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             return null;
         }
     }
-
-
-
-    @Transactional
-    protected String getStatsForAdmin(User user, String role ) {
-        LocalDate localDate = LocalDate.now();
-        StatDTO stat;
-        List<ManagersListDTO> managers;
-        List<WorkersListDTO> workers;
-
-        stat = personalService.getStats(localDate, user, role);
-        managers = personalService.getManagersAndCount()
-                .stream()
-                .sorted(Comparator.comparing(ManagersListDTO::getSum1Month).reversed())
-                .toList();
-        workers = personalService.gerWorkersToAndCount()
-                .stream()
-                .sorted(Comparator.comparing(WorkersListDTO::getSum1Month).reversed())
-                .toList();
-
-        // Формируем строку с выручкой менеджеров
-        StringBuilder managerRevenue = new StringBuilder();
-        for (ManagersListDTO manager : managers) {
-            managerRevenue.append(manager.getFio())
-                    .append(": ")
-                    .append(manager.getPayment1Month())
-                    .append(" руб.\n");
-        }
-
-        // Формируем строку с выручкой менеджеров
-        StringBuilder managerZp = new StringBuilder();
-        for (ManagersListDTO manager : managers) {
-            managerZp.append(manager.getFio())
-                    .append(": ")
-                    .append(manager.getSum1Month())
-                    .append(" руб. ")
-                    .append(" Новых: ")
-                    .append(manager.getLeadsInWorkInMonth())
-                     .append("\n");
-        }
-
-        // Формируем строку с выручкой менеджеров
-        StringBuilder workerRevenue = new StringBuilder();
-        for (WorkersListDTO worker : workers) {
-            workerRevenue.append(worker.getFio())
-                    .append(": ")
-                    .append(worker.getSum1Month())
-                    .append(" руб. ")
-                    .append(" н-")
-                    .append(worker.getNewOrder())
-                    .append("к-")
-                    .append(worker.getInCorrect())
-                    .append("в-")
-                    .append(worker.getIntVigul())
-                    .append("п-")
-                    .append(worker.getPublish())
-                    .append("\n");
-        }
-
-        // Отправляем сообщение
-        return
-                "Выручка за месяц всей компании: " + stat.getSum1MonthPay() + " руб.\n" +
-                        "Новых компаний за месяц: " + stat.getLeadsInWork() + "\n" +  "\n" +
-                        "Выручка менеджеров:\n" + managerRevenue + "\n" +
-                        "ЗП менеджеров:\n" + managerZp + "\n" +
-                        "ЗП Работников:\n" + workerRevenue;
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        System.out.printf(text + "%.4f сек%n", timeElapsed);
     }
 
-    private String getRole(Principal principal){
-        // Получите текущий объект аутентификации
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // Получите имя текущего пользователя (пользователя, не роль)
-        String username = principal.getName();
-        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
-        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
-    } // Берем роль пользователя
 }

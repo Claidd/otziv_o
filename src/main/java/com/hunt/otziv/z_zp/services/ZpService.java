@@ -29,4 +29,6 @@ public interface ZpService {
     List<Zp> findAllToDateByUser(LocalDate localDate, Long id);
 
     Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

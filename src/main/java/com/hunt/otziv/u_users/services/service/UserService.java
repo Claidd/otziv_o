@@ -41,6 +41,8 @@ public interface UserService extends UserDetailsService{
 
     Optional<User> findByChatId(long chatId);
 
+    User findByIdToUserInfo(Long staticFor);
+
 
 //
 //    Object getUserByPrincipal(Principal principal);

@@ -81,4 +81,24 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     GROUP BY u.fio
 """)
     List<Object[]> findAllByPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
+
+    @Query("""
+    SELECT 
+        u.fio AS workerFio, 
+        COUNT(DISTINCT r.id) AS workerReviewCount, 
+        m_user.fio AS managerFio, 
+        COUNT(DISTINCT r.id) AS managerReviewCount
+    FROM Review r 
+    LEFT JOIN r.worker w 
+    LEFT JOIN r.orderDetails.order.manager m 
+    LEFT JOIN w.user u 
+    LEFT JOIN m.user m_user 
+    WHERE r.publishedDate BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
+      AND r.publish = true 
+    GROUP BY u.fio, m_user.fio
+""")
+    List<Object[]> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+
+
 }

@@ -1,9 +1,6 @@
 package com.hunt.otziv.admin.controller;
 
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
-import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
+import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.services.PersonalService;
 //import com.hunt.otziv.u_users.config.DockerService;
 import com.hunt.otziv.u_users.model.*;
@@ -26,6 +23,7 @@ import java.io.IOException;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Controller
 @RequiredArgsConstructor
@@ -166,66 +164,159 @@ public class AdminController {
     @GetMapping("/score")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
     public ModelAndView score(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
-        long startTime = System.nanoTime();
-        String userRole = getRole(principal);
-
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
-            model.put("user", personalService.getUserLK(principal));
-            model.put("route", "score");
-            model.put("managers", personalService.getManagersAndCount().stream().sorted(Comparator.comparing(ManagersListDTO:: getSum1Month).reversed()));
-            model.put("marketologs", personalService.getMarketologsAndCount().stream().sorted(Comparator.comparing(MarketologsListDTO:: getSum1Month).reversed()));
-            model.put("workers", personalService.gerWorkersToAndCount().stream().sorted(Comparator.comparing(WorkersListDTO:: getSum1Month).reversed()));
-            model.put("operators", personalService.gerOperatorsAndCount().stream().sorted(Comparator.comparing(OperatorsListDTO:: getSum1Month).reversed()));
-            checkTimeMethod("Время выполнения AdminController/admin/score для ADMIN: ",startTime);
-            return new ModelAndView("admin/layouts/score", model);
-        }
-        else {
-            model.put("route", "score");
-            model.put("user", personalService.getUserLK(principal));
-            model.put("managers", personalService.getManagersAndCount().stream().sorted(Comparator.comparing(ManagersListDTO:: getReview1Month).reversed()));
-            model.put("marketologs", personalService.getMarketologsAndCount().stream().sorted(Comparator.comparing(MarketologsListDTO:: getOrder1Month).reversed()));
-            model.put("workers", personalService.gerWorkersToAndCount().stream().sorted(Comparator.comparing(WorkersListDTO:: getReview1Month).reversed()));
-            model.put("operators", personalService.gerOperatorsAndCount().stream().sorted(Comparator.comparing(OperatorsListDTO:: getOrder1Month).reversed()));
-            checkTimeMethod("Время выполнения AdminController/admin/score для ВСЕХ: ",startTime);
-            return new ModelAndView("admin/layouts/score", model);
-        }
+        return processScoreRequest(model, principal, LocalDate.now());
     }
 
     @PostMapping("/score")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
-    public ModelAndView scorePost(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+    public ModelAndView scorePost(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,
+                                  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        return processScoreRequest(model, principal, date);
+    }
+
+    private ModelAndView processScoreRequest(Map<String, Object> model, Principal principal, LocalDate date) {
         long startTime = System.nanoTime();
         String userRole = getRole(principal);
 
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
-            model.put("user", personalService.getUserLK(principal));
-            model.put("route", "score");
-            model.put("managers", personalService.getManagersAndCountToDate(date).stream().sorted(Comparator.comparing(ManagersListDTO:: getSum1Month).reversed()));
-            model.put("marketologs", personalService.getMarketologsAndCountToDate(date).stream().sorted(Comparator.comparing(MarketologsListDTO:: getSum1Month).reversed()));
-            model.put("workers", personalService.gerWorkersToAndCountToDate(date).stream().sorted(Comparator.comparing(WorkersListDTO:: getSum1Month).reversed()));
-            model.put("operators", personalService.gerOperatorsAndCountToDate(date).stream().sorted(Comparator.comparing(OperatorsListDTO:: getSum1Month).reversed()));
-            checkTimeMethod("Время выполнения AdminController/admin/score для ADMIN: ",startTime);
-            return new ModelAndView("admin/layouts/score", model);
-        }
-        else {
-            model.put("route", "score");
-            model.put("user", personalService.getUserLK(principal));
-            model.put("managers", personalService.getManagersAndCountToDate(date).stream().sorted(Comparator.comparing(ManagersListDTO:: getReview1Month).reversed()));
-            model.put("marketologs", personalService.getMarketologsAndCountToDate(date).stream().sorted(Comparator.comparing(MarketologsListDTO:: getOrder1Month).reversed()));
-            model.put("workers", personalService.gerWorkersToAndCountToDate(date).stream().sorted(Comparator.comparing(WorkersListDTO:: getReview1Month).reversed()));
-            model.put("operators", personalService.gerOperatorsAndCountToDate(date).stream().sorted(Comparator.comparing(OperatorsListDTO:: getOrder1Month).reversed()));
-            checkTimeMethod("Время выполнения AdminController/admin/score для ВСЕХ: ",startTime);
-            return new ModelAndView("admin/layouts/score", model);
-        }
+        model.put("route", "score");
+        model.put("user", personalService.getUserLK(principal));
+
+        // Получаем всех пользователей
+        List<UserData> listPersonal = personalService.getPersonalsAndCountToScore(date);
+
+        // Группировка пользователей по ролям
+        Map<String, List<UserData>> groupedUsers = listPersonal.stream()
+                .collect(Collectors.groupingBy(
+                        UserData::getRole,
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                list -> list.stream()
+                                        .sorted(getRoleComparator()) // Универсальная сортировка
+                                        .collect(Collectors.toList())
+                        )
+                ));
+
+        // Добавляем группы пользователей в модель
+        model.put("managers", groupedUsers.getOrDefault("ROLE_MANAGER", Collections.emptyList()));
+        model.put("marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", Collections.emptyList()));
+        model.put("workers", groupedUsers.getOrDefault("ROLE_WORKER", Collections.emptyList()));
+        model.put("operators", groupedUsers.getOrDefault("ROLE_OPERATOR", Collections.emptyList()));
+
+        checkTimeMethod("Время выполнения AdminController/admin/score: ", startTime);
+        return new ModelAndView("admin/layouts/score", model);
     }
+
+    // Универсальный компаратор для сортировки
+    private Comparator<UserData> getRoleComparator() {
+        return Comparator.comparing((UserData user) -> {
+                    switch (user.getRole()) {
+                        case "ROLE_MANAGER": return 1;
+                        case "ROLE_WORKER": return 2;
+                        case "ROLE_OPERATOR": return 3;
+                        case "ROLE_MARKETOLOG": return 4;
+                        default: return 5;
+                    }
+                }).thenComparing(UserData::getTotalSum, Comparator.reverseOrder())
+                .thenComparing(UserData::getSalary, Comparator.reverseOrder());
+    }
+
+
+//    @GetMapping("/score")
+//    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+//    public ModelAndView score(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
+//        long startTime = System.nanoTime();
+//        String userRole = getRole(principal);
+//        LocalDate localDate = LocalDate.now();
+//        return getListPersonalToScore(model, principal, startTime, userRole, localDate);
+//    }
+//
+//    @PostMapping("/score")
+//    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_OPERATOR', 'ROLE_MARKETOLOG')")
+//    public ModelAndView scorePost(final Map<String, Object> model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber, @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+//        long startTime = System.nanoTime();
+//        String userRole = getRole(principal);
+//        return getListPersonalToScore(model, principal, startTime, userRole, date);
+//    }
+//
+//    private ModelAndView getListPersonalToScore(Map<String, Object> model, Principal principal, long startTime, String userRole, LocalDate localDate) {
+//        List<UserData> listPersonal = personalService.getPersonalsAndCountToScore(localDate);
+//
+//        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+//            model.put("user", personalService.getUserLK(principal));
+//            model.put("route", "score");
+//            // Получаем все персональные данные
+//
+//            // Фильтруем пользователей по ролям
+//            List<UserData> managers = listPersonal.stream()
+//                    .filter(user -> "ROLE_MANAGER".equals(user.getRole()))
+//                    .sorted(Comparator.comparing(UserData:: getTotalSum).reversed())
+//                    .collect(Collectors.toList());
+//            List<UserData> workers = listPersonal.stream()
+//                    .filter(user -> "ROLE_WORKER".equals(user.getRole()))
+//                    .sorted(Comparator.comparing(UserData:: getSalary).reversed())
+//                    .collect(Collectors.toList());
+//            List<UserData> marketologs = listPersonal.stream()
+//                    .filter(user -> "ROLE_MARKETOLOG".equals(user.getRole()))
+//                    .collect(Collectors.toList());
+//
+//            List<UserData> operators = listPersonal.stream()
+//                    .filter(user -> "ROLE_OPERATOR".equals(user.getRole()))
+//                    .collect(Collectors.toList());
+//
+//            // Добавляем в модель
+//            model.put("managers", managers);
+//            model.put("marketologs", marketologs);
+//            model.put("workers", workers);
+//            model.put("operators", operators);
+//            checkTimeMethod("Время выполнения AdminController/admin/score для ADMIN: ",startTime);
+//            return new ModelAndView("admin/layouts/score", model);
+//        }
+//        else {
+//            model.put("route", "score");
+//            model.put("user", personalService.getUserLK(principal));
+//            // Получаем все персональные данные
+//
+//
+//            // Фильтруем пользователей по ролям
+//            List<UserData> managers = listPersonal.stream()
+//                    .filter(user -> "ROLE_MANAGER".equals(user.getRole()))
+//                    .sorted(Comparator.comparing(UserData:: getTotalSum).reversed())
+//                    .collect(Collectors.toList());
+//            List<UserData> workers = listPersonal.stream()
+//                    .filter(user -> "ROLE_WORKER".equals(user.getRole()))
+//                    .sorted(Comparator.comparing(UserData:: getSalary).reversed())
+//                    .collect(Collectors.toList());
+//            List<UserData> marketologs = listPersonal.stream()
+//                    .filter(user -> "ROLE_MARKETOLOG".equals(user.getRole()))
+//                    .collect(Collectors.toList());
+//
+//            List<UserData> operators = listPersonal.stream()
+//                    .filter(user -> "ROLE_OPERATOR".equals(user.getRole()))
+//                    .collect(Collectors.toList());
+//
+//            // Добавляем в модель
+//            model.put("managers", managers);
+//            model.put("marketologs", marketologs);
+//            model.put("workers", workers);
+//            model.put("operators", operators);
+////            model.put("managers", personalService.getManagersAndCount().stream().sorted(Comparator.comparing(ManagersListDTO:: getReview1Month).reversed()));
+////            model.put("marketologs", personalService.getMarketologsAndCount().stream().sorted(Comparator.comparing(MarketologsListDTO:: getOrder1Month).reversed()));
+////            model.put("workers", personalService.gerWorkersToAndCount().stream().sorted(Comparator.comparing(WorkersListDTO:: getReview1Month).reversed()));
+////            model.put("operators", personalService.gerOperatorsAndCount().stream().sorted(Comparator.comparing(OperatorsListDTO:: getOrder1Month).reversed()));
+//            checkTimeMethod("Время выполнения AdminController/admin/score для ВСЕХ: ",startTime);
+//            return new ModelAndView("admin/layouts/score", model);
+//        }
+//    }
+
+
 
     @GetMapping("/user_info")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
-    public ModelAndView userInfo(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
+    public ModelAndView userInfo(final Map<String, Object> model, @RequestParam(defaultValue = "") Long staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         LocalDate localDate = LocalDate.now();
-        System.out.println(staticFor);
-        User user = userService.findByUserName(staticFor).orElseThrow();;
+//        System.out.println(staticFor);
+        User user = userService.findByIdToUserInfo(staticFor);
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
         model.put("workerZp", personalService.getWorkerReviews(user, localDate));
@@ -235,11 +326,11 @@ public class AdminController {
 
     @PostMapping("/user_info")
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER')")
-    public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") String staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) {
+    public ModelAndView userInfoPost(final Map<String, Object> model, @RequestParam(defaultValue = "") Long staticFor, Principal principal, @RequestParam(defaultValue = "0") int pageNumber,  @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Optional<LocalDate> date) {
         long startTime = System.nanoTime();
         LocalDate localDate = date.orElse(LocalDate.now());
-        System.out.println(staticFor);
-        User user = userService.findByUserName(staticFor).orElseThrow();
+//        System.out.println(staticFor);
+        User user = userService.findByIdToUserInfo(staticFor);
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
         model.put("workerZp", personalService.getWorkerReviews(user, localDate));
