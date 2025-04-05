@@ -90,25 +90,54 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Order> findAllByWorkerAndCompanyTitleContainingIgnoreCaseOrWorkerAndCompanyTelephoneContainingIgnoreCase(
             Worker worker, String keyword1, Worker worker2, String keyword2); //взять все заказы по названию и телефону компании определенного менеджера
 
-    @Query("SELECT w.user.fio, " +
-            "COUNT(CASE WHEN o.status.title  = :statusNew THEN 1 END), " +
-            "COUNT(CASE WHEN o.status.title  = :statusCorrect THEN 1 END) " +
-            "FROM Order o " +
-            "LEFT JOIN o.details " +
-            "LEFT JOIN o.status " +
-            "LEFT JOIN o.filial " +
-            "LEFT JOIN o.company c " +
-            "LEFT JOIN c.categoryCompany " +
-            "LEFT JOIN c.subCategory " +
-            "LEFT JOIN c.status " +
-            "LEFT JOIN o.worker w " +
-            "LEFT JOIN w.user " +
-            "LEFT JOIN o.manager m " +
-            "JOIN m.user " +
-            "GROUP BY w.user.fio " +
-            "ORDER BY MAX(o.changed) DESC")
-    List<Object[]> findAllIdByNewOrderAllStatus(String statusNew,
-                                                String statusCorrect);
+//    @Query("SELECT w.user.fio, " +
+//            "COUNT(CASE WHEN o.status.title  = :statusNew THEN 1 END), " +
+//            "COUNT(CASE WHEN o.status.title  = :statusCorrect THEN 1 END) " +
+//            "FROM Order o " +
+//            "LEFT JOIN o.details " +
+//            "LEFT JOIN o.status " +
+//            "LEFT JOIN o.filial " +
+//            "LEFT JOIN o.company c " +
+//            "LEFT JOIN c.categoryCompany " +
+//            "LEFT JOIN c.subCategory " +
+//            "LEFT JOIN c.status " +
+//            "LEFT JOIN o.worker w " +
+//            "LEFT JOIN w.user " +
+//            "LEFT JOIN o.manager m " +
+//            "JOIN m.user " +
+//            "GROUP BY w.user.fio " +
+//            "ORDER BY MAX(o.changed) DESC")
+//    List<Object[]> findAllIdByNewOrderAllStatus(String statusNew,
+//                                                String statusCorrect);
+
+    @Query("""
+    SELECT 
+        'operator' AS type,
+        wu.fio AS fio, 
+        COUNT(CASE WHEN o.status.title = :statusNew THEN 1 ELSE NULL END) AS newOrders, 
+        COUNT(CASE WHEN o.status.title = :statusCorrect THEN 1 ELSE NULL END) AS correctOrders
+    FROM Order o 
+    LEFT JOIN o.worker w 
+    LEFT JOIN w.user wu 
+    WHERE wu.fio IS NOT NULL
+    GROUP BY wu.fio
+
+    UNION ALL
+
+    SELECT 
+        'manager' AS type,
+        COALESCE(mu.fio, 'Без менеджера') AS fio, 
+        COUNT(CASE WHEN o.status.title = :statusNew THEN 1 ELSE NULL END) AS newOrders, 
+        COUNT(CASE WHEN o.status.title = :statusCorrect THEN 1 ELSE NULL END) AS correctOrders
+    FROM Order o 
+    LEFT JOIN o.manager m 
+    LEFT JOIN m.user mu 
+    WHERE mu.fio IS NOT NULL
+    GROUP BY mu.fio
+""")
+    List<Object[]> findAllIdByNewOrderAllStatus(String statusNew, String statusCorrect);
+
+
 
 
     @Query("""
@@ -127,6 +156,29 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     GROUP BY w.user.fio, m_user.fio
 """)
     List<Object[]> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    @Query("""
+    SELECT 
+        COALESCE(m_user.fio, u.fio) AS fio, 
+        o.status.title AS status, 
+        COUNT(o.id) AS count,
+        CASE 
+            WHEN m_user.fio IS NOT NULL THEN 'manager' 
+            ELSE 'worker' 
+        END AS role
+    FROM Order o 
+    LEFT JOIN o.worker w 
+    LEFT JOIN w.user u 
+    LEFT JOIN o.manager m 
+    LEFT JOIN m.user m_user 
+    WHERE o.complete = false 
+    AND o.changed BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
+    AND o.status.title IN (:statuses)
+    GROUP BY fio, o.status.title, role
+""")
+    List<Object[]> getOrdersByStatusForUsers(List<String> statuses,
+                                             LocalDate firstDayOfMonth,
+                                             LocalDate lastDayOfMonth);
 
 
 

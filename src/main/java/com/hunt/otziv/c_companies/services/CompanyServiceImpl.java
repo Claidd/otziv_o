@@ -613,17 +613,24 @@ public class CompanyServiceImpl implements CompanyService{
 
     private CategoryDTO convertToCategoryDto(Category category) { // перевод категории в ДТО
         CategoryDTO categoryDTO = new CategoryDTO();
-        categoryDTO.setId(category.getId());
-        categoryDTO.setCategoryTitle(category.getCategoryTitle());
+        categoryDTO.setId(category.getId() != null ? category.getId() : 0L);
+        categoryDTO.setCategoryTitle(category.getCategoryTitle() !=null ? category.getCategoryTitle() : "Не выбрана");
         return categoryDTO;
     } // перевод категории в ДТО
 
-    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // перевод подкатегории в ДТО
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) {
+        if (subCategory == null) {
+            return new SubCategoryDTO(0L, "Не выбрана"); // Безопасное значение по умолчанию
+        }
+
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
-        subCategoryDTO.setId(subCategory.getId());
-        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
+        subCategoryDTO.setId(subCategory.getId() != null ? subCategory.getId() : 0L);
+        subCategoryDTO.setSubCategoryTitle(
+                subCategory.getSubCategoryTitle() != null ? subCategory.getSubCategoryTitle() : "Не выбрана"
+        );
+
         return subCategoryDTO;
-    } // перевод подкатегории в ДТО
+    }// перевод подкатегории в ДТО
 
     private Set<FilialDTO> convertToFilialDtoSet(Set<Filial> filial) { // перевод филиала в ДТО Сэт
         return filial.stream()
@@ -650,6 +657,10 @@ public class CompanyServiceImpl implements CompanyService{
         Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
         boolean isChanged = false;
 
+        if (saveCompany.getSubCategory() == null) {
+            saveCompany.setSubCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()));
+        }
+
         /*Временная проверка сравнений*/
         System.out.println("title: " + !Objects.equals(companyDTO.getTitle(), saveCompany.getTitle()));
         System.out.println("telephone: " + !Objects.equals(changeNumberPhone(companyDTO.getTelephone()), changeNumberPhone(saveCompany.getTelephone())));
@@ -660,7 +671,8 @@ public class CompanyServiceImpl implements CompanyService{
         System.out.println("comments: " +  !Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany()));
         System.out.println("status: " + !Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId()));
         System.out.println("category: " + !Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId()));
-        System.out.println("subCategory: " + !Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId()));
+
+        System.out.println("subCategory: " + !Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId() != null ? saveCompany.getSubCategory().getId() : 0L));
         System.out.println("manager: " + !Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId()));
         System.out.println("workerId: " +  (newWorkerDTO.getWorkerId() != 0));
         System.out.println("filial: " +  (!companyDTO.getFilial().getTitle().isEmpty()));
@@ -715,7 +727,7 @@ public class CompanyServiceImpl implements CompanyService{
             reviewService.updateReviewByFilials(filials, companyDTO.getCategoryCompany().getId(), companyDTO.getSubCategory().getId());
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId())){ /*Проверка субкатегорию*/
+        if (!Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId() != null ? saveCompany.getSubCategory().getId() : 0L)){ /*Проверка субкатегорию*/
             log.info("Обновляем субкатегорию");
             saveCompany.setSubCategory(subCategoryService.getSubCategoryById(companyDTO.getSubCategory().getId()));
             Set<Filial> filials = saveCompany.getFilial();

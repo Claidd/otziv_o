@@ -428,7 +428,7 @@ public class CompanyController {
         CompanyDTO companyDTO = companyService.getCompaniesDTOById(companyId);
         model.addAttribute("companyDTO", companyDTO);
         model.addAttribute("categories", categoryService.getAllCategories());
-        model.addAttribute("subCategories", subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()));
+        model.addAttribute("subCategories", subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()) != null ? subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()) : 0L);
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("newWorkerDTO", new WorkerDTO());
         model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));

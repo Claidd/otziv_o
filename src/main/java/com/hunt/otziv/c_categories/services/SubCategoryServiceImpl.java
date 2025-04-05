@@ -72,8 +72,8 @@ public class SubCategoryServiceImpl implements SubCategoryService{
     // Метод для преобразования сущности SubCategory в DTO SubCategoryDTO
     private SubCategoryDTO convertToSubCategoryDTO(SubCategory subCategory) {
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
-        subCategoryDTO.setId(subCategory.getId());
-        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
+        subCategoryDTO.setId(subCategory.getId() != null ? subCategory.getId() : 0);
+        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle() != null ? subCategory.getSubCategoryTitle() : "Не Выбрано");
         // Здесь можете заполнить другие поля DTO, если они есть
 
         return subCategoryDTO;

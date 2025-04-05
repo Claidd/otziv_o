@@ -1,5 +1,6 @@
 package com.hunt.otziv.z_zp.services;
 
+import com.hunt.otziv.admin.model.Quadruple;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
@@ -28,7 +29,7 @@ public interface ZpService {
 
     List<Zp> findAllToDateByUser(LocalDate localDate, Long id);
 
-    Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

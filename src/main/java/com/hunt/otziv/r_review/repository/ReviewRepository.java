@@ -68,26 +68,44 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
     int countByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 
+
     @Query("""
     SELECT 
-        u.fio, 
-        COUNT(r.id), 
-        SUM(CASE WHEN r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE 0 END) 
+        u.fio AS fio, 
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews, 
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE NULL END) AS vigulCount
     FROM Review r 
     LEFT JOIN r.worker w 
     LEFT JOIN w.user u 
-    WHERE r.publishedDate BETWEEN :firstDayOfMonth AND :localDate 
-      AND r.publish = false 
+    WHERE r.publish = false 
+      AND u.fio IS NOT NULL
     GROUP BY u.fio
+    
+    UNION ALL
+
+    SELECT 
+        mu.fio AS fio, 
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews, 
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE NULL END) AS vigulCount
+    FROM Review r 
+    LEFT JOIN r.orderDetails od 
+    LEFT JOIN od.order o
+    LEFT JOIN o.manager m
+    LEFT JOIN m.user mu
+    WHERE r.publish = false 
+      AND mu.fio IS NOT NULL
+    GROUP BY mu.fio
 """)
-    List<Object[]> findAllByPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
+    List<Object[]> findAllByPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate, LocalDate localDate2);
+
+
 
     @Query("""
     SELECT 
         u.fio AS workerFio, 
-        COUNT(DISTINCT r.id) AS workerReviewCount, 
+        COUNT( r.id) AS workerReviewCount, 
         m_user.fio AS managerFio, 
-        COUNT(DISTINCT r.id) AS managerReviewCount
+        COUNT( r.id) AS managerReviewCount
     FROM Review r 
     LEFT JOIN r.worker w 
     LEFT JOIN r.orderDetails.order.manager m 
@@ -98,6 +116,45 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     GROUP BY u.fio, m_user.fio
 """)
     List<Object[]> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+
+
+
+//    @Query("""
+//    SELECT
+//        u.fio,
+//        COUNT(r.id),
+//        SUM(CASE WHEN r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE 0 END)
+//    FROM Review r
+//    LEFT JOIN r.worker w
+//    LEFT JOIN w.user u
+//    LEFT JOIN r.orderDetails od
+//    LEFT JOIN od.order o
+//    LEFT JOIN o.manager m
+//    LEFT JOIN m.user mu
+//    WHERE r.publishedDate BETWEEN :firstDayOfMonth AND :localDate
+//      AND r.publish = false
+//    GROUP BY u.fio
+//""")
+//    List<Object[]> findAllByPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
+
+
+//    @Query("""
+//    SELECT
+//        u.fio AS workerFio,
+//        COUNT(DISTINCT r.id) AS workerReviewCount,
+//        m_user.fio AS managerFio,
+//        COUNT(DISTINCT r.id) AS managerReviewCount
+//    FROM Review r
+//    LEFT JOIN r.worker w
+//    LEFT JOIN r.orderDetails.order.manager m
+//    LEFT JOIN w.user u
+//    LEFT JOIN m.user m_user
+//    WHERE r.publishedDate BETWEEN :firstDayOfMonth AND :lastDayOfMonth
+//      AND r.publish = true
+//    GROUP BY u.fio, m_user.fio
+//""")
+//    List<Object[]> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
 
 

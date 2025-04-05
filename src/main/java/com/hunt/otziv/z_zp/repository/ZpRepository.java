@@ -43,18 +43,36 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 
 
     @Query("""
-    SELECT u.fio, 
-           COALESCE(SUM(z.sum), 0) AS totalSum, 
-           (SELECT MIN(r.name) 
-            FROM User u2 
-            JOIN u2.roles r 
-            WHERE u2.id = u.id) AS role 
+    SELECT 
+        u.fio, 
+        COALESCE(SUM(z.sum), 0) AS totalSum, 
+        (SELECT MIN(r.name) FROM Role r JOIN r.users ru WHERE ru.id = u.id) AS role, 
+        COUNT(DISTINCT z.id) AS totalOrders, 
+        COALESCE(SUM(z.amount), 0) AS totalAmount
     FROM User u
     LEFT JOIN Zp z ON u.id = z.userId AND z.created BETWEEN :startDate AND :endDate
     GROUP BY u.fio, u.id
     ORDER BY totalSum DESC
 """)
     List<Object[]> findAllUsersWithZpToDate(LocalDate startDate, LocalDate endDate);
+
+
+
+
+
+//    @Query("""
+//    SELECT u.fio,
+//           COALESCE(SUM(z.sum), 0) AS totalSum,
+//           (SELECT MIN(r.name)
+//            FROM User u2
+//            JOIN u2.roles r
+//            WHERE u2.id = u.id) AS role
+//    FROM User u
+//    LEFT JOIN Zp z ON u.id = z.userId AND z.created BETWEEN :startDate AND :endDate
+//    GROUP BY u.fio, u.id
+//    ORDER BY totalSum DESC
+//""")
+//    List<Object[]> findAllUsersWithZpToDate(LocalDate startDate, LocalDate endDate);
 
 
 

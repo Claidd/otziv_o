@@ -594,8 +594,8 @@ public class ReviewServiceImpl implements ReviewService{
                 .orderId(review.getOrderDetails().getOrder().getId())
                 .text(review.getText())
                 .answer(review.getAnswer())
-                .category(review.getCategory().getCategoryTitle())
-                .subCategory(review.getSubCategory().getSubCategoryTitle())
+                .category(review.getCategory() != null ? review.getCategory().getCategoryTitle() : "Нет категории")
+                .subCategory(review.getSubCategory() != null ? review.getSubCategory().getSubCategoryTitle() : "Нет подкатегории")
                 .botId(review.getBot() != null && review.getBot().getId() != null ? review.getBot().getId() : 0)
                 .botFio(review.getBot() != null && review.getBot().getFio() != null? review.getBot().getFio() : "Добавьте ботов и нажмите сменить")
                 .botLogin(review.getBot() != null && review.getBot().getLogin() != null? review.getBot().getLogin() : "none")
@@ -820,14 +820,32 @@ public class ReviewServiceImpl implements ReviewService{
 
     @Override
     public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
-        List<Object[]> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate);
-
-        return results.stream()
+        Map<String, Pair<Long, Long>> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2)).stream()
                 .collect(Collectors.toMap(
-                        row -> (String) row[0],  // ФИО
-                        row -> Pair.of((Long) row[2], (Long) row[1]) // Количество всего, количество с isVigul = false
+                        row -> (String) row[0], // ФИО (работник) или ФИО (менеджер)
+                        row -> Pair.of(((Number) row[2]).longValue(), ((Number) row[1]).longValue()) // totalReviews и vigulCount
                 ));
+//        System.out.println(results);
+
+        return results;
     }
+
+
+//    @Override
+//    public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
+//        List<Object[]> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate);
+//
+//        return results.stream()
+//                .collect(Collectors.toMap(
+//                        row -> (String) row[0],  // ФИО
+//                        row -> Pair.of((Long) row[1], (Long) row[2]) // Количество всего, количество с isVigul = false
+//                ));
+//    }
+
+
+
+
+
 
     @Override
     public Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {

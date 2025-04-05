@@ -92,6 +92,7 @@ public class WorkerOrderController {
     @GetMapping("/new_orders") // Все заказы - Новые
     public String NewAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
+        LocalDate localDate = LocalDate.now();
         String userRole = gerRole(principal);
         System.out.println(userRole);
 
@@ -125,6 +126,7 @@ public class WorkerOrderController {
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
             personalService.getPersonalsAndCountToMap();
+//            personalService.getPersonalsAndCountToScore(localDate) для рейтинга;
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }

@@ -6,6 +6,7 @@ import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.*;
+import com.hunt.otziv.admin.model.Quadruple;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -612,7 +613,13 @@ public class PersonalServiceImpl implements PersonalService {
         Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll("Новый", "Коррекция");
         // Получаем данные о заказах в публикации
         Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
-
+        // Получаем данные о всех заказах с разными данными
+        Map<String, Map<String, Long>>  allOrders = orderService.getAllOrdersToMonthByStatus(firstDayOfMonth, lastDayOfMonth, "Новый", "В проверку", "На проверке", "Коррекция", "Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
+        Map<String, Long> leadsNewAndInWork = leadService.getAllLeadsToMonthToManager("Новый", firstDayOfMonth, lastDayOfMonth);
+        System.out.println(leadsNewAndInWork);
+        Long zpTotal = zps.values().stream()
+                .mapToLong(Pair::getSecond) // Извлекаем сумму зарплаты
+                .sum();
 
         // Создаем карту для результатов
         Map<String, UserData> result = new HashMap<>();
@@ -621,19 +628,31 @@ public class PersonalServiceImpl implements PersonalService {
         zps.entrySet().parallelStream().forEach(entry -> {
             String fio = entry.getKey();
             Pair<String, Long> pair = entry.getValue();
-
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
             Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
-            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
-            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+//            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+//            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
             Long inVigul = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
             Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  0L);
             String role = pair.getFirst();
+            // Счетчики заказов
+            Map<String, Long> orders = allOrders.getOrDefault(fio, new HashMap<>());
+            Long orderInNew = orders.getOrDefault("Новый", 0L);
+            Long orderToCheck = orders.getOrDefault("В проверку", 0L);
+            Long orderInCheck = orders.getOrDefault("На проверке", 0L);
+            Long orderInCorrect = orders.getOrDefault("Коррекция", 0L);
+            Long orderInPublished = orders.getOrDefault("Опубликовано", 0L);
+            Long orderInWaitingPay1 = orders.getOrDefault("Выставлен счет", 0L);
+            Long orderInWaitingPay2 = orders.getOrDefault("Напоминание", 0L);
+            Long orderNoPay = orders.getOrDefault("Не оплачено", 0L);
 
             // Сохраняем все данные в карту
-            result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, newCompanyCount, newOrderCount, correctOrders, inVigul, inPublishCount, 1L,0L, 0L, 0L, null, null, null));
+            result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
         });
 
+//        System.out.println(result);
         // Возвращаем результат
         System.out.println(displayResult(result));
         return result;
@@ -661,13 +680,27 @@ public class PersonalServiceImpl implements PersonalService {
                     // Менеджеры идут первыми
                     return Boolean.compare(isManager2, isManager1);
                 })
-                .toList();
+                .collect(Collectors.toList());
 
         // Вычисляем общую выручку всех менеджеров
         long totalManagerRevenue = result.values().stream()
                 .filter(user -> user.getRole().equals("ROLE_MANAGER"))
                 .mapToLong(UserData::getTotalSum)
                 .sum();
+
+        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
+        long totalSpecificManagersRevenue = result.values().stream()
+                .filter(user -> user.getRole().equals("ROLE_MANAGER") &&
+                        (user.getFio().equals("Звуков Андрей") || user.getFio().equals("Анжелика Б.")))
+                .mapToLong(UserData::getTotalSum)
+                .sum();
+
+        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
+        long totalZp = result.values().stream().findFirst().get().getZpTotal();
+
+
+//        System.out.println(totalZp);
+
 
         // Вычисляем количество новых компаний
         long totalNewCompanies = result.values().stream()
@@ -676,8 +709,10 @@ public class PersonalServiceImpl implements PersonalService {
                 .sum();
 
         // Общая выручка и новые компании
-        resultBuilder.append("Выручка за месяц всей компании: ").append(totalManagerRevenue)
-                .append(" руб.\nНовых компаний за месяц: ").append(totalNewCompanies).append("\n\n");
+        resultBuilder.append("Выручка за месяц всей компании: ").append(totalManagerRevenue).append(" руб. ( ")
+                .append(totalSpecificManagersRevenue).append(" руб. )\n")
+                .append("Общие затраты по ЗП: ").append(totalZp).append(" руб. \n")
+                .append("Новых компаний за месяц: ").append(totalNewCompanies).append("\n\n");
 
         // Выручка менеджеров
         resultBuilder.append("Выручка менеджеров:\n");
@@ -686,7 +721,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .forEach(entry -> {
                     String fio = entry.getKey();
                     UserData userData = entry.getValue();
-                    resultBuilder.append(fio).append(": ").append(userData.getTotalSum()).append(" руб.\n");
+                    resultBuilder.append(fio).append(": ").append(userData.getTotalSum()).append(" руб. Новых: ")
+                            .append(userData.getNewCompanies()).append("\n");
                 });
 
         // ЗП менеджеров
@@ -696,8 +732,21 @@ public class PersonalServiceImpl implements PersonalService {
                 .forEach(entry -> {
                     String fio = entry.getKey();
                     UserData userData = entry.getValue();
-                    resultBuilder.append(fio).append(": ").append(userData.getSalary())
-                            .append(" руб.  Новых: ").append(userData.getNewCompanies()).append("\n");
+//                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+//                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+//                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatsForWorkers = "\n"  + "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
+                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. ")
+                            .append(orderStatsForWorkers)
+//                            .append("\n\n")
+                            .append("\n")
+//                            .append("\nСтатусы Заказов: ")
+                            .append(orderStatus)
+                            .append("\n\n");
                 });
 
         // ЗП Работников
@@ -715,6 +764,8 @@ public class PersonalServiceImpl implements PersonalService {
 
         return resultBuilder.toString();
     }
+
+
 
 
 //    public String displayResult(Map<String, UserData> result) {
@@ -780,7 +831,7 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Quadruple<String, Long, Long, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о новых компаниях
@@ -790,9 +841,9 @@ public class PersonalServiceImpl implements PersonalService {
         // Получаем данные о заказах в публикации
         Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
         // Получаем данные о заказах
-        Map<String, Long> orders = orderService.getAllOrdersToMonth("Оплачено", firstDayOfMonth, lastDayOfMonth);
+//        Map<String, Long> orders = orderService.getAllOrdersToMonth("Оплачено", firstDayOfMonth, lastDayOfMonth);
         // Получаем данные об отзывах
-        Map<String, Long> reviews = reviewService.getAllReviewsToMonth(firstDayOfMonth, lastDayOfMonth);
+//        Map<String, Long> reviews = reviewService.getAllReviewsToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о аватарках
         Map<String, Pair<Long, Long>> imagesIds = imageService.getAllImages();
         // Получаем данные о лидах
@@ -804,9 +855,12 @@ public class PersonalServiceImpl implements PersonalService {
         // Параллельная обработка данных и сохранение в карту
         zps.entrySet().parallelStream().forEach(entry -> {
             String fio = entry.getKey();
-            Pair<String, Long> pair = entry.getValue();
+            Quadruple<String, Long, Long, Long> pair = entry.getValue();
 
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long zpTotal = zps.values().stream()
+                    .mapToLong(Quadruple::getSecond) // Извлекаем сумму зарплаты
+                    .sum();
             Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
             Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
             Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
@@ -814,9 +868,11 @@ public class PersonalServiceImpl implements PersonalService {
             Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
             Long imageId = imagesIds.getOrDefault(fio,  Pair.of(1L, 0L)).getFirst();
             Long userId = imagesIds.getOrDefault(fio,  Pair.of(1L, 0L)).getSecond();
-            Long ordersCount = orders.getOrDefault(fio, 0L);
-            Long reviewsCount = reviews.getOrDefault(fio, 0L);
-            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  Pair.of(0L, 0L)).getFirst();;
+//            Long ordersCount = orders.getOrDefault(fio, 0L);
+            Long ordersCount = pair.getThird();
+            Long reviewsCount = pair.getFourth();
+//            Long reviewsCount = reviews.getOrDefault(fio, 0L);
+            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  Pair.of(0L, 0L)).getFirst();
             Long leadsInWork = leadsNewAndInWork.getOrDefault(fio,  Pair.of(0L, 0L)).getSecond();
             Long percentInWork = 0L;
             if (leadsNew != 0 || leadsInWork != 0){
@@ -825,7 +881,9 @@ public class PersonalServiceImpl implements PersonalService {
             String role = pair.getFirst();
 
             // Сохраняем все данные в карту
-            result.add(new UserData(fio, role, pair.getSecond(), totalSum, newCompanyCount, newOrderCount, correctOrders, inVigul, inPublishCount, imageId, userId, ordersCount, reviewsCount, leadsNew, leadsInWork, percentInWork));
+            result.add(new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, newOrderCount, correctOrders,
+                    inVigul, inPublishCount, imageId, userId, ordersCount, reviewsCount, leadsNew, leadsInWork, percentInWork,
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
         });
 
         // Возвращаем результат

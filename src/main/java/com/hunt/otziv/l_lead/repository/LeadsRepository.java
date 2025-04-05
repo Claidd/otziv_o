@@ -112,8 +112,14 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 """)
     List<Object[]> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
-
-
-
-
+    @Query("""
+    SELECT 
+        m_user.fio AS managerfio, 
+        COUNT(CASE WHEN l.lidStatus = :status THEN 1 END) AS statusCount
+    FROM Lead l 
+    LEFT JOIN l.manager m 
+    LEFT JOIN m.user m_user 
+    GROUP BY m_user.fio
+""")
+    List<Object[]> getAllLeadsToMonthToManager(String status);
 }

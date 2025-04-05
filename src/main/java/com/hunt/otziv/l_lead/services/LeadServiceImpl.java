@@ -633,10 +633,23 @@ public class LeadServiceImpl implements LeadService{
         return resultMap;
     }
 
+    @Override
+    public Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        // Получаем результат из базы данных (например, используя @Query)
+        List<Object[]> results = leadsRepository.getAllLeadsToMonthToManager(status);
 
+        Map<String, Long> resultMap = new HashMap<>();
 
+        for (Object[] row : results) {
+            String managerFio = (String) row[0];
+            Long allLeadsManager = (Long) row[1];
 
-
+            // Обрабатываем менеджера
+            resultMap.put(managerFio, allLeadsManager);
+        }
+//        System.out.println(resultMap);
+        return resultMap;
+    }
 
 
 }

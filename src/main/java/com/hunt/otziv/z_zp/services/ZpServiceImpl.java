@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.hunt.otziv.admin.model.Quadruple;
 
 import java.math.BigDecimal;
 import java.security.Principal;
@@ -77,25 +78,50 @@ public class ZpServiceImpl implements ZpService{
                         LinkedHashMap::new // Сохраняем порядок сортировки
                 ));
     }
-
-    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте **/
+    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте и распределяем в мапу (фио, роль, сумма зп, кол-во заказов, кол-во отзывов **/
     @Override
-    public Map<String, Pair<String, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
+    public Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        Map<String, Quadruple<String, Long, Long, Long>> results = zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
                 .stream()
                 .sorted(Comparator.comparing((Object[] obj) -> {
                                     String role = (String) obj[2];
-                                    return rolePriority(role); // Сортируем сначала по приоритету роли
+                                    return rolePriority(role);
                                 })
-                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
+                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder()) // Сортировка по зарплате
                 )
                 .collect(Collectors.toMap(
-                        obj -> (String) obj[0],   // ФИО
-                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
+                        obj -> (String) obj[0], // ФИО
+                        obj -> Quadruple.of(
+                                (String) obj[2], // Роль
+                                ((Number) obj[1]).longValue(), // Сумма зарплаты
+                                ((Number) obj[3]).longValue(), // Сумма выплат (amount)
+                                ((Long) obj[4]) // Количество отзывов
+                        ),
                         (e1, e2) -> e1,
-                        LinkedHashMap::new // Сохраняем порядок сортировки
+                        LinkedHashMap::new // Сохранение порядка сортировки
                 ));
+//        System.out.println(results);
+        return results;
     }
+
+
+//    @Override
+//    public Map<String, Pair<String, Long>, Pair<Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+//        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
+//                .stream()
+//                .sorted(Comparator.comparing((Object[] obj) -> {
+//                                    String role = (String) obj[2];
+//                                    return rolePriority(role); // Сортируем сначала по приоритету роли
+//                                })
+//                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
+//                )
+//                .collect(Collectors.toMap(
+//                        obj -> (String) obj[0],   // ФИО
+//                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
+//                        (e1, e2) -> e1,
+//                        LinkedHashMap::new // Сохраняем порядок сортировки
+//                ));
+//    }
 
 
     // Метод для присваивания приоритета ролям

@@ -78,6 +78,8 @@ public interface LeadService {
 
     Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
+    Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

@@ -153,9 +153,9 @@
                         <div class="company__card__content__product">
                             <a class="company__card__title__worker" th:text="${order.workerUserFio}">ФИО бота</a>
                         </div>
-                        <div class="company__card__content__city"> <!-- Статус и Сумма заказа -->
-                            <p class="company__card__text__city__lead" th:text="${order.categoryTitle}">Категрия</p>
-                            <p class="company__card__text__city__lead" th:text="${order.subCategoryTitle}">Под категория</p> 
+                        <div class="company__card__content__city"> 
+                            <p class="company__card__text__city__lead" th:text="${order.categoryTitle} ?: 'Не установлено'">Категория</p>
+                            <p class="company__card__text__city__lead" th:text="${order.subCategoryTitle} ?: 'Не установлено'">Подкатегория</p> 
                         </div>
 
                         <!-- НИЖНИИ КНОПКИ -->

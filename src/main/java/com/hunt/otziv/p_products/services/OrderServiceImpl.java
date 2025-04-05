@@ -1014,16 +1014,44 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return count;
     }
 
-    @Override
+//    @Override
+//    public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
+//        Map<String, Pair<Long, Long>> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect).stream()
+//                .collect(Collectors.toMap(
+//                        row -> (String) row[0],  // ФИО
+//                        row -> Pair.of((Long) row[1], (Long) row[2]) // Кол-во по статусу "Новый" и "Коррекция"
+//                ));
+//        System.out.println(results);
+//        return results;
+//    }
+
     public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
         List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect);
 
-        return results.stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],  // ФИО
-                        row -> Pair.of((Long) row[1], (Long) row[2]) // Кол-во по статусу "Новый" и "Коррекция"
-                ));
+        Map<String, Pair<Long, Long>> workerStats = new HashMap<>();
+        Map<String, Pair<Long, Long>> managerStats = new HashMap<>();
+
+        for (Object[] row : results) {
+            String type = (String) row[0]; // "operator" или "manager"
+            String fio = (String) row[1];  // ФИО
+            long newOrders = ((Number) row[2]).longValue();
+            long correctOrders = ((Number) row[3]).longValue();
+
+            if ("operator".equals(type)) {
+                workerStats.put(fio, Pair.of(newOrders, correctOrders));
+            } else {
+                managerStats.put(fio, Pair.of(newOrders, correctOrders));
+            }
+        }
+
+        // Объединяем две мапы (если нужно)
+        Map<String, Pair<Long, Long>> combinedStats = new HashMap<>(workerStats);
+        combinedStats.putAll(managerStats);
+
+        return combinedStats;
     }
+
+
 
     @Override
     public Map<String, Long> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
@@ -1059,6 +1087,56 @@ public boolean deleteOrder(Long orderId, Principal principal){
         allOrders.putAll(managerOrders);
         return allOrders;
     }
+
+    @Override
+    public Map<String, Map<String, Long>> getAllOrdersToMonthByStatus(
+            LocalDate firstDayOfMonth,
+            LocalDate lastDayOfMonth,
+            String orderInNew,
+            String orderToCheck,
+            String orderInCheck,
+            String orderInCorrect,
+            String orderInPublished,
+            String orderInWaitingPay1,
+            String orderInWaitingPay2,
+            String orderNoPay) {
+
+        List<String> statuses = List.of(orderInNew, orderToCheck, orderInCheck, orderInCorrect,
+                orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay);
+
+        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(1), lastDayOfMonth);
+
+        // Используем LinkedHashMap, чтобы сначала добавить менеджеров, затем работников
+        Map<String, Map<String, Long>> ordersMap = new LinkedHashMap<>();
+
+        // Отдельные списки для сортировки
+        Map<String, Map<String, Long>> managerOrders = new LinkedHashMap<>();
+        Map<String, Map<String, Long>> workerOrders = new LinkedHashMap<>();
+
+        for (Object[] row : results) {
+            if (row.length < 4) continue; // Пропускаем некорректные данные
+
+            String fio = (String) row[0];  // ФИО
+            String status = (String) row[1];  // Статус
+            Long count = row[2] != null ? (Long) row[2] : 0L;  // Количество заказов
+            String role = (String) row[3];  // 'manager' или 'worker'
+
+            if ("manager".equals(role)) {
+                managerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
+            } else {
+                workerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
+            }
+        }
+
+        // Сначала добавляем менеджеров, потом работников
+        ordersMap.putAll(managerOrders);
+        ordersMap.putAll(workerOrders);
+
+//        System.out.println(ordersMap);
+
+        return ordersMap;
+    }
+
 
 
 
@@ -1202,8 +1280,8 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .amount(order.getAmount())
                 .counter(order.getCounter())
                 .workerUserFio(order.getWorker().getUser().getFio())
-                .categoryTitle(order.getCompany().getCategoryCompany().getCategoryTitle())
-                .subCategoryTitle(order.getCompany().getSubCategory().getSubCategoryTitle())
+                .categoryTitle(order.getCompany().getCategoryCompany() != null ? order.getCompany().getCategoryCompany().getCategoryTitle() : "Не выбрано")
+                .subCategoryTitle(order.getCompany().getSubCategory() != null ? order.getCompany().getSubCategory().getSubCategoryTitle() : "Не выбрано")
                 .created(order.getCreated())
                 .changed(order.getChanged())
                 .payDay(order.getPayDay())
@@ -1258,22 +1336,23 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
                 .filials(convertToFilialDTOList(company.getFilial()))
-                .categoryCompany(convertToCategoryDto(company.getCategoryCompany()))
-                .subCategory(convertToSubCategoryDto(company.getSubCategory()))
+                .categoryCompany(company.getCategoryCompany() != null ? convertToCategoryDto(company.getCategoryCompany()) : null)
+                .subCategory(company.getSubCategory() != null ? convertToSubCategoryDto(company.getSubCategory()) : null)
+
                 .build();
     } // Конвертер DTO для компании
 
     private CategoryDTO convertToCategoryDto(Category category) {// Конвертер DTO для категории
         CategoryDTO categoryDTO = new CategoryDTO();
-        categoryDTO.setId(category.getId());
-        categoryDTO.setCategoryTitle(category.getCategoryTitle());
+        categoryDTO.setId(category.getId() != null ? category.getId() : null);
+        categoryDTO.setCategoryTitle(category.getCategoryTitle() != null ? category.getCategoryTitle() : null);
         // Other fields if needed
         return categoryDTO;
     } // Конвертер DTO для категории
     private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Конвертер DTO для субкатегории
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
-        subCategoryDTO.setId(subCategory.getId());
-        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
+        subCategoryDTO.setId(subCategory.getId() != null ? subCategory.getId() : 0L);
+        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle() != null ? subCategory.getSubCategoryTitle() : "Не выбрано");
         // Other fields if needed
         return subCategoryDTO;
     } // Конвертер DTO для субкатегории

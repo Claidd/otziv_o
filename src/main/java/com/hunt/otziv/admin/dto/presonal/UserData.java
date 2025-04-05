@@ -15,6 +15,7 @@ public class UserData {
     private String role;        // Роль пользователя
     private Long salary;        // Зарплата
     private Long totalSum;      // Сумма чеков
+    private Long zpTotal;      // Сумма всех ЗП
     private Long newCompanies;  // Количество новых компаний
     private Long newOrders;     // Количество новых заказов
     private Long correctOrders;     // Количество в коррекции
@@ -32,5 +33,15 @@ public class UserData {
     private Long leadsNew;
     private Long leadsInWork;
     private Long percentInWork;
+
+    // Счетчики заказов
+    private Long orderInNew;
+    private Long orderToCheck;
+    private Long orderInCheck;
+    private Long orderInCorrect;
+    private Long orderInPublished;
+    private Long orderInWaitingPay1;
+    private Long orderInWaitingPay2;
+    private Long orderNoPay;
 
 }
