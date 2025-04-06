@@ -68,4 +68,14 @@ public interface PersonalService {
 
 
     List<UserData> getPersonalsAndCountToScore(LocalDate localDate);
+
+    Map<String, UserData> getPersonalsAndCountToMapToOwner(Long userId);
+
+    String displayResultToManager(Map<String, UserData> personalsAndCountToMapToOwner);
+
+    Map<String, UserData> getPersonalsAndCountToMapToManager(Long userId);
+
+    Map<String, UserData>  getPersonalsAndCountToMapToWorker(Long userId);
+
+    String displayResultToWorker(Map<String, UserData> personalsAndCountToMapToWorker);
 }

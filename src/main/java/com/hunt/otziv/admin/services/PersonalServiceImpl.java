@@ -12,6 +12,7 @@ import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.*;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
@@ -40,6 +41,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -654,9 +656,11 @@ public class PersonalServiceImpl implements PersonalService {
 
 //        System.out.println(result);
         // Возвращаем результат
-        System.out.println(displayResult(result));
+//        System.out.println(displayResult(result));
         return result;
     }
+
+
 
     public String displayResult(Map<String, UserData> result) {
         StringBuilder resultBuilder = new StringBuilder();
@@ -726,7 +730,7 @@ public class PersonalServiceImpl implements PersonalService {
                 });
 
         // ЗП менеджеров
-        resultBuilder.append("\nЗП менеджеров:\n");
+        resultBuilder.append("\nМенеджеры:\n\n");
         sortedEntries.stream()
                 .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
                 .forEach(entry -> {
@@ -738,14 +742,13 @@ public class PersonalServiceImpl implements PersonalService {
                     String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
                             + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
                             + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
-                    String orderStatsForWorkers = "\n"  + "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
+                    String orderStatsForWorkers = "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
                             + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
-                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. ")
-                            .append(orderStatsForWorkers)
-//                            .append("\n\n")
+                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. \n")
+                            .append(orderStatus)
                             .append("\n")
 //                            .append("\nСтатусы Заказов: ")
-                            .append(orderStatus)
+                            .append(orderStatsForWorkers)
                             .append("\n\n");
                 });
 
@@ -756,74 +759,17 @@ public class PersonalServiceImpl implements PersonalService {
                 .forEach(entry -> {
                     String fio = entry.getKey();
                     UserData userData = entry.getValue();
-                    String orderStats = "н-" + userData.getNewOrders() + "к-" + userData.getCorrectOrders()
-                            + "в-" + userData.getInVigul() + "п-" + userData.getInPublish();
+//                    String orderStats = "н-" + userData.getNewOrders() + "к-" + userData.getCorrectOrders()
+//                            + "в-" + userData.getInVigul() + "п-" + userData.getInPublish();
+                    String orderStats = "Новые - " + userData.getNewOrders() + " В коррекции - " + userData.getCorrectOrders()
+                            + " В выгуле - " + userData.getInVigul() + " На публикации - " + userData.getInPublish();
                     resultBuilder.append(fio).append(": ").append(userData.getSalary())
-                            .append(" руб.  ").append(orderStats).append("\n");
+                            .append(" руб.  ").append("\n").append(orderStats).append("\n\n");
                 });
 
         return resultBuilder.toString();
     }
 
-
-
-
-//    public String displayResult(Map<String, UserData> result) {
-//        StringBuilder resultBuilder = new StringBuilder();
-//
-//        // Сортируем сначала менеджеров по totalSum, затем остальных по salary
-//        List<Map.Entry<String, UserData>> sortedEntries = result.entrySet().stream()
-//                .sorted((entry1, entry2) -> {
-//                    UserData user1 = entry1.getValue();
-//                    UserData user2 = entry2.getValue();
-//
-//                    boolean isManager1 = user1.getRole().equals("ROLE_MANAGER");
-//                    boolean isManager2 = user2.getRole().equals("ROLE_MANAGER");
-//
-//                    if (isManager1 && isManager2) {
-//                        // Оба менеджеры → сортируем по убыванию суммы чеков
-//                        return Long.compare(user2.getTotalSum(), user1.getTotalSum());
-//                    } else if (!isManager1 && !isManager2) {
-//                        // Оба не менеджеры → сортируем по убыванию зарплаты
-//                        return Long.compare(user2.getSalary(), user1.getSalary());
-//                    }
-//                    // Менеджеры идут первыми
-//                    return Boolean.compare(isManager2, isManager1);
-//                })
-//                .toList();
-//
-//        // Вычисляем общую выручку менеджеров
-//        long totalManagerRevenue = result.values().stream()
-//                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
-//                .mapToLong(UserData::getTotalSum)
-//                .sum();
-//
-//        resultBuilder.append("Общая выручка всех менеджеров: ").append(totalManagerRevenue).append("\n\n");
-//
-//        // Выводим данные в отсортированном порядке
-//        sortedEntries.forEach(entry -> {
-//            String fio = entry.getKey();
-//            UserData userData = entry.getValue();
-//
-//            if (userData.getRole().equals("ROLE_MANAGER")) {
-//                resultBuilder.append("**").append(fio).append("**")
-//                        .append(", ЗП: ").append(userData.getSalary())
-//                        .append(", Сумма чеков: ").append(userData.getTotalSum())
-//                        .append(", Новые компании: ").append(userData.getNewCompanies())
-//                        .append("\n");
-//            } else {
-//                resultBuilder.append(fio)
-//                        .append(", ЗП: ").append(userData.getSalary())
-//                        .append(", Новые заказы: ").append(userData.getNewOrders())
-//                        .append(", Коррекции заказы: ").append(userData.getCorrectOrders())
-//                        .append(", Выгул заказы: ").append(userData.getInVigul())
-//                        .append(", Заказы в публикации: ").append(userData.getInPublish())
-//                        .append("\n");
-//            }
-//        });
-//
-//        return resultBuilder.toString();
-//    }
 
 
     public List<UserData> getPersonalsAndCountToScore(LocalDate localDate) {
@@ -895,209 +841,417 @@ public class PersonalServiceImpl implements PersonalService {
 
 
 
+    @Transactional
+    public Map<String, UserData> getPersonalsAndCountToMapToOwner(Long userId) {
+        RegistrationUserDTO user1 = userService.findById(userId);
+        assert user1 != null;
+        LocalDate localDate = LocalDate.now();
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        // Получаем данные о зарплатах
+        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о платежах
+        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых компаниях
+        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых заказах
+        Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll("Новый", "Коррекция");
+        // Получаем данные о заказах в публикации
+        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+        // Получаем данные о всех заказах с разными данными
+        Map<String, Map<String, Long>>  allOrders = orderService.getAllOrdersToMonthByStatus(firstDayOfMonth, lastDayOfMonth, "Новый", "В проверку", "На проверке", "Коррекция", "Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
+        Map<String, Long> leadsNewAndInWork = leadService.getAllLeadsToMonthToManager("Новый", firstDayOfMonth, lastDayOfMonth);
+        Long zpTotal = zps.values().stream()
+                .mapToLong(Pair::getSecond) // Извлекаем сумму зарплаты
+                .sum();
+
+        // Создаем карту для результатов
+        Map<String, UserData> result = new HashMap<>();
+
+        // Параллельная обработка данных и сохранение в карту
+        zps.entrySet().parallelStream().forEach(entry -> {
+            String fio = entry.getKey();
+            Pair<String, Long> pair = entry.getValue();
+            Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
+//            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+//            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long inVigul = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  0L);
+            String role = pair.getFirst();
+            // Счетчики заказов
+            Map<String, Long> orders = allOrders.getOrDefault(fio, new HashMap<>());
+            Long orderInNew = orders.getOrDefault("Новый", 0L);
+            Long orderToCheck = orders.getOrDefault("В проверку", 0L);
+            Long orderInCheck = orders.getOrDefault("На проверке", 0L);
+            Long orderInCorrect = orders.getOrDefault("Коррекция", 0L);
+            Long orderInPublished = orders.getOrDefault("Опубликовано", 0L);
+            Long orderInWaitingPay1 = orders.getOrDefault("Выставлен счет", 0L);
+            Long orderInWaitingPay2 = orders.getOrDefault("Напоминание", 0L);
+            Long orderNoPay = orders.getOrDefault("Не оплачено", 0L);
+
+            // Сохраняем все данные в карту
+            result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+        });
+
+//        System.out.println(result);
+        // Возвращаем результат
+//        System.out.println(displayResult(result));
+
+        // Собираем список ФИО менеджеров и их работников, которые закреплены за user1
+        Set<String> allowedFio = user1.getManagers().stream()
+                .flatMap(manager -> {
+                    Stream<String> workersFio = manager.getUser().getWorkers().stream()
+                            .map(worker -> worker.getUser().getFio()); // Или как у тебя называется поле с ФИО
+                    return Stream.concat(Stream.of(manager.getUser().getFio()), workersFio);
+                })
+                .collect(Collectors.toSet());
+
+// Фильтруем Map оставляя только нужных людей
+        Map<String, UserData> filteredResult = result.entrySet().stream()
+                .filter(entry -> allowedFio.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        return filteredResult;
+
+//    return result;
+    }
+
+    @Transactional
+    public Map<String, UserData> getPersonalsAndCountToMapToManager(Long userId) {
+        RegistrationUserDTO user1 = userService.findById(userId);
+        assert user1 != null;
+        LocalDate localDate = LocalDate.now();
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        // Получаем данные о зарплатах
+        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о платежах
+        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых компаниях
+        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых заказах
+        Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll("Новый", "Коррекция");
+        // Получаем данные о заказах в публикации
+        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+        // Получаем данные о всех заказах с разными данными
+        Map<String, Map<String, Long>>  allOrders = orderService.getAllOrdersToMonthByStatus(firstDayOfMonth, lastDayOfMonth, "Новый", "В проверку", "На проверке", "Коррекция", "Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
+        Map<String, Long> leadsNewAndInWork = leadService.getAllLeadsToMonthToManager("Новый", firstDayOfMonth, lastDayOfMonth);
+        Long zpTotal = zps.values().stream()
+                .mapToLong(Pair::getSecond) // Извлекаем сумму зарплаты
+                .sum();
+
+        // Создаем карту для результатов
+        Map<String, UserData> result = new HashMap<>();
+
+        // Параллельная обработка данных и сохранение в карту
+        zps.entrySet().parallelStream().forEach(entry -> {
+            String fio = entry.getKey();
+            Pair<String, Long> pair = entry.getValue();
+            Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
+//            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+//            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long inVigul = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  0L);
+            String role = pair.getFirst();
+            // Счетчики заказов
+            Map<String, Long> orders = allOrders.getOrDefault(fio, new HashMap<>());
+            Long orderInNew = orders.getOrDefault("Новый", 0L);
+            Long orderToCheck = orders.getOrDefault("В проверку", 0L);
+            Long orderInCheck = orders.getOrDefault("На проверке", 0L);
+            Long orderInCorrect = orders.getOrDefault("Коррекция", 0L);
+            Long orderInPublished = orders.getOrDefault("Опубликовано", 0L);
+            Long orderInWaitingPay1 = orders.getOrDefault("Выставлен счет", 0L);
+            Long orderInWaitingPay2 = orders.getOrDefault("Напоминание", 0L);
+            Long orderNoPay = orders.getOrDefault("Не оплачено", 0L);
+
+            // Сохраняем все данные в карту
+            result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+        });
+
+//        System.out.println(result);
+        // Возвращаем результат
+//        System.out.println(displayResult(result));
+
+        // Собираем список ФИО менеджеров и их работников, которые закреплены за user1
+        // Собираем список ФИО: user1 + его работники
+        Set<String> allowedFio = Stream.concat(
+                Stream.of(user1.getFio()), // Сам менеджер
+                user1.getWorkers().stream()
+                        .map(worker -> worker.getUser().getFio()) // Работники
+        ).collect(Collectors.toSet());
+
+// Фильтруем Map и оставляем только user1 и его работников
+        Map<String, UserData> filteredResult = result.entrySet().stream()
+                .filter(entry -> allowedFio.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        return filteredResult;
+
+
+//    return result;
+    }
+
+    public String displayResultToManager(Map<String, UserData> result) {
+        StringBuilder resultBuilder = new StringBuilder();
+
+        // Сортируем сначала менеджеров по totalSum, затем остальных по salary
+        List<Map.Entry<String, UserData>> sortedEntries = result.entrySet().stream()
+                .sorted((entry1, entry2) -> {
+                    UserData user1 = entry1.getValue();
+                    UserData user2 = entry2.getValue();
+
+                    boolean isManager1 = user1.getRole().equals("ROLE_MANAGER");
+                    boolean isManager2 = user2.getRole().equals("ROLE_MANAGER");
+
+                    if (isManager1 && isManager2) {
+                        // Оба менеджеры → сортируем по убыванию суммы чеков
+                        return Long.compare(user2.getTotalSum(), user1.getTotalSum());
+                    } else if (!isManager1 && !isManager2) {
+                        // Оба не менеджеры → сортируем по убыванию зарплаты
+                        return Long.compare(user2.getSalary(), user1.getSalary());
+                    }
+                    // Менеджеры идут первыми
+                    return Boolean.compare(isManager2, isManager1);
+                })
+                .collect(Collectors.toList());
+
+        // Вычисляем общую выручку всех менеджеров
+        long totalManagerRevenue = result.values().stream()
+                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
+                .mapToLong(UserData::getTotalSum)
+                .sum();
+
+        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
+        long totalZp = result.values().stream().findFirst().get().getZpTotal();
+
+
+//        System.out.println(totalZp);
+
+
+        // Вычисляем количество новых компаний
+        long totalNewCompanies = result.values().stream()
+                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
+                .mapToLong(UserData::getNewCompanies)
+                .sum();
+
+        // ЗП менеджеров
+
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+                .forEach(entry -> {
+                    String fio = entry.getKey();
+                    UserData userData = entry.getValue();
+//                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+//                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+//                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatsForWorkers = "\n"  + "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
+                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. ")
+                            .append("\n\n")
+                            .append(orderStatus)
+//                            .append("\n\n")
+                            .append("\n")
+//                            .append("\nСтатусы Заказов: ")
+                            .append(orderStatsForWorkers)
+                            .append("\n\n");
+                });
+
+        // ЗП Работников
+        resultBuilder.append("\nСпециалисты:\n");
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getRole()))
+                .forEach(entry -> {
+                    String fio = entry.getKey();
+                    UserData userData = entry.getValue();
+                    String orderStats = "Новые - " + userData.getNewOrders() + " В коррекции - " + userData.getCorrectOrders()
+                            + " В выгуле - " + userData.getInVigul() + " На публикации - " + userData.getInPublish();
+                    resultBuilder.append("\n")
+                            .append(orderStats).append("\n\n");
+                });
+
+        return resultBuilder.toString();
+    }
 
 
 
+    @Transactional
+    public Map<String, UserData> getPersonalsAndCountToMapToWorker(Long userId) {
+        RegistrationUserDTO user1 = userService.findById(userId);
+        assert user1 != null;
+        LocalDate localDate = LocalDate.now();
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
-//    public String getPersonalsAndCountToMap() {
-//        LocalDate localDate = LocalDate.now();
-//        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-//        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-//
-//        // Получаем данные о зарплатах
-//        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
-//        // Получаем данные о платежах
-//        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
-//
-//        // Объединяем данные в Map<String, Triple<String, Long, Long>>
-//        Map<String, Triple<String, Long, Long>> result = new HashMap<>();
-//
-//        // Обрабатываем данные о зарплатах
-//        zps.forEach((fio, pair) -> {
-//            // Получаем соответствующие данные из pcs (сумма чеков и количество компаний)
-//            Pair<Long, Long> paymentData = pcs.get(fio);
-//
-//            if (paymentData != null) {
-//                // Если данные о платежах найдены, добавляем их в результат
-//                result.put(fio, Triple.of(pair.getFirst(), pair.getSecond(), paymentData.getFirst()));
-//            } else {
-//                // Если данных о платежах нет, ставим 0 в поле суммы чеков
-//                result.put(fio, Triple.of(pair.getFirst(), pair.getSecond(), 0L));
-//            }
-//        });
-//
-//        // Разделяем на три группы: менеджеры, работники, остальные
-//        List<Map.Entry<String, Triple<String, Long, Long>>> managers = result.entrySet().stream()
-//                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getLeft()))
-//                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getRight(), entry1.getValue().getRight())) // Сортировка по сумме (убывание)
-//                .toList();
-//
-//        List<Map.Entry<String, Triple<String, Long, Long>>> workers = result.entrySet().stream()
-//                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getLeft()))
-//                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getMiddle(), entry1.getValue().getMiddle())) // Сортировка по зарплате (убывание)
-//                .toList();
-//
-//        List<Map.Entry<String, Triple<String, Long, Long>>> others = result.entrySet().stream()
-//                .filter(entry -> !"ROLE_MANAGER".equals(entry.getValue().getLeft()) && !"ROLE_WORKER".equals(entry.getValue().getLeft()))
-//                .sorted((entry1, entry2) -> Long.compare(entry2.getValue().getMiddle(), entry1.getValue().getMiddle())) // Сортировка по зарплате (убывание)
-//                .toList();
-//
-//        // Объединяем все списки в итоговый список
-//        List<Map.Entry<String, Triple<String, Long, Long>>> finalList = new ArrayList<>();
-//        finalList.addAll(managers);
-//        finalList.addAll(workers);
-//        finalList.addAll(others);
-//
-//
-//         Map<String, Pair<Long, Long>> newOrderAll = orderService.getNewOrderAll("Новый", "Коррекция");
-//        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
-//
-//        System.out.println(newOrderAll);
-//        System.out.println(inPublishAndVigul);
-//
-//
-//
-//
-//
-//        // Создаём StringBuilder для объединения строк
-//        StringBuilder resultBuilder = new StringBuilder();
-//
-//        // Вычисляем общую выручку всех менеджеров
-//        long totalManagerRevenue = managers.stream()
-//                .mapToLong(entry -> entry.getValue().getRight()) // Берем сумму для каждого менеджера
-//                .sum();
-//
-//        // Добавляем общую выручку менеджеров в начало
-//        resultBuilder.append("Общая выручка всех менеджеров: ").append(totalManagerRevenue).append("\n\n");
-//
-//        // Используем AtomicReference для хранения предыдущей роли
-//        AtomicReference<String> previousRole = new AtomicReference<>("");
-//
-//        // Проходим по каждой записи
-//        finalList.forEach(entry -> {
-//            String fio = entry.getKey();
-//            String role = entry.getValue().getLeft();
-//            Long salary = entry.getValue().getMiddle();
-//            Long sum = entry.getValue().getRight();
-//
-//            // Если текущая роль отличается от предыдущей, добавляем перенос строки
-//            if (!previousRole.get().isEmpty() && !previousRole.get().equals(role)) {
-//                resultBuilder.append("\n"); // Перенос строки между группами
-//            }
-//
-//            String resultText = fio + ", ЗП: " + salary;
-//
-//            // Если сумма не равна 0, добавляем её к результату
-//            if (sum != 0) {
-//                resultText += ", Сумма: " + sum;
-//            }
-//
-//            // Добавляем строку в результат
-//            resultBuilder.append(resultText).append(" \n");
-//
-//            // Обновляем предыдущую роль
-//            previousRole.set(role);
-//        });
-//
-//        // Возвращаем результат как одну строку
-//        String finalResult = resultBuilder.toString().trim();
-//
-//        // Выводим финальный результат
-//        System.out.println(finalResult);
-//
-//        return finalResult;
+        // Получаем данные о зарплатах
+        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о платежах
+        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых компаниях
+        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        // Получаем данные о новых заказах
+        Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll("Новый", "Коррекция");
+        // Получаем данные о заказах в публикации
+        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+        // Получаем данные о всех заказах с разными данными
+        Map<String, Map<String, Long>>  allOrders = orderService.getAllOrdersToMonthByStatus(firstDayOfMonth, lastDayOfMonth, "Новый", "В проверку", "На проверке", "Коррекция", "Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
+        Map<String, Long> leadsNewAndInWork = leadService.getAllLeadsToMonthToManager("Новый", firstDayOfMonth, lastDayOfMonth);
+        Long zpTotal = zps.values().stream()
+                .mapToLong(Pair::getSecond) // Извлекаем сумму зарплаты
+                .sum();
+
+        // Создаем карту для результатов
+        Map<String, UserData> result = new HashMap<>();
+
+        // Параллельная обработка данных и сохранение в карту
+        zps.entrySet().parallelStream().forEach(entry -> {
+            String fio = entry.getKey();
+            Pair<String, Long> pair = entry.getValue();
+            Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
+//            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+//            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long inVigul = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
+            Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
+            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  0L);
+            String role = pair.getFirst();
+            // Счетчики заказов
+            Map<String, Long> orders = allOrders.getOrDefault(fio, new HashMap<>());
+            Long orderInNew = orders.getOrDefault("Новый", 0L);
+            Long orderToCheck = orders.getOrDefault("В проверку", 0L);
+            Long orderInCheck = orders.getOrDefault("На проверке", 0L);
+            Long orderInCorrect = orders.getOrDefault("Коррекция", 0L);
+            Long orderInPublished = orders.getOrDefault("Опубликовано", 0L);
+            Long orderInWaitingPay1 = orders.getOrDefault("Выставлен счет", 0L);
+            Long orderInWaitingPay2 = orders.getOrDefault("Напоминание", 0L);
+            Long orderNoPay = orders.getOrDefault("Не оплачено", 0L);
+
+            // Сохраняем все данные в карту
+            result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+        });
+
+//        System.out.println(result);
+        // Возвращаем результат
+//        System.out.println(displayResult(result));
+
+        // Собираем список ФИО менеджеров и их работников, которые закреплены за user1
+        // Собираем список ФИО: user1 + его работники
+        Set<String> allowedFio = Stream.concat(
+                Stream.of(user1.getFio()), // Сам менеджер
+                user1.getWorkers().stream()
+                        .map(worker -> worker.getUser().getFio()) // Работники
+        ).collect(Collectors.toSet());
+
+// Фильтруем Map и оставляем только user1 и его работников
+        Map<String, UserData> filteredResult = result.entrySet().stream()
+                .filter(entry -> allowedFio.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        return filteredResult;
 
 
+//    return result;
+    }
+
+    public String displayResultToWorker(Map<String, UserData> result) {
+        StringBuilder resultBuilder = new StringBuilder();
+
+        // Сортируем сначала менеджеров по totalSum, затем остальных по salary
+        List<Map.Entry<String, UserData>> sortedEntries = result.entrySet().stream()
+                .sorted((entry1, entry2) -> {
+                    UserData user1 = entry1.getValue();
+                    UserData user2 = entry2.getValue();
+
+                    boolean isManager1 = user1.getRole().equals("ROLE_MANAGER");
+                    boolean isManager2 = user2.getRole().equals("ROLE_MANAGER");
+
+                    if (isManager1 && isManager2) {
+                        // Оба менеджеры → сортируем по убыванию суммы чеков
+                        return Long.compare(user2.getTotalSum(), user1.getTotalSum());
+                    } else if (!isManager1 && !isManager2) {
+                        // Оба не менеджеры → сортируем по убыванию зарплаты
+                        return Long.compare(user2.getSalary(), user1.getSalary());
+                    }
+                    // Менеджеры идут первыми
+                    return Boolean.compare(isManager2, isManager1);
+                })
+                .collect(Collectors.toList());
+
+        // Вычисляем общую выручку всех менеджеров
+        long totalManagerRevenue = result.values().stream()
+                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
+                .mapToLong(UserData::getTotalSum)
+                .sum();
+
+        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
+        long totalZp = result.values().stream().findFirst().get().getZpTotal();
 
 
+//        System.out.println(totalZp);
 
 
-//        // Создаём StringBuilder для объединения строк
-//        StringBuilder resultBuilder = new StringBuilder();
-//
-//        // Проходим по каждой записи и добавляем в StringBuilder
-//        finalList.forEach(entry -> {
-//            // Извлекаем данные из Triple
-//            String fio = entry.getKey();
-//            String role = entry.getValue().getLeft();
-//            Long salary = entry.getValue().getMiddle();
-//            Long sum = entry.getValue().getRight();
-//
-//            // Формируем строку вывода
-//            String resultText = fio + ", ЗП: " + salary;
-//
-//            // Если сумма не равна 0, добавляем её к результату
-//            if (sum != 0) {
-//                resultText += ", Сумма: " + sum;
-//            }
-//
-//            // Добавляем результат в StringBuilder с разделением через пробел
-//            resultBuilder.append(resultText).append(" \n");
-//        });
-//
-//        // Добавляем дополнительный перенос между менеджерами и работниками
-//        if (!managers.isEmpty() && !workers.isEmpty()) {
-//            resultBuilder.append("\n");  // Добавляем два переноса между группами
-//        }
-//
-//        // Возвращаем результат как одну строку
-//        String finalResult = resultBuilder.toString().trim();
-//
-//        // Выводим финальный результат
-//        System.out.println(finalResult);
-//
-//        return finalResult;
+        // Вычисляем количество новых компаний
+        long totalNewCompanies = result.values().stream()
+                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
+                .mapToLong(UserData::getNewCompanies)
+                .sum();
+
+        // ЗП менеджеров
+
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+                .forEach(entry -> {
+                    String fio = entry.getKey();
+                    UserData userData = entry.getValue();
+//                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+//                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+//                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+                    String orderStatsForWorkers = "\n"  + "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
+                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. ")
+                            .append("\n\n")
+                            .append(orderStatus)
+//                            .append("\n\n")
+                            .append("\n")
+//                            .append("\nСтатусы Заказов: ")
+                            .append(orderStatsForWorkers)
+                            .append("\n\n");
+                });
+
+        // ЗП Работников
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getRole()))
+                .forEach(entry -> {
+                    String fio = entry.getKey();
+                    UserData userData = entry.getValue();
+                    String orderStats = "Новые - " + userData.getNewOrders() + " В коррекции - " + userData.getCorrectOrders()
+                            + " В выгуле - " + userData.getInVigul() + " На публикации - " + userData.getInPublish();
+                    resultBuilder.append(fio).append(": ").append(userData.getSalary())
+                            .append(" руб.  ")
+                            .append("\n\n")
+                            .append("Статусы заказов:")
+                            .append("\n")
+                            .append(orderStats).append("\n\n");
+                });
+
+        return resultBuilder.toString();
+    }
 
 
-
-
-
-
-        // Выводим результат
-//        finalList.forEach(entry ->
-//                System.out.println("ФИО: " + entry.getKey() + ", Роль: " + entry.getValue().getLeft() +
-//                        ", ЗП: " + entry.getValue().getMiddle() + ", Сумма: " + entry.getValue().getRight())
-//        );
-
-
-
-//        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
-//        zps.forEach((fio, pair) ->
-//                System.out.println("ФИО: " + fio + ", Роль: " + pair.getFirst() + ", Сумма: " + pair.getSecond())
-//        );
-//        Map<String, Long> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
-//        pcs.forEach((fio, sum) ->
-//                System.out.println("ФИО: " + fio +  ", Сумма: " + sum)
-//        );
-//        return
-//    }
-
-//    private ManagersListDTO toManagersListDTOAndCount(Manager manager){
-//        LocalDate localDate = LocalDate.now();
-//        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-//        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-//        List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
-//        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
-//        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
-//        BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
-//        Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
-//        Set<Manager> managerList = new HashSet<>();
-//        managerList.add(manager);
-//        List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatusToOwnerForTelegram(localDate, "В работе", managerList);// берем всех лидов за текущий месяц + статус
-//        System.out.println(inWorkleadList.size());
-//        return ManagersListDTO.builder()
-//                .id(manager.getId())
-//                .userId(manager.getUser().getId())
-//                .fio(manager.getUser().getFio())
-//                .login(manager.getUser().getUsername())
-//                .imageId(imageId)
-//                .sum1Month(sum30.intValue())
-//                .order1Month(zps.size())
-//                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
-//                .payment1Month(sum30Payments.intValue())
-//                .leadsInWorkInMonth(inWorkleadList.size())
-//                .build();
-//    }
 
 
 

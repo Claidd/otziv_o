@@ -125,7 +125,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
-            personalService.getPersonalsAndCountToMap();
+//            personalService.getPersonalsAndCountToMap();
 //            personalService.getPersonalsAndCountToScore(localDate) для рейтинга;
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";

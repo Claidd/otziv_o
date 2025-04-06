@@ -158,27 +158,62 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Object[]> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     @Query("""
-    SELECT 
-        COALESCE(m_user.fio, u.fio) AS fio, 
-        o.status.title AS status, 
-        COUNT(o.id) AS count,
-        CASE 
-            WHEN m_user.fio IS NOT NULL THEN 'manager' 
-            ELSE 'worker' 
-        END AS role
-    FROM Order o 
-    LEFT JOIN o.worker w 
-    LEFT JOIN w.user u 
-    LEFT JOIN o.manager m 
-    LEFT JOIN m.user m_user 
-    WHERE o.complete = false 
-    AND o.changed BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
-    AND o.status.title IN (:statuses)
-    GROUP BY fio, o.status.title, role
+
+            SELECT\s
+    u.fio AS fio,\s
+    o.status.title AS status,\s
+    COUNT(o.id) AS count,
+    'worker' AS role
+FROM Order o\s
+LEFT JOIN o.worker w\s
+LEFT JOIN w.user u\s
+WHERE o.complete = false\s
+AND o.changed BETWEEN :firstDayOfMonth AND :lastDayOfMonth\s
+AND o.status.title IN (:statuses)
+GROUP BY u.fio, o.status.title
+
+UNION ALL
+
+SELECT\s
+    m_user.fio AS fio,\s
+    o.status.title AS status,\s
+    COUNT(o.id) AS count,
+    'manager' AS role
+FROM Order o\s
+LEFT JOIN o.manager m\s
+LEFT JOIN m.user m_user\s
+WHERE o.complete = false\s
+AND o.changed BETWEEN :firstDayOfMonth AND :lastDayOfMonth\s
+AND o.status.title IN (:statuses)
+GROUP BY m_user.fio, o.status.title
 """)
     List<Object[]> getOrdersByStatusForUsers(List<String> statuses,
                                              LocalDate firstDayOfMonth,
                                              LocalDate lastDayOfMonth);
+
+
+//    @Query("""
+//    SELECT
+//        COALESCE(m_user.fio, u.fio) AS fio,
+//        o.status.title AS status,
+//        COUNT(o.id) AS count,
+//        CASE
+//            WHEN m_user.fio IS NOT NULL THEN 'manager'
+//            ELSE 'worker'
+//        END AS role
+//    FROM Order o
+//    LEFT JOIN o.worker w
+//    LEFT JOIN w.user u
+//    LEFT JOIN o.manager m
+//    LEFT JOIN m.user m_user
+//    WHERE o.complete = false
+//    AND o.changed BETWEEN :firstDayOfMonth AND :lastDayOfMonth
+//    AND o.status.title IN (:statuses)
+//    GROUP BY fio, o.status.title, role
+//""")
+//    List<Object[]> getOrdersByStatusForUsers(List<String> statuses,
+//                                             LocalDate firstDayOfMonth,
+//                                             LocalDate lastDayOfMonth);
 
 
 

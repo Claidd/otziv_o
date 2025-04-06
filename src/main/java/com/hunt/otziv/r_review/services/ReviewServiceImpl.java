@@ -86,7 +86,7 @@ public class ReviewServiceImpl implements ReviewService{
         List<Long> reviewId;
         List<Review> reviewPage;
         reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
+        reviewPage = reviewRepository.findAll(reviewId).stream().filter(review -> review.getOrderDetails().getOrder().getManager().equals(manager)).collect(Collectors.toList());
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
 
@@ -778,7 +778,7 @@ public class ReviewServiceImpl implements ReviewService{
         List<Long> reviewId;
         List<Review> reviewPage;
         reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
+        reviewPage = reviewRepository.findAll(reviewId).stream().filter(review -> review.getOrderDetails().getOrder().getManager().equals(manager)).collect(Collectors.toList());
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Менеджера
 

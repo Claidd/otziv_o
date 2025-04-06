@@ -53,10 +53,12 @@ public class MyTelegramBot extends TelegramLongPollingBot {
 
 
             User user = authUserInTelegramBot(chatId, messageText);
+            Long userId = null;
             String username = null;
             String role = null;
 
             if (user != null) {
+                userId = user.getId();
                 username = user.getUsername();
                 role = user.getRoles().stream()
                         .map(Role::getName)
@@ -77,10 +79,20 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                     // Отправляем сообщение
                     if (role.equals("ROLE_ADMIN")) {
                         sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()));
+//                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)));
+//                        sendMessage(chatId,personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)));
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
-                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()));
+                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)));
+                        break;
+                    }
+                    if (role.equals("ROLE_MANAGER")) {
+                        sendMessage(chatId,personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)));
+                        break;
+                    }
+                    if (role.equals("ROLE_WORKER")) {
+                        sendMessage(chatId,personalService.displayResultToWorker(personalService.getPersonalsAndCountToMapToWorker(userId)));
                         break;
                     }
 

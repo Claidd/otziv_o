@@ -1104,7 +1104,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
         List<String> statuses = List.of(orderInNew, orderToCheck, orderInCheck, orderInCorrect,
                 orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay);
 
-        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(1), lastDayOfMonth);
+        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(2), lastDayOfMonth);
 
         // Используем LinkedHashMap, чтобы сначала добавить менеджеров, затем работников
         Map<String, Map<String, Long>> ordersMap = new LinkedHashMap<>();
@@ -1137,7 +1137,54 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return ordersMap;
     }
 
-
+//    @Override
+//    public Map<String, Map<String, Long>> getAllOrdersToMonthByStatus(
+//            LocalDate firstDayOfMonth,
+//            LocalDate lastDayOfMonth,
+//            String orderInNew,
+//            String orderToCheck,
+//            String orderInCheck,
+//            String orderInCorrect,
+//            String orderInPublished,
+//            String orderInWaitingPay1,
+//            String orderInWaitingPay2,
+//            String orderNoPay) {
+//
+//        List<String> statuses = List.of(orderInNew, orderToCheck, orderInCheck, orderInCorrect,
+//                orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay);
+//
+//        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(2), lastDayOfMonth);
+//
+//        // Используем LinkedHashMap, чтобы сначала добавить менеджеров, затем работников
+//        Map<String, Map<String, Long>> ordersMap = new LinkedHashMap<>();
+//
+//        // Отдельные списки для сортировки
+//        Map<String, Map<String, Long>> managerOrders = new LinkedHashMap<>();
+//        Map<String, Map<String, Long>> workerOrders = new LinkedHashMap<>();
+//
+//        for (Object[] row : results) {
+//            if (row.length < 4) continue; // Пропускаем некорректные данные
+//
+//            String fio = (String) row[0];  // ФИО
+//            String status = (String) row[1];  // Статус
+//            Long count = row[2] != null ? (Long) row[2] : 0L;  // Количество заказов
+//            String role = (String) row[3];  // 'manager' или 'worker'
+//
+//            if ("manager".equals(role)) {
+//                managerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
+//            } else {
+//                workerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
+//            }
+//        }
+//
+//        // Сначала добавляем менеджеров, потом работников
+//        ordersMap.putAll(managerOrders);
+//        ordersMap.putAll(workerOrders);
+//
+//        System.out.println(ordersMap);
+//
+//        return ordersMap;
+//    }
 
 
 //    @Override
