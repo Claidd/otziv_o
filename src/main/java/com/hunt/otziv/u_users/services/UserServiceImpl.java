@@ -55,6 +55,10 @@ public class UserServiceImpl  implements UserService {
         return userRepository.findByUsername(username);
     } // Метод поиска юзера по имени в БД
 
+    public List<User> getAllOwners(String roleName){
+        return userRepository.findAllOwners(roleName);
+    }
+
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException { // Метод для секьюрити от имплеменитрованного DetailsUsers
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
@@ -512,6 +516,18 @@ public class UserServiceImpl  implements UserService {
     @Override
     public User findByIdToUserInfo(Long staticFor) {
         return userRepository.findById(staticFor).orElseThrow();
+    }
+
+    @Override
+    public Map<String, Long> getAllWorkers() {
+        List<Object[]> result = userRepository.getAllWorkersByRole();
+
+        Map<String, Long> map = result.stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Long) row[1]
+                ));
+        return map;
     }
 
 //    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (старый вариант)

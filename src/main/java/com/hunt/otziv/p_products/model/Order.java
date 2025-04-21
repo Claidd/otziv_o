@@ -87,6 +87,7 @@ public class Order {
                 ", sum=" + sum +
                 ", status=" + status +
                 ", worker=" + worker +
+                ", manager=" + manager +
                 ", complete=" + complete +
                 '}';
     }

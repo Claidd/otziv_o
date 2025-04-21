@@ -1,31 +1,17 @@
 package com.hunt.otziv.t_telegrambot;
-
-import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
-import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.annotation.Lazy;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.security.Principal;
-import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
 
 
@@ -33,7 +19,7 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class MyTelegramBot extends TelegramLongPollingBot {
-
+    @Lazy
     private final PersonalService personalService;
     private final UserService userService;
 

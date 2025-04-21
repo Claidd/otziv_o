@@ -30,6 +30,8 @@ import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -44,6 +46,7 @@ import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
@@ -86,11 +89,14 @@ public class OrderServiceImpl implements OrderService {
     private final UserService userService;
     private final CompanyStatusService companyStatusService;
     private final EmailService emailService;
+    private final TelegramService telegramService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
     public static final String MANAGER = "ROLE_MANAGER";
     public static final String STATUS_NEW = "Новый";
+    public static final String STATUS_TO_CHECK = "В проверку";
+    public static final String STATUS_CORRECTION= "Коррекция";
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_ARCHIVE = "Архив";
@@ -450,6 +456,15 @@ public class OrderServiceImpl implements OrderService {
             log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
             log.info("10. Обновляем счетчик компании в БД");
             updateCompanyCounter(order, companyId);
+
+            if (order.getWorker() != null && order.getWorker().getUser() != null) {
+                Long telegramChatId = order.getWorker().getUser().getTelegramChatId();
+                if (telegramChatId != null) {
+                    String resultBuilder = "У вас новый заказ для:  " +
+                            order.getCompany().getTitle();
+                    telegramService.sendMessage(telegramChatId, resultBuilder);
+                }
+            }
             return true;
         } catch (PersistenceException | NumberFormatException e) {  //replace these with exceptions you expect
             log.error("Ошибка при создании нового заказа с отзывами", e);
@@ -846,6 +861,39 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 return true;
             }
             else {
+                if (STATUS_TO_CHECK.equals(title)) {
+                    if (order.getManager() != null
+                            && order.getManager().getUser() != null
+                            && order.getManager().getUser().getTelegramChatId() != null
+                            && order.getDetails() != null
+                            && order.getDetails().getFirst() != null
+                            && order.getDetails().getFirst().getOrder() != null
+                            && order.getDetails().getFirst().getOrder().getCompany() != null) {
+
+                        String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
+
+                        telegramService.sendMessage(order.getManager().getUser().getTelegramChatId(),
+                                companyTitle + " готов - На проверку \n" + "https://o-ogo.ru/orders/all_orders?status=В%20проверку");
+                    }
+                }
+
+                if (STATUS_CORRECTION.equals(title)) {
+                    if (order.getWorker() != null
+                            && order.getWorker().getUser() != null
+                            && order.getWorker().getUser().getTelegramChatId() != null
+                            && order.getDetails() != null
+                            && order.getDetails().getFirst() != null
+                            && order.getDetails().getFirst().getOrder() != null
+                            && order.getDetails().getFirst().getOrder().getCompany() != null) {
+
+                        String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
+                        String comments = order.getDetails().getFirst().getOrder().getCompany().getCommentsCompany();
+
+                        telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+                                companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments + "\n "
+                                        + "https://o-ogo.ru/worker/correct");
+                    }
+                }
                 order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                 orderRepository.save(order);
                 return true;
@@ -992,6 +1040,18 @@ public boolean deleteOrder(Long orderId, Principal principal){
             if (order.getAmount() <= order.getCounter()) {
                 changeStatusForOrder(order.getId(), STATUS_PUBLIC);
                 log.info("4. Счетчик совпадает с количеством заказа. Статус заказа с id {} сменен на Опубликовано", order.getId());
+                if (order.getManager() != null && order.getManager().getUser() != null) {
+                    Long telegramChatId = order.getManager().getUser().getTelegramChatId();
+
+                    if (telegramChatId != null && order.getCompany() != null && order.getCompany().getTitle() != null) {
+                        String resultBuilder =
+                                order.getCompany().getTitle() +
+                                " опубликован. \n" +
+                                "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
+
+                        telegramService.sendMessage(telegramChatId, resultBuilder);
+                    }
+                }
             } else {
                 log.info("4. Счетчик не совпадает с количеством заказа с id {}. Статус заказа не изменён", order.getId());
             }

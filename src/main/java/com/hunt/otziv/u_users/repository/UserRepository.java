@@ -19,6 +19,10 @@ public interface UserRepository extends CrudRepository<User, Long> {
     List<String> findAllActiveFioByRole(String roleName);
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles LEFT JOIN FETCH u.managers m LEFT JOIN FETCH u.workers w WHERE u.telegramChatId = :telegramId")
     Optional<User> findByTelegramChatId(long telegramId);
+    @Query("SELECT u.fio, u.telegramChatId FROM User u WHERE u.active = true AND u.telegramChatId IS NOT NULL")
+    List<Object[]> getAllWorkersByRole();
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.managers m LEFT JOIN FETCH m.user mu LEFT JOIN FETCH mu.workers w JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
+    List<User> findAllOwners(String roleName);
 
 
     //    User findFirstByActivateCode(String activateCode);

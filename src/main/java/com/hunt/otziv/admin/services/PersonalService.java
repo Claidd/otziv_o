@@ -78,4 +78,6 @@ public interface PersonalService {
     Map<String, UserData>  getPersonalsAndCountToMapToWorker(Long userId);
 
     String displayResultToWorker(Map<String, UserData> personalsAndCountToMapToWorker);
+
+    String displayResultToTelegramAdmin(Map<String, UserData> result);
 }

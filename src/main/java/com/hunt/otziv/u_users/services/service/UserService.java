@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface UserService extends UserDetailsService{
@@ -42,6 +43,10 @@ public interface UserService extends UserDetailsService{
     Optional<User> findByChatId(long chatId);
 
     User findByIdToUserInfo(Long staticFor);
+
+    Map<String, Long> getAllWorkers();
+
+    List<User> getAllOwners(String roleName);
 
 
 //

@@ -9,6 +9,7 @@ import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.t_telegrambot.service.NotificationSchedulerToTelegram;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -36,6 +37,7 @@ public class WorkerOrderController {
     private final ReviewService reviewService;
     private final BotService botService;
     private final PersonalService personalService;
+    private final NotificationSchedulerToTelegram toTelegram;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -101,6 +103,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Новый", pageNumber, pageSize));
+            toTelegram.sendDailyReportToWorkers();
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Админа: ", startTime);
             return "products/orders/new_orders_worker";
         }
@@ -109,6 +112,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Новый",pageNumber, pageSize));
+            toTelegram.sendDailyReportToWorkers();
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }
@@ -125,6 +129,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
+            toTelegram.sendDailyReportToWorkers();
 //            personalService.getPersonalsAndCountToMap();
 //            personalService.getPersonalsAndCountToScore(localDate) для рейтинга;
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
