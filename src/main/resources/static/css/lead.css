@@ -455,7 +455,12 @@ body {
 }
 /* Меняет количество */
 
-
+.tabs__content__lead-item1{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 5rem;
+}
 .card__remember {
     display: flex;
     flex-direction: row;

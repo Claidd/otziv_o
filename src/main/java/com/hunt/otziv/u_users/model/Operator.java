@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.l_lead.model.Telephone;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,6 +29,10 @@ public class Operator {
     @OneToMany(mappedBy = "operator",fetch = FetchType.LAZY)
     @ToString.Exclude
     private Set<Lead> leads;
+
+    @OneToMany(mappedBy = "telephoneOperator",fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private Set<Telephone> telephones;
 
     @Override
     public int hashCode() {

@@ -81,8 +81,6 @@ public class EditLeadController {
     //Редактор лида
     @GetMapping("lead/edit/{leadId}")
     public String editLead(@PathVariable final Long leadId, Model model){
-        System.out.println(leadId);
-//        model.put("route", "edit");
         model.addAttribute("editLeadDto", leadService.findById(leadId));
         model.addAttribute("operators", operatorService.getAllOperators());
         model.addAttribute("managers", managerService.getAllManagers());

@@ -25,30 +25,30 @@
                             </a>
                         </li>
                         <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/operators}" class="nav__link link" aria-label="Перейти на страницу Оператора">
                                 Оператор
                             </a>
                         </li>
                         <li  sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MARKETOLOG')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу Маркетолога">
                                 Маркетолог
                             </a>
                         </li>
                         <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MANAGER')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/companies/company(status='Все')}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/companies/company(status='Все')}" class="nav__link link" aria-label="Перейти на страницу Менеджера">
                                 Менеджер
                             </a>
                         </li>
                         <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'WORKER')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/worker/new_orders}" class="nav__link link" aria-label="Перейти на страницу день рождения под ключ">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/worker/new_orders}" class="nav__link link" aria-label="Перейти на страницу Специалиста">
                                 Специалист
                             </a>
                         </li>
                         <li class="mev__item">
-                            <a sec:authorize="hasAnyRole('OPERATOR', 'MANAGER', 'WORKER', 'MARKETOLOG')" th:href="@{/admin}" class="nav__link  link" aria-label="Перейти на страницу квестов">
+                            <a sec:authorize="hasAnyRole('OPERATOR', 'MANAGER', 'WORKER', 'MARKETOLOG')" th:href="@{/admin}" class="nav__link  link" aria-label="Перейти в Личный Кабинет">
                                 Личный кабинет
                             </a>
-                            <a sec:authorize="hasAnyRole('ADMIN', 'OWNER')" th:href="@{/admin/analyse}" class="nav__link  link" aria-label="Перейти на страницу квестов">
+                            <a sec:authorize="hasAnyRole('ADMIN', 'OWNER')" th:href="@{/admin/analyse}" class="nav__link  link" aria-label="Перейти на страницу Анализа">
                                 Личный кабинет
                             </a>
                         </li>

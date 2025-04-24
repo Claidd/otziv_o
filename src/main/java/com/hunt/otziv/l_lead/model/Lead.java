@@ -78,6 +78,10 @@ public class Lead {
     @JoinColumn(name = "marketolog_id")
     private Marketolog marketolog;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "telephone_id")
+    private Telephone telephone;
+
     // Геттеры и сеттеры
 
     @PrePersist

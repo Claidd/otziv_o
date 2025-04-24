@@ -24,12 +24,14 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private final PersonalService personalService;
 
     // каждый день в 9:25
-    @Scheduled(cron = "0 23 10 * * *")
+    @Scheduled(cron = "0 05 00 * * *")
     public void sendDailyReport() {
-        myTelegramBot.sendMessage(794146111,"Доброе утро! Отчёт за сегодня готов.");
+        Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
+        sendOnlyAdminReport(794146111L, userDataMap);
+//        myTelegramBot.sendMessage(794146111,"Доброе утро! Отчёт за сегодня готов");
     }
 
-    @Scheduled(cron = "0 25 9 * * *") // каждый день в 9:25
+    @Scheduled(cron = "0 00 14 * * *") // каждый день в 9:25
     public void sendDailyReportToWorkers() {
         Map<String, Long> workersTelegramIDs = userService.getAllWorkers();
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
@@ -47,7 +49,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
                 String message = generateMessageByRole(data.getRole(), fio, data, userDataMap);
                 sendMessageSafe(chatId, message, fio);
             } else {
-                log.warn("У сотрудника {} chatId отсутствует", fio);
+//                log.warn("У сотрудника {} chatId отсутствует", fio);
             }
         });
     }
@@ -70,7 +72,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
             Long chatId = owner.getTelegramChatId();
             if (chatId != null && chatId > 0) {
-                String message = personalService.displayResult(filtered);
+                String message = personalService.displayResultToTelegramAdmin(filtered);
                 sendMessageSafe(chatId, message, owner.getFio());
             } else {
                 log.info("У владельца {} chatId отсутствует", owner.getFio());
@@ -87,6 +89,14 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
             log.warn("У Админа отсутствует chatId");
         }
     }
+    private void sendOnlyAdminReport(Long chatIds, Map<String, UserData> userDataMap) {
+        if (chatIds != null && chatIds > 0) {
+            String message = personalService.displayResultToTelegramAdmin(userDataMap);
+            sendMessageSafe(chatIds, message, "Админ");
+        } else {
+            log.warn("У Админа отсутствует chatId");
+        }
+    }
 
     private void sendMessageSafe(Long chatId, String message, String who) {
         try {
@@ -99,7 +109,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private String generateMessageByRole(String role, String fio, UserData userData, Map<String, UserData> result) {
         switch (role) {
             case "ROLE_MANAGER":
-                return "Ежедневная сводка: " + "\n\n" +
+                return "Ежедневная сводка: " + "\n" + "(везде должен быть 0)" + "\n\n" +
 //                        fio + ": " + userData.getSalary()+ " руб. " +
                         "Лиды: " + userData.getLeadsNew() + "\n" +
                         "В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()  + "\n" +
@@ -108,7 +118,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
                         "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders() + "\n" +
                         "Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
             case "ROLE_WORKER":
-                return "Ежедневная сводка: " + "\n\n" +
+                return "Ежедневная сводка: " + "\n" + "(везде должен быть 0)" + "\n\n" +
                         "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders() + "\n" +
                         "Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
             default:

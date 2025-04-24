@@ -57,11 +57,15 @@ public class LeadController {
         model.put("leadListALL", leadsAll);
         log.info("загрузили ВСЕ компании");
 
-        long endTime = System.nanoTime();
-        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf("Лид контроллер: %.4f сек%n", timeElapsed);
+        checkTimeMethod("Время выполнения LeadController/lead: ", startTime);
 
         return new ModelAndView("lead/layouts/lead", model);
+    }
+
+    private void checkTimeMethod(String text, long startTime){
+        long endTime = System.nanoTime();
+        double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
+        log.info(text + "%.4f сек%n", timeElapsed);
     }
 
 

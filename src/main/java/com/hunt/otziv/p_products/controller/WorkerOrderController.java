@@ -103,7 +103,6 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Новый", pageNumber, pageSize));
-            toTelegram.sendDailyReportToWorkers();
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Админа: ", startTime);
             return "products/orders/new_orders_worker";
         }
@@ -112,7 +111,6 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Новый",pageNumber, pageSize));
-            toTelegram.sendDailyReportToWorkers();
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }
@@ -129,9 +127,6 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
-            toTelegram.sendDailyReportToWorkers();
-//            personalService.getPersonalsAndCountToMap();
-//            personalService.getPersonalsAndCountToScore(localDate) для рейтинга;
             checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
             return "products/orders/new_orders_worker";
         }

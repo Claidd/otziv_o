@@ -41,9 +41,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -274,13 +277,6 @@ public class ReviewServiceImpl implements ReviewService{
         log.info("Достали Отзыв");
         boolean isChanged = false;
 
-        /*Временная проверка сравнений*/
-//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-//        System.out.println("comment: " + !Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment()));
-//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-//        System.out.println("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
-
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
             log.info("Обновляем текст отзыва");
             saveReview.setText(reviewDTO.getText());
@@ -330,44 +326,103 @@ public class ReviewServiceImpl implements ReviewService{
         try {
             OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
 
-            // Проверяем, есть ли отзывы
             List<Review> reviews = saveOrderDetails.getReviews();
             if (reviews.isEmpty()) {
                 log.error("Ошибка: список отзывов пуст");
                 return false;
             }
 
-            // Рассчитываем plusDays, избегаем деления на 0
-            int botCounter = reviews.getFirst().getBot().getCounter();
-            int plusDays = orderDetailsDTO.getAmount() > 0 ? Math.max(30 / orderDetailsDTO.getAmount(), 1) : 1;
-            LocalDate localDate = getLocalDate(botCounter);
-
-            // Устанавливаем дату публикации каждому отзыву
-            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
-                checkUpdateReview(reviewDTO, localDate);
-                localDate = localDate.plusDays(plusDays);
-                log.info("Обновили дату: {}", localDate);
+            int totalReviews = orderDetailsDTO.getReviews().size();
+            if (totalReviews == 0) {
+                log.error("Ошибка: список отзывов в DTO пуст");
+                return false;
             }
 
-            // Обновляем комментарий, если он изменился
+            int botCounter = reviews.getFirst().getBot().getCounter();
+            LocalDate startDate = getLocalDate(botCounter);
+            LocalDate endDate = startDate.plusDays(30);
+
+            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
+
+            BigDecimal step = BigDecimal.valueOf(totalDays)
+                    .divide(BigDecimal.valueOf(totalReviews - 1), 2, RoundingMode.HALF_UP);
+            BigDecimal currentOffset = BigDecimal.ZERO;
+
+            for (int i = 0; i < totalReviews; i++) {
+                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
+                long daysToAdd = currentOffset.setScale(0, RoundingMode.HALF_UP).longValue();
+                LocalDate publishDate = startDate.plusDays(daysToAdd);
+
+                checkUpdateReview(reviewDTO, publishDate);
+                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
+
+                currentOffset = currentOffset.add(step);
+            }
+
             if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
                 log.info("Обновляем комментарий отзыва и Деталей Заказа");
                 saveOrderDetails.setComment(orderDetailsDTO.getComment());
                 orderDetailsService.save(saveOrderDetails);
             }
 
-            log.info("Все прошло успешно, даты публикаций установлены, возвращаем TRUE");
+            log.info("Все прошло успешно, даты публикаций установлены равномерно, возвращаем TRUE");
             return true;
         } catch (Exception e) {
-            log.error("Ошибка обновления данных, , даты публикаций НЕ установлены: ", e);
+            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
             return false;
         }
     }
+
 
     // Улучшенная версия метода getLocalDate
     private LocalDate getLocalDate(int botCounter) {
         return botCounter < 2 ? LocalDate.now().plusDays(2) : LocalDate.now();
     }
+
+
+//    @Override
+//    @Transactional
+//    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+//        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
+//
+//        try {
+//            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+//
+//            // Проверяем, есть ли отзывы
+//            List<Review> reviews = saveOrderDetails.getReviews();
+//            if (reviews.isEmpty()) {
+//                log.error("Ошибка: список отзывов пуст");
+//                return false;
+//            }
+//
+//            // Рассчитываем plusDays, избегаем деления на 0
+//            int botCounter = reviews.getFirst().getBot().getCounter();
+//            int plusDays = orderDetailsDTO.getAmount() > 0 ? Math.max(30 / orderDetailsDTO.getAmount(), 1) : 1;
+//            LocalDate localDate = getLocalDate(botCounter);
+//
+//            // Устанавливаем дату публикации каждому отзыву
+//            for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
+//                checkUpdateReview(reviewDTO, localDate);
+//                localDate = localDate.plusDays(plusDays);
+//                log.info("Обновили дату: {}", localDate);
+//            }
+//
+//            // Обновляем комментарий, если он изменился
+//            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
+//                log.info("Обновляем комментарий отзыва и Деталей Заказа");
+//                saveOrderDetails.setComment(orderDetailsDTO.getComment());
+//                orderDetailsService.save(saveOrderDetails);
+//            }
+//
+//            log.info("Все прошло успешно, даты публикаций установлены, возвращаем TRUE");
+//            return true;
+//        } catch (Exception e) {
+//            log.error("Ошибка обновления данных, , даты публикаций НЕ установлены: ", e);
+//            return false;
+//        }
+//    }
+//
+
 
 
 
