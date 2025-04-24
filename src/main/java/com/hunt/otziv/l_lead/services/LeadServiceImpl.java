@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -14,6 +15,7 @@ import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.z_zp.services.ZpService;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -26,6 +28,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -40,8 +43,9 @@ public class LeadServiceImpl implements LeadService{
     private final MarketologService marketologService;
     private final ZpService zpService;
     private final UserService userService;
+    private final TelephoneService telephoneService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -49,6 +53,7 @@ public class LeadServiceImpl implements LeadService{
         this.marketologService = marketologService;
         this.zpService = zpService;
         this.userService = userService;
+        this.telephoneService = telephoneService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -167,7 +172,6 @@ public class LeadServiceImpl implements LeadService{
     public Page<LeadDTO> getAllLeads(String status, String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов
         log.info("Берем все лиды");
         String userRole = getRole(principal);
-        System.out.println(userRole);
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
@@ -224,6 +228,41 @@ public class LeadServiceImpl implements LeadService{
         }
         return Page.empty();
     } // Взять всех лидов
+
+    @Override
+    public Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize) {
+        log.info("Берем один лид для оператора");
+
+        Optional<Lead> lead;
+
+        if (keywords != null && !keywords.isEmpty()) {
+            lead = leadsRepository.findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(telephoneId, status, "%" + keywords + "%");
+        } else {
+            lead = leadsRepository.findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(telephoneId, status);
+        }
+
+        List<LeadDTO> leadDTOs = lead.map(this::toDto).map(List::of).orElse(List.of());
+
+        return new PageImpl<>(leadDTOs, PageRequest.of(0, 1), leadDTOs.size());
+    }
+
+
+
+//    @Override
+//    public Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize) {
+//        log.info("Берем все лиды");
+//        String userRole = getRole(principal);
+//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
+//        Page<Lead> leadsPage;
+//        List<LeadDTO> leadDTOs = null;
+//
+//            leadsPage = leadsRepository.findAllByLidStatusByTelephoneId(telephoneId, status,pageable);
+//            leadDTOs = leadsPage.getContent()
+//                    .stream()
+//                    .map(this::toDto)
+//                    .collect(Collectors.toList());
+//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+//    }
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
@@ -379,6 +418,31 @@ public class LeadServiceImpl implements LeadService{
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
+    // меняем статус с нового на отправленное - начало
+
+    @Override
+    @Transactional
+    public void changeStatusLeadOnSendAndTelephone(Long leadId) {
+        Lead lead = findByLeadId(leadId)
+                .orElseThrow(() -> new EntityNotFoundException("Лид с id " + leadId + " не найден"));
+
+        if (lead.getTelephone() == null) {
+            throw new IllegalStateException("У лида нет привязанного телефона");
+        }
+
+        Telephone telephone = telephoneService.getTelephoneById(lead.getTelephone().getId());
+        telephone.setTimer(LocalDateTime.now().plusMinutes(3));
+        telephoneService.saveTelephone(telephone);
+
+        lead.setLidStatus("К рассылке");
+        lead.setUpdateStatus(LocalDate.now());
+        lead.setDateNewTry(LocalDate.now().plusDays(720));
+
+        leadsRepository.save(lead);
+    }
+
+    // меняем статус с нового на отправленное - конец
+
 
     // меняем статус с нового на отправленное - начало
     @Override

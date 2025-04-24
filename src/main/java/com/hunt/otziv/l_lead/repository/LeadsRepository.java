@@ -23,6 +23,18 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status")
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
 
+//    @Query("select l from Lead l where l.lidStatus = :status AND l.telephone.id = :telephoneId")
+//    Page<Lead> findAllByLidStatusByTelephoneId(Long telephoneId, String status, Pageable pageable);
+
+    @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND l.telephone.id = :telephoneId AND LOWER(l.commentsLead) LIKE LOWER(:keyword) ORDER BY l.createDate DESC LIMIT 1")
+    Optional<Lead> findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(Long telephoneId,
+                                                                                   String status,
+                                                                                   String keyword);
+
+    @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND l.telephone.id = :telephoneId ORDER BY l.createDate DESC LIMIT 1")
+    Optional<Lead> findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(Long telephoneId, String status);
+
+
     @Query("select l from Lead l where l.lidStatus = :status AND l.manager = :manager")
     List<Lead> findAllByLidListStatus(String status, Manager manager);
 

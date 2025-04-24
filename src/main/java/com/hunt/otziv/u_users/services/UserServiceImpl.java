@@ -64,8 +64,8 @@ public class UserServiceImpl  implements UserService {
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", username)
         ));
-        System.out.println(user.getUsername() + user.getPassword()
-                + user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).toList());
+//        System.out.println(user.getUsername() + user.getPassword()
+//                + user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).toList());
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
@@ -80,7 +80,7 @@ public class UserServiceImpl  implements UserService {
 
     @Override
     public List<RegistrationUserDTO> getAllUsers() { // Взять всех юзеров - начало
-        log.info("Берем все юзеров");
+//        log.info("Берем все юзеров");
         return userRepository.findAll().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());

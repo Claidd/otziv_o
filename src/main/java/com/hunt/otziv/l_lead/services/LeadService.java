@@ -32,11 +32,13 @@ public interface LeadService {
     List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
     List<Long> getAllLeadsByDate2Month(LocalDate localDate);
     List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status);
-
+    void changeStatusLeadOnSendAndTelephone(Long leadId);
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
     // метод вывода всех лидов
     Page<LeadDTO> getAllLeads(String status, String keyword, Principal principal, int pageNumber, int pageSize);
+    // метод вывода всех новых лидов по телефону
+    Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keyword, Principal principal, int pageNumber, int pageSize);
     // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
     Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize);
     // метод поиска одного лида по id и перевод его в дто

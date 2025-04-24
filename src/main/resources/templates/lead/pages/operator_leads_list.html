@@ -95,7 +95,7 @@
                                     <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
                                 </div>
                                 <div class="card__content_button">
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="post" th:action="'operators/status_send/' + ${lead.id}">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <button type="submit" class="card__text__lead-button ">отправил</button>
                                     </form>

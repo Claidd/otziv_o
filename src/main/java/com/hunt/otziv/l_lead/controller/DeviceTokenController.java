@@ -19,7 +19,6 @@ public class DeviceTokenController {
 
     @PostMapping("/device-token")
     public ResponseEntity<?> createToken(@RequestParam Long telephoneId, HttpServletResponse response) {
-        System.out.println(telephoneId);
         try {
             deviceTokenService.createDeviceToken(telephoneId, response);
             return ResponseEntity.ok().build();
