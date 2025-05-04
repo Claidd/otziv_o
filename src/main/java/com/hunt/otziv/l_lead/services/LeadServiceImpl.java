@@ -431,7 +431,7 @@ public class LeadServiceImpl implements LeadService{
         }
 
         Telephone telephone = telephoneService.getTelephoneById(lead.getTelephone().getId());
-        telephone.setTimer(LocalDateTime.now().plusMinutes(3));
+        telephone.setTimer(LocalDateTime.now().plusMinutes(telephone.getBlockTime()));
         telephoneService.saveTelephone(telephone);
 
         lead.setLidStatus("К рассылке");

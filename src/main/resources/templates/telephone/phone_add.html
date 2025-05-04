@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+
+    <title>Телефоны O! Company!</title>
+</head>
+<body>
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+    <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+    <div class="container mt-4">
+        <h2>Добавить новый телефон</h2>
+        <form method="post" th:action="@{/phone/add}" th:object="${phone}">
+            <div class="mb-3">
+                <label for="number" class="form-label">Номер телефона</label>
+                <input type="text" th:field="*{number}" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="fio" class="form-label">ФИО</label>
+                <input type="text" th:field="*{fio}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="amountAllowed" class="form-label">Разрешено отправлять</label>
+                <input type="number" th:field="*{amountAllowed}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="amountSent" class="form-label">Отправлено</label>
+                <input type="number" th:field="*{amountSent}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="blockTime" class="form-label">Длительность блокировки (мин)</label>
+                <input type="number" th:field="*{blockTime}" class="form-control">
+            </div>
+
+<!--            <div class="mb-3">-->
+<!--                <label for="timer" class="form-label">Таймер блокировки</label>-->
+<!--                <input type="datetime-local" name="timer"-->
+<!--                       th:value="${#temporals.format(phone.timer, 'yyyy-MM-dd''T''HH:mm')}"-->
+<!--                       class="form-control"/>-->
+<!--            </div>-->
+
+            <div class="mb-3">
+                <label for="googleLogin" class="form-label">Google логин</label>
+                <input type="text" th:field="*{googleLogin}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="googlePassword" class="form-label">Google пароль</label>
+                <input type="password" th:field="*{googlePassword}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="avitoPassword" class="form-label">Avito пароль</label>
+                <input type="password" th:field="*{avitoPassword}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="mailLogin" class="form-label">Mail логин</label>
+                <input type="text" th:field="*{mailLogin}" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="mailPassword" class="form-label">Mail пароль</label>
+                <input type="password" th:field="*{mailPassword}" class="form-control">
+            </div>
+
+<!--            <div class="mb-3">-->
+<!--                <label for="createDate" class="form-label">Дата создания</label>-->
+<!--                <input type="date" name="createDate"-->
+<!--                       th:value="${#temporals.format(phone.createDate, 'yyyy-MM-dd')}"-->
+<!--                       class="form-control"/>-->
+<!--            </div>-->
+
+<!--            <div class="mb-3">-->
+<!--                <label for="updateStatus" class="form-label">Дата обновления</label>-->
+<!--                <input type="datetime-local" name="updateStatus"-->
+<!--                       th:value="${#temporals.format(phone.updateStatus, 'yyyy-MM-dd''T''HH:mm')}"-->
+<!--                       class="form-control"/>-->
+<!--            </div>-->
+
+            <div class="mb-3">
+                <label for="foto_instagram" class="form-label">Ссылка на фото Instagram</label>
+                <input type="text" th:field="*{foto_instagram}" class="form-control">
+            </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" th:field="*{active}" class="form-check-input">
+                <label class="form-check-label" for="active">Активен</label>
+            </div>
+
+            <div class="mb-3">
+                <label for="operator" class="form-label">Оператор</label>
+                <select id="operator" th:field="*{operator.id}" class="form-select">
+                    <option value="">-- Выберите оператора --</option>
+                    <option th:each="op : ${operators}"
+                            th:value="${op.id}"
+                            th:text="${op.user.fio}">
+                    </option>
+                </select>
+            </div>
+
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+            <button type="submit" class="btn btn-success">Добавить</button>
+            <a th:href="@{/phone}" class="btn btn-secondary">Назад</a>
+        </form>
+    </div>
+
+
+    <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+<!--    <th:block th:insert="~{fragments/common :: backDen}"></th:block>-->
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+    <header th:replace="~{fragments/footer :: footer}"></header>
+</div>
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+</body>
+</html>

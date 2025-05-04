@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+
+    <title>Телефоны O! Company!</title>
+</head>
+<body>
+<div class="wrapper">
+    <header th:replace="~{fragments/header :: header}"></header>
+
+
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+    <div class="container mt-5">
+        <h2 class="section-title">СПИСОК ВСЕХ ТЕЛЕФОНОВ</h2>
+        <a class="btn btn-success" th:href="@{/phone/add}">➕ Добавить телефон</a>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Номер</th>
+                    <th scope="col">ФИО</th>
+                    <th scope="col">Разрешено</th>
+                    <th scope="col">Отправлено</th>
+                    <th scope="col">Блок (мин)</th>
+                    <th scope="col">Таймер</th>
+                    <th scope="col">Google логин</th>
+                    <th scope="col">Google пароль</th>
+                    <th scope="col">Avito пароль</th>
+                    <th scope="col">Mail логин</th>
+                    <th scope="col">Mail пароль</th>
+                    <th scope="col">Фото Instagram</th>
+                    <th scope="col">Активен</th>
+                    <th scope="col">Дата создания</th>
+                    <th scope="col">Обновлён</th>
+                    <th scope="col">Оператор</th>
+                    <th scope="col">Изменить</th>
+                    <th scope="col">Удалить</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="phone : ${all_phones}">
+                    <td scope="row" th:text="${phone.id}">ID</td>
+                    <td scope="row" th:text="${phone.number}">Номер</td>
+                    <td scope="row" th:text="${phone.fio}">ФИО</td>
+                    <td scope="row" th:text="${phone.amountAllowed}">Разрешеное кол-во</td>
+                    <td scope="row" th:text="${phone.amountSent}">Отправлено</td>
+                    <td scope="row" th:text="${phone.blockTime}">Время блока</td>
+                    <td scope="row" th:text="${#temporals.format(phone.timer, 'dd.MM.yyyy HH:mm')}">Таймер</td>
+                    <td scope="row" th:text="${phone.googleLogin}">Google логин</td>
+                    <td scope="row" th:text="${phone.googlePassword}">Google пароль</td>
+                    <td scope="row" th:text="${phone.avitoPassword}">Avito пароль</td>
+                    <td scope="row" th:text="${phone.mailLogin}">Mail логин</td>
+                    <td scope="row" th:text="${phone.mailPassword}">Mail пароль</td>
+                    <td scope="row" th:text="${phone.foto_instagram}">Instagram</td>
+                    <td scope="row" th:text="${phone.active ? 'Да' : 'Нет'}">Активен</td>
+                    <td scope="row" th:text="${#temporals.format(phone.createDate, 'dd.MM.yyyy')}">Создан</td>
+                    <td scope="row" th:text="${#temporals.format(phone.updateStatus, 'dd.MM.yyyy HH:mm')}">Обновлён</td>
+                    <td scope="row" th:text="${phone.operator != null && phone.operator.user != null ? phone.operator.user.fio : '—'}">Оператор</td>
+                    <td>
+                        <form th:method="get" th:action="@{'/phone/' + ${phone.id} + '/edit'}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Изменить</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form th:method="delete" th:action="@{'/phone/' + ${phone.id} + '/delete'}">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<!--    <th:block th:insert="~{fragments/common :: backDen}"></th:block>-->
+    <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ ЮЗЕРОВ------------------------------------------------------>
+    <header th:replace="~{fragments/footer :: footer}"></header>
+</div>
+<th:block th:insert="~{fragments/common :: js}"></th:block>
+</body>
+</html>

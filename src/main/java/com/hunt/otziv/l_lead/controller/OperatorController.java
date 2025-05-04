@@ -29,34 +29,44 @@ public class OperatorController {
     private final DeviceTokenService deviceTokenService;
 
     @GetMapping
-    public ModelAndView leadToOperator(Map<String, Object> model, @CookieValue(name = "device_token", required = false) String token, Principal principal, @RequestParam(defaultValue = "") String keyword, @RequestParam(defaultValue = "0") int pageNumber) {
+    public ModelAndView leadToOperator(
+            Map<String, Object> model,
+            @CookieValue(name = "device_token", required = false) String token,
+            Principal principal,
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "0") int pageNumber) {
+
         long startTime = System.nanoTime();
         LocalDateTime localDateTime = LocalDateTime.now();
 
         TelephoneIDAndTimeDTO telephone = resolveTelephoneId(token);
-        if (localDateTime.isAfter(telephone.getTime()) || localDateTime.isEqual(telephone.getTime())) {
-            boolean requireDeviceId = (telephone.getTelephoneID() == null);
 
-            Page<LeadDTO> leadsNew = leadService.getAllLeadsToOperator(telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+        boolean requireDeviceId = (telephone == null || telephone.getTelephoneID() == null);
+
+        if (telephone == null || localDateTime.isAfter(telephone.getTime()) || localDateTime.isEqual(telephone.getTime())) {
+
+            Page<LeadDTO> leadsNew = (telephone != null)
+                    ? leadService.getAllLeadsToOperator(
+                    telephone.getTelephoneID(), LeadStatus.NEW.title,
+                    keyword, principal, pageNumber, 10)
+                    : Page.empty();
 
             model.put("requireDeviceId", requireDeviceId);
             model.put("promoTexts", promoTextService.getAllPromoTexts());
             model.put("leadListNew", leadsNew);
 
-            logExecutionTime("Время выполнения operators/для телефона : " + telephone.getTelephoneID(), startTime);
+            logExecutionTime("Время выполнения operators/для телефона : " + (telephone != null ? telephone.getTelephoneID() : "null"), startTime);
             return new ModelAndView("lead/layouts/operators", model);
-        }
-        else {
-            boolean requireDeviceId = (telephone.getTelephoneID() == null);
+        } else {
             model.put("requireDeviceId", requireDeviceId);
             model.put("promoTexts", promoTextService.getAllPromoTexts());
-            model.put("leadListNew",  Page.empty());
+            model.put("leadListNew", Page.empty());
 
-            logExecutionTime("Время выполнения operators/для: ", startTime);
+            logExecutionTime("Время выполнения operators/для: (просрочено или null)", startTime);
             return new ModelAndView("lead/layouts/operators", model);
         }
-
     }
+
 
     // меняем статус с нового на отправленное - начало
     @PostMapping("/status_send/{leadId}")
@@ -68,14 +78,22 @@ public class OperatorController {
     }
     // меняем статус с нового на отправленное - конец
 
+
+
     private TelephoneIDAndTimeDTO resolveTelephoneId(String token) {
         if (token == null || token.isBlank()) {
+            log.warn("device_token отсутствует в cookies");
             return null;
         }
         TelephoneIDAndTimeDTO telephone = deviceTokenService.getTelephoneIdByToken(token);
-        log.debug("Получен telephoneId из токена: {}", telephone.getTelephoneID());
+        if (telephone == null) {
+            log.warn("Токен [{}] не найден в базе", token);
+        } else {
+            log.debug("Получен telephoneId из токена: {}", telephone.getTelephoneID());
+        }
         return telephone;
     }
+
 
     private void logExecutionTime(String label, long startTime) {
         long endTime = System.nanoTime();

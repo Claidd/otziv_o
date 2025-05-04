@@ -79,6 +79,8 @@ public class SecurityConfig {
                                         .requestMatchers("/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                                         .requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER","MANAGER")
                                         .requestMatchers("/cities/**").hasAnyRole("ADMIN", "OWNER","MANAGER")
+                                        .requestMatchers("/phone").hasAnyRole("ADMIN", "OWNER")
+                                        .requestMatchers("/phone/**").hasAnyRole("ADMIN", "OWNER")
 //                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
                 )
                 //    настройка логирования
