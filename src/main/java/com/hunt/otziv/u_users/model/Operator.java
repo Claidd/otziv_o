@@ -22,6 +22,9 @@ public class Operator {
     @Column(name = "operator_id")
     private Long id;
 
+    @Column(name = "operator_count")
+    private int count;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

@@ -22,29 +22,28 @@ import java.util.Set;
 @Table(name = "telephones")
 public class Telephone {
 
-    // ID телефона
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "telephone_id")
-    private Long id;
+    private Long id; // ID телефона
 
-    // Номер телефона Яндекс, ВК, Озон, Вайлдбериес
     @Column(name = "telephone_number")
-    private String number;
+    private String number; // Номер телефона Яндекс, ВК, Озон, Вайлдбериес
 
-    // ФИО аккаунта в соц. сетях
     @Column(name = "telephone_fio")
-    private String fio;
+    private String fio; // ФИО аккаунта в соц. сетях
 
-    // Назначенный за телефоном Оператор
+    @Column(name = "telephone_birthday")
+    private LocalDate birthday; // Номер телефона Яндекс, ВК, Озон, Вайлдбериес
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "telephone_operator", unique = false, nullable = true)
-    private Operator telephoneOperator;
+    private Operator telephoneOperator; // Назначенный за телефоном Оператор
 
     // Список лидов для оператора
     @OneToMany(mappedBy = "telephone", fetch = FetchType.LAZY)
     private Set<Lead> telephoneOperatorLids;
-
 
     // Список токенов устройства, привязанных к телефону
     @OneToMany(mappedBy = "telephone", cascade = CascadeType.ALL, orphanRemoval = true)

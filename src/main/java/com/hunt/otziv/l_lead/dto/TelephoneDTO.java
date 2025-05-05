@@ -25,6 +25,9 @@ public class TelephoneDTO {
     // ФИО аккаунта в соц. сетях
     private String fio;
 
+    // Дата рождения
+    private LocalDate birthday;
+
     // Кол-во разрешенных отправляемых
     private int amountAllowed;
 

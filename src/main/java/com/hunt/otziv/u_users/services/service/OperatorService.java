@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.services.service;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Arrays;
 import java.util.List;
@@ -33,4 +34,11 @@ public interface OperatorService {
 
 
     List<Operator> getAllOperatorsToManager(Manager manager);
+
+    void save(Operator operator);
+
+    Operator getOperatorByTelephoneId(Long telephoneId);
+
+//    @Query("SELECT o FROM Operator o JOIN o.telephones t WHERE t.id = :telephoneId")
+//    Operator getOperatorByTelephoneId(Long TelephoneId);
 }

@@ -29,6 +29,13 @@
             </div>
 
             <div class="mb-3">
+                <label for="birthday" class="form-label">Дата рождения</label>
+                <input type="date" name="birthday"
+                       th:value="${#temporals.format(phone.birthday, 'yyyy-MM-dd')}"
+                       class="form-control"/>
+            </div>
+
+            <div class="mb-3">
                 <label for="amountAllowed" class="form-label">Разрешено отправлять</label>
                 <input type="number" th:field="*{amountAllowed}" class="form-control">
             </div>

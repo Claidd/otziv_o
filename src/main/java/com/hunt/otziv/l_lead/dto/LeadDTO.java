@@ -50,6 +50,8 @@ public class LeadDTO {
     private Manager manager;
     private Marketolog marketolog;
 
+    private Long operatorId;
+
 //    ПОЯСНЕНИЕ:
 //  Класс LeadDTO является простым Java-классом, который представляет DTO (Data Transfer Object) для класса Lead.
 //    В DTO используются те же поля, что и в классе Lead, за исключением ассоциации с объектом User. Вместо этого,

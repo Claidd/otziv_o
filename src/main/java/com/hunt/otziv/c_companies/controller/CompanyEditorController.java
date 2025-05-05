@@ -14,6 +14,7 @@ import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.c_companies.util.CompanyValidation;
 import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.validation.Valid;
@@ -40,6 +41,50 @@ public class CompanyEditorController {
     private final SubCategoryService subCategoryService;
     private final CityService cityService;
     private final CompanyValidation companyValidation;
+
+    @GetMapping("/new_company_to_operator/{leadId}")
+    String newCompanyToOperator(@PathVariable final Long leadId, Principal principal, Model model) { // Добавление новой компании из лида Менеджера
+        model.addAttribute("newCompany", companyService.convertToDtoToOperator(leadId, principal));
+        List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+        model.addAttribute("categories", categories);
+        List<CityDTO> citiesList = cityService.getAllCities().stream().sorted(Comparator.comparing(CityDTO::getCityTitle)).toList();
+        model.addAttribute("cities", citiesList);
+        model.addAttribute("leadId", leadId);
+        return "companies/new_company_to_operator";
+    } // Добавление новой компании из лида Менеджера
+
+    @PostMapping("/new_company_to_operator")
+    String saveNewCompanyToOperator(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, @ModelAttribute("leadId") Long leadId, Model model) { // Добавление новой компании из лида Менеджера
+        log.info("1.Начинаем сохранение компании");
+        companyValidation.validate(companyDTO, bindingResult);
+        if (bindingResult.hasErrors()) {
+            log.info("1.1 Вошли в ошибку");
+            CompanyDTO companyDTO1 = companyService.convertToDtoToManager(leadId, principal);
+            companyDTO.setUser(companyDTO1.getUser());
+            model.addAttribute("newCompany", companyDTO);
+            List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
+            model.addAttribute("categories", categories);
+            model.addAttribute("leadId", leadId);
+            List<CityDTO> citiesList = cityService.getAllCities().stream().sorted(Comparator.comparing(CityDTO::getCityTitle)).toList();
+            model.addAttribute("cities", citiesList);
+            model.addAttribute("errorUrl", "Категории слетели из-за повтора филиала: обновите");
+            return "redirect:/operators";
+        }
+        else if (companyService.save(companyDTO)) {
+            log.info("OK.Начинаем сохранение компании прошло успешно");
+//            for (Company company : companyService.getAllCompaniesList()) {
+            log.info("вход в меняем статус с К рассылке на В работе");
+            leadService.changeStatusLeadOnInWork(leadId);
+            leadService.changeCountToOperator(leadId);
+            log.info("статус успешно сменен К рассылке на В работе");
+//                System.out.println(company);
+//            }
+            return "redirect:/operators";
+        } else {
+            log.info("ERROR.Начинаем сохранение компании прошло НЕ успешно");
+            return "redirect:/operators";
+        }
+    } // Добавление новой компании из лида Менеджера
 
 
     @GetMapping("/new_company_to_manager/{leadId}")

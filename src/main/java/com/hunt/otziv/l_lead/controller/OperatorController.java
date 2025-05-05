@@ -37,35 +37,38 @@ public class OperatorController {
             @RequestParam(defaultValue = "0") int pageNumber) {
 
         long startTime = System.nanoTime();
-        LocalDateTime localDateTime = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
 
         TelephoneIDAndTimeDTO telephone = resolveTelephoneId(token);
-
         boolean requireDeviceId = (telephone == null || telephone.getTelephoneID() == null);
+        boolean hasKeyword = !keyword.isEmpty();
+        boolean isTimerExpired = (telephone != null && (now.isAfter(telephone.getTime()) || now.isEqual(telephone.getTime())));
 
-        if (telephone == null || localDateTime.isAfter(telephone.getTime()) || localDateTime.isEqual(telephone.getTime())) {
+        Page<LeadDTO> leadsNew = Page.empty();
 
-            Page<LeadDTO> leadsNew = (telephone != null)
-                    ? leadService.getAllLeadsToOperator(
-                    telephone.getTelephoneID(), LeadStatus.NEW.title,
-                    keyword, principal, pageNumber, 10)
-                    : Page.empty();
+        if (hasKeyword && telephone != null) {
+            // С ключом — всегда показываем лиды
+            leadsNew = leadService.getAllLeadsToOperator(
+                    telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+            logExecutionTime("С ключом — загрузка лидов без проверки таймера", startTime);
 
-            model.put("requireDeviceId", requireDeviceId);
-            model.put("promoTexts", promoTextService.getAllPromoTexts());
-            model.put("leadListNew", leadsNew);
+        } else if (!hasKeyword && telephone != null && isTimerExpired) {
+            // Без ключа — только если таймер истёк
+            leadsNew = leadService.getAllLeadsToOperator(
+                    telephone.getTelephoneID(), LeadStatus.NEW.title, "", principal, pageNumber, 10);
+            logExecutionTime("Без ключа и с истекшим таймером — загрузка лидов", startTime);
 
-            logExecutionTime("Время выполнения operators/для телефона : " + (telephone != null ? telephone.getTelephoneID() : "null"), startTime);
-            return new ModelAndView("lead/layouts/operators", model);
         } else {
-            model.put("requireDeviceId", requireDeviceId);
-            model.put("promoTexts", promoTextService.getAllPromoTexts());
-            model.put("leadListNew", Page.empty());
-
-            logExecutionTime("Время выполнения operators/для: (просрочено или null)", startTime);
-            return new ModelAndView("lead/layouts/operators", model);
+            logExecutionTime("Условия не выполнены — лиды не загружены", startTime);
         }
+
+        model.put("requireDeviceId", requireDeviceId);
+        model.put("promoTexts", promoTextService.getAllPromoTexts());
+        model.put("leadListNew", leadsNew);
+
+        return new ModelAndView("lead/layouts/operators", model);
     }
+
 
 
     // меняем статус с нового на отправленное - начало
@@ -77,6 +80,8 @@ public class OperatorController {
         return "redirect:/operators";
     }
     // меняем статус с нового на отправленное - конец
+
+
 
 
 

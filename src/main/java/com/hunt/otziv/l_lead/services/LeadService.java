@@ -82,6 +82,8 @@ public interface LeadService {
 
     Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
+    void changeCountToOperator(Long leadId);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

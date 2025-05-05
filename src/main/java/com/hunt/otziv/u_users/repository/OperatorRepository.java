@@ -29,4 +29,8 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
 
     @Query("SELECT DISTINCT o FROM Operator o LEFT JOIN FETCH o.user u LEFT JOIN FETCH o.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
     List<Operator> findAllOperators();
+
+    @Query("SELECT o FROM Operator o JOIN o.telephones t WHERE t.id = :telephoneId")
+    Operator getOperatorByTelephoneId(Long telephoneId);
+
 }

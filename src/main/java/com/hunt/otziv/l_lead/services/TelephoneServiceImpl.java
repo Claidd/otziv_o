@@ -99,6 +99,11 @@ public class TelephoneServiceImpl implements TelephoneService {
             changed = true;
         }
 
+        if (!Objects.equals(existing.getBirthday(), dto.getBirthday())) {
+            existing.setBirthday(dto.getBirthday());
+            changed = true;
+        }
+
         if (!Objects.equals(existing.getUpdateStatus(), dto.getUpdateStatus())) {
             existing.setUpdateStatus(dto.getUpdateStatus()); // это поле можно не трогать, если ты хочешь сам выставлять текущее время ниже
             changed = true;
@@ -143,6 +148,7 @@ public class TelephoneServiceImpl implements TelephoneService {
                 .id(tel.getId())
                 .number(tel.getNumber())
                 .fio(tel.getFio())
+                .birthday(tel.getBirthday())
                 .amountAllowed(tel.getAmountAllowed())
                 .amountSent(tel.getAmountSent())
                 .blockTime(tel.getBlockTime())
@@ -164,7 +170,7 @@ public class TelephoneServiceImpl implements TelephoneService {
         return TelephoneDTO.builder()
                 .active(true) // ✅ по умолчанию активен
                 .number("+7")
-                .amountAllowed(0)
+                .amountAllowed(1)
                 .amountSent(0)
                 .blockTime(3)
                 .build();
@@ -183,6 +189,7 @@ public class TelephoneServiceImpl implements TelephoneService {
                 .id(null)
                 .number(dto.getNumber())
                 .fio(dto.getFio())
+                .birthday(dto.getBirthday() != null ? dto.getBirthday() : LocalDate.now())
                 .amountAllowed(dto.getAmountAllowed())
                 .amountSent(dto.getAmountSent())
                 .blockTime(dto.getBlockTime())

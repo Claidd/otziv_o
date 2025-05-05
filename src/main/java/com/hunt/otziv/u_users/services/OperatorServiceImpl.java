@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Set;
 
 @Service
 @Slf4j
@@ -77,6 +76,16 @@ public class OperatorServiceImpl implements OperatorService {
     @Override
     public List<Operator> getAllOperatorsToManager(Manager manager) {
         return operatorRepository.findAllToManagerOperators(manager.getUser().getOperators());
+    }
+
+    @Override
+    public void save(Operator operator) {
+        operatorRepository.save(operator);
+    }
+
+    @Override
+    public Operator getOperatorByTelephoneId(Long telephoneId) {
+        return operatorRepository.getOperatorByTelephoneId(telephoneId);
     }
 
 }

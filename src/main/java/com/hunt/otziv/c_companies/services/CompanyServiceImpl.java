@@ -28,9 +28,11 @@ import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
+import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +64,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
     private final ReviewService reviewService;
-    private final ReviewArchiveService reviewArchiveService;
+    private final OperatorService operatorService;
 
     @Transactional
     public void save(Company company){
@@ -117,6 +119,7 @@ public class CompanyServiceImpl implements CompanyService{
                 filial.setCompany(company1); // Установка компании в филиале
                 filialService.save(filial); // Сохранение обновленного филиала
             }
+
             return true;
         } catch (Exception e) {
             log.error("ОШИБКА при сохранении компании: " + e.getMessage());
@@ -238,10 +241,10 @@ public class CompanyServiceImpl implements CompanyService{
             companyPage = companyRepository.findAll(companyId);
         }
         else{
-            companyId = companyRepository.findAllByManagerListAndStatus(managerList, status);
+            companyId = companyRepository.findAllByOwnerAndStatusToOwner(managerList, status);
             companyPage = companyRepository.findAll(companyId);
         }
-        return getPageIsAfter(companyPage,pageNumber,pageSize);
+        return getPage(companyPage,pageNumber,pageSize);
     } // Берем все заказы Владельца + поиск + статус
 
     @Override
@@ -347,6 +350,49 @@ public class CompanyServiceImpl implements CompanyService{
         return companyDTO;
     } //    Метод подготовки ДТО при создании компании из Лида менеджером
 
+    public CompanyDTO convertToDtoToOperator(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида оператора
+        LeadDTO leadDTO = leadService.findById(leadId);
+        Operator operator = operatorService.getOperatorById(leadDTO.getOperatorId());
+        System.out.println("Оператор " + operator);
+        int countManagers = operator.getCount();
+
+        if (countManagers >= 1) {
+            SecureRandom random = new SecureRandom();
+            User user = userService.findByUserName("hunt").orElseThrow();
+            return getCompanyDTO(principal, leadDTO, random, user);
+        }
+        else {
+            SecureRandom random = new SecureRandom();
+            User user = userService.findByUserName("mia").orElseThrow();
+            return getCompanyDTO(principal, leadDTO, random, user);
+        }
+    } //    Метод подготовки ДТО при создании компании из Лида оператора
+
+    private CompanyDTO getCompanyDTO(Principal principal, LeadDTO leadDTO, SecureRandom random, User user) {
+        List<Manager> managers = new ArrayList<>(user.getManagers());
+        if (!managers.isEmpty()) {
+            Manager manager = managers.get(random.nextInt(managers.size()));
+            System.out.println("Новая компания создается для менеджера: " + manager);
+            List<Worker> workers = new ArrayList<>(manager.getUser().getWorkers());
+            Worker randomWorker = workers.get(random.nextInt(workers.size()));
+            System.out.println("Новая компания создается для работника: " + randomWorker);
+            CompanyDTO companyDTO = new CompanyDTO();
+            companyDTO.setTelephone(leadDTO.getTelephoneLead());
+            companyDTO.setCity(leadDTO.getCityLead());
+            companyDTO.setUser(convertToUserDto(manager.getUser()));
+            companyDTO.setOperator(leadDTO.getOperator().getUser().getFio());
+            companyDTO.setManager(convertToManagerDto(manager));
+            companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
+            companyDTO.setFilial(new FilialDTO());
+            companyDTO.setWorker(convertToWorkerDTO(randomWorker));
+            return companyDTO;
+            // Используй manager
+        } else {
+            // Обработка случая, когда у пользователя нет менеджеров
+            throw new IllegalStateException("У пользователя mia нет менеджеров");
+        }
+    }
+
     public CompanyDTO convertToDtoToManagerNotLead(Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
         List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
         var random = new SecureRandom();
@@ -365,6 +411,10 @@ public class CompanyServiceImpl implements CompanyService{
         return companyDTO;
     } //    Метод подготовки ДТО при создании компании из Лида менеджером
 
+
+
+
+
     @Override
     public int getAllCompanyDTOByStatus(String status) {
         return companyRepository.findAllIdByStatus(status).size();
@@ -377,7 +427,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status) {
-        return companyRepository.findAllByOwnerAndStatus(managerList, status).size();
+        return companyRepository.findAllByOwnerAndStatus2(managerList, status).size();
     }
 
     @Override

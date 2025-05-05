@@ -236,7 +236,7 @@ public class LeadServiceImpl implements LeadService{
         Optional<Lead> lead;
 
         if (keywords != null && !keywords.isEmpty()) {
-            lead = leadsRepository.findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(telephoneId, status, "%" + keywords + "%");
+            lead = leadsRepository.findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(telephoneId, "%" + keywords + "%");
         } else {
             lead = leadsRepository.findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(telephoneId, status);
         }
@@ -426,12 +426,18 @@ public class LeadServiceImpl implements LeadService{
         Lead lead = findByLeadId(leadId)
                 .orElseThrow(() -> new EntityNotFoundException("Лид с id " + leadId + " не найден"));
 
-        if (lead.getTelephone() == null) {
-            throw new IllegalStateException("У лида нет привязанного телефона");
+        Telephone telephone = Optional.ofNullable(lead.getTelephone())
+                .orElseThrow(() -> new IllegalStateException("У лида нет привязанного телефона"));
+
+        int updatedSentCount = telephone.getAmountSent() + 1;
+
+        if (updatedSentCount >= telephone.getAmountAllowed()) {
+            telephone.setTimer(LocalDateTime.now().plusMinutes(telephone.getBlockTime()));
+            telephone.setAmountSent(0); // сброс счётчика
+        } else {
+            telephone.setAmountSent(updatedSentCount);
         }
 
-        Telephone telephone = telephoneService.getTelephoneById(lead.getTelephone().getId());
-        telephone.setTimer(LocalDateTime.now().plusMinutes(telephone.getBlockTime()));
         telephoneService.saveTelephone(telephone);
 
         lead.setLidStatus("К рассылке");
@@ -440,6 +446,7 @@ public class LeadServiceImpl implements LeadService{
 
         leadsRepository.save(lead);
     }
+
 
     // меняем статус с нового на отправленное - конец
 
@@ -619,6 +626,7 @@ public class LeadServiceImpl implements LeadService{
                 .operator(lead.getOperator())
                 .manager(lead.getManager())
                 .marketolog(lead.getMarketolog())
+                .operatorId(lead.getTelephone().getTelephoneOperator().getId())
                 .build();
     } // Перевод юзера в дто - конец
 
@@ -713,6 +721,23 @@ public class LeadServiceImpl implements LeadService{
         }
 //        System.out.println(resultMap);
         return resultMap;
+    }
+
+    @Override
+    public void changeCountToOperator(Long leadId) {
+        Lead lead = leadsRepository.findById(leadId).orElseThrow();
+        Operator operator = lead.getTelephone().getTelephoneOperator();
+//        Operator operator = operatorService.getOperatorByTelephoneId(lead.getTelephone().getId());
+        System.out.println(operator);
+        int count = operator.getCount();
+        if (count == 0){
+            operator.setCount(1);
+        }
+        if (count >= 1){
+            operator.setCount(0);
+        }
+        operatorService.save(operator);
+        log.info("поменяли счетчик выбора менеджера");
     }
 
 

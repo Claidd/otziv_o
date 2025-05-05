@@ -53,5 +53,5 @@ public interface CompanyService {
     int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status);
 
 
-
+    CompanyDTO convertToDtoToOperator(Long leadId, Principal principal);
 }

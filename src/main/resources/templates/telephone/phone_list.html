@@ -25,6 +25,7 @@
                     <th scope="col">ID</th>
                     <th scope="col">Номер</th>
                     <th scope="col">ФИО</th>
+                    <th scope="col">Рождение</th>
                     <th scope="col">Разрешено</th>
                     <th scope="col">Отправлено</th>
                     <th scope="col">Блок (мин)</th>
@@ -34,7 +35,7 @@
                     <th scope="col">Avito пароль</th>
                     <th scope="col">Mail логин</th>
                     <th scope="col">Mail пароль</th>
-                    <th scope="col">Фото Instagram</th>
+                    <th scope="col">Фото</th>
                     <th scope="col">Активен</th>
                     <th scope="col">Дата создания</th>
                     <th scope="col">Обновлён</th>
@@ -48,6 +49,7 @@
                     <td scope="row" th:text="${phone.id}">ID</td>
                     <td scope="row" th:text="${phone.number}">Номер</td>
                     <td scope="row" th:text="${phone.fio}">ФИО</td>
+                    <td scope="row" th:text="${phone.birthday}">Рождение</td>
                     <td scope="row" th:text="${phone.amountAllowed}">Разрешеное кол-во</td>
                     <td scope="row" th:text="${phone.amountSent}">Отправлено</td>
                     <td scope="row" th:text="${phone.blockTime}">Время блока</td>

@@ -55,7 +55,7 @@
                                 </div>
                                 <div class="card__remember__box-serch">
 
-                                        <form class="card_remember-search" th:method="get" th:action="@{/lead}">
+                                        <form class="card_remember-search" th:method="get" th:action="@{/operators}">
                                             <!-- The text field -->
                                             <input class="card_remember-search__text" type="text" value="" name="keyword" id="keyword">
                                             <!-- The button used to copy the text -->
@@ -100,7 +100,7 @@
                                         <button type="submit" class="card__text__lead-button ">отправил</button>
                                     </form>
 
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_operator/' + ${lead.id}">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <button type="submit" class="card__text__lead-button ">в работу</button>
                                     </form>
