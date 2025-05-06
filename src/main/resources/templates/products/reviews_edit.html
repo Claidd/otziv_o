@@ -86,9 +86,21 @@
                                             </p>
 
                                         </div>
-                                        <div  class="company__card__content__review__text">
-                                            <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
-                                        </div> 
+                                        <div class="company__card__content__review__text">
+                                            <textarea
+                                                    class="company__card__text__review expandable-textarea"
+                                                    th:field="*{reviews[__${itemStat.index}__].text}"
+                                                    onclick="expandTextarea(this)"
+                                                    data-id="review-text-${itemStat.index}"
+                                                    id="review-text-${itemStat.index}"
+                                            ></textarea>
+                                        </div>
+
+                                        <!-- Кнопка закрытия (вставляется динамически в JS) -->
+
+                                        <!--                                        <div  class="company__card__content__review__text">-->
+<!--                                            <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>-->
+<!--                                        </div> -->
                                         <div class="company__card__content__subtitle">
                                             <a class="company__card__title__lead2" >Замечания:</a>
                                         </div>
@@ -253,9 +265,9 @@
                                 <div th:each="item, itemStat : *{reviews}" class="company__card__lead" style="display: none;">
                                     <div class="company__card__content__lead" >
                                         <!-- элементы карточки - начало -->
-                                        <div class="company__card__content__subtitle">
-                                            <a class="company__card__title__lead2" >текст отзыва:</a>
-                                        </div>
+<!--                                        <div class="company__card__content__subtitle">-->
+<!--                                            <a class="company__card__title__lead2" >текст отзыва:</a>-->
+<!--                                        </div>-->
                                         <div  class="company__card__content__review__text">
                                             <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
                                         </div> 
@@ -363,6 +375,42 @@
         </section> 
         <!-- section -->
 
+        <script>
+            function expandTextarea(textarea) {
+                if (document.getElementById("textarea-wrapper")) return;
+
+                // Создаем обертку
+                const wrapper = document.createElement("div");
+                wrapper.className = "textarea-wrapper";
+                wrapper.id = "textarea-wrapper";
+
+                // Клонируем textarea
+                const clone = textarea.cloneNode(true);
+                clone.value = textarea.value;
+                clone.oninput = () => textarea.value = clone.value;
+
+                // Подсказка
+                const note = document.createElement("div");
+                note.className = "note";
+                note.innerText = "1 — внесите правки, 2 — нажмите вернуться, 3 — нажмите сохранить";
+
+                // Кнопка
+                const closeBtn = document.createElement("button");
+                closeBtn.className = "back-btn";
+                closeBtn.innerText = "Вернуться";
+                closeBtn.onclick = function () {
+                    wrapper.remove();
+                    document.body.style.overflow = "";
+                };
+
+                wrapper.appendChild(clone);
+                wrapper.appendChild(note);
+                wrapper.appendChild(closeBtn);
+
+                document.body.appendChild(wrapper);
+                document.body.style.overflow = "hidden";
+            }
+        </script>
 
         <!-- ===================== MAIN END ======================== -->
 

@@ -3056,6 +3056,55 @@ main .recent-orders a{
         width: 100%;
     }
 
+
+
+
+    /* ==================== ОТКРЫТИЕ МЕНЮ РЕДАКТИРОВАНИЯ ТЕКСТА ДЛЯ КЛИЕНТА =================== */
+    .textarea-wrapper {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #fff;
+        z-index: 9999;
+        overflow-y: auto;
+        padding: 20px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+    }
+
+    .textarea-wrapper textarea {
+        font-size: 30px;
+        line-height: 1.5;
+        width: 100%;
+        max-width: 600px;
+        min-height: 400px;
+        padding: 10px;
+        box-sizing: border-box;
+        font-family: "Times New Roman", Times, serif;
+    }
+
+    .textarea-wrapper .note {
+        margin-top: 20px;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .textarea-wrapper .back-btn {
+        margin-top: 10px;
+        background: #4CAF50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    /* ==================== ОТКРЫТИЕ МЕНЮ РЕДАКТИРОВАНИЯ ТЕКСТА ДЛЯ КЛИЕНТА =================== */
 }
 
     /* ==================== 470 =================== */
