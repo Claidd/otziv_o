@@ -60,4 +60,6 @@ public interface OrderService {
     Map<String, Long> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     Map<String, Map<String, Long>>  getAllOrdersToMonthByStatus(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth, String orderInNew, String orderToCheck, String orderInCheck, String orderInCorrect, String orderInPublished, String orderInWaitingPay1, String orderInWaitingPay2, String orderNoPay);
+
+    void save(Order order);
 }

@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -34,6 +35,7 @@ public class ReviewController {
     private final ReviewService reviewService;
     private final OrderDetailsService orderDetailsService;
     private final OrderService orderService;
+    private final ProductService productService;
 
     //    =========================================== REVIEW EDIT =======================================================
     @GetMapping("/editReview/{reviewId}")
@@ -41,6 +43,7 @@ public class ReviewController {
         System.out.println("Вошли в обновление " + reviewService.getReviewDTOById(reviewId));
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
         model.addAttribute("reviewDTO", reviewDTO);
+        model.addAttribute("products", productService.findAll());
         model.addAttribute("companyId", reviewDTO.getOrderDetails().getOrder().getCompany().getId());
         model.addAttribute("orderId", reviewDTO.getOrderDetails().getOrder().getId());
         return "products/review_edit";

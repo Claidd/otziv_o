@@ -36,7 +36,15 @@
                         <div class="company__card__text__lead2" th:text="${review.answer}">Ответ на отзыв</div>
                     </div>
                     <div class="company__card__content__product">
-                        <a class="company__card__title__bot" th:text="${review.botFio + ' ' + review.botCounter}">ФИО бота</a>
+<!--                        <a class="company__card__title__bot" th:text="${review.botFio + ' ' + review.botCounter}">ФИО бота</a>-->
+<!--                        <a class="company__card__title__bot" -->
+<!--                           th:text="${review.botFio + ' ' + review.botCounter + (review.product != null and review.product.photo ? ' + ФОТО' : '')}">-->
+<!--                            ФИО бота-->
+<!--                        </a>-->
+                        <a class="company__card__title__bot">
+                            <span th:text="${review.botFio + ' ' + review.botCounter}">ФИО бота</span>
+                            <span th:if="${review.product != null and review.product.photo}" style="color:red;"> + ФОТО</span>
+                        </a>
                     </div>
                     <div class="company__card__content_button">
                         <div class="company__card__text__lead"> <!-- Bot Login -->

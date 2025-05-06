@@ -5,6 +5,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -14,6 +15,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -64,6 +66,16 @@ public class Review {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_worker")
     private Worker worker;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_product")
+    private Product product;
+
+    @Column(name = "review_price")
+    private BigDecimal price;
+
+    @Column(name = "review_url")
+    private String url;
 
     @Override
     public boolean equals(Object o) {

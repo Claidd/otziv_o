@@ -7,6 +7,11 @@
     <section class="company__lead__card">
         <div class="container">
             <h2 class="company__section-title">Оператор</h2>
+            <div class="mb-3" th:if="${saveSuccess}">
+                <div class="alert alert-success">
+                    Данные успешно изменены и сохранены.
+                </div>
+            </div>
 
             <div class="menu-container">
                 <button class="menu-toggle" onclick="toggleMenu()">Меню</button>
@@ -15,9 +20,9 @@
 
                     <div class="company__tabs__lead">
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
-                        <div class="tabs__btn__lead">
-                            <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Отправить</button>
-                        </div>
+<!--                        <div class="tabs__btn__lead">-->
+<!--                            <button class="tabs__btn__lead-item tabs__btn__lead-item&#45;&#45;active" data-button="content-1">Отправить</button>-->
+<!--                        </div>-->
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
 
                         <div class="tabs__content-lead">

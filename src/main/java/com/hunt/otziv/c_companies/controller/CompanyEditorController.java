@@ -24,6 +24,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.util.Comparator;
@@ -54,7 +55,7 @@ public class CompanyEditorController {
     } // Добавление новой компании из лида Менеджера
 
     @PostMapping("/new_company_to_operator")
-    String saveNewCompanyToOperator(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, @ModelAttribute("leadId") Long leadId, Model model) { // Добавление новой компании из лида Менеджера
+    String saveNewCompanyToOperator(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, @ModelAttribute("leadId") Long leadId, RedirectAttributes rm, Model model) { // Добавление новой компании из лида Менеджера
         log.info("1.Начинаем сохранение компании");
         companyValidation.validate(companyDTO, bindingResult);
         if (bindingResult.hasErrors()) {
@@ -77,6 +78,7 @@ public class CompanyEditorController {
             leadService.changeStatusLeadOnInWork(leadId);
             leadService.changeCountToOperator(leadId);
             log.info("статус успешно сменен К рассылке на В работе");
+            rm.addFlashAttribute("saveSuccess", "true");
 //                System.out.println(company);
 //            }
             return "redirect:/operators";

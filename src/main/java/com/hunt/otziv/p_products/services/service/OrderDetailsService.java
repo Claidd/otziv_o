@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.services.service;
 
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 
 import java.util.UUID;
@@ -15,4 +16,6 @@ public interface OrderDetailsService {
     void deleteOrderDetailsById(UUID orderDetailId);
 
     void deleteOrderDetails(OrderDetails orderDetails);
+
+    void saveOrder(Order order);
 }

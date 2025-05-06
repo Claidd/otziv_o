@@ -128,7 +128,12 @@
                         <div>
                             <div class="company__card__content__city">
                                 <button type="submit" class="company__card__text__lead-fioWorker" th:text="${review.workerFio}">ФИО Работника</button>
-                                <button type="submit" class="company__card__text__lead-fioWorker" th:text="${review.productTitle}">Название Заказа</button>
+                                <button type="submit"
+                                        class="company__card__text__lead-fioWorker"
+                                        style="color: red;"
+                                        th:text="${review.product.photo} ? 'ФОТО' : ''"> Указание фото
+                                </button>
+<!--                                <button type="submit" class="company__card__text__lead-fioWorker" th:text="${review.productTitle}">Название Заказа</button>-->
                             </div>
                     </div> 
 

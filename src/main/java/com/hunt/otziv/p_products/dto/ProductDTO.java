@@ -21,4 +21,6 @@ public class ProductDTO {
     private BigDecimal price;
 
     private ProductCategory productCategory;
+
+    private boolean photo;
 }

@@ -11,7 +11,9 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderDetailsRepository;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 public class OrderDetailsServiceImpl implements OrderDetailsService {
 
     private final OrderDetailsRepository orderDetailsRepository;
+    private final OrderRepository orderRepository;
     @Override
     public OrderDetails save(OrderDetails orderDetails) { // Сохранить детали заказ в БД
         return orderDetailsRepository.save(orderDetails);
@@ -48,9 +51,13 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         orderDetailsRepository.delete(orderDetails);
     }
 
+    @Override
+    public void saveOrder(Order order) {
+        orderRepository.save(order);
+    }
 
 
-    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){ // Взять детали дто по Id
+    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
         return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
     } // Взять детали дто по Id
 
@@ -113,6 +120,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .publish(review.isPublish())
                 .publishedDate(review.getPublishedDate())
                 .botName(review.getBot().getFio())
+                .product(review.getProduct())
                 .build();
     } // перевод отзыва в дто
 

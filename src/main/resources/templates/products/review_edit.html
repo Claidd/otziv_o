@@ -44,6 +44,12 @@
                             <input type="text" id="comment" th:field="*{comment}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('comment')}" th:text="${err}">Validation error</small>
                         </div>
+
+                        <div class="form-group">
+                            <label for="url">url для фото</label>
+                            <textarea type="text" id="url" th:field="*{url}" class="form-control"> </textarea>
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('url')}" th:text="${err}">Validation error</small>
+                        </div>
                         
                         <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="form-group">
                             <label for="created">Дата создания</label>
@@ -85,6 +91,18 @@
                             <label for="botName">Имя Бота</label>
                             <input type="text" id="botFIO" th:field="*{botName}" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('botName')}" th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="product" class="form-label">Продукт</label>
+                            <select id="operator" th:field="*{product.id}" class="form-select">
+                                <option value="">-- Выберите продукта --</option>
+                                <option th:each="prod : ${products}"
+                                        th:value="${prod.id}"
+                                        th:text="${prod.title}"
+                                        th:selected="${reviewDTO.product != null and prod.id == reviewDTO.product.id}">
+                                </option>
+                            </select>
                         </div>
                         
                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">

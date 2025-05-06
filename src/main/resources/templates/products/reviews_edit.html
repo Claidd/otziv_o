@@ -81,6 +81,10 @@
                                         <!-- элементы карточки - начало -->
                                         <div class="company__card__content__subtitle">
                                             <p sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER', 'WORKER')" th:text="*{reviews[__${itemStat.index}__].botName}">ТЕКСТ ОТЗЫВА:</p>
+                                            <p th:if="${item.product != null and item.product.photo}">
+                                                &nbsp;ФОТО
+                                            </p>
+
                                         </div>
                                         <div  class="company__card__content__review__text">
                                             <textarea class="company__card__text__review" type="text" th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
@@ -88,9 +92,15 @@
                                         <div class="company__card__content__subtitle">
                                             <a class="company__card__title__lead2" >Замечания:</a>
                                         </div>
-                                        <div >
-                                            <textarea class="company__card__content__review__answer" type="text" th:field="*{reviews[__${itemStat.index}__].answer}"></textarea>
-                                        </div> 
+                                        <div>
+                                            <textarea
+                                                    class="company__card__content__review__answer"
+                                                    th:field="*{reviews[__${itemStat.index}__].answer}"
+                                                    placeholder="впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами"
+                                                    onfocus="this.placeholder='';"
+                                                    onblur="if(this.value===''){this.placeholder='впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами';}"
+                                            ></textarea>
+                                        </div>
                                         <!-- <div >
                                             <p type="text" th:text="*{reviews[__${itemStat.index}__].botName}"></p>
                                         </div> -->

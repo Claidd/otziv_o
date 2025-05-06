@@ -24,6 +24,9 @@ public class Product {
     @Column(name = "product_price")
     private BigDecimal price;
 
+    @Column(name = "product_photo")
+    private Boolean photo;
+
     @ManyToOne
     @JoinColumn(name = "product_category")
     @ToString.Include

@@ -506,58 +506,7 @@ public class OrderServiceImpl implements OrderService {
 
 
 
-//    @Transactional
-//    @Override
-//    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) { // сохранение нового ORDER, ORDER_DETAIL и списка REVIEWS
-//        try {
-//            Order order = toEntityOrderFromDTO(orderDTO, productId);
-//            Order saveOrder = orderRepository.save(order);
-//            log.info("1. Сохранили ORDER");
 //
-//            OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, saveOrder, productId);
-//            OrderDetails orderDetailsSave = orderDetailsService.save(orderDetails);
-//            log.info("2. Сохранили ORDER-DETAIL");
-//
-//            List<Review> reviews = toEntityListReviewsFromDTO(orderDTO, orderDetailsSave);
-//            log.info("3. Сохранили REVIEWS");
-//
-//            orderDetailsSave.setReviews(reviews);
-//            log.info("4. Установили REVIEWS в ORDER-DETAIL");
-//
-//            OrderDetails orderDetails2 = orderDetailsService.save(orderDetailsSave);
-//            log.info("5. Сохранили ORDER-DETAIL с REVIEWS");
-//
-//            List<OrderDetails> detailsList;
-//            if (saveOrder.getDetails() != null) {
-//                detailsList = saveOrder.getDetails();
-//                log.info("6. Взяли ORDER-DETAIL лист");
-//            } else {
-//                detailsList = new ArrayList<>();
-//                log.info("6. Создали пустой ORDER-DETAIL лист");
-//            }
-//
-//            detailsList.add(orderDetails2);
-//            log.info("7. Добавили ORDER-DETAIL лист");
-//
-//            saveOrder.setDetails(detailsList);
-//            log.info("8. Установили его в ORDER");
-//
-//            Order saveOrder2 = orderRepository.save(saveOrder);
-//            log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
-//
-//            log.info("10. Обновляем счетчик компании в БД");
-//
-//            Company company = companyService.getCompaniesById(companyId);
-//            company.setCounterNoPay(company.getCounterNoPay() + (saveOrder2.getAmount() - company.getCounterNoPay()));
-//            company.setStatus(companyStatusService.getStatusByTitle("В работе"));
-//            companyService.save(company);
-//
-//            return true;
-//        } catch (Exception e) {
-//            log.error("Ошибка при создании нового заказа с отзывами", e);
-//            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e); // убеждаемся, что транзакция откатывается при ошибке
-//        }
-//    }
 //============================ СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS КОНЕЦ ============================
 //
 
@@ -730,27 +679,6 @@ public boolean deleteOrder(Long orderId, Principal principal){
     }
 
 
-//    @Transactional
-//    public boolean deleteOrder(Long orderId, Principal principal){
-//        String userRole = getRole(principal);
-//        Order deleteOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
-//        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
-//            orderRepository.delete(deleteOrder);
-//            log.info("заказ удален Админом или Владельцем");
-//            return true;
-//        }
-//        if ("ROLE_MANAGER".equals(userRole)){
-//            if (deleteOrder.getStatus().getTitle().equals("Новый")){
-//                orderRepository.delete(deleteOrder);
-//                log.info("заказ удален Менеджером");
-//                return true;
-//            } else
-//                System.out.println("не удален из-за статуса");
-//        }
-//        else
-//            System.out.println("не удален из-за отсутсвия прав доступа");
-//        return false;
-//    }
 
 //========================================= УДАЛЕНИЕ ЗАКАЗА КОНЕЦ ======================================================
 
@@ -791,9 +719,9 @@ public boolean deleteOrder(Long orderId, Principal principal){
         try {
             Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
             if (title.equals(STATUS_PAYMENT)){
-                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
-                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
-                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
+//                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
+//                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
+//                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
 
                 if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
                     log.info("2. Проверили, что заказ еще не бьл выполнен и что счетчкики совпадают");
@@ -1061,12 +989,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
         }
     }
 
-//    @Override
-//    public int findAllIdByWorkerAndKeyWordAndStatusForTelegram(Worker worker, String status) { // найти все заказы работника со статусом "новый" для телеграм
-//        int x = orderRepository.findAllIdByWorkerAndKeyWordAndStatusForTelegram(worker, status).size();
-//        System.out.println(worker.getUser().getFio() + " " + x);
-//        return x;
-//    }
+
 
     public int countOrdersByWorkerAndStatus(Worker worker, String status) {
         int count = orderRepository.countByWorkerAndStatus(worker, status);
@@ -1074,16 +997,6 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return count;
     }
 
-//    @Override
-//    public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
-//        Map<String, Pair<Long, Long>> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect).stream()
-//                .collect(Collectors.toMap(
-//                        row -> (String) row[0],  // ФИО
-//                        row -> Pair.of((Long) row[1], (Long) row[2]) // Кол-во по статусу "Новый" и "Коррекция"
-//                ));
-//        System.out.println(results);
-//        return results;
-//    }
 
     public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
         List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect);
@@ -1197,154 +1110,10 @@ public boolean deleteOrder(Long orderId, Principal principal){
         return ordersMap;
     }
 
-//    @Override
-//    public Map<String, Map<String, Long>> getAllOrdersToMonthByStatus(
-//            LocalDate firstDayOfMonth,
-//            LocalDate lastDayOfMonth,
-//            String orderInNew,
-//            String orderToCheck,
-//            String orderInCheck,
-//            String orderInCorrect,
-//            String orderInPublished,
-//            String orderInWaitingPay1,
-//            String orderInWaitingPay2,
-//            String orderNoPay) {
-//
-//        List<String> statuses = List.of(orderInNew, orderToCheck, orderInCheck, orderInCorrect,
-//                orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay);
-//
-//        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(2), lastDayOfMonth);
-//
-//        // Используем LinkedHashMap, чтобы сначала добавить менеджеров, затем работников
-//        Map<String, Map<String, Long>> ordersMap = new LinkedHashMap<>();
-//
-//        // Отдельные списки для сортировки
-//        Map<String, Map<String, Long>> managerOrders = new LinkedHashMap<>();
-//        Map<String, Map<String, Long>> workerOrders = new LinkedHashMap<>();
-//
-//        for (Object[] row : results) {
-//            if (row.length < 4) continue; // Пропускаем некорректные данные
-//
-//            String fio = (String) row[0];  // ФИО
-//            String status = (String) row[1];  // Статус
-//            Long count = row[2] != null ? (Long) row[2] : 0L;  // Количество заказов
-//            String role = (String) row[3];  // 'manager' или 'worker'
-//
-//            if ("manager".equals(role)) {
-//                managerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
-//            } else {
-//                workerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
-//            }
-//        }
-//
-//        // Сначала добавляем менеджеров, потом работников
-//        ordersMap.putAll(managerOrders);
-//        ordersMap.putAll(workerOrders);
-//
-//        System.out.println(ordersMap);
-//
-//        return ordersMap;
-//    }
-
-
-//    @Override
-//    @Transactional
-//    public boolean changeStatusAndOrderCounter(Long reviewId) { // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
-//        try {
-//            Review review = reviewService.getReviewById(reviewId);
-//            log.info("2. Достали отзыв по id " + reviewId);
-//
-//            if (review == null) {
-//                log.info("2. Что-то пошло не так и метод changeStatusAndOrderCounter не отработал правильно: отзыв не найден");
-//                return false;
-//            }
-//
-//            Order order = orderRepository.findById(review.getOrderDetails().getOrder().getId()).orElse(null);
-//            if (order == null || review.isPublish()) {
-//                log.info("3. Счетчик не увеличен, проверка не пройдена: order = " + (order != null) + ", publish status = " + (!review.isPublish()));
-//                return false;
-//            }
-//
-//            log.info("3. Прошли проверку что заказ не пустой и его статус не опубликован - order != null && !review.isPublish()");
-//            reviewArchiveService.saveNewReviewArchive(reviewId);
-//            log.info("4. Сохранили опубликованный отзыв компании в отзыв в архив");
-//
-//            order.setCounter(order.getCounter() + 1);
-//            Order savedOrder = orderRepository.save(order);
-//            log.info("5. Увеличили, обновили и сохранили счетчик публикаций в заказе. Итого теперь: {}", savedOrder.getCounter());
-//
-//            checkOrderCounterAndAmount(savedOrder);
-//            log.info("6. Увеличиваем счетчик публикаций бота и сохраняем его");
-//
-//            updateBotCounterAndStatus(review.getBot());
-//            review.setPublish(true);
-//            log.info("7. Установили Publish на true - опубликовано");
-//
-//            reviewService.save(review);
-//            log.info("8. Сохранили отзыв в БД");
-//
-//            return true;
-//        } catch (Exception e) {
-//            log.error("Ошибка при выполнении метода changeStatusAndOrderCounter, который  делал - смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен", e);
-//            throw e; // Убедитесь, что транзакция откатывается при ошибке
-//        }
-//    } // смена статуса отзыва, увеличение счетчика и смена статуса заказа если выполнен
-
-
-//    @Transactional
-//    public void updateBotCounterAndStatus(Bot bot) {// обновление счетчика и статуса у бота
-//        try {
-//            bot.setCounter(bot.getCounter() + 1);
-//            if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
-//                log.info("Меняем статус бота от 20 отзывов");
-//                bot.setStatus(botService.changeStatus(HIGH_STATUS));
-//            } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
-//                log.info("Меняем статус бота от 10 отзывов");
-//                bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
-//            }
-//            botService.save(bot);
-//        } catch (Exception e) {
-//            log.error("Ошибка при обновлении счетчика и статуса у бота", e);
-//            throw e;
-//        }
-//    }// обновление счетчика и статуса у бота
-
-
-//    @Transactional
-//    protected void changeBotCounterAndStatus(Bot bot) { // обновление счетчика и статуса у бота
-//        try {
-//            bot.setCounter(bot.getCounter() + 1);
-//            if (bot.getCounter() >= 10) {
-//                log.info("6. меняем статус бота от 10 отзывов");
-//                bot.setStatus(botService.changeStatus("Средний"));
-//            }
-//            if (bot.getCounter() >= 20) {
-//                log.info("6. меняем статус бота от 20 отзывов");
-//                bot.setStatus(botService.changeStatus("Высокий"));
-//            }
-//            botService.save(bot);
-//        } catch (Exception e) {
-//            log.error("Ошибка при обновлении счетчика и статуса у бота", e);
-//            throw e; // Убедитесь, что транзакция откатывается при ошибке
-//        }
-//    } // обновление счетчика и статуса у бота
-
-
-
-//    @Transactional
-//    protected void checkOrderCounterAndAmount(Order order) { // проверка счетчиков заказа
-//        try {
-//            if (order.getAmount() <= order.getCounter()) {
-//                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
-//                log.info("4. Счетчик совпадает с количеством заказа. Статус заказа сменен на Опубликовано");
-//            } else {
-//                log.info("4. Счетчик НЕ совпадает с количеством заказа. Статус заказа НЕ сменен на Опубликовано");
-//            }
-//        } catch (Exception e) {
-//            log.error("Ошибка при проверке счетчиков заказа", e);
-//            throw e; // проверка счетчиков заказа
-//        }
-//    }
+    @Override
+    public void save(Order order) {
+        orderRepository.save(order);
+    }
 
 
     //    ======================================== ЗАКАЗ UPDATE =========================================================
@@ -1614,24 +1383,18 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
                 .text("Текст отзыва")
-                .answer("впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами")
+                .answer("")
                 .orderDetails(orderDetails)
                 .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
                 .filial(convertFilialDTOToFilial(filialDTO))
                 .publish(false)
                 .worker(orderDetails.getOrder().getWorker())
+                .product(orderDetails.getProduct())
+                .price(orderDetails.getProduct().getPrice())
                 .build();
     }// Конвертер из DTO для отзыва
 
     private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
-//        Так было раньше когда назначались только боты привязанные за человеком без сопоставления городов
-//        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(orderDTO.getWorker().getWorkerId());
-//        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
-//        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-//        bots.removeAll(botsCompany);
-//        return bots;
-//        Так было раньше когда назначались только боты привязанные за человеком без сопоставления городов
-
             List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
         System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
             List<Review> reviewListFilial = reviewService.findAllByFilial(filial);

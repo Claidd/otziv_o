@@ -106,6 +106,7 @@
 <th:block th:fragment="title(route)" xmlns:th="http://www.w3.org/1999/xhtml">
     <title th:switch="${route}">
         <th:block th:case="lead">Список лидов</th:block>
+        <th:block th:case="operators">Оператор</th:block>
         <th:block th:case="leads_list">Список 2 лидов</th:block>
         <th:block th:case="create">Добавление нового лида</th:block>
         <th:block th:case="fast_analytics">Быстрая аналитика</th:block>

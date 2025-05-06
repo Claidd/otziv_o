@@ -6,9 +6,11 @@ import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.Column;
+import jakarta.persistence.JoinColumn;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +18,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -56,5 +59,11 @@ public class ReviewDTO {
     private boolean publish;
 
     private String comment;
+
+    private Product product;
+
+    private BigDecimal price;
+
+    private String url;
 
 }

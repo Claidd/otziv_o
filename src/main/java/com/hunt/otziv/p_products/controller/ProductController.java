@@ -48,7 +48,6 @@ public class ProductController {
 
     @PostMapping("/edit/{productId}")
     private String UpdateProducts(@ModelAttribute("editProductDto") ProductDTO editProductDto, Model model, RedirectAttributes rm, @PathVariable Long productId){
-        System.out.println(editProductDto);
         if (productService.update(editProductDto)){
             rm.addFlashAttribute("saveSuccess", "true");
         }

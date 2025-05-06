@@ -43,6 +43,7 @@ public class ProductServiceImpl implements ProductService {
         product.setPrice(productDTO.getPrice());
         ProductCategory productCategory = productCategoryService.findById(productDTO.getProductCategory().getId());
         product.setProductCategory(productCategory);
+        product.setPhoto(productDTO.isPhoto());
         Product product1 = productRepository.save(product);
         productCategory.getProduct().add(product1);
         productCategoryService.save(productCategory);
@@ -65,11 +66,11 @@ public class ProductServiceImpl implements ProductService {
         Product saveProduct = productRepository.findById(productDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%s' не найден", productDTO)));
         log.info("Достали Продукт");
         boolean isChanged = false;
-
         /*Временная проверка сравнений*/
-        System.out.println("title: " + !Objects.equals(productDTO.getTitle(), saveProduct.getTitle()));
-        System.out.println("price: " + !Objects.equals(productDTO.getPrice(), saveProduct.getPrice()));
-        System.out.println("productCategory: " + !Objects.equals(productDTO.getProductCategory().getId(), saveProduct.getProductCategory().getId()));
+        log.info("title: " + !Objects.equals(productDTO.getTitle(), saveProduct.getTitle()));
+        log.info("price: " + !Objects.equals(productDTO.getPrice(), saveProduct.getPrice()));
+        log.info("photo: " + !Objects.equals(productDTO.isPhoto(), saveProduct.getPhoto()));
+        log.info("productCategory: " + !Objects.equals(productDTO.getProductCategory().getId(), saveProduct.getProductCategory().getId()));
 
 
         if (!Objects.equals(productDTO.getTitle(), saveProduct.getTitle())){ /*Проверка смены названия*/
@@ -85,6 +86,12 @@ public class ProductServiceImpl implements ProductService {
         if (!Objects.equals(productDTO.getProductCategory().getId(), saveProduct.getProductCategory().getId())){ /*Проверка смены работника*/
             log.info("Обновляем работника");
             saveProduct.setProductCategory(productCategoryService.findById(productDTO.getProductCategory().getId()));
+            isChanged = true;
+        }
+
+        if (!Objects.equals(productDTO.isPhoto(), saveProduct.getPhoto())){ /*Проверка смены работника*/
+            log.info("Обновляем наличие фото у продукта");
+            saveProduct.setPhoto(!saveProduct.getPhoto());
             isChanged = true;
         }
 
