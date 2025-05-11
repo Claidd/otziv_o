@@ -26,6 +26,8 @@ import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
@@ -65,6 +67,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final FilialService filialService;
     private final ReviewService reviewService;
     private final OperatorService operatorService;
+    private final TelegramService telegramService;
 
     @Transactional
     public void save(Company company){
@@ -120,6 +123,18 @@ public class CompanyServiceImpl implements CompanyService{
                 filialService.save(filial); // Сохранение обновленного филиала
             }
 
+            if (company1.getManager() != null && company1.getManager().getUser() != null) {
+                Long telegramChatId = company1.getManager().getUser().getTelegramChatId();
+
+                if (telegramChatId != null && company1.getTitle() != null ) {
+                    String resultBuilder =
+
+                                    "Добавлена новая компания: " + company1.getTitle() + "\n" +
+                                    "https://o-ogo.ru/companies/company?status=Новая";
+
+                    telegramService.sendMessage(telegramChatId, resultBuilder);
+                }
+            }
             return true;
         } catch (Exception e) {
             log.error("ОШИБКА при сохранении компании: " + e.getMessage());

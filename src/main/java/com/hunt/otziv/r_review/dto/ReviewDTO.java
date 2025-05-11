@@ -66,4 +66,6 @@ public class ReviewDTO {
 
     private String url;
 
+    private String urlPhoto;
+
 }

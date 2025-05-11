@@ -64,6 +64,7 @@ public class OperatorController {
 
         model.put("requireDeviceId", requireDeviceId);
         model.put("promoTexts", promoTextService.getAllPromoTexts());
+        model.put("text", deviceTokenService.getText(token));
         model.put("leadListNew", leadsNew);
 
         return new ModelAndView("lead/layouts/operators", model);

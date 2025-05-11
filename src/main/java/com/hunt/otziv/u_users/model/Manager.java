@@ -28,6 +28,22 @@ public class Manager {
     @Column(name = "pay_text")
     private String payText;
 
+    // Начальный текст
+    @Column(name = "manager_begin")
+    private String beginText;
+
+    // Текст предложения
+    @Column(name = "manager_offer")
+    private String offerText;
+
+    // Текст предложения 2
+    @Column(name = "manager_reminder")
+    private String reminderText;
+
+    // Текст о создании группы
+    @Column(name = "manager_start")
+    private String startText;
+
     @OneToMany(mappedBy = "manager", fetch = FetchType.LAZY)
     private Set<Company> companies;
 

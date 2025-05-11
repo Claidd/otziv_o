@@ -31,31 +31,31 @@
                                 <div class="card__remember__box">
                                     <div class="card_remember-content">
                                         <!-- The text field -->
-                                        <textarea class="card__remember-text" th:utext="${promoTexts[0]}" id="myInput1"></textarea>
+                                        <textarea class="card__remember-text" th:utext="${text.beginText}" id="myInput1"></textarea>
 
                                         <!-- The button used to copy the text -->
-                                        <button class="card_remember-content__btn" onclick="myFunction1()">предложение</button>
+                                        <button class="card_remember-content__btn" onclick="myFunction1()">Вступление</button>
                                     </div>
                                     <div class="card_remember-content">
                                         <!-- The text field -->
-                                        <textarea class="card__remember-text"th:utext="${promoTexts[1]}" id="myInput2"></textarea>
+                                        <textarea class="card__remember-text"th:utext="${text.offerText}" id="myInput2"></textarea>
 
                                         <!-- The button used to copy the text -->
-                                        <button class="card_remember-content__btn" onclick="myFunction2()">напоминание</button>
+                                        <button class="card_remember-content__btn" onclick="myFunction2()">Предложение</button>
                                     </div>
                                     <div class="card_remember-content">
                                         <!-- The text field -->
-                                        <textarea class="card__remember-text" th:utext="${promoTexts[2]}" id="myInput3"></textarea>
+                                        <textarea class="card__remember-text" th:utext="${text.offer2Text}" id="myInput3"></textarea>
 
                                         <!-- The button used to copy the text -->
-                                        <button class="card_remember-content__btn" onclick="myFunction3()">данные</button>
+                                        <button class="card_remember-content__btn" onclick="myFunction3()">Доп. услуги</button>
                                     </div>
                                     <div class="card_remember-content">
                                         <!-- The text field -->
-                                        <textarea class="card__remember-text" th:utext="${promoTexts[3]}" id="myInput4"></textarea>
+                                        <textarea class="card__remember-text" th:utext="${text.startText}" id="myInput4"></textarea>
 
                                         <!-- The button used to copy the text -->
-                                        <button class="card_remember-content__btn" onclick="myFunction4()">ответы</button>
+                                        <button class="card_remember-content__btn" onclick="myFunction4()">В работу</button>
                                     </div>
                                 </div>
                                 <div class="card__remember__box-serch">

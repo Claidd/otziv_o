@@ -612,23 +612,40 @@ public class LeadServiceImpl implements LeadService{
     } // Взять одного юзера по имени
 
     // Перевод юзера в дто - начало
-    private LeadDTO toDto(Lead lead){ // Перевод лида в дто
+    private LeadDTO toDto(Lead lead) {// Перевод юзера в дто - конец
 
-        return LeadDTO.builder()
-                .id(lead.getId())
-                .telephoneLead(lead.getTelephoneLead())
-                .cityLead(lead.getCityLead())
-                .lidStatus(lead.getLidStatus())
-                .commentsLead(lead.getCommentsLead())
-                .createDate(lead.getCreateDate())
-                .updateStatus(lead.getUpdateStatus())
-                .dateNewTry(lead.getDateNewTry())
-                .operator(lead.getOperator())
-                .manager(lead.getManager())
-                .marketolog(lead.getMarketolog())
-                .operatorId(lead.getTelephone().getTelephoneOperator().getId())
-                .build();
-    } // Перевод юзера в дто - конец
+        if (lead.getTelephone() != null && lead.getTelephone().getTelephoneOperator() != null) {
+            return LeadDTO.builder()
+                    .id(lead.getId())
+                    .telephoneLead(lead.getTelephoneLead())
+                    .cityLead(lead.getCityLead())
+                    .lidStatus(lead.getLidStatus())
+                    .commentsLead(lead.getCommentsLead())
+                    .createDate(lead.getCreateDate())
+                    .updateStatus(lead.getUpdateStatus())
+                    .dateNewTry(lead.getDateNewTry())
+                    .operator(lead.getOperator())
+                    .manager(lead.getManager())
+                    .marketolog(lead.getMarketolog())
+                    .operatorId(lead.getTelephone().getTelephoneOperator().getId())
+                    .build();
+        }
+        else {
+            return LeadDTO.builder()
+                    .id(lead.getId())
+                    .telephoneLead(lead.getTelephoneLead())
+                    .cityLead(lead.getCityLead())
+                    .lidStatus(lead.getLidStatus())
+                    .commentsLead(lead.getCommentsLead())
+                    .createDate(lead.getCreateDate())
+                    .updateStatus(lead.getUpdateStatus())
+                    .dateNewTry(lead.getDateNewTry())
+                    .operator(lead.getOperator())
+                    .manager(lead.getManager())
+                    .marketolog(lead.getMarketolog())
+                    .build();
+        }
+    }// Перевод юзера в дто - конец
 
     public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
         String[] a = phone.split("9", 2);

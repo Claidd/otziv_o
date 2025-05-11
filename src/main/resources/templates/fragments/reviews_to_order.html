@@ -43,7 +43,13 @@
 <!--                        </a>-->
                         <a class="company__card__title__bot">
                             <span th:text="${review.botFio + ' ' + review.botCounter}">ФИО бота</span>
-                            <span th:if="${review.product != null and review.product.photo}" style="color:red;"> + ФОТО</span>
+                            <a th:if="${review.product.photo}"
+                               th:href="${review.url}"
+                               target="_blank"
+                               class="company__card__text__lead-fioWorker"
+                               style="display: inline-flex; justify-content: center; align-items: center; height: 38px; padding: 0 12px; color: red; ">
+                                ФОТО
+                            </a>
                         </a>
                     </div>
                     <div class="company__card__content_button">

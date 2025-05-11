@@ -534,7 +534,7 @@ public class OrderServiceImpl implements OrderService {
         System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId()));
         System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
         System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
-        System.out.println("заметка заказа: " + !Objects.equals(orderDTO.getZametka(), saveOrder.getZametka()));
+        System.out.println("заметка заказа: " + !Objects.equals(orderDTO.getOrderComments(), saveOrder.getZametka()));
         System.out.println("комментарий компании: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
         if (orderDTO.getCounter() != null){
             System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
@@ -591,9 +591,9 @@ public class OrderServiceImpl implements OrderService {
             saveOrder.setComplete(orderDTO.isComplete());
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getZametka(), saveOrder.getZametka())){ /*Проверка комментария заказа*/
+        if (!Objects.equals(orderDTO.getOrderComments(), saveOrder.getZametka())){ /*Проверка комментария заказа*/
             log.info("Обновляем выполнение комментария заказа");
-            saveOrder.setZametka(orderDTO.getZametka());
+            saveOrder.setZametka(orderDTO.getOrderComments());
             isChanged = true;
         }
         if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
@@ -1162,7 +1162,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .changed(order.getChanged())
                 .payDay(order.getPayDay())
                 .dayToChangeStatusAgo(daysDifference)
-                .zametka(order.getZametka() == null ? "нет заметок" : order.getZametka())
+                .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
                 .build();
     } // Конвертер DTO для заказа на AllOrderListController/orders/
 
@@ -1200,7 +1200,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .counter(order.getCounter())
                 .dayToChangeStatusAgo(period.getDays())
                 .orderDetailsId(order.getDetails().getFirst().getId())
-                .zametka(order.getZametka() == null ? "нет заметок" : order.getZametka())
+                .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
                 .build();
     } // Конвертер DTO для заказа
     private CompanyDTO convertToCompanyDTO(Company company){ // Конвертер DTO для компании

@@ -18,9 +18,24 @@
             <section class="company__lead__card">
                 <div class="container">
                     <h2 class="company__section-title2" th:utext="'Детали заказа ' + (${reviews != null and not #lists.isEmpty(reviews)} ? ${reviews[0].productTitle} : 'Отзывы')"></h2>
-                    <div class="company__card__content__comments__tocompanyComments">
-                        <div class="company__card__text__companyComments" th:utext="${reviews != null and not #lists.isEmpty(reviews)} ? ${reviews[0].commentCompany} : ' '">Комментарий для компании</div>
-                    </div>        
+
+                    <div th:if="${reviews[0] != null and ((reviews[0].commentCompany != null and !reviews[0].commentCompany.isEmpty()) or (reviews[0].orderComments != null and !reviews[0].orderComments.isEmpty()))}"
+                         sec:authorize="hasAnyRole('WORKER', 'MANAGER', 'ADMIN', 'OWNER')"
+                         class="company__card__content__comments__tocompanyComments">
+
+                        <div class="company__card__text__companyComments"
+                             th:utext="${(reviews[0].orderComments != null ? 'Для заказа: ' + reviews[0].orderComments : '')
+                          + (reviews != null and !#lists.isEmpty(reviews) and reviews[0].commentCompany != null ? '   Для компании: ' + reviews[0].commentCompany : '')}">
+                            Комментарий для компании
+                        </div>
+                    </div>
+
+
+<!--                    <div class="company__card__content__comments__tocompanyComments">-->
+<!--                        <div class="company__card__text__companyComments" th:utext="${reviews != null and not #lists.isEmpty(reviews)} ? ${reviews[0].commentCompany} : ' '">Комментарий для компании</div>-->
+<!--                    </div>-->
+
+
                     <div class="company__tabs__lead">
                         <div id="reviewsContainer">
                             <header th:replace="~{fragments/reviews_to_order :: reviews_to_order}"></header> <!-- вставка карточек отзывов-->

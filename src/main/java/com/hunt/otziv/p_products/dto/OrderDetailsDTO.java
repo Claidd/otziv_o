@@ -38,6 +38,8 @@ public class OrderDetailsDTO {
 
     private String companyComments;
 
+    private String orderComments;
+
     private String titleCompany;
 
     private Long idCompanies;

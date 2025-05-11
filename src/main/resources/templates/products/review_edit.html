@@ -21,12 +21,15 @@
         <div class="container">
             <div class="row py-2 pt-1 mt-1">
                 <div class="col-12 pt-5">
-                    <form method="post" th:object="${reviewDTO}">
-                        <div class="mb-3" th:if="${saveSuccess}">
-                            <div class="alert alert-success">
-                                Данные успешно изменены и сохранены.
-                            </div>
+                    <div class="mb-3" th:if="${saveSuccess}">
+                        <div class="alert alert-success">
+                            Данные успешно изменены и сохранены.
                         </div>
+                    </div>
+
+                    <form method="post" th:object="${reviewDTO}">
+
+
 
                         <div class="form-group">
                             <label for="text">Текст</label>
@@ -45,12 +48,7 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('comment')}" th:text="${err}">Validation error</small>
                         </div>
 
-                        <div class="form-group">
-                            <label for="url">url для фото</label>
-                            <textarea type="text" id="url" th:field="*{url}" class="form-control"> </textarea>
-                            <small class="form-text text-danger" th:each="err : ${#fields.errors('url')}" th:text="${err}">Validation error</small>
-                        </div>
-                        
+
                         <div sec:authorize="hasAnyRole('MANAGER', 'ADMIN', 'OWNER')"  class="form-group">
                             <label for="created">Дата создания</label>
                             <input type="text" id="created" th:field="*{created}" class="form-control">
@@ -87,6 +85,12 @@
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('orderDetailsId')}" th:text="${err}">Validation error</small>
                         </div>
 
+                        <div class="form-group mt-5 d-none">
+                            <label for="url">url для фото</label>
+                            <textarea type="text" id="url" th:field="*{url}" class="form-control"> </textarea>
+                            <!--                        <small class="form-text text-danger" th:each="err : ${#fields.errors('url')}" th:text="${err}">Validation error</small>-->
+                        </div>
+
                         <div class="form-group">
                             <label for="botName">Имя Бота</label>
                             <input type="text" id="botFIO" th:field="*{botName}" class="form-control">
@@ -112,10 +116,32 @@
                             <button th:onclick="goBack(event)" class="btn btn-secondary mt-3">Назад</button>
                             <!-- <a th:href="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post" class="btn btn-secondary mt-3 ml-5">Удалить</a> -->
                     </form>
+
+                    <div th:if="${reviewDTO.product.photo == true}">
+                        <div class="form-group mt-5">
+                            <label for="url">url для фото</label>
+                            <textarea type="text" id="url" th:field="*{reviewDTO.url}" class="form-control"> </textarea>
+    <!--                        <small class="form-text text-danger" th:each="err : ${#fields.errors('url')}" th:text="${err}">Validation error</small>-->
+                        </div>
+
+                        <!-- 🟡 Форма загрузки фото -->
+                        <form class="mt-3"
+                              th:action="@{'/reviews/' + ${reviewDTO.id} + '/upload-photo'}"
+                              method="post" enctype="multipart/form-data"
+                              th:if="${reviewDTO.id != null}">
+                            <input type="file" name="file" required>
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                            <button class="btn btn-warning" type="submit">Загрузить фото</button>
+                        </form>
+                    </div>
+
+
                     <form class="mt-5" th:action="@{'/review/deleteReviews/'+ ${companyId} + '/' + ${orderId} + '/' + ${reviewDTO.id}}" method="post">
                         <input type="hidden" name="_csrf" th:value="${_csrf.token}" />
                         <button type="submit" class="btn btn-danger mt-5">Удалить</button>
                     </form>
+
+
                 </div>
             </div>
         </div>

@@ -52,6 +52,8 @@ public class ReviewDTOOne {
 
     private String commentCompany;
 
+    private String orderComments;
+
     private String filialCity;
 
     private String filialTitle;
@@ -79,6 +81,8 @@ public class ReviewDTOOne {
     private BigDecimal price;
 
     private String url;
+
+    private String urlPhoto;
 
     //    private OrderDetailsDTO orderDetails;
 

@@ -74,6 +74,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .workerFio(orderDetails.getReviews().getFirst().getWorker().getUser().getFio())
                 .companyComments(orderDetails.getOrder().getCompany().getCommentsCompany())
                 .titleCompany(orderDetails.getOrder().getCompany().getTitle())
+                .orderComments(orderDetails.getOrder().getZametka())
                 .idCompanies(orderDetails.getOrder().getCompany().getId())
                 .build();
     } // перевод деталей в дто
@@ -121,6 +122,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .publishedDate(review.getPublishedDate())
                 .botName(review.getBot().getFio())
                 .product(review.getProduct())
+                .url(review.getUrl() != null ? review.getUrl() : "")
                 .build();
     } // перевод отзыва в дто
 

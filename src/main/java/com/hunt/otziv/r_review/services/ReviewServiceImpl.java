@@ -588,6 +588,7 @@ public class ReviewServiceImpl implements ReviewService{
                 .publish(review.isPublish())
                 .vigul(review.isVigul())
                 .comment(review.getOrderDetails().getComment())
+                .orderComments(review.getOrderDetails().getOrder().getZametka())
                 .product(review.getProduct())
                 .url(review.getUrl())
                 .build();

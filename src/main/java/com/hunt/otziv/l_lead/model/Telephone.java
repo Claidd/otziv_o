@@ -68,6 +68,22 @@ public class Telephone {
 
 
 
+    // Начальный текст
+    @Column(name = "telephone_begin")
+    private String beginText;
+
+    // Текст предложения
+    @Column(name = "telephone_offer")
+    private String offerText;
+
+    // Текст предложения 2
+    @Column(name = "telephone_offer2")
+    private String offer2Text;
+
+    // Текст о создании группы
+    @Column(name = "telephone_start")
+    private String startText;
+
 
     //    Логин Гугла
     @Column(name = "telephone_google_login")
