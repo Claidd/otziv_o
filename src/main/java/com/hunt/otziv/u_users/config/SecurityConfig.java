@@ -45,6 +45,7 @@ public class SecurityConfig {
                                         //    настройка доступа
                                         .requestMatchers("/auth","/login","/register").permitAll()
                                         .requestMatchers("/api/auth").permitAll()
+                                        .requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/.well-known/acme-challenge/**").permitAll()
                                         .requestMatchers("/access-denied").permitAll()
                                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
@@ -109,6 +110,7 @@ public class SecurityConfig {
                 .csrf((csrf) -> csrf
                         .csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())
                         .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
+                                .ignoringRequestMatchers("/api/**") // отключаем CSRF только для API
 //                                .requireCsrfProtectionMatcher()
 //                        .ignoringRequestMatchers("/**")
                 );
