@@ -26,6 +26,7 @@ public class GptReviewController {
             @RequestParam(defaultValue = "позитивный") String tone) {
         long startTime = System.nanoTime();
         String review = reviewService.generateReview(product, category, tone);
+        System.out.println(review);
         checkTimeMethod("Время создания отзыва: ", startTime);
         return ResponseEntity.ok(review);
     }
@@ -33,6 +34,7 @@ public class GptReviewController {
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        log.info(text + "%.4f сек%n", timeElapsed);
+        log.info("{} {}", text, String.format("%.4f сек", timeElapsed));
+
     }
 }

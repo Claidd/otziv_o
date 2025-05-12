@@ -30,8 +30,9 @@ import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import com.hunt.otziv.text_generator.service.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.WebsiteParserService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -43,10 +44,10 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.PersistenceException;
+import jakarta.ws.rs.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
@@ -55,7 +56,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.webjars.NotFoundException;
+
 
 import java.math.BigDecimal;
 import java.security.Principal;
@@ -90,6 +91,8 @@ public class OrderServiceImpl implements OrderService {
     private final CompanyStatusService companyStatusService;
     private final EmailService emailService;
     private final TelegramService telegramService;
+    private final ReviewGeneratorService reviewGeneratorService;
+    private final WebsiteParserService websiteParserService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -318,6 +321,7 @@ public class OrderServiceImpl implements OrderService {
         orderDTO.setWorkers(companyDTO.getWorkers()); // список работников в этой компании
         orderDTO.setManager(companyDTO.getManager());
         orderDTO.setStatus(orderStatusService.getOrderStatusDTOByTitle("Новый"));
+        orderDTO.setFilial(companyDTO.getFilial());
         return orderDTO;
     } // Создание DTO заготовки для создания нового Отзыва
     @Transactional
@@ -333,66 +337,56 @@ public class OrderServiceImpl implements OrderService {
                 .category(company.getCategoryCompany())
                 .subCategory(company.getSubCategory())
                 .text("Текст отзыва")
-                .answer(" ")
+                .answer("")
                 .orderDetails(orderDetails)
                 .bot(selectedBot)
                 .filial(order.getFilial())
                 .publish(false)
                 .worker(order.getWorker())
+                .product(orderDetails.getProduct())
+                .price(orderDetails.getProduct().getPrice())
                 .build();
     } // Создание нового отзыва
     @Transactional
-    public boolean addNewReview(Long orderId) {  // Добавление нового отзыва
+    public boolean addNewReview(Long orderId) { // Добавление нового отзыва
         try {
             log.info("1. Зашли в добавление нового отзыва");
 
-            // Ищем заказ по ID
             Order saveOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
 
-            // Получаем детали заказа
-            OrderDetails orderDetails = saveOrder.getDetails().get(0);
+            OrderDetails orderDetails = saveOrder.getDetails().getFirst();
             Company saveCompany = saveOrder.getCompany();
 
             log.info("2. Создаем новый отзыв");
 
-            // Создаем и сохраняем новый отзыв
             Review review = reviewService.save(createNewReview(saveCompany, orderDetails, saveOrder));
-
             log.info("3. Создали новый отзыв");
 
-            // Обновляем список отзывов и сохраняем детали заказа
             List<Review> newList = orderDetails.getReviews();
             newList.add(review);
             orderDetails.setReviews(newList);
-            orderDetails.setAmount(orderDetails.getAmount() + 1);
-            orderDetails.setPrice(orderDetails.getPrice().add(orderDetails.getProduct().getPrice()));
 
-            log.info("4. Сохраняем обновленные детали заказа: {}", orderDetails);
-            orderDetailsService.save(orderDetails);
+            recalculateOrderAndDetails(orderDetails);
+            log.info("4. Пересчитали детали и заказ");
 
-            // Обновляем и сохраняем заказ
-            saveOrder.setAmount(saveOrder.getAmount() + 1);
-            saveOrder.setSum(saveOrder.getSum().add(orderDetails.getProduct().getPrice()));
-            orderRepository.save(saveOrder);
-
-            log.info("5. Обновили счетчик и сумму в заказе");
-
-            // Обновляем и сохраняем компанию
             saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() + 1);
             companyService.save(saveCompany);
-
-            log.info("6. Обновили счетчик в компании");
+            log.info("5. Обновили компанию");
 
             return true;
         } catch (Exception e) {
             log.error("Ошибка при создании нового отзыва", e);
             return false;
         }
-    } // Добавление нового отзыва
+    }// Добавление нового отзыва
+
+
+
+
 
     @Transactional
-    public boolean deleteNewReview(Long orderId, Long reviewId) { // Удаление отзыва
+    public boolean deleteNewReview(Long orderId, Long reviewId) {
         try {
             Order saveOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
@@ -410,28 +404,47 @@ public class OrderServiceImpl implements OrderService {
 
             newList.remove(review);
             orderDetails.setReviews(newList);
-            orderDetails.setAmount(orderDetails.getAmount() - 1);
-            orderDetails.setPrice(orderDetails.getPrice().subtract(orderDetails.getProduct().getPrice()));
-            orderDetailsService.save(orderDetails);
-            log.info("2. Обновили детали заказа");
 
-            saveOrder.setAmount(saveOrder.getAmount() - 1);
-            saveOrder.setSum(saveOrder.getSum().subtract(orderDetails.getProduct().getPrice()));
-            Order saveOrder2 = orderRepository.save(saveOrder);
-            log.info("3. Обновили заказ");
+            recalculateOrderAndDetails(orderDetails);
+            log.info("2. Пересчитали детали и заказ");
 
             reviewService.deleteReview(reviewId);
-            log.info("4. Удалили отзыв");
+            log.info("3. Удалили отзыв");
 
-            saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() - 1); // уменьшаем счетчик
+            saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() - 1);
             companyService.save(saveCompany);
-            log.info("5. Обновили компанию");
+            log.info("4. Обновили компанию");
 
             return true;
         } catch (Exception e) {
             log.error("Ошибка при удалении отзыва", e);
             return false;
         }
+    }
+
+
+
+    private void recalculateOrderAndDetails(OrderDetails orderDetails) {
+        // Пересчёт суммы всех отзывов
+        BigDecimal detailTotal = orderDetails.getReviews().stream()
+                .map(Review::getPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        orderDetails.setPrice(detailTotal);
+
+        // Пересчёт количества отзывов
+        orderDetails.setAmount(orderDetails.getReviews().size());
+
+        // Сохраняем OrderDetails
+        orderDetailsService.save(orderDetails);
+
+        // Пересчёт суммы и количества в заказе
+        Order order = orderDetails.getOrder();
+        order.setSum(detailTotal);
+        order.setAmount(orderDetails.getAmount());
+
+        // Сохраняем Order
+        orderDetailsService.saveOrder(order);
     }
 
 //============================= СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS==================================
@@ -1365,24 +1378,102 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .comment("")
                 .build();
     } // Конвертер из DTO для деталей заказа
-    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // Конвертер из DTO для списка отзывов
+    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
         List<Review> reviewList = new ArrayList<>();
-//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
 
-        for (int i = 0; i < orderDTO.getAmount(); i++) {
-            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getFilial(), bots);
-            Review review2 = reviewService.save(review);
-            reviewList.add(review2);
+        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
+        String site = websiteParserService.extractTextFromWebsite("naigru.ru");
+
+        String category = orderDTO.getCompany().getSubCategory().getSubCategoryTitle();
+        int totalAmount = orderDTO.getAmount();
+
+        Set<String> uniqueTexts = new LinkedHashSet<>();
+        int maxAttempts = 10 * totalAmount;
+        int attempts = 0;
+
+        while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
+            List<String> batch = reviewGeneratorService.generateMultipleReviews(
+                    category,
+                    "позитивный",
+                    site,
+                    totalAmount - uniqueTexts.size()
+            );
+
+            for (String review : batch) {
+                if (review == null || review.isBlank()) continue;
+
+                if (review.startsWith("⚠️")) {
+                    log.warn("Пропущен отзыв с ошибкой: {}", review);
+                    continue;
+                }
+
+                if (uniqueTexts.contains(review)) {
+                    log.debug("Пропущен дубликат отзыва: {}", review);
+                    continue;
+                }
+
+                uniqueTexts.add(review);
+            }
+
+            // Если не хватило — запрашиваем по одному
+            if (uniqueTexts.size() < totalAmount) {
+                String one = reviewGeneratorService.generateReview(category, "позитивный", site);
+                if (one != null && !one.startsWith("⚠️") && !uniqueTexts.contains(one)) {
+                    uniqueTexts.add(one);
+                } else if (one != null) {
+                    log.debug("Одинарный отзыв не добавлен (дубликат или ошибка): {}", one);
+                }
+            }
+
+            attempts++;
+
+            try {
+                Thread.sleep(300); // задержка 300 мс между попытками
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
+
+        if (uniqueTexts.size() < totalAmount) {
+            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {}", uniqueTexts.size(), totalAmount);
+        } else {
+            log.info("📝 Получено итогово {} уникальных отзывов", uniqueTexts.size());
+        }
+
+        List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
+        for (String text : texts) {
+            Review review = toEntityReviewFromDTO(
+                    orderDTO.getCompany(),
+                    orderDetails,
+                    orderDTO.getFilial(),
+                    bots,
+                    text
+            );
+            Review saved = reviewService.save(review);
+            if (saved != null) {
+                reviewList.add(saved);
+            } else {
+                log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
+            }
+        }
+
         return reviewList;
-    } // Конвертер из DTO для списка отзывов
-    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, FilialDTO filialDTO, List<Bot> bots){ // Конвертер из DTO для отзыва
+    }
+
+
+    private Review toEntityReviewFromDTO(
+            CompanyDTO companyDTO,
+            OrderDetails orderDetails,
+            FilialDTO filialDTO,
+            List<Bot> bots,
+            String textReview // <-- передаём уже готовый текст
+    ) {
         var random = new SecureRandom();
+
         return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
-                .text("Текст отзыва")
+                .text(textReview != null ? textReview : "Текст отзыва")
                 .answer("")
                 .orderDetails(orderDetails)
                 .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
@@ -1392,7 +1483,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .product(orderDetails.getProduct())
                 .price(orderDetails.getProduct().getPrice())
                 .build();
-    }// Конвертер из DTO для отзыва
+    }
 
     private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
             List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());

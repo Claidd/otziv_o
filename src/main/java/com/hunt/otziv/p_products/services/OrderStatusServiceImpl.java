@@ -4,10 +4,10 @@ import com.hunt.otziv.p_products.dto.OrderStatusDTO;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderStatusRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import jakarta.ws.rs.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.webjars.NotFoundException;
 
 import java.util.Objects;
 

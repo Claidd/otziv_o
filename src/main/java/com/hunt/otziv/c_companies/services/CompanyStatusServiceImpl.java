@@ -1,16 +1,11 @@
 package com.hunt.otziv.c_companies.services;
 
-import com.hunt.otziv.c_categories.services.CategoryService;
-import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyStatusRepository;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.u_users.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import org.webjars.NotFoundException;
+
 
 @Service
 @Slf4j

@@ -1,6 +1,5 @@
 package com.hunt.otziv.r_review.services;
 
-import com.fasterxml.jackson.databind.node.POJONode;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
@@ -22,7 +21,6 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -126,7 +124,7 @@ public class ReviewServiceImpl implements ReviewService{
             return reviewRepository.save(review);
         }
         if (review.getText().equals("Текст отзыва")){
-            System.out.println(review.getText());
+//            System.out.println(review.getText());
             log.info("1. Отзыв в БД отзывы сохранен как шаблон");
             return reviewRepository.save(review);
         }
@@ -221,7 +219,11 @@ public class ReviewServiceImpl implements ReviewService{
             isChanged = true;
         }
 
-        if (!Objects.equals(reviewDTO.getProduct().getId(), saveReview.getProduct().getId())) {
+        if ((reviewDTO.getProduct() != null && saveReview.getProduct() != null &&
+                !Objects.equals(reviewDTO.getProduct().getId(), saveReview.getProduct().getId()))
+                || (reviewDTO.getProduct() != null && saveReview.getProduct() == null)
+                || (reviewDTO.getProduct() == null && saveReview.getProduct() != null)) {
+
             log.info("Обновляем продукт отзыва");
             System.out.println(reviewDTO.getProduct());
             // 1. Обновляем продукт и цену у отзыва
@@ -231,17 +233,9 @@ public class ReviewServiceImpl implements ReviewService{
             reviewRepository.save(saveReview);
 
             // 2. Пересчитываем сумму деталей
-            OrderDetails orderDetails = orderDetailsService.getOrderDetailById(reviewDTO.getOrderDetailsId());
-            BigDecimal detailTotal = orderDetails.getReviews().stream()
-                    .map(Review::getPrice)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            orderDetails.setPrice(detailTotal);
-            orderDetailsService.save(orderDetails);
-
             // 3. Пересчитываем сумму всего заказа
-            Order order = orderDetails.getOrder(); // или получить через orderService
-            order.setSum(orderDetails.getPrice());
-            orderDetailsService.saveOrder(order);
+            recalculateOrderAndDetailsPrice(reviewDTO.getOrderDetailsId());
+
         }
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
@@ -267,6 +261,23 @@ public class ReviewServiceImpl implements ReviewService{
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
     } // Обновление отзывов
+
+    private void recalculateOrderAndDetailsPrice(UUID orderDetailsId) {
+        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailsId);
+
+        BigDecimal detailTotal = orderDetails.getReviews().stream()
+                .map(Review::getPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        orderDetails.setPrice(detailTotal);
+        orderDetailsService.save(orderDetails);
+
+        Order order = orderDetails.getOrder();
+        order.setSum(orderDetails.getPrice());
+        orderDetailsService.saveOrder(order);
+    }
+
 
 
 
