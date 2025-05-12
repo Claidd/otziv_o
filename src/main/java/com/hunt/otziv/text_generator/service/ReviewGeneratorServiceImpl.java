@@ -82,12 +82,14 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
   - по стилю,
   - по формулировкам;
 - не используй одни и те же фразы, слова и обороты.
+- используй смайлики в отзывах
 
 Разделяй отзывы пустой строкой.
 """, count, category, tone, site);
 
         ChatCompletionRequest request = ChatCompletionRequest.builder()
-                .model("gpt-4o")
+//                .model("gpt-4o")
+                .model("gpt-3.5-turbo")
                 .messages(List.of(
                         new ChatMessage("system", "Ты — профессиональный копирайтер."),
                         new ChatMessage("user", prompt)
@@ -114,6 +116,72 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
             return List.of("⚠️ Неизвестная ошибка при генерации отзыва.");
         }
     }
+
+
+
+    public String safeAnalyzeSiteText(String siteRaw) {
+        try {
+            ChatCompletionRequest request = ChatCompletionRequest.builder()
+                    .model("gpt-3.5-turbo")
+                    .messages(List.of(
+                            new ChatMessage("system", "Ты помощник, который структурирует текст сайта для генерации отзывов."),
+                            new ChatMessage("user", "На основе следующего текста выдели и кратко ответь по шаблону на вопросы:\n" +
+                                    siteRaw +
+                                    "\n\nШаблон:\n" +
+                                    "1. Название и адрес филиала:\n" +
+                                    "2. Основная сфера деятельности:\n" +
+                                    "3. Как давно вы работаете:\n" +
+                                    "4. Что именно вы предлагаете:\n" +
+                                    "5. Как выглядит вход:\n" +
+                                    "6. Интерьер:\n" +
+                                    "7. Парковка и удобства:\n" +
+                                    "8. Цены:\n" +
+                                    "9. Хиты продаж:\n" +
+                                    "10. Уникальные предложения:\n" +
+                                    "11. Имена и должности ключевых сотрудников:\n" +
+                                    "12. Опыт, специализация:\n" +
+                                    "13. Акции и скидки:\n" +
+                                    "14. Фразы для отзыва:\n" +
+                                    "15. Цитаты клиентов:\n" +
+                                    "16. Как происходит заказ:\n" +
+                                    "17. Гарантии и возвраты:\n" +
+                                    "18. Срок выполнения:\n" +
+                                    "19. Прочая информация:")
+                    ))
+                    .build();
+
+            return openAiService.createChatCompletion(request)
+                    .getChoices().get(0).getMessage().getContent();
+
+        } catch (Exception e) {
+            log.error("⚠️ Ошибка при анализе текста сайта: {}", e.getMessage());
+            return "Информация с сайта недоступна.";
+        }
+    }
+
+
+    public String safeGenerateSingleReview(String prompt) {
+        ChatCompletionRequest request = ChatCompletionRequest.builder()
+                .model("gpt-3.5-turbo")
+                .messages(List.of(
+                        new ChatMessage("system", "Пиши от лица обычного человека. Никакого маркетинга, смайлов и шаблонов."),
+                        new ChatMessage("user", prompt )
+                ))
+                .temperature(0.7)
+                .maxTokens(400)
+                .build();
+
+        try {
+            ChatCompletionResult result = openAiService.createChatCompletion(request);
+            String content = result.getChoices().getFirst().getMessage().getContent().trim();
+            log.info("✅ Получен отзыв ({} токенов)", content.length());
+            return content;
+        } catch (Exception e) {
+            log.error("❌ Ошибка при генерации отзыва: {}", e.getMessage());
+            return "⚠️ Ошибка при генерации отзыва.";
+        }
+    }
+
 
 
 

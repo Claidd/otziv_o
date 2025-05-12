@@ -58,7 +58,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+import java.io.InterruptedIOException;
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -1378,11 +1380,41 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .comment("")
                 .build();
     } // Конвертер из DTO для деталей заказа
+
+    private String siteText = "1. Название и адрес филиала: Центр детских развлечений, г. Иркутск, мк-н, Юбилейный, 17.\n" +
+            "2. Основная сфера деятельности: Организация детских праздников, проведение квестов и развлечений.\n" +
+            "3. Как давно вы работаете: Работаем на рынке развлечений уже несколько лет.\n" +
+            "4. Что именно вы предлагаете: Организацию детских дней рождения \"под ключ\" с квестами, играми, анимацией, фотосессиями и питанием.\n" +
+            "5. Как выглядит вход: Интересный и яркий вход, оформленный в стиле детских приключений.\n" +
+            "6. Интерьер: Уютное и красочное помещение с различными зонами для игр и отдыха.\n" +
+            "7. Парковка и удобства: Есть парковочные места, комфортные условия для проведения мероприятий.\n" +
+            "8. Цены: Стоимость различных пакетов услуг начинается от 1100 рублей за человека.\n" +
+            "9. Хиты продаж: Популярные квесты \"Гарри Поттер\", \"Замок Дракулы\", а также пакеты дня рождения \"под ключ\".\n" +
+            "10. Уникальные предложения: Организация питания, бесплатная чайная зона, красочные костюмы для игроков.\n" +
+            "11. Имена и должности ключевых сотрудников: Не указано.\n" +
+            "12. Опыт, специализация: Специализация в проведении детских мероприятий и квестов.\n" +
+            "13. Акции и скидки: Скидки при большом количестве участников, скидка на повторное посещение.\n" +
+            "14. Фразы для отзыва: \"Наш ребенок провел здесь незабываемый день рождения! Все организовано на высшем уровне.\"\n" +
+            "15. Цитаты клиентов: \"Мои дети в восторге от проведенного времени! Спасибо за теплую атмосферу.\"\n" +
+            "16. Как происходит заказ: Заказ услуг осуществляется по телефону или через онлайн-форму на сайте.\n" +
+            "17. Гарантии и возвраты: Гарантия качества проведения мероприятий, возможность замены пакетов услуг.\n" +
+            "18. Срок выполнения: Время проведения мероприятий зависит от выбранного пакета услуг, от 2 до 4 часов.\n" +
+            "19. Прочая информация: Предоставляется широкий выбор развлечений для детей разного возраста и интересов, разнообразие квестов и анимаций.";
+
     private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
         List<Review> reviewList = new ArrayList<>();
 
         List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-        String site = websiteParserService.extractTextFromWebsite("naigru.ru");
+        String siteRaw = websiteParserService.extractTextFromWebsite("naigru.ru");
+
+        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
+        log.info("\uD83C\uDF10 Текст с сайта содержит приблизительно {} токенов", siteTokens);
+//
+//        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
+//        String site = siteText;
+        String site = siteRaw;
+        System.out.println(site);
+//        log.info("\uD83D\uDCCB Компактный анализ сайта:\n{}", site);
 
         String category = orderDTO.getCompany().getSubCategory().getSubCategoryTitle();
         int totalAmount = orderDTO.getAmount();
@@ -1390,55 +1422,46 @@ public boolean deleteOrder(Long orderId, Principal principal){
         Set<String> uniqueTexts = new LinkedHashSet<>();
         int maxAttempts = 10 * totalAmount;
         int attempts = 0;
+        long startTime = System.nanoTime();
+        int totalTokenCount = 0;
 
         while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
-            List<String> batch = reviewGeneratorService.generateMultipleReviews(
-                    category,
-                    "позитивный",
-                    site,
-                    totalAmount - uniqueTexts.size()
-            );
+            String aspect = getRandomAspect();
+            String tone = "позитивный";
+            String prompt = getRandomPrompt(category, tone, site, aspect);
 
-            for (String review : batch) {
-                if (review == null || review.isBlank()) continue;
+            String review = reviewGeneratorService.safeGenerateSingleReview(prompt);
+            int tokens = review != null ? review.length() : 0;
 
-                if (review.startsWith("⚠️")) {
-                    log.warn("Пропущен отзыв с ошибкой: {}", review);
-                    continue;
-                }
-
-                if (uniqueTexts.contains(review)) {
-                    log.debug("Пропущен дубликат отзыва: {}", review);
-                    continue;
-                }
-
+            if (review != null && !review.startsWith("⚠️") && !uniqueTexts.contains(review)) {
                 uniqueTexts.add(review);
-            }
-
-            // Если не хватило — запрашиваем по одному
-            if (uniqueTexts.size() < totalAmount) {
-                String one = reviewGeneratorService.generateReview(category, "позитивный", site);
-                if (one != null && !one.startsWith("⚠️") && !uniqueTexts.contains(one)) {
-                    uniqueTexts.add(one);
-                } else if (one != null) {
-                    log.debug("Одинарный отзыв не добавлен (дубликат или ошибка): {}", one);
-                }
+                totalTokenCount += tokens;
+                log.info("➕ Добавлен новый отзыв ({} токенов), текущий счётчик: {}/{}", tokens, uniqueTexts.size(), totalAmount);
+            } else {
+                log.warn("⚠️ Ошибка, дубликат или неподходящая длина, отзыв не добавлен. Попытка: {}/{}", attempts + 1, maxAttempts);
             }
 
             attempts++;
 
             try {
-                Thread.sleep(300); // задержка 300 мс между попытками
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
 
+        long endTime = System.nanoTime();
+        double durationSec = (endTime - startTime) / 1_000_000_000.0;
+
         if (uniqueTexts.size() < totalAmount) {
-            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {}", uniqueTexts.size(), totalAmount);
+            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
+                    uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
         } else {
-            log.info("📝 Получено итогово {} уникальных отзывов", uniqueTexts.size());
+            log.info("\uD83D\uDCDD Получено итогово {} уникальных отзывов за {} сек после {} попыток",
+                    uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
         }
+
+        log.info("\uD83D\uDCCA Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
 
         List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
         for (String text : texts) {
@@ -1459,6 +1482,220 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
         return reviewList;
     }
+
+    private String getRandomAspect() {
+        List<String> aspects = List.of(
+                "доброжелательный персонал",
+                "удобное расположение",
+                "качественный сервис",
+                "доступные цены",
+                "широкий ассортимент",
+                "атмосфера уюта",
+                "профессионализм сотрудников",
+                "быстрое обслуживание",
+                "гарантии и возвраты",
+                "интересные акции"
+        );
+        return aspects.get(new Random().nextInt(aspects.size()));
+    }
+
+    private String getRandomPrompt(String category, String tone, String site, String aspect) {
+        List<String> variants = List.of(
+                "Ты обычный человек. Напиши краткий отзыв от первого лица, который мог бы оставить клиент после визита. Категория: %s. Информация: %s. Сделай акцент на: %s. Не используй пафос и рекламу. Просто и по делу.",
+                "Напиши отзыв в обычном разговорном стиле, без клише и восторгов. Категория: %s. Акцент: %s. Тональность: %s. Информация о компании: %s.",
+                "Сформулируй обычный очень короткий отзыв, который мог бы появиться на Яндекс.Картах или 2ГИС. Не слишком длинный. Категория: %s. Тема: %s. Контекст: %s. Без смайликов."
+        );
+        String pattern = variants.get(new Random().nextInt(variants.size()));
+        return String.format(pattern, category, site, aspect, tone);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================================      РАБОЧИЙ ВАРИАНТ   ДЛЯ СОЗДАНИЯ ОТЗЫВОВ 1м ВЫЗОВОМ              ==================================
+
+//    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
+//        List<Review> reviewList = new ArrayList<>();
+//
+//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
+//        String siteRaw = websiteParserService.extractTextFromWebsite("naigru.ru");
+//
+//        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
+//        log.info("🌐 Текст с сайта содержит приблизительно {} токенов", siteTokens);
+//
+//        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
+//        log.info("📋 Компактный анализ сайта:\n{}", site);
+//        String category = orderDTO.getCompany().getSubCategory().getSubCategoryTitle();
+//        int totalAmount = orderDTO.getAmount();
+//
+//        Set<String> uniqueTexts = new LinkedHashSet<>();
+//        int maxAttempts = 10 * totalAmount;
+//        int attempts = 0;
+//        long startTime = System.nanoTime();
+//        int totalTokenCount = 0;
+//
+//        while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
+//            int remaining = totalAmount - uniqueTexts.size();
+//            int batchSize = Math.min(remaining, 5); // ограничиваем батч до 5 штук
+//
+//            log.info("📦 Запрашиваем партию отзывов, размер: {}", batchSize);
+//
+//            List<String> batch = safeGenerateMultipleReviews(
+//                    category,
+//                    "позитивный",
+//                    site,
+//                    batchSize
+//            );
+//
+//            int batchTokens = batch.stream().mapToInt(s -> s != null ? s.length() : 0).sum();
+//            totalTokenCount += batchTokens;
+//            log.info("🔢 Получено {} отзывов, оценка токенов партии (приблизительно): {}", batch.size(), batchTokens);
+//
+//            for (String review : batch) {
+//                if (review == null || review.isBlank()) continue;
+//
+//                if (review.startsWith("⚠️")) {
+//                    log.warn("Пропущен отзыв с ошибкой: {}", review);
+//                    continue;
+//                }
+//
+//                if (uniqueTexts.contains(review)) {
+//                    log.debug("Пропущен дубликат отзыва: {}", review);
+//                    continue;
+//                }
+//
+//                uniqueTexts.add(review);
+//            }
+//
+//            if (uniqueTexts.size() < totalAmount) {
+//                String one = safeGenerateReview(category, "позитивный", site);
+//                if (one != null && !one.startsWith("⚠️") && !uniqueTexts.contains(one)) {
+//                    uniqueTexts.add(one);
+//                    totalTokenCount += one.length();
+//                } else if (one != null) {
+//                    log.debug("Одинарный отзыв не добавлен (дубликат или ошибка): {}", one);
+//                }
+//            }
+//
+//            attempts++;
+//
+//            try {
+//                Thread.sleep(300);
+//            } catch (InterruptedException e) {
+//                Thread.currentThread().interrupt();
+//            }
+//        }
+//
+//        long endTime = System.nanoTime();
+//        double durationSec = (endTime - startTime) / 1_000_000_000.0;
+//
+//        if (uniqueTexts.size() < totalAmount) {
+//            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
+//                    uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
+//        } else {
+//            log.info("📝 Получено итогово {} уникальных отзывов за {} сек после {} попыток",
+//                    uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
+//        }
+//
+//        log.info("📊 Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
+//
+//        List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
+//        for (String text : texts) {
+//            Review review = toEntityReviewFromDTO(
+//                    orderDTO.getCompany(),
+//                    orderDetails,
+//                    orderDTO.getFilial(),
+//                    bots,
+//                    text
+//            );
+//            Review saved = reviewService.save(review);
+//            if (saved != null) {
+//                reviewList.add(saved);
+//            } else {
+//                log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
+//            }
+//        }
+//
+//        return reviewList;
+//    }
+//
+//
+//    private String safeGenerateReview(String category, String tone, String site) {
+//        int retries = 3;
+//        for (int i = 0; i < retries; i++) {
+//            try {
+//                return reviewGeneratorService.generateReview(category, tone, site);
+//            } catch (RuntimeException ex) {
+//                Throwable cause = ex.getCause();
+//                if (ex.getMessage() != null && ex.getMessage().contains("Rate limit reached")) {
+//                    log.warn("🚦 Rate limit при генерации отзыва, попытка {}/{}", i + 1, retries);
+//                    try {
+//                        Thread.sleep(6000);
+//                    } catch (InterruptedException e) {
+//                        Thread.currentThread().interrupt();
+//                    }
+//                } else if (cause instanceof SocketTimeoutException || cause instanceof InterruptedIOException) {
+//                    log.warn("⏱ Прерывание или timeout при генерации, попытка {}/{}", i + 1, retries);
+//                    try {
+//                        Thread.sleep(1000);
+//                    } catch (InterruptedException e) {
+//                        Thread.currentThread().interrupt();
+//                    }
+//                } else {
+//                    log.error("❌ Ошибка при генерации отзыва: {}", ex.getMessage(), ex);
+//                    throw ex;
+//                }
+//            }
+//        }
+//        return "⚠️ Ошибка: не удалось получить отзыв после ретраев";
+//    }
+//
+//    private List<String> safeGenerateMultipleReviews(String category, String tone, String site, int amount) {
+//        int retries = 3;
+//        for (int i = 0; i < retries; i++) {
+//            try {
+//                return reviewGeneratorService.generateMultipleReviews(category, tone, site, amount);
+//            } catch (RuntimeException ex) {
+//                Throwable cause = ex.getCause();
+//                if (ex.getMessage() != null && ex.getMessage().contains("Rate limit reached")) {
+//                    log.warn("🚦 Rate limit при batch генерации отзывов, попытка {}/{}", i + 1, retries);
+//                    try {
+//                        Thread.sleep(6000);
+//                    } catch (InterruptedException e) {
+//                        Thread.currentThread().interrupt();
+//                    }
+//                } else if (cause instanceof SocketTimeoutException || cause instanceof InterruptedIOException) {
+//                    log.warn("⏱ Прерывание или timeout при batch генерации отзывов, попытка {}/{}", i + 1, retries);
+//                    try {
+//                        Thread.sleep(1000);
+//                    } catch (InterruptedException e) {
+//                        Thread.currentThread().interrupt();
+//                    }
+//                } else {
+//                    log.error("❌ Ошибка при batch генерации отзывов: {}", ex.getMessage(), ex);
+//                    throw ex;
+//                }
+//            }
+//        }
+//        return Collections.emptyList();
+//    }
+
+    // ==================================      РАБОЧИЙ ВАРИАНТ                 ==================================
 
 
     private Review toEntityReviewFromDTO(

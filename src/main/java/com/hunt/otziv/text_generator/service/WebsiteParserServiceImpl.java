@@ -9,8 +9,11 @@ import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -18,12 +21,12 @@ import java.util.Set;
 public class WebsiteParserServiceImpl implements WebsiteParserService{
 
 
-    private static final int MAX_PAGES = 7; // Ограничим, чтобы не зациклиться
+    private static final int MAX_PAGES = 10; // Ограничим, чтобы не зациклиться
     private final Set<String> visitedUrls = new HashSet<>();
 
     @Override
     public String extractTextFromWebsite(String rootUrl) {
-        visitedUrls.clear(); // очищаем перед началом
+        visitedUrls.clear();
         if (rootUrl == null || rootUrl.isBlank()) return "⚠️ Не указан сайт.";
         if (!rootUrl.startsWith("http")) rootUrl = "https://" + rootUrl;
 
@@ -31,12 +34,14 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
             URI rootUri = new URI(rootUrl);
             String domain = rootUri.getHost();
 
-            return crawl(rootUrl, domain, 0);
+            String raw = crawl(rootUrl, domain, 0);
+            return cleanAndDeduplicateText(raw);
         } catch (Exception e) {
             log.error("Ошибка при парсинге сайта: {}", e.getMessage(), e);
             return "⚠️ Ошибка при обработке сайта.";
         }
     }
+
 
     private String crawl(String url, String domain, int depth) {
         if (visitedUrls.contains(url) || visitedUrls.size() >= MAX_PAGES) return "";
@@ -47,8 +52,8 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
 
             Document doc = Jsoup.connect(url).get();
 
-            // 👉 Удаляем мусор перед сбором текста
-            doc.select("header, footer, nav, script, style, .menu, .sidebar, .breadcrumbs").remove();
+            // Удаляем шум перед извлечением
+            doc.select(" script, style, .menu, .sidebar, .breadcrumbs").remove();
 
             StringBuilder allText = new StringBuilder(doc.body().text()).append("\n");
 
@@ -68,5 +73,13 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
         }
     }
 
+    private String cleanAndDeduplicateText(String raw) {
+        return Arrays.stream(raw.split("\\s+"))
+                .map(String::trim)
+                .filter(word -> !word.isBlank())
+                .map(word -> word.replaceAll("[^а-яА-Яa-zA-Z0-9]", "").toLowerCase())
+                .distinct()
+                .collect(Collectors.joining(" "));
+    }
 
 }
