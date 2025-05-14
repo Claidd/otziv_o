@@ -1,5 +1,6 @@
-package com.hunt.otziv.text_generator.service;
+package com.hunt.otziv.text_generator.service.parser;
 
+import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -11,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -20,8 +20,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WebsiteParserServiceImpl implements WebsiteParserService{
 
+    private final ReviewGeneratorService reviewGeneratorService;
 
-    private static final int MAX_PAGES = 10; // Ограничим, чтобы не зациклиться
+
+    private static final int MAX_PAGES = 20; // Ограничим, чтобы не зациклиться
     private final Set<String> visitedUrls = new HashSet<>();
 
     @Override
@@ -35,7 +37,8 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
             String domain = rootUri.getHost();
 
             String raw = crawl(rootUrl, domain, 0);
-            return cleanAndDeduplicateText(raw);
+            String raw2 = cleanAndDeduplicateText(raw);
+            return reviewGeneratorService.safeAnalyzeSiteText(raw2);
         } catch (Exception e) {
             log.error("Ошибка при парсинге сайта: {}", e.getMessage(), e);
             return "⚠️ Ошибка при обработке сайта.";

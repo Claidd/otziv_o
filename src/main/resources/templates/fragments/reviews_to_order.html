@@ -71,11 +71,23 @@
                         </div>
                         
                         <div class="company__card__text__lead"> <!-- Bot Login -->
-                            <label>
-                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>
-                            </label>
-                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>
+<!--                            <label>-->
+<!--                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>-->
+<!--                            </label>-->
+<!--                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>-->
+                            <button type="button"
+                                    class="company__card__text__lead-button"
+                                    th:onclick="'myFunctionChangeText(this, \'' +
+            '/ordersDetails/changeText/' + ${review.companyId} + '/' + ${review.orderId} + '/' + ${review.id} + '\'' +
+        ')'">
+                                вк
+                            </button>
+                            <span th:id="'spinner-' + ${review.id}" class="spinner" style="display: none;">⏳</span>
                         </div>
+
+
+
+
                     </div> <!-- card__content_button -->
                     <div class="company__card__content_button">
                         <div class="company__card__text__lead"> <!-- Review Text -->

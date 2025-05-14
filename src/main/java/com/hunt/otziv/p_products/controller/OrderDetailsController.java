@@ -6,6 +6,8 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.text_generator.service.AutoTextService;
+import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,6 +36,7 @@ public class OrderDetailsController {
 
     private final ReviewService reviewService;
     private final OrderService orderService;
+    private final AutoTextService autoTextService;
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model){
@@ -50,6 +53,22 @@ public class OrderDetailsController {
             return "products/orders_detail_list";
         }
     } // Переход на страницу Просмотра  деталей заказа
+
+    @PostMapping("/changeText/{companyId}/{orderId}/{reviewId}")
+    public String changeReviewText(@PathVariable Long companyId, @PathVariable Long orderId, @PathVariable Long reviewId,RedirectAttributes rm, Model model){
+        long startTime = System.nanoTime();
+        if (autoTextService.changeReviewText(reviewId)){
+            rm.addFlashAttribute("saveSuccess", "true");
+            checkTimeMethod("Смена текста OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+        else {
+            checkTimeMethod("Смена текста OrderDetailsController/ordersDetails/{companyId}/{orderId} для Всех: ", startTime);
+            rm.addFlashAttribute("saveSuccess", "false");
+            return String.format("redirect:/ordersDetails/%s/%s", companyId, orderId);
+        }
+
+    }
 
 
     @PostMapping("/{orderId}/change_bot/{reviewId}")

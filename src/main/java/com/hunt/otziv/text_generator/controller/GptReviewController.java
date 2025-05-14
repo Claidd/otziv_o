@@ -1,6 +1,6 @@
 package com.hunt.otziv.text_generator.controller;
 
-import com.hunt.otziv.text_generator.service.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

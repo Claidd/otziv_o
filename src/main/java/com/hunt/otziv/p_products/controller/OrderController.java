@@ -10,6 +10,7 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.services.AmountService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.text_generator.service.AutoTextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;

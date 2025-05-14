@@ -304,6 +304,33 @@ function onPayment(button) {
       // alert("Copied the text: " + copyText5.value);
     }
 
+function myFunctionChangeText(button, url) {
+    const originalText = button.innerText;
+    button.innerText = '⏳ Ждите...';
+    button.disabled = true;
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]').value
+        }
+    }).then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            button.innerText = 'Готово';
+        }
+    }).catch(error => {
+        console.error('Ошибка запроса:', error);
+        button.innerText = 'Ошибка';
+    }).finally(() => {
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.disabled = false;
+        }, 1500);
+    });
+}
+
 
     function myFunction2Gis(button) {
       var copyText6 = button.getAttribute("data-orderfilial");

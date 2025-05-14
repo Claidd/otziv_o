@@ -1,5 +1,9 @@
-package com.hunt.otziv.text_generator.service;
+package com.hunt.otziv.text_generator.service.toGPT;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.text_generator.dto.PromptDTO;
+import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
 import com.theokanning.openai.OpenAiHttpException;
 import com.theokanning.openai.completion.chat.ChatCompletionRequest;
 import com.theokanning.openai.completion.chat.ChatCompletionResult;
@@ -17,7 +21,156 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
     private final OpenAiService openAiService;
-    private final WebsiteParserService websiteParserService;
+
+
+    public String safeGenerateSingleReview(PromptDTO promptDTO) {
+        ChatCompletionRequest request = ChatCompletionRequest.builder()
+//                .model("gpt-3.5-turbo")
+                .model("gpt-4o")
+                .messages(List.of(
+                        new ChatMessage("system", "Ты человек пишуший отзыв о компании в которой был. " +promptDTO.getSystem()),
+                        new ChatMessage("user", promptDTO.getPrompt() )
+                ))
+                .temperature(promptDTO.getTemperature())
+                .maxTokens(400)
+                .build();
+
+        try {
+            ChatCompletionResult result = openAiService.createChatCompletion(request);
+            String content = result.getChoices().getFirst().getMessage().getContent().trim();
+            log.info("✅ Получен отзыв ({} токенов)", content.length());
+            return content;
+        } catch (Exception e) {
+            log.error("❌ Ошибка при генерации отзыва: {}", e.getMessage());
+            return "⚠️ Ошибка при генерации отзыва.";
+        }
+    }
+
+    public String minusSlova(String text) {
+        ChatCompletionRequest request = ChatCompletionRequest.builder()
+//                .model("gpt-3.5-turbo")
+                .model("gpt-4o")
+                .messages(List.of(
+                        new ChatMessage("system", "Ты - Редактор текстов отзывов, который делает тексты более человечными. "),
+                        new ChatMessage("user","Перепиши текст отзыва в более обычном разговорном стиле, без клише, восторгов и ярких эмоций. Но смайлы, если есть, можешь оставлять. Вот текст: " + text + "Убери  слова и словосочетания такие как - в восторге, превзошло все ожидания, это то, что нам нужно, невероятно, были отзывчивы, атмосферу, были в восторге, просто супер, на высшем уровне, был безупречным, настоящая находка, сразу понял/поняла это то что нужно, был приятно удивлен ")
+                ))
+                .temperature(0.8)
+                .maxTokens(400)
+                .build();
+
+        try {
+            ChatCompletionResult result = openAiService.createChatCompletion(request);
+            String content = result.getChoices().getFirst().getMessage().getContent().trim();
+            log.info("✅ Получен отзыв ({} токенов)", content.length());
+            return content;
+        } catch (Exception e) {
+            log.error("❌ Ошибка при генерации отзыва: {}", e.getMessage());
+            return "⚠️ Ошибка при генерации отзыва.";
+        }
+    }
+
+
+    public String safeAnalyzeSiteTextNoShablon(String siteRaw) {
+        try {
+            ChatCompletionRequest request = ChatCompletionRequest.builder()
+                    .model("gpt-3.5-turbo")
+                    .messages(List.of(
+                            new ChatMessage("system", "Ты помощник, который структурирует текст сайта для генерации отзывов."),
+                            new ChatMessage("user", "Изучи, проанализируй информацию и сделай краткую выжимку самой важной информации. Вот текст:\n" +
+                                    siteRaw )
+                    ))
+                    .build();
+
+            return openAiService.createChatCompletion(request)
+                    .getChoices().getFirst().getMessage().getContent();
+
+        } catch (Exception e) {
+            log.error("⚠️ Ошибка при анализе текста сайта: {}", e.getMessage());
+            return "Информация с сайта недоступна.";
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    public List<String> diversifyReviews(List<String> rawReviews) {
+        if (rawReviews.isEmpty()) return List.of();
+
+        StringBuilder userPrompt = new StringBuilder("""
+        Вот список отзывов. Перепиши каждый отзыв так, чтобы:
+        - они стали разнообразными по стилю, длине, лексике;
+        - звучали более естественно, как если бы их писали разные люди;
+        - не использовались одинаковые фразы;
+        - избегались шаблоны вроде «в восторге», «превзошло ожидания» и т. п.;
+        - сохранился общий смысл, но стиль был более разговорным и реалистичным.
+        - тексты должны быть абсолютно разные между собой
+
+        Ответ верни в формате JSON-массива строк. Пример:
+        ["отзыв 1", "отзыв 2", ...]
+    """);
+
+        for (int i = 0; i < rawReviews.size(); i++) {
+            userPrompt.append("Отзыв ").append(i + 1).append(": ").append(rawReviews.get(i)).append("\n\n");
+        }
+
+        ChatCompletionRequest request = ChatCompletionRequest.builder()
+                .model("gpt-4o")
+                .messages(List.of(
+                        new ChatMessage("system", "Ты редактор пользовательских отзывов."),
+                        new ChatMessage("user", userPrompt.toString())
+                ))
+                .temperature(0.9)
+                .maxTokens(400)
+                .build();
+
+        try {
+            ChatCompletionResult result = openAiService.createChatCompletion(request);
+            String jsonContent = result.getChoices().getFirst().getMessage().getContent().trim();
+
+// Убираем markdown-форматирование
+            jsonContent = jsonContent.replaceAll("(?s)^```(?:json)?|```$", "").trim();
+
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(jsonContent, new TypeReference<>() {});
+
+        } catch (Exception e) {
+            log.error("❌ Ошибка при разнообразии отзывов: {}", e.getMessage());
+            return List.of("⚠️ Ошибка при обработке отзывов.");
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     public String generateReview(String category, String tone, String site) {
@@ -128,23 +281,23 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
                             new ChatMessage("user", "На основе следующего текста выдели и кратко ответь по шаблону на вопросы:\n" +
                                     siteRaw +
                                     "\n\nШаблон:\n" +
-                                    "1. Название и адрес филиала:\n" +
+                                    "1. Название и адрес филиалов:\n" +
                                     "2. Основная сфера деятельности:\n" +
-                                    "3. Как давно вы работаете:\n" +
-                                    "4. Что именно вы предлагаете:\n" +
+                                    "3. Как давно вы работают:\n" +
+                                    "4. Что именно вы предлагают:\n" +
                                     "5. Как выглядит вход:\n" +
                                     "6. Интерьер:\n" +
                                     "7. Парковка и удобства:\n" +
-                                    "8. Цены:\n" +
-                                    "9. Хиты продаж:\n" +
+                                    "8. Укажи название каждого товара/услуги и их Цену:\n" +
+//                                    "9. Хиты продаж:\n" +
                                     "10. Уникальные предложения:\n" +
                                     "11. Имена и должности ключевых сотрудников:\n" +
                                     "12. Опыт, специализация:\n" +
-                                    "13. Акции и скидки:\n" +
-                                    "14. Фразы для отзыва:\n" +
-                                    "15. Цитаты клиентов:\n" +
-                                    "16. Как происходит заказ:\n" +
-                                    "17. Гарантии и возвраты:\n" +
+//                                    "13. Акции и скидки:\n" +
+//                                    "14. Фразы для отзыва:\n" +
+//                                    "15. Цитаты клиентов:\n" +
+//                                    "16. Как происходит заказ:\n" +
+//                                    "17. Гарантии и возвраты:\n" +
                                     "18. Срок выполнения:\n" +
                                     "19. Прочая информация:")
                     ))
@@ -158,33 +311,6 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
             return "Информация с сайта недоступна.";
         }
     }
-
-
-    public String safeGenerateSingleReview(String prompt) {
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-                .model("gpt-3.5-turbo")
-                .messages(List.of(
-                        new ChatMessage("system", "Пиши от лица обычного человека. Никакого маркетинга, смайлов и шаблонов."),
-                        new ChatMessage("user", prompt )
-                ))
-                .temperature(0.7)
-                .maxTokens(400)
-                .build();
-
-        try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            String content = result.getChoices().getFirst().getMessage().getContent().trim();
-            log.info("✅ Получен отзыв ({} токенов)", content.length());
-            return content;
-        } catch (Exception e) {
-            log.error("❌ Ошибка при генерации отзыва: {}", e.getMessage());
-            return "⚠️ Ошибка при генерации отзыва.";
-        }
-    }
-
-
-
-
 
     String promtText = "1) Мне нужно сгенерировать один отзыв для бизнеса. Информацию я прикрепляю. Важно, чтобы отзывы были максимально естественными, будто их писал живой человек. Не идеально выверенные, а именно такие, какие мы встречаем в реальности — с чуть-чуть \"кривыми\" фразами, живыми мыслями и разной эмоциональностью.\n" +
             "\n" +

@@ -31,8 +31,9 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.text_generator.service.ReviewGeneratorService;
-import com.hunt.otziv.text_generator.service.WebsiteParserService;
+import com.hunt.otziv.text_generator.service.AutoTextService;
+import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -58,9 +59,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
-import java.io.InterruptedIOException;
 import java.math.BigDecimal;
-import java.net.SocketTimeoutException;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -93,8 +92,7 @@ public class OrderServiceImpl implements OrderService {
     private final CompanyStatusService companyStatusService;
     private final EmailService emailService;
     private final TelegramService telegramService;
-    private final ReviewGeneratorService reviewGeneratorService;
-    private final WebsiteParserService websiteParserService;
+    private final AutoTextService autoTextService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -496,7 +494,10 @@ public class OrderServiceImpl implements OrderService {
     private OrderDetails saveOrderDetails(Order order, OrderDTO orderDTO, Long productId) {
         OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, order, productId);
         OrderDetails savedOrderDetails = orderDetailsService.save(orderDetails);
+    //        Вариант для ручного создания текстов
         List<Review> reviews = toEntityListReviewsFromDTO(orderDTO, savedOrderDetails);
+        //        Вариант для Авто создания текстов
+//        List<Review> reviews = autoTextService.toEntityListReviewsFromDTO(orderDTO, savedOrderDetails);
         savedOrderDetails.setReviews(reviews);
         return orderDetailsService.save(savedOrderDetails);
     }
@@ -1361,25 +1362,25 @@ public boolean deleteOrder(Long orderId, Principal principal){
         Product product1 = productService.findById(productId);
         return Order.builder()
                 .amount(orderDTO.getAmount())
-                .complete(false)
+            .complete(false)
                 .worker(convertWorkerDTOToWorker(orderDTO.getWorker()))
-                .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
-                .manager(convertManagerDTOToManager(orderDTO.getManager()))
-                .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
-                .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
-                .status(convertStatusDTOToStatus(orderDTO.getStatus()))
-                .build();
-    } // Конвертер из DTO для заказа
-    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){ // Конвертер из DTO для деталей заказа
-        Product product1 = productService.findById(productId);
-        return OrderDetails.builder()
-                .amount(orderDTO.getAmount())
-                .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
-                .order(order)
-                .product(product1)
-                .comment("")
-                .build();
-    } // Конвертер из DTO для деталей заказа
+            .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
+            .manager(convertManagerDTOToManager(orderDTO.getManager()))
+            .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
+            .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
+            .status(convertStatusDTOToStatus(orderDTO.getStatus()))
+            .build();
+} // Конвертер из DTO для заказа
+private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){ // Конвертер из DTO для деталей заказа
+    Product product1 = productService.findById(productId);
+    return OrderDetails.builder()
+            .amount(orderDTO.getAmount())
+            .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
+            .order(order)
+            .product(product1)
+            .comment("")
+            .build();
+} // Конвертер из DTO для деталей заказа
 
     private String siteText = "1. Название и адрес филиала: Центр детских развлечений, г. Иркутск, мк-н, Юбилейный, 17.\n" +
             "2. Основная сфера деятельности: Организация детских праздников, проведение квестов и развлечений.\n" +
@@ -1401,117 +1402,38 @@ public boolean deleteOrder(Long orderId, Principal principal){
             "18. Срок выполнения: Время проведения мероприятий зависит от выбранного пакета услуг, от 2 до 4 часов.\n" +
             "19. Прочая информация: Предоставляется широкий выбор развлечений для детей разного возраста и интересов, разнообразие квестов и анимаций.";
 
-    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
+
+
+
+
+    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // Конвертер из DTO для списка отзывов
         List<Review> reviewList = new ArrayList<>();
-
+//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
         List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-        String siteRaw = websiteParserService.extractTextFromWebsite("naigru.ru");
 
-        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
-        log.info("\uD83C\uDF10 Текст с сайта содержит приблизительно {} токенов", siteTokens);
-//
-//        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
-//        String site = siteText;
-        String site = siteRaw;
-        System.out.println(site);
-//        log.info("\uD83D\uDCCB Компактный анализ сайта:\n{}", site);
-
-        String category = orderDTO.getCompany().getSubCategory().getSubCategoryTitle();
-        int totalAmount = orderDTO.getAmount();
-
-        Set<String> uniqueTexts = new LinkedHashSet<>();
-        int maxAttempts = 10 * totalAmount;
-        int attempts = 0;
-        long startTime = System.nanoTime();
-        int totalTokenCount = 0;
-
-        while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
-            String aspect = getRandomAspect();
-            String tone = "позитивный";
-            String prompt = getRandomPrompt(category, tone, site, aspect);
-
-            String review = reviewGeneratorService.safeGenerateSingleReview(prompt);
-            int tokens = review != null ? review.length() : 0;
-
-            if (review != null && !review.startsWith("⚠️") && !uniqueTexts.contains(review)) {
-                uniqueTexts.add(review);
-                totalTokenCount += tokens;
-                log.info("➕ Добавлен новый отзыв ({} токенов), текущий счётчик: {}/{}", tokens, uniqueTexts.size(), totalAmount);
-            } else {
-                log.warn("⚠️ Ошибка, дубликат или неподходящая длина, отзыв не добавлен. Попытка: {}/{}", attempts + 1, maxAttempts);
-            }
-
-            attempts++;
-
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        for (int i = 0; i < orderDTO.getAmount(); i++) {
+            Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getFilial(), bots);
+            Review review2 = reviewService.save(review);
+            reviewList.add(review2);
         }
-
-        long endTime = System.nanoTime();
-        double durationSec = (endTime - startTime) / 1_000_000_000.0;
-
-        if (uniqueTexts.size() < totalAmount) {
-            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
-                    uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
-        } else {
-            log.info("\uD83D\uDCDD Получено итогово {} уникальных отзывов за {} сек после {} попыток",
-                    uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
-        }
-
-        log.info("\uD83D\uDCCA Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
-
-        List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
-        for (String text : texts) {
-            Review review = toEntityReviewFromDTO(
-                    orderDTO.getCompany(),
-                    orderDetails,
-                    orderDTO.getFilial(),
-                    bots,
-                    text
-            );
-            Review saved = reviewService.save(review);
-            if (saved != null) {
-                reviewList.add(saved);
-            } else {
-                log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
-            }
-        }
-
         return reviewList;
-    }
-
-    private String getRandomAspect() {
-        List<String> aspects = List.of(
-                "доброжелательный персонал",
-                "удобное расположение",
-                "качественный сервис",
-                "доступные цены",
-                "широкий ассортимент",
-                "атмосфера уюта",
-                "профессионализм сотрудников",
-                "быстрое обслуживание",
-                "гарантии и возвраты",
-                "интересные акции"
-        );
-        return aspects.get(new Random().nextInt(aspects.size()));
-    }
-
-    private String getRandomPrompt(String category, String tone, String site, String aspect) {
-        List<String> variants = List.of(
-                "Ты обычный человек. Напиши краткий отзыв от первого лица, который мог бы оставить клиент после визита. Категория: %s. Информация: %s. Сделай акцент на: %s. Не используй пафос и рекламу. Просто и по делу.",
-                "Напиши отзыв в обычном разговорном стиле, без клише и восторгов. Категория: %s. Акцент: %s. Тональность: %s. Информация о компании: %s.",
-                "Сформулируй обычный очень короткий отзыв, который мог бы появиться на Яндекс.Картах или 2ГИС. Не слишком длинный. Категория: %s. Тема: %s. Контекст: %s. Без смайликов."
-        );
-        String pattern = variants.get(new Random().nextInt(variants.size()));
-        return String.format(pattern, category, site, aspect, tone);
-    }
-
-
-
-
+    } // Конвертер из DTO для списка отзывов
+    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, FilialDTO filialDTO, List<Bot> bots){ // Конвертер из DTO для отзыва
+        var random = new SecureRandom();
+        return Review.builder()
+                .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
+                .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
+                .text("Текст отзыва")
+                .answer("")
+                .orderDetails(orderDetails)
+                .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
+                .filial(convertFilialDTOToFilial(filialDTO))
+                .publish(false)
+                .worker(orderDetails.getOrder().getWorker())
+                .product(orderDetails.getProduct())
+                .price(orderDetails.getProduct().getPrice())
+                .build();
+    }// Конвертер из DTO для отзыва
 
 
 

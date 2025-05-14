@@ -1,4 +1,4 @@
-package com.hunt.otziv.text_generator.service;
+package com.hunt.otziv.text_generator.service.parser;
 
 import org.springframework.context.annotation.ComponentScan;
 
