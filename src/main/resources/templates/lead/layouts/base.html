@@ -24,6 +24,7 @@
                     <th:block th:switch="${route}">
                         <th:block th:case="lead" th:insert="~{lead/pages/leads_list :: content}"></th:block>
                         <th:block th:case="operators" th:insert="~{lead/pages/operator_leads_list :: content}"></th:block>
+                        <th:block th:case="whatsapp" th:insert="~{lead/pages/whatsapp :: content}"></th:block>
                         <th:block th:case="create" th:insert="~{lead/pages/new_lead :: content(${route})}"></th:block>
                     </th:block>
                     <!-- ==================== FRAGMENT: title ======================== -->

@@ -304,32 +304,15 @@ function onPayment(button) {
       // alert("Copied the text: " + copyText5.value);
     }
 
-function myFunctionChangeText(button, url) {
-    const originalText = button.innerText;
-    button.innerText = '⏳ Ждите...';
-    button.disabled = true;
-
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]').value
-        }
-    }).then(response => {
-        if (response.redirected) {
-            window.location.href = response.url;
-        } else {
-            button.innerText = 'Готово';
-        }
-    }).catch(error => {
-        console.error('Ошибка запроса:', error);
-        button.innerText = 'Ошибка';
-    }).finally(() => {
-        setTimeout(() => {
-            button.innerText = originalText;
-            button.disabled = false;
-        }, 1500);
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('form.change-text-form').forEach(form => {
+        form.addEventListener('submit', function () {
+            const btn = form.querySelector('button');
+            btn.innerText = '⏳ Ждите...';
+            btn.disabled = true;
+        });
     });
-}
+});
 
 
     function myFunction2Gis(button) {

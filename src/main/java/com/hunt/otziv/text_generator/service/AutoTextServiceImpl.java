@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 import java.security.SecureRandom;
 import java.util.*;
 @Service
@@ -396,13 +397,71 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 
     public boolean changeReviewText(Long reviewId) {
+        long start = System.nanoTime();
+
         Review review = reviewService.getReviewById(reviewId);
+        if (review == null) {
+            log.error("❌ Review с ID {} не найден", reviewId);
+            return false;
+        }
+
         String site = "";
         PromptDTO promptDTO = takePromtDTOconverter(site, review.getSubCategory().getSubCategoryTitle());
-        String text = reviewGeneratorService.safeGenerateSingleReview(promptDTO);
-        review.setText(text);
-        return reviewService.save(review) != null;
+
+        String generatedText = null;
+        int maxAttempts = 3;
+
+        for (int i = 1; i <= maxAttempts; i++) {
+            long attemptStart = System.nanoTime();
+            try {
+                log.info("🧠 Генерация отзыва (попытка {})...", i);
+                generatedText = reviewGeneratorService.safeGenerateSingleReview(promptDTO);
+
+                if (generatedText == null || generatedText.isBlank()) {
+                    log.warn("⚠️ Пустой результат генерации — попытка {}", i);
+                    continue;
+                }
+
+                // Если нужно исключить дубли:
+                // if (reviewService.existsByText(generatedText)) {
+                //     log.warn("🔁 Такой текст уже есть в БД — попытка {}", i);
+                //     continue;
+                // }
+
+                break;
+
+            } catch (Exception e) {
+                long durationMs = (System.nanoTime() - attemptStart) / 1_000_000;
+                if (e.getCause() instanceof SocketTimeoutException) {
+                    log.warn("⏱ Timeout при попытке {} за {} мс", i, durationMs);
+                    try {
+                        Thread.sleep(3000); // пауза перед следующей попыткой
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                } else {
+                    log.error("❌ Ошибка при генерации отзыва (попытка {}) за {} мс", i, durationMs, e);
+                }
+            }
+        }
+
+        if (generatedText == null || generatedText.isBlank()) {
+            log.error("❌ Не удалось сгенерировать отзыв после {} попыток", maxAttempts);
+            return false;
+        }
+
+        review.setText(generatedText);
+        boolean result = reviewService.save(review) != null;
+
+        long end = System.nanoTime();
+        log.info("✅ Смена текста завершена за {:.4f} сек", (end - start) / 1_000_000_000.0);
+
+        return result;
     }
+
+
+
 
     private Review toEntityReviewFromDTO(
             CompanyDTO companyDTO,

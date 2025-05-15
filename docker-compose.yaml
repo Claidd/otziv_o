@@ -1,11 +1,11 @@
 version: '3.8'
+
 services:
   mysql:
     image: mysql:latest
     container_name: my-mysql
     volumes:
       - mysql_data:/var/lib/mysql
-#      - ./data/mysql/my.cnf:/etc/my.cnf:ro
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files/
     restart: always
@@ -16,6 +16,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - internal_net
 
   nginx:
     image: nginx:latest
@@ -33,14 +35,15 @@ services:
       - ./data/proxy_cache:/var/lib/nginx/proxy_cache
     depends_on:
       - mysql
+    networks:
+      - internal_net
 
   app:
     image: claid38/otziv-app
     restart: always
-#    ports:
-#      - "8080:8080"
     depends_on:
       - mysql
+      - vpn-proxy
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -51,16 +54,49 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       DATABASE_URL: ${DATABASE_URL}
+      HTTP_PROXY: http://vpn-proxy:8888
+      HTTPS_PROXY: http://vpn-proxy:8888
     env_file:
       - .env
+    volumes:
+      - ./data/openai-route.sh:/usr/local/bin/openai-route.sh
+    networks:
+      - internal_net
 
   phpmyadmin:
     image: phpmyadmin:latest
-#    container_name: my-phpmyadmin
     ports:
       - "6571:80"
     volumes:
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+    networks:
+      - internal_net
+
+  vpn-proxy:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=GMuC/oH+cz/DN6FUAsK62UTnDmWE/KH8GNFGtSEJSWw=
+      - WIREGUARD_ADDRESSES=192.168.6.252/32
+      - WIREGUARD_PUBLIC_KEY=2ZxarKjjg+SUx7F+g0PKJ9cqb2a4kvK2B9dG4GP9zCs=
+      - WIREGUARD_ENDPOINT_IP=62.133.60.134
+      - WIREGUARD_ENDPOINT_PORT=1024
+      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0
+      - FIREWALL=off
+      - HTTPPROXY=on
+      - HTTPPROXY_LOG=on
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data/gluetun:/gluetun
+    networks:
+      - internal_net
 
 volumes:
   mysql_data:
+
+networks:
+  internal_net:

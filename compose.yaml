@@ -1,6 +1,6 @@
 version: '3.8'
 networks:
-  network2:
+  internal_net:
 
 services:
   mysql:
@@ -17,7 +17,7 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     networks:
-      - network2
+      internal_net:
 
   nginx:
     build:
@@ -41,7 +41,7 @@ services:
       - phpmyadmin
       - app
     networks:
-      - network2
+      internal_net:
 
   app:
     build:
@@ -54,6 +54,7 @@ services:
 #      - '8080:8080'
     depends_on:
       - mysql
+      - vpn-proxy
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -67,7 +68,7 @@ services:
     env_file:
       - .env
     networks:
-      - network2
+      internal_net:
 
   phpmyadmin:
     image: phpmyadmin:latest
@@ -85,12 +86,76 @@ services:
       - mysql
     command: /bin/sh -c "chmod 644 /etc/phpmyadmin/config.inc.php && apache2-foreground"
     networks:
-      - network2
+      internal_net:
 
+  vpn-proxy:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=GMuC/oH+cz/DN6FUAsK62UTnDmWE/KH8GNFGtSEJSWw=
+      - WIREGUARD_ADDRESSES=192.168.6.252/32
+      - WIREGUARD_PUBLIC_KEY=2ZxarKjjg+SUx7F+g0PKJ9cqb2a4kvK2B9dG4GP9zCs=
+      - WIREGUARD_ENDPOINT_IP=62.133.60.134
+      - WIREGUARD_ENDPOINT_PORT=1024
+      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0
+      - FIREWALL=off
+      - HTTPPROXY=on
+      - HTTPPROXY_LOG=on
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data/gluetun:/gluetun
+    networks:
+      - internal_net
+
+  whatsapp1:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    image: otziv-whatsapp:latest    # ✅ общий тег
+    container_name: whatsapp1
+    volumes:
+      - whatsapp_auth_data:/root/.config/whatsapp-web.js
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    environment:
+      - CLIENT_ID=client1
+    networks:
+      - internal_net
+
+  whatsapp2:
+    image: otziv-whatsapp:latest    # ✅ используем тот же образ
+    container_name: whatsapp2
+    volumes:
+      - whatsapp_auth_data:/root/.config/whatsapp-web.js
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+    environment:
+      - CLIENT_ID=client2
+    networks:
+      - internal_net
+
+  whatsapp3:
+    image: otziv-whatsapp:latest    # ✅ тот же образ
+    container_name: whatsapp3
+    volumes:
+      - whatsapp_auth_data:/root/.config/whatsapp-web.js
+    ports:
+      - "3003:3000"
+    restart: unless-stopped
+    environment:
+      - CLIENT_ID=client3
+    networks:
+      - internal_net
 
 volumes:
   mysql_data:
-
+  whatsapp_auth_data:
 
 
   #  docker exec -i my-mysql mysqldump -uhunt -pRkfql54532111 otziv > /docker/backup-otziv.sql

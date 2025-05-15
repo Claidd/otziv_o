@@ -36,9 +36,6 @@ CMD ["java", "-jar", "app.jar"]
 
 
 
-
-
-
 #FROM mysql:latest
 #
 ## Установка необходимых пакетов

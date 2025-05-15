@@ -17,6 +17,7 @@
         <div th:if="${errorMessage}" class="mb-3"  >
             <p th:text="${errorMessage}" class="alert alert-success"  style="color: red;"></p>
         </div>
+        <input type="hidden" name="_csrf" th:value="${_csrf.token}" id="csrfToken"/>
 
         
 
@@ -69,21 +70,22 @@
                             <textarea  class="company__card__remember-text" th:utext="${review.botPassword}" th:id="'botPassword_' + ${review.id}"></textarea>
                             <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
                         </div>
-                        
-                        <div class="company__card__text__lead"> <!-- Bot Login -->
-<!--                            <label>-->
-<!--                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>-->
-<!--                            </label>-->
-<!--                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>-->
-                            <button type="button"
-                                    class="company__card__text__lead-button"
-                                    th:onclick="'myFunctionChangeText(this, \'' +
-            '/ordersDetails/changeText/' + ${review.companyId} + '/' + ${review.orderId} + '/' + ${review.id} + '\'' +
-        ')'">
-                                вк
-                            </button>
-                            <span th:id="'spinner-' + ${review.id}" class="spinner" style="display: none;">⏳</span>
-                        </div>
+
+                        <!--                            <label>-->
+                        <!--                                <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>-->
+                        <!--                            </label>-->
+                        <!--                            <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>-->
+
+                        <form th:method="post"
+                              th:action="@{/ordersDetails/changeText/{companyId}/{orderId}/{reviewId}(
+                                companyId=${review.companyId},
+                                orderId=${review.orderId},
+                                reviewId=${review.id})}"
+                              class="change-text-form company__card__text__lead"> <!-- вот тут -->
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                            <button type="submit" class="company__card__text__lead-button">вк</button>
+                        </form>
+
 
 
 

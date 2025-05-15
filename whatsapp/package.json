@@ -1,0 +1,16 @@
+{
+  "name": "whatsapp-proxy",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "whatsapp-web.js": "^1.22.1",
+    "puppeteer": "^21.3.8",
+    "qrcode-terminal": "^0.12.0",
+    "qrcode": "^1.5.1"
+  }
+}
+

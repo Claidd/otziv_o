@@ -30,7 +30,7 @@
                             </a>
                         </li>
                         <li  sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'MARKETOLOG')" class="mev__item">
-                            <a sec:authorize="isAuthenticated()" th:href="@{/lead/new_lead}" class="nav__link link" aria-label="Перейти на страницу Маркетолога">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/whatsapp}" class="nav__link link" aria-label="Перейти на страницу Маркетолога">
                                 Маркетолог
                             </a>
                         </li>

@@ -1,0 +1,55 @@
+<th:block th:fragment="content" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- ===================== CHOOSE START ========================== -->
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__card">
+        <div class="container">
+            <h2 class="company__section-title">Оператор</h2>
+            <div class="mb-3" th:if="${saveSuccess}">
+                <div class="alert alert-success">
+                    Данные успешно изменены и сохранены.
+                </div>
+            </div>
+
+            <div class="menu-container">
+<!--                <button class="menu-toggle" onclick="toggleMenu()">Меню</button>-->
+<!--                <div class="menu-content" id="menu">-->
+
+
+                <form method="post" th:action="@{'/whatsapp/send'}" >
+                    <label>Клиент:
+                        <select name="clientId">
+                            <option value="client1">client1</option>
+                            <option value="client2">client2</option>
+                            <option value="client3">client3</option>
+                        </select>
+                    </label>
+                    <br><br>
+                    <label>Телефон (без +):
+                        <input type="text" name="phone" required />
+                    </label>
+                    <br><br>
+                    <label>Сообщение:
+                        <textarea name="message" required></textarea>
+                    </label>
+                    <br><br>
+                    <button type="submit">Отправить</button>
+                </form>
+
+                <div style="margin-top: 20px; color: green;">
+                    <p th:if="${result}" th:text="'✅ Ответ: ' + ${result}"></p>
+                </div>
+
+
+
+
+                </div> <!-- tabs__content -->
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+
+    <!-- ====================== CHOOSE END =========================== -->
+
+</th:block>
