@@ -36,21 +36,7 @@
 			<artifactId>javax.mail</artifactId>
 			<version>1.6.2</version>
 		</dependency>
-<!--		<dependency>-->
-<!--			<groupId>com.jcraft</groupId>-->
-<!--			<artifactId>jsch</artifactId>-->
-<!--			<version>0.1.55</version> &lt;!&ndash; Версия может быть актуализирована &ndash;&gt;-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>com.github.docker-java</groupId>-->
-<!--			<artifactId>docker-java</artifactId>-->
-<!--			<version>3.2.8</version>-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>com.github.docker-java</groupId>-->
-<!--			<artifactId>docker-java-transport-okhttp</artifactId>-->
-<!--			<version>3.2.8</version>-->
-<!--		</dependency>-->
+
 		<dependency>
 			<groupId>com.twilio.sdk</groupId>
 			<artifactId>twilio</artifactId>
@@ -79,11 +65,7 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
-<!--		<dependency>-->
-<!--			<groupId>io.github.cdimascio</groupId>-->
-<!--			<artifactId>java-dotenv</artifactId>-->
-<!--			<version>5.2.2</version>-->
-<!--		</dependency>-->
+
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>
@@ -105,12 +87,12 @@
 		</dependency>
 
 		<!-- DOCKER -->
-		<dependency>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-docker-compose</artifactId>
-					<scope>runtime</scope>
-					<optional>true</optional>
-		</dependency>
+<!--		<dependency>-->
+<!--					<groupId>org.springframework.boot</groupId>-->
+<!--					<artifactId>spring-boot-docker-compose</artifactId>-->
+<!--					<scope>runtime</scope>-->
+<!--					<optional>true</optional>-->
+<!--		</dependency>-->
 
 			<!-- AWS SDK v2 for S3 -->
 		<dependency>
@@ -148,35 +130,13 @@
 			<version>1.17.2</version> <!-- последняя стабильная версия на 2025 -->
 		</dependency>
 
-<!--		<dependency>-->
-<!--			<groupId>org.seleniumhq.selenium</groupId>-->
-<!--			<artifactId>selenium-java</artifactId>-->
-<!--			<version>4.20.0</version>-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>org.seleniumhq.selenium</groupId>-->
-<!--			<artifactId>selenium-chrome-driver</artifactId>-->
-<!--			<version>4.20.0</version>-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>org.seleniumhq.selenium</groupId>-->
-<!--			<artifactId>selenium-remote-driver</artifactId>-->
-<!--			<version>4.20.0</version>-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>org.seleniumhq.selenium</groupId>-->
-<!--			<artifactId>selenium-api</artifactId>-->
-<!--			<version>4.20.0</version>-->
-<!--		</dependency>-->
-<!--		<dependency>-->
-<!--			<groupId>io.github.bonigarcia</groupId>-->
-<!--			<artifactId>webdrivermanager</artifactId>-->
-<!--			<version>5.8.0</version>-->
-<!--		</dependency>-->
 
 
-
-
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>
@@ -207,11 +167,7 @@
 
 
 
-<!--		<dependency>-->
-<!--			<groupId>org.webjars</groupId>-->
-<!--			<artifactId>webjars-locator-core</artifactId>-->
-<!--			<version>0.50</version> &lt;!&ndash; или выше, но не 0.58! &ndash;&gt;-->
-<!--		</dependency>-->
+
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt</artifactId>
@@ -228,11 +184,6 @@
 			<version>3.12.0</version>
 		</dependency>
 
-		<!--		    <dependency>-->
-<!--					<groupId>io.jsonwebtoken</groupId>-->
-<!--					<artifactId>jjwt</artifactId>-->
-<!--					<version>0.9.1</version>-->
-<!--		    </dependency>-->
 
 		<dependency>
 			<groupId>com.nimbusds</groupId>

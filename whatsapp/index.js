@@ -6,7 +6,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 
 const clientId = process.env.CLIENT_ID || 'default';
-const dataPath = `/root/.config/whatsapp-web.js`; // ✅ путь volume в контейнере
+const path = require('path');
+const os = require('os');
+const dataPath = process.env.AUTH_PATH || path.join(os.homedir(), '.wwebjs_auth');
 const qrStore = {};
 let client;
 
@@ -18,7 +20,7 @@ const makeClient = (id) => {
     }),
     puppeteer: {
       headless: true,
-      executablePath: '/usr/bin/chromium',
+      executablePath: puppeteer.executablePath(), // ✅ универсально для любой ОС
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
   });

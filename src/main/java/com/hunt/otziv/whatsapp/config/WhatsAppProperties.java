@@ -17,4 +17,9 @@ public class WhatsAppProperties {
         private String id;
         private String url;
     }
+
+    public int getClientCount() {
+        return clients != null ? clients.size() : 0;
+    }
+
 }

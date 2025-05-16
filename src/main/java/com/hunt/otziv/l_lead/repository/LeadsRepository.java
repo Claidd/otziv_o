@@ -133,4 +133,19 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     GROUP BY m_user.fio
 """)
     List<Object[]> getAllLeadsToMonthToManager(String status);
+
+//    @Query("""
+//    SELECT l FROM Lead l
+//    WHERE l.telephone.id = :telephoneId
+//      AND l.lidStatus = :status
+//      AND l.createDate <= :date
+//    ORDER BY l.createDate ASC
+//""")
+//    Optional<Lead> findFirstByTelephone(Long telephoneId, String status, LocalDate date);
+
+    Optional<Lead> findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
+            Long telephoneId,
+            String status,
+            LocalDate date
+    );
 }
