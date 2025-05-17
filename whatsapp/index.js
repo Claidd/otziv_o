@@ -4,10 +4,12 @@ const qrcodeTerminal = require('qrcode-terminal');
 const qrcode = require('qrcode');
 const express = require('express');
 const bodyParser = require('body-parser');
-
-const clientId = process.env.CLIENT_ID || 'default';
+const axios = require('axios');
 const path = require('path');
 const os = require('os');
+
+const clientId = process.env.CLIENT_ID || 'default';
+const serverUrl = process.env.SERVER_URL || 'http://localhost:8080'; // 🌐 ← сюда подставляй нужный адрес
 const dataPath = process.env.AUTH_PATH || path.join(os.homedir(), '.wwebjs_auth');
 const qrStore = {};
 let client;
@@ -20,7 +22,7 @@ const makeClient = (id) => {
     }),
     puppeteer: {
       headless: true,
-      executablePath: puppeteer.executablePath(), // ✅ универсально для любой ОС
+      executablePath: puppeteer.executablePath(),
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
   });
@@ -39,8 +41,18 @@ const makeClient = (id) => {
     console.log(`[${id}] 🔥 Клиент готов`);
   });
 
-  instance.on('message', msg => {
+  instance.on('message', async msg => {
     console.log(`[${id}] Входящее сообщение от ${msg.from}: ${msg.body}`);
+
+    try {
+      await axios.post(`${serverUrl}/webhook/whatsapp-reply`, {
+        clientId: id,
+        from: msg.from,
+        message: msg.body
+      });
+    } catch (error) {
+      console.error(`[${id}] ❌ Ошибка при отправке вебхука:`, error.message);
+    }
   });
 
   instance.initialize();
@@ -85,3 +97,5 @@ app.post('/send', async (req, res) => {
 app.listen(3000, () => {
   console.log(`🟢 API запущено на порту 3000 для клиента ${clientId}`);
 });
+
+

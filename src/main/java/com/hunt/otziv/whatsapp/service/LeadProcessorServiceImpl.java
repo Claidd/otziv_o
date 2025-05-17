@@ -8,11 +8,12 @@ import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.validator.internal.util.stereotypes.Lazy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,8 +30,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private final WhatsAppService whatsAppService;
     private final AdminNotifierService adminNotifierService; // уведомление в Telegram
     private final WhatsAppProperties properties;
-    @Lazy
-    private final LeadSenderServiceImpl leadSenderService; // для остановки планировщика
+    private final ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider; // безопасное получение
 
     private static final Set<String> finishedClients = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean notificationSent = new AtomicBoolean(false);
@@ -57,7 +57,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         if (leadOpt.isEmpty()) {
             log.info("🔁 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
             finishedClients.add(client.getId());
-            leadSenderService.stopClientScheduler(client.getId()); // 💥 остановка планировщика
+            Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId()); // 💥 остановка планировщика
             checkAllClientsFinished();
             return;
         }

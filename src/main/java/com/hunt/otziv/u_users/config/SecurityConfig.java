@@ -53,6 +53,8 @@ public class SecurityConfig {
                                         .requestMatchers("/phpmyadmin").permitAll()
                                         .requestMatchers("/send-message").permitAll()
                                         .requestMatchers("/sendEmail").permitAll()
+                                        .requestMatchers("/webhook").permitAll()
+                                        .requestMatchers("/webhook/**").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
@@ -113,6 +115,7 @@ public class SecurityConfig {
                         .csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())
                         .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
                                 .ignoringRequestMatchers("/api/**") // отключаем CSRF только для API
+                                .ignoringRequestMatchers("/webhook/**") // 💥 разрешить без CSRF
 //                                .requireCsrfProtectionMatcher()
 //                        .ignoringRequestMatchers("/**")
                 );
