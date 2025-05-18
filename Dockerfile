@@ -10,29 +10,56 @@
 #CMD ["java", "-jar", "app.jar"]
 
 
-
-
-# Многоэтапная сборка
-
-# Этап 1: Сборка приложения с помощью Maven
+# Этап 1: Сборка
 FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-#RUN apt-get update && apt-get install -y maven
 RUN mvn clean package -DskipTests
-# ENTRYPOINT команда, указывающая, какой shell использовать
-ENTRYPOINT ["/bin/sh", "-c", "java -jar your-application.jar"]
 
-# Этап 2: Создание контейнера для выполнения приложения
-FROM maven:3.9.8-eclipse-temurin-22-alpine
+# Этап 2: Финальный образ для выполнения
+FROM eclipse-temurin:22-jdk-alpine
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
+
+VOLUME /app/logs
 EXPOSE 8080
-# Установите метку BUILD_NO_CACHE
-LABEL BUILD_NO_CACHE="1"
 
 CMD ["java", "-jar", "app.jar"]
+
+
+# Многоэтапная сборка
+
+## Этап 1: Сборка приложения с помощью Maven
+#FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
+#WORKDIR /app
+#COPY pom.xml .
+#COPY src ./src
+##RUN apt-get update && apt-get install -y maven
+#RUN mvn clean package -DskipTests
+## ENTRYPOINT команда, указывающая, какой shell использовать
+#ENTRYPOINT ["/bin/sh", "-c", "java -jar your-application.jar"]
+#VOLUME /app/logs
+#
+## Этап 2: Создание контейнера для выполнения приложения
+#FROM maven:3.9.8-eclipse-temurin-22-alpine
+#WORKDIR /app
+#COPY --from=build /app/target/otziv-1.jar /app/app.jar
+#EXPOSE 8080
+## Установите метку BUILD_NO_CACHE
+#LABEL BUILD_NO_CACHE="1"
+#
+#CMD ["java", "-jar", "app.jar"]
+
+
+
+
+
+
+
+
+
+
 
 
 

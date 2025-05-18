@@ -1,5 +1,6 @@
 package com.hunt.otziv.whatsapp.controller;
 
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,12 @@ public class WhatsAppWebhookController {
     public ResponseEntity<Void> handleReply(@RequestBody WhatsAppReplyDTO reply) {
         log.info("📥 Получен ответ: {}", reply);
         replyService.processIncomingReply(reply);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/whatsapp-group-reply")
+    public ResponseEntity<Void> handleGroupReply(@RequestBody WhatsAppGroupReplyDTO groupReply) {
+        replyService.processGroupReply(groupReply);
         return ResponseEntity.ok().build();
     }
 }

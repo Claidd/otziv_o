@@ -65,6 +65,8 @@ public class OrderDTOList {
 
     private long dayToChangeStatusAgo;
 
+    private String groupId;
+
 
 
 

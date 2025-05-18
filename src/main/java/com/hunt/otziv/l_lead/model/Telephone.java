@@ -125,5 +125,9 @@ public class Telephone {
     @Column(name = "telephone_active")
     private boolean active;
 
+    //    ClientId Whatsapp
+    @Column(name = "telephone_client")
+    private String client;
+
 
 }

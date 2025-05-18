@@ -44,6 +44,10 @@ public class Manager {
     @Column(name = "manager_start")
     private String startText;
 
+    // Клиент Id в Whatsapp
+    @Column(name = "client_id")
+    private String clientId;
+
     @OneToMany(mappedBy = "manager", fetch = FetchType.LAZY)
     private Set<Company> companies;
 

@@ -84,6 +84,10 @@ public interface LeadService {
 
     void changeCountToOperator(Long leadId);
 
+    Optional<Lead> getByTelephoneLead(String telephoneNumber);
+
+    void saveLead(Lead lead);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

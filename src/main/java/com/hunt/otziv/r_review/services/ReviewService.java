@@ -38,6 +38,7 @@ public interface ReviewService {
     List<Review> findAllByListId(List<Long> reviewId);
     int findAllByReviewListStatus(String username);
     List<Review> getAllWorkerReviews(Long workerId);
+    List<Review> saveAll(List<Review> reviews);
 
     void deleteReviewsByOrderId(Long orderId);
 

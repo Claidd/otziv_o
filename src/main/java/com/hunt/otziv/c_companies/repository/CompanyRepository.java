@@ -103,4 +103,23 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     GROUP BY u.fio
 """)
     List<Object[]> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+
+    @Query("""
+    SELECT c
+    FROM Company c
+    WHERE 
+        (LOWER(c.telephone) = LOWER(:telephoneNumber) AND LOWER(c.title) LIKE LOWER(CONCAT('%', :title, '%')))
+        OR
+        (LOWER(c.title) = LOWER(:title) AND LOWER(c.telephone) = LOWER(:telephoneNumber))
+""")
+    Optional<Company> getByTelephoneOrTitleIgnoreCase(String telephoneNumber, String title);
+
+
+    @Query("""
+    SELECT c
+    FROM Company c
+    WHERE c.groupId = :groupId
+""")
+    Optional<Company> findByGroupId(String groupId);
 }

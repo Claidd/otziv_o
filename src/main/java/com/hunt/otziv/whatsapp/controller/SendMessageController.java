@@ -37,8 +37,21 @@ public class SendMessageController {
         String result = whatsAppService.sendMessage(clientId, phone, message);
         model.addAttribute("result", result);
         return "lead/layouts/whatsapp";
-
     }
+
+    @GetMapping("/toChat")
+    public ModelAndView toChat(Map<String, Object> model) {
+        whatsAppService.sendMessage("client1", "79086431055", "Погуляем сегодня?");
+        return new ModelAndView("lead/layouts/whatsapp", model);// send.html
+    }
+
+    @GetMapping("/toGroup")
+    public ModelAndView toGroup(Map<String, Object> model) {
+        whatsAppService.sendMessageToGroup("client1", "79086431055", "Погуляем сегодня?");
+        return new ModelAndView("lead/layouts/whatsapp", model);// send.html
+    }
+
+
 
 }
 

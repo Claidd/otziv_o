@@ -17,4 +17,6 @@ public class ManagerDTO {
     private User user;
 
     private String payText;
+
+    private String clientId;
 }

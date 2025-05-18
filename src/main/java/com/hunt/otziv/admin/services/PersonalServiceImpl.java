@@ -803,7 +803,7 @@ public class PersonalServiceImpl implements PersonalService {
         // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
         long totalSpecificManagersRevenue = result.values().stream()
                 .filter(user -> user.getRole().equals("ROLE_MANAGER") &&
-                        (user.getFio().equals("Звуков Андрей") || user.getFio().equals("Анжелика Б.")))
+                        (user.getFio().equals("Анжелика Б.")))
                 .mapToLong(UserData::getTotalSum)
                 .sum();
 
@@ -820,63 +820,114 @@ public class PersonalServiceImpl implements PersonalService {
                 .mapToLong(UserData::getNewCompanies)
                 .sum();
 
-        // Общая выручка и новые компании
-        resultBuilder.append("Выручка за месяц всей компании: ").append(totalManagerRevenue).append(" руб. ( ")
-                .append(totalSpecificManagersRevenue).append(" руб. )\n")
-                .append("Общие затраты по ЗП: ").append(totalZp).append(" руб. \n")
-                .append("Новых компаний за месяц: ").append(totalNewCompanies).append("\n\n");
+        resultBuilder.append("*📊 Отчёт за месяц*\n\n")
+                .append("*Общая выручка:* `").append(totalManagerRevenue).append(" руб.`\n")
+                .append("*Выручка (Анжелика Б.):* `").append(escapeMarkdown(String.valueOf(totalSpecificManagersRevenue))).append(" руб.`\n")
+                .append("*Общие затраты на ЗП:* `").append(totalZp).append(" руб.`\n")
+                .append("*Новых компаний:* `").append(totalNewCompanies).append("`\n\n");
 
-        // Выручка менеджеров
-        resultBuilder.append("Выручка менеджеров:\n");
+        resultBuilder.append("*👤 Выручка менеджеров:*\n");
         sortedEntries.stream()
                 .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
                 .forEach(entry -> {
-                    String fio = entry.getKey();
-                    UserData userData = entry.getValue();
-                    resultBuilder.append(fio).append(": ").append(userData.getTotalSum()).append(" руб. Новых: ")
-                            .append(userData.getNewCompanies()).append("\n");
+                    UserData user = entry.getValue();
+                    resultBuilder.append("• ").append(escapeMarkdown(entry.getKey()))
+                            .append(": `").append(user.getTotalSum()).append(" руб.`")
+                            .append(" — Новых: `").append(user.getNewCompanies()).append("`\n");
                 });
 
-        // ЗП менеджеров
-        resultBuilder.append("\nМенеджеры:\n\n");
+        resultBuilder.append("\n*💼 Менеджеры и статусы:*\n");
         sortedEntries.stream()
                 .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
                 .forEach(entry -> {
-                    String fio = entry.getKey();
-                    UserData userData = entry.getValue();
-//                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
-//                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+                    UserData user = entry.getValue();
+                    String fio = escapeMarkdown(entry.getKey());
+
+                    resultBuilder.append("*").append(fio).append("* — `").append(user.getSalary()).append(" руб.`\n");
+
+                    resultBuilder.append("`Лиды:` ").append(user.getLeadsNew()).append("  ")
+                            .append("`В проверку:` ").append(user.getOrderToCheck()).append("  ")
+                            .append("`На проверке:` ").append(user.getOrderInCheck()).append("  ")
+                            .append("`Опубликовано:` ").append(user.getOrderInPublished()).append("\n");
+
+                    resultBuilder.append("`Счёт:` ").append(user.getOrderInWaitingPay1()).append("  ")
+                            .append("`Напоминание:` ").append(user.getOrderInWaitingPay2()).append("  ")
+                            .append("`Не оплачено:` ").append(user.getOrderNoPay()).append("\n");
+
+                    resultBuilder.append("`Новых:` ").append(user.getNewOrders()).append("  ")
+                            .append("`Коррекция:` ").append(user.getCorrectOrders()).append("  ")
+                            .append("`Выгул:` ").append(user.getInVigul()).append("  ")
+                            .append("`Публикация:` ").append(user.getInPublish()).append("\n\n");
+                });
+
+        return resultBuilder.toString();
+    }
+
+    private String escapeMarkdown(String text) {
+        if (text == null) return "";
+        return text.replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("[", "\\[")
+                .replace("`", "\\`");
+    }
+
+
+    // Общая выручка и новые компании
+//        resultBuilder.append("Выручка за месяц всей компании: ").append(totalManagerRevenue).append(" руб. ( ")
+//                .append(totalSpecificManagersRevenue).append(" руб. )\n")
+//                .append("Общие затраты по ЗП: ").append(totalZp).append(" руб. \n")
+//                .append("Новых компаний за месяц: ").append(totalNewCompanies).append("\n\n");
+//
+//        // Выручка менеджеров
+//        resultBuilder.append("Выручка менеджеров:\n");
+//        sortedEntries.stream()
+//                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+//                .forEach(entry -> {
+//                    String fio = entry.getKey();
+//                    UserData userData = entry.getValue();
+//                    resultBuilder.append(fio).append(": ").append(userData.getTotalSum()).append(" руб. Новых: ")
+//                            .append(userData.getNewCompanies()).append("\n");
+//                });
+//
+//        // ЗП менеджеров
+//        resultBuilder.append("\nМенеджеры:\n\n");
+//        sortedEntries.stream()
+//                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+//                .forEach(entry -> {
+//                    String fio = entry.getKey();
+//                    UserData userData = entry.getValue();
+////                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+////                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
+////                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
+//                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
+//                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
 //                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
-                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
-                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
-                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
-                    String orderStatsForWorkers = "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
-                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
-                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. \n")
-                            .append(orderStatus)
-                            .append("\n")
-//                            .append("\nСтатусы Заказов: ")
-                            .append(orderStatsForWorkers)
-                            .append("\n\n");
-                });
+//                    String orderStatsForWorkers = "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
+//                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+//                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. \n")
+//                            .append(orderStatus)
+//                            .append("\n")
+////                            .append("\nСтатусы Заказов: ")
+//                            .append(orderStatsForWorkers)
+//                            .append("\n\n");
+//                });
 
-        // ЗП Работников
+    // ЗП Работников
 //        resultBuilder.append("\nЗП Работников:\n");
 //        sortedEntries.stream()
 //                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getRole()))
 //                .forEach(entry -> {
 //                    String fio = entry.getKey();
 //                    UserData userData = entry.getValue();
-////                    String orderStats = "н-" + userData.getNewOrders() + "к-" + userData.getCorrectOrders()
-////                            + "в-" + userData.getInVigul() + "п-" + userData.getInPublish();
+    ////                    String orderStats = "н-" + userData.getNewOrders() + "к-" + userData.getCorrectOrders()
+    ////                            + "в-" + userData.getInVigul() + "п-" + userData.getInPublish();
 //                    String orderStats = "Новые - " + userData.getNewOrders() + " В коррекции - " + userData.getCorrectOrders()
 //                            + " В выгуле - " + userData.getInVigul() + " На публикации - " + userData.getInPublish();
 //                    resultBuilder.append(fio).append(": ").append(userData.getSalary())
 //                            .append(" руб.  ").append("\n").append(orderStats).append("\n\n");
 //                });
 
-        return resultBuilder.toString();
-    }
+
 
 
 

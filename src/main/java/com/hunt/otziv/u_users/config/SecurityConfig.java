@@ -57,6 +57,8 @@ public class SecurityConfig {
                                         .requestMatchers("/webhook/**").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
+                                        .requestMatchers("/logs").hasAnyRole("ADMIN", "OWNER")
+                                        .requestMatchers("/logs/**").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
                                         .requestMatchers("/bots/**").hasAnyRole("ADMIN", "OWNER", "WORKER")
                                         .requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")

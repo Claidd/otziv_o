@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface PromoTextService {
     List<String> getAllPromoTexts();
+
+    String findById(int l);
 }

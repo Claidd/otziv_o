@@ -82,6 +82,10 @@ public class Lead {
     @JoinColumn(name = "telephone_id")
     private Telephone telephone;
 
+    //    высылали предложение или нет
+    @Column(name = "leads_offer")
+    private boolean offer;
+
     // Геттеры и сеттеры
 
     @PrePersist
@@ -89,7 +93,6 @@ public class Lead {
         createDate = LocalDate.now();
         updateStatus = LocalDate.now();
         dateNewTry = LocalDate.now();
-        System.out.println(LocalDate.now().plusDays(10));
     }
 
 

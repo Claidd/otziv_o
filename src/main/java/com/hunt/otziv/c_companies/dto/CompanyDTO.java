@@ -106,4 +106,6 @@ public class CompanyDTO {
     //    активнность компании
     private boolean active;
 
+    private String groupId;
+
 }

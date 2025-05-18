@@ -46,4 +46,6 @@ public class CompanyListDTO {
 
     //    дата и время нового отправления предложения
     private LocalDate dateNewTry;
+
+    private String groupId;
 }

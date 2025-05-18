@@ -18,7 +18,7 @@ public class AdminNotifierServiceImpl implements AdminNotifierService {
     @Override
     public void notifyAdmin(String message) {
         try {
-            telegramBotClient.sendMessage(ADMIN_CHAT_ID, message);
+            telegramBotClient.sendMessage(ADMIN_CHAT_ID, message, "Markdown");
             log.info("📩 Уведомление отправлено администратору: {}", message);
         } catch (Exception e) {
             log.error("❌ Ошибка при отправке уведомления админу: {}", e.getMessage(), e);

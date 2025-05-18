@@ -62,4 +62,6 @@ public class OrderDTO {
 
     //    филиал содержащий название и url
     private FilialDTO filial;
+
+    private String groupId;
 }

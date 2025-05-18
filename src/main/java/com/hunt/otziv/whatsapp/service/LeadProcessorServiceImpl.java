@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -29,8 +30,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private final LeadsRepository leadRepository;
     private final WhatsAppService whatsAppService;
     private final AdminNotifierService adminNotifierService; // уведомление в Telegram
-    private final WhatsAppProperties properties;
     private final ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider; // безопасное получение
+
 
     private static final Set<String> finishedClients = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean notificationSent = new AtomicBoolean(false);
@@ -39,13 +40,18 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     public static final String STATUS_SENT = "К рассылке";
 
     private final AtomicInteger totalSentMessages = new AtomicInteger(0);
-
+    private List<WhatsAppProperties.ClientConfig> operatorClients;
 
     @Transactional
     @Override
     public void processLead(WhatsAppProperties.ClientConfig client) {
         Long telephoneId = Long.valueOf(client.getId().replace("client", ""));
         log.info("telephoneId: {}", telephoneId);
+
+        // 🆕 Инициализация operatorClients один раз
+        if (operatorClients == null) {
+            operatorClients = leadSenderServiceProvider.getIfAvailable().getActiveOperatorClients();
+        }
 
         Optional<Lead> leadOpt = leadRepository
                 .findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
@@ -65,25 +71,26 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         Lead lead = leadOpt.get();
         log.info("lead: {}", lead);
 
-        String message = "Здравствуйте! У нас есть предложение...";
+        String message = lead.getTelephone().getBeginText();
         String result = whatsAppService.sendMessage(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
 
         log.info("📤 Сообщение отправлено: {}", result);
 
-        // Изменяем статус лида только при успешной отправке
         if (result != null && !result.isBlank() && result.contains("ok")) {
             lead.setLidStatus(STATUS_SENT);
             lead.setUpdateStatus(LocalDate.now());
             leadRepository.save(lead);
-            totalSentMessages.incrementAndGet(); // ✅ увеличиваем счётчик
+            totalSentMessages.incrementAndGet();
         } else {
             log.warn("⚠️ Сообщение не было отправлено, статус лида не изменён");
         }
     }
 
+
     private void checkAllClientsFinished() {
-        // Проверка, что все клиенты завершили рассылку
-        if (!notificationSent.get() && finishedClients.size() == properties.getClients().size()) {
+        if (operatorClients == null) return;
+
+        if (!notificationSent.get() && finishedClients.size() == operatorClients.size()) {
             notificationSent.set(true);
             String message = "✅ Все клиенты завершили рассылку лидов. Всего отправлено сообщений: " + totalSentMessages.get();
             log.info(message);

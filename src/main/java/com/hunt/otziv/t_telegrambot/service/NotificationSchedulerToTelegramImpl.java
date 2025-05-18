@@ -100,7 +100,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
     private void sendMessageSafe(Long chatId, String message, String who) {
         try {
-            myTelegramBot.sendMessage(chatId, message);
+            myTelegramBot.sendMessage(chatId, message, "Markdown");
         } catch (Exception e) {
             log.error("Ошибка отправки Telegram-сообщения для {}: {}", who, e.getMessage());
         }

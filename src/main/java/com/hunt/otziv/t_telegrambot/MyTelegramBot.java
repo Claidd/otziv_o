@@ -64,51 +64,51 @@ public class MyTelegramBot extends TelegramLongPollingBot {
                 case "1":
                     // Отправляем сообщение
                     if (role.equals("ROLE_ADMIN")) {
-                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()));
+                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMap()), "Markdown");
 //                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)));
 //                        sendMessage(chatId,personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)));
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
-                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)));
+                        sendMessage(chatId,personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)), "Markdown");
                         break;
                     }
                     if (role.equals("ROLE_MANAGER")) {
-                        sendMessage(chatId,personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)));
+                        sendMessage(chatId,personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)), "Markdown");
                         break;
                     }
                     if (role.equals("ROLE_WORKER")) {
-                        sendMessage(chatId,personalService.displayResultToWorker(personalService.getPersonalsAndCountToMapToWorker(userId)));
+                        sendMessage(chatId,personalService.displayResultToWorker(personalService.getPersonalsAndCountToMapToWorker(userId)), "Markdown");
                         break;
                     }
 
                     else {
-                        sendMessage(chatId, " У вас нет доступа");
+                        sendMessage(chatId, " У вас нет доступа", "Markdown");
                     }
                     break;
 
                 case ("2"):
                     if (role.equals("ROLE_ADMIN")) {
-                         sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()));
+                         sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "Markdown");
                         break;
                     }
                     if (role.equals("ROLE_OWNER")) {
-                        sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()));
+                        sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "Markdown");
                         break;
                 }
                     else {
-                        sendMessage(chatId, " У вас нет доступа");
+                        sendMessage(chatId, " У вас нет доступа", "Markdown");
                     }
 
                 case ("3"):
 //                    stat = personalService.getStats(localDate, userService.findByUserName("mia").orElseThrow(), "ROLE_OWNER");
                     sendMessage(chatId, "Выручка за месяц mia: " + "\n" +
-                            "Новых компаний: "
-                    );
+                            "Новых компаний: ",
+                            "Markdown");
                     break;
 
                 default:
-                    sendMessage(chatId, "You said not need symbol: " + messageText);
+                    sendMessage(chatId, "You said not need symbol: " + messageText, "Markdown");
                     break;
             }
             checkTimeMethod("Время выполнения Запроса для телеграмм отработал за: ",startTime);
@@ -139,6 +139,22 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    public void sendMessage(long chatId, String text, String parseMode) {
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        message.setParseMode(parseMode); // Важно: добавляем режим разметки
+        message.setDisableWebPagePreview(true); // (опционально) скрыть превью ссылок
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("❌ Ошибка при отправке сообщения в Telegram: {}", e.getMessage(), e);
+        }
+    }
+
+
+
 
     protected User authUserInTelegramBot(long chatId, String messageText) {
         // Ищем по chatId
@@ -158,17 +174,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
             if (user.getTelegramChatId() == null) {
                 user.setTelegramChatId(chatId);
                 userService.save(user);
-                sendMessage(chatId, "Привязка успешно выполнена! Добро пожаловать, " + user.getUsername());
+                sendMessage(chatId, "Привязка успешно выполнена! Добро пожаловать, " + user.getUsername(), "Markdown");
                 log.info("Привязка успешно выполнена! Добро пожаловать, " + user.getUsername());
             } else {
-                sendMessage(chatId, "Добро пожаловать обратно, " + user.getUsername() + "!");
+                sendMessage(chatId, "Добро пожаловать обратно, " + user.getUsername() + "!", "Markdown");
                 log.info("Добро пожаловать обратно, " + user.getUsername() + "!");
             }
 
             return user;
 
         } else {
-            sendMessage(chatId, "Пользователь с таким username не найден. Введите свой логин:");
+            sendMessage(chatId, "Пользователь с таким username не найден. Введите свой логин:", "Markdown");
             log.info("Пользователь с таким username не найден. Введите свой логин:");
             return null;
         }

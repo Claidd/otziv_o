@@ -383,6 +383,19 @@ public class CompanyServiceImpl implements CompanyService{
         }
     } //    Метод подготовки ДТО при создании компании из Лида оператора
 
+
+
+    @Override
+    public Optional<Company> getCompanyByTelephonAndTitle(String telephoneNumber, String title) {
+        Optional<Company> companyOpt = companyRepository.getByTelephoneOrTitleIgnoreCase(telephoneNumber, title);
+        return companyOpt;
+    }
+
+    @Override
+    public Optional<Company> findByGroupId(String groupId) {
+        return companyRepository.findByGroupId(groupId);
+    }
+
     private CompanyDTO getCompanyDTO(Principal principal, LeadDTO leadDTO, SecureRandom random, User user) {
         List<Manager> managers = new ArrayList<>(user.getManagers());
         if (!managers.isEmpty()) {

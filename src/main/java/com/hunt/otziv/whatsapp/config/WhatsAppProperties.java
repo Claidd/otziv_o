@@ -16,6 +16,7 @@ public class WhatsAppProperties {
     public static class ClientConfig {
         private String id;
         private String url;
+        private String role;
     }
 
     public int getClientCount() {

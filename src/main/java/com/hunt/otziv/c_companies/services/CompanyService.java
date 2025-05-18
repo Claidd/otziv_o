@@ -14,6 +14,7 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public interface CompanyService {
@@ -54,4 +55,8 @@ public interface CompanyService {
 
 
     CompanyDTO convertToDtoToOperator(Long leadId, Principal principal);
+
+    Optional<Company> getCompanyByTelephonAndTitle(String telephoneNumber, String title);
+
+    Optional<Company> findByGroupId(String groupId);
 }

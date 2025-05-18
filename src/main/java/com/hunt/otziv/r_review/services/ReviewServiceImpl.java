@@ -117,6 +117,10 @@ public class ReviewServiceImpl implements ReviewService{
         return new PageImpl<>(ReviewDTOOnes, pageable, reviewPage.size());
     }
 
+    @Override
+    public List<Review> saveAll(List<Review> reviews) {
+        return (List<Review>) reviewRepository.saveAll(reviews);
+    }
 
     public Review save(Review review){ // Сохранить отзыв в БД
         if (!reviewRepository.existsByText(review.getText())) {

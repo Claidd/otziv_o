@@ -757,5 +757,15 @@ public class LeadServiceImpl implements LeadService{
         log.info("поменяли счетчик выбора менеджера");
     }
 
+    @Override
+    public Optional<Lead> getByTelephoneLead(String telephoneNumber) {
+        return leadsRepository.findByTelephoneLead(telephoneNumber);
+    }
+
+    @Override
+    public void saveLead(Lead lead) {
+        leadsRepository.save(lead);
+    }
+
 
 }

@@ -16,24 +16,20 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.*;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
-import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.p_products.services.service.*;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
-import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
-import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -41,6 +37,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
@@ -92,16 +89,21 @@ public class OrderServiceImpl implements OrderService {
     private final CompanyStatusService companyStatusService;
     private final EmailService emailService;
     private final TelegramService telegramService;
-    private final AutoTextService autoTextService;
+    private final PromoTextService textService;
+    private final WhatsAppService whatsAppService;
+    private final OrderTransactionService orderTransactionService;
+    private final OrderStatusCheckerService orderStatusCheckerService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
     public static final String MANAGER = "ROLE_MANAGER";
     public static final String STATUS_NEW = "Новый";
     public static final String STATUS_TO_CHECK = "В проверку";
+    public static final String STATUS_IN_CHECK = "На проверке";
     public static final String STATUS_CORRECTION= "Коррекция";
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_PUBLIC = "Опубликовано";
+    public static final String STATUS_TO_PAY = "Выставлен счет";
     public static final String STATUS_ARCHIVE = "Архив";
     public static final String STATUS_COMPANY_IN_WORK = "В работе";
     public static final String STATUS_COMPANY_IN_STOP = "На стопе";
@@ -110,7 +112,6 @@ public class OrderServiceImpl implements OrderService {
     private static final int HIGH_COUNTER_THRESHOLD = 20;
     private static final String MEDIUM_STATUS = "Средний";
     private static final String HIGH_STATUS = "Высокий";
-    private final MessageSource messageSource;
 
 
     //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
@@ -448,42 +449,35 @@ public class OrderServiceImpl implements OrderService {
     }
 
 //============================= СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS==================================
-    /**
-     * Создает новый заказ с отзывами для указанной компании и продукта.
-     * @param companyId Идентификатор компании.
-     * @param productId Идентификатор продукта.
-     * @param orderDTO  DTO объекта заказа, содержащий детали заказа.
-     * @return true, если заказ успешно создан, иначе false.
-     * @throws RuntimeException если происходит ошибка при создании заказа.
-     */
-    @Transactional
-    @Override
-    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
-        try {
-            Order order = saveOrder(orderDTO, productId);
-            log.info("1. Сохранили ORDER");
-            OrderDetails orderDetails = saveOrderDetails(order, orderDTO, productId);
-            log.info("5. Сохранили ORDER-DETAIL с REVIEWS");
-            log.info("6. Установили его в ORDER");
-            updateOrder(order, orderDetails);
-            log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
-            log.info("10. Обновляем счетчик компании в БД");
-            updateCompanyCounter(order, companyId);
 
-            if (order.getWorker() != null && order.getWorker().getUser() != null) {
-                Long telegramChatId = order.getWorker().getUser().getTelegramChatId();
-                if (telegramChatId != null) {
-                    String resultBuilder = "У вас новый заказ для:  " +
-                            order.getCompany().getTitle();
-                    telegramService.sendMessage(telegramChatId, resultBuilder);
-                }
-            }
-            return true;
-        } catch (PersistenceException | NumberFormatException e) {  //replace these with exceptions you expect
-            log.error("Ошибка при создании нового заказа с отзывами", e);
-            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
-        }
-    }
+//    @Transactional
+//    @Override
+//    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
+//        try {
+//            Order order = saveOrder(orderDTO, productId);
+//            log.info("1. Сохранили ORDER");
+//            OrderDetails orderDetails = saveOrderDetails(order, orderDTO, productId);
+//            log.info("5. Сохранили ORDER-DETAIL с REVIEWS");
+//            log.info("6. Установили его в ORDER");
+//            updateOrder(order, orderDetails);
+//            log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
+//            log.info("10. Обновляем счетчик компании в БД");
+//            updateCompanyCounter(order, companyId);
+//
+//            if (order.getWorker() != null && order.getWorker().getUser() != null) {
+//                Long telegramChatId = order.getWorker().getUser().getTelegramChatId();
+//                if (telegramChatId != null) {
+//                    String resultBuilder = "У вас новый заказ для:  " +
+//                            order.getCompany().getTitle();
+//                    telegramService.sendMessage(telegramChatId, resultBuilder);
+//                }
+//            }
+//            return true;
+//        } catch (PersistenceException | NumberFormatException e) {  //replace these with exceptions you expect
+//            log.error("Ошибка при создании нового заказа с отзывами", e);
+//            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
+//        }
+//    }
 
 
     private Order saveOrder(OrderDTO orderDTO, Long productId) {
@@ -731,125 +725,148 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
 
     @Transactional
-    public boolean changeStatusForOrder(Long orderID, String title) throws Exception { // смена статуса для заказа с проверкой на Оплачено
+    public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
         try {
-            Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
-            if (title.equals(STATUS_PAYMENT)){
-//                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
-//                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
-//                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
+            Order order = orderRepository.findById(orderID)
+                    .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
-                if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
-                    log.info("2. Проверили, что заказ еще не бьл выполнен и что счетчкики совпадают");
-                    if (zpService.save(order)){
-                        log.info("3. Сохранили ЗП");
-                        boolean chek = paymentCheckService.save(order);
-                        log.info(String.valueOf(chek));
-                        log.info("4. Сохранили Чек компании");
-                        Company company = companyService.getCompaniesById(order.getCompany().getId());
-
-                        try {
-                            company.setCounterPay(company.getCounterPay() + order.getAmount());
-                            log.info("счетчик: {} - {}", company.getCounterPay(), order.getAmount());
-                            company.setSumTotal(company.getSumTotal().add(order.getSum()));
-                            log.info("сумма: {}", company.getSumTotal().add(order.getSum()));
-                            log.info("5. Успешно установили суммы");
-                            order.setComplete(true);
-                            order.setPayDay(LocalDate.now());
-                            log.info("Дата оплаты: {}", order.getPayDay());
-                            orderRepository.save(order);
-                            log.info("6. Заказ обновлен и сохранен");
-                            companyService.save(checkStatusToCompany(company));
-                            log.info("7. Компания сохранена, статус сменен на Готов к Новому заказу");
-//                             Создание нового заказа с отзывами
-                            if (createNewOrderWithReviews(company.getId(), order.getDetails().getFirst().getProduct().getId(), convertToOrderDTOToRepeat(order))) {
-                                log.info("8. Новый заказ создался автоматически - Успешно");
-                                log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
-                            }
-                            else {
-                                log.info("8. Новый заказ создался автоматически - НЕ Успешно");
-                                throw new Exception("8. Новый заказ создался автоматически - НЕ успешно");
-                            }
-                            log.info("8. Новый заказ создался автоматически - Успешно");
-                            log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
-                        }
-                        catch (Exception e) {
-                            log.error("Ошибка при обновлении данных компании не успешно установлены суммы", e);
-                            throw e;
-                        }
-                    }
-                    else {
-                        log.error("2. Оплата поступила, но при сохранении какие-то проблемы");
-                    }
+            return switch (title) {
+                case STATUS_PAYMENT -> orderTransactionService.handlePaymentStatus(order);
+                case STATUS_ARCHIVE -> handleArchiveStatus(order);
+                case STATUS_TO_CHECK -> handleToCheckStatus(order);
+                case STATUS_CORRECTION -> handleCorrectionStatus(order);
+                case STATUS_PUBLIC -> handlePublicStatus(order);
+                default -> {
+                    log.warn("Неизвестный статус: {}", title);
+                    yield false;
                 }
-                else {
-                    log.info("3. Что-то пошло не так и выбросило в момент Зачисления");
-                }
+            };
 
-                log.info("2. Проверили, что заказ УЖЕ был выполнен и просто меняем статус");
-                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                orderRepository.save(order);
-                return true;
-            }
-            if (order.getStatus().getTitle().equals(STATUS_ARCHIVE)){
-                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
-                log.info("Сменили статус компании на В работе");
-                orderRepository.save(order);
-            }
-            if (title.equals(STATUS_ARCHIVE)){
-                saveReviewsToArchive(order.getDetails().getFirst().getReviews());
-                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
-                orderRepository.save(order);
-                return true;
-            }
-            else {
-                if (STATUS_TO_CHECK.equals(title)) {
-                    if (order.getManager() != null
-                            && order.getManager().getUser() != null
-                            && order.getManager().getUser().getTelegramChatId() != null
-                            && order.getDetails() != null
-                            && order.getDetails().getFirst() != null
-                            && order.getDetails().getFirst().getOrder() != null
-                            && order.getDetails().getFirst().getOrder().getCompany() != null) {
-
-                        String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
-
-                        telegramService.sendMessage(order.getManager().getUser().getTelegramChatId(),
-                                companyTitle + " готов - На проверку \n" + "https://o-ogo.ru/orders/all_orders?status=В%20проверку");
-                    }
-                }
-
-                if (STATUS_CORRECTION.equals(title)) {
-                    if (order.getWorker() != null
-                            && order.getWorker().getUser() != null
-                            && order.getWorker().getUser().getTelegramChatId() != null
-                            && order.getDetails() != null
-                            && order.getDetails().getFirst() != null
-                            && order.getDetails().getFirst().getOrder() != null
-                            && order.getDetails().getFirst().getOrder().getCompany() != null) {
-
-                        String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
-                        String comments = order.getDetails().getFirst().getOrder().getCompany().getCommentsCompany();
-
-                        telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
-                                companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments + "\n "
-                                        + "https://o-ogo.ru/worker/correct");
-                    }
-                }
-                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                orderRepository.save(order);
-                return true;
-            }
         } catch (Exception e) {
             log.error("При смене статуса произошли какие-то проблемы", e);
-            throw e; // Исключение пробрасывается для отката транзакции
+            throw e;
         }
-    } // смена статуса для заказа с проверкой на Оплачено
+    }
+
+    private boolean handleArchiveStatus(Order order) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
+        Company company = order.getCompany();
+        boolean hasUnpaidOrders = company.getOrderList().stream()
+                .anyMatch(o -> !o.getStatus().getTitle().equalsIgnoreCase(STATUS_PAYMENT));
+        if (hasUnpaidOrders) {
+            company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+        }
+        orderRepository.save(order);
+        companyService.save(company);
+        return true;
+    }
+
+    private boolean handleToCheckStatus(Order order) {
+        String clientId = order.getManager().getClientId();
+        String groupId = order.getCompany().getGroupId();
+
+        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+                textService.findById(5) + "\n\n" +
+                "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
+                order.getDetails().getFirst().getId();
+
+        // Если groupId отсутствует — просто ставим статус без отправки сообщений
+        if (groupId == null || groupId.isBlank()) {
+            log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений", order.getCompany().getTitle());
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+            orderRepository.save(order);
+            return true;
+        }
+
+        return sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
+    }
 
 
-//====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
+    private boolean handleCorrectionStatus(Order order) {
+        if (hasWorkerWithTelegram(order)) {
+            String companyTitle = order.getCompany().getTitle();
+            String comments = order.getCompany().getCommentsCompany();
+            telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+                    companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
+                            "\n https://o-ogo.ru/worker/correct");
+        }
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
+        orderRepository.save(order);
+        return true;
+    }
+
+    private boolean handlePublicStatus(Order order) {
+        String clientId = order.getManager().getClientId();
+        String groupId = order.getCompany().getGroupId();
+
+        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+                "Здравствуйте, ваш заказ выполнен, просьба оплатить.  АЛЬФА-БАНК по счету https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И.  ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " +
+                order.getSum() + " руб.";
+
+        if (groupId == null || groupId.isBlank()) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            log.info("✅ Статус заказа {} установлен в '{}' без отправки в WhatsApp (отсутствует groupId)", order.getId(), STATUS_PUBLIC);
+            return true;
+        }
+
+        return sentMessageToGroup(STATUS_PUBLIC, order, clientId, groupId, message, STATUS_TO_PAY);
+    }
+
+
+    private boolean sentMessageToGroup(String title, Order order, String clientId, String groupId, String message, String statusToPay) {
+    String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
+
+    if (result != null && result.toLowerCase().contains("ok")) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(statusToPay));
+    } else {
+        if (hasManagerWithTelegram(order)) {
+            String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
+            telegramService.sendMessage(
+                    order.getManager().getUser().getTelegramChatId(),
+                    companyTitle + " готов - На проверку \n" +
+                            "https://o-ogo.ru/orders/all_orders?status=В%20проверку"
+            );
+        }
+        order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+    }
+
+    orderRepository.save(order);
+    return true;
+}
+
+private boolean hasManagerWithTelegram(Order order) {
+    try {
+        return order != null &&
+                order.getManager() != null &&
+                order.getManager().getUser() != null &&
+                order.getManager().getUser().getTelegramChatId() != null &&
+                order.getDetails() != null &&
+                !order.getDetails().isEmpty() &&
+                order.getDetails().getFirst() != null &&
+                order.getDetails().getFirst().getOrder() != null &&
+                order.getDetails().getFirst().getOrder().getCompany() != null;
+    } catch (Exception e) {
+        return false;
+    }
+}
+
+private boolean hasWorkerWithTelegram(Order order) {
+    try {
+        return order.getWorker() != null
+                && order.getWorker().getUser() != null
+                && order.getWorker().getUser().getTelegramChatId() != null
+                && order.getDetails() != null
+                && order.getDetails().getFirst() != null
+                && order.getDetails().getFirst().getOrder() != null
+                && order.getDetails().getFirst().getOrder().getCompany() != null;
+    } catch (Exception e) {
+        return false;
+    }
+}
+
+
+    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
     @Transactional
     protected void saveReviewsToArchive(List<Review> reviews) { // сохранение отзывов в архив при отправке заказа в статус архив
         for (Review review : reviews) {
@@ -872,146 +889,88 @@ public boolean deleteOrder(Long orderId, Principal principal){
         }
         return company;
     }
-
-
+    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ =============================
     @Override
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
-        boolean isChanged = false;
         try {
             Review review = reviewService.getReviewById(reviewId);
             Order order = validateAndRetrieveOrder(review, reviewId);
-            log.info("2. Достали отзыв по id {} для компании: {}", reviewId, review.getOrderDetails().getOrder().getCompany().getTitle());
-            log.info("3. Заказ найден, и отзыв еще не опубликован. Продолжаем выполнение.");
 
-            reviewArchiveService.saveNewReviewArchive(reviewId);
-            log.info("4. Сохранили отзыв в архив");
+            log.info("Достали отзыв id={} для компании: {}", reviewId, order.getCompany().getTitle());
+
+            // reviewArchiveService.saveNewReviewArchive(reviewId);
+//            log.info("Сохранили отзыв в архив");
 
             updateBotCounterAndStatus(review.getBot());
-            log.info("5. Увеличили кол-во публикаций у бота");
+            log.info("Увеличили кол-во публикаций у бота");
 
             review.setPublish(true);
-            log.info("6. Установили статус публикации отзыва на true");
-            
             reviewService.save(review);
-            log.info("7. Сохранили отзыв в базе данных");
+            log.info("Сохранили отзыв, публикация установлена в true");
 
             order.setCounter(order.getCounter() + 1);
-            Order savedOrder = orderRepository.save(order);
-            log.info("8. Обновили счетчик публикаций заказа. Новый счетчик: {}", savedOrder.getCounter());
+            orderRepository.save(order);
+            log.info("Обновили счётчик заказа: {}", order.getCounter());
 
-            int reviewCounter = counterReviewIsPublish(savedOrder);
-            
-            log.info("9. reviewCounter: {}", reviewCounter);
-            
-            if (savedOrder.getCounter() != reviewCounter){
-                String textMail = "Компания: " + savedOrder.getCompany().getTitle() + ". Заказ № " + savedOrder.getId() + ". Работник " + savedOrder.getWorker().getUser().getFio();
-                log.info("9. !!!!!!!!!!! ЧТО-ТО НЕ ТАК !!!!!! Проверка savedOrder.getCounter() != reviewCounter не пройдена: savedOrder.getCounter() = {},  reviewCounter = {}", savedOrder.getCounter(), reviewCounter);
-                emailService.sendSimpleEmail("2.12nps@mail.ru", "Ошибка проверки счетчика", "Срочно проверь. Что-то пошло не так при нажатии кнопки опубликовать у отзыва. " + textMail);
-                isChanged = true;
-                log.info("isChanged {}", isChanged);
-                throw new IllegalStateException("Проблема с проверкой счетчиков, транзакция должна быть откатана");
-            }
-            checkOrderCounterAndAmount(savedOrder);
-            log.info("10. Проверили счетчик заказа на выполнение заказа - он еще не выполнен");
+            int actualPublished = countPublishedReviews(order);
+            log.info("Фактическое количество опубликованных отзывов: {}", actualPublished);
+
+            orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
+            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
 
             return true;
         } catch (Exception e) {
-            log.error("Ошибка при выполнении метода changeStatusAndOrderCounter для отзыва с id {}", reviewId, e);
-//            return false;
-            throw e; // Транзакция откатится при исключении
+            log.error("Ошибка при смене статуса отзыва id={}", reviewId, e);
+            throw e;
         }
     }
 
-    protected Order validateAndRetrieveOrder(Review review, Long reviewId) {
-
+    private Order validateAndRetrieveOrder(Review review, Long reviewId) {
         if (review == null) {
-            log.error("2. Отзыв с id {} не найден", reviewId);
-            throw new IllegalStateException("Проблема с отсутвием отзыва по ид, транзакция должна быть откатана");
-//                return false;
+            throw new IllegalStateException("Отзыв не найден: id=" + reviewId);
         }
-
-        OrderDetails orderDetails = review.getOrderDetails();
-        if (orderDetails == null || orderDetails.getOrder() == null) {
-            throw new IllegalStateException("OrderDetails или Order отсутствуют для отзыва с ID: " + reviewId);
+        OrderDetails details = review.getOrderDetails();
+        if (details == null || details.getOrder() == null) {
+            throw new IllegalStateException("OrderDetails или Order отсутствуют у отзыва id=" + reviewId);
         }
-
-        Order order = orderRepository.findById(orderDetails.getOrder().getId()).orElse(null);
+        Order order = orderRepository.findById(details.getOrder().getId()).orElse(null);
         if (order == null || review.isPublish()) {
-            log.info("3. Проверка не пройдена: пустой order = {}, или отзыв уже опубликован publish = {}", order != null, review.isPublish());
-            throw new IllegalStateException("Проблема с отсутвием заказа по ид и статуса уже опубликован, транзакция должна быть откатана");
-//                return false;
+            throw new IllegalStateException("Заказ не найден или отзыв уже опубликован. id=" + reviewId);
         }
-        else return order;
+        return order;
     }
 
-
-    @Transactional
-    protected int counterReviewIsPublish(Order savedOrder){
-        int reviewCounter = 0;
-        List<Review> reviewList = savedOrder.getDetails().getFirst().getReviews();
-        for (Review review1 : reviewList) {
-            if (review1.isPublish()) {
-                reviewCounter++;
-            }
-        }
-        return reviewCounter;
+    protected int countPublishedReviews(Order order) {
+        return (int) order.getDetails().getFirst().getReviews().stream()
+                .filter(Review::isPublish)
+                .count();
     }
 
-    @Transactional
     public void updateBotCounterAndStatus(Bot bot) {
         try {
             bot.setCounter(bot.getCounter() + 1);
 
             if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
-                log.info("Меняем статус бота при достижении 20 отзывов");
                 bot.setStatus(botService.changeStatus(HIGH_STATUS));
             } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
-                log.info("Меняем статус бота при достижении 10 отзывов");
                 bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
             }
 
             botService.save(bot);
         } catch (Exception e) {
-            log.error("Ошибка при обновлении счетчика и статуса у бота с id {}", bot.getId(), e);
+            log.error("Ошибка при обновлении бота id={}", bot.getId(), e);
             throw e;
         }
     }
-
-    @Transactional
-    protected void checkOrderCounterAndAmount(Order order) throws Exception {
-        try {
-            if (order.getAmount() <= order.getCounter()) {
-                changeStatusForOrder(order.getId(), STATUS_PUBLIC);
-                log.info("4. Счетчик совпадает с количеством заказа. Статус заказа с id {} сменен на Опубликовано", order.getId());
-                if (order.getManager() != null && order.getManager().getUser() != null) {
-                    Long telegramChatId = order.getManager().getUser().getTelegramChatId();
-
-                    if (telegramChatId != null && order.getCompany() != null && order.getCompany().getTitle() != null) {
-                        String resultBuilder =
-                                order.getCompany().getTitle() +
-                                " опубликован. \n" +
-                                "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
-
-                        telegramService.sendMessage(telegramChatId, resultBuilder);
-                    }
-                }
-            } else {
-                log.info("4. Счетчик не совпадает с количеством заказа с id {}. Статус заказа не изменён", order.getId());
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при проверке счетчиков заказа с id {}", order.getId(), e);
-            throw e;
-        }
-    }
-
-
 
     public int countOrdersByWorkerAndStatus(Worker worker, String status) {
-        int count = orderRepository.countByWorkerAndStatus(worker, status);
-//        System.out.println(worker.getUser().getFio() + " " + count);
-        return count;
+        return orderRepository.countByWorkerAndStatus(worker, status);
     }
+    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ =============================
+
+
+
 
 
     public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
@@ -1217,6 +1176,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .dayToChangeStatusAgo(period.getDays())
                 .orderDetailsId(order.getDetails().getFirst().getId())
                 .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
+                .groupId(order.getCompany().getGroupId())
                 .build();
     } // Конвертер DTO для заказа
     private CompanyDTO convertToCompanyDTO(Company company){ // Конвертер DTO для компании
@@ -1230,7 +1190,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .filials(convertToFilialDTOList(company.getFilial()))
                 .categoryCompany(company.getCategoryCompany() != null ? convertToCategoryDto(company.getCategoryCompany()) : null)
                 .subCategory(company.getSubCategory() != null ? convertToSubCategoryDto(company.getSubCategory()) : null)
-
+                .groupId(company.getGroupId())
                 .build();
     } // Конвертер DTO для компании
 
@@ -1253,6 +1213,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .managerId(manager.getId())
                 .user(manager.getUser())
                 .payText(manager.getPayText())
+                .clientId(manager.getClientId())
                 .build();
     } // Конвертер DTO для менеджера
     private OrderStatusDTO convertToOrderDTO(OrderStatus orderStatus){// Конвертер DTO для статуса заказа
@@ -1309,6 +1270,7 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 .worker(convertToWorkerDTO(order.getWorker()))
                 .manager(convertToManagerDTO(order.getManager()))
                 .company(convertToCompanyDTO(order.getCompany()))
+                .groupId(order.getCompany().getGroupId())
                 .build();
     } // Конвертер DTO для заказа
     public OrderDTO convertToOrderDTOToRepeat(Order order){ // Конвертер DTO для создания нового заказа после завершения предыдущего
@@ -1667,3 +1629,303 @@ private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, 
 
 //    ==================================================================================================================
 }
+
+
+
+
+
+
+
+
+//@Transactional
+//public boolean changeStatusForOrder(Long orderID, String title) throws Exception { // смена статуса для заказа с проверкой на Оплачено
+//    try {
+//        Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
+//        if (title.equals(STATUS_PAYMENT)){
+////                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
+////                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
+////                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
+//
+//            if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
+//                log.info("2. Проверили, что заказ еще не бьл выполнен и что счетчкики совпадают");
+//                if (zpService.save(order)){
+//                    log.info("3. Сохранили ЗП");
+//                    boolean chek = paymentCheckService.save(order);
+//                    log.info(String.valueOf(chek));
+//                    log.info("4. Сохранили Чек компании");
+//                    Company company = companyService.getCompaniesById(order.getCompany().getId());
+//
+//                    try {
+//                        company.setCounterPay(company.getCounterPay() + order.getAmount());
+//                        log.info("счетчик: {} - {}", company.getCounterPay(), order.getAmount());
+//                        company.setSumTotal(company.getSumTotal().add(order.getSum()));
+//                        log.info("сумма: {}", company.getSumTotal().add(order.getSum()));
+//                        log.info("5. Успешно установили суммы");
+//                        order.setComplete(true);
+//                        order.setPayDay(LocalDate.now());
+//                        log.info("Дата оплаты: {}", order.getPayDay());
+//                        orderRepository.save(order);
+//                        log.info("6. Заказ обновлен и сохранен");
+//                        companyService.save(checkStatusToCompany(company));
+//                        log.info("7. Компания сохранена, статус сменен на Готов к Новому заказу");
+////                             Создание нового заказа с отзывами
+//                        if (createNewOrderWithReviews(company.getId(), order.getDetails().getFirst().getProduct().getId(), convertToOrderDTOToRepeat(order))) {
+//                            log.info("8. Новый заказ создался автоматически - Успешно");
+//                            log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
+//                        }
+//                        else {
+//                            log.info("8. Новый заказ создался автоматически - НЕ Успешно");
+//                            throw new Exception("8. Новый заказ создался автоматически - НЕ успешно");
+//                        }
+//                        log.info("8. Новый заказ создался автоматически - Успешно");
+//                        log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
+//                    }
+//                    catch (Exception e) {
+//                        log.error("Ошибка при обновлении данных компании не успешно установлены суммы", e);
+//                        throw e;
+//                    }
+//                }
+//                else {
+//                    log.error("2. Оплата поступила, но при сохранении какие-то проблемы");
+//                }
+//            }
+//            else {
+//                log.info("3. Что-то пошло не так и выбросило в момент Зачисления");
+//            }
+//
+//            log.info("2. Проверили, что заказ УЖЕ был выполнен и просто меняем статус");
+//            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+//            orderRepository.save(order);
+//            return true;
+//        }
+//        if (order.getStatus().getTitle().equals(STATUS_ARCHIVE)){
+//            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+//            order.getCompany().setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
+//            log.info("Сменили статус компании на В работе");
+//            orderRepository.save(order);
+//        }
+//        if (title.equals(STATUS_ARCHIVE)) {
+//            // Меняем статус заказа
+//            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+//
+//            Company company = order.getCompany();
+//            Set<Order> orders = company.getOrderList();
+//
+//            boolean hasUnpaidOrders = orders.stream()
+//                    .anyMatch(o -> !o.getStatus().getTitle().equalsIgnoreCase(STATUS_PAYMENT));
+//
+//            if (hasUnpaidOrders) {
+//                company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+//            }
+//
+//            orderRepository.save(order);
+//            return true;
+//        }
+//        else {
+//            if (STATUS_TO_CHECK.equals(title)) {
+//                String clientId = order.getManager().getClientId();
+//                String groupId = order.getCompany().getGroupId();
+//                String message = textService.findById(5) + "\n\n" +
+//                        "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" + order.getDetails().getFirst().getId();
+//
+//                return sentMessageToGroup(title, order, clientId, groupId, message, STATUS_IN_CHECK);
+//            }
+//
+//            if (STATUS_CORRECTION.equals(title)) {
+//                if (hasWorkerWithTelegram(order)) {
+//
+//                    String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
+//                    String comments = order.getDetails().getFirst().getOrder().getCompany().getCommentsCompany();
+//                    telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+//                            companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments + "\n "
+//                                    + "https://o-ogo.ru/worker/correct");
+//                }
+//                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+//                orderRepository.save(order);
+//                return true;
+//            }
+//            if (STATUS_PUBLIC.equals(title)) {
+//                String clientId = order.getManager().getClientId();
+//                String groupId = order.getCompany().getGroupId();
+//                String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+//                        "Здравствуйте, ваш заказ выполнен, просьба оплатить.  АЛЬФА-БАНК по счету https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И.  ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " +
+//                        order.getSum() + " руб.";
+//
+//                return sentMessageToGroup(title, order, clientId, groupId, message, STATUS_TO_PAY);
+//            }
+//
+//
+////                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+////                orderRepository.save(order);
+////                return true;
+//        }
+//    } catch (Exception e) {
+//        log.error("При смене статуса произошли какие-то проблемы", e);
+//        throw e; // Исключение пробрасывается для отката транзакции
+//    }
+//} // смена статуса для заказа с проверкой на Оплачено
+//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//@Override
+//@Transactional
+//public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
+//    boolean isChanged = false;
+//    try {
+//        Review review = reviewService.getReviewById(reviewId);
+//        Order order = validateAndRetrieveOrder(review, reviewId);
+//        log.info("2. Достали отзыв по id {} для компании: {}", reviewId, review.getOrderDetails().getOrder().getCompany().getTitle());
+//        log.info("3. Заказ найден, и отзыв еще не опубликован. Продолжаем выполнение.");
+//
+////            reviewArchiveService.saveNewReviewArchive(reviewId);
+//        log.info("4. Сохранили отзыв в архив");
+//
+//        updateBotCounterAndStatus(review.getBot());
+//        log.info("5. Увеличили кол-во публикаций у бота");
+//
+//        review.setPublish(true);
+//        log.info("6. Установили статус публикации отзыва на true");
+//
+//        reviewService.save(review);
+//        log.info("7. Сохранили отзыв в базе данных");
+//
+//        order.setCounter(order.getCounter() + 1);
+//        Order savedOrder = orderRepository.save(order);
+//        log.info("8. Обновили счетчик публикаций заказа. Новый счетчик: {}", savedOrder.getCounter());
+//
+//        int reviewCounter = counterReviewIsPublish(savedOrder);
+//
+//        log.info("9. reviewCounter: {}", reviewCounter);
+//
+//        if (savedOrder.getCounter() != reviewCounter){
+//            String textMail = "Компания: " + savedOrder.getCompany().getTitle() + ". Заказ № " + savedOrder.getId() + ". Работник " + savedOrder.getWorker().getUser().getFio();
+//            log.info("9. !!!!!!!!!!! ЧТО-ТО НЕ ТАК !!!!!! Проверка savedOrder.getCounter() != reviewCounter не пройдена: savedOrder.getCounter() = {},  reviewCounter = {}", savedOrder.getCounter(), reviewCounter);
+//            emailService.sendSimpleEmail("2.12nps@mail.ru", "Ошибка проверки счетчика", "Срочно проверь. Что-то пошло не так при нажатии кнопки опубликовать у отзыва. " + textMail);
+//            isChanged = true;
+//            log.info("isChanged {}", isChanged);
+//            throw new IllegalStateException("Проблема с проверкой счетчиков, транзакция должна быть откатана");
+//        }
+//        checkOrderCounterAndAmount(savedOrder);
+//        log.info("10. Проверили счетчик заказа на выполнение заказа - он еще не выполнен");
+//
+//        return true;
+//    } catch (Exception e) {
+//        log.error("Ошибка при выполнении метода changeStatusAndOrderCounter для отзыва с id {}", reviewId, e);
+////            return false;
+//        throw e; // Транзакция откатится при исключении
+//    }
+//}
+//
+//protected Order validateAndRetrieveOrder(Review review, Long reviewId) {
+//
+//    if (review == null) {
+//        log.error("2. Отзыв с id {} не найден", reviewId);
+//        throw new IllegalStateException("Проблема с отсутвием отзыва по ид, транзакция должна быть откатана");
+////                return false;
+//    }
+//
+//    OrderDetails orderDetails = review.getOrderDetails();
+//    if (orderDetails == null || orderDetails.getOrder() == null) {
+//        throw new IllegalStateException("OrderDetails или Order отсутствуют для отзыва с ID: " + reviewId);
+//    }
+//
+//    Order order = orderRepository.findById(orderDetails.getOrder().getId()).orElse(null);
+//    if (order == null || review.isPublish()) {
+//        log.info("3. Проверка не пройдена: пустой order = {}, или отзыв уже опубликован publish = {}", order != null, review.isPublish());
+//        throw new IllegalStateException("Проблема с отсутвием заказа по ид и статуса уже опубликован, транзакция должна быть откатана");
+////                return false;
+//    }
+//    else return order;
+//}
+//
+//
+//@Transactional
+//protected int counterReviewIsPublish(Order savedOrder){
+//    int reviewCounter = 0;
+//    List<Review> reviewList = savedOrder.getDetails().getFirst().getReviews();
+//    for (Review review1 : reviewList) {
+//        if (review1.isPublish()) {
+//            reviewCounter++;
+//        }
+//    }
+//    return reviewCounter;
+//}
+//
+//@Transactional
+//public void updateBotCounterAndStatus(Bot bot) {
+//    try {
+//        bot.setCounter(bot.getCounter() + 1);
+//
+//        if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
+//            log.info("Меняем статус бота при достижении 20 отзывов");
+//            bot.setStatus(botService.changeStatus(HIGH_STATUS));
+//        } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
+//            log.info("Меняем статус бота при достижении 10 отзывов");
+//            bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
+//        }
+//
+//        botService.save(bot);
+//    } catch (Exception e) {
+//        log.error("Ошибка при обновлении счетчика и статуса у бота с id {}", bot.getId(), e);
+//        throw e;
+//    }
+//}
+//
+//@Transactional
+//protected void checkOrderCounterAndAmount(Order order) throws Exception {
+//    try {
+//        if (order.getAmount() <= order.getCounter()) {
+//            changeStatusForOrder(order.getId(), STATUS_PUBLIC);
+//            log.info("4. Счетчик совпадает с количеством заказа. Статус заказа с id {} сменен на Опубликовано", order.getId());
+//            if (order.getManager() != null && order.getManager().getUser() != null) {
+//                Long telegramChatId = order.getManager().getUser().getTelegramChatId();
+//
+//                if (telegramChatId != null && order.getCompany() != null && order.getCompany().getTitle() != null) {
+//                    String resultBuilder =
+//                            order.getCompany().getTitle() +
+//                                    " опубликован. \n" +
+//                                    "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
+//
+//                    telegramService.sendMessage(telegramChatId, resultBuilder);
+//                }
+//            }
+//        } else {
+//            log.info("4. Счетчик не совпадает с количеством заказа с id {}. Статус заказа не изменён", order.getId());
+//        }
+//    } catch (Exception e) {
+//        log.error("Ошибка при проверке счетчиков заказа с id {}", order.getId(), e);
+//        throw e;
+//    }
+//}
+//
+//
+//
+//public int countOrdersByWorkerAndStatus(Worker worker, String status) {
+//    int count = orderRepository.countByWorkerAndStatus(worker, status);
+////        System.out.println(worker.getUser().getFio() + " " + count);
+//    return count;
+//}

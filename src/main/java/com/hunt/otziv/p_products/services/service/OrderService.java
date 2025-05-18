@@ -19,7 +19,7 @@ public interface OrderService {
     OrderDTO newOrderDTO(Long id);
     boolean addNewReview(Long orderId);
     boolean deleteNewReview(Long orderId, Long reviewId);
-    boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
+//    boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
     boolean changeStatusForOrder(Long orderID, String title) throws Exception;
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);

@@ -5,6 +5,7 @@ import com.hunt.otziv.l_lead.services.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.services.service.OrderCreationService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
@@ -38,6 +39,7 @@ public class OrderController {
     private final AmountService amountService;
     private final PromoTextService promoTextService;
     private final OrderDetailsService orderDetailsService;
+    private final OrderCreationService creationService;
 
     int pageSize = 10; // желаемый размер страницы
 
@@ -62,7 +64,7 @@ public class OrderController {
 
     @PostMapping ("/{companyID}/{id}") // Пост запрос на создание нового заказа и редирект на оформление нового заказа
     String newOrder(@ModelAttribute ("newOrder") OrderDTO orderDTO, @PathVariable Long companyID, RedirectAttributes rm, @PathVariable Long id, Model model){
-        orderService.createNewOrderWithReviews(companyID, id, orderDTO);
+        creationService.createNewOrderWithReviews(companyID, id, orderDTO);
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/companies/company";
     } // Пост запрос на создание нового заказа и редирект на оформление нового заказа

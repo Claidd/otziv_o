@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -35,9 +36,12 @@ public class LeadSenderServiceImpl implements LeadSenderService {
 
     @PostConstruct
     public void initClients() {
-        this.clients = properties.getClients();
+        this.clients = properties.getClients().stream()
+                .filter(client -> "operator".equalsIgnoreCase(client.getRole()))
+                .collect(Collectors.toList());
         resetClientStates();
     }
+
 
     public void resetClientStates() {
         activeClients.clear();
@@ -48,7 +52,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("🔄 Состояния всех клиентов сброшены и активированы");
     }
 
-    @Scheduled(cron = "0 54 17 * * *") // каждый день в 16:25
+    @Scheduled(cron = "0 00 23 * * *") // каждый день в 16:25
     public void startDailyDispatch() {
         log.info("⏰ Ежедневный запуск рассылки для всех клиентов");
         adminNotifierService.notifyAdmin("🚀 Началась ежедневная рассылка сообщений по клиентам");
@@ -70,7 +74,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
                     return;
                 }
                 leadProcessorService.processLead(client);
-            }, initialDelay, 180, TimeUnit.SECONDS);
+            }, initialDelay, 360, TimeUnit.SECONDS);
 
             futures.put(client.getId(), future);
         }
@@ -101,6 +105,10 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         } else {
             log.info("ℹ️ Планировщик для клиента {} уже был остановлен", clientId);
         }
+    }
+
+    public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
+        return clients;
     }
 }
 
