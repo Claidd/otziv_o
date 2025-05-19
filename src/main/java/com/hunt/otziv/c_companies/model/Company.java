@@ -138,8 +138,13 @@ public class Company {
     @Column(name = "company_active")
     private boolean active;
 
+    @Column(name = "company_url_site")
+    private String urlSite;
+
     @Column(name = "company_group_id")
     private String groupId;
+
+
 
 
     // Геттеры и сеттеры

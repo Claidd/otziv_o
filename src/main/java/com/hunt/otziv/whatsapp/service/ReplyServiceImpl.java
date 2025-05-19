@@ -79,7 +79,7 @@ public class ReplyServiceImpl implements ReplyService {
             "(https?://\\S+|www\\.\\S+|t\\.me/\\S+|vk\\.com/\\S+)", Pattern.CASE_INSENSITIVE
     );
 
-    private final List<Long> adminChatIds = List.of(794146111L);
+    private final List<Long> adminChatIds = List.of(794146111L, 828987226L);
 
     private void notifyAdminIfMessageContainsLink(Lead lead, WhatsAppReplyDTO reply) {
         String message = reply.getMessage();

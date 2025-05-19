@@ -737,8 +737,9 @@ public boolean deleteOrder(Long orderId, Principal principal){
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
                 default -> {
-                    log.warn("Неизвестный статус: {}", title);
-                    yield false;
+                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                orderRepository.save(order);
+                    yield true;
                 }
             };
 

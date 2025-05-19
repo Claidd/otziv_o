@@ -3,6 +3,7 @@ package com.hunt.otziv.text_generator.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.theokanning.openai.client.OpenAiApi;
 import com.theokanning.openai.service.OpenAiService;
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -17,40 +18,50 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Configuration
 public class OpenAIConfig {
 
     @Value("${openai.api-key}")
     private String apiKey;
 
+    @Value("${proxy.host:}")
+    private String proxyHost;
+
+    @Value("${proxy.port:8888}")
+    private int proxyPort;
+
     @Bean
     public OpenAiService openAiService() {
-        // Настраиваем прокси
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("vpn-proxy", 8888));
+        Proxy proxy = null;
+
+        if (proxyHost != null && !proxyHost.isBlank()) {
+            log.info("📦 Используем прокси {}:{}", proxyHost, proxyPort);
+            proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+        } else {
+            log.info("🚫 Прокси не задан — используем прямое соединение");
+        }
+
         Duration timeout = Duration.ofSeconds(40);
 
-        // Кастомный клиент с прокси и авторизацией
-        OkHttpClient client = new OkHttpClient.Builder()
-                .proxy(proxy)
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .connectTimeout(timeout)
                 .readTimeout(timeout)
                 .writeTimeout(timeout)
-                .addInterceptor(new MyAuthInterceptor(apiKey))
-                .build();
+                .addInterceptor(new MyAuthInterceptor(apiKey));
 
-        // Retrofit + API
-        ObjectMapper mapper = OpenAiService.defaultObjectMapper();
-        Retrofit retrofit = OpenAiService.defaultRetrofit(client, mapper);
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+
+        OkHttpClient client = builder.build();
+        Retrofit retrofit = OpenAiService.defaultRetrofit(client, OpenAiService.defaultObjectMapper());
         OpenAiApi api = retrofit.create(OpenAiApi.class);
 
         return new OpenAiService(api, client.dispatcher().executorService());
     }
 
-    /**
-     * Кастомный Interceptor для авторизации
-     */
     public static class MyAuthInterceptor implements Interceptor {
         private final String apiKey;
 
@@ -68,5 +79,8 @@ public class OpenAIConfig {
         }
     }
 }
+
+
+
 
 

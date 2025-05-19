@@ -16,7 +16,9 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
+import com.hunt.otziv.text_generator.service.config.ReviewGenerationManager;
 import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
 import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,11 @@ import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -38,6 +45,8 @@ public class AutoTextServiceImpl implements AutoTextService{
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
+    private final ReviewGenerationManager reviewGenerationManager;
+    private final PromptFactory promptFactory;
     private final WebsiteParserService websiteParserService;
 
 
@@ -210,86 +219,39 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 //==================================== НАСТРОЙКИ ТЕКСТОВ - КОНЕЦ ==================================================
 
-    /** Код создания отзывов*/
     public List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
         List<Review> reviewList = new ArrayList<>();
-
         List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-//        String siteRaw = websiteParserService.extractTextFromWebsite("parfumerkld.ru");
-//
-//        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
-//        log.info("\uD83C\uDF10 Текст с сайта содержит приблизительно {} токенов", siteTokens);
-
-//        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
-//        String site = siteText;
         String site = parfum;
-//        String site = textShablon;
-//        String site = "";
-//        System.out.println(site);
-//        log.info("\uD83D\uDCCB Компактный анализ сайта:\n{}", site);
-
-//        if (site != null && !site.isBlank()) {
-//              site = reviewGeneratorService.safeAnalyzeSiteTextNoShablon(site);
-//        }
-//        System.out.println(site);
-
         String category = orderDetails.getOrder().getCompany().getSubCategory().getSubCategoryTitle();
         int totalAmount = orderDTO.getAmount();
-        System.out.println(category);
 
+        long start = System.nanoTime();
+        int timeoutMillis = 15_000;
 
+        List<CompletableFuture<String>> futureReviews = new ArrayList<>();
+        for (int i = 0; i < totalAmount; i++) {
+            PromptDTO promptDTO = promptFactory.generatePrompt(site, category);
+            futureReviews.add(reviewGenerationManager.generateReviewAsync(promptDTO));
+        }
 
-        Set<String> uniqueTexts = new LinkedHashSet<>();
-        int maxAttempts = 10 * totalAmount;
-        int attempts = 0;
-        long startTime = System.nanoTime();
-        int totalTokenCount = 0;
-
-        while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
-//            Формирование Промта
-            PromptDTO promptDTO = takePromtDTOconverter(site, category);
-//            Формирование Промта
-
-            String firstText = reviewGeneratorService.safeGenerateSingleReview(promptDTO);
-            int tokens = firstText != null ? firstText.length() : 0;
-
-
-//            String review = reviewGeneratorService.minusSlova(firstText);
-            String review = firstText;
-//            System.out.println(firstText);
-//            System.out.println(review);
-
-            if (review != null && !review.startsWith("⚠️") && !uniqueTexts.contains(review)) {
-                uniqueTexts.add(review);
-                totalTokenCount += tokens;
-                log.info("➕ Добавлен новый отзыв ({} токенов), текущий счётчик: {}/{}", tokens, uniqueTexts.size(), totalAmount);
-            } else {
-                log.warn("⚠️ Ошибка, дубликат или неподходящая длина, отзыв не добавлен. Попытка: {}/{}", attempts + 1, maxAttempts);
-            }
-
-            attempts++;
-
+        List<String> texts = new ArrayList<>();
+        for (CompletableFuture<String> future : futureReviews) {
             try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                String text = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+                if (text != null && !text.startsWith("⚠️") && !texts.contains(text)) {
+                    texts.add(text);
+                }
+                Thread.sleep(300);
+            } catch (TimeoutException e) {
+                log.warn("⏱ Отзыв не успел сгенерироваться за {} мс", timeoutMillis);
+            } catch (Exception e) {
+                log.error("❌ Ошибка получения результата генерации: {}", e.getMessage());
             }
         }
 
-        long endTime = System.nanoTime();
-        double durationSec = (endTime - startTime) / 1_000_000_000.0;
-
-        if (uniqueTexts.size() < totalAmount) {
-            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
-                    uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
-        } else {
-            log.info("\uD83D\uDCDD Получено итогово {} уникальных отзывов за {} сек после {} попыток",
-                    uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
-        }
-
-        log.info("\uD83D\uDCCA Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
-
-        List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
+        long durationSec = (System.nanoTime() - start) / 1_000_000_000;
+        log.info("🎯 Сгенерировано {} отзывов за {} сек", texts.size(), durationSec);
 
         for (String text : texts) {
             Review review = toEntityReviewFromDTO(
@@ -303,95 +265,14 @@ public class AutoTextServiceImpl implements AutoTextService{
             if (saved != null) {
                 reviewList.add(saved);
             } else {
-                log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
+                log.warn("⚠️ Отзыв не сохранён (возможно, дубликат): {}", text.length() > 80 ? text.substring(0, 80) + "..." : text);
             }
         }
-
         return reviewList;
     }
 
-    private PromptDTO takePromtDTOconverter(String siteText, String subCategory) {
-        Double temperature = this.temperature.get(new Random().nextInt(this.temperature.size()));
-        System.out.println("Температура отзыва: " + temperature);
-        return PromptDTO.builder()
-                .system(getSystemPromt())
-                .prompt(getPrompt(siteText, subCategory))
-                .temperature(temperature)
-                .build();
-    }
 
 
-    private String getSystemPromt() {
-        String systemText = String.format("""
-        Ты %s, %s, %s лет.\s
-        Имеешь %s образование, %s, %s
-        Стиль твоего текста, который ты напишешь: %s""",
-                sex.get(new Random().nextInt(sex.size())), // Ты Мужчина, Женщина
-                proffesion.get(new Random().nextInt(proffesion.size())), // Работник, Студент
-                olds.get(new Random().nextInt(olds.size())), // Такого-то возраста
-                education.get(new Random().nextInt(education.size())), // Образование
-                finance.get(new Random().nextInt(finance.size())), // Доход
-                socialStatus.get(new Random().nextInt(socialStatus.size())), // Женат, Холост, соц. статус
-                styleOfSpeech.get(new Random().nextInt(styleOfSpeech.size())) // Стиль общения
-        );
-        System.out.println(systemText);
-        return systemText;
-    }
-
-    private String getPrompt(String siteText, String subCategory) {
-        String promptText = String.format("""
-        1.Напиши отзыв от первого лица, который мог бы появиться на Яндекс.Картах или 2ГИС.\s
-        Основываясь на информации сайта компании, если она есть %s, или на категории деятельности компании: %s Выбери один продукт/услугу и пиши про него\s
-
-        2. Обязательно используя структуру: %s.
-        %s.
-        3. Очень важно! Не используй слова и словосочетания - в восторге, превзошло все ожидания, это то, что нам нужно, невероятно, были отзывчивы, атмосферу, были в восторге, просто супер, на высшем уровне, был безупречным, настоящая находка, сразу понял/поняла это то что нужно, был приятно удивлен
-        4. Строго следи за указанным размером текста отзыва\s
-        5. не используй название компании в написании текста отзыва
-        6. Используй стиль написания %s.
-       \s""",
-
-                siteText, // Информация с сайта
-                subCategory, // Категория
-//                lengthText.get(new Random().nextInt(lengthText.size())), // Длина текста
-//                2. Можешь использовать следующие следующие жаргонные слова: %s.
-//                gargon, // Жаргон
-                structure.get(new Random().nextInt(structure.size())), // Структура
-//                aspects.get(new Random().nextInt(aspects.size())), // Акцент
-                decorateText.get(new Random().nextInt(decorateText.size())), // Декорация: смайлы или нет
-                styleOfSpeech.get(new Random().nextInt(styleOfSpeech.size())) // Стиль общения
-        );
-        System.out.println(promptText);
-        return promptText;
-    }
-
-
-
-    private String getRandomAspect() {
-        List<String> aspects = List.of(
-                "доброжелательный персонал",
-                "удобное расположение",
-                "качественный сервис",
-                "доступные цены",
-                "широкий ассортимент",
-                "атмосфера уюта",
-                "профессионализм сотрудников",
-                "быстрое обслуживание",
-                "гарантии и возвраты",
-                "интересные акции"
-        );
-        return aspects.get(new Random().nextInt(aspects.size()));
-    }
-
-    private String getRandomPrompt(String category, String tone, String site, String aspect) {
-        List<String> variants = List.of(
-                "Ты обычный человек. Напиши краткий отзыв от первого лица, который мог бы оставить клиент после визита. Категория: %s. Информация: %s. Сделай акцент на: %s. Не используй пафос и рекламу. Просто и по делу.",
-                "Напиши отзыв в обычном разговорном стиле, без клише и восторгов. Категория: %s. Акцент: %s. Тональность: %s. Информация о компании: %s.",
-                "Сформулируй обычный очень короткий отзыв, который мог бы появиться на Яндекс.Картах или 2ГИС. Не слишком длинный. Категория: %s. Тема: %s. Контекст: %s. Без смайликов."
-        );
-        String pattern = variants.get(new Random().nextInt(variants.size()));
-        return String.format(pattern, category, site, aspect, tone);
-    }
 
 
     public boolean changeReviewText(Long reviewId) {
@@ -403,8 +284,10 @@ public class AutoTextServiceImpl implements AutoTextService{
             return false;
         }
 
-        String site = "";
-        PromptDTO promptDTO = takePromtDTOconverter(site, review.getSubCategory().getSubCategoryTitle());
+        PromptDTO promptDTO = promptFactory.generatePrompt(
+                "", // или подставь siteText, если хочешь давать данные о компании
+                review.getSubCategory().getSubCategoryTitle()
+        );
 
         String generatedText = null;
         int maxAttempts = 3;
@@ -420,12 +303,6 @@ public class AutoTextServiceImpl implements AutoTextService{
                     continue;
                 }
 
-                // Если нужно исключить дубли:
-                // if (reviewService.existsByText(generatedText)) {
-                //     log.warn("🔁 Такой текст уже есть в БД — попытка {}", i);
-                //     continue;
-                // }
-
                 break;
 
             } catch (Exception e) {
@@ -433,7 +310,7 @@ public class AutoTextServiceImpl implements AutoTextService{
                 if (e.getCause() instanceof SocketTimeoutException) {
                     log.warn("⏱ Timeout при попытке {} за {} мс", i, durationMs);
                     try {
-                        Thread.sleep(3000); // пауза перед следующей попыткой
+                        Thread.sleep(3000);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         return false;
@@ -460,7 +337,6 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 
 
-
     private Review toEntityReviewFromDTO(
             CompanyDTO companyDTO,
             OrderDetails orderDetails,
@@ -484,35 +360,6 @@ public class AutoTextServiceImpl implements AutoTextService{
                 .price(orderDetails.getProduct().getPrice())
                 .build();
     }// Конвертер из DTO для отзыва
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -693,6 +540,60 @@ public class AutoTextServiceImpl implements AutoTextService{
             "    - Отзывы покупателей доступны на сайте.";
 
 
+
+
+
+
+    private String getRandomAspect() {
+        List<String> aspects = List.of(
+                "доброжелательный персонал",
+                "удобное расположение",
+                "качественный сервис",
+                "доступные цены",
+                "широкий ассортимент",
+                "атмосфера уюта",
+                "профессионализм сотрудников",
+                "быстрое обслуживание",
+                "гарантии и возвраты",
+                "интересные акции"
+        );
+        return aspects.get(new Random().nextInt(aspects.size()));
+    }
+
+    private String getRandomPrompt(String category, String tone, String site, String aspect) {
+        List<String> variants = List.of(
+                "Ты обычный человек. Напиши краткий отзыв от первого лица, который мог бы оставить клиент после визита. Категория: %s. Информация: %s. Сделай акцент на: %s. Не используй пафос и рекламу. Просто и по делу.",
+                "Напиши отзыв в обычном разговорном стиле, без клише и восторгов. Категория: %s. Акцент: %s. Тональность: %s. Информация о компании: %s.",
+                "Сформулируй обычный очень короткий отзыв, который мог бы появиться на Яндекс.Картах или 2ГИС. Не слишком длинный. Категория: %s. Тема: %s. Контекст: %s. Без смайликов."
+        );
+        String pattern = variants.get(new Random().nextInt(variants.size()));
+        return String.format(pattern, category, site, aspect, tone);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //    List<String> structure = List.of(
 //            "Классическую структуру (товары и услуги)\n" +
 //                    "Контекст: зачем купили / когда обратились\n" +
@@ -807,6 +708,107 @@ public class AutoTextServiceImpl implements AutoTextService{
 //            "Простой максимально короткий отзыв в стиле - Спасибо, все понравилось."
 //    );
 }
+
+
+/** Код создания отзывов*/
+//public List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
+//    List<Review> reviewList = new ArrayList<>();
+//
+//    List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
+////        String siteRaw = websiteParserService.extractTextFromWebsite("parfumerkld.ru");
+////
+////        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
+////        log.info("\uD83C\uDF10 Текст с сайта содержит приблизительно {} токенов", siteTokens);
+//
+////        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
+////        String site = siteText;
+//    String site = parfum;
+////        String site = textShablon;
+////        String site = "";
+////        System.out.println(site);
+////        log.info("\uD83D\uDCCB Компактный анализ сайта:\n{}", site);
+//
+////        if (site != null && !site.isBlank()) {
+////              site = reviewGeneratorService.safeAnalyzeSiteTextNoShablon(site);
+////        }
+////        System.out.println(site);
+//
+//    String category = orderDetails.getOrder().getCompany().getSubCategory().getSubCategoryTitle();
+//    int totalAmount = orderDTO.getAmount();
+//    System.out.println(category);
+//
+//
+//
+//    Set<String> uniqueTexts = new LinkedHashSet<>();
+//    int maxAttempts = 10 * totalAmount;
+//    int attempts = 0;
+//    long startTime = System.nanoTime();
+//    int totalTokenCount = 0;
+//
+//    while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
+////            Формирование Промта
+//        PromptDTO promptDTO = takePromtDTOconverter(site, category);
+////            Формирование Промта
+//
+//        String firstText = reviewGeneratorService.safeGenerateSingleReview(promptDTO);
+//        int tokens = firstText != null ? firstText.length() : 0;
+//
+//
+////            String review = reviewGeneratorService.minusSlova(firstText);
+//        String review = firstText;
+////            System.out.println(firstText);
+////            System.out.println(review);
+//
+//        if (review != null && !review.startsWith("⚠️") && !uniqueTexts.contains(review)) {
+//            uniqueTexts.add(review);
+//            totalTokenCount += tokens;
+//            log.info("➕ Добавлен новый отзыв ({} токенов), текущий счётчик: {}/{}", tokens, uniqueTexts.size(), totalAmount);
+//        } else {
+//            log.warn("⚠️ Ошибка, дубликат или неподходящая длина, отзыв не добавлен. Попытка: {}/{}", attempts + 1, maxAttempts);
+//        }
+//
+//        attempts++;
+//
+//        try {
+//            Thread.sleep(500);
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//        }
+//    }
+//
+//    long endTime = System.nanoTime();
+//    double durationSec = (endTime - startTime) / 1_000_000_000.0;
+//
+//    if (uniqueTexts.size() < totalAmount) {
+//        log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
+//                uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
+//    } else {
+//        log.info("\uD83D\uDCDD Получено итогово {} уникальных отзывов за {} сек после {} попыток",
+//                uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
+//    }
+//
+//    log.info("\uD83D\uDCCA Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
+//
+//    List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
+//
+//    for (String text : texts) {
+//        Review review = toEntityReviewFromDTO(
+//                orderDTO.getCompany(),
+//                orderDetails,
+//                orderDTO.getFilial(),
+//                bots,
+//                text
+//        );
+//        Review saved = reviewService.save(review);
+//        if (saved != null) {
+//            reviewList.add(saved);
+//        } else {
+//            log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
+//        }
+//    }
+//
+//    return reviewList;
+//}
 
 
 

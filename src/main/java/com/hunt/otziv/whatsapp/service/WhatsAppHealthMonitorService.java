@@ -16,12 +16,14 @@ public class WhatsAppHealthMonitorService {
     private final WhatsAppProperties properties;
     private final RestTemplate restTemplate;
 
-    @Scheduled(fixedDelay = 360000) // каждый 60 секунд
+    @Scheduled(fixedDelay = 720000) // каждый 60 секунд
     public void checkAllClientsHealth() {
         for (WhatsAppProperties.ClientConfig client : properties.getClients()) {
             checkHealthForClient(client);
         }
     }
+
+
 
     private void checkHealthForClient(WhatsAppProperties.ClientConfig client) {
         String healthUrl = client.getUrl() + "/health";

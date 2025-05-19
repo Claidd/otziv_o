@@ -16,14 +16,19 @@ WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
+VOLUME /app/logs
 
 # Этап 2: Финальный образ для выполнения
 FROM eclipse-temurin:22-jdk-alpine
+RUN apk add --no-cache curl
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
 
 VOLUME /app/logs
 EXPOSE 8080
+
+## Установите метку BUILD_NO_CACHE
+LABEL BUILD_NO_CACHE="1"
 
 CMD ["java", "-jar", "app.jar"]
 
