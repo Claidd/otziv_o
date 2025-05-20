@@ -1,6 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
 
+import com.hunt.otziv.l_lead.services.LeadService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 
@@ -26,6 +28,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     private final WhatsAppProperties properties;
     private final LeadProcessorService leadProcessorService;
     private final AdminNotifierService adminNotifierService; // уведомление в Telegram
+    private final LeadService leadService;
 
     private List<WhatsAppProperties.ClientConfig> clients;
     private final List<ScheduledExecutorService> executors = new ArrayList<>();
@@ -33,6 +36,9 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     private final Map<String, ScheduledFuture<?>> futures = new ConcurrentHashMap<>();
 
 
+
+
+    private final String NEW_STATUS = "Новый";
 
     @PostConstruct
     public void initClients() {
@@ -52,20 +58,33 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("🔄 Состояния всех клиентов сброшены и активированы");
     }
 
-    @Scheduled(cron = "0 00 23 * * *") // каждый день в 16:25
+    @Scheduled(cron = "0 0 1 * * *") // каждый день в 1:00
     public void startDailyDispatch() {
         log.info("⏰ Ежедневный запуск рассылки для всех клиентов");
         adminNotifierService.notifyAdmin("🚀 Началась ежедневная рассылка сообщений по клиентам");
-        resetClientStates();
 
-        int delayStepSeconds = 60;
+        resetClientStates();
 
         for (int i = 0; i < clients.size(); i++) {
             WhatsAppProperties.ClientConfig client = clients.get(i);
+
+            // Рандомный шаг задержки от 30 до 120 секунд
+            int delayStepSeconds = ThreadLocalRandom.current().nextInt(30, 121);
             int initialDelay = i * delayStepSeconds;
+            log.debug("⏱ delayStepSeconds для {}: {}", client.getId(), delayStepSeconds);
+
+
+            String id = client.getId().replaceAll("\\D+", ""); // удалит все нецифры
+            Long telephoneId = Long.valueOf(id);
+            int leadCount = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS); // например, leadRepository.countByClientIdAndStatusNew(...)
+
+            int periodSeconds = calculateRandomPeriodByLeadCount(leadCount);
 
             ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
             executors.add(executor);
+
+            log.info("📅 Планируем запуск клиента {}: initialDelay={} сек, период={} сек (лидов: {})",
+                    client.getId(), initialDelay, periodSeconds, leadCount);
 
             ScheduledFuture<?> future = executor.scheduleAtFixedRate(() -> {
                 if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
@@ -74,9 +93,26 @@ public class LeadSenderServiceImpl implements LeadSenderService {
                     return;
                 }
                 leadProcessorService.processLead(client);
-            }, initialDelay, 360, TimeUnit.SECONDS);
+            }, initialDelay, periodSeconds, TimeUnit.SECONDS);
 
             futures.put(client.getId(), future);
+        }
+        leadProcessorService.resetState(); // Сброс перед новым днём
+        log.info("🧹 Сброшены лимиты и счётчики ошибок после запуска задач — все клиенты готовы к рассылке");
+    }
+
+    /**
+     * Вычисление периода запуска на основе количества лидов.
+     */
+    private int calculateRandomPeriodByLeadCount(int leadCount) {
+        if (leadCount <= 10) {
+            return ThreadLocalRandom.current().nextInt(300, 3601); // от 5 до 60 мин
+        } else if (leadCount <= 20) {
+            return ThreadLocalRandom.current().nextInt(300, 1801); // от 5 до 30 мин
+        } else if (leadCount <= 30) {
+            return ThreadLocalRandom.current().nextInt(300, 901); // от 5 до 15 мин
+        } else {
+            return 300; // минимум — 5 минут
         }
     }
 
@@ -110,11 +146,38 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
         return clients;
     }
+
 }
 
 
 
-
+//@Scheduled(cron = "0 0 1 * * *") // каждый день в 1:00
+//public void startDailyDispatch() {
+//    log.info("⏰ Ежедневный запуск рассылки для всех клиентов");
+//    adminNotifierService.notifyAdmin("🚀 Началась ежедневная рассылка сообщений по клиентам");
+//    resetClientStates();
+//
+//    int delayStepSeconds = 60;
+//
+//    for (int i = 0; i < clients.size(); i++) {
+//        WhatsAppProperties.ClientConfig client = clients.get(i);
+//        int initialDelay = i * delayStepSeconds;
+//
+//        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+//        executors.add(executor);
+//
+//        ScheduledFuture<?> future = executor.scheduleAtFixedRate(() -> {
+//            if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
+//                log.info("🛑 У клиента {} закончились лиды — планировщик останавливается", client.getId());
+//                futures.get(client.getId()).cancel(false);
+//                return;
+//            }
+//            leadProcessorService.processLead(client);
+//        }, initialDelay, 360, TimeUnit.SECONDS);
+//
+//        futures.put(client.getId(), future);
+//    }
+//}
 
 
 

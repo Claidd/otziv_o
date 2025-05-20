@@ -86,7 +86,7 @@ public class S3UploadServiceImpl implements S3UploadService {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             Thumbnails.of(file.getInputStream())
-                    .size(600, 400)
+//                    .size(600, 400)
                     .crop(Positions.CENTER)
                     .outputFormat("jpg")
                     .outputQuality(0.7)

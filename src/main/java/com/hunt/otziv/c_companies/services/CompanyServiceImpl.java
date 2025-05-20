@@ -939,7 +939,7 @@ public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление
     public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
-            a[0] = "+79";
+            a[0] = "79";
             String tel = a[0] + a[1];
             String tel2 = tel.replace("-","");
             String tel3 = tel2.replace("(", "");
@@ -958,7 +958,7 @@ public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление
             companyRepository.save(company);
             return true;
         } catch (Exception e){
-            System.out.println(e);
+            log.error(String.valueOf(e));
             return false;
         }
     } // смена статуса компании

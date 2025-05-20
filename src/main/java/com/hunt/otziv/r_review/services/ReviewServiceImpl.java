@@ -9,6 +9,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
@@ -552,17 +553,66 @@ public class ReviewServiceImpl implements ReviewService{
         }
     } // Изменение статуса бота как НЕ активный
 
-    private List<Bot> findAllBotsMinusFilial(Review review){ // Найти всех ботов за исключением тех, что уже есть у филиала
-//        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(review.getOrderDetails().getOrder().getWorker().getId());
-        List<Bot> bots = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId());
-        System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
-        List<Review> reviewListFilial = reviewRepository.findAllByFilial(review.getFilial());
-        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        System.out.println("Боты вытащенные из базы по определнному городу для удаления: " +  botsCompany.size());
+    private List<Bot> findAllBotsMinusFilial(Review review) {
+        if (review == null) {
+            log.error("Ошибка: review == null");
+            return Collections.emptyList();
+        }
+
+        Filial filial = review.getFilial();
+        if (filial == null) {
+            log.error("Ошибка: у review отсутствует filial");
+            return Collections.emptyList();
+        }
+
+        City city = filial.getCity();
+        if (city == null || city.getId() == null) {
+            log.error("Ошибка: у filial отсутствует город или его ID");
+            return Collections.emptyList();
+        }
+
+        List<Bot> bots;
+        try {
+            bots = botService.getFindAllByFilialCityId(city.getId());
+        } catch (Exception e) {
+            log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
+            return Collections.emptyList();
+        }
+
+        log.info("Боты вытащенные из базы по городу: {} кол-во: {}", city.getTitle(), bots != null ? bots.size() : 0);
+
+        if (bots == null || bots.isEmpty()) {
+            log.warn("Список ботов пуст или null");
+            return Collections.emptyList();
+        }
+
+        List<Review> reviewListFilial;
+        try {
+            reviewListFilial = reviewRepository.findAllByFilial(filial);
+        } catch (Exception e) {
+            log.error("Ошибка при получении отзывов по филиалу: {}", filial.getId(), e);
+            return Collections.emptyList();
+        }
+
+        if (reviewListFilial == null) {
+            log.warn("Список отзывов филиала null");
+            reviewListFilial = Collections.emptyList();
+        }
+
+        List<Bot> botsCompany = reviewListFilial.stream()
+                .map(Review::getBot)
+                .filter(Objects::nonNull)
+                .toList();
+
+        log.info("Боты уже использованные в этом городе (для удаления из списка): {}", botsCompany.size());
+
         bots.removeAll(botsCompany);
-        System.out.println("Оставшиеся: " + bots.size());
+        log.info("Оставшиеся: {}", bots.size());
+
         return bots;
-    } // Найти всех ботов за исключением тех, что уже есть у филиала
+    }
+
+
 
 //    ================================ ЗАМЕНА И БЛОИРОКА БОТОВ ДЛЯ ЗАКАЗА КОНЕЦ ========================================
 

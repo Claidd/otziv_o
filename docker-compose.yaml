@@ -71,6 +71,9 @@ services:
     restart: always
     environment:
       - UPLOAD_LIMIT=512M
+      - PMA_HOST=mysql
+      - PMA_USER=${MYSQL_USER}
+      - PMA_PASSWORD=${MYSQL_PASSWORD}
     networks:
       - internal_net
 
@@ -112,6 +115,7 @@ services:
     networks:
       - internal_net
 
+#  http://o-ogo:ru:1002/qr
 
   whatsapp_vika:
     image: claid38/otziv-whatsapp
@@ -123,7 +127,7 @@ services:
     restart: always
     environment:
       - CLIENT_ID=whatsapp_vika
-      - SERVER_URL=http://nginx:80
+      - SERVER_URL=https://o-ogo.ru
       - AUTH_PATH=/root/.config/whatsapp-web.js
     networks:
       - internal_net
@@ -141,11 +145,11 @@ services:
       - whatsapp_vika
     environment:
       - CLIENT_ID=whatsapp_lika
-      - SERVER_URL=http://nginx:80
+      - SERVER_URL=https://o-ogo.ru
       - AUTH_PATH=/root/.config/whatsapp-web.js
     networks:
       - internal_net
-#
+
 #  client1:
 #    image: claid38/otziv-whatsapp
 #    container_name: client1

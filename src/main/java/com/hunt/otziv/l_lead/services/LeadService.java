@@ -88,6 +88,8 @@ public interface LeadService {
 
     void saveLead(Lead lead);
 
+    int countNewLeadsByClient(Long telephoneId, String status);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

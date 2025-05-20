@@ -4,4 +4,6 @@ import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 
 public interface LeadProcessorService {
     void processLead(WhatsAppProperties.ClientConfig client);
+
+    void resetState();
 }

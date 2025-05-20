@@ -25,9 +25,7 @@ import java.util.regex.Pattern;
 public class ReplyServiceImpl implements ReplyService {
 
     private final CompanyService companyService;
-    private final WhatsAppService whatsAppService;
     private final LeadService leadService;
-    private final MyTelegramBot myTelegramBot;
     private final OfferService offerService;
     private final NotificationService notificationService;
 

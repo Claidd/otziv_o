@@ -148,4 +148,8 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
             String status,
             LocalDate date
     );
+
+
+    int countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(Long telephone_id, LocalDate createDate, String lidStatus);
+
 }

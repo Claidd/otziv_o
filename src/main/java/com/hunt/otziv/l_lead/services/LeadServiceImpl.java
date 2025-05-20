@@ -767,5 +767,10 @@ public class LeadServiceImpl implements LeadService{
         leadsRepository.save(lead);
     }
 
+    @Override
+    public int countNewLeadsByClient(Long telephoneId, String status) {
+        return leadsRepository.countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(telephoneId, LocalDate.now() , status);
+    }
+
 
 }

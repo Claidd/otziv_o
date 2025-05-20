@@ -113,13 +113,9 @@ public class SecurityConfig {
 //                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
 //                .csrf(AbstractHttpConfigurer::disable)
                 .cors(AbstractHttpConfigurer::disable)
-                .csrf((csrf) -> csrf
-                        .csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())
-                        .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
-                                .ignoringRequestMatchers("/api/**") // отключаем CSRF только для API
-                                .ignoringRequestMatchers("/webhook/**") // 💥 разрешить без CSRF
-//                                .requireCsrfProtectionMatcher()
-//                        .ignoringRequestMatchers("/**")
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository) // ✅ используем CSRF-токен из сессии
+                        .ignoringRequestMatchers("/api/**", "/webhook/**") // ❌ отключаем для API и Webhook
                 );
                 // Добавляем наш фильтр перед другими фильтрами безопасности
                 http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -148,7 +144,15 @@ public class SecurityConfig {
     }
 
 
+//                .csrf((csrf) -> csrf
+//            .csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())
+//            .ignoringRequestMatchers("/api/**") // отключаем CSRF только для API
+//                                .ignoringRequestMatchers("/webhook/**") // 💥 разрешить без CSRF
+//                        .sessionAuthenticationStrategy(new CsrfAuthenticationStrategy(csrfTokenRepository))
 
+//                                .requireCsrfProtectionMatcher()
+//                        .ignoringRequestMatchers("/**")
+//            );
 
 //    @Bean
 //    public PasswordEncoder passwordEncoder() {

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Slf4j
@@ -30,13 +31,8 @@ public class OfferService {
         }
 
         try {
-            Thread.sleep(10_000); // Задержка перед отправкой
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("⏰ Ожидание прервано для {}", telephoneNumber);
-        }
+            delayBeforeSending(telephoneNumber);
 
-        try {
             String result = whatsAppService.sendMessage(clientId, telephoneNumber, offerText);
 
             if (result != null && result.contains("ok")) {
@@ -47,7 +43,19 @@ public class OfferService {
                 log.warn("❌ Ошибка при отправке оффера клиенту {}", telephoneNumber);
             }
         } finally {
-            phonesInProgress.remove(telephoneNumber); // очищаем даже при ошибке
+            phonesInProgress.remove(telephoneNumber);
         }
     }
+
+    private void delayBeforeSending(String telephoneNumber) {
+        int delaySeconds = ThreadLocalRandom.current().nextInt(10, 61); // 10–60 сек
+        log.info("⏳ Ждём {} секунд перед отправкой оффера клиенту {}", delaySeconds, telephoneNumber);
+        try {
+            Thread.sleep(delaySeconds * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("⏰ Ожидание прервано для {}", telephoneNumber);
+        }
+    }
+
 }

@@ -42,6 +42,7 @@ const makeClient = (id) => {
   });
 
   instance.on('message', async msg => {
+    console.log(`📤 Пришло сообщение`);
     const chat = await msg.getChat();
 
     // Обработка только текстовых сообщений
@@ -63,6 +64,7 @@ const makeClient = (id) => {
       console.log(`💬 Текст: ${content}`);
 
       try {
+        console.log(`📤 Отправка в группу ${serverUrl}/webhook/whatsapp-reply`);
         await axios.post(`${serverUrl}/webhook/whatsapp-group-reply`, {
           clientId: id,
           groupId: groupId,
@@ -76,6 +78,7 @@ const makeClient = (id) => {
     } else {
       console.log(`[${id}] Входящее сообщение от ${msg.from}: ${content}`);
       try {
+        console.log(`📤 Отправка в личку ${serverUrl}/webhook/whatsapp-reply`);
         await axios.post(`${serverUrl}/webhook/whatsapp-reply`, {
           clientId: id,
           from: msg.from.replace('@c.us', ''),
@@ -115,11 +118,13 @@ app.get('/qr', async (req, res) => {
 
 app.post('/send', async (req, res) => {
   const { phone, message } = req.body;
+  console.log(`📤 Отправка в личку ${groupId}: ${message}`);
   if (!client || !client.info || !client.info.wid) {
     return res.status(503).json({ status: 'error', error: 'Клиент не готов или не авторизован' });
   }
 
   try {
+    console.log(`[${id}] ➡️ Отправка POST на ${serverUrl}/webhook/whatsapp-reply`);
     await client.sendMessage(`${phone}@c.us`, message);
     res.json({ status: 'ok' });
   } catch (e) {
@@ -132,6 +137,8 @@ app.post('/send-group', async (req, res) => {
   console.log(`📤 Отправка в группу ${groupId}: ${message}`);
 
   try {
+    console.log(`[${id}] ➡️ Отправка POST на ${serverUrl}/webhook/whatsapp-group-reply`);
+
     await client.sendMessage(groupId, message);
     res.json({ status: 'ok' });
   } catch (e) {
