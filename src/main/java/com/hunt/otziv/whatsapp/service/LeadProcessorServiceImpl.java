@@ -1,35 +1,40 @@
 package com.hunt.otziv.whatsapp.service;
 
+import com.hunt.otziv.l_lead.dto.TelephoneDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.TelephoneService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class LeadProcessorServiceImpl implements LeadProcessorService {
 
     @Value("${whatsapp.ban-protection.maxFailures:5}")
@@ -44,6 +49,9 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     @Value("${whatsapp.ban-protection.maxDelay:30}")
     private int maxDelay;
 
+    @Value("${whatsapp.async.executor:leadDispatcherExecutor}")
+    private String executorName;
+
     private LocalTime startTime;
     private LocalTime endTime;
 
@@ -51,42 +59,69 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private final WhatsAppService whatsAppService;
     private final AdminNotifierService adminNotifierService;
     private final ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider;
+    private final TelephoneService telephoneService;
+    private final PromoTextService promoTextService;
+    private final TaskExecutor taskExecutor;
 
     private static final Set<String> finishedClients = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean notificationSent = new AtomicBoolean(false);
 
     public static final String STATUS_NEW = "Новый";
     public static final String STATUS_SENT = "К рассылке";
+    public static final String STATUS_FAIL = "Ошибка";
 
     private List<WhatsAppProperties.ClientConfig> operatorClients;
 
     private final Map<String, AtomicInteger> failedAttemptsPerClient = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> dailyMessageCount = new ConcurrentHashMap<>();
-
-    // счетчик отправок
     private final Map<String, StatDto> statsPerClient = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> controlSendCounter = new ConcurrentHashMap<>();
+    private final Map<String, Integer> controlIntervalPerClient = new ConcurrentHashMap<>();
 
     private final AtomicInteger globalFailureCounter = new AtomicInteger(0);
-    private static final int GLOBAL_FAILURE_LIMIT = 10; // например, 10 подряд неудач
+    private static final int GLOBAL_FAILURE_LIMIT = 10;
 
+    private List<String> myPhoneNumbers;
+    private List<String> randomText;
 
+    @Autowired
+    public LeadProcessorServiceImpl(
+            LeadsRepository leadRepository,
+            WhatsAppService whatsAppService,
+            AdminNotifierService adminNotifierService,
+            ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider,
+            TelephoneService telephoneService,
+            PromoTextService promoTextService,
+            @Qualifier("leadDispatcherExecutor") TaskExecutor taskExecutor
+    ) {
+        this.leadRepository = leadRepository;
+        this.whatsAppService = whatsAppService;
+        this.adminNotifierService = adminNotifierService;
+        this.leadSenderServiceProvider = leadSenderServiceProvider;
+        this.telephoneService = telephoneService;
+        this.promoTextService = promoTextService;
+        this.taskExecutor = taskExecutor;
+    }
 
     @Transactional
     @Override
     public void processLead(WhatsAppProperties.ClientConfig client) {
-        Long telephoneId = Long.valueOf(client.getId().replace("client", ""));
-        log.info("📞 telephoneId: {}", telephoneId);
-
-        if (operatorClients == null) {
-            operatorClients = leadSenderServiceProvider.getIfAvailable().getActiveOperatorClients();
+        if (startTime == null) {
+            startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
         }
 
-        Optional<Lead> leadOpt = leadRepository
-                .findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
-                        telephoneId, STATUS_NEW, LocalDate.now());
+        Long telephoneId = Long.valueOf(client.getId().replace("client", ""));
+        log.info("\uD83D\uDCDE telephoneId: {}", telephoneId);
+
+        if (operatorClients == null) {
+            operatorClients = Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).getActiveOperatorClients();
+        }
+
+        Optional<Lead> leadOpt = leadRepository.findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
+                telephoneId, STATUS_NEW, LocalDate.now());
 
         if (leadOpt.isEmpty()) {
-            log.info("🔁 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
+            log.info("\uD83D\uDD01 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
             finishedClients.add(client.getId());
             Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
             checkAllClientsFinished();
@@ -94,71 +129,128 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         Lead lead = leadOpt.get();
-        log.info("📩 Обрабатываем лид: {}", lead);
+        log.info("\uD83D\uDCE9 Обрабатываем лид: {}", lead);
 
         int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
-        log.info("⏱ Задержка {} секунд перед отправкой сообщения клиенту {}", delaySeconds, client.getId());
 
-        try {
-            Thread.sleep(delaySeconds * 1000L);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("⏰ Ожидание прервано перед отправкой сообщения {}", lead.getTelephoneLead());
+        taskExecutor.execute(() -> {
+            try {
+                TimeUnit.SECONDS.sleep(delaySeconds);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            dailyMessageCount.putIfAbsent(client.getId(), new AtomicInteger(0));
+            int sentToday = dailyMessageCount.get(client.getId()).incrementAndGet();
+
+            if (sentToday > dailyMessageLimit) {
+                log.warn("\uD83D\uDD1B Превышен лимит {} сообщений в день для клиента {}. Останавливаем.", dailyMessageLimit, client.getId());
+                finishedClients.add(client.getId());
+                Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
+                checkAllClientsFinished();
+                return;
+            }
+
+            String message = lead.getTelephone().getBeginText();
+            String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
+
+            if (result != null && !result.isBlank() && result.contains("ok")) {
+                lead.setLidStatus(STATUS_SENT);
+                lead.setUpdateStatus(LocalDate.now());
+                leadRepository.save(lead);
+
+                failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
+                statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
+                statsPerClient.get(client.getId()).incrementSuccess(lead.getId());
+                globalFailureCounter.set(0);
+
+                AtomicInteger counter = controlSendCounter.computeIfAbsent(client.getId(), k -> new AtomicInteger(0));
+                int count = counter.incrementAndGet();
+                if (count > 10000) counter.set(0);
+
+                int interval = controlIntervalPerClient.computeIfAbsent(client.getId(), k -> ThreadLocalRandom.current().nextInt(2, 6));
+                if (count % interval == 0) {
+                    sendControlMessage(client.getId(), telephoneId, delaySeconds);
+                    controlIntervalPerClient.put(client.getId(), ThreadLocalRandom.current().nextInt(2, 6));
+                }
+            } else {
+                handleFailure(client, lead);
+            }
+        });
+    }
+
+    // остальная часть кода без изменений...
+
+
+    private void sendControlMessage(String clientId, Long telephoneId, int delaySeconds) {
+        String clientPhoneNumber = telephoneService.getTelephoneById(telephoneId).getNumber();
+
+        if (myPhoneNumbers == null || myPhoneNumbers.isEmpty()) {
+            log.warn("📵 Нет своих номеров для контрольной отправки");
+            return;
         }
-
-        dailyMessageCount.putIfAbsent(client.getId(), new AtomicInteger(0));
-        int sentToday = dailyMessageCount.get(client.getId()).incrementAndGet();
-
-        if (sentToday > dailyMessageLimit) {
-            log.warn("📛 Превышен лимит {} сообщений в день для клиента {}. Останавливаем.", dailyMessageLimit, client.getId());
-            finishedClients.add(client.getId());
-            Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
-            checkAllClientsFinished();
+        if (randomText == null || randomText.isEmpty()) {
+            log.warn("📝 Нет текстов для контрольной отправки");
             return;
         }
 
-        String message = lead.getTelephone().getBeginText();
-        String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
+        String message2 = randomText.get(ThreadLocalRandom.current().nextInt(randomText.size()));
+        List<String> availablePhones = myPhoneNumbers.stream()
+                .filter(p -> !normalizePhone(p).equals(normalizePhone(clientPhoneNumber)))
+                .toList();
 
-        log.info("📤 Ответ от sendMessage: {}", result);
-
-        if (result != null && !result.isBlank() && result.contains("ok")) {
-            lead.setLidStatus(STATUS_SENT);
-            lead.setUpdateStatus(LocalDate.now());
-            leadRepository.save(lead);
-            failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
-            statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
-            statsPerClient.get(client.getId()).incrementSuccess(lead.getId());
-            globalFailureCounter.set(0);
-
-        } else {
-            log.warn("⚠️ Неудачная попытка отправки для клиента {}", client.getId());
-
-            failedAttemptsPerClient.putIfAbsent(client.getId(), new AtomicInteger(0));
-            int failures = failedAttemptsPerClient.get(client.getId()).incrementAndGet();
-            statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
-            statsPerClient.get(client.getId()).incrementFail(lead.getId());
-
-            int globalFailures = globalFailureCounter.incrementAndGet();
-            if (globalFailures >= GLOBAL_FAILURE_LIMIT) {
-                log.error("🚨 Обнаружено {} глобальных сбоев. Останавливаем всех клиентов!", globalFailures);
-                operatorClients.forEach(c ->
-                        Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable())
-                                .stopClientScheduler(c.getId())
-                );
-                adminNotifierService.notifyAdmin("🚨 Глобальный сбой: все клиенты отключены из-за серии ошибок");
-            }
-
-
-
-            if (failures >= maxFailures) {
-                log.error("🚫 Клиент {} достиг лимита ошибок ({}). Останавливаем рассылку.", client.getId(), failures);
-                finishedClients.add(client.getId());
-                Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
-                adminNotifierService.notifyAdmin(String.format("🚫 Клиент %s отключён после %d ошибок подряд.", client.getId(), failures));
-                checkAllClientsFinished();
-            }
+        if (availablePhones.isEmpty()) {
+            log.warn("📵 Нет подходящих номеров для контрольной отправки (исключая свой)");
+            return;
         }
+
+        String myTelephone = availablePhones.get(ThreadLocalRandom.current().nextInt(availablePhones.size()));
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                TimeUnit.SECONDS.sleep(delaySeconds);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            String result2 = sendWithRetry(clientId, normalizePhone(myTelephone), message2);
+            if (result2 != null && !result2.isBlank() && result2.contains("ok")) {
+                log.info("📨 Отправлено контрольное сообщение на {}: {}", myTelephone, message2);
+            } else {
+                log.warn("⚠️ Ошибка при контрольной отправке на {}: {}", myTelephone, message2);
+            }
+        });
+    }
+
+    private void handleFailure(WhatsAppProperties.ClientConfig client, Lead lead) {
+        String clientId = client.getId();
+        log.warn("⚠️ Неудачная попытка отправки для клиента {}", clientId);
+
+        failedAttemptsPerClient.putIfAbsent(clientId, new AtomicInteger(0));
+        int failures = failedAttemptsPerClient.get(clientId).incrementAndGet();
+
+        statsPerClient.putIfAbsent(clientId, new StatDto(clientId, 0, 0, null, null, new HashSet<>()));
+        statsPerClient.get(clientId).incrementFail(lead.getId());
+
+        int globalFailures = globalFailureCounter.incrementAndGet();
+        if (globalFailures >= GLOBAL_FAILURE_LIMIT) {
+            log.error("🚨 Обнаружено {} глобальных сбоев. Останавливаем всех клиентов!", globalFailures);
+            operatorClients.forEach(c ->
+                    Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(c.getId()));
+            adminNotifierService.notifyAdmin("🚨 Глобальный сбой: все клиенты отключены из-за серии ошибок");
+        }
+
+        if (failures >= maxFailures) {
+            log.error("🚫 Клиент {} достиг лимита ошибок. Останавливаем.", clientId);
+            finishedClients.add(clientId);
+            Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(clientId);
+            adminNotifierService.notifyAdmin(String.format("🚫 Клиент %s отключён после %d ошибок.", clientId, failures));
+            checkAllClientsFinished();
+        }
+
+        lead.setLidStatus(STATUS_FAIL);
+        lead.setUpdateStatus(LocalDate.now());
+        leadRepository.save(lead);
     }
 
     private void checkAllClientsFinished() {
@@ -172,10 +264,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             int totalFail = statsPerClient.values().stream().mapToInt(StatDto::getFail).sum();
 
             StringBuilder sb = new StringBuilder("\uD83D\uDCC8 Итог рассылки по всем клиентам:\n");
-
-            for (StatDto stat : statsPerClient.values()) {
-                sb.append(stat.toReportLine()).append("\n");
-            }
+            statsPerClient.values().forEach(stat -> sb.append(stat.toReportLine()).append("\n"));
 
             sb.append("\n\uD83D\uDCCA Всего отправлено: ✅ ")
                     .append(totalSuccess)
@@ -195,18 +284,17 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
     }
 
-
-
-    private String normalizePhone(String rawPhone) {
-        String digits = rawPhone.replaceAll("[^\\d]", "");
-        return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
-    }
-
     public void resetState() {
         failedAttemptsPerClient.clear();
         dailyMessageCount.clear();
         statsPerClient.clear();
-        log.info("♻️ LeadProcessor: сброшены счётчики ошибок, лимитов и статистика сообщений");
+        myPhoneNumbers = Stream.concat(
+                telephoneService.getAllTelephones().stream().map(TelephoneDTO::getNumber),
+                Stream.of("79086431055", "79041256288")
+        ).toList();
+
+        randomText = promoTextService.getAllPromoTexts();
+        log.info("♻️ Сброшены лимиты и подгружены контрольные номера и тексты");
     }
 
     private String sendWithRetry(String clientId, String phone, String message) {
@@ -216,14 +304,12 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 return whatsAppService.sendMessage(clientId, phone, message);
             } catch (Exception e) {
                 log.warn("⚠️ Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
-
                 if (attempt == maxAttempts) {
                     log.error("❌ Все попытки отправки для клиента {} исчерпаны", clientId);
                     return null;
                 }
-
                 try {
-                    Thread.sleep(2000L);
+                    TimeUnit.SECONDS.sleep(2);
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                     return null;
@@ -233,7 +319,12 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         return null;
     }
 
-
+    private String normalizePhone(String rawPhone) {
+        String digits = rawPhone.replaceAll("[^\\d]", "");
+        return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
+    }
 }
+
+
 
 

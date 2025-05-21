@@ -7,7 +7,8 @@ public enum LeadStatus {
     RESEND ("Напоминание"),
 
     ARCHIVE ("К рассылке"),
-    INWORK ("В работе");
+    INWORK ("В работе"),
+    FAIL ("Ошибка");
 
     public String title;
 
