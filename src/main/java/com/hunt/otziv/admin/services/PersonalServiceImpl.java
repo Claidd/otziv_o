@@ -8,8 +8,7 @@ import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.model.Quadruple;
 import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.l_lead.services.LeadService;
-import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
@@ -21,8 +20,6 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.tuple.Triple;
-import org.springframework.data.domain.Page;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,7 +33,6 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -822,7 +818,7 @@ public class PersonalServiceImpl implements PersonalService {
 
         resultBuilder.append("*📊 Отчёт за месяц*\n\n")
                 .append("*Общая выручка:* `").append(totalManagerRevenue).append(" руб.`\n")
-                .append("*Выручка (Анжелика Б.):* `").append(escapeMarkdown(String.valueOf(totalSpecificManagersRevenue))).append(" руб.`\n")
+                .append("*Выручка (Иван):* `").append(escapeMarkdown(String.valueOf(totalSpecificManagersRevenue))).append(" руб.`\n")
                 .append("*Общие затраты на ЗП:* `").append(totalZp).append(" руб.`\n")
                 .append("*Новых компаний:* `").append(totalNewCompanies).append("`\n\n");
 

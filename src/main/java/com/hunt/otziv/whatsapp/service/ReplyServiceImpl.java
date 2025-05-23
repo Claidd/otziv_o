@@ -4,19 +4,20 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.Telephone;
-import com.hunt.otziv.l_lead.services.LeadService;
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.text_generator.alltext.service.clas.OfferTextService;
+import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
-import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Matcher;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 @Service
@@ -28,7 +29,19 @@ public class ReplyServiceImpl implements ReplyService {
     private final LeadService leadService;
     private final OfferService offerService;
     private final NotificationService notificationService;
+    private final OfferTextService offerTextService;
+//    private final RandomTextService randomTextService;
 
+    private List<String> offerList;
+//    private List<String> randomList;
+
+    @PostConstruct
+    public void initOfferTexts() {
+        this.offerList = offerTextService.findAllTexts();
+        log.info("📄 Загружено {} офферов", offerList.size());
+//        this.randomList = randomTextService.findAllTexts();
+//        log.info("📄 Загружено {} рандомных текстов", randomList.size());
+    }
 
     @Override
     public void processIncomingReply(WhatsAppReplyDTO reply) {
@@ -47,7 +60,7 @@ public class ReplyServiceImpl implements ReplyService {
 
         if (!lead.isOffer()) {
             String messageText = reply.getMessage().toLowerCase();
-            List<String> declineKeywords = List.of("нет", "не надо", "не нужно");
+            List<String> declineKeywords = List.of("нет", "не надо", "не нужно", "отстаньте", "не интересует", "не хочу", "спам", "хватит", "отпишитесь");
 
             if (declineKeywords.stream().anyMatch(messageText::contains)) {
                 log.info("⛔ Клиент {} отказался в сообщении: '{}'. Оффер не отправляем.", telephoneNumber, messageText);
@@ -61,7 +74,11 @@ public class ReplyServiceImpl implements ReplyService {
             }
 
             String clientId = "client" + telephone.getId();
-            String offerText = telephone.getOfferText();
+            if (offerList == null || offerList.isEmpty()) {
+                log.warn("⚠️ Список offerList пуст — оффер не будет отправлен");
+                return;
+            }
+            String offerText = offerList.get(ThreadLocalRandom.current().nextInt(offerList.size()));
 
             offerService.sendOfferAsync(lead, clientId, telephoneNumber, offerText);
             log.info("⏳ Оффер поставлен в очередь на отправку клиенту {}", telephoneNumber);
@@ -116,7 +133,9 @@ public class ReplyServiceImpl implements ReplyService {
         return text.replace("_", "\\_")
                 .replace("*", "\\*")
                 .replace("[", "\\[")
-                .replace("`", "\\`");
+                .replace("`", "\\`")
+                .replace("~", "\\~")
+                .replace(">", "\\>");
     }
 
 

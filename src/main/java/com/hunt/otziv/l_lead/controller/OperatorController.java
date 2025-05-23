@@ -2,9 +2,9 @@ package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
-import com.hunt.otziv.l_lead.services.DeviceTokenService;
-import com.hunt.otziv.l_lead.services.LeadService;
-import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.time.LocalDateTime;
@@ -48,8 +49,10 @@ public class OperatorController {
 
         if (hasKeyword && telephone != null) {
             // С ключом — всегда показываем лиды
-            leadsNew = leadService.getAllLeadsToOperator(
-                    telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+//            leadsNew = leadService.getAllLeadsToOperator(
+//                    telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+            leadsNew = leadService.getAllLeadsToOperatorAll(
+                    telephone.getOperatorID(), keyword, principal, pageNumber, 10);
             logExecutionTime("С ключом — загрузка лидов без проверки таймера", startTime);
 
         } else if (!hasKeyword && telephone != null && isTimerExpired) {
@@ -74,15 +77,26 @@ public class OperatorController {
 
     // меняем статус с нового на отправленное - начало
     @PostMapping("/status_send/{leadId}")
-    public String changeStatusLeadOnSend(Model model, @PathVariable final Long leadId, Principal principal){
+    public String changeStatusLeadOnSend(Model model, RedirectAttributes rm,  @PathVariable final Long leadId, Principal principal){
         log.info("вход в меняем статус с нового на отправленное");
         leadService.changeStatusLeadOnSendAndTelephone(leadId);
         log.info("статус успешно сменен с нового на отправленного" );
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/operators";
     }
     // меняем статус с нового на отправленное - конец
 
-
+    // меняем статус с нового на отправленное - начало
+    @PostMapping("lead/status_to_work/{leadId}")
+    public String changeStatusLeadToWork(Model model, RedirectAttributes rm, @PathVariable final Long leadId,
+                                         Principal principal){
+        log.info("вход в меняем статус с нового на В Работу");
+        leadService.changeStatusLeadToWork(leadId);
+        log.info("статус успешно сменен с нового на В Работу" );
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/operators";
+    }
+    // меняем статус с нового на отправленное - конец
 
 
 

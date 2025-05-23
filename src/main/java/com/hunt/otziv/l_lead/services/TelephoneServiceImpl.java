@@ -3,6 +3,7 @@ package com.hunt.otziv.l_lead.services;
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
 import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.repository.TelephoneRepository;
+import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.repository.OperatorRepository;
 import jakarta.persistence.EntityNotFoundException;

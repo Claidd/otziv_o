@@ -77,16 +77,16 @@ public class BotsController {
         model.addAttribute("editBotDto", botService.findById(id));
         model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
         model.addAttribute("statuses", statusBotService.findAllBotsStatus());
-        System.out.println(botService.findById(id));
-        System.out.println(userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
+//        System.out.println(botService.findById(id));
+//        System.out.println(userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
         return "bots/bot_edit";
     } //Редактирование бота
 
     //Обновление бота
     @PostMapping("/edit/{id}")
     public String updateBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("editBotDto") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal, RedirectAttributes rm){
-        System.out.println(botsDto.getWorker());
-        System.out.println(botsDto);
+//        System.out.println(botsDto.getWorker());
+//        System.out.println(botsDto);
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("Сработал биндинг - есть ошибка");
@@ -96,7 +96,7 @@ public class BotsController {
             return "bots/bot_edit";
         }
         if (botService.updateBot(botsDto, id)){
-            log.info("Бот обновлен");
+            log.info("Бот обновлен. - " + principal.getName());
 //            return "redirect:/bots";
             rm.addFlashAttribute("saveSuccess", "true");
             return "redirect:/worker/bot";

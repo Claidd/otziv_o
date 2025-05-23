@@ -16,6 +16,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Irkutsk
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Irkutsk
     networks:
       - internal_net
 
@@ -55,6 +57,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       HTTP_PROXY: http://vpn-proxy:8888
       HTTPS_PROXY: http://vpn-proxy:8888
+      TZ: Asia/Irkutsk
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Irkutsk
     env_file:
       - .env
     volumes:

@@ -1,7 +1,6 @@
 package com.hunt.otziv.l_lead.controller;
 
-import com.hunt.otziv.l_lead.services.DeviceTokenService;
-import jakarta.servlet.http.HttpServletRequest;
+import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

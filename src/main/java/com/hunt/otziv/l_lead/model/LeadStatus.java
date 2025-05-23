@@ -7,6 +7,7 @@ public enum LeadStatus {
     RESEND ("Напоминание"),
 
     ARCHIVE ("К рассылке"),
+    TO_WORK ("В работу"),
     INWORK ("В работе"),
     FAIL ("Ошибка");
 

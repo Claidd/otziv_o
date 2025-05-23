@@ -1,7 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
 
-import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
@@ -41,11 +41,18 @@ public class LeadSenderServiceImpl implements LeadSenderService {
 
     @PostConstruct
     public void initClients() {
-        this.clients = properties.getClients().stream()
-                .filter(client -> "operator".equalsIgnoreCase(client.getRole()))
-                .collect(Collectors.toList());
+        List<WhatsAppProperties.ClientConfig> loadedClients = properties.getClients();
+        if (loadedClients == null) {
+            log.warn("⚠️ В конфигурации WhatsAppProperties нет clients — список пустой");
+            this.clients = new ArrayList<>();
+        } else {
+            this.clients = loadedClients.stream()
+                    .filter(client -> "operator".equalsIgnoreCase(client.getRole()))
+                    .collect(Collectors.toList());
+        }
         resetClientStates();
     }
+
 
 
     public void resetClientStates() {
@@ -57,7 +64,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("🔄 Состояния всех клиентов сброшены и активированы");
     }
 
-    @Scheduled(cron = "0 0 14 * * *") // каждый день в 14:00
+    @Scheduled(cron = "0 0 6 * * *") // каждый день в 6:00
     public void startDailyDispatch() {
         log.info("⏰ Ежедневный запуск рассылки для всех клиентов");
 
@@ -150,19 +157,20 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     }
 
     public void stopClientScheduler(String clientId) {
-        ScheduledFuture<?> future = futures.get(clientId);
+        ScheduledFuture<?> future = futures.remove(clientId); // безопаснее, сразу удаляет
         if (future != null && !future.isCancelled()) {
             future.cancel(false);
-            futures.remove(clientId); // 🧹 очищаем из памяти
             log.info("🛑 Планировщик для клиента {} остановлен вручную", clientId);
         } else {
-            log.info("ℹ️ Планировщик для клиента {} уже был остановлен", clientId);
+            log.info("ℹ️ Планировщик для клиента {} уже был остановлен или не найден", clientId);
         }
     }
 
     public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
         return clients;
     }
+
+
 
 }
 

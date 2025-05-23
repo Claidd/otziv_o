@@ -7,6 +7,7 @@ import com.hunt.otziv.l_lead.repository.DeviceTokenRepository;
 import com.hunt.otziv.l_lead.repository.TelephoneRepository;
 import com.hunt.otziv.l_lead.model.DeviceToken;
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
+import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +93,7 @@ public class DeviceTokenServiceImpl implements DeviceTokenService {
         return TelephoneIDAndTimeDTO.builder()
                 .telephoneID(telephone.getId())
                 .time(telephone.getTimer())
+                .operatorID(telephone.getTelephoneOperator().getId())
                 .build();
     }
 

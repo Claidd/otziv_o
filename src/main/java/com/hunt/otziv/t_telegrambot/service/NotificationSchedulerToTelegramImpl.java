@@ -24,14 +24,14 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private final PersonalService personalService;
 
     // каждый день в 9:25
-    @Scheduled(cron = "0 05 00 * * *")
+    @Scheduled(cron = "0 00 8 * * *")
     public void sendDailyReport() {
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
         sendOnlyAdminReport(794146111L, userDataMap);
 //        myTelegramBot.sendMessage(794146111,"Доброе утро! Отчёт за сегодня готов");
     }
 
-    @Scheduled(cron = "0 00 14 * * *") // каждый день в 9:25
+    @Scheduled(cron = "0 00 22 * * *") // каждый день в 9:25
     public void sendDailyReportToWorkers() {
         Map<String, Long> workersTelegramIDs = userService.getAllWorkers();
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();

@@ -1,15 +1,20 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
+import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
-import com.hunt.otziv.l_lead.services.PromoTextService;
-import com.hunt.otziv.l_lead.services.TelephoneService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.TelephoneService;
+import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
+import com.hunt.otziv.text_generator.alltext.service.clas.OfferTextService;
+import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -60,7 +66,10 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private final AdminNotifierService adminNotifierService;
     private final ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider;
     private final TelephoneService telephoneService;
-    private final PromoTextService promoTextService;
+    private final HelloTextService helloTextService;
+    private final LeadEventPublisher leadEventPublisher;
+    private final RandomTextService randomTextService;
+
     private final TaskExecutor taskExecutor;
 
     private static final Set<String> finishedClients = ConcurrentHashMap.newKeySet();
@@ -82,6 +91,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private static final int GLOBAL_FAILURE_LIMIT = 10;
 
     private List<String> myPhoneNumbers;
+    private List<String> helloText;
     private List<String> randomText;
 
     @Autowired
@@ -91,7 +101,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             AdminNotifierService adminNotifierService,
             ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider,
             TelephoneService telephoneService,
-            PromoTextService promoTextService,
+            HelloTextService helloTextService, OfferTextService offerTextService, LeadEventPublisher leadEventPublisher, RandomTextService randomTextService,
             @Qualifier("leadDispatcherExecutor") TaskExecutor taskExecutor
     ) {
         this.leadRepository = leadRepository;
@@ -99,9 +109,13 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         this.adminNotifierService = adminNotifierService;
         this.leadSenderServiceProvider = leadSenderServiceProvider;
         this.telephoneService = telephoneService;
-        this.promoTextService = promoTextService;
+        this.helloTextService = helloTextService;
+        this.leadEventPublisher = leadEventPublisher;
+        this.randomTextService = randomTextService;
         this.taskExecutor = taskExecutor;
     }
+
+
 
     @Transactional
     @Override
@@ -110,7 +124,14 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
         }
 
-        Long telephoneId = Long.valueOf(client.getId().replace("client", ""));
+        String digits = client.getId().replaceAll("\\D+", ""); // оставляем только цифры
+        Long telephoneId;
+        try {
+            telephoneId = Long.valueOf(digits);
+        } catch (NumberFormatException e) {
+            log.error("❌ Невозможно извлечь ID телефона из clientId='{}'", client.getId(), e);
+            return;
+        }
         log.info("\uD83D\uDCDE telephoneId: {}", telephoneId);
 
         if (operatorClients == null) {
@@ -151,13 +172,14 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 return;
             }
 
-            String message = lead.getTelephone().getBeginText();
+            String message = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
             String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
 
             if (result != null && !result.isBlank() && result.contains("ok")) {
                 lead.setLidStatus(STATUS_SENT);
-                lead.setUpdateStatus(LocalDate.now());
+                lead.setUpdateStatus(LocalDateTime.now());
                 leadRepository.save(lead);
+                leadEventPublisher.publishUpdate(lead);
 
                 failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
                 statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
@@ -249,24 +271,25 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         lead.setLidStatus(STATUS_FAIL);
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         leadRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     }
 
-    private void checkAllClientsFinished() {
-        if (operatorClients == null) return;
-
-        if (!notificationSent.get() && finishedClients.size() == operatorClients.size()) {
+    @Override
+    public void checkAllClientsFinished() {
+        List<WhatsAppProperties.ClientConfig> clients = getOperatorClients();
+        if (!notificationSent.get() && finishedClients.size() == clients.size()) {
             notificationSent.set(true);
             endTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
 
             int totalSuccess = statsPerClient.values().stream().mapToInt(StatDto::getSuccess).sum();
             int totalFail = statsPerClient.values().stream().mapToInt(StatDto::getFail).sum();
 
-            StringBuilder sb = new StringBuilder("\uD83D\uDCC8 Итог рассылки по всем клиентам:\n");
+            StringBuilder sb = new StringBuilder("📈 Итог рассылки по всем клиентам:\n");
             statsPerClient.values().forEach(stat -> sb.append(stat.toReportLine()).append("\n"));
 
-            sb.append("\n\uD83D\uDCCA Всего отправлено: ✅ ")
+            sb.append("\n📊 Всего отправлено: ✅ ")
                     .append(totalSuccess)
                     .append(" / ❌ ")
                     .append(totalFail)
@@ -274,7 +297,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                     .append(totalSuccess + totalFail)
                     .append(")");
 
-            sb.append(" \uD83D\uDD53 Время: с ")
+            sb.append(" 🕓 Время: с ")
                     .append(startTime != null ? startTime.format(DateTimeFormatter.ofPattern("HH:mm")) : "--:--")
                     .append(" до ")
                     .append(endTime != null ? endTime.format(DateTimeFormatter.ofPattern("HH:mm")) : "--:--");
@@ -292,8 +315,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 telephoneService.getAllTelephones().stream().map(TelephoneDTO::getNumber),
                 Stream.of("79086431055", "79041256288")
         ).toList();
-
-        randomText = promoTextService.getAllPromoTexts();
+        helloText = helloTextService.findAllTexts();
+        randomText = randomTextService.findAllTexts();
         log.info("♻️ Сброшены лимиты и подгружены контрольные номера и тексты");
     }
 
@@ -323,6 +346,33 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         String digits = rawPhone.replaceAll("[^\\d]", "");
         return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
     }
+
+    @PostConstruct
+    public void initTextTemplates() {
+        helloText = helloTextService.findAllTexts();
+        randomText = randomTextService.findAllTexts();
+        myPhoneNumbers = Stream.concat(
+                telephoneService.getAllTelephones().stream().map(TelephoneDTO::getNumber),
+                Stream.of("79086431055", "79041256288")
+        ).toList();
+        log.info("🔃 Инициализированы helloText, randomText и номера для контрольных отправок");
+    }
+
+    private List<WhatsAppProperties.ClientConfig> getOperatorClients() {
+        if (operatorClients == null) {
+            LeadSenderServiceImpl sender = leadSenderServiceProvider.getIfAvailable();
+            if (sender != null) {
+                operatorClients = sender.getActiveOperatorClients();
+            } else {
+                log.warn("⚠️ LeadSenderService недоступен");
+                operatorClients = Collections.emptyList();
+            }
+        }
+        return operatorClients;
+    }
+
+
+
 }
 
 

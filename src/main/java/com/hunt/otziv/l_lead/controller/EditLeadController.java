@@ -3,9 +3,8 @@ package com.hunt.otziv.l_lead.controller;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
-import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
-import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
 import jakarta.validation.Valid;
 
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +80,7 @@ public class EditLeadController {
     //Редактор лида
     @GetMapping("lead/edit/{leadId}")
     public String editLead(@PathVariable final Long leadId, Model model){
+        log.info("🟢 GET-запрос на редактирование лида с ID={}", leadId);
         model.addAttribute("editLeadDto", leadService.findById(leadId));
         model.addAttribute("operators", operatorService.getAllOperators());
         model.addAttribute("managers", managerService.getAllManagers());
@@ -90,7 +90,7 @@ public class EditLeadController {
 
     //Сохранение отредактированного лида
     @PostMapping("lead/edit/{leadId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OWNER')")
     public String editLead(@PathVariable final Long leadId,
                            @ModelAttribute("editLeadDto")LeadDTO leadDTO){
         log.info("0. Валидация на повторный телефон");
@@ -113,14 +113,17 @@ public class EditLeadController {
 
     // меняем статус с нового на отправленное - начало
     @PostMapping("lead/status_send/{leadId}")
-    public String changeStatusLeadOnSend(Model model, @PathVariable final Long leadId,
+    public String changeStatusLeadOnSend(Model model,RedirectAttributes rm, @PathVariable final Long leadId,
                              Principal principal){
         log.info("вход в меняем статус с нового на отправленное");
         leadService.changeStatusLeadOnSend(leadId);
         log.info("статус успешно сменен с нового на отправленного" );
+        rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/lead";
     }
     // меняем статус с нового на отправленное - конец
+
+
 
     // меняем статус с отправленное на напоминание - начало
     @PostMapping("lead/status_resend/{leadId}")

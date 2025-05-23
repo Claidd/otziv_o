@@ -2,8 +2,8 @@ package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.l_lead.model.PromoText;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.method.P;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Service
 @Slf4j
-public class PromoTextServiceImpl implements PromoTextService{
+public class PromoTextServiceImpl implements PromoTextService {
 
     private final PromoTextRepository promoTextRepository;
 

@@ -76,7 +76,7 @@
 
 
 
-                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+<!--                     СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
                     <div class="tabs__content__lead-item tabs__content__lead-item--active" id="content-1">
                         <div th:each="lead : ${leadListNew}" class="card__lead">
                             <div class="card__content__lead">
@@ -100,12 +100,16 @@
                                     <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
                                 </div>
                                 <div class="card__content_button">
-                                    <form class="card__text__lead" th:method="post" th:action="'operators/status_send/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="post"  th:action="@{/operators/status_send/{leadId}(leadId=${lead.id})}">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <button type="submit" class="card__text__lead-button ">отправил</button>
                                     </form>
+                                    <form class="card__text__lead" th:method="post"  th:action="@{/operators/lead/status_to_work/{leadId}(leadId=${lead.id})}">
+                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                        <button type="submit" class="card__text__lead-button ">передать</button>
+                                    </form>
 
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_operator/' + ${lead.id}">
+                                    <form class="card__text__lead" th:method="get"  th:action="@{/companies/new_company_to_operator/{leadId}(leadId=${lead.id})}">
                                         <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                         <button type="submit" class="card__text__lead-button ">в работу</button>
                                     </form>

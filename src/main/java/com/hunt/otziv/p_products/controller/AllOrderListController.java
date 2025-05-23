@@ -1,10 +1,9 @@
 package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;

@@ -1,7 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
-import com.hunt.otziv.l_lead.services.TelephoneService;
+import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;

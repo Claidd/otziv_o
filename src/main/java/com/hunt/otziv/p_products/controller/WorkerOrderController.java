@@ -2,7 +2,7 @@ package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
-import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +51,7 @@ public class WorkerOrderController {
             return "products/orders/bot_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех ботов для Работника: " + principal.getName());
+            log.info("Зашли список всех ботов для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
         }
@@ -75,7 +75,7 @@ public class WorkerOrderController {
             return "products/orders/bot_list";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника: " + principal.getName());
+            log.info("Зашли список всех заказов для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Список аккаунтов");
 //            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(principal).stream().sorted(Comparator.comparing(BotDTO :: getFio)));
@@ -97,7 +97,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Новый", pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Админа: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Админа: ", startTime, principal);
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -105,15 +105,15 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Новый",pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime, principal);
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника: " + principal.getName());
+            log.info("Зашли список всех заказов для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword,"Новый", pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Работника: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Работника: ", startTime, principal);
             return "products/orders/new_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
@@ -121,7 +121,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Новые");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Новый",pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/new_orders для Менеджера: ", startTime, principal);
             return "products/orders/new_orders_worker";
         }
         else return "redirect:/";
@@ -138,7 +138,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordAndStatus(keyword, "Коррекция", pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Админа: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Админа: ", startTime, principal);
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -146,15 +146,15 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManager(principal, keyword,"Коррекция", pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Менеджера: ", startTime, principal);
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех заказов для Работника: " + principal.getName());
+            log.info("Зашли список всех заказов для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Коррекция" + principal.getName());
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, "Коррекция", pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Работника: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Работника: ", startTime, principal);
             return "products/orders/correct_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
@@ -162,7 +162,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Коррекция");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword,"Коррекция",  pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Владельца: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/correct для Владельца: ", startTime, principal);
             return "products/orders/correct_orders_worker";
         }
         else return "redirect:/";
@@ -181,7 +181,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Админа: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Админа: ", startTime, principal);
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -189,15 +189,15 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublish(localDate,principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Менеджера: ", startTime, principal);
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех отзывов к публикации для Работника: " + principal.getName());
+            log.info("Зашли список всех отзывов к публикации для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublish(localDate,principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника: ", startTime, principal);
             return "products/orders/publish_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
@@ -205,7 +205,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Публикация");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Владельца: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Владельца: ", startTime, principal);
             return "products/orders/publish_orders_worker";
         }
         else return "redirect:/";
@@ -224,7 +224,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(2), pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Админа: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Админа: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -232,15 +232,15 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("Зашли список всех отзывов к нагулу для Работника: " + principal.getName());
+            log.info("Зашли список всех отзывов к нагулу для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
@@ -248,7 +248,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Владельца: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Владельца: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
         else return "redirect:/";
@@ -264,7 +264,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Админа: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Админа: ", startTime, principal);
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_MANAGER".equals(userRole)){
@@ -272,7 +272,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Менеджера: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Менеджера: ", startTime, principal);
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_WORKER".equals(userRole)){
@@ -280,7 +280,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Работника: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Работника: ", startTime, principal);
             return "products/orders/all_orders_worker";
         }
         if ("ROLE_OWNER".equals(userRole)){
@@ -288,7 +288,7 @@ public class WorkerOrderController {
             model.addAttribute("TitleName", "Все");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
             model.addAttribute("orders", orderService.getAllOrderDTOAndKeywordByOwnerAll(principal, keyword, pageNumber, pageSize));
-            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Владельца: ", startTime);
+            checkTimeMethod("Время выполнения WorkerOrderController/worker/all_orders для Владельца: ", startTime, principal);
             return "products/orders/all_orders_worker";
         }
         else return "redirect:/";
@@ -303,9 +303,9 @@ public class WorkerOrderController {
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
 
-    private void checkTimeMethod(String text, long startTime){
+    private void checkTimeMethod(String text, long startTime, Principal principal){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf(text + "%.4f сек%n", timeElapsed);
+        log.info("{}: {} сек. - {}", text, String.format("%.4f", timeElapsed), principal != null ? principal.getName() : "Гость");
     }
 }

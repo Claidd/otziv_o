@@ -16,11 +16,11 @@
                     <div class="company__tabs__lead">
                         <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
                         <div class="tabs__btn__lead">
-                            <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">Отправить</button>
+                            <button class="tabs__btn__lead-item tabs__btn__lead-item--active" data-button="content-1">В работу</button>
                             <button class="tabs__btn__lead-item" data-button="content-2">Напомнить</button>
-                            <button class="tabs__btn__lead-item" data-button="content-3">Решают</button>
-                            <button class="tabs__btn__lead-item" data-button="content-4">Напомнить еще</button>
-                            <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>
+<!--                            <button class="tabs__btn__lead-item" data-button="content-3">Решают</button>-->
+<!--                            <button class="tabs__btn__lead-item" data-button="content-4">Напомнить еще</button>-->
+<!--                            <button class="tabs__btn__lead-item" data-button="content-5">В работе</button>-->
                             <button class="tabs__btn__lead-item" data-button="content-6">Все</button>
                             <a class="tabs__btn__lead__a-item" th:href="@{'/categories'}" data-button="content-7">Категории</a>
                             <a class="tabs__btn__lead__a-item" th:href="@{'/companies/company'}" data-button="content-8">Компании</a>
@@ -84,406 +84,141 @@
                     <div class="tabs__content__lead-item tabs__content__lead-item--active" id="content-1">
                         
                         
-                        <div th:each="lead : ${leadListNew}" class="card__lead">
-                            <div class="card__content__lead">
+                            <div th:each="lead : ${leadListNew}" class="card__lead">
+                                <div class="card__content__lead">
 
-                                <!-- элементы карточки - начало -->
-                                <div class="card__content__phone">
-                                    <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
-                                </div>
-                                <div class="company__card__content__phone">
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="company__card__text__lead-button" th:text="${lead.telephoneLead}">телефон лида</button>
-                                    </form>
-                                    <!-- <textarea class="card__remember-text" th:text="${lead.telephoneLead}" id="copyPhone"></textarea>
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" onclick="copyTelephone()">Телефон</button> -->
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
-                                </div>
-                                <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
-                                </div>
-                                <div class="card__content__comments">
-                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
-                                </div>
-                                <div class="card__content_button">
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">отправил</button>
-                                    </form>
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
-                                    </form>
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в архив</button>
-                                    </form> -->
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в работу</button>
-                                    </form>
+                                    <!-- элементы карточки - начало -->
+                                    <div class="card__content__phone">
+                                        <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
+                                    </div>
+                                    <div class="company__card__content__phone">
+                                        <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
+                                            <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                            <button type="submit" class="company__card__text__lead-button" th:text="${lead.telephoneLead}">телефон лида</button>
+                                        </form>
+                                        <!-- <textarea class="card__remember-text" th:text="${lead.telephoneLead}" id="copyPhone"></textarea>
+                                        <button type="submit" class="company__telephone__button__tel" th:text="T" onclick="copyTelephone()">Телефон</button> -->
+                                        <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
+                                    </div>
+                                    <div class="card__content__city">
+                                             <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
+                                            <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
+                                    </div>
+                                    <div class="card__content__comments">
+                                        <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
+                                    </div>
+                                    <div class="card__content_button">
+                                        <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
+                                            <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                            <button type="submit" class="card__text__lead-button ">отправил</button>
+                                        </form>
 
-                                    <!-- элементы карточки - конец -->
-                                </div> <!-- card__content_button -->
-                            </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
-                            </form>
-                        </div> <!-- card -->
+                                        </form>
+                                        <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
+                                            <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                            <button type="submit" class="card__text__lead-button ">в работу</button>
+                                        </form>
+
+                                        <!-- элементы карточки - конец -->
+                                    </div> <!-- card__content_button -->
+                                </div> <!-- card__content__lead -->
+                                <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
+                                    <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
+                                    <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                                </form>
+                            </div> <!-- card -->
                         <!-- Добавление блока пагинации -->
                         
                     </div> <!-- tabs__content-item -->
                     <!-- СПИСОК КАРТОЧЕК 1 -->
-                    
-                        <!-- <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
-                            <ul class="pagination">
-                                <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
-                                </li>
-                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListNew.totalPages - 1)}"
-                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li>
-                                <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
-                                </li>
-                            </ul>
-                        </div> -->
 
-                        
+
                             <div class="tabs__content__lead-item2" id="pagination-1">
                                 <ul class="pagination">
-                                    <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
-                                        <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                                    <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
+                                        <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
                                     </li>
-                                    <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListSend.totalPages - 1)}"
-                                        th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
+                                    <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListNew.totalPages - 1)}"
+                                        th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
                                         <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
                                     </li>
-                                    <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
-                                        <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
+                                    <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
+                                        <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
                                     </li>
                                 </ul>
                             </div>
-                        
-
-                        <!-- <div class="tabs__content__lead-item2 tabs__content__lead-item--active" id="pagination-1">
-                            <ul class="pagination">
-                                <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
-                                </li>
-                        
-                                Отображаем первые пять страниц
-                                <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
-                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li> -->
-                        
-                                <!-- Отображаем "..." только если есть более 5 страниц -->
-                                <!-- <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
-                                    <span class="page-link">...</span>
-                                </li> -->
-                        
-                                <!-- Отображаем последнюю страницу -->
-                                <!-- <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
-                                    th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li> -->
-                        
-                                <!-- <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
-                                </li>
-                            </ul>
-                        </div> -->
-                        
-                    
-
-                    <!-- СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ-->
-                    <div class="tabs__content__lead-item" id="content-2">
-                        <div th:each="lead : ${leadListSend}" class="card__lead">
-                            <div class="card__content__lead">
-
-                                <!-- элементы карточки - начало -->
-                                <div class="card__content__phone">
-                                    <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
-                                </div>
-                                <div class="company__card__content__phone">
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
-                                    </form>
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
-                                </div>
-
-                                <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
-                                </div>
-                                <div class="card__content__comments">
-                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
-                                </div>
-                                <div class="card__content_button">
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">отправил</button>
-                                    </form> -->
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
-                                    </form>
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">в архив</button>
-                                    </form> -->
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в работу</button>
-                                    </form>
-                                    <!-- элементы карточки - конец -->
-                                </div> <!-- card__content_button -->
-                            </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
-                            </form>
-                        </div> <!-- card -->
-                        
-                    </div> <!-- tabs__content-item -->
-
-                    
-                    <div class="tabs__content__lead-item2" id="pagination-2">
-                        <ul class="pagination">
-                            <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
-                            </li>
-                            <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListSend.totalPages - 1)}"
-                                th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
-                            <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
-                            </li>
-                        </ul>
-                    </div>
-                
-                    <!-- СПИСОК КАРТОЧЕК 2 -->
-
-                    <!-- СПИСОК КАРТОЧЕК 3 С НАПОМИНАНИЕМ-->
-                    <div class="tabs__content__lead-item" id="content-3">
-                        <div th:each="lead : ${leadListReSend}" class="card__lead">
-                            <div class="card__content__lead">
-
-                                <!-- элементы карточки - начало -->
-                                <div class="card__content__phone">
-                                    <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
-                                </div>
-                                <div class="company__card__content__phone">
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
-                                    </form>
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
-                                </div>
-                                
-                                <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
-                                </div>
-                                <div class="card__content__comments">
-                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
-                                </div>
-                                <div class="card__content_button">
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">отправил</button>
-                                    </form>
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
-                                    </form> -->
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">в архив</button>
-                                    </form>
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в работу</button>
-                                    </form>
-                                    <!-- элементы карточки - конец -->
-                                </div> <!-- card__content_button -->
-                            </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
-                            </form>
-                        </div> <!-- card -->
-                        
-                    </div> <!-- tabs__content-item -->
-                    <!-- СПИСОК КАРТОЧЕК 3 -->
-                    <div class="tabs__content__lead-item2" id="pagination-3">
-                        <ul class="pagination">
-                            <li th:class="${leadListReSend.first ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListReSend.number - 1})}" class="page-link">Предыдущая</a>
-                            </li>
-                            <li th:if="${leadListReSend.totalPages != null && leadListReSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListReSend.totalPages - 1)}"
-                                th:class="${leadListReSend.number == i ? 'active' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
-                            <li th:class="${leadListReSend.last ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListReSend.number + 1})}" class="page-link">Следующая</a>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <!-- СПИСОК КАРТОЧЕК 4 В АРХИВ-->
-                    <div class="tabs__content__lead-item" id="content-4">
-                        <div th:each="lead : ${leadListArchive}" class="card__lead">
-                            <div class="card__content__lead">
-
-                                <!-- элементы карточки - начало -->
-                                <div class="card__content__phone">
-                                    <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
-                                </div>
-                                <div class="company__card__content__phone">
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
-                                    </form>
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
-                                </div>
-                                
-                                <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
-                                </div>
-                                <div class="card__content__comments">
-                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
-                                </div>
-                                <div class="card__content_button">
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">отправил</button>
-                                    </form>
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
-                                    </form> -->
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">в архив</button>
-                                    </form> -->
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в работу</button>
-                                    </form>
-
-<!--                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_in_work/' + ${lead.id}">-->
-<!--                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>-->
-<!--                                        <button type="submit" class="card__text__lead-button ">в работу</button>-->
-<!--                                    </form>-->
 
 
-                                    <!-- элементы карточки - конец -->
-                                </div> <!-- card__content_button -->
-                            </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
-                            </form>
-                        </div> <!-- card -->
-                    </div> <!-- tabs__content-item -->
-                    <div class="tabs__content__lead-item2" id="pagination-4">
-                        <ul class="pagination">
-                            <li th:class="${leadListArchive.first ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListArchive.number - 1})}" class="page-link">Предыдущая</a>
-                            </li>
-                            <li th:if="${leadListArchive.totalPages != null && leadListArchive.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListArchive.totalPages - 1)}"
-                                th:class="${leadListArchive.number == i ? 'active' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
-                            <li th:class="${leadListArchive.last ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListArchive.number + 1})}" class="page-link">Следующая</a>
-                            </li>
-                        </ul>
-                    </div>
-                    <!-- СПИСОК КАРТОЧЕК 4 -->
 
-                    <!-- СПИСОК КАРТОЧЕК 5 -->
-                    <div class="tabs__content__lead-item" id="content-5">
-                        <div th:each="lead : ${leadListInWork}" class="card__lead">
-                            <div class="card__content__lead">
 
-                                <!-- элементы карточки - начало -->
-                                <div class="card__content__phone">
-                                    <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
-                                </div>
-                                <div class="company__card__content__phone">
-                                    <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
-                                    </form>
-                                    <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
-                                </div>
-                                
-                                <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
-                                </div>
-                                <div class="card__content__comments">
-                                    <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
-                                </div>
-                                <div class="card__content_button">
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">отправил</button>
-                                    </form>
-                                    <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">напомнил</button>
-                                    </form> -->
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">в архив</button>
-                                    </form>
-                                    <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
-                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                        <button type="submit" class="card__text__lead-button ">в работу</button>
-                                    </form> -->
-                                    <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_lead_new/' + ${lead.id}">
-                                        <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                        <button type="submit" class="card__text__lead-button ">Новыe</button>
-                                    </form> -->
-                                    <!-- элементы карточки - конец -->
-                                </div> <!-- card__content_button -->
-                            </div> <!-- card__content__lead -->
-                            <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
-                                <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
-                                <input type="hidden" name="_csrf" value="${_csrf.token}"/>
-                                <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
-                            </form>
-                        </div> <!-- card -->
-                    </div> <!-- tabs__content-item -->
-                    <div class="tabs__content__lead-item2" id="pagination-5">
-                        <ul class="pagination">
-                            <li th:class="${leadListInWork.first ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListInWork.number - 1})}" class="page-link">Предыдущая</a>
-                            </li>
-                            <li th:if="${leadListInWork.totalPages != null && leadListInWork.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListInWork.totalPages - 1)}"
-                                th:class="${leadListInWork.number == i ? 'active' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li>
-                            <li th:class="${leadListInWork.last ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListInWork.number + 1})}" class="page-link">Следующая</a>
-                            </li>
-                        </ul>
-                    </div>
-                    <!-- СПИСОК КАРТОЧЕК 5 -->
+                <!-- СПИСОК КАРТОЧЕК 2  ОТПРАВЛЕННЫЕ-->
+                <div class="tabs__content__lead-item" id="content-2">
+                    <div th:each="lead : ${leadListSend}" class="card__lead">
+                        <div class="card__content__lead">
+
+                            <!-- элементы карточки - начало -->
+                            <div class="card__content__phone">
+                                <div class="card__title__lead" th:text="${lead.lidStatus}">Текущий статус Лида</div>
+                            </div>
+                            <div class="company__card__content__phone">
+                                <form class="company__card__title__lead" th:method="get" target="_blank" th:action="'https://wa.me/' + ${lead.telephoneLead}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="company__card__text__lead-button " th:text="${lead.telephoneLead}">телефон лида</button>
+                                </form>
+                                <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
+                            </div>
+
+                            <div class="card__content__city">
+                                <div class="card__text__city__lead" th:text="${lead.dateNewTry}">Дата смены статуса Лида</div>
+                                <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
+                            </div>
+                            <div class="card__content__comments">
+                                <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
+                            </div>
+                            <div class="card__content_button">
+                                <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_send/' + ${lead.id}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="card__text__lead-button ">отправил</button>
+                                </form> -->
+                                <form class="card__text__lead" th:method="post" th:action="'lead/status_resend/' + ${lead.id}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="card__text__lead-button ">напомнил</button>
+                                </form>
+                                <!-- <form class="card__text__lead" th:method="post" th:action="'lead/status_archive/' + ${lead.id}">
+                                    <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                                    <button type="submit" class="card__text__lead-button ">в архив</button>
+                                </form> -->
+                                <form class="card__text__lead" th:method="get" th:action="'companies/new_company_to_manager/' + ${lead.id}">
+                                    <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                    <button type="submit" class="card__text__lead-button ">в работу</button>
+                                </form>
+                                <!-- элементы карточки - конец -->
+                            </div> <!-- card__content_button -->
+                        </div> <!-- card__content__lead -->
+                        <form class="card__content__author" th:method="get" th:action="'lead/edit/' + ${lead.id}">
+                            <div class="card__link__lead" th:text="${lead.operator.user.fio != null ? lead.operator.user.fio : 'пусто'}">Имя Оператора</div>
+                            <input type="hidden" name="_csrf" value="${_csrf.token}"/>
+                            <button type="submit" class="card__link__lead__more card__link__lead">Подробнее</button>
+                        </form>
+                    </div> <!-- card -->
+
+                </div> <!-- tabs__content-item -->
+
+
+                <div class="tabs__content__lead-item2" id="pagination-2">
+                    <ul class="pagination">
+                        <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
+                            <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                        </li>
+                        <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListSend.totalPages - 1)}"
+                            th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
+                            <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
+                        </li>
+                        <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
+                            <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
+                        </li>
+                    </ul>
+                </div>
 
                     <!-- СПИСОК КАРТОЧЕК 6 -->
                     <div class="tabs__content__lead-item" id="content-6">
@@ -502,8 +237,8 @@
                                     <button type="submit" class="company__telephone__button__tel" th:text="T" th:attr="data-ordertel=${lead.telephoneLead}" onclick="copyTelephone(this)">Телефон</button>
                                 </div>
                                 <div class="card__content__city">
-                                         <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
-                                        <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
+                                    <div class="card__text__city__lead" th:text="${lead.createDate}">Дата создания Лида</div>
+                                    <div class="card__text__city__lead" th:text="${lead.cityLead}">Город Лида</div>
                                 </div>
                                 <div class="card__content__comments">
                                     <div class="card__text__lead2" th:text="${lead.commentsLead}">Комментарий для лида</div>
@@ -555,64 +290,26 @@
                     </div> -->
                     <!-- СПИСОК КАРТОЧЕК 6 -->
 
-                    
-                        <div class="tabs__content__lead-item2" id="pagination-6">
-                            
-                            <ul class="pagination">
-                                <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
-                                </li>
-                                <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListALL.totalPages - 1)}"
-                                    th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                                </li>
-                                <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
-                                    <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
-                                </li>
-                            </ul>
-                        </div>
 
-
-
-
-                    <!-- <div class="page__row2">
                     <div class="tabs__content__lead-item2" id="pagination-6">
+
                         <ul class="pagination">
-                            <li th:class="${leadListNew.first ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListNew.number - 1})}" class="page-link">Предыдущая</a>
-                            </li> -->
-                    
-                            <!-- Отображаем первые пять страниц -->
-                            <!-- <li th:if="${leadListNew.totalPages != null && leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(0, 4)}"
-                                th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
+                            <li th:class="${leadListSend.first ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListSend.number - 1})}" class="page-link">Предыдущая</a>
+                            </li>
+                            <li th:if="${leadListSend.totalPages != null && leadListSend.totalPages > 0}" th:each="i : ${#numbers.sequence(0, leadListALL.totalPages - 1)}"
+                                th:class="${leadListSend.number == i ? 'active' : ''}" class="page-item">
                                 <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li> -->
-                    
-                            <!-- Отображаем "..." только если есть более 5 страниц -->
-                            <!-- <li th:if="${leadListNew.totalPages > 5}" class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li> -->
-                    
-                            <!-- Отображаем последнюю страницу -->
-                            <!-- <li th:if="${leadListNew.totalPages > 0}" th:each="i : ${#numbers.sequence(leadListNew.totalPages - 1, leadListNew.totalPages - 1)}"
-                                th:class="${leadListNew.number == i ? 'active' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${i})}" class="page-link" th:text="${i}">1</a>
-                            </li> -->
-                    
-                            <!-- <li th:class="${leadListNew.last ? 'disabled' : ''}" class="page-item">
-                                <a th:href="@{/lead(pageNumber=${leadListNew.number + 1})}" class="page-link">Следующая</a>
+                            </li>
+                            <li th:class="${leadListSend.last ? 'disabled' : ''}" class="page-item">
+                                <a th:href="@{/lead(pageNumber=${leadListSend.number + 1})}" class="page-link">Следующая</a>
                             </li>
                         </ul>
                     </div>
-                </div> -->
-                    
-                    
 
-
-                </div> <!-- tabs__content -->
             <!-- </div> tabs -->
 <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
-                        
+                </div> <!-- tabs__content -->
         </div> <!-- container -->
     </section> <!-- section -->
 

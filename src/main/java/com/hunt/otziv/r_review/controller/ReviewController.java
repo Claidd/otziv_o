@@ -40,7 +40,7 @@ public class ReviewController {
     //    =========================================== REVIEW EDIT =======================================================
     @GetMapping("/editReview/{reviewId}")
     String ReviewEdit(@PathVariable Long reviewId, Model model){
-        System.out.println("Вошли в обновление " + reviewService.getReviewDTOById(reviewId));
+        System.out.println("Вошли в обновление отзыва");
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
         model.addAttribute("reviewDTO", reviewDTO);
         model.addAttribute("products", productService.findAll());
@@ -52,7 +52,7 @@ public class ReviewController {
     @PostMapping("/editReview/{reviewId}") // Страница редактирования Заказа - Post
     String ReviewEditPost(@ModelAttribute("reviewDTO") ReviewDTO reviewDTO, @PathVariable Long reviewId, RedirectAttributes rm, Model model, Principal principal){
         String userRole = getRole(principal);
-        log.info("1. Начинаем обновлять данные отзыва");
+        log.info("1. Начинаем обновлять данные отзыва. - {}", principal != null ? principal.getName() : "Гость");
         reviewService.updateReview(userRole, reviewDTO, reviewId);
         log.info("5. Обновление отзыва прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
@@ -60,8 +60,8 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post
 
     @PostMapping("/addReviews/{companyId}/{orderId}") // Добавить новый отзыв - Post
-    String ReviewAdd(@PathVariable Long orderId, @PathVariable Long companyId, RedirectAttributes rm, Model model){
-        log.info("1. Начинаем добавлять новый Отзыв");
+    String ReviewAdd(@PathVariable Long orderId, @PathVariable Long companyId, RedirectAttributes rm, Model model, Principal principal){
+        log.info("1. Начинаем добавлять новый Отзыв. - {}", principal != null ? principal.getName() : "Гость");
         if (orderService.addNewReview(orderId)){
             log.info("5. Добавили новый отзыв");
             rm.addFlashAttribute("saveSuccess", "true");
@@ -74,8 +74,8 @@ public class ReviewController {
 
     @PostMapping("/deleteReviews/{companyId}/{orderId}/{reviewId}") // Удалить отзыв - Post
     @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OWNER', 'ROLE_MANAGER', 'ROLE_WORKER')")
-    String ReviewDelete(@PathVariable Long orderId, @PathVariable Long companyId, @PathVariable Long reviewId, RedirectAttributes rm, Model model){
-        log.info("1. Начинаем удалять новый Отзыв" );
+    String ReviewDelete(@PathVariable Long orderId, @PathVariable Long companyId, @PathVariable Long reviewId, RedirectAttributes rm, Model model, Principal principal){
+        log.info("1. Начинаем удалять новый Отзыв. - {}", principal != null ? principal.getName() : "Гость");
         if (orderService.deleteNewReview(orderId, reviewId)){
             log.info("2. Удалили отзыв");
             rm.addFlashAttribute("saveSuccess", "true");
@@ -113,8 +113,8 @@ public class ReviewController {
     } // Страница редактирования Заказа - Get
 
     @PostMapping("/editReviews/{orderDetailId}") // Страница редактирования Заказа - Post - СОХРАНИТЬ
-    String ReviewsEditPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model){
-        log.info("1. Начинаем обновлять данные Отзыва");
+    String ReviewsEditPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal){
+        log.info("1. Начинаем обновлять данные Отзыва. - {}", principal != null ? principal.getName() : "Гость");
         for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
             reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
         }
@@ -124,8 +124,8 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
     @PostMapping("/editReviews/{orderDetailId}/payOk") // Страница редактирования Заказа - Post - СОХРАНИТЬ
-    String OrderPayOkPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, @PathVariable String orderDetailId) throws Exception {
-        log.info("1. Начинаем менять статус заказа на ОПлачено");
+    String OrderPayOkPost(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal, @PathVariable String orderDetailId) throws Exception {
+        log.info("1. Начинаем менять статус заказа на Оплачено. - {}", principal != null ? principal.getName() : "Гость");
         Order order = orderDetailsService.getOrderDetailById(UUID.fromString(orderDetailId)).getOrder();
         if (order.getAmount() <= order.getCounter()){
             orderService.changeStatusForOrder(order.getId(), "Оплачено");
@@ -140,8 +140,8 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
     @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
-    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model) throws Exception {
-        log.info("1. Начинаем обновлять данные Отзыва3");
+    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal) throws Exception {
+        log.info("1. Начинаем обновлять данные Отзыва3. - {}", principal != null ? principal.getName() : "Гость");
         if (reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO)){
             log.info("Начинаем обновлять статус заказа");
             orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
@@ -159,8 +159,8 @@ public class ReviewController {
     } // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
 
     @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
-    String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model) throws Exception {
-        log.info("1. Начинаем обновлять данные Отзыва2");
+    String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal) throws Exception {
+        log.info("1. Начинаем обновлять данные Отзыва2. - {}", principal != null ? principal.getName() : "Гость");
         for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
             reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
         }
@@ -177,16 +177,13 @@ public class ReviewController {
 private void checkTimeMethod(String text, long startTime){
     long endTime = System.nanoTime();
     double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-    System.out.printf(text + "%.4f сек%n", timeElapsed);
+    log.info("{}: {} сек", text, String.format("%.4f", timeElapsed));
 }
 
-    private String getRole(Principal principal){ // Берем роль пользователя
-        // Получите текущий объект аутентификации
+    private String getRole(Principal principal) {
+        if (principal == null) return "anonymous";
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // Получите имя текущего пользователя (пользователя, не роль)
-        String username = principal.getName();
-        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
-    } // Берем роль пользователя
+    }// Берем роль пользователя
 
 }

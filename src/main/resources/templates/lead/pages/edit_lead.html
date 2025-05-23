@@ -23,7 +23,7 @@
                         <div class="container">
                             <h2 class="section-title">РЕДАКТИРОВАНИЕ ЛИДА</h2>
                             <div class="edit__box">
-                                <form th:object="${editLeadDto}" method="post" th:action="@{/lead/edit/{leadId}(leadId=${editLeadDto.id})}">
+                                <form th:object="${editLeadDto}" method="post" th:action="@{/lead/edit/{leadId}(leadId=${editLeadDto.id != null ? editLeadDto.id : 0})}">
                                     <div class="mb-3" >
                                         <label for="inputTelephoneLead" class="form-label">Телефон</label>
                                         <input type="text" name="telephoneLead" th:field="*{telephoneLead}" th:value="${editLeadDto.getTelephoneLead()}" class="form-control" id="inputTelephoneLead" aria-describedby="emailHelp">

@@ -18,6 +18,6 @@ public class OfferText {
     @Column(name = "offer_id")
     private Long id;
 
-    @Column(name = "offer_text")
-    private String offer;
+    @Column(name = "offer_text", nullable = false, length = 3000)
+    private String text;
 }

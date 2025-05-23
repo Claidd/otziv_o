@@ -15,7 +15,7 @@ import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
-import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
@@ -24,9 +24,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
@@ -346,13 +344,9 @@ public class CompanyServiceImpl implements CompanyService{
 
 
 
-    public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
+    public CompanyDTO convertToDtoToManager(Long leadId, Principal principal) {
         LeadDTO leadDTO = leadService.findById(leadId);
-        List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
-        var random = new SecureRandom();
-    //        находим лида по переданному id
 
-        //        Устанавливаем поля из лида в новый дто
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
         companyDTO.setCity(leadDTO.getCityLead());
@@ -361,9 +355,36 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setManager(convertToManagerDto(leadDTO.getManager()));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
-        companyDTO.setWorker(workers.get(random.nextInt(workers.size())));
+
+        Set<WorkerDTO> workers = leadDTO.getManager().getUser().getWorkers().stream()
+                .map(this::convertToWorkerDto)
+                .collect(Collectors.toSet());
+
+        companyDTO.setWorkers(workers); // ✅ добавляем весь список работников в DTO
+
+        WorkerDTO selectedWorker = selectRandomWorker(workers);
+        companyDTO.setWorker(selectedWorker);
+        log.info("📦 CompanyDTO подготовлен для лида ID {}. Назначен сотрудник: {}", leadId, selectedWorker.getUser().getFio());
+
         return companyDTO;
-    } //    Метод подготовки ДТО при создании компании из Лида менеджером
+    }
+
+
+    private WorkerDTO selectRandomWorker(Set<WorkerDTO> workers) {
+        if (workers.isEmpty()) {
+            throw new IllegalStateException("❌ Нет доступных сотрудников для назначения.");
+        }
+
+        List<WorkerDTO> workerList = new ArrayList<>(workers);
+        int index = new SecureRandom().nextInt(workerList.size());
+
+        WorkerDTO selected = workerList.get(index);
+        log.debug("🎯 Случайно выбран сотрудник {} (ID user: {}) из {} доступных",
+                selected.getUser().getFio(), selected.getUser().getId(), workerList.size());
+
+        return selected;
+    }
+
 
     public CompanyDTO convertToDtoToOperator(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида оператора
         LeadDTO leadDTO = leadService.findById(leadId);
@@ -421,23 +442,37 @@ public class CompanyServiceImpl implements CompanyService{
         }
     }
 
-    public CompanyDTO convertToDtoToManagerNotLead(Principal principal) { //    Метод подготовки ДТО при создании компании из Лида менеджером
-        List<WorkerDTO> workers = userService.findByUserName(principal.getName()).orElseThrow().getWorkers().stream().map(this::convertToWorkerDto).toList();
-        var random = new SecureRandom();
-        //        находим лида по переданному id
+    public CompanyDTO convertToDtoToManagerNotLead(Principal principal) {
+        Long userId = userService.findByUserName(principal.getName())
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден"))
+                .getId();
 
-        //        Устанавливаем поля из лида в новый дто
+        Manager manager = managerService.getManagerByUserId(userId);
+
+        // Получаем и преобразуем список работников
+        Set<WorkerDTO> workers = manager.getUser().getWorkers().stream()
+                .map(this::convertToWorkerDto)
+                .collect(Collectors.toSet());
+
+        WorkerDTO selectedWorker = selectRandomWorker(workers);
+
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone("");
         companyDTO.setCity("Не задан");
         companyDTO.setUser(convertToUserDtoToManager(principal));
         companyDTO.setOperator(null);
-        companyDTO.setManager(convertToManagerDto(managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId())));
+        companyDTO.setManager(convertToManagerDto(manager));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
-        companyDTO.setWorker(workers.get(random.nextInt(workers.size())));
+        companyDTO.setWorkers(workers); // ✅ список для отображения
+        companyDTO.setWorker(selectedWorker); // ✅ назначенный по умолчанию
+
+        log.info("📦 CompanyDTO создан без лида. Назначен менеджер: {}, сотрудник: {}",
+                manager.getUser().getFio(), selectedWorker.getUser().getFio());
+
         return companyDTO;
-    } //    Метод подготовки ДТО при создании компании из Лида менеджером
+    }
+
 
 
 

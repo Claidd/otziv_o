@@ -18,6 +18,6 @@ public class HelloText {
     @Column(name = "hello_id")
     private Long id;
 
-    @Column(name = "hello_text")
-    private String hello_text;
+    @Column(name = "hello_text", nullable = false, length = 1000)
+    private String text;
 }

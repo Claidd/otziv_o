@@ -12,6 +12,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Data
@@ -51,17 +52,14 @@ public class Lead {
     private String lidStatus;
 
     //    время создания пользователя
-    @Temporal(TemporalType.DATE)
     @Column(name = "create_date", nullable = false)
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    @Temporal(TemporalType.DATE)
     @Column(name = "update_status")
-    private LocalDate updateStatus;
+    private LocalDateTime updateStatus;
 
     //    дата и время нового отправления предложения
-    @Temporal(TemporalType.DATE)
     @Column(name = "date_new_try")
     private LocalDate dateNewTry;
 
@@ -90,9 +88,21 @@ public class Lead {
 
     @PrePersist
     protected void onCreate() {
-        createDate = LocalDate.now();
-        updateStatus = LocalDate.now();
-        dateNewTry = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        createDate = now.toLocalDate();
+        updateStatus = now;
+        dateNewTry = now.toLocalDate();
+    }
+
+    @PreUpdate
+    protected void updateTimestamps() {
+        updateStatus = LocalDateTime.now();
+        if (createDate == null) {
+            createDate = LocalDate.now();
+        }
+        if (dateNewTry == null) {
+            dateNewTry = LocalDate.now();
+        }
     }
 
 

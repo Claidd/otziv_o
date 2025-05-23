@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -38,7 +39,7 @@ public class LeadDTO {
 
     //    дата и время обновления статуса
 
-    private LocalDate updateStatus;
+    private LocalDateTime updateStatus;
 
     //    дата и время нового отправления предложения
 
@@ -51,6 +52,8 @@ public class LeadDTO {
     private Marketolog marketolog;
 
     private Long operatorId;
+
+    private boolean offer;
 
 //    ПОЯСНЕНИЕ:
 //  Класс LeadDTO является простым Java-классом, который представляет DTO (Data Transfer Object) для класса Lead.

@@ -1,6 +1,11 @@
 package com.hunt.otziv.l_lead.services;
 
+import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import com.hunt.otziv.l_lead.event.LeadEventPublisher;
+import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Telephone;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -14,6 +19,7 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -34,7 +40,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class LeadServiceImpl implements LeadService{
+public class LeadServiceImpl implements LeadService {
 
     private final LeadsRepository leadsRepository;
     private final UserRepository userRepository;
@@ -44,8 +50,11 @@ public class LeadServiceImpl implements LeadService{
     private final ZpService zpService;
     private final UserService userService;
     private final TelephoneService telephoneService;
+    private final LeadMapper leadMapper;
+    private final LeadEventPublisher leadEventPublisher;
+    private final WhatsAppService whatsAppService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -54,6 +63,9 @@ public class LeadServiceImpl implements LeadService{
         this.zpService = zpService;
         this.userService = userService;
         this.telephoneService = telephoneService;
+        this.leadMapper = leadMapper;
+        this.leadEventPublisher = leadEventPublisher;
+        this.whatsAppService = whatsAppService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -75,7 +87,7 @@ public class LeadServiceImpl implements LeadService{
         log.info("5. Юзер успешно создан");
 //        this.save(user);
         Lead lead1 = leadsRepository.save(lead);
-        zpService.saveLeadZp(lead1);
+//        zpService.saveLeadZp(lead1);
         return lead1;
     } // Создание нового пользователя "Клиент" - конец
 
@@ -115,41 +127,49 @@ public class LeadServiceImpl implements LeadService{
             log.info("Обновили комментарий");
         }
         /*Проверяем не равен ли апдейт время предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getUpdateStatus(), saveLead.getUpdateStatus())){
-            saveLead.setUpdateStatus(leadDTO.getUpdateStatus());
-            isChanged = true;
-            log.info("Обновили дату изменения");
-        }
+//        if (!Objects.equals(leadDTO.getUpdateStatus(), saveLead.getUpdateStatus())){
+//            saveLead.setUpdateStatus(leadDTO.getUpdateStatus());
+//            isChanged = true;
+//            log.info("Обновили дату изменения");
+//        }
         /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
         if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator())){
-            System.out.println(leadDTO.getOperator());
-            System.out.println(saveLead.getOperator());
+//            System.out.println(leadDTO.getOperator());
+//            System.out.println(saveLead.getOperator());
             saveLead.setOperator(leadDTO.getOperator());
             isChanged = true;
             log.info("Обновили оператора");
         }
         /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
         if (!Objects.equals(leadDTO.getMarketolog(), saveLead.getMarketolog())){
-            System.out.println(leadDTO.getMarketolog());
-            System.out.println(saveLead.getMarketolog());
+//            System.out.println(leadDTO.getMarketolog());
+//            System.out.println(saveLead.getMarketolog());
             saveLead.setMarketolog(leadDTO.getMarketolog());
             isChanged = true;
             log.info("Обновили маркетолога");
         }
         /*Проверяем не равен ли апдейт менеджера, если нет, то меняем флаг на тру*/
         if (!Objects.equals(leadDTO.getManager(), saveLead.getManager())){
-            System.out.println(leadDTO.getManager());
-            System.out.println(saveLead.getManager());
+//            System.out.println(leadDTO.getManager());
+//            System.out.println(saveLead.getManager());
             saveLead.setManager(leadDTO.getManager());
             isChanged = true;
             log.info("Обновили менеджера");
         }
+
+        if (!Objects.equals(leadDTO.getLidStatus(), saveLead.getLidStatus())) {
+            saveLead.setLidStatus(leadDTO.getLidStatus());
+            isChanged = true;
+            log.info("Обновили статус");
+        }
+
         /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
          * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
         if  (isChanged){
             log.info("Начали сохранять обновленного лида в БД");
             leadsRepository.save(saveLead);
-            log.info("Сохранили обновленного лида в БД");
+            log.info("Сохранили обновленного лида в БД Теперь запускаем отправку на сервер");
+            leadEventPublisher.publishUpdate(saveLead);
         }
         else {
             log.info("Изменений не было, лид в БД не изменена");
@@ -229,6 +249,71 @@ public class LeadServiceImpl implements LeadService{
         return Page.empty();
     } // Взять всех лидов
 
+
+    @Override
+    public Page<LeadDTO> getAllLeadsToWork(String status, String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов
+        log.info("Берем все лиды");
+        String userRole = getRole(principal);
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
+        Page<Lead> leadsPage;
+        List<LeadDTO> leadDTOs = null;
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.info("Зашли список всех лидов для админа");
+            if (!keywords.isEmpty()){
+//                leadsPage =  leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords,pageable);
+                    leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords,pageable);
+            }
+            else leadsPage = leadsRepository.findAllByLidStatus(status,pageable);
+            leadDTOs = leadsPage.getContent()
+                    .stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        if ("ROLE_MANAGER".equals(userRole)){
+            log.info("Зашли список всех лидов для Менеджера");
+            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+//                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager,pageable);
+                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager,pageable);
+            }
+            else leadsPage =leadsRepository.findAllByLidStatusAndManager(status, manager,pageable);
+            leadDTOs = leadsPage.getContent()
+                    .stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)){
+            log.info("Зашли список всех лидов для Маркетолога");
+            Marketolog marketolog = marketologService.getMarketologById(userService.findByUserName(principal.getName()).orElseThrow().getId());
+            if (!keywords.isEmpty()){
+                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog,pageable);
+            }
+            else leadsPage =leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog,pageable);
+            leadDTOs = leadsPage.getContent()
+                    .stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        if ("ROLE_OWNER".equals(userRole)){
+            log.info("Зашли список всех лидов для Владельца");
+            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+            if (!keywords.isEmpty()){
+//                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable);
+                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
+            }
+            else leadsPage =leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
+            leadDTOs = leadsPage.getContent()
+                    .stream()
+                    .map(this::toDto)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        return Page.empty();
+    } // Взять всех лидов
+
     @Override
     public Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize) {
         log.info("Берем один лид для оператора");
@@ -248,21 +333,26 @@ public class LeadServiceImpl implements LeadService{
 
 
 
-//    @Override
-//    public Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize) {
-//        log.info("Берем все лиды");
-//        String userRole = getRole(principal);
-//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
-//        Page<Lead> leadsPage;
-//        List<LeadDTO> leadDTOs = null;
-//
-//            leadsPage = leadsRepository.findAllByLidStatusByTelephoneId(telephoneId, status,pageable);
-//            leadDTOs = leadsPage.getContent()
-//                    .stream()
-//                    .map(this::toDto)
-//                    .collect(Collectors.toList());
-//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-//    }
+
+    @Override
+    public Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorId, String keywords, Principal principal, int pageNumber, int pageSize) {
+        Operator operator = operatorService.getOperatorById(operatorId);
+        log.info("🔍 Получаем все лиды оператора ID {} по ключу '{}'", operatorId, keywords);
+
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
+
+        String keywordPattern = "%" + keywords.trim().toLowerCase() + "%";
+
+        Page<Lead> leadsPage = leadsRepository.getAllLeadsToOperatorAll(operator, keywordPattern, pageable);
+
+        List<LeadDTO> leadDTOs = leadsPage.getContent()
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+    }
+
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
@@ -441,10 +531,11 @@ public class LeadServiceImpl implements LeadService{
         telephoneService.saveTelephone(telephone);
 
         lead.setLidStatus("К рассылке");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(720));
 
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     }
 
 
@@ -459,11 +550,108 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Отправленный");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(1));
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     }
     // меняем статус с нового на отправленное - конец
+
+
+    // 120363399937937645@g.us    - Анжелика
+    //     - Вика
+
+    @Override
+    @Transactional
+    public void changeStatusLeadToWork(Long leadId) {
+        log.info("🚀 Начинаем обработку перевода лида {} в статус TO_WORK", leadId);
+
+        Lead lead = findByLeadId(leadId).orElseThrow(() -> {
+            log.error("❌ Лид с ID {} не найден в системе", leadId);
+            return new UsernameNotFoundException(String.format("Пользователь с ID '%s' не найден", leadId));
+        });
+
+        Operator operator = lead.getOperator();
+        log.info("🔄 Назначаем менеджера на основе счётчика оператора (ID: {}, Count: {})", operator.getId(), operator.getCount());
+        assignManagerBasedOnOperatorCount(lead, operator);
+
+        lead.setLidStatus(LeadStatus.TO_WORK.title);
+        leadsRepository.save(lead);
+        log.info("✅ Статус лида {} установлен в '{}'", lead.getId(), LeadStatus.TO_WORK.title);
+
+        pushToWhatsApp(lead); //  Отправляем уведомление в Ватсапп
+
+        toggleOperatorManagerCount(operator); //  меняем счетчик у оператора
+        leadEventPublisher.publishUpdate(lead); //  Отправляем уведомление в Ватсаппотправляем изменения на сервер
+        log.info("✅ Обработка лида {} завершена", leadId);
+    }
+
+    private void assignManagerBasedOnOperatorCount(Lead lead, Operator operator) {
+        Long managerId = switch (operator.getCount()) {
+            case 0 -> 2L;
+            case 1 -> 3L;
+            default -> throw new IllegalStateException("Неизвестное значение счётчика оператора: " + operator.getCount());
+        };
+        lead.setManager(managerService.getManagerById(managerId));
+        log.info("👤 Менеджер с ID {} назначен лиду {}", managerId, lead.getId());
+    }
+
+    private void toggleOperatorManagerCount(Operator operator) {
+        int oldCount = operator.getCount();
+        int updatedCount = (oldCount == 0) ? 1 : 0;
+        operator.setCount(updatedCount);
+        operatorService.save(operator);
+        log.info("🔁 Счётчик оператора {} изменён: {} → {}", operator.getId(), oldCount, updatedCount);
+    }
+
+    private void pushToWhatsApp(Lead lead) {
+        Long managerId = lead.getManager().getId();
+        String groupId = switch (managerId.intValue()) {
+            case 2 -> ""; // Можно заменить на реальную группу
+            case 3 -> "120363399937937645@g.us";
+            default -> null;
+        };
+
+        String clientId = lead.getManager().getClientId();
+
+        if (clientId == null || clientId.isBlank()) {
+            log.warn("❌ Неизвестный клиент (clientId = null) для менеджера ID: {} — сообщение в WhatsApp не отправлено", managerId);
+            return;
+        }
+
+        if (groupId != null && !groupId.isEmpty()) {
+            String message = String.format("📨 Новая фирма:\n📞 %s\n🌆 %s\n💬 %s",
+                    lead.getTelephoneLead(), lead.getCityLead(), lead.getCommentsLead());
+
+            log.info("🚀 Попытка отправить сообщение в группу через {} на {}", clientId, groupId);
+            whatsAppService.sendMessageToGroup(clientId, groupId, message);
+            log.info("📲 Сообщение отправлено в WhatsApp-группу {} от менеджера {}", groupId, managerId);
+        } else {
+            log.warn("⚠️ WhatsApp-группа не указана для менеджера ID: {} — сообщение не отправлено", managerId);
+        }
+    }
+
+
+
+
+
+
+    @Override
+    public void changeCountToOperator(Long leadId) {
+        Lead lead = leadsRepository.findById(leadId).orElseThrow();
+        Operator operator = lead.getTelephone().getTelephoneOperator();
+//        Operator operator = operatorService.getOperatorByTelephoneId(lead.getTelephone().getId());
+        System.out.println(operator);
+        int count = operator.getCount();
+        if (count == 0){
+            operator.setCount(1);
+        }
+        if (count >= 1){
+            operator.setCount(0);
+        }
+        operatorService.save(operator);
+        log.info("поменяли счетчик выбора менеджера");
+    }
 
     @Override
     @Transactional
@@ -472,9 +660,10 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Напоминание");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(2));
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     } // меняем статус с отправленное на напоминание - конец
 
     @Override
@@ -484,9 +673,10 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("К рассылке");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(90));
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     } // меняем статус с напоминание на К рассылке - конец
 
     @Override
@@ -496,9 +686,10 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("В работе");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now());
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     } // меняем статус с К рассылке на В работе - конец
 
     @Override
@@ -508,8 +699,9 @@ public class LeadServiceImpl implements LeadService{
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
         lead.setLidStatus("Новый");
-        lead.setUpdateStatus(LocalDate.now());
+        lead.setUpdateStatus(LocalDateTime.now());
         leadsRepository.save(lead);
+        leadEventPublisher.publishUpdate(lead);
     } // меняем статус с любого на Новый - конец
 
 
@@ -517,12 +709,6 @@ public class LeadServiceImpl implements LeadService{
     public List<Lead> findAllByLidListStatus(String username) {
         Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
         return leadsRepository.findAllByLidListStatus("Новый", manager);
-    }
-
-    @Override
-    public Long findAllByLidListStatusNew(Marketolog marketolog) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
     }
 
     @Override
@@ -536,10 +722,6 @@ public class LeadServiceImpl implements LeadService{
         LocalDate localDate = LocalDate.now();
         return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
     }
-    @Override
-    public Long findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToMarketolog("Новый", marketolog, localDate);
-    }
 
     @Override
     public Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate) {
@@ -552,11 +734,6 @@ public class LeadServiceImpl implements LeadService{
     }
 
 
-    @Override
-    public Long findAllByLidListStatusNew(Operator operator) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
-    }
 
     @Override
     public Long findAllByLidListNew(Operator operator) {
@@ -578,11 +755,6 @@ public class LeadServiceImpl implements LeadService{
 
 
     @Override
-    public Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToOperator("Новый", operator, localDate);
-    }
-
-    @Override
     public Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
         return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
     }
@@ -599,6 +771,11 @@ public class LeadServiceImpl implements LeadService{
         Lead lead = leadsRepository.findById(leadId).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(lead);
+    } // Взять одного лида дто - конец
+
+    @Override
+    public Optional<Lead> findByIdOptional(Long leadId) { // Взять одного лида дто по id
+        return leadsRepository.findById(leadId);
     } // Взять одного лида дто - конец
 
     @Override
@@ -740,22 +917,7 @@ public class LeadServiceImpl implements LeadService{
         return resultMap;
     }
 
-    @Override
-    public void changeCountToOperator(Long leadId) {
-        Lead lead = leadsRepository.findById(leadId).orElseThrow();
-        Operator operator = lead.getTelephone().getTelephoneOperator();
-//        Operator operator = operatorService.getOperatorByTelephoneId(lead.getTelephone().getId());
-        System.out.println(operator);
-        int count = operator.getCount();
-        if (count == 0){
-            operator.setCount(1);
-        }
-        if (count >= 1){
-            operator.setCount(0);
-        }
-        operatorService.save(operator);
-        log.info("поменяли счетчик выбора менеджера");
-    }
+
 
     @Override
     public Optional<Lead> getByTelephoneLead(String telephoneNumber) {
@@ -771,6 +933,49 @@ public class LeadServiceImpl implements LeadService{
     public int countNewLeadsByClient(Long telephoneId, String status) {
         return leadsRepository.countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(telephoneId, LocalDate.now() , status);
     }
+
+    @Override
+    public LeadDtoTransfer findByIdToTransfer(Long leadId) {
+        return leadMapper.toDtoTransfer(leadsRepository.findById(leadId).orElseThrow());
+    }
+
+
+    public List<Lead> findModifiedSince(LocalDateTime since) {
+        return leadsRepository.findByUpdateStatusAfter(since);
+    }
+
+    @Override
+    @Transactional
+    public void saveOrUpdateByTelephoneLead(Lead incomingLead) {
+        log.info("📨 saveOrUpdateByTelephoneLead: {}", incomingLead.getTelephoneLead());
+
+        Optional<Lead> existing = leadsRepository.findByTelephoneLead(incomingLead.getTelephoneLead());
+
+        if (existing.isPresent()) {
+            Lead lead = existing.get();
+
+            lead.setTelephoneLead(incomingLead.getTelephoneLead());
+            lead.setCityLead(incomingLead.getCityLead());
+            lead.setCommentsLead(incomingLead.getCommentsLead());
+            lead.setLidStatus(incomingLead.getLidStatus());
+            lead.setCreateDate(incomingLead.getCreateDate());
+            lead.setUpdateStatus(incomingLead.getUpdateStatus());
+            lead.setDateNewTry(incomingLead.getDateNewTry());
+
+            lead.setOperator(incomingLead.getOperator());
+            lead.setManager(incomingLead.getManager());
+            lead.setMarketolog(incomingLead.getMarketolog());
+            lead.setTelephone(incomingLead.getTelephone());
+
+            leadsRepository.save(lead);
+            log.info("🔁 Обновили существующего лида: {}", lead.getTelephoneLead());
+
+        } else {
+            leadsRepository.save(incomingLead);
+            log.info("🆕 Добавили нового лида: {}", incomingLead.getTelephoneLead());
+        }
+    }
+
 
 
 }

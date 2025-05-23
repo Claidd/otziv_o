@@ -7,6 +7,8 @@ import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -24,7 +26,7 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
-
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 @RequestMapping("/admin")
@@ -45,7 +47,7 @@ public class AdminController {
         model.put("route", "user_info");
         model.put("workerZp", personalService.getWorkerReviews(user, localDate));
         model.put("user", personalService.getUserLK(principal));
-        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
@@ -57,7 +59,7 @@ public class AdminController {
         model.put("route", "user_info");
         model.put("workerZp", personalService.getWorkerReviews(user, date));
         model.put("user", personalService.getUserLK(principal));
-        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
@@ -73,7 +75,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologs());
             model.put("workers", personalService.gerWorkers());
             model.put("operators", personalService.gerOperators());
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
 
@@ -85,7 +87,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologsToManager(manager));
             model.put("workers", personalService.gerWorkersToManager(manager));
             model.put("operators", personalService.gerOperatorsToManager(manager));
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
 
@@ -105,7 +107,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologsAndCountToOwner(allMarketologs));
             model.put("workers", personalService.getWorkersToAndCountToOwner(allWorkers));
             model.put("operators", personalService.getOperatorsAndCountToOwner(allOperators));
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
         else return new ModelAndView("admin/layouts/personal", model);
@@ -123,7 +125,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologs());
             model.put("workers", personalService.gerWorkers());
             model.put("operators", personalService.gerOperators());
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Админа: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
 
@@ -135,7 +137,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologsToManager(manager));
             model.put("workers", personalService.gerWorkersToManager(manager));
             model.put("operators", personalService.gerOperatorsToManager(manager));
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Менеджера: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
 
@@ -155,7 +157,7 @@ public class AdminController {
             model.put("marketologs", personalService.getMarketologsAndCountToDateToOwner(allMarketologs, date));
             model.put("workers", personalService.gerWorkersToAndCountToDateToOwner(allWorkers, date));
             model.put("operators", personalService.gerOperatorsAndCountToDateToOwner(allOperators, date));
-            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/personal для Владельца: ",startTime, principal);
             return new ModelAndView("admin/layouts/personal", model);
         }
         else return new ModelAndView("admin/layouts/personal", model);
@@ -202,7 +204,7 @@ public class AdminController {
         model.put("workers", groupedUsers.getOrDefault("ROLE_WORKER", Collections.emptyList()));
         model.put("operators", groupedUsers.getOrDefault("ROLE_OPERATOR", Collections.emptyList()));
 
-        checkTimeMethod("Время выполнения AdminController/admin/score: ", startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/score: ", startTime, principal);
         return new ModelAndView("admin/layouts/score", model);
     }
 
@@ -320,7 +322,7 @@ public class AdminController {
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
         model.put("workerZp", personalService.getWorkerReviews(user, localDate));
-        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
@@ -334,7 +336,7 @@ public class AdminController {
         model.put("route", "user_info");
         model.put("user", personalService.getUserLK(principal));
         model.put("workerZp", personalService.getWorkerReviews(user, localDate));
-        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/personal для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/user_info", model);
     }
 
@@ -351,14 +353,14 @@ public class AdminController {
             model.put("user", personalService.getUserLK(principal));
             model.put("stats", personalService.getStats(localDate, user, userRole));
 //            dockerService.createMysqlBackup("mysql_container", "tmp/backup-otziv.sql");
-            checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime, principal);
             return new ModelAndView("admin/layouts/analyse", model);
         }
         if ("ROLE_OWNER".equals(userRole)) {
             model.put("route", "analyse");
             model.put("user", personalService.getUserLK(principal));
             model.put("stats", personalService.getStats(localDate, user, userRole));
-            checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
+            checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime, principal);
             return new ModelAndView("admin/layouts/analyse", model);
         }
         return new ModelAndView("admin/layouts/analyse", model);
@@ -372,7 +374,7 @@ public class AdminController {
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
         model.put("stats", personalService.getStats(date, user, userRole));
-        checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/analyse", model);
     }
 
@@ -385,7 +387,7 @@ public class AdminController {
         model.put("route", "analyse");
         model.put("user", personalService.getUserLK(principal));
         model.put("stats", personalService.getStats(localDate, user, "ROLE_ADMIN"));
-        checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime);
+        checkTimeMethod("Время выполнения AdminController/admin/analyse для всех: ",startTime, principal);
         return new ModelAndView("admin/layouts/analyse", model);
     }
 
@@ -400,9 +402,9 @@ public class AdminController {
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
 
-    private void checkTimeMethod(String text, long startTime){
+    private void checkTimeMethod(String text, long startTime , Principal principal){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf(text + "%.4f сек%n", timeElapsed);
+        log.info("{}: {} сек. - {}", text, String.format("%.4f", timeElapsed), principal.getName());
     }
 }

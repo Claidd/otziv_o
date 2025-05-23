@@ -16,7 +16,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
-import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.dto.*;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -29,7 +29,6 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
-import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -41,11 +40,9 @@ import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.persistence.PersistenceException;
 import jakarta.ws.rs.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
@@ -816,27 +813,48 @@ public boolean deleteOrder(Long orderId, Principal principal){
 
 
     private boolean sentMessageToGroup(String title, Order order, String clientId, String groupId, String message, String statusToPay) {
-    String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
+        log.info("📨 Отправка сообщения в WhatsApp-группу:");
+        log.info("🔹 Клиент: {}", clientId);
+        log.info("🔹 Группа: {}", groupId);
+        log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
 
-    if (result != null && result.toLowerCase().contains("ok")) {
-        order.setStatus(orderStatusService.getOrderStatusByTitle(statusToPay));
-    } else {
-        if (hasManagerWithTelegram(order)) {
+        String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
+
+        if (result != null && result.toLowerCase().contains("ok")) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(statusToPay));
+            log.info("✅ Статус заказа успешно обновлён на: {}", statusToPay);
+        } else {
+            log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: {}", result);
+
             String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
-            telegramService.sendMessage(
-                    order.getManager().getUser().getTelegramChatId(),
-                    companyTitle + " готов - На проверку \n" +
-                            "https://o-ogo.ru/orders/all_orders?status=В%20проверку"
-            );
+            String managerChatId = String.valueOf(order.getManager().getUser().getTelegramChatId());
+
+            if (title.equals(STATUS_TO_CHECK) && hasManagerWithTelegram(order)) {
+                String url = "https://o-ogo.ru/orders/all_orders?status=В%20проверку";
+                String text = companyTitle + " готов - На проверку\n" + url;
+                telegramService.sendMessage(Long.parseLong(managerChatId), text);
+                log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → В проверку", managerChatId);
+            }
+
+            if (title.equals(STATUS_PUBLIC) && hasManagerWithTelegram(order)) {
+                String url = "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
+                String text = companyTitle + " Опубликован\n" + url;
+                telegramService.sendMessage(Long.parseLong(managerChatId), text);
+                log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → Опубликовано", managerChatId);
+            }
+
+            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+            log.info("🔄 Статус заказа установлен вручную: {}", title);
         }
-        order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+
+        orderRepository.save(order);
+        log.info("💾 Заказ сохранён: ID {}. Компания - {} ", order.getId(),order.getCompany().getTitle());
+
+        return true;
     }
 
-    orderRepository.save(order);
-    return true;
-}
 
-private boolean hasManagerWithTelegram(Order order) {
+    private boolean hasManagerWithTelegram(Order order) {
     try {
         return order != null &&
                 order.getManager() != null &&

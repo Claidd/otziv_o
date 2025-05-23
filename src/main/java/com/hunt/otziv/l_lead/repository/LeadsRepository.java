@@ -9,9 +9,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -102,7 +104,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
     Page<Lead> findAllByLidStatusAndManagerToOwner(String status, List<Manager> managers, Pageable pageable);
 
-
+    List<Lead> findByUpdateStatusAfter(LocalDateTime since);
 
     @Query("""
     SELECT 
@@ -151,5 +153,16 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
 
     int countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(Long telephone_id, LocalDate createDate, String lidStatus);
+
+    List<Lead> findByUpdateStatusAfter(LocalDate localDate);
+
+    @Query("SELECT l FROM Lead l WHERE l.operator = :operator AND " +
+            "(LOWER(l.telephoneLead) LIKE LOWER(:keyword)) AND " +
+            "(l.lidStatus = 'Новый' OR l.lidStatus = 'Отправленный' OR l.lidStatus = 'В работу')")
+    Page<Lead> getAllLeadsToOperatorAll(
+            @Param("operator") Operator operator,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
 
 }

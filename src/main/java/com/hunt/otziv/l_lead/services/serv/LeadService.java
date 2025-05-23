@@ -1,5 +1,6 @@
-package com.hunt.otziv.l_lead.services;
+package com.hunt.otziv.l_lead.services.serv;
 
+import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -11,6 +12,7 @@ import org.springframework.data.util.Pair;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,20 +20,17 @@ import java.util.Set;
 
 public interface LeadService {
     //    =============================== СОЗДАНИЕ И ОБНОВЛЕНИЕ =========================================
-    // перевод лида в дто
-    LeadDTO convertFromLead(Lead lead);
     // сохранение нового лида
     Lead save(LeadDTO leadDTO, String id);
     // метод обнолвдения данных лида
     void updateProfile(LeadDTO leadDTO, Long id);
     // метод поиска лидав по id
     Optional<Lead> findByIdAndToUpdate(Long id);
-    public LeadDTO findById(Long id);
+    LeadDTO findById(Long id);
+    Optional<Lead> findByIdOptional(Long leadId);
     Optional<User> findByFio(String operator);
     List<Long> getAllLeadsByDate(LocalDate localDate);
     List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
-    List<Long> getAllLeadsByDate2Month(LocalDate localDate);
-    List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status);
     void changeStatusLeadOnSendAndTelephone(Long leadId);
 
     //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
@@ -60,14 +59,10 @@ public interface LeadService {
     Long findAllByLidListNew(Operator operator);
 
     List<Lead> findAllByLidListStatus(String name);
-    Long findAllByLidListStatusNew(Marketolog marketolog);
     Long findAllByLidListStatusInWork(Marketolog marketolog);
 
     Long findAllByLidListStatusInWork(Operator operator);
-    Long findAllByLidListStatusNew(Operator operator);
-    Long findAllByLidListStatusNewToDate(Marketolog marketolog, LocalDate localDate);
     Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
-    Long findAllByLidListStatusNewToDate(Operator operator, LocalDate localDate);
     Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
     Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate);
     Long findAllByLidListNewToDate(Operator operator, LocalDate localDate);
@@ -89,6 +84,18 @@ public interface LeadService {
     void saveLead(Lead lead);
 
     int countNewLeadsByClient(Long telephoneId, String status);
+
+    LeadDtoTransfer findByIdToTransfer(Long leadId);
+
+    List<Lead> findModifiedSince(LocalDateTime since);
+
+    void saveOrUpdateByTelephoneLead(Lead incomingLead);
+
+    void changeStatusLeadToWork(Long leadId);
+
+    Page<LeadDTO> getAllLeadsToWork(String title, String keyword, Principal principal, int pageNumber, int pageSize);
+
+    Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
 
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================

@@ -6,4 +6,6 @@ public interface LeadProcessorService {
     void processLead(WhatsAppProperties.ClientConfig client);
 
     void resetState();
+
+    void checkAllClientsFinished();
 }

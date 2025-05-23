@@ -1,7 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
-import com.hunt.otziv.b_bots.dto.BotDTO;
-import com.hunt.otziv.l_lead.services.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -11,7 +10,6 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.services.AmountService;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.text_generator.service.AutoTextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -25,7 +23,6 @@ import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
-import java.util.Comparator;
 
 @Controller
 @Slf4j
@@ -105,7 +102,7 @@ public class OrderController {
     String OrderEditPost(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Principal principal, Model model){
         String userRole = getRole(principal);
         if ("ROLE_WORKER".equals(userRole)){
-            log.info("1. Начинаем обновлять данные Заказа ДЛЯ Работника" + principal.getName());
+            log.info("1. Начинаем обновлять данные Заказа ДЛЯ Работника - {}", principal != null ? principal.getName() : "Гость");
             orderService.updateOrderToWorker(orderDTO, companyId, orderId);
             log.info("5. Обновление Заказа прошло успешно");
             rm.addFlashAttribute("saveSuccess", "true");
@@ -122,7 +119,7 @@ public class OrderController {
 
     @PostMapping("/ordersDetails/{companyId}/{orderId}/delete") // Страница редактирования Заказа - Post
     String OrderEditPostDelete(@ModelAttribute ("ordersDTO") OrderDTO orderDTO, @PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Principal principal, Model model){
-        log.info("1. Начинаем удалять Заказ");
+        log.info("1. Начинаем удалять Заказ. - {}", principal != null ? principal.getName() : "Гость");
         if(orderService.deleteOrder(orderId, principal)) {
             rm.addFlashAttribute("saveSuccess", "true");
             log.info("5. Заказ удален");
@@ -389,7 +386,7 @@ public class OrderController {
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        log.info(text + "%.4f сек%n", timeElapsed);
+        log.info("{}: {} сек", text, String.format("%.4f", timeElapsed));
     }
 //    =========================================== СМЕНА СТАТУСА ========================================================
 private String getRole(Principal principal){ // Берем роль пользователя

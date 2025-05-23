@@ -15,8 +15,8 @@ public class OperatorsController {
 
     @GetMapping("/delete/{userId}/{operatorId}")
     public String deleteOperatorByUser(@PathVariable(name="userId") Long userId, @PathVariable(name="operatorId") Long operatorId){
-        System.out.println(userId);
-        System.out.println(operatorId);
+//        System.out.println(userId);
+//        System.out.println(operatorId);
         return "redirect:/allUsers";
     }
 

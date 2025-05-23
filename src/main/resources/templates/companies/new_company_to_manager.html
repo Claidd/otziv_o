@@ -86,7 +86,7 @@
                             <label for="inputManagers" class="form-label">Специалист</label> <br>
                             <select id="inputManagers" name="managerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
                                 <option value="">Выберите специалиста...</option>
-                                <option th:each="specialist : ${newCompany.user.workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}" ></option>
+                                <option th:each="specialist : ${newCompany.workers}" th:value="${specialist.workerId}" th:text="${specialist.user.fio}" ></option>
 <!--                                <option th:each="specialist : ${workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}" ></option>-->
 <!--                                <option th:unless="${!workers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>&ndash;&gt;-->
                             </select>

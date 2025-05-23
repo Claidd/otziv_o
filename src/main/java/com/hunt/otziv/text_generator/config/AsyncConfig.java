@@ -7,7 +7,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
-@Configuration
+@Configuration("asyncConfigTextGen") // для text_generator
 @EnableAsync
 public class AsyncConfig {
 

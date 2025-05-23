@@ -1,7 +1,8 @@
 package com.hunt.otziv.whatsapp.service;
 
+import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.services.LeadService;
+import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class OfferService {
 
     private final WhatsAppService whatsAppService;
     private final LeadService leadService;
+    private final LeadEventPublisher leadEventPublisher;
 
     // Потокобезопасный набор: номера в процессе отправки
     private final Set<String> phonesInProgress = ConcurrentHashMap.newKeySet();
@@ -39,6 +41,7 @@ public class OfferService {
                 log.info("✅ Оффер успешно отправлен клиенту {}", telephoneNumber);
                 lead.setOffer(true);
                 leadService.saveLead(lead);
+                leadEventPublisher.publishUpdate(lead);
             } else {
                 log.warn("❌ Ошибка при отправке оффера клиенту {}", telephoneNumber);
             }

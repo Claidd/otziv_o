@@ -1,26 +1,20 @@
 package com.hunt.otziv.c_companies.controller;
 
-import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.sevices.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
-import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.c_companies.services.CompanyStatusService;
-import com.hunt.otziv.l_lead.services.PromoTextService;
-import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -32,7 +26,6 @@ import org.springframework.web.util.UriUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
-import java.time.LocalDate;
 import java.util.*;
 
 @Controller

@@ -12,6 +12,8 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
+
 import java.util.Optional;
 
 
@@ -134,8 +136,17 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         message.setText(text);
         try {
             execute(message);
+        } catch (TelegramApiRequestException e) {
+            if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
+                log.warn("⛔ Бот заблокирован пользователем. ChatId: {}", chatId);
+                // здесь можно пометить в БД, что пользователь заблокировал бота
+            } else {
+                log.error("❌ Telegram API ошибка: {}", e.getApiResponse(), e);
+            }
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("❌ Ошибка при отправке сообщения в Telegram: {}", e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("❌ Неизвестная ошибка при отправке Telegram сообщения: {}", e.getMessage(), e);
         }
     }
 
@@ -143,15 +154,25 @@ public class MyTelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
-        message.setParseMode(parseMode); // Важно: добавляем режим разметки
-        message.setDisableWebPagePreview(true); // (опционально) скрыть превью ссылок
+        message.setParseMode(parseMode); // Markdown или HTML
+        message.setDisableWebPagePreview(true);
 
         try {
             execute(message);
+        } catch (TelegramApiRequestException e) {
+            if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
+                log.warn("⛔ Бот заблокирован пользователем. ChatId: {}", chatId);
+                // здесь можно пометить в БД, что пользователь заблокировал бота
+            } else {
+                log.error("❌ Telegram API ошибка: {}", e.getApiResponse(), e);
+            }
         } catch (TelegramApiException e) {
             log.error("❌ Ошибка при отправке сообщения в Telegram: {}", e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("❌ Неизвестная ошибка при отправке Telegram сообщения: {}", e.getMessage(), e);
         }
     }
+
 
 
 

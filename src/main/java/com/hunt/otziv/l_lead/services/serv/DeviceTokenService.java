@@ -1,4 +1,4 @@
-package com.hunt.otziv.l_lead.services;
+package com.hunt.otziv.l_lead.services.serv;
 
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
 import com.hunt.otziv.l_lead.dto.TextPhoneDTO;
