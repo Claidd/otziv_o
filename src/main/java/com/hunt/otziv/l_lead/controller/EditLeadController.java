@@ -123,7 +123,17 @@ public class EditLeadController {
     }
     // меняем статус с нового на отправленное - конец
 
-
+    // меняем статус с нового на отправленное - начало
+    @PostMapping("lead/status_to_work/{leadId}")
+    public String changeStatusLeadToWork(Model model, RedirectAttributes rm, @PathVariable final Long leadId,
+                                         @RequestParam(required = false) String commentsLead, Principal principal){
+        log.info("вход в меняем статус с нового на В Работу");
+        leadService.changeStatusLeadToWork(leadId, commentsLead);
+        log.info("статус успешно сменен с нового на В Работу" );
+        rm.addFlashAttribute("saveSuccess", "true");
+        return "redirect:/lead";
+    }
+    // меняем статус с нового на отправленное - конец
 
     // меняем статус с отправленное на напоминание - начало
     @PostMapping("lead/status_resend/{leadId}")

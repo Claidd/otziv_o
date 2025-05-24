@@ -92,6 +92,9 @@ const makeClient = (id) => {
         console.error(`[${id}] ❌ Не удалось пометить как прочитанное: ${err.message}`);
       }
 
+      const delayAfterRead = Math.floor(Math.random() * 5000) + 2000; // 2–7 сек
+      await delay(delayAfterRead);
+
       try {
         await axios.post(`${serverUrl}/webhook/whatsapp-reply`, {
           clientId: id,

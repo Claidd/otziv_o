@@ -9,6 +9,9 @@ import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +42,7 @@ public class OperatorController {
 
         long startTime = System.nanoTime();
         LocalDateTime now = LocalDateTime.now();
+        String userRole = getRole(principal);
 
         TelephoneIDAndTimeDTO telephone = resolveTelephoneId(token);
         boolean requireDeviceId = (telephone == null || telephone.getTelephoneID() == null);
@@ -47,21 +51,38 @@ public class OperatorController {
 
         Page<LeadDTO> leadsNew = Page.empty();
 
-        if (hasKeyword && telephone != null) {
-            // С ключом — всегда показываем лиды
-//            leadsNew = leadService.getAllLeadsToOperator(
-//                    telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
-            leadsNew = leadService.getAllLeadsToOperatorAll(
-                    telephone.getOperatorID(), keyword, principal, pageNumber, 10);
-            logExecutionTime("С ключом — загрузка лидов без проверки таймера", startTime);
 
-        } else if (!hasKeyword && telephone != null && isTimerExpired) {
-            // Без ключа — только если таймер истёк
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            if (hasKeyword && telephone != null) {
+                // С ключом — всегда показываем лиды
+                leadsNew = leadService.getAllLeadsNoStatus(keyword, principal, pageNumber, 10);
+                logExecutionTime("С ключом — загрузка лидов без проверки таймера", startTime);
+
+            } else if (!hasKeyword && telephone != null && isTimerExpired) {
+                // Без ключа — только если таймер истёк
+                leadsNew = leadService.getAllLeads(LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+                logExecutionTime("Без ключа и с истекшим таймером — загрузка лидов", startTime);
+
+            }
+        }
+
+
+        if ("ROLE_OPERATOR".equals(userRole)){
+            if (hasKeyword && telephone != null) {
+                // С ключом — всегда показываем лиды
             leadsNew = leadService.getAllLeadsToOperator(
-                    telephone.getTelephoneID(), LeadStatus.NEW.title, "", principal, pageNumber, 10);
-            logExecutionTime("Без ключа и с истекшим таймером — загрузка лидов", startTime);
+                    telephone.getTelephoneID(), LeadStatus.NEW.title, keyword, principal, pageNumber, 10);
+                logExecutionTime("С ключом — загрузка лидов без проверки таймера", startTime);
 
-        } else {
+            } else if (!hasKeyword && telephone != null && isTimerExpired) {
+                // Без ключа — только если таймер истёк
+                leadsNew = leadService.getAllLeadsToOperator(
+                        telephone.getTelephoneID(), LeadStatus.NEW.title, "", principal, pageNumber, 10);
+                logExecutionTime("Без ключа и с истекшим таймером — загрузка лидов", startTime);
+
+            }
+        }
+         else {
             logExecutionTime("Условия не выполнены — лиды не загружены", startTime);
         }
 
@@ -89,9 +110,9 @@ public class OperatorController {
     // меняем статус с нового на отправленное - начало
     @PostMapping("lead/status_to_work/{leadId}")
     public String changeStatusLeadToWork(Model model, RedirectAttributes rm, @PathVariable final Long leadId,
-                                         Principal principal){
+                                         @RequestParam(required = false) String commentsLead, Principal principal){
         log.info("вход в меняем статус с нового на В Работу");
-        leadService.changeStatusLeadToWork(leadId);
+        leadService.changeStatusLeadToWork(leadId, commentsLead);
         log.info("статус успешно сменен с нового на В Работу" );
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/operators";
@@ -119,8 +140,13 @@ public class OperatorController {
         long endTime = System.nanoTime();
         double seconds = (endTime - startTime) / 1_000_000_000.0;
         log.info("{} {} сек", label, String.format("%.4f", seconds));
-
     }
+
+    private String getRole(Principal principal) {
+        if (principal == null) return "anonymous";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
+    }// Берем роль пользователя
 }
 
 //    @GetMapping()

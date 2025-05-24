@@ -55,7 +55,6 @@ services:
     restart: always
     depends_on:
       - mysql
-
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -66,6 +65,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       DATABASE_URL: ${DATABASE_URL}
+      TZ: Asia/Irkutsk
     env_file:
       - .env
     volumes:
@@ -92,25 +92,25 @@ services:
     networks:
       internal_net:
 
-  vpn-proxy:
-    image: qmcgaw/gluetun:latest
-    cap_add:
-      - NET_ADMIN
-    environment:
-      - VPN_SERVICE_PROVIDER=custom
-      - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=+Gw0CzywSmBnqAqJ/AFxUvcdmJoLMTkYnXNVc2G4C3Q=
-      - WIREGUARD_ADDRESSES=10.64.128.252/32
-      - WIREGUARD_PUBLIC_KEY=veLqpZazR9j/Ol2G8TfrO32yEhc1i543MCN8rpy1FBA=
-      - WIREGUARD_ENDPOINT_IP=185.204.1.203
-      - WIREGUARD_ENDPOINT_PORT=51820
-      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0,::0/0
-      - FIREWALL=off
-      - HTTPPROXY=on
-      - HTTPPROXY_LOG=on
-      - DNS=10.64.0.1
-    networks:
-      - internal_net
+#  vpn-proxy:
+#    image: qmcgaw/gluetun:latest
+#    cap_add:
+#      - NET_ADMIN
+#    environment:
+#      - VPN_SERVICE_PROVIDER=custom
+#      - VPN_TYPE=wireguard
+#      - WIREGUARD_PRIVATE_KEY=+Gw0CzywSmBnqAqJ/AFxUvcdmJoLMTkYnXNVc2G4C3Q=
+#      - WIREGUARD_ADDRESSES=10.64.128.252/32
+#      - WIREGUARD_PUBLIC_KEY=veLqpZazR9j/Ol2G8TfrO32yEhc1i543MCN8rpy1FBA=
+#      - WIREGUARD_ENDPOINT_IP=185.204.1.203
+#      - WIREGUARD_ENDPOINT_PORT=51820
+#      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0,::0/0
+#      - FIREWALL=off
+#      - HTTPPROXY=on
+#      - HTTPPROXY_LOG=on
+#      - DNS=10.64.0.1
+#    networks:
+#      - internal_net
 
 
   log-viewer:
@@ -128,9 +128,9 @@ services:
 
 
   whatsapp_vika:
-    build:
-      context: .
-      dockerfile: Dockerfile.whatsapp
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.whatsapp
     image: otziv-whatsapp:latest
     container_name: whatsapp_vika
     volumes:
@@ -146,27 +146,27 @@ services:
       - internal_net
 
 
-#  whatsapp_lika:
-#    image: otziv-whatsapp:latest
-#    container_name: whatsapp_lika
-#    volumes:
-#      - ./whatsapp_auth_data/whatsapp_lika:/root/.config/whatsapp-web.js
-#    ports:
-#      - "1002:3000"
-#    restart: always
-#    depends_on:
-#      - whatsapp_vika
-#    environment:
-#      - CLIENT_ID=whatsapp_lika
-#      - SERVER_URL=http://nginx:80
-#      - AUTH_PATH=/root/.config/whatsapp-web.js
-#    networks:
-#      - internal_net
+  whatsapp_lika:
+    image: otziv-whatsapp:latest
+    container_name: whatsapp_lika
+    volumes:
+      - ./whatsapp_auth_data/whatsapp_lika:/root/.config/whatsapp-web.js
+    ports:
+      - "1002:3000"
+    restart: always
+    depends_on:
+      - whatsapp_vika
+    environment:
+      - CLIENT_ID=whatsapp_lika
+      - SERVER_URL=http://nginx:80
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+    networks:
+      - internal_net
 
   client1:
-    build:
-      context: .
-      dockerfile: Dockerfile.whatsapp
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.whatsapp
     image: otziv-whatsapp:latest
     container_name: client1
     volumes:

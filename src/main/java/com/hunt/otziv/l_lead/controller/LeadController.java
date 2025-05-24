@@ -34,28 +34,32 @@ public class LeadController {
     public ModelAndView lead(final Map<String, Object> model, @RequestParam(defaultValue = "") String keyword, Principal principal, @RequestParam(defaultValue = "0") int pageNumber) {
         long startTime = System.nanoTime();
         int pageSize = 10; // желаемый размер страницы
-        Page<LeadDTO> leadsNew = leadService.getAllLeadsToWork(LeadStatus.TO_WORK.title, keyword, principal, pageNumber, pageSize);
+        Page<LeadDTO> leadsToWork = leadService.getAllLeadsToWork(LeadStatus.TO_WORK.title, keyword, principal, pageNumber, pageSize);
+        Page<LeadDTO> leadsNew = leadService.getAllLeads(LeadStatus.NEW.title, keyword, principal, pageNumber, pageSize);
         Page<LeadDTO> leadsSend = leadService.getAllLeadsToDateReSend(LeadStatus.SEND.title, keyword, principal, pageNumber, pageSize);
 //        Page<LeadDTO> leadsReSend = leadService.getAllLeadsToDateReSend(LeadStatus.RESEND.title, keyword, principal, pageNumber, pageSize);
 //        Page<LeadDTO> leadsArchive = leadService.getAllLeadsToDateReSend(LeadStatus.ARCHIVE.title, keyword, principal, pageNumber, pageSize);
-//        Page<LeadDTO> leadsInWork = leadService.getAllLeads(LeadStatus.INWORK.title, keyword, principal, pageNumber, pageSize);
+        Page<LeadDTO> leadsInWork = leadService.getAllLeads(LeadStatus.INWORK.title, keyword, principal, pageNumber, pageSize);
         Page<LeadDTO> leadsAll = leadService.getAllLeadsNoStatus(keyword, principal, pageNumber, pageSize);
 
 
         model.put("promoTexts", promoTextService.getAllPromoTexts());
-        log.info("загрузили промо тексты");
+//        log.info("загрузили промо тексты");
+        model.put("leadsToWork", leadsToWork);
+//        log.info("загрузили В работу компании");
         model.put("leadListNew", leadsNew);
-        log.info("загрузили НОВЫЕ компании");
+//        log.info("загрузили НОВЫЕ компании");
         model.put("leadListSend", leadsSend);
-        log.info("загрузили ОТПРАВЛЕННЫЕ компании");
+//        log.info("загрузили ОТПРАВЛЕННЫЕ компании");
 //        model.put("leadListReSend", leadsReSend);
 //        log.info("загрузили НАПОМНЕННЫЕ компании");
 //        model.put("leadListArchive", leadsArchive);
 //        log.info("загрузили АРХИВ компании");
-//        model.put("leadListInWork", leadsInWork);
+        model.put("leadListInWork", leadsInWork);
 //        log.info("загрузили В РАБОТЕ компании");
         model.put("leadListALL", leadsAll);
-        log.info("загрузили ВСЕ компании");
+//        log.info("загрузили ВСЕ компании");
+        model.put("keyword", keyword);
 
         checkTimeMethod("Время выполнения LeadController/lead: ", startTime);
 
@@ -65,7 +69,7 @@ public class LeadController {
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        log.info(text + "%.4f сек%n", timeElapsed);
+        log.info("{}: {} сек.", text, String.format("%.4f", timeElapsed));
     }
 
 

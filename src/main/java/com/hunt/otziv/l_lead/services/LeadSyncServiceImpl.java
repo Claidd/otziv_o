@@ -4,6 +4,8 @@ import com.hunt.otziv.config.jwt.service.JwtService;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.l_lead.model.SyncTimestamp;
+import com.hunt.otziv.l_lead.repository.SyncTimestampRepository;
 import com.hunt.otziv.l_lead.repository.TelephoneRepository;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.LeadSyncService;
@@ -20,6 +22,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -38,6 +44,7 @@ public class LeadSyncServiceImpl implements LeadSyncService {
     private final MarketologRepository marketologRepo;
     private final TelephoneRepository telephoneRepo;
     private final JwtService jwtService;
+    private final SyncTimestampRepository syncTimestampRepository;
 
     @Value("${lead.synchrony.url}") // https://o-ogo.ru/api/leads/modified
     private String remoteSyncUrl;
@@ -47,10 +54,13 @@ public class LeadSyncServiceImpl implements LeadSyncService {
         log.info("✅ LeadSyncServiceImpl инициализирован");
     }
 
-    private LocalDateTime lastSync = LocalDateTime.now().minusHours(1); // инициализация
+//    private LocalDateTime lastSync = LocalDateTime.now().minusHours(1); // инициализация
+//    private final Path syncFile = Paths.get("last_sync.json");
 
     @Scheduled(fixedRate = 5 * 60 * 1000) // каждые 5 минут
+    @Scheduled(fixedRate = 5 * 60 * 1000)
     public void syncModifiedLeads() {
+        LocalDateTime lastSync = readLastSync();
         String url = remoteSyncUrl + "?since=" + lastSync;
         log.info("🔄 Запуск синхронизации лидов: {}", url);
 
@@ -91,12 +101,86 @@ public class LeadSyncServiceImpl implements LeadSyncService {
                 log.info("📭 Нет новых лидов для импорта");
             }
 
-            lastSync = LocalDateTime.now(); // ✅ Обновляем точку синхронизации только после обработки
+            // ✅ Пишем время по последнему лиду
+            LocalDateTime maxUpdate = Arrays.stream(dtos)
+                    .map(LeadDtoTransfer::getUpdateStatus)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(lastSync);
+
+            writeLastSync(maxUpdate);
 
         } catch (Exception e) {
             log.error("❌ Ошибка синхронизации лидов с сервера: {}", e.getMessage(), e);
         }
     }
 
+
+    private LocalDateTime readLastSync() {
+        return syncTimestampRepository.findById("lead_sync")
+                .map(SyncTimestamp::getLastSync)
+                .orElse(LocalDateTime.of(2025, 1, 1, 0, 0));
+    }
+
+    private void writeLastSync(LocalDateTime time) {
+        SyncTimestamp timestamp = new SyncTimestamp("lead_sync", time);
+        syncTimestampRepository.save(timestamp);
+    }
+
+
 }
 
+
+
+
+
+
+
+
+
+//public void syncModifiedLeads() {
+//    String url = remoteSyncUrl + "?since=" + lastSync;
+//    log.info("🔄 Запуск синхронизации лидов: {}", url);
+//
+//    try {
+//        String token = jwtService.generateSyncToken();
+//
+//        HttpHeaders headers = new HttpHeaders();
+//        headers.setBearerAuth(token);
+//
+//        HttpEntity<Void> entity = new HttpEntity<>(headers);
+//        ResponseEntity<LeadDtoTransfer[]> response = restTemplate.exchange(
+//                url,
+//                HttpMethod.GET,
+//                entity,
+//                LeadDtoTransfer[].class
+//        );
+//
+//        HttpStatus status = (HttpStatus) response.getStatusCode();
+//        log.info("📡 Ответ от сервера: {} {}", status.value(), status.getReasonPhrase());
+//
+//        LeadDtoTransfer[] dtos = response.getBody();
+//        int count = dtos != null ? dtos.length : 0;
+//
+//        if (count > 0) {
+//            log.info("📥 Получено {} лидов. Примеры: {}", count,
+//                    Arrays.stream(dtos)
+//                            .limit(3)
+//                            .map(LeadDtoTransfer::getTelephoneLead)
+//                            .toList());
+//
+//            for (LeadDtoTransfer dto : dtos) {
+//                Lead lead = leadMapper.toEntity(dto, operatorRepo, managerRepo, marketologRepo, telephoneRepo);
+//                leadService.saveOrUpdateByTelephoneLead(lead);
+//            }
+//
+//            log.info("✅ Импортировано {} лидов с сервера", count);
+//        } else {
+//            log.info("📭 Нет новых лидов для импорта");
+//        }
+//
+//        lastSync = LocalDateTime.now(); // ✅ Обновляем точку синхронизации только после обработки
+//
+//    } catch (Exception e) {
+//        log.error("❌ Ошибка синхронизации лидов с сервера: {}", e.getMessage(), e);
+//    }
+//}

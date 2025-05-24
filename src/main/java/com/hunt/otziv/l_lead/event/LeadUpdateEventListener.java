@@ -4,10 +4,6 @@ import com.hunt.otziv.l_lead.dto.LeadUpdatedEvent;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.LeadTransferService;
-import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.repository.ManagerRepository;
-import com.hunt.otziv.u_users.repository.OperatorRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,9 +41,12 @@ public class LeadUpdateEventListener {
 
     @TransactionalEventListener
     public void onLeadUpdated(LeadUpdatedEvent event) {
+        log.info("📡 Получено событие LeadUpdatedEvent для лида {}", event.leadId());
         Lead lead = leadService.findByIdOptional(event.leadId()).orElse(null);
-        if (lead == null) return;
-
+        if (lead == null) {
+            log.warn("⚠️ Лид {} не найден в базе", event.leadId());
+            return;
+        }
         leadTransferService.sendLeadUpdate(lead);
     }
 }

@@ -24,6 +24,11 @@
                                 Главная
                             </a>
                         </li>
+                        <li sec:authorize="hasAnyRole('ADMIN', 'OWNER')" class="mev__item">
+                            <a sec:authorize="isAuthenticated()" th:href="@{/lead}" class="nav__link link" aria-label="Перейти на страницу Оператора">
+                                Лиды
+                            </a>
+                        </li>
                         <li sec:authorize="hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')" class="mev__item">
                             <a sec:authorize="isAuthenticated()" th:href="@{/operators}" class="nav__link link" aria-label="Перейти на страницу Оператора">
                                 Оператор

@@ -60,7 +60,7 @@ $("#category").change(function() {
 
 
 const tabsItems = document.querySelectorAll('.tabs__btn__lead-item');
-const tabsContents = document.querySelectorAll('.tabs__content__lead-item, .tabs__content__lead-item2');
+const tabsContents = document.querySelectorAll('.tabs__content__lead-item, .tabs__content__lead-item2, .tabs__content__lead-item1');
 
 tabsItems.forEach(function(element) {
   element.addEventListener('click', open);

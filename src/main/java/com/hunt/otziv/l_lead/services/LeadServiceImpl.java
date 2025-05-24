@@ -366,7 +366,7 @@ public class LeadServiceImpl implements LeadService {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole)){
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
             log.info("Зашли список всех лидов для админа");
             if (!keywords.isEmpty()){
                 leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords,pageable);
@@ -395,21 +395,21 @@ public class LeadServiceImpl implements LeadService {
                     .collect(Collectors.toList());
             return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
         }
-        if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех лидов для Владельца");
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList,pageable);
-            }
-            else leadsPage = leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
-                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
+//        if ("ROLE_OWNER".equals(userRole)){
+//            log.info("Зашли список всех лидов для Владельца");
+//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+//            if (!keywords.isEmpty()){
+//                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList,pageable);
+//            }
+//            else leadsPage = leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
+//            leadDTOs = leadsPage.getContent()
+//                    .stream()
+//                    .map(this::toDto)
+//                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
+//                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+//                    .collect(Collectors.toList());
+//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+//        }
         return Page.empty();
     } // Взять всех лидов - к рассылке
 
@@ -425,7 +425,7 @@ public class LeadServiceImpl implements LeadService {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole)){
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
             log.info("Зашли список всех лидов для админа");
             if (!keywords.isEmpty()){
                 leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords,pageable);
@@ -454,21 +454,21 @@ public class LeadServiceImpl implements LeadService {
                     .collect(Collectors.toList());
             return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
         }
-        if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех лидов для менеджера");
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
-            }
-            else leadsPage = leadsRepository.findAllByManagerToOwner(managerList, pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
-                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
+//        if ("ROLE_OWNER".equals(userRole)){
+//            log.info("Зашли список всех лидов для менеджера");
+//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+//            if (!keywords.isEmpty()){
+//                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
+//            }
+//            else leadsPage = leadsRepository.findAllByManagerToOwner(managerList, pageable);
+//            leadDTOs = leadsPage.getContent()
+//                    .stream()
+//                    .map(this::toDto)
+//                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+//                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
+//                    .collect(Collectors.toList());
+//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+//        }
         return Page.empty();
     } // Взять всех лидов без статуса - конец
 
@@ -563,13 +563,19 @@ public class LeadServiceImpl implements LeadService {
 
     @Override
     @Transactional
-    public void changeStatusLeadToWork(Long leadId) {
+    public void changeStatusLeadToWork(Long leadId, String newComment) {
         log.info("🚀 Начинаем обработку перевода лида {} в статус TO_WORK", leadId);
 
         Lead lead = findByLeadId(leadId).orElseThrow(() -> {
             log.error("❌ Лид с ID {} не найден в системе", leadId);
             return new UsernameNotFoundException(String.format("Пользователь с ID '%s' не найден", leadId));
         });
+
+        // Обновляем комментарий, если он изменился
+        if (newComment != null && !newComment.equals(lead.getCommentsLead())) {
+            log.info("📝 Обновляем комментарий лида: {} → {}", lead.getCommentsLead(), newComment);
+            lead.setCommentsLead(newComment);
+        }
 
         Operator operator = lead.getOperator();
         log.info("🔄 Назначаем менеджера на основе счётчика оператора (ID: {}, Count: {})", operator.getId(), operator.getCount());

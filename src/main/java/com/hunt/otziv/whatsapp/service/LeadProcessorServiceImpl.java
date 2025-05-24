@@ -3,7 +3,9 @@ package com.hunt.otziv.whatsapp.service;
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.l_lead.services.serv.LeadStatusService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
@@ -16,6 +18,7 @@ import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.validator.internal.util.stereotypes.Lazy;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -69,6 +72,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private final HelloTextService helloTextService;
     private final LeadEventPublisher leadEventPublisher;
     private final RandomTextService randomTextService;
+    private final LeadStatusService leadStatusService;
 
     private final TaskExecutor taskExecutor;
 
@@ -76,7 +80,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private static final AtomicBoolean notificationSent = new AtomicBoolean(false);
 
     public static final String STATUS_NEW = "Новый";
-    public static final String STATUS_SENT = "К рассылке";
+    public static final String STATUS_SENT = LeadStatus.SEND.title;
     public static final String STATUS_FAIL = "Ошибка";
 
     private List<WhatsAppProperties.ClientConfig> operatorClients;
@@ -101,7 +105,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             AdminNotifierService adminNotifierService,
             ObjectProvider<LeadSenderServiceImpl> leadSenderServiceProvider,
             TelephoneService telephoneService,
-            HelloTextService helloTextService, OfferTextService offerTextService, LeadEventPublisher leadEventPublisher, RandomTextService randomTextService,
+            HelloTextService helloTextService, LeadEventPublisher leadEventPublisher, RandomTextService randomTextService,
+            LeadStatusService leadStatusService,
             @Qualifier("leadDispatcherExecutor") TaskExecutor taskExecutor
     ) {
         this.leadRepository = leadRepository;
@@ -112,19 +117,19 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         this.helloTextService = helloTextService;
         this.leadEventPublisher = leadEventPublisher;
         this.randomTextService = randomTextService;
+        this.leadStatusService = leadStatusService;
         this.taskExecutor = taskExecutor;
     }
 
 
 
-    @Transactional
     @Override
     public void processLead(WhatsAppProperties.ClientConfig client) {
         if (startTime == null) {
             startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
         }
 
-        String digits = client.getId().replaceAll("\\D+", ""); // оставляем только цифры
+        String digits = client.getId().replaceAll("\\D+", "");
         Long telephoneId;
         try {
             telephoneId = Long.valueOf(digits);
@@ -132,7 +137,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             log.error("❌ Невозможно извлечь ID телефона из clientId='{}'", client.getId(), e);
             return;
         }
-        log.info("\uD83D\uDCDE telephoneId: {}", telephoneId);
+        log.info("📞 telephoneId: {}", telephoneId);
 
         if (operatorClients == null) {
             operatorClients = Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).getActiveOperatorClients();
@@ -142,7 +147,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 telephoneId, STATUS_NEW, LocalDate.now());
 
         if (leadOpt.isEmpty()) {
-            log.info("\uD83D\uDD01 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
+            log.info("📭 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
             finishedClients.add(client.getId());
             Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
             checkAllClientsFinished();
@@ -150,11 +155,14 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         Lead lead = leadOpt.get();
-        log.info("\uD83D\uDCE9 Обрабатываем лид: {}", lead);
+        log.info("📦 Обрабатываем лид: {}", lead);
 
-        int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
+        // Сохраняем статус и публикуем событие (в транзакции)
+        leadStatusService.prepareLeadForSending(lead, STATUS_SENT);
 
+        // Отправка сообщения — асинхронно
         taskExecutor.execute(() -> {
+            int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
             try {
                 TimeUnit.SECONDS.sleep(delaySeconds);
             } catch (InterruptedException e) {
@@ -165,7 +173,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             int sentToday = dailyMessageCount.get(client.getId()).incrementAndGet();
 
             if (sentToday > dailyMessageLimit) {
-                log.warn("\uD83D\uDD1B Превышен лимит {} сообщений в день для клиента {}. Останавливаем.", dailyMessageLimit, client.getId());
+                log.warn("🚫 Превышен лимит {} сообщений в день для клиента {}", dailyMessageLimit, client.getId());
                 finishedClients.add(client.getId());
                 Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
                 checkAllClientsFinished();
@@ -176,11 +184,6 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
 
             if (result != null && !result.isBlank() && result.contains("ok")) {
-                lead.setLidStatus(STATUS_SENT);
-                lead.setUpdateStatus(LocalDateTime.now());
-                leadRepository.save(lead);
-                leadEventPublisher.publishUpdate(lead);
-
                 failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
                 statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
                 statsPerClient.get(client.getId()).incrementSuccess(lead.getId());
@@ -200,6 +203,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             }
         });
     }
+
 
     // остальная часть кода без изменений...
 
@@ -270,10 +274,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             checkAllClientsFinished();
         }
 
-        lead.setLidStatus(STATUS_FAIL);
-        lead.setUpdateStatus(LocalDateTime.now());
-        leadRepository.save(lead);
-        leadEventPublisher.publishUpdate(lead);
+        leadStatusService.prepareLeadForSending(lead, STATUS_FAIL);
+
     }
 
     @Override

@@ -456,11 +456,27 @@ body {
 /* Меняет количество */
 
 .tabs__content__lead-item1{
-    display: flex;
+    display: none;
     justify-content: center;
     align-items: center;
     margin-top: 5rem;
 }
+
+.card__textarea__lead {
+    width: 100%;
+    min-height: 60px;
+    border-radius: 16px;
+    border: 1px solid #ccc;
+    padding: 8px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.card__textarea__lead:focus::placeholder {
+    color: transparent;
+}
+
 .card__remember {
     display: flex;
     flex-direction: row;
@@ -562,6 +578,10 @@ body {
 }
 
 .tabs__content__lead-item2.tabs__content__lead-item--active {
+    display: grid;
+}
+
+.tabs__content__lead-item1.tabs__content__lead-item--active {
     display: grid;
 }
 

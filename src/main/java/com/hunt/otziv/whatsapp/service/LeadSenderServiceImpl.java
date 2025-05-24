@@ -53,8 +53,6 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         resetClientStates();
     }
 
-
-
     public void resetClientStates() {
         activeClients.clear();
         for (WhatsAppProperties.ClientConfig client : clients) {
@@ -64,7 +62,11 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("🔄 Состояния всех клиентов сброшены и активированы");
     }
 
-    @Scheduled(cron = "0 0 6 * * *") // каждый день в 6:00
+
+
+
+
+    @Scheduled(cron = "0 45 23 * * *") // каждый день в 6:00
     public void startDailyDispatch() {
         log.info("⏰ Ежедневный запуск рассылки для всех клиентов");
 

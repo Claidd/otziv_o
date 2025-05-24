@@ -91,7 +91,7 @@ public interface LeadService {
 
     void saveOrUpdateByTelephoneLead(Lead incomingLead);
 
-    void changeStatusLeadToWork(Long leadId);
+    void changeStatusLeadToWork(Long leadId, String commentsLead);
 
     Page<LeadDTO> getAllLeadsToWork(String title, String keyword, Principal principal, int pageNumber, int pageSize);
 
