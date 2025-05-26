@@ -30,29 +30,26 @@ public class ReplyServiceImpl implements ReplyService {
     private final OfferService offerService;
     private final NotificationService notificationService;
     private final OfferTextService offerTextService;
-//    private final RandomTextService randomTextService;
 
     private List<String> offerList;
-//    private List<String> randomList;
 
     @PostConstruct
     public void initOfferTexts() {
         this.offerList = offerTextService.findAllTexts();
-        log.info("📄 Загружено {} офферов", offerList.size());
-//        this.randomList = randomTextService.findAllTexts();
-//        log.info("📄 Загружено {} рандомных текстов", randomList.size());
+        log.info("\n════════════════════════════════════════════════════\n📄 [INIT] Загружено {} офферов\n════════════════════════════════════════════════════", offerList.size());
     }
 
     @Override
     public void processIncomingReply(WhatsAppReplyDTO reply) {
-        log.info("📩 Ответ от клиента {} ({}): {}", reply.getClientId(), reply.getFrom(), reply.getMessage());
+        log.info("\n🟦 [REPLY] Входящий ответ от клиента\n├─ Клиент: {}\n├─ Телефон: {}\n└─ Сообщение: {}",
+                reply.getClientId(), reply.getFrom(), reply.getMessage());
 
         String telephoneNumber = reply.getFrom().replaceAll("@c\\.us$", "");
-        log.info("📞 Извлечён номер телефона: {}", telephoneNumber);
+        log.debug("🔍 Извлечён номер телефона: {}", telephoneNumber);
 
         Optional<Lead> leadOpt = leadService.getByTelephoneLead(telephoneNumber);
         if (leadOpt.isEmpty()) {
-            log.warn("❌ Не удалось найти Лид по номеру {} ", telephoneNumber);
+            log.warn("❌ Не найден лид по номеру {}", telephoneNumber);
             return;
         }
 
@@ -63,13 +60,13 @@ public class ReplyServiceImpl implements ReplyService {
             List<String> declineKeywords = List.of("нет", "не надо", "не нужно", "отстаньте", "не интересует", "не хочу", "спам", "хватит", "отпишитесь");
 
             if (declineKeywords.stream().anyMatch(messageText::contains)) {
-                log.info("⛔ Клиент {} отказался в сообщении: '{}'. Оффер не отправляем.", telephoneNumber, messageText);
+                log.info("⛔ Клиент отказался: '{}'", messageText);
                 return;
             }
 
             Telephone telephone = lead.getTelephone();
             if (telephone == null) {
-                log.warn("⚠️ У лида {} нет привязанного телефона. Пропускаем отправку", lead.getId());
+                log.warn("⚠️ У лида {} нет привязанного телефона", lead.getId());
                 return;
             }
 
@@ -78,22 +75,17 @@ public class ReplyServiceImpl implements ReplyService {
                 log.warn("⚠️ Список offerList пуст — оффер не будет отправлен");
                 return;
             }
-            String offerText = offerList.get(ThreadLocalRandom.current().nextInt(offerList.size()));
 
+            String offerText = offerList.get(ThreadLocalRandom.current().nextInt(offerList.size()));
             offerService.sendOfferAsync(lead, clientId, telephoneNumber, offerText);
-            log.info("⏳ Оффер поставлен в очередь на отправку клиенту {}", telephoneNumber);
+            log.info("📨 Оффер поставлен в очередь: клиент {}", telephoneNumber);
         } else {
-            // ✅ если оффер уже был отправлен — проверяем на наличие ссылки
             notifyAdminIfMessageContainsLink(lead, reply);
-            log.info("✅ Оффер уже был отправлен ранее клиенту {}", telephoneNumber);
+            log.info("✅ Оффер уже отправлялся ранее клиенту {}", telephoneNumber);
         }
     }
 
-
-    private static final Pattern LINK_PATTERN = Pattern.compile(
-            "(https?://\\S+|www\\.\\S+|t\\.me/\\S+|vk\\.com/\\S+)", Pattern.CASE_INSENSITIVE
-    );
-
+    private static final Pattern LINK_PATTERN = Pattern.compile("(https?://\\S+|www\\.\\S+|t\\.me/\\S+|vk\\.com/\\S+)", Pattern.CASE_INSENSITIVE);
     private final List<Long> adminChatIds = List.of(794146111L, 828987226L);
 
     private void notifyAdminIfMessageContainsLink(Lead lead, WhatsAppReplyDTO reply) {
@@ -107,7 +99,7 @@ public class ReplyServiceImpl implements ReplyService {
                 ? "✅ *Клиент прислал ССЫЛКУ после оффера!*"
                 : "\uD83D\uDD14 *Клиент ОТВЕТИЛ после оффера!*";
 
-        String msg = """
+        String msg = String.format("""
             %s
 
             🆔*Телефон :* `%s`
@@ -115,18 +107,15 @@ public class ReplyServiceImpl implements ReplyService {
 
             📩 *Сообщение:*
             %s
-            """.formatted(
+            """,
                 header,
                 escapeMarkdown(clientId),
                 escapeMarkdown(telephone),
-                escapeMarkdown(message)
-        );
+                escapeMarkdown(message));
 
-        notificationService.sendAdminAlert(msg, adminChatIds); // асинхронно
-        log.info("📨 Уведомление обрабатывается асинхронно для {}", telephone);
+        notificationService.sendAdminAlert(msg, adminChatIds);
+        log.info("📢 Уведомление отправлено админам: {}", telephone);
     }
-
-
 
     private String escapeMarkdown(String text) {
         if (text == null) return "";
@@ -138,16 +127,14 @@ public class ReplyServiceImpl implements ReplyService {
                 .replace(">", "\\>");
     }
 
-
-
     @Override
     public void processGroupReply(WhatsAppGroupReplyDTO reply) {
-        log.info("👥 Ответ из группы '{}': от {} — {} id группы - {}", reply.getGroupName(), reply.getFrom(), reply.getMessage(), reply.getGroupId());
+        log.info("\n🟦 [GROUP REPLY] Группа '{}'\n├─ От: {}\n├─ Сообщение: {}\n└─ GroupId: {}",
+                reply.getGroupName(), reply.getFrom(), reply.getMessage(), reply.getGroupId());
 
         Optional<Company> optCompany = companyService.findByGroupId(reply.getGroupId());
 
         if (optCompany.isEmpty()) {
-            // ⛑ fallback — пробуем по номеру и названию группы
             String telephoneNumber = reply.getFrom().replaceAll("@c\\.us$", "");
             String rawName = reply.getGroupName();
             String title = rawName.contains(".") ? rawName.substring(0, rawName.indexOf(".")) : rawName;
@@ -155,23 +142,20 @@ public class ReplyServiceImpl implements ReplyService {
             optCompany = companyService.getCompanyByTelephonAndTitle(telephoneNumber, title);
 
             if (optCompany.isEmpty()) {
-                log.warn("❌ Не удалось найти компанию по номеру {} и названию '{}'", telephoneNumber, title);
+                log.warn("❌ Компания не найдена по номеру {} и названию '{}'", telephoneNumber, title);
                 return;
             }
 
             Company found = optCompany.get();
-
             if (found.getGroupId() == null || found.getGroupId().isBlank()) {
                 found.setGroupId(reply.getGroupId());
                 companyService.save(found);
-                log.info("📌 Привязали компанию '{}' к ID группы {}", found.getTitle(), reply.getGroupId());
+                log.info("📌 Компания '{}' привязана к GroupId {}", found.getTitle(), reply.getGroupId());
             }
         }
-
-//        Company company = optCompany.get();
-        // здесь можно продолжить работу с компанией (например, сохранить ответ в историю)
     }
-
 }
+
+
 
 

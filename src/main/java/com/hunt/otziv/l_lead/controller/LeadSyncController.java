@@ -62,14 +62,17 @@ public class LeadSyncController {
 
     @PostMapping(value = "/update", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, String>> updateLead(@RequestBody LeadUpdateDto dto) {
-        log.info("📥 Получен LeadUpdateDto: {}", dto);
+        log.info("\n==================== [SYNC UPDATE] ====================");
+        log.info("📥 [SYNC] Получен LeadUpdateDto: {}", dto);
 
         if (dto.getLeadId() == null) {
+            log.warn("🟥 [SYNC] Отсутствует leadId в запросе");
             return ResponseEntity.badRequest().body(Map.of("error", "Missing leadId"));
         }
 
         Lead lead = leadRepository.findById(dto.getLeadId()).orElse(null);
         if (lead == null) {
+            log.warn("🟥 [SYNC] Лид с ID {} не найден", dto.getLeadId());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Lead not found"));
         }
 
@@ -78,8 +81,9 @@ public class LeadSyncController {
         leadRepository.save(lead);
 
         Map<String, String> changes = collectChangedFields(oldCopy, lead);
-        log.info("✅ Лид #{} обновлён на сервере", lead.getId());
-        changes.forEach((key, value) -> log.info("🔄 {}: {}", key, value));
+        log.info("🟩 [SYNC] ✅ Лид #{} обновлён на сервере", lead.getId());
+        changes.forEach((key, value) -> log.info("🔄 [SYNC] {}: {}", key, value));
+        log.info("==================== [END SYNC UPDATE] ====================\n");
 
         return ResponseEntity.ok(changes);
     }
@@ -102,96 +106,46 @@ public class LeadSyncController {
                 .build();
     }
 
-
-
     private Map<String, String> collectChangedFields(Lead oldLead, Lead newLead) {
         Map<String, String> changes = new LinkedHashMap<>();
 
         if (!Objects.equals(oldLead.getTelephoneLead(), newLead.getTelephoneLead())) {
             String change = oldLead.getTelephoneLead() + " → " + newLead.getTelephoneLead();
             changes.put("📞 Телефон", change);
-            log.info("📞 Телефон: {}", change);
         }
 
         if (!Objects.equals(oldLead.getCityLead(), newLead.getCityLead())) {
             String change = oldLead.getCityLead() + " → " + newLead.getCityLead();
             changes.put("🌆 Город", change);
-            log.info("🌆 Город: {}", change);
         }
 
         if (!Objects.equals(oldLead.getCommentsLead(), newLead.getCommentsLead())) {
             String change = oldLead.getCommentsLead() + " → " + newLead.getCommentsLead();
             changes.put("💬 Комментарий", change);
-            log.info("💬 Комментарий: {}", change);
         }
 
         if (!Objects.equals(oldLead.getLidStatus(), newLead.getLidStatus())) {
             String change = oldLead.getLidStatus() + " → " + newLead.getLidStatus();
             changes.put("📋 Статус", change);
-            log.info("📋 Статус: {}", change);
         }
-
 
         if (!Objects.equals(oldLead.getManager(), newLead.getManager())) {
             String change = safeUserId(oldLead.getManager()) + " → " + safeUserId(newLead.getManager());
             changes.put("🧑‍💼 Менеджер", change);
-            log.info("🧑‍💼 Менеджер: {}", change);
         }
 
         if (!Objects.equals(oldLead.getOperator(), newLead.getOperator())) {
             String change = safeUserId(oldLead.getOperator()) + " → " + safeUserId(newLead.getOperator());
             changes.put("🎧 Оператор", change);
-            log.info("🎧 Оператор: {}", change);
         }
 
         if (!Objects.equals(oldLead.getMarketolog(), newLead.getMarketolog())) {
             String change = safeUserId(oldLead.getMarketolog()) + " → " + safeUserId(newLead.getMarketolog());
             changes.put("📈 Маркетолог", change);
-            log.info("📈 Маркетолог: {}", change);
         }
 
         return changes;
     }
-
-
-    private void logChangedFields(Lead oldLead, Lead newLead) {
-        if (!Objects.equals(oldLead.getTelephoneLead(), newLead.getTelephoneLead())) {
-            log.info("📞 Телефон: {} → {}", oldLead.getTelephoneLead(), newLead.getTelephoneLead());
-        } else {
-            log.debug("📞 Телефон не изменился: {}", oldLead.getTelephoneLead());
-        }
-
-        if (!Objects.equals(oldLead.getCityLead(), newLead.getCityLead())) {
-            log.info("🌆 Город: {} → {}", oldLead.getCityLead(), newLead.getCityLead());
-        } else {
-            log.debug("🌆 Город не изменился: {}", oldLead.getCityLead());
-        }
-
-        if (!Objects.equals(oldLead.getLidStatus(), newLead.getLidStatus())) {
-            log.info("📋 Статус: {} → {}", oldLead.getLidStatus(), newLead.getLidStatus());
-        } else {
-            log.debug("📋 Статус не изменился: {}", oldLead.getLidStatus());
-        }
-
-        if (!Objects.equals(oldLead.getCommentsLead(), newLead.getCommentsLead())) {
-            log.info("💬 Комментарий: {} → {}", oldLead.getCommentsLead(), newLead.getCommentsLead());
-        }else {
-            log.debug("📋 Комментарий не изменился: {}", oldLead.getCommentsLead());
-        }
-
-        if (!Objects.equals(oldLead.getUpdateStatus(), newLead.getUpdateStatus()))
-            log.info("🕒 Дата обновления: {} → {}", oldLead.getUpdateStatus(), newLead.getUpdateStatus());
-
-        if (!Objects.equals(oldLead.getManager(), newLead.getManager()))
-            log.info("🧑‍💼 Менеджер: {} → {}", safeUserId(oldLead.getManager()), safeUserId(newLead.getManager()));
-
-        if (!Objects.equals(oldLead.getOperator(), newLead.getOperator()))
-            log.info("🎧 Оператор: {} → {}", safeUserId(oldLead.getOperator()), safeUserId(newLead.getOperator()));
-
-        if (!Objects.equals(oldLead.getMarketolog(), newLead.getMarketolog()))
-            log.info("📈 Маркетолог: {} → {}", safeUserId(oldLead.getMarketolog()), safeUserId(newLead.getMarketolog()));
-    }
-
 
     private String safeUserId(Object obj) {
         if (obj == null) return "null";

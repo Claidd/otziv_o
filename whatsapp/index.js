@@ -86,11 +86,12 @@ const makeClient = (id) => {
       await delay(delayBeforeRead);
 
       try {
-        await msg.markAsRead();
-        console.log(`[${id}] ✅ Пометили сообщение от ${from} как прочитанное`);
+        await chat.sendSeen();
+        console.log(`[${id}] ✅ Пометили чат с ${from} как прочитанный`);
       } catch (err) {
-        console.error(`[${id}] ❌ Не удалось пометить как прочитанное: ${err.message}`);
+        console.error(`[${id}] ❌ Не удалось пометить как прочитанный: ${err.message}`);
       }
+
 
       const delayAfterRead = Math.floor(Math.random() * 5000) + 2000; // 2–7 сек
       await delay(delayAfterRead);

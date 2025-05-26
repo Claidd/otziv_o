@@ -23,8 +23,10 @@ FROM eclipse-temurin:22-jdk-alpine
 RUN apk add --no-cache curl
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
-
+# Указываем, что эта директория будет томом (для хэшей)
 VOLUME /app/logs
+VOLUME /app/sent-hashes
+
 EXPOSE 8080
 
 ## Установите метку BUILD_NO_CACHE

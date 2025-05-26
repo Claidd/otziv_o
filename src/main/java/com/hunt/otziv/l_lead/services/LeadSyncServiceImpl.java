@@ -51,18 +51,14 @@ public class LeadSyncServiceImpl implements LeadSyncService {
 
     @PostConstruct
     public void init() {
-        log.info("✅ LeadSyncServiceImpl инициализирован");
+        log.info("✅ [INIT] LeadSyncServiceImpl инициализирован");
     }
 
-//    private LocalDateTime lastSync = LocalDateTime.now().minusHours(1); // инициализация
-//    private final Path syncFile = Paths.get("last_sync.json");
-
-    @Scheduled(fixedRate = 5 * 60 * 1000) // каждые 5 минут
     @Scheduled(fixedRate = 5 * 60 * 1000)
     public void syncModifiedLeads() {
         LocalDateTime lastSync = readLastSync();
         String url = remoteSyncUrl + "?since=" + lastSync;
-        log.info("🔄 Запуск синхронизации лидов: {}", url);
+        log.info("🔄 [SYNC] Запуск синхронизации лидов: {}", url);
 
         try {
             String token = jwtService.generateSyncToken();
@@ -79,13 +75,13 @@ public class LeadSyncServiceImpl implements LeadSyncService {
             );
 
             HttpStatus status = (HttpStatus) response.getStatusCode();
-            log.info("📡 Ответ от сервера: {} {}", status.value(), status.getReasonPhrase());
+            log.info("📡 [SYNC] Ответ от сервера: {} {}", status.value(), status.getReasonPhrase());
 
             LeadDtoTransfer[] dtos = response.getBody();
             int count = dtos != null ? dtos.length : 0;
 
             if (count > 0) {
-                log.info("📥 Получено {} лидов. Примеры: {}", count,
+                log.info("📥 [SYNC] Получено {} лидов. Примеры: {}", count,
                         Arrays.stream(dtos)
                                 .limit(3)
                                 .map(LeadDtoTransfer::getTelephoneLead)
@@ -96,12 +92,11 @@ public class LeadSyncServiceImpl implements LeadSyncService {
                     leadService.saveOrUpdateByTelephoneLead(lead);
                 }
 
-                log.info("✅ Импортировано {} лидов с сервера", count);
+                log.info("🟩 [SYNC] ✅ Импортировано {} лидов с сервера", count);
             } else {
-                log.info("📭 Нет новых лидов для импорта");
+                log.info("📭 [SYNC] Нет новых лидов для импорта");
             }
 
-            // ✅ Пишем время по последнему лиду
             LocalDateTime maxUpdate = Arrays.stream(dtos)
                     .map(LeadDtoTransfer::getUpdateStatus)
                     .max(LocalDateTime::compareTo)
@@ -110,10 +105,9 @@ public class LeadSyncServiceImpl implements LeadSyncService {
             writeLastSync(maxUpdate);
 
         } catch (Exception e) {
-            log.error("❌ Ошибка синхронизации лидов с сервера: {}", e.getMessage(), e);
+            log.error("🟥 [SYNC] ❌ Ошибка синхронизации лидов с сервера: {}", e.getMessage(), e);
         }
     }
-
 
     private LocalDateTime readLastSync() {
         return syncTimestampRepository.findById("lead_sync")
@@ -125,9 +119,8 @@ public class LeadSyncServiceImpl implements LeadSyncService {
         SyncTimestamp timestamp = new SyncTimestamp("lead_sync", time);
         syncTimestampRepository.save(timestamp);
     }
-
-
 }
+
 
 
 

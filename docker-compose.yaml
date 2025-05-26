@@ -59,10 +59,12 @@ services:
       HTTPS_PROXY: http://vpn-proxy:8888
       TZ: Asia/Irkutsk
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Irkutsk
+      JAVA_OPTS: "-Xmx512m"
     env_file:
       - .env
     volumes:
       - ./data/app-logs:/app/logs
+      - ./docker/sent-hashes:/app/sent-hashes
     networks:
       - internal_net
 
@@ -303,7 +305,7 @@ services:
 
 volumes:
   mysql_data:
-  whatsapp_auth_data:
+  sent_hashes:
 
 networks:
   internal_net:

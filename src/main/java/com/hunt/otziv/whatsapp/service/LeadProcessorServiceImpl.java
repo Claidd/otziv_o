@@ -6,26 +6,23 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.serv.LeadStatusService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
-import com.hunt.otziv.text_generator.alltext.service.clas.OfferTextService;
 import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
+import com.hunt.otziv.whatsapp.service.fichi.MessageHumanizer;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.validator.internal.util.stereotypes.Lazy;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -97,6 +94,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     private List<String> myPhoneNumbers;
     private List<String> helloText;
     private List<String> randomText;
+    private final MessageHumanizer humanizer = new MessageHumanizer();
+
 
     @Autowired
     public LeadProcessorServiceImpl(
@@ -121,10 +120,21 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         this.taskExecutor = taskExecutor;
     }
 
-
+    @PostConstruct
+    public void initTextTemplates() {
+        helloText = helloTextService.findAllTexts();
+        randomText = randomTextService.findAllTexts();
+        myPhoneNumbers = Stream.concat(
+                telephoneService.getAllTelephones().stream().map(TelephoneDTO::getNumber),
+                Stream.of("79086431055", "79041256288")
+        ).toList();
+        log.info("🔃 [INIT] Инициализированы helloText, randomText и номера для контрольных отправок");
+    }
 
     @Override
     public void processLead(WhatsAppProperties.ClientConfig client) {
+        log.info("\n==================== [PROCESS LEAD] {} ====================", client.getId());
+
         if (startTime == null) {
             startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
         }
@@ -134,10 +144,10 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         try {
             telephoneId = Long.valueOf(digits);
         } catch (NumberFormatException e) {
-            log.error("❌ Невозможно извлечь ID телефона из clientId='{}'", client.getId(), e);
+            log.error("🟥 [PROCESS] ❌ Невозможно извлечь ID телефона из clientId='{}'", client.getId(), e);
             return;
         }
-        log.info("📞 telephoneId: {}", telephoneId);
+        log.info("📞 [PROCESS] telephoneId: {}", telephoneId);
 
         if (operatorClients == null) {
             operatorClients = Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).getActiveOperatorClients();
@@ -147,7 +157,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 telephoneId, STATUS_NEW, LocalDate.now());
 
         if (leadOpt.isEmpty()) {
-            log.info("📭 Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
+            log.info("📭 [PROCESS] Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
             finishedClients.add(client.getId());
             Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
             checkAllClientsFinished();
@@ -155,12 +165,16 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         Lead lead = leadOpt.get();
-        log.info("📦 Обрабатываем лид: {}", lead);
+        log.info("""
+            📨 [PROCESS LEAD DETAILS]
+            🆔 Лид ID: {}
+            📱 Телефон: {}
+            📋 Статус: {}
+            🕒 Время: {}
+            """, lead.getId(), lead.getTelephoneLead(), lead.getLidStatus(), LocalDateTime.now());
 
-        // Сохраняем статус и публикуем событие (в транзакции)
         leadStatusService.prepareLeadForSending(lead, STATUS_SENT);
 
-        // Отправка сообщения — асинхронно
         taskExecutor.execute(() -> {
             int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
             try {
@@ -173,17 +187,21 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             int sentToday = dailyMessageCount.get(client.getId()).incrementAndGet();
 
             if (sentToday > dailyMessageLimit) {
-                log.warn("🚫 Превышен лимит {} сообщений в день для клиента {}", dailyMessageLimit, client.getId());
+                log.warn("🟥 [PROCESS] 🚫 Превышен лимит {} сообщений в день для клиента {}", dailyMessageLimit, client.getId());
                 finishedClients.add(client.getId());
                 Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
                 checkAllClientsFinished();
                 return;
             }
 
-            String message = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
+
+            String rawMessage = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
+            String message = humanizer.generate(rawMessage);
+            log.debug("📨 [MESSAGE] {}", message);
             String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
 
             if (result != null && !result.isBlank() && result.contains("ok")) {
+                log.info("🟩 [PROCESS] ✅ Успешная отправка сообщения клиенту {}", client.getId());
                 failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
                 statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
                 statsPerClient.get(client.getId()).incrementSuccess(lead.getId());
@@ -199,24 +217,51 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                     controlIntervalPerClient.put(client.getId(), ThreadLocalRandom.current().nextInt(2, 6));
                 }
             } else {
+                log.warn("🟥 [PROCESS] ❌ Ошибка при отправке сообщения клиенту {}", client.getId());
                 handleFailure(client, lead);
             }
+
+            log.info("==================== [END PROCESS LEAD] {} ====================\n", client.getId());
         });
     }
 
 
-    // остальная часть кода без изменений...
+    private String normalizePhone(String rawPhone) {
+        String digits = rawPhone.replaceAll("[^\\d]", "");
+        return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
+    }
 
+    private String sendWithRetry(String clientId, String phone, String message) {
+        int maxAttempts = 2;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return whatsAppService.sendMessage(clientId, phone, message);
+            } catch (Exception e) {
+                log.warn("⚠️ [RETRY] Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
+                if (attempt == maxAttempts) {
+                    log.error("❌ [RETRY] Все попытки отправки для клиента {} исчерпаны", clientId);
+                    return null;
+                }
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
 
     private void sendControlMessage(String clientId, Long telephoneId, int delaySeconds) {
         String clientPhoneNumber = telephoneService.getTelephoneById(telephoneId).getNumber();
 
         if (myPhoneNumbers == null || myPhoneNumbers.isEmpty()) {
-            log.warn("📵 Нет своих номеров для контрольной отправки");
+            log.warn("📵 [CONTROL] Нет своих номеров для контрольной отправки");
             return;
         }
         if (randomText == null || randomText.isEmpty()) {
-            log.warn("📝 Нет текстов для контрольной отправки");
+            log.warn("📝 [CONTROL] Нет текстов для контрольной отправки");
             return;
         }
 
@@ -226,7 +271,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 .toList();
 
         if (availablePhones.isEmpty()) {
-            log.warn("📵 Нет подходящих номеров для контрольной отправки (исключая свой)");
+            log.warn("📵 [CONTROL] Нет подходящих номеров для контрольной отправки (исключая свой)");
             return;
         }
 
@@ -241,16 +286,16 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
 
             String result2 = sendWithRetry(clientId, normalizePhone(myTelephone), message2);
             if (result2 != null && !result2.isBlank() && result2.contains("ok")) {
-                log.info("📨 Отправлено контрольное сообщение на {}: {}", myTelephone, message2);
+                log.info("📨 [CONTROL] Отправлено контрольное сообщение на {}: {}", myTelephone, message2);
             } else {
-                log.warn("⚠️ Ошибка при контрольной отправке на {}: {}", myTelephone, message2);
+                log.warn("⚠️ [CONTROL] Ошибка при контрольной отправке на {}: {}", myTelephone, message2);
             }
         });
     }
 
     private void handleFailure(WhatsAppProperties.ClientConfig client, Lead lead) {
         String clientId = client.getId();
-        log.warn("⚠️ Неудачная попытка отправки для клиента {}", clientId);
+        log.warn("⚠️ [FAILURE] Неудачная попытка отправки для клиента {}", clientId);
 
         failedAttemptsPerClient.putIfAbsent(clientId, new AtomicInteger(0));
         int failures = failedAttemptsPerClient.get(clientId).incrementAndGet();
@@ -260,14 +305,14 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
 
         int globalFailures = globalFailureCounter.incrementAndGet();
         if (globalFailures >= GLOBAL_FAILURE_LIMIT) {
-            log.error("🚨 Обнаружено {} глобальных сбоев. Останавливаем всех клиентов!", globalFailures);
+            log.error("🚨 [FAILURE] Обнаружено {} глобальных сбоев. Останавливаем всех клиентов!", globalFailures);
             operatorClients.forEach(c ->
                     Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(c.getId()));
             adminNotifierService.notifyAdmin("🚨 Глобальный сбой: все клиенты отключены из-за серии ошибок");
         }
 
         if (failures >= maxFailures) {
-            log.error("🚫 Клиент {} достиг лимита ошибок. Останавливаем.", clientId);
+            log.error("🚫 [FAILURE] Клиент {} достиг лимита ошибок. Останавливаем.", clientId);
             finishedClients.add(clientId);
             Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(clientId);
             adminNotifierService.notifyAdmin(String.format("🚫 Клиент %s отключён после %d ошибок.", clientId, failures));
@@ -275,7 +320,6 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         leadStatusService.prepareLeadForSending(lead, STATUS_FAIL);
-
     }
 
     @Override
@@ -304,7 +348,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                     .append(" до ")
                     .append(endTime != null ? endTime.format(DateTimeFormatter.ofPattern("HH:mm")) : "--:--");
 
-            log.info(sb.toString());
+            log.info("\n==================== [SUMMARY] ====================\n{}\n====================================================", sb);
             adminNotifierService.notifyAdmin(sb.toString());
         }
     }
@@ -319,45 +363,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         ).toList();
         helloText = helloTextService.findAllTexts();
         randomText = randomTextService.findAllTexts();
-        log.info("♻️ Сброшены лимиты и подгружены контрольные номера и тексты");
-    }
-
-    private String sendWithRetry(String clientId, String phone, String message) {
-        int maxAttempts = 2;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                return whatsAppService.sendMessage(clientId, phone, message);
-            } catch (Exception e) {
-                log.warn("⚠️ Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
-                if (attempt == maxAttempts) {
-                    log.error("❌ Все попытки отправки для клиента {} исчерпаны", clientId);
-                    return null;
-                }
-                try {
-                    TimeUnit.SECONDS.sleep(2);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                }
-            }
-        }
-        return null;
-    }
-
-    private String normalizePhone(String rawPhone) {
-        String digits = rawPhone.replaceAll("[^\\d]", "");
-        return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
-    }
-
-    @PostConstruct
-    public void initTextTemplates() {
-        helloText = helloTextService.findAllTexts();
-        randomText = randomTextService.findAllTexts();
-        myPhoneNumbers = Stream.concat(
-                telephoneService.getAllTelephones().stream().map(TelephoneDTO::getNumber),
-                Stream.of("79086431055", "79041256288")
-        ).toList();
-        log.info("🔃 Инициализированы helloText, randomText и номера для контрольных отправок");
+        log.info("♻️ [RESET] Сброшены лимиты и подгружены контрольные номера и тексты");
     }
 
     private List<WhatsAppProperties.ClientConfig> getOperatorClients() {
@@ -366,16 +372,17 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             if (sender != null) {
                 operatorClients = sender.getActiveOperatorClients();
             } else {
-                log.warn("⚠️ LeadSenderService недоступен");
+                log.warn("⚠️ [FALLBACK] LeadSenderService недоступен");
                 operatorClients = Collections.emptyList();
             }
         }
         return operatorClients;
     }
 
-
-
 }
+
+
+
 
 
 

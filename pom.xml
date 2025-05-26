@@ -92,12 +92,12 @@
 
 
 		<!-- DOCKER -->
-<!--		<dependency>-->
-<!--					<groupId>org.springframework.boot</groupId>-->
-<!--					<artifactId>spring-boot-docker-compose</artifactId>-->
-<!--					<scope>runtime</scope>-->
-<!--					<optional>true</optional>-->
-<!--		</dependency>-->
+		<dependency>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-docker-compose</artifactId>
+					<scope>runtime</scope>
+					<optional>true</optional>
+		</dependency>
 
 			<!-- AWS SDK v2 for S3 -->
 		<dependency>
@@ -114,6 +114,14 @@
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>regions</artifactId>
 			<version>2.31.38</version>
+		</dependency>
+
+		<!-- ПЛАНИРОВЩИК -->
+		<!-- pom.xml -->
+		<dependency>
+			<groupId>com.cronutils</groupId>
+			<artifactId>cron-utils</artifactId>
+			<version>9.2.0</version>
 		</dependency>
 
 		<!-- OPENAI -->
@@ -214,6 +222,7 @@
 	</dependencies>
 
 	<build>
+		<finalName>otziv-1</finalName> <!-- 👈 добавь это -->
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

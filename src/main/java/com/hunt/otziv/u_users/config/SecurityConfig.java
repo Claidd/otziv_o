@@ -59,6 +59,7 @@ public class SecurityConfig {
                                         .requestMatchers("/webhook/**").permitAll()
                                         .requestMatchers(HttpMethod.POST, "/api/leads/update").permitAll()
                                         .requestMatchers("/api/leads/modified").permitAll()
+                                        .requestMatchers("/api/dispatch-settings/cron").permitAll()
                                         .requestMatchers("/admin/**").authenticated()
                                         .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
                                         .requestMatchers("/logs").hasAnyRole("ADMIN", "OWNER")

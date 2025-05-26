@@ -4,6 +4,7 @@ networks:
 
 volumes:
   mysql_data:
+  sent_hashes:
 
 services:
   mysql:
@@ -55,7 +56,6 @@ services:
     restart: always
     depends_on:
       - mysql
-
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -66,10 +66,13 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       DATABASE_URL: ${DATABASE_URL}
+      TZ: Asia/Irkutsk
+      JAVA_OPTS: "-Xmx512m"
     env_file:
       - .env
     volumes:
       - ./data/app-logs:/app/logs
+      - ./docker/sent-hashes:/app/sent-hashes
     networks:
       internal_net:
 
@@ -127,23 +130,23 @@ services:
       - internal_net
 
 
-  whatsapp_vika:
-    build:
-      context: .
-      dockerfile: Dockerfile.whatsapp
-    image: otziv-whatsapp:latest
-    container_name: whatsapp_vika
-    volumes:
-      - ./whatsapp_auth_data/whatsapp_vika:/root/.config/whatsapp-web.js
-    ports:
-      - "1001:3000"
-    restart: always
-    environment:
-      - CLIENT_ID=whatsapp_vika
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-    networks:
-      - internal_net
+#  whatsapp_vika:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.whatsapp
+##    image: otziv-whatsapp:latest
+#    container_name: whatsapp_vika
+#    volumes:
+#      - ./whatsapp_auth_data/whatsapp_vika:/root/.config/whatsapp-web.js
+#    ports:
+#      - "1001:3000"
+#    restart: always
+#    environment:
+#      - CLIENT_ID=whatsapp_vika
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#    networks:
+#      - internal_net
 
 
 #  whatsapp_lika:
@@ -163,40 +166,40 @@ services:
 #    networks:
 #      - internal_net
 
-  client1:
-    build:
-      context: .
-      dockerfile: Dockerfile.whatsapp
-    image: otziv-whatsapp:latest
-    container_name: client1
-    volumes:
-      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
-    ports:
-      - "3001:3000"
-    restart: always
-    environment:
-      - CLIENT_ID=client1
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-    networks:
-      - internal_net
-
-  client2:
-    image: otziv-whatsapp:latest
-    container_name: client2
-    volumes:
-      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
-    ports:
-      - "3002:3000"
-    restart: always
-    depends_on:
-      - client1
-    environment:
-      - CLIENT_ID=client2
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-    networks:
-      - internal_net
+#  client1:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.whatsapp
+#    image: otziv-whatsapp:latest
+#    container_name: client1
+#    volumes:
+#      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3001:3000"
+#    restart: always
+#    environment:
+#      - CLIENT_ID=client1
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#    networks:
+#      - internal_net
+#
+#  client2:
+#    image: otziv-whatsapp:latest
+#    container_name: client2
+#    volumes:
+#      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3002:3000"
+#    restart: always
+#    depends_on:
+#      - client1
+#    environment:
+#      - CLIENT_ID=client2
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#    networks:
+#      - internal_net
 
 #  client3:
 #    image: otziv-whatsapp:latest

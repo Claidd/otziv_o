@@ -46,6 +46,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         pathChecks.put("/api/leads/import", this::checkImportAuth);
         pathChecks.put("/api/leads/modified", this::checkSyncAuth);
         pathChecks.put("/api/leads/update", this::checkSyncAuth);
+        pathChecks.put("/api/dispatch-settings/cron", this::checkSyncAuth);
     }
 
     @Override
