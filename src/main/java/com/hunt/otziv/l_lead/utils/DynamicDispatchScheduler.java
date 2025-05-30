@@ -13,6 +13,7 @@ import com.hunt.otziv.whatsapp.service.LeadSenderServiceImpl;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -33,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "lead.sync.outbound.enabled", havingValue = "true", matchIfMissing = false)
 public class DynamicDispatchScheduler {
 
     private final DispatchSettingsRepository settingsRepository;
@@ -46,6 +48,7 @@ public class DynamicDispatchScheduler {
     public void scheduleInitialTask() {
         scheduleNext();
     }
+
 
     private void scheduleNext() {
         String cron = settingsRepository.findById(1L)

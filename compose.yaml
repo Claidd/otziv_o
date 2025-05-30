@@ -166,57 +166,63 @@ services:
 #    networks:
 #      - internal_net
 
-#  client1:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.whatsapp
-#    image: otziv-whatsapp:latest
-#    container_name: client1
-#    volumes:
-#      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
-#    ports:
-#      - "3001:3000"
-#    restart: always
-#    environment:
-#      - CLIENT_ID=client1
-#      - SERVER_URL=http://nginx:80
-#      - AUTH_PATH=/root/.config/whatsapp-web.js
-#    networks:
-#      - internal_net
+  client1:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    image: otziv-whatsapp:latest
+    container_name: client1
+    volumes:
+      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
+    ports:
+      - "3001:3000"
+    restart: always
+    environment:
+      - CLIENT_ID=client1
+      - SERVER_URL=http://nginx:80
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+      - PROXY_URL=socks5://192.168.3.151:1080
+    networks:
+      - internal_net
 #
-#  client2:
-#    image: otziv-whatsapp:latest
-#    container_name: client2
-#    volumes:
-#      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
-#    ports:
-#      - "3002:3000"
-#    restart: always
-#    depends_on:
-#      - client1
-#    environment:
-#      - CLIENT_ID=client2
-#      - SERVER_URL=http://nginx:80
-#      - AUTH_PATH=/root/.config/whatsapp-web.js
-#    networks:
-#      - internal_net
+  client2:
+    image: otziv-whatsapp:latest
+    container_name: client2
+    volumes:
+      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
+    ports:
+      - "3002:3000"
+    restart: always
+    depends_on:
+      - client1
+    environment:
+      - CLIENT_ID=client2
+      - SERVER_URL=http://nginx:80
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+      - PROXY_URL=socks5://192.168.3.152:1080
+    networks:
+      - internal_net
 
-#  client3:
+  client3:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
 #    image: otziv-whatsapp:latest
-#    container_name: client3
-#    volumes:
-#      - ./whatsapp_auth_data/client3:/root/.config/whatsapp-web.js
-#    ports:
-#      - "3003:3000"
-#    restart: always
+    container_name: client3
+    volumes:
+      - ./whatsapp_auth_data/client3:/root/.config/whatsapp-web.js
+    ports:
+      - "3003:3000"
+    restart: always
 #    depends_on:
 #      - client2
-#    environment:
-#      - CLIENT_ID=client3
-#      - SERVER_URL=http://nginx:80
-#      - AUTH_PATH=/root/.config/whatsapp-web.js
-#    networks:
-#      - internal_net
+    environment:
+      - CLIENT_ID=client3
+      - SERVER_URL=http://nginx:80
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+      - PROXY_URL=socks5://192.168.3.153:1080
+    networks:
+      - internal_net
 #
 #
 #  client4:
