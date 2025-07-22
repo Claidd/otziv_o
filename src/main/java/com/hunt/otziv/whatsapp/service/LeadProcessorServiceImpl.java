@@ -1,5 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -11,6 +13,7 @@ import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
 import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
+import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.service.fichi.MessageHumanizer;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
@@ -22,13 +25,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,6 +51,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
 
     @Value("${whatsapp.ban-protection.dailyLimit:30}")
     private int dailyMessageLimit;
+
 
     @Value("${whatsapp.ban-protection.minDelay:5}")
     private int minDelay;
@@ -165,13 +169,26 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         }
 
         Lead lead = leadOpt.get();
+
+        // Проверяем только регистрацию в WhatsApp
+        Optional<WhatsAppUserStatusDto> userStatusOpt = whatsAppService.checkActiveUser(client.getId(), normalizePhone(lead.getTelephoneLead()));
+        if (userStatusOpt.isEmpty() || Boolean.FALSE.equals(userStatusOpt.get().getRegistered())) {
+            log.warn("📵 Номер {} НЕ зарегистрирован в WhatsApp — отправка запрещена", lead.getTelephoneLead());
+            leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+
+            statsPerClient.putIfAbsent(client.getId(),
+                    new StatDto(client.getId(), 0, 0, 0, 0, 0,null, null, new HashSet<>()));
+            statsPerClient.get(client.getId()).incrementNoWhatsApp(lead.getId());
+            return;
+        }
+
         log.info("""
-            📨 [PROCESS LEAD DETAILS]
-            🆔 Лид ID: {}
-            📱 Телефон: {}
-            📋 Статус: {}
-            🕒 Время: {}
-            """, lead.getId(), lead.getTelephoneLead(), lead.getLidStatus(), LocalDateTime.now());
+    📨 [PROCESS LEAD DETAILS]
+    🆔 Лид ID: {}
+    📱 Телефон: {}
+    📋 Статус: {}
+    🕒 Время: {}
+    """, lead.getId(), lead.getTelephoneLead(), lead.getLidStatus(), LocalDateTime.now());
 
         leadStatusService.prepareLeadForSending(lead, STATUS_SENT);
 
@@ -194,16 +211,26 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 return;
             }
 
-
             String rawMessage = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
             String message = humanizer.generate(rawMessage);
             log.debug("📨 [MESSAGE] {}", message);
-            String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message);
+            String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message, lead);
+
+            if ("not_whatsapp".equals(result)) {
+                log.warn("📵 Номер {} не зарегистрирован в WhatsApp — устанавливаем статус 'нет ватсап'", lead.getTelephoneLead());
+                leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+
+                statsPerClient.putIfAbsent(client.getId(),
+                        new StatDto(client.getId(), 0, 0, 0, 0, 0, null, null, new HashSet<>()));
+                statsPerClient.get(client.getId()).incrementNoWhatsApp(lead.getId());
+                return;
+            }
 
             if (result != null && !result.isBlank() && result.contains("ok")) {
                 log.info("🟩 [PROCESS] ✅ Успешная отправка сообщения клиенту {}", client.getId());
                 failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
-                statsPerClient.putIfAbsent(client.getId(), new StatDto(client.getId(), 0, 0, null, null, new HashSet<>()));
+                statsPerClient.putIfAbsent(client.getId(),
+                        new StatDto(client.getId(), 0, 0, 0, 0, 0, null, null, new HashSet<>()));
                 statsPerClient.get(client.getId()).incrementSuccess(lead.getId());
                 globalFailureCounter.set(0);
 
@@ -226,22 +253,51 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     }
 
 
+
+
+
     private String normalizePhone(String rawPhone) {
         String digits = rawPhone.replaceAll("[^\\d]", "");
         return digits.startsWith("8") ? "7" + digits.substring(1) : digits;
     }
 
-    private String sendWithRetry(String clientId, String phone, String message) {
+
+
+    private String sendWithRetry(String clientId, String phone, String message, Lead lead) {
         int maxAttempts = 2;
+
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                return whatsAppService.sendMessage(clientId, phone, message);
+                String response = whatsAppService.sendMessage(clientId, phone, message);
+
+                if (response == null || response.isBlank()) {
+                    log.warn("⚠️ [RETRY] Пустой ответ от клиента {}", clientId);
+                    continue;
+                }
+
+                if (response.contains("\"status\":\"not_whatsapp\"")) {
+                    log.warn("📵 [CHECK] Номер {} не зарегистрирован в WhatsApp", phone);
+                    return "not_whatsapp";
+                }
+
+                if (response.contains("\"status\":\"ok\"")) {
+                    return "ok";
+                }
+
+                if (response.contains("\"status\":\"error\"")) {
+                    log.error("❌ [RETRY] Ошибка отправки от клиента {}: {}", clientId, response);
+                    continue;
+                }
+
+                return response;
+
             } catch (Exception e) {
                 log.warn("⚠️ [RETRY] Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
                 if (attempt == maxAttempts) {
                     log.error("❌ [RETRY] Все попытки отправки для клиента {} исчерпаны", clientId);
                     return null;
                 }
+
                 try {
                     TimeUnit.SECONDS.sleep(2);
                 } catch (InterruptedException ex) {
@@ -250,8 +306,31 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 }
             }
         }
+
         return null;
     }
+
+
+
+
+
+
+
+
+    private String extractJsonValue(String json, String key) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(json);
+            JsonNode valueNode = node.get(key);
+            return valueNode != null ? valueNode.asText() : null;
+        } catch (Exception e) {
+            log.warn("⚠️ [PARSE] Ошибка разбора JSON ({}): {}", key, e.getMessage());
+            return null;
+        }
+    }
+
+
+
 
     private void sendControlMessage(String clientId, Long telephoneId, int delaySeconds) {
         String clientPhoneNumber = telephoneService.getTelephoneById(telephoneId).getNumber();
@@ -284,7 +363,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 Thread.currentThread().interrupt();
             }
 
-            String result2 = sendWithRetry(clientId, normalizePhone(myTelephone), message2);
+            String result2 = sendWithRetry(clientId, normalizePhone(myTelephone), message2, null);
             if (result2 != null && !result2.isBlank() && result2.contains("ok")) {
                 log.info("📨 [CONTROL] Отправлено контрольное сообщение на {}: {}", myTelephone, message2);
             } else {
@@ -300,7 +379,9 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         failedAttemptsPerClient.putIfAbsent(clientId, new AtomicInteger(0));
         int failures = failedAttemptsPerClient.get(clientId).incrementAndGet();
 
-        statsPerClient.putIfAbsent(clientId, new StatDto(clientId, 0, 0, null, null, new HashSet<>()));
+        statsPerClient.putIfAbsent(client.getId(),
+                new StatDto(client.getId(), 0, 0, 0, 0, 0, null, null, new HashSet<>()));
+
         statsPerClient.get(clientId).incrementFail(lead.getId());
 
         int globalFailures = globalFailureCounter.incrementAndGet();
@@ -330,7 +411,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             endTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
 
             int totalSuccess = statsPerClient.values().stream().mapToInt(StatDto::getSuccess).sum();
-            int totalFail = statsPerClient.values().stream().mapToInt(StatDto::getFail).sum();
+            int totalFailOnly = statsPerClient.values().stream().mapToInt(StatDto::getFail).sum();
+            int totalNoWhatsApp = statsPerClient.values().stream().mapToInt(StatDto::getNoWhatsApp).sum();
 
             StringBuilder sb = new StringBuilder("📈 Итог рассылки по всем клиентам:\n");
             statsPerClient.values().forEach(stat -> sb.append(stat.toReportLine()).append("\n"));
@@ -338,9 +420,11 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             sb.append("\n📊 Всего отправлено: ✅ ")
                     .append(totalSuccess)
                     .append(" / ❌ ")
-                    .append(totalFail)
+                    .append(totalFailOnly)
+                    .append(" / 🚫 ")
+                    .append(totalNoWhatsApp)
                     .append(" (итого: ")
-                    .append(totalSuccess + totalFail)
+                    .append(totalSuccess + totalFailOnly + totalNoWhatsApp)
                     .append(")");
 
             sb.append(" 🕓 Время: с ")
@@ -352,6 +436,8 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             adminNotifierService.notifyAdmin(sb.toString());
         }
     }
+
+
 
     public void resetState() {
         failedAttemptsPerClient.clear();
@@ -379,6 +465,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
         return operatorClients;
     }
 
+
 }
 
 
@@ -387,3 +474,318 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
 
 
 
+//        Optional<Boolean> registeredOpt = whatsAppService.isRegisteredInWhatsApp(client.getId(), normalizePhone(lead.getTelephoneLead()));
+//        boolean notRegisteredOrUnknown = registeredOpt.isEmpty() || Boolean.FALSE.equals(registeredOpt.get());
+//
+//        if (notRegisteredOrUnknown) {
+//            if (registeredOpt.isEmpty()) {
+//                log.warn("📵 Не удалось определить, зарегистрирован ли номер {} в WhatsApp — отправка запрещена", lead.getTelephoneLead());
+//            } else {
+//                log.warn("📵 Номер {} НЕ зарегистрирован в WhatsApp — отправка запрещена", lead.getTelephoneLead());
+//            }
+//
+//            leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+//
+//            statsPerClient.putIfAbsent(client.getId(),
+//                    new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//            statsPerClient.get(client.getId()).incrementNoWhatsApp(lead.getId());
+//            return;
+//        }
+//
+//        Optional<LocalDateTime> lastSeenOpt = whatsAppService.fetchLastSeen(client.getId(), normalizePhone(lead.getTelephoneLead()));
+//        if (lastSeenOpt.isPresent()) {
+//            LocalDateTime lastSeen = lastSeenOpt.get();
+//            if (lastSeen.isBefore(LocalDateTime.now().minusDays(2))) {
+//                log.warn("⛔ [SKIP] Лид {} не обрабатывается — lastSeen более 2 дней назад: {}", lead.getId(), lastSeen);
+//                leadStatusService.prepareLeadForSending(lead, "Не в сети");
+//
+//                statsPerClient.putIfAbsent(client.getId(),
+//                        new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//                statsPerClient.get(client.getId()).incrementNotOnline(lead.getId());
+//                return;
+//            }
+//        } else {
+//            log.warn("📴 [SKIP] Не удалось определить lastSeen — отправка запрещена");
+//            leadStatusService.prepareLeadForSending(lead, "Не в сети");
+//
+//            statsPerClient.putIfAbsent(client.getId(),
+//                    new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//            statsPerClient.get(client.getId()).incrementNotOnline(lead.getId());
+//            return;
+//        }
+
+//    private String sendWithRetry(String clientId, String phone, String message) {
+//        int maxAttempts = 2;
+//
+//        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+//            try {
+//                String response = whatsAppService.sendMessage(clientId, phone, message);
+//
+//                if (response == null || response.isBlank()) {
+//                    log.warn("⚠️ [RETRY] Пустой ответ от клиента {}", clientId);
+//                    continue;
+//                }
+//
+//                // Проверка на статус not_whatsapp
+//                if (response.contains("\"status\":\"not_whatsapp\"")) {
+//                    log.warn("📵 [CHECK] Номер {} не зарегистрирован в WhatsApp", phone);
+//                    return "not_whatsapp";
+//                }
+//
+//                if (response.contains("\"status\":\"ok\"")) {
+//                    return "ok";
+//                }
+//
+//                // Если ответ явно содержит "error"
+//                if (response.contains("\"status\":\"error\"")) {
+//                    log.error("❌ [RETRY] Ошибка отправки от клиента {}: {}", clientId, response);
+//                    continue;
+//                }
+//
+//                return response;
+//
+//            } catch (Exception e) {
+//                log.warn("⚠️ [RETRY] Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
+//                if (attempt == maxAttempts) {
+//                    log.error("❌ [RETRY] Все попытки отправки для клиента {} исчерпаны", clientId);
+//                    return null;
+//                }
+//
+//                try {
+//                    TimeUnit.SECONDS.sleep(2);
+//                } catch (InterruptedException ex) {
+//                    Thread.currentThread().interrupt();
+//                    return null;
+//                }
+//            }
+//        }
+//        return null;
+//    }
+//@Override
+//public void processLead(WhatsAppProperties.ClientConfig client) {
+//    log.info("\n==================== [PROCESS LEAD] {} ====================", client.getId());
+//
+//    if (startTime == null) {
+//        startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
+//    }
+//
+//    String digits = client.getId().replaceAll("\\D+", "");
+//    Long telephoneId;
+//    try {
+//        telephoneId = Long.valueOf(digits);
+//    } catch (NumberFormatException e) {
+//        log.error("🟥 [PROCESS] ❌ Невозможно извлечь ID телефона из clientId='{}'", client.getId(), e);
+//        return;
+//    }
+//    log.info("📞 [PROCESS] telephoneId: {}", telephoneId);
+//
+//    if (operatorClients == null) {
+//        operatorClients = Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).getActiveOperatorClients();
+//    }
+//
+//    Optional<Lead> leadOpt = leadRepository.findFirstByTelephone_IdAndLidStatusAndCreateDateLessThanEqualOrderByCreateDateAsc(
+//            telephoneId, STATUS_NEW, LocalDate.now());
+//
+//    if (leadOpt.isEmpty()) {
+//        log.info("📭 [PROCESS] Нет новых лидов для телефона {} ({}). Планировщик завершится", telephoneId, client.getId());
+//        finishedClients.add(client.getId());
+//        Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
+//        checkAllClientsFinished();
+//        return;
+//    }
+//
+//    Lead lead = leadOpt.get();
+//
+//    Optional<WhatsAppUserStatusDto> userStatusOpt = whatsAppService.checkActiveUser(client.getId(), normalizePhone(lead.getTelephoneLead()));
+//    if (userStatusOpt.isEmpty()) {
+//        log.warn("📵 Не удалось определить активность пользователя {} — отправка запрещена", lead.getTelephoneLead());
+//        leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+//        return;
+//    }
+//
+//    WhatsAppUserStatusDto userStatus = userStatusOpt.get();
+//    if (Boolean.FALSE.equals(userStatus.getRegistered())) {
+//        log.warn("📵 Номер {} НЕ зарегистрирован в WhatsApp — отправка запрещена", lead.getTelephoneLead());
+//        leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+//        return;
+//    }
+//
+//    if (userStatus.getLastSeen() == null) {
+//        log.warn("📴 lastSeen для {} недоступен — отправка запрещена", lead.getTelephoneLead());
+//        leadStatusService.prepareLeadForSending(lead, "Не в сети");
+//        return;
+//    }
+//
+//    log.info("📶 lastSeen для {}: {}", lead.getTelephoneLead(), userStatus.getLastSeen());
+//
+//
+//    log.info("""
+//            📨 [PROCESS LEAD DETAILS]
+//            🆔 Лид ID: {}
+//            📱 Телефон: {}
+//            📋 Статус: {}
+//            🕒 Время: {}
+//            """, lead.getId(), lead.getTelephoneLead(), lead.getLidStatus(), LocalDateTime.now());
+//
+//    leadStatusService.prepareLeadForSending(lead, STATUS_SENT);
+//
+//    taskExecutor.execute(() -> {
+//        int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
+//        try {
+//            TimeUnit.SECONDS.sleep(delaySeconds);
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//        }
+//
+//        dailyMessageCount.putIfAbsent(client.getId(), new AtomicInteger(0));
+//        int sentToday = dailyMessageCount.get(client.getId()).incrementAndGet();
+//
+//        if (sentToday > dailyMessageLimit) {
+//            log.warn("🟥 [PROCESS] 🚫 Превышен лимит {} сообщений в день для клиента {}", dailyMessageLimit, client.getId());
+//            finishedClients.add(client.getId());
+//            Objects.requireNonNull(leadSenderServiceProvider.getIfAvailable()).stopClientScheduler(client.getId());
+//            checkAllClientsFinished();
+//            return;
+//        }
+//
+//
+//        String rawMessage = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
+//        String message = humanizer.generate(rawMessage);
+//        log.debug("📨 [MESSAGE] {}", message);
+//        String result = sendWithRetry(client.getId(), normalizePhone(lead.getTelephoneLead()), message, lead);
+//
+//        if ("not_whatsapp".equals(result)) {
+//            log.warn("📵 Номер {} не зарегистрирован в WhatsApp — устанавливаем статус 'нет ватсап'", lead.getTelephoneLead());
+//            leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
+//
+//            statsPerClient.putIfAbsent(client.getId(),
+//                    new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//
+//            statsPerClient.get(client.getId()).incrementNoWhatsApp(lead.getId());
+//            return;
+//        }
+//        if ("offline".equals(result)) {
+//            log.warn("📴 Номер {} не был в сети — устанавливаем статус 'не в сети'", lead.getTelephoneLead());
+//            leadStatusService.prepareLeadForSending(lead, "Не в сети");
+//
+//            statsPerClient.putIfAbsent(client.getId(),
+//                    new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//
+//            statsPerClient.get(client.getId()).incrementNotOnline(lead.getId());
+//            return;
+//        }
+//        if (result != null && !result.isBlank() && result.contains("ok")) {
+//            log.info("🟩 [PROCESS] ✅ Успешная отправка сообщения клиенту {}", client.getId());
+//            failedAttemptsPerClient.put(client.getId(), new AtomicInteger(0));
+//            statsPerClient.putIfAbsent(client.getId(),
+//                    new StatDto(client.getId(), 0, 0, 0, 0, null, null, new HashSet<>()));
+//
+//            statsPerClient.get(client.getId()).incrementSuccess(lead.getId()); // ✅ только success
+//            globalFailureCounter.set(0);
+//
+//            AtomicInteger counter = controlSendCounter.computeIfAbsent(client.getId(), k -> new AtomicInteger(0));
+//            int count = counter.incrementAndGet();
+//            if (count > 10000) counter.set(0);
+//
+//            int interval = controlIntervalPerClient.computeIfAbsent(client.getId(), k -> ThreadLocalRandom.current().nextInt(2, 6));
+//            if (count % interval == 0) {
+//                sendControlMessage(client.getId(), telephoneId, delaySeconds);
+//                controlIntervalPerClient.put(client.getId(), ThreadLocalRandom.current().nextInt(2, 6));
+//            }
+//        } else {
+//            log.warn("🟥 [PROCESS] ❌ Ошибка при отправке сообщения клиенту {}", client.getId());
+//            handleFailure(client, lead);
+//        }
+//
+//        log.info("==================== [END PROCESS LEAD] {} ====================\n", client.getId());
+//    });
+//}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ДОБАВЬ в sendWithRetry метод LeadProcessorServiceImpl проверку last-seen:
+//private String sendWithRetry(String clientId, String phone, String message, Lead lead) {
+//    int maxAttempts = 2;
+//
+//    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+//        try {
+//            String response = whatsAppService.sendMessage(clientId, phone, message);
+//
+//            if (response == null || response.isBlank()) {
+//                log.warn("⚠️ [RETRY] Пустой ответ от клиента {}", clientId);
+//                continue;
+//            }
+//
+//            // not_whatsapp
+//            if (response.contains("\"status\":\"not_whatsapp\"")) {
+//                log.warn("📵 [CHECK] Номер {} не зарегистрирован в WhatsApp", phone);
+//                return "not_whatsapp";
+//            }
+//
+//            // last_seen
+//            if (response.contains("\"last_seen\"")) {
+//                String lastSeenStr = extractJsonValue(response, "last_seen");
+//                if (lastSeenStr != null) {
+//                    Instant lastSeen = Instant.parse(lastSeenStr);
+//                    ZonedDateTime irkutskTime = lastSeen.atZone(ZoneId.of("Asia/Irkutsk"));
+//
+//                    log.info("📶 [LAST SEEN] {} был в сети: {}", phone, irkutskTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+//
+//                    if (lastSeen.isBefore(Instant.now().minus(2, ChronoUnit.DAYS))) {
+//                        log.warn("⏱️ [SKIP] {} не был в сети более 2 дней ({}), пропускаем", phone, irkutskTime);
+//                        if (lead != null) {
+//                            leadStatusService.prepareLeadForSending(lead, "Не в сети");
+//                            statsPerClient.putIfAbsent(clientId,
+//                                    new StatDto(clientId, 0, 0, 0, 0, 0, null, null, new HashSet<>()));
+//                            statsPerClient.get(clientId).incrementNotOnline(lead.getId());
+//                        }
+//                        return "offline";
+//                    }
+//                }
+//            }
+//
+//
+//
+//            if (response.contains("\"status\":\"ok\"")) {
+//                return "ok";
+//            }
+//
+//            if (response.contains("\"status\":\"error\"")) {
+//                log.error("❌ [RETRY] Ошибка отправки от клиента {}: {}", clientId, response);
+//                continue;
+//            }
+//
+//            return response;
+//
+//        } catch (Exception e) {
+//            log.warn("⚠️ [RETRY] Попытка {}: ошибка отправки WhatsApp для {}: {}", attempt, clientId, e.getMessage());
+//            if (attempt == maxAttempts) {
+//                log.error("❌ [RETRY] Все попытки отправки для клиента {} исчерпаны", clientId);
+//                return null;
+//            }
+//
+//            try {
+//                TimeUnit.SECONDS.sleep(2);
+//            } catch (InterruptedException ex) {
+//                Thread.currentThread().interrupt();
+//                return null;
+//            }
+//        }
+//    }
+//
+//    return null;
+//}

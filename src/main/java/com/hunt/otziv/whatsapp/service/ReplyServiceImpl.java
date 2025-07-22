@@ -129,30 +129,57 @@ public class ReplyServiceImpl implements ReplyService {
 
     @Override
     public void processGroupReply(WhatsAppGroupReplyDTO reply) {
-        log.info("\n🟦 [GROUP REPLY] Группа '{}'\n├─ От: {}\n├─ Сообщение: {}\n└─ GroupId: {}",
+        log.info("\n🟦 [GROUP REPLY] Получен ответ из группы"
+                        + "\n├─ Группа: '{}'"
+                        + "\n├─ Отправитель (raw): '{}'"
+                        + "\n├─ Сообщение: '{}'"
+                        + "\n└─ GroupId: {}",
                 reply.getGroupName(), reply.getFrom(), reply.getMessage(), reply.getGroupId());
 
+        // 1. Поиск по GroupId
         Optional<Company> optCompany = companyService.findByGroupId(reply.getGroupId());
+        if (optCompany.isPresent()) {
+            log.info("🔍 Найдена компания '{}' напрямую по GroupId: {}",
+                    optCompany.get().getTitle(), reply.getGroupId());
+        } else {
+            log.info("🔍 Компания по GroupId {} не найдена, пробуем искать по телефону и названию",
+                    reply.getGroupId());
 
-        if (optCompany.isEmpty()) {
+            // 2. Нормализуем телефон и название
             String telephoneNumber = reply.getFrom().replaceAll("@c\\.us$", "");
             String rawName = reply.getGroupName();
-            String title = rawName.contains(".") ? rawName.substring(0, rawName.indexOf(".")) : rawName;
+            String title = rawName.contains(".")
+                    ? rawName.substring(0, rawName.indexOf("."))
+                    : rawName;
 
+            log.debug("➡ Используем телефон '{}' и заголовок '{}'", telephoneNumber, title);
+
+            // 3. Поиск по телефону и названию
             optCompany = companyService.getCompanyByTelephonAndTitle(telephoneNumber, title);
 
             if (optCompany.isEmpty()) {
-                log.warn("❌ Компания не найдена по номеру {} и названию '{}'", telephoneNumber, title);
+                log.warn("❌ Компания не найдена ни по GroupId {}, ни по номеру '{}' + названию '{}'",
+                        reply.getGroupId(), telephoneNumber, title);
                 return;
-            }
-
-            Company found = optCompany.get();
-            if (found.getGroupId() == null || found.getGroupId().isBlank()) {
-                found.setGroupId(reply.getGroupId());
-                companyService.save(found);
-                log.info("📌 Компания '{}' привязана к GroupId {}", found.getTitle(), reply.getGroupId());
+            } else {
+                log.info("🔍 Найдена компания '{}' по телефону '{}' и названию '{}'",
+                        optCompany.get().getTitle(), telephoneNumber, title);
             }
         }
+
+        // 4. Привязка GroupId (если нужно)
+        Company found = optCompany.get();
+        if (found.getGroupId() == null || found.getGroupId().isBlank()) {
+            found.setGroupId(reply.getGroupId());
+            companyService.save(found);
+            log.info("📌 Компания '{}' (ID={}) успешно привязана к GroupId {}",
+                    found.getTitle(), found.getId(), reply.getGroupId());
+        } else {
+            log.info("ℹ Компания '{}' уже имеет GroupId: {}",
+                    found.getTitle(), found.getGroupId());
+        }
+
+        log.info("✅ Обработка ответа из группы '{}' завершена", reply.getGroupName());
     }
 }
 

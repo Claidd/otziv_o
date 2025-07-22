@@ -84,6 +84,10 @@ public class Lead {
     @Column(name = "leads_offer")
     private boolean offer;
 
+    // Новое поле — когда пользователь последний раз был онлайн
+    @Column(name = "last_seen")
+    private LocalDateTime lastSeen;
+
     // Геттеры и сеттеры
 
     @PrePersist

@@ -69,7 +69,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("==================================================================\n");
     }
 
-    @Scheduled(cron = "0 00 11 * * *")
+//    @Scheduled(cron = "0 00 11 * * *")
     public void startDailyDispatch() {
         log.info("\n===================== START DAILY DISPATCH =======================");
 
@@ -98,7 +98,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         for (int i = 0; i < clients.size(); i++) {
             WhatsAppProperties.ClientConfig client = clients.get(i);
 
-            int delayStepSeconds = ThreadLocalRandom.current().nextInt(30, 121);
+            int delayStepSeconds = ThreadLocalRandom.current().nextInt(60, 181); //Клиент 1 — через 60 - 180 сек
             int initialDelay = i * delayStepSeconds;
 
             Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));

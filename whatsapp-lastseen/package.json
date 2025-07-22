@@ -1,0 +1,13 @@
+{
+  "name": "whatsapp-lastseen",
+  "version": "1.0.0",
+  "main": "checkLastSeen.js",
+  "scripts": {
+    "start": "node checkLastSeen.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^22.8.2",
+    "qrcode": "^1.5.3"
+  }
+}

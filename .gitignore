@@ -3,7 +3,6 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-
 ### STS ###
 .apt_generated
 .classpath
@@ -12,7 +11,6 @@ target/
 .settings
 .springBeans
 .sts4-cache
-
 ### IntelliJ IDEA ###
 .idea
 *.iws
@@ -22,7 +20,6 @@ target/
 .yaml
 .env
 .sql
-
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
@@ -32,6 +29,11 @@ target/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
-
 ### VS Code ###
 .vscode/
+
+# managed
+**.data.json
+**.node-persist**
+**_IGNORE_**
+# end managed

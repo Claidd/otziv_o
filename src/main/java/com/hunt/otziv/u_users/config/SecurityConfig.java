@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.config;
 
+import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -32,102 +33,87 @@ public class SecurityConfig {
     private final UserServiceImpl userService;
     private final BCryptPasswordEncoder passwordEncoder;
     private final RequestValidationFilter requestValidationFilter;
+    private final JwtAuthFilter jwtAuthFilter;
 
 //    private final JwtRequestFilter jwtRequestFilter;
 
 
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         HttpSessionCsrfTokenRepository csrfTokenRepository = new HttpSessionCsrfTokenRepository();
 
         http
-                .authorizeHttpRequests((authorizeRequests) ->
-                                authorizeRequests
-                                        //    настройка доступа
-                                        .requestMatchers("/auth","/login","/register").permitAll()
-                                        .requestMatchers("/api/auth").permitAll()
-                                        .requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER")
-                                        .requestMatchers("/.well-known/acme-challenge/**").permitAll()
-                                        .requestMatchers("/access-denied").permitAll()
-                                        .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/").permitAll()
-                                        .requestMatchers("/phpmyadmin").permitAll()
-                                        .requestMatchers("/send-message").permitAll()
-                                        .requestMatchers("/sendEmail").permitAll()
-                                        .requestMatchers("/webhook").permitAll()
-                                        .requestMatchers("/webhook/**").permitAll()
-                                        .requestMatchers(HttpMethod.POST, "/api/leads/update").permitAll()
-                                        .requestMatchers("/api/leads/modified").permitAll()
-                                        .requestMatchers("/api/dispatch-settings/cron").permitAll()
-                                        .requestMatchers("/admin/**").authenticated()
-                                        .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
-                                        .requestMatchers("/logs").hasAnyRole("ADMIN", "OWNER")
-                                        .requestMatchers("/logs/**").hasAnyRole("ADMIN", "OWNER")
-                                        .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
-                                        .requestMatchers("/bots/**").hasAnyRole("ADMIN", "OWNER", "WORKER")
-                                        .requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
-                                        .requestMatchers("/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
-                                        .requestMatchers("/operator/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/operators").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/whatsapp").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/operators/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/whatsapp/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/telephone/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR","MARKETOLOG")
-                                        .requestMatchers("/companies/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
-                                        .requestMatchers("/products/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
-                                        .requestMatchers("/products").hasAnyRole("ADMIN", "OWNER", "MANAGER")
-                                        .requestMatchers("/ordersCompany/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/ordersDetails/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/filial/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/review").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/reviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER", "OPERATOR")
-                                        .requestMatchers("/review/editReview/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/review/addReviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/review/deleteReviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER","WORKER")
-                                        .requestMatchers("/review/editReviews/**").permitAll()
-                                        .requestMatchers("/review/editReviewses/**").permitAll()
-                                        .requestMatchers("/zp/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
-                                        .requestMatchers("/payment_check/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
-                                        .requestMatchers("/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
-                                        .requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER","MANAGER")
-                                        .requestMatchers("/cities/**").hasAnyRole("ADMIN", "OWNER","MANAGER")
-                                        .requestMatchers("/phone").hasAnyRole("ADMIN", "OWNER")
-                                        .requestMatchers("/phone/**").hasAnyRole("ADMIN", "OWNER")
-//                                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**").permitAll()
-                )
-                //    настройка логирования
-                .formLogin((formLogin) ->
-                                formLogin
-                                        .usernameParameter("username")
-                                        .passwordParameter("password")
-                                        .loginPage("/login")
-                                        .loginProcessingUrl("/process-login")
-                                        .defaultSuccessUrl("/",true)
-                                        .failureUrl("/login?error")
-                )
-                //    настройка раз логирования
-                .logout((logout) ->
-                        logout.deleteCookies("remove")
-                                .invalidateHttpSession(false)
-                                .logoutUrl("/custom-logout")
-                                .logoutSuccessUrl("/login")
-                )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)) // добавил недавно
-                .exceptionHandling((exceptionHandling) ->
-                             exceptionHandling.accessDeniedPage("/access-denied"))
-//                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-//                .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(csrfTokenRepository) // ✅ используем CSRF-токен из сессии
-                        .ignoringRequestMatchers("/api/**", "/webhook/**", "/api/leads/**") // ❌ отключаем для API и Webhook
-                );
-                // Добавляем наш фильтр перед другими фильтрами безопасности
-                http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
-        return http.build();
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .ignoringRequestMatchers("/api/**", "/webhook", "/webhook/**", "/api/leads/**", "/health")
+                )
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/auth", "/login", "/register").permitAll()
+                        .requestMatchers("/api/auth").permitAll()
+                        .requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers("/.well-known/acme-challenge/**").permitAll()
+                        .requestMatchers("/access-denied").permitAll()
+                        .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers("/").permitAll()
+                        .requestMatchers("/phpmyadmin").permitAll()
+                        .requestMatchers("/send-message", "/sendEmail").permitAll()
+                        .requestMatchers("/webhook", "/webhook/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/leads/update").permitAll()
+                        .requestMatchers("/api/leads/modified").permitAll()
+                        .requestMatchers("/api/dispatch-settings/cron").permitAll()
+                        .requestMatchers("/admin/**").authenticated()
+                        .requestMatchers("/admin/dispatch/start").permitAll()
+                        .requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers("/logs", "/logs/**").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
+                        .requestMatchers("/bots/**").hasAnyRole("ADMIN", "OWNER", "WORKER")
+                        .requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
+                        .requestMatchers("/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
+                        .requestMatchers("/operator/**", "/operators", "/operators/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers("/whatsapp", "/whatsapp/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers("/telephone/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers("/companies/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
+                        .requestMatchers("/products", "/products/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
+                        .requestMatchers("/ordersCompany/**", "/ordersDetails/**", "/filial/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers("/review", "/review/editReview/**", "/review/addReviews/**", "/review/deleteReviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers("/reviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR")
+                        .requestMatchers("/review/editReviews/**", "/review/editReviewses/**").permitAll()
+                        .requestMatchers("/zp/**", "/payment_check/**", "/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
+                        .requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER", "MANAGER")
+                        .requestMatchers("/cities/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
+                        .requestMatchers("/phone", "/phone/**").hasAnyRole("ADMIN", "OWNER")
+                )
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .loginProcessingUrl("/process-login")
+                        .usernameParameter("username")
+                        .passwordParameter("password")
+                        .defaultSuccessUrl("/", true)
+                        .failureUrl("/login?error")
+                )
+                .logout(logout -> logout
+                        .logoutUrl("/custom-logout")
+                        .logoutSuccessUrl("/login")
+                        .invalidateHttpSession(true)
+                        .deleteCookies("JSESSIONID")
+                )
+//                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+                .exceptionHandling(ex -> ex
+                        .accessDeniedPage("/access-denied")
+                )
+
+                .cors(AbstractHttpConfigurer::disable);
+
+        // 🧩 фильтр — только ПОСЛЕ всей основной конфигурации
+        http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
     }
+
+
 
 //    настройка доступа к внутренним файлам
     @Bean

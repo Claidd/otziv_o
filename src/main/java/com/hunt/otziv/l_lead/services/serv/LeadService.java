@@ -97,6 +97,8 @@ public interface LeadService {
 
     Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
 
+    List<Lead> findNewLeadsByClient(Long telephoneId, String status);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }

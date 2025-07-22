@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,11 +26,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
 import static org.apache.commons.codec.digest.DigestUtils.sha256Hex;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -57,6 +60,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String uri = request.getRequestURI();
 
+        // 🔓 Пропускаем вебхуки и health без JWT и авторизации
+        if (uri.startsWith("/webhook") || uri.equals("/health")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         if (pathChecks.containsKey(uri)) {
             HttpServletRequestContext context = new HttpServletRequestContext(request);
             try {
@@ -75,6 +84,34 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+
+
+//    @Override
+//    protected void doFilterInternal(HttpServletRequest request,
+//                                    @NotNull HttpServletResponse response,
+//                                    @NotNull FilterChain filterChain)
+//            throws ServletException, IOException {
+//
+//        String uri = request.getRequestURI();
+//
+//        if (pathChecks.containsKey(uri)) {
+//            HttpServletRequestContext context = new HttpServletRequestContext(request);
+//            try {
+//                pathChecks.get(uri).accept(context, response);
+//            } catch (AuthException e) {
+//                log.warn("🔒 Ошибка авторизации: {} ({}): {}", e.status, uri, e.getMessage());
+//                response.sendError(e.status, e.getMessage());
+//                return;
+//            }
+//
+//            if (uri.equals("/api/leads/import")) {
+//                filterChain.doFilter(context.getWrappedRequest(), response);
+//                return;
+//            }
+//        }
+//
+//        filterChain.doFilter(request, response);
+//    }
 
     private void checkImportAuth(HttpServletRequestContext context, HttpServletResponse response) {
         String token = extractTokenOrThrow(context.request);
@@ -98,9 +135,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private void checkSyncAuth(HttpServletRequestContext context, HttpServletResponse response) {
         String token = extractTokenOrThrow(context.request);
         Claims claims = parseTokenOrThrow(token);
+
         if (!"lead-sync".equals(claims.getSubject())) {
             throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Wrong token subject");
         }
+
+        // ✅ Устанавливаем Authentication в SecurityContext
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                claims.getSubject(), null, List.of() // Можно добавить роли, если нужно
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        log.info("🛡 JWT авторизация прошла: subject = {}", claims.getSubject());
     }
 
     private String extractTokenOrThrow(HttpServletRequest request) {
@@ -149,6 +195,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
     }
 }
+
 
 
 

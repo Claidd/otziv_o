@@ -182,6 +182,16 @@ public class LeadServiceImpl implements LeadService {
 
     //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
+    @Override
+    public List<Lead> findNewLeadsByClient(Long telephoneId, String status) {
+        return leadsRepository.findByTelephoneAndStatusBeforeDate(
+                telephoneId, status, LocalDate.now());
+    }
+
+    public int countNewLeadsByClient(long telephoneId, String status) {
+        return leadsRepository.countByTelephoneAndStatusBeforeDate(
+                telephoneId, status, LocalDate.now());
+    }
 
 
 
@@ -352,6 +362,8 @@ public class LeadServiceImpl implements LeadService {
 
         return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
     }
+
+
 
 
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================

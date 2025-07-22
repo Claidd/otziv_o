@@ -1,3 +1,66 @@
+const userAgents = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.107 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.128 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.85 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.224 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.163 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.145 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.98 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.171 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.198 Safari/537.36"
+];
+
+function getDesktopEmulationProfile(userAgent) {
+  const profiles = [
+    {
+      regex: /Chrome\/123\.0\./i,
+      viewport: { width: 1366, height: 768, deviceScaleFactor: 1 },
+      platform: 'Win32',
+      renderer: 'ANGLE (NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc.'
+    },
+    {
+      regex: /Chrome\/122\.0\./i,
+      viewport: { width: 1440, height: 900, deviceScaleFactor: 1 },
+      platform: 'Win32',
+      renderer: 'ANGLE (Intel UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc.'
+    },
+    {
+      regex: /Chrome\/121\.0\./i,
+      viewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+      platform: 'Win32',
+      renderer: 'ANGLE (AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc.'
+    },
+    {
+      regex: /Chrome\/120\.0\./i,
+      viewport: { width: 1600, height: 900, deviceScaleFactor: 1 },
+      platform: 'Win32',
+      renderer: 'ANGLE (NVIDIA Quadro T1000 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc.'
+    },
+    {
+      regex: /Chrome\/119\.0\./i,
+      viewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
+      platform: 'Win32',
+      renderer: 'ANGLE (Intel Iris Xe Graphics Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc.'
+    }
+  ];
+
+  for (const profile of profiles) {
+    if (profile.regex.test(userAgent)) return profile;
+  }
+  return {
+    viewport: { width: 1366, height: 768, deviceScaleFactor: 1 },
+    platform: 'Win32',
+    renderer: 'ANGLE (Intel UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0)',
+    vendor: 'Google Inc.'
+  };
+}
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const puppeteer = require('puppeteer');
 const qrcodeTerminal = require('qrcode-terminal');
@@ -7,73 +70,85 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const path = require('path');
 const os = require('os');
-const proxyArg = process.env.PROXY_URL ? [`--proxy-server=${process.env.PROXY_URL}`] : [];
+const fs = require('fs');
 
+const proxyArg = process.env.PROXY_URL ? [`--proxy-server=${process.env.PROXY_URL}`] : [];
 const clientId = process.env.CLIENT_ID || 'default';
 const serverUrl = process.env.SERVER_URL || 'http://localhost:8080';
 const dataPath = process.env.AUTH_PATH || path.join(os.homedir(), '.wwebjs_auth');
 const qrStore = {};
 let client;
+let globalUserAgent = null;
+let lastRestart = 0;
 
-const userAgents = [
-  "Mozilla/5.0 (Linux; Android 13; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.107 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.224 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Samsung Galaxy S21) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.163 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Mi 11 Lite) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.57 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Samsung Galaxy A51) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.171 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Realme 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.58 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; OnePlus 8T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.98 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; POCO X4 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.123 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Samsung Galaxy A53) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Mobile Safari/537.36",
+// Безопасная обертка для evaluate
+async function safeEvaluate(page, fn, ...args) {
+  try {
+    return await page.evaluate(fn, ...args);
+  } catch (e) {
+    if (e.message.includes('Execution context was destroyed')) {
+      console.warn(`[${clientId}] ⚠ ExecutionContext потерян, пересоздаю страницу...`);
+      const browser = await page.browser();
+      const newPage = await browser.newPage();
+      client.pupPage = newPage;
+      return null;
+    }
+    throw e;
+  }
+}
 
-  "Mozilla/5.0 (Linux; Android 11; Nokia 5.4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.28 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Huawei P30 Lite) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.145 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Infinix Note 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.47 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Vivo Y21s) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.98 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Samsung Galaxy M31) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.62 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Realme C25s) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.106 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Xiaomi 13 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.27 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Oppo Reno5 Lite) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.70 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Honor 70) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.61 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Pixel 3 XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.111 Mobile Safari/537.36",
+// Перезапуск при крашах Puppeteer
+process.on('uncaughtException', (err) => {
+  if (err.message.includes('Execution context was destroyed')) {
+    console.error(`[${clientId}] 💥 Puppeteer краш: ${err.message}`);
+    restartClientWithDelay(5000);
+  } else {
+    console.error(`[${clientId}] ❌ Необработанная ошибка:`, err);
+  }
+});
 
-  "Mozilla/5.0 (Linux; Android 13; Galaxy Z Flip 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.81 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Galaxy Z Fold 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.129 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Moto G60) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.140 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Tecno Camon 20 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.95 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Redmi 9A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.161 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Redmi Note 10 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.55 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Vivo V27e) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.48 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Oppo A74) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.89 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Realme 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.83 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Honor X9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.33 Mobile Safari/537.36",
-
-  "Mozilla/5.0 (Linux; Android 12; Asus ROG Phone 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.139 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; OnePlus Nord N10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.137 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Redmi K50i) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.65 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Infinix Zero 5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.78 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 10; Realme Narzo 30A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.122 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Poco F4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.113 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Vivo Y20) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.172 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Galaxy M13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.40 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 12; Tecno Spark 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.112 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 11; Nokia G21) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.130 Mobile Safari/537.36"
-];
-
+function restartClientWithDelay(ms = 5000) {
+  const now = Date.now();
+  if (now - lastRestart < 60000) {
+    console.warn(`[${clientId}] 🚫 Перезапуск отменён — не прошло 60 сек с последнего перезапуска.`);
+    return;
+  }
+  lastRestart = now;
+  console.warn(`[${clientId}] 🔁 Перезапуск клиента через ${ms / 1000} сек.`);
+  setTimeout(() => {
+    try {
+      client?.destroy()?.catch(() => {});
+    } catch (_) {}
+    client = null;
+    makeClient(clientId);
+  }, ms);
+}
 
 const makeClient = (id) => {
-  const selectedUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-  console.log(`[${id}] Используемый User-Agent: ${selectedUserAgent}`);
+  if (client) return client;
+  const uaPath = path.join(dataPath, `${id}_ua.json`);
+
+  let selectedUserAgent, selectedProfile;
+  if (fs.existsSync(uaPath)) {
+    const saved = JSON.parse(fs.readFileSync(uaPath, 'utf-8'));
+    selectedUserAgent = saved.userAgent;
+    globalUserAgent = selectedUserAgent;
+    selectedProfile = saved.profile;
+    console.log(`[${id}] ✅ Загружен сохранённый User-Agent`);
+  } else {
+    selectedUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+    globalUserAgent = selectedUserAgent;
+    selectedProfile = getDesktopEmulationProfile(selectedUserAgent);
+    fs.writeFileSync(uaPath, JSON.stringify({ userAgent: selectedUserAgent, profile: selectedProfile }, null, 2));
+    console.log(`[${id}] 🆕 Сохранён новый User-Agent`);
+  }
 
   const instance = new Client({
-    authStrategy: new LocalAuth({
-      clientId: id,
-      dataPath: dataPath
-    }),
+    authStrategy: new LocalAuth({ clientId: id, dataPath }),
     puppeteer: {
       headless: true,
       executablePath: puppeteer.executablePath(),
+      timeout: 60000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -84,111 +159,61 @@ const makeClient = (id) => {
   });
 
   instance.on('browser', async (browser) => {
-    const pages = await browser.pages();
-    const page = pages.length ? pages[0] : await browser.newPage();
-    const profile = getMobileEmulationProfile(selectedUserAgent);
+    console.log(`[${clientId}] 🧠 Браузер подключён`);
+    try {
+      const pages = await browser.pages();
+      const page = pages.length ? pages[0] : await browser.newPage();
+      client.pupPage = page;
 
-    await page.setViewport({
-      ...profile.viewport,
-      isMobile: true,
-      hasTouch: true
-    });
-
-    await page.evaluateOnNewDocument((profile) => {
-      // Языки и платформа
-      Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru'] });
-      Object.defineProperty(navigator, 'language', { get: () => 'ru-RU' });
-      Object.defineProperty(navigator, 'platform', { get: () => profile.platform });
-      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
-      Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
-
-      // WebGL fingerprint spoof
-      const getParameter = WebGLRenderingContext.prototype.getParameter;
-      WebGLRenderingContext.prototype.getParameter = function (parameter) {
-        if (parameter === 37445) return profile.renderer;
-        if (parameter === 37446) return profile.vendor;
-        return getParameter.call(this, parameter);
-      };
-
-      // battery API
-      navigator.getBattery = async () => ({
-        charging: true,
-        chargingTime: 0,
-        dischargingTime: Infinity,
-        level: 0.95,
-        onchargingchange: null,
-        onlevelchange: null,
-        onchargingtimechange: null,
-        ondischargingtimechange: null
+      await page.setViewport({
+        ...selectedProfile.viewport,
+        isMobile: true,
+        hasTouch: true
       });
 
-      // mediaDevices
-      navigator.mediaDevices = {
-        enumerateDevices: async () => ([
-          { kind: "audioinput", label: "Микрофон", deviceId: "default" },
-          { kind: "videoinput", label: "Камера", deviceId: "default" }
-        ])
-      };
+      // Подмены для антидетекта
+      await page.evaluateOnNewDocument((profile) => {
+        Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru'] });
+        Object.defineProperty(navigator, 'language', { get: () => 'ru-RU' });
+        Object.defineProperty(navigator, 'platform', { get: () => profile.platform });
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
+        Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
 
-      // webdriver = false
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false
-      });
+        const getParameter = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) return profile.renderer;
+          if (parameter === 37446) return profile.vendor;
+          return getParameter.call(this, parameter);
+        };
 
-      // plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3]
-      });
+        navigator.getBattery = async () => ({
+          charging: true,
+          chargingTime: 0,
+          dischargingTime: Infinity,
+          level: 0.95
+        });
 
-      // mimeTypes
-      Object.defineProperty(navigator, 'mimeTypes', {
-        get: () => [{ type: "application/pdf" }]
-      });
+        navigator.mediaDevices = {
+          enumerateDevices: async () => ([
+            { kind: "audioinput", label: "Микрофон", deviceId: "default" },
+            { kind: "videoinput", label: "Камера", deviceId: "default" }
+          ])
+        };
 
-      // Маскировка соединения (network info API)
-      Object.defineProperty(navigator, 'connection', {
-        get: () => ({
-          downlink: 10,
-          effectiveType: '4g',
-          rtt: 50,
-          saveData: false,
-          type: 'wifi'
-        })
-      });
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+        Object.defineProperty(navigator, 'mimeTypes', { get: () => [{ type: "application/pdf" }] });
+        Object.defineProperty(navigator, 'connection', {
+          get: () => ({ downlink: 10, effectiveType: '4g', rtt: 50, saveData: false, type: 'wifi' })
+        });
 
-      // Ориентация экрана
-      window.screen.orientation = {
-        angle: 0,
-        type: 'portrait-primary',
-        onchange: null
-      };
-
-      window.chrome = {
-        runtime: {},
-        loadTimes: () => {},
-        csi: () => {},
-        app: { isInstalled: false }
-      };
-
-      const originalQuery = window.navigator.permissions?.query;
-      if (originalQuery) {
-        window.navigator.permissions.query = (parameters) => (
-            parameters.name === 'notifications'
-                ? Promise.resolve({ state: Notification.permission })
-                : originalQuery(parameters)
-        );
-      }
-
-      const originalToString = Function.prototype.toString;
-      Function.prototype.toString = function () {
-        if (this === window.navigator.permissions.query) {
-          return 'function query() { [native code] }';
-        }
-        return originalToString.call(this);
-      };
-    }, profile);
+        window.screen.orientation = { angle: 0, type: 'portrait-primary', onchange: null };
+        window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: { isInstalled: false } };
+      }, selectedProfile);
+    } catch (e) {
+      console.error(`[${clientId}] ❌ Ошибка инициализации страницы:`, e.message);
+    }
   });
-
 
 
   instance.on('qr', qr => {
@@ -197,83 +222,20 @@ const makeClient = (id) => {
     qrcodeTerminal.generate(qr, { small: true });
   });
 
-  instance.on('authenticated', () => {
-    console.log(`[${id}] ✅ Авторизация завершена`);
+  instance.on('authenticated', () => console.log(`[${id}] ✅ Авторизация завершена`));
+  instance.on('ready', () => console.log(`[${id}] 🔥 Клиент готов`));
+
+  instance.on('disconnected', (reason) => {
+    console.warn(`[${id}] ⚠️ Клиент отключён: ${reason}`);
+    restartClientWithDelay();
   });
 
-  instance.on('ready', () => {
-    console.log(`[${id}] 🔥 Клиент готов`);
-  });
-
-  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-  instance.on('message', async msg => {
-    const chat = await msg.getChat();
-
-    if (msg.type !== 'chat') {
-      console.log(`[${id}] 📷 Получено медиа сообщение (${msg.type}) от ${msg.from}. Игнорируем.`);
-      return;
-    }
-
-    const content = msg.body?.trim();
-    if (!content) return;
-
-    const from = msg.from.replace('@c.us', '');
-
-    if (chat.isGroup) {
-      // Групповое сообщение — без задержек и без markAsRead
-      const groupId = chat.id._serialized;
-      const senderId = msg.author;
-      const senderNumber = senderId?.replace('@c.us', '') || 'unknown';
-
-      console.log(`📨 [${id}] Группа: ${chat.name}`);
-      console.log(`👤 Отправитель: ${senderNumber}`);
-      console.log(`💬 Текст: ${content}`);
-
-      try {
-        await axios.post(`${serverUrl}/webhook/whatsapp-group-reply`, {
-          clientId: id,
-          groupId,
-          groupName: chat.name,
-          from: senderNumber,
-          message: content
-        });
-      } catch (err) {
-        console.error(`[${id}] ❌ Ошибка при отправке вебхука из группы:`, err.message);
-      }
-
-    } else {
-      // Личное сообщение — с задержкой и markAsRead
-      console.log(`[${id}] 📥 Входящее сообщение от ${from}: ${content}`);
-
-      const delayBeforeRead = Math.floor(Math.random() * 25000) + 5000; // 5–30 сек
-      await delay(delayBeforeRead);
-
-      try {
-        await chat.sendSeen();
-        console.log(`[${id}] ✅ Пометили чат с ${from} как прочитанный`);
-      } catch (err) {
-        console.error(`[${id}] ❌ Не удалось пометить как прочитанный: ${err.message}`);
-      }
-
-
-      const delayAfterRead = Math.floor(Math.random() * 5000) + 2000; // 2–7 сек
-      await delay(delayAfterRead);
-
-      try {
-        await axios.post(`${serverUrl}/webhook/whatsapp-reply`, {
-          clientId: id,
-          from,
-          message: content
-        });
-        console.log(`[${id}] 📤 Вебхук отправлен после прочтения`);
-      } catch (err) {
-        console.error(`[${id}] ❌ Ошибка при отправке вебхука: ${err.message}`);
-      }
+  instance.on('change_state', state => {
+    if (state === 'DISCONNECTED') {
+      console.warn(`[${id}] ⚠️ Состояние клиента: ${state}`);
+      restartClientWithDelay();
     }
   });
-
-
 
   instance.initialize();
   return instance;
@@ -284,223 +246,824 @@ client = makeClient(clientId);
 const app = express();
 app.use(bodyParser.json());
 
+
+
+// ==== QR-код в браузере ====
 app.get('/qr', async (req, res) => {
   const qrData = qrStore[clientId];
-  if (!qrData) return res.status(404).send('QR-код не найден');
-
+  if (!qrData) {
+    return res.send(`<html><body>
+      <h2>QR-код пока не сгенерирован для клиента ${clientId}</h2>
+      <p>Обновите страницу через 5-10 секунд.</p>
+    </body></html>`);
+  }
   const qrImage = await qrcode.toDataURL(qrData);
-  res.send(`
-    <html>
-      <head><title>QR-код</title></head>
-      <body>
-        <h2>QR-код для ${clientId}</h2>
-        <img src="${qrImage}" />
-      </body>
-    </html>
-  `);
+  res.send(`<html><body style="text-align:center;">
+    <h2>QR-код для клиента ${clientId}</h2>
+    <img src="${qrImage}" style="max-width:400px;" />
+  </body></html>`);
 });
 
+// Логируем исходящие сообщения
 app.post('/send', async (req, res) => {
   const { phone, message } = req.body;
-  console.log(`📤 Отправка в личку ${phone}: ${message}`);
   if (!client || !client.info || !client.info.wid) {
-    return res.status(503).json({ status: 'error', error: 'Клиент не готов или не авторизован' });
+    return res.status(503).json({ status: 'error', error: 'Клиент не готов' });
   }
 
   try {
-    console.log(`[${clientId}] ➡️ Отправка POST на ${serverUrl}/webhook/whatsapp-reply`);
-    await client.sendMessage(`${phone}@c.us`, message);
+    const numberId = await client.getNumberId(phone);
+    if (!numberId) {
+      console.warn(`[${clientId}] ❌ Номер ${phone} не зарегистрирован в WhatsApp`);
+      return res.status(400).json({ status: 'not_whatsapp', error: 'Номер не в WhatsApp' });
+    }
+
+    console.log(`[${clientId}] ➡️ Отправляю сообщение на ${phone}: "${message}"`);
+    await client.sendMessage(numberId._serialized, message);
+    console.log(`[${clientId}] ✅ Сообщение успешно отправлено на ${phone}`);
     res.json({ status: 'ok' });
+
   } catch (e) {
-    res.status(500).json({ status: 'error', error: e.message });
+    const errorMessage = e?.message || 'Неизвестная ошибка';
+    console.error(`[${clientId}] ❌ Ошибка отправки на ${phone}: ${errorMessage}`);
+    res.status(500).json({ status: 'error', error: errorMessage });
   }
 });
+
+// Логируем все входящие сообщения
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+client.on('message', async msg => {
+  const chat = await msg.getChat();
+
+  // Игнорируем медиа (картинки, видео и т.д.)
+  if (msg.type !== 'chat') {
+    console.log(`[${clientId}] 📷 Получено медиа сообщение (${msg.type}) от ${msg.from}. Игнорируем.`);
+    return;
+  }
+
+  const content = msg.body?.trim();
+  if (!content) return;
+
+  const from = msg.from.replace('@c.us', '');
+
+  if (chat.isGroup) {
+    // Групповое сообщение (без задержек и без markAsRead)
+    const groupId = chat.id._serialized;
+    const senderId = msg.author;
+    const senderNumber = senderId?.replace('@c.us', '') || 'unknown';
+
+    console.log(`📨 [${clientId}] Группа: ${chat.name}`);
+    console.log(`👤 Отправитель: ${senderNumber}`);
+    console.log(`💬 Текст: ${content}`);
+
+    try {
+      await axios.post(`${serverUrl}/webhook/whatsapp-group-reply`, {
+        clientId,
+        groupId,
+        groupName: chat.name,
+        from: senderNumber,
+        message: content
+      });
+      console.log(`[${clientId}] 📤 Вебхук отправлен для группы ${chat.name}`);
+    } catch (err) {
+      console.error(`[${clientId}] ❌ Ошибка отправки вебхука из группы: ${err.message}`);
+    }
+
+  } else {
+    // Личное сообщение (с задержкой и пометкой как прочитанное)
+    console.log(`[${clientId}] 📥 Входящее сообщение от ${from}: ${content}`);
+
+    const delayBeforeRead = Math.floor(Math.random() * 25000) + 5000; // 5–30 сек
+    await delay(delayBeforeRead);
+
+    try {
+      await msg.markAsRead();
+      console.log(`[${clientId}] ✅ Пометили сообщение от ${from} как прочитанное`);
+    } catch (err) {
+      console.error(`[${clientId}] ❌ Не удалось пометить как прочитанное: ${err.message}`);
+    }
+
+    try {
+      await axios.post(`${serverUrl}/webhook/whatsapp-reply`, {
+        clientId,
+        from,
+        message: content
+      });
+      console.log(`[${clientId}] 📤 Вебхук отправлен после прочтения`);
+    } catch (err) {
+      console.error(`[${clientId}] ❌ Ошибка при отправке вебхука: ${err.message}`);
+    }
+  }
+});
+
 
 app.post('/send-group', async (req, res) => {
   const { groupId, message } = req.body;
-  console.log(`📤 Отправка в группу ${groupId}: ${message}`);
 
-  try {
-    console.log(`[${clientId}] ➡️ Отправка POST на ${serverUrl}/webhook/whatsapp-reply`);
-
-    await client.sendMessage(groupId, message);
-    res.json({ status: 'ok' });
-  } catch (e) {
-    console.error(`❌ Ошибка при отправке в группу: ${e.message}`);
-    res.status(500).json({ status: 'error', error: e.message });
+  if (!groupId || !message) {
+    return res.status(400).json({ status: 'error', error: 'groupId и message обязательны' });
   }
+  if (!/^\d+@g\.us$/.test(groupId)) {
+    return res.status(400).json({ status: 'error', error: 'Некорректный формат groupId' });
+  }
+
+  let attempts = 0;
+  let success = false;
+  let lastError = '';
+
+  while (attempts < 3 && !success) {
+    attempts++;
+
+    if (!client || !client.info) {
+      console.warn(`[${clientId}] 🚫 Клиент не готов (попытка ${attempts}/3) — жду 5 сек и повторяю...`);
+      await delay(5000);
+      continue;
+    }
+
+    try {
+      let chat;
+      try {
+        chat = await client.getChatById(groupId);
+      } catch (e) {
+        console.warn(`[${clientId}] ⚠️ Чат ${groupId} не найден напрямую, пробую загрузить все чаты`);
+      }
+
+      if (!chat) {
+        const allChats = await client.getChats();  // клиент точно инициализирован
+        chat = allChats.find(c => c.id._serialized === groupId);
+      }
+
+      if (!chat || !chat.isGroup) {
+        return res.status(404).json({ status: 'error', error: 'Группа не найдена или недоступна' });
+      }
+
+      console.log(`[${clientId}] ➡️ Отправляю сообщение в группу ${groupId}: "${message}"`);
+      await chat.sendStateTyping();
+      await delay(1500);
+
+      const sentMsg = await client.sendMessage(groupId, message);
+      if (!sentMsg?.id) {
+        console.warn(`[${clientId}] ⚠️ Сообщение отправлено, но ID пустой (возможна задержка синхронизации)`);
+      }
+
+      console.log(`[${clientId}] ✅ Сообщение успешно отправлено в группу ${groupId}`);
+      success = true;
+      return res.json({ status: 'ok', attempts });
+
+    } catch (e) {
+      lastError = e.message;
+      console.error(`[${clientId}] ❌ Ошибка отправки в группу ${groupId} (попытка ${attempts}/3):`, lastError);
+      if (attempts < 3) {
+        console.log(`[${clientId}] 🔄 Повторная попытка через 5 секунд...`);
+        await delay(5000);
+      }
+    }
+  }
+
+  // Если 3 попытки не помогли
+  res.status(500).json({
+    status: 'error',
+    error: lastError || 'Не удалось отправить сообщение',
+    attempts
+  });
 });
+
+
+
+
+
 
 app.get('/health', async (req, res) => {
   try {
-    const info = await client.getState(); // например, "CONNECTED"
+    const info = await client.getState();
     return res.status(200).json({ status: info });
   } catch (e) {
     return res.status(500).json({ status: 'DISCONNECTED', error: e.message });
   }
-});
+})
 
-app.listen(3000, () => {
-  console.log(`🟢 API запущено на порту 3000 для клиента ${clientId}`);
-});
 
-function getMobileEmulationProfile(userAgent) {
-  const profiles = [
-    {
-      regex: /Pixel 6 Pro/i,
-      viewport: { width: 412, height: 915, deviceScaleFactor: 3.5 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G78 MP20',
-      vendor: 'Google Inc.'
-    },
-    {
-      regex: /Samsung Galaxy S21/i,
-      viewport: { width: 360, height: 800, deviceScaleFactor: 3 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G78 MP14',
-      vendor: 'Samsung'
-    },
-    {
-      regex: /Redmi Note 12 Pro/i,
-      viewport: { width: 393, height: 873, deviceScaleFactor: 2.75 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 610',
-      vendor: 'Xiaomi'
-    },
-    {
-      regex: /OnePlus 8T/i,
-      viewport: { width: 412, height: 915, deviceScaleFactor: 2.5 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 650',
-      vendor: 'OnePlus'
-    },
-    {
-      regex: /Galaxy Z Flip/i,
-      viewport: { width: 360, height: 748, deviceScaleFactor: 3 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 730',
-      vendor: 'Samsung'
-    },
-    {
-      regex: /Pixel 5/i,
-      viewport: { width: 393, height: 851, deviceScaleFactor: 2.75 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 620',
-      vendor: 'Google Inc.'
-    },
-    {
-      regex: /Mi 11 Lite/i,
-      viewport: { width: 412, height: 892, deviceScaleFactor: 2.7 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 642L',
-      vendor: 'Xiaomi'
-    },
-    {
-      regex: /Samsung Galaxy A51/i,
-      viewport: { width: 360, height: 800, deviceScaleFactor: 2.5 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G72 MP3',
-      vendor: 'Samsung'
-    },
-    {
-      regex: /Realme 9 Pro/i,
-      viewport: { width: 390, height: 844, deviceScaleFactor: 2.8 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 619',
-      vendor: 'Realme'
-    },
-    {
-      regex: /POCO X4 Pro/i,
-      viewport: { width: 395, height: 850, deviceScaleFactor: 2.7 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 619',
-      vendor: 'Xiaomi'
-    },
-    {
-      regex: /Nokia 5.4/i,
-      viewport: { width: 360, height: 780, deviceScaleFactor: 2.5 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 610',
-      vendor: 'Nokia'
-    },
-    {
-      regex: /Huawei P30 Lite/i,
-      viewport: { width: 360, height: 780, deviceScaleFactor: 2.4 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G51 MP4',
-      vendor: 'Huawei'
-    },
-    {
-      regex: /Infinix Note 12/i,
-      viewport: { width: 393, height: 851, deviceScaleFactor: 2.6 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G57 MC2',
-      vendor: 'Infinix'
-    },
-    {
-      regex: /Vivo Y21s/i,
-      viewport: { width: 360, height: 780, deviceScaleFactor: 2.5 },
-      platform: 'Linux armv8l',
-      renderer: 'PowerVR GE8320',
-      vendor: 'Vivo'
-    },
-    {
-      regex: /Samsung Galaxy M31/i,
-      viewport: { width: 360, height: 800, deviceScaleFactor: 2.75 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G72 MP3',
-      vendor: 'Samsung'
-    },
-    {
-      regex: /Realme C25s/i,
-      viewport: { width: 360, height: 780, deviceScaleFactor: 2.4 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G52',
-      vendor: 'Realme'
-    },
-    {
-      regex: /Xiaomi 13 Pro/i,
-      viewport: { width: 400, height: 900, deviceScaleFactor: 3.2 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 740',
-      vendor: 'Xiaomi'
-    },
-    {
-      regex: /Oppo Reno5 Lite/i,
-      viewport: { width: 360, height: 780, deviceScaleFactor: 2.5 },
-      platform: 'Linux armv8l',
-      renderer: 'Mali-G57 MC2',
-      vendor: 'Oppo'
-    },
-    {
-      regex: /Honor 70/i,
-      viewport: { width: 390, height: 844, deviceScaleFactor: 2.8 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 642L',
-      vendor: 'Honor'
-    },
-    {
-      regex: /Pixel 3 XL/i,
-      viewport: { width: 412, height: 847, deviceScaleFactor: 3.0 },
-      platform: 'Linux armv8l',
-      renderer: 'Adreno 630',
-      vendor: 'Google Inc.'
-    }
-  ];
+const sanitizeFileName = str => str.replace(/[^\w.-]/g, '_');
+function cleanStatus(raw) {
+  if (!raw) return null;
 
-  for (const profile of profiles) {
-    if (profile.regex.test(userAgent)) return profile;
+  // Приводим к нижнему регистру для проверки
+  const lower = raw.toLowerCase();
+
+  // Если "в сети" или "online" — не трогаем
+  if (/в сети|online|last seen/i.test(lower)) return raw.trim();
+
+  // Убираем имя и "был(-а)" если есть
+  // Пример: "Иванбыл(-а) сегодня в 07:45" → "сегодня в 07:45"
+  const cleaned = raw.replace(/^[^\s]+был\(.*?\)\s*/i, '').trim();
+
+  return cleaned || raw.trim();
+}
+app.get('/lastseen/:phone', async (req, res) => {
+  const phone = req.params.phone;
+  if (!client || !client.pupPage) {
+    return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
   }
 
-  return {
-    viewport: { width: 390, height: 844, deviceScaleFactor: 3 },
-    platform: 'Linux armv8l',
-    renderer: 'Adreno (TM) 620',
-    vendor: 'Qualcomm'
+  const browser = await client.pupPage.browser();
+  const page = await browser.newPage();
+  await page.setUserAgent(globalUserAgent);
+
+  const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const safePhone = sanitizeFileName(phone);
+  const htmlPath = `lastseen_debug_${safePhone}_${timestamp}.html`;
+  const imgPath = `lastseen_debug_${safePhone}_${timestamp}.png`;
+
+  const startTime = Date.now();
+  console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+
+  const closeModals = async () => {
+    let closed = false;
+    try {
+      const buttons = await page.$$('div[role="dialog"] button');
+      for (const btn of buttons) {
+        const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+        if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+          await btn.click();
+          closed = true;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    if (closed) {
+      console.log(`[${clientId}] 🧹 Закрыто модальное окно (время: ${Date.now() - startTime} мс)`);
+      await page.waitForTimeout(1500);
+    } else {
+      console.log(`[${clientId}] ℹ️ Модальное окно не обнаружено (время: ${Date.now() - startTime} мс)`);
+    }
   };
+
+  try {
+    console.log(`[${clientId}] 🔍 Перехожу на чат ${phone} (${url})`);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(12000);
+    await closeModals();
+
+    const banner = await page.$('div[role="alert"]');
+    if (banner) {
+      console.warn(`[${clientId}] ⚠️ ${phone} — найден баннер "не зарегистрирован"`);
+      await page.close();
+      return res.json({ status: 'ok', phone, registered: false, lastSeen: null, stage: 'banner' });
+    }
+
+
+    // Вместо isRegisteredUser используем проверку header
+    try {
+      await page.waitForSelector('header', { timeout: 15000 });
+      console.log(`[${clientId}] ✅ Чат загружен — номер активен`);
+      await page.waitForTimeout(10000);
+    } catch {
+      console.warn(`[${clientId}] ❌ header не найден — считаем номер ${phone} не зарегистрирован`);
+      await page.close();
+      return res.json({ status: 'ok', phone, registered: false, lastSeen: null, stage: 'header' });
+    }
+
+
+    // --- Поиск статуса ---
+    const statusText = await safeEvaluate(page, () => {
+      const regex = /(в сети|был|online|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+      const elements = Array.from(document.querySelectorAll('header span, header div'));
+      for (const el of elements) {
+        const text = el.textContent?.trim() || '';
+        const aria = el.getAttribute?.('aria-label')?.trim() || '';
+        const title = el.getAttribute?.('title')?.trim() || '';
+        if (regex.test(text)) return text;
+        if (regex.test(aria)) return aria;
+        if (regex.test(title)) return title;
+      }
+      return null;
+    });
+
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.screenshot({ path: imgPath });
+    fs.writeFileSync(htmlPath, await page.content());
+    await page.close();
+
+    if (statusText) {
+      const cleaned = cleanStatus(statusText);
+      console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+      return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned, stage: 'lastSeen' });
+    } else {
+      console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath})`);
+      return res.json({ status: 'ok', phone, registered: true, lastSeen: null, stage: 'lastSeen' });
+    }
+  } catch (e) {
+    console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
+    try {
+      fs.writeFileSync(htmlPath, await page.content());
+      await page.screenshot({ path: imgPath });
+    } catch (_) {}
+    await page.close();
+    return res.status(500).json({ status: 'error', error: e.message, stage: 'error' });
+  }
+});
+
+
+
+
+
+
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   const page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//
+//   const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = `lastseen_debug_${safePhone}_${timestamp}.html`;
+//   const imgPath = `lastseen_debug_${safePhone}_${timestamp}.png`;
+//
+//   const startTime = Date.now();
+//   console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+//
+//   const closeModals = async () => {
+//     let closed = false;
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           closed = true;
+//           break;
+//         }
+//       }
+//     } catch (_) {}
+//
+//     if (closed) {
+//       console.log(`[${clientId}] 🧹 Закрыто модальное окно (время: ${Date.now() - startTime} мс)`);
+//       await page.waitForTimeout(1500);
+//     } else {
+//       console.log(`[${clientId}] ℹ️ Модальное окно не обнаружено (время: ${Date.now() - startTime} мс)`);
+//     }
+//   };
+//
+//   try {
+//     console.log(`[${clientId}] 🔍 Перехожу на чат ${phone} (${url})`);
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     await page.waitForTimeout(12000);
+//     await closeModals();
+//
+//     // 👉 Новая проверка через API WhatsApp
+//     const isRegistered = await client.isRegisteredUser(`${phone}@c.us`);
+//     if (!isRegistered) {
+//       console.warn(`[${clientId}] 📵 ${phone} — не зарегистрирован (проверка через API)`);
+//       await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null });
+//     }
+//
+//     // Дальше идёт стандартная логика (header + lastSeen)
+//     try {
+//       await page.waitForSelector('header', { timeout: 15000 });
+//       console.log(`[${clientId}] ✅ Чат загружен`);
+//       await page.waitForTimeout(10000);
+//     } catch {
+//       console.warn(`[${clientId}] ❌ header не найден — номер НЕ зарегистрирован в WhatsApp`);
+//       await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null });
+//     }
+//
+//     const statusText = await safeEvaluate(page, () => {
+//       const regex = /(в сети|был|online|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+//       const elements = Array.from(document.querySelectorAll('header span, header div'));
+//       for (const el of elements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text)) return text;
+//         if (regex.test(aria)) return aria;
+//         if (regex.test(title)) return title;
+//       }
+//       return null;
+//     });
+//
+//     await page.setViewport({ width: 1920, height: 1080 });
+//     await page.screenshot({ path: imgPath });
+//     fs.writeFileSync(htmlPath, await page.content());
+//     await page.close();
+//
+//     if (statusText) {
+//       const cleaned = cleanStatus(statusText);
+//       console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned });
+//     } else {
+//       console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath})`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: null });
+//     }
+//   } catch (e) {
+//     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
+//     try {
+//       fs.writeFileSync(htmlPath, await page.content());
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     await page.close();
+//     return res.status(500).json({ status: 'error', error: e.message });
+//   }
+// });
+
+
+
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   const page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//
+//   const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = `lastseen_debug_${safePhone}_${timestamp}.html`;
+//   const imgPath = `lastseen_debug_${safePhone}_${timestamp}.png`;
+//
+//   const startTime = Date.now();
+//   console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+//
+//   // 🔧 Закрытие модалки WhatsApp Web
+//   const closeModals = async () => {
+//     let closed = false;
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           closed = true;
+//           break;
+//         }
+//       }
+//     } catch (_) {
+//       // молча пропускаем
+//     }
+//
+//     if (closed) {
+//       console.log(`[${clientId}] 🧹 Закрыто модальное окно (время: ${Date.now() - startTime} мс)`);
+//       await page.waitForTimeout(1500);
+//     } else {
+//       console.log(`[${clientId}] ℹ️ Модальное окно не обнаружено (время: ${Date.now() - startTime} мс)`);
+//     }
+//   };
+//
+//   try {
+//     console.log(`[${clientId}] 🔍 Перехожу на чат ${phone} (${url})`);
+//     const gotoStart = Date.now();
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     console.log(`[${clientId}] ⏱ goto() занял ${Date.now() - gotoStart} мс (с начала: ${Date.now() - startTime} мс)`);
+//
+//     await page.waitForTimeout(12000);
+//     console.log(`[${clientId}] ⏱ Ждём перед закрытием модалок (с начала: ${Date.now() - startTime} мс)`);
+//     await closeModals();
+//
+//     let chatLoaded = false;
+//     try {
+//       const headerStart = Date.now();
+//       await page.waitForSelector('header', { timeout: 15000 });
+//       chatLoaded = true;
+//       console.log(`[${clientId}] ✅ Чат загружен (ждали ${Date.now() - headerStart} мс, с начала: ${Date.now() - startTime} мс)`);
+//       await page.waitForTimeout(10000);
+//     } catch {
+//       console.warn(`[${clientId}] ⚠ header не найден — номер может быть не в WhatsApp (с начала: ${Date.now() - startTime} мс)`);
+//       await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null });
+//     }
+//
+//     const parseStart = Date.now();
+//     const statusText = await safeEvaluate(page, () => {
+//       const regex = /(в сети|был|online|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+//       const elements = Array.from(document.querySelectorAll('header span, header div'));
+//       for (const el of elements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text)) return text;
+//         if (regex.test(aria)) return aria;
+//         if (regex.test(title)) return title;
+//       }
+//       return null;
+//     });
+//     console.log(`[${clientId}] ⏱ Парсинг статуса занял ${Date.now() - parseStart} мс (с начала: ${Date.now() - startTime} мс)`);
+//
+//     await page.setViewport({ width: 1920, height: 1080 });
+//     await page.screenshot({ path: imgPath });
+//     fs.writeFileSync(htmlPath, await page.content());
+//     await page.close();
+//
+//     const totalElapsed = Date.now() - startTime;
+//     if (statusText) {
+//       const cleaned = cleanStatus(statusText);
+//       console.log(`[${clientId}] 📌 Статус найден: ${statusText} (всего ${totalElapsed} мс)`);
+//       return res.json({ status: 'ok', phone, lastSeen: cleaned });
+//     } else {
+//       console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath}, всего ${totalElapsed} мс)`);
+//       return res.json({ status: 'ok', phone, lastSeen: null });
+//     }
+//   } catch (e) {
+//     const totalElapsed = Date.now() - startTime;
+//     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message} (всего ${totalElapsed} мс)`);
+//
+//     try {
+//       fs.writeFileSync(htmlPath, await page.content());
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     await page.close();
+//     return res.status(500).json({ status: 'error', error: e.message });
+//   }
+// });
+
+
+
+
+// --- Универсальный эндпоинт для проверки регистрации и lastSeen ---
+app.get('/is-active-user', async (req, res) => {
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).json({ status: 'error', message: 'phone required' });
+  if (!client) return res.status(503).json({ status: 'error', message: 'client not ready' });
+
+  try {
+    const numberId = await client.getNumberId(phone);
+    const registered = !!numberId;
+
+    let lastSeenIso = null;
+    if (registered && client.pupPage) {
+      try {
+        const rawStatus = await fetchLastSeenText(phone);
+        if (rawStatus) {
+          lastSeenIso = convertStatusToIso(rawStatus);
+        }
+      } catch (_) {}
+    }
+
+    return res.json({ status: 'ok', registered, lastSeen: lastSeenIso });
+  } catch (e) {
+    console.error(`[${clientId}] ❌ Ошибка /is-active-user: ${e.message}`);
+    return res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
+// --- Эндпоинт только lastSeen (тот же движок) ---
+app.get('/last-seen', async (req, res) => {
+  const phone = req.query.phone;
+  if (!client || !client.pupPage) {
+    return res.status(503).json({ status: 'error', message: 'client not ready' });
+  }
+
+  try {
+    const rawStatus = await fetchLastSeenText(phone);
+    const lastSeenIso = rawStatus ? convertStatusToIso(rawStatus) : null;
+    return res.json({ status: 'ok', lastSeen: lastSeenIso });
+  } catch (e) {
+    console.error(`[${clientId}] ❌ Ошибка last-seen: ${e.message}`);
+    return res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
+// --- Проверка регистрации отдельно (упрощённый) ---
+app.get('/check-registered', async (req, res) => {
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).json({ status: 'error', message: 'phone required' });
+  if (!client) return res.status(503).json({ status: 'error', message: 'client not ready' });
+
+  try {
+    const numberId = await client.getNumberId(phone);
+    return res.json({ status: 'ok', registered: !!numberId });
+  } catch (e) {
+    console.error(`[${clientId}] ❌ Ошибка check-registered: ${e.message}`);
+    return res.status(500).json({ status: 'error', message: e.message });
+  }
+});
+
+// --- Вспомогательные функции ---
+async function fetchLastSeenText(phone) {
+  const browser = await client.pupPage.browser();
+  const page = await browser.newPage();
+  await page.setUserAgent(globalUserAgent);
+
+  const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForTimeout(10000);
+
+  const statusText = await safeEvaluate(page, () => {
+    const regex = /(в сети|был|сегодня|вчера|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+    const elements = Array.from(document.querySelectorAll('header span, header div'));
+    for (const el of elements) {
+      const text = el.textContent?.trim() || '';
+      if (regex.test(text)) return text;
+    }
+    return null;
+  });
+  await page.close();
+  return statusText;
+}
+
+function convertStatusToIso(raw) {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  if (/в сети/i.test(raw)) return new Date().toISOString();
+  if (/сегодня/i.test(raw)) return `${today}T${raw.match(/\d{1,2}:\d{2}/)?.[0] || '00:00'}:00`;
+  if (/вчера/i.test(raw)) {
+    const yesterday = new Date(now.setDate(now.getDate() - 1)).toISOString().split('T')[0];
+    return `${yesterday}T${raw.match(/\d{1,2}:\d{2}/)?.[0] || '00:00'}:00`;
+  }
+  // Фоллбек — вернуть строку как есть (Java может сохранить null или строку)
+  return null;
 }
 
 
 
 
+app.listen(3000, () => {
+  console.log(`🟢 API запущено на порту 3000 для клиента ${clientId}`);
+});
 
+
+
+
+
+
+
+
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   const page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//
+//   const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = `lastseen_debug_${safePhone}_${timestamp}.html`;
+//   const imgPath = `lastseen_debug_${safePhone}_${timestamp}.png`;
+//
+//   // 🔧 Закрытие модалки WhatsApp Web
+//   const closeModals = async () => {
+//     let closed = false;
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           closed = true;
+//           break;
+//         }
+//       }
+//     } catch (_) {
+//       // молча пропускаем
+//     }
+//
+//     if (closed) {
+//       console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+//       await page.waitForTimeout(1500);
+//     } else {
+//       console.log(`[${clientId}] ℹ️ Модальное окно не обнаружено`);
+//     }
+//   };
+//
+//   try {
+//     console.log(`[${clientId}] 🔍 Перехожу на чат с ${phone}`);
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     // await closeModals();
+//     await page.waitForTimeout(12000);
+//     await closeModals();
+//
+//     try {
+//       await page.waitForSelector('header', { timeout: 15000 });
+//       console.log(`[${clientId}] ✅ Чат загружен`);
+//       await page.waitForTimeout(10000);
+//     } catch {
+//       console.warn(`[${clientId}] ⚠ header не найден — возможно, номер не зарегистрирован`);
+//     }
+//
+//     const statusText = await safeEvaluate(page, () => {
+//       const regex = /(в сети|был|online|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+//       const elements = Array.from(document.querySelectorAll('header span, header div'));
+//       for (const el of elements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text)) return text;
+//         if (regex.test(aria)) return aria;
+//         if (regex.test(title)) return title;
+//       }
+//       return null;
+//     });
+
+
+
+
+
+// const sanitizeFileName = str => str.replace(/[^\w.-]/g, '_');
+//
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   const page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//
+//   const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = `lastseen_debug_${safePhone}_${timestamp}.html`;
+//   const imgPath = `lastseen_debug_${safePhone}_${timestamp}.png`;
+//
+//   // 🔧 Закрытие модалки WhatsApp Web
+//   const closeModals = async () => {
+//     let closed = false;
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           closed = true;
+//           break;
+//         }
+//       }
+//     } catch (_) {
+//       // молча пропускаем
+//     }
+//
+//     if (closed) {
+//       console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+//       await page.waitForTimeout(1500);
+//     } else {
+//       console.log(`[${clientId}] ℹ️ Модальное окно не обнаружено`);
+//     }
+//   };
+//
+//   try {
+//     console.log(`[${clientId}] 🔍 Перехожу на чат с ${phone}`);
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     await closeModals();
+//     await page.waitForTimeout(10000);
+//     await closeModals();
+//
+//     try {
+//       await page.waitForSelector('header', { timeout: 15000 });
+//       console.log(`[${clientId}] ✅ Чат загружен`);
+//       await page.waitForTimeout(10000);
+//     } catch {
+//       console.warn(`[${clientId}] ⚠ header не найден — возможно, номер не зарегистрирован`);
+//     }
+//
+//     const statusText = await page.evaluate(() => {
+//       const regex = /(в сети|был|online|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2})/i;
+//       const elements = Array.from(document.querySelectorAll('header span, header div'));
+//       for (const el of elements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text)) return text;
+//         if (regex.test(aria)) return aria;
+//         if (regex.test(title)) return title;
+//       }
+//       return null;
+//     });
+//
+//     await page.setViewport({ width: 1920, height: 1080 });
+//     await page.screenshot({ path: imgPath });
+//     fs.writeFileSync(htmlPath, await page.content());
+//     await page.close();
+//
+//     if (statusText) {
+//       console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+//       return res.json({ phone, status: statusText });
+//     } else {
+//       console.warn(`[${clientId}] ⚠ Статус не найден, HTML: ${htmlPath}`);
+//       return res.json({ phone, status: 'не удалось получить статус' });
+//     }
+//   } catch (e) {
+//     console.error(`[${clientId}] ❌ Ошибка: ${e.message}`);
+//     try {
+//       fs.writeFileSync(htmlPath, await page.content());
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     await page.close();
+//     return res.status(500).json({ status: 'error', error: e.message });
+//   }
+// });

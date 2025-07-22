@@ -20,6 +20,58 @@ import java.util.Set;
 
 @Repository
 public interface LeadsRepository extends CrudRepository<Lead, Long> {
+
+    // Выборка всех лидов по телефону, статусу и дате (от самых старых)
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.telephone.id = :telephoneId
+          AND l.lidStatus = :status
+          AND l.createDate <= :date
+        ORDER BY l.createDate ASC
+    """)
+    List<Lead> findByTelephoneAndStatusBeforeDateOrdered(
+            @Param("telephoneId") Long telephoneId,
+            @Param("status") String status,
+            @Param("date") LocalDate date
+    );
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.telephone.id = :telephoneId AND l.lidStatus = 'Новый' AND l.createDate <= CURRENT_DATE")
+    long countPendingLeadsByTelephone(@Param("telephoneId") Long telephoneId);
+
+
+    @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId " +
+            "AND l.lidStatus = :status AND l.createDate <= :date ORDER BY l.createDate ASC")
+    List<Lead> findByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
+                                                  @Param("status") String status,
+                                                  @Param("date") LocalDate date);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.telephone.id = :telephoneId " +
+            "AND l.lidStatus = :status AND l.createDate <= :date")
+    int countByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
+                                            @Param("status") String status,
+                                            @Param("date") LocalDate date);
+
+    @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId " +
+            "AND l.lidStatus = :status AND l.createDate <= :date ORDER BY l.createDate ASC")
+    Optional<Lead> findFirstByTelephoneAndStatusBeforeDate(@Param("telephoneId") Long telephoneId,
+                                                           @Param("status") String status,
+                                                           @Param("date") LocalDate date);
+
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.telephone.id = :telephoneId
+          AND l.lidStatus = :status
+          AND l.createDate <= :date
+        ORDER BY l.createDate ASC
+    """)
+    List<Lead> findAllByTelephoneAndStatusBeforeDate(
+            @Param("telephoneId") Long telephoneId,
+            @Param("status") String status,
+            @Param("date") LocalDate date
+    );
+
+
     Optional<Lead> findByTelephoneLead(String telephoneLead);
 
     @Query("select l from Lead l where l.lidStatus = :status")
