@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers("/send-message", "/sendEmail").permitAll()
                         .requestMatchers("/webhook", "/webhook/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/leads/update").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/leads/sync").permitAll()
                         .requestMatchers("/api/leads/modified").permitAll()
                         .requestMatchers("/api/dispatch-settings/cron").permitAll()
                         .requestMatchers("/admin/**").authenticated()

@@ -27,4 +27,5 @@ public class LeadDtoTransfer {
     private Long telephoneId;
 
     private boolean offer;
+    private LocalDateTime lastSeen;
 }

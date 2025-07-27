@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:20-slim
 
 # Установка зависимостей Chromium, curl и сертификатов
 RUN apt-get update && apt-get install -y \
@@ -44,6 +44,9 @@ RUN npm install
 COPY whatsapp/ ./
 
 CMD ["node", "index.js"]
+
+
+
 
 
 

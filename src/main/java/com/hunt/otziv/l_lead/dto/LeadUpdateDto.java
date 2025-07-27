@@ -26,4 +26,5 @@ public class LeadUpdateDto {
     private Long operatorId;
     private Long marketologId;
     private Long telephoneId;
+    private LocalDateTime lastSeen;
 }

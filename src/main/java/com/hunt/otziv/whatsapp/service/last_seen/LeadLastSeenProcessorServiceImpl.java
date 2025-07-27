@@ -1,19 +1,28 @@
 package com.hunt.otziv.whatsapp.service.last_seen;
 
+import com.hunt.otziv.config.jwt.service.JwtService;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.l_lead.repository.LeadSyncQueueRepository;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.l_lead.services.serv.VpsSyncService;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 @Service
@@ -25,6 +34,12 @@ public class LeadLastSeenProcessorServiceImpl {
     private final WhatsAppService whatsAppService;
     private final ObjectProvider<LeadLastSeenCollectorServiceImpl> collectorProvider;
     private static final ZoneId IRKUTSK_ZONE = ZoneId.of("Asia/Irkutsk");
+
+    private final VpsSyncService vpsSyncService;         // отдельный сервис для синхронизации
+
+    // Менеджеры для ротации
+    private static final List<Long> MANAGER_IDS = List.of(2L, 3L);
+    private final AtomicInteger managerCounter = new AtomicInteger(0);
 
     /**
      * Обрабатывает одного лида: проверяет регистрацию и lastSeen, сохраняет в БД.
@@ -73,13 +88,25 @@ public class LeadLastSeenProcessorServiceImpl {
                 return;
             }
 
-            // Если lastSeen доступен — сохраняем
+            // Если lastSeen доступен — сохраняем и назначаем менеджера
             if (status.getParsedLastSeen() != null) {
                 lead.setLastSeen(status.getParsedLastSeen());
+                lead.setLidStatus("Новый");
+
+                // Чередуем менеджеров (2 → 3 → 2 → 3 …)
+                Long nextManagerId = MANAGER_IDS.get(managerCounter.getAndIncrement() % MANAGER_IDS.size());
+                Manager manager = new Manager();
+                manager.setId(nextManagerId);
+                lead.setManager(manager);
+
                 leadRepository.save(lead);
+
+                // Асинхронная отправка на VPS
+                vpsSyncService.sendLeadAsync(lead);
+
                 collectorProvider.getObject().incrementStat(clientId, 1, 1, 1, 0);
-                log.info("📅 [{}] {} — lastSeen={} (DB save {} мс)",
-                        clientId, phone, status.getParsedLastSeen(), System.currentTimeMillis() - dbStart);
+                log.info("📅 [{}] {} — lastSeen={}, менеджер назначен ID={} (DB save {} мс)",
+                        clientId, phone, status.getParsedLastSeen(), nextManagerId, System.currentTimeMillis() - dbStart);
             } else {
                 // lastSeen отсутствует — ставим оффлайн
                 lead.setLastSeen(null);
@@ -101,6 +128,7 @@ public class LeadLastSeenProcessorServiceImpl {
     }
 
 
+
     /**
      * Нормализует телефон (заменяет 8 на 7, убирает мусор).
      */
@@ -119,6 +147,8 @@ public class LeadLastSeenProcessorServiceImpl {
                 currentStatus.isBlank() ||
                 currentStatus.equalsIgnoreCase("Оффлайн");
     }
+
+
 }
 
 

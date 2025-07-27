@@ -27,6 +27,7 @@ public class LeadMapper {
                 .managerId(lead.getManager() != null ? lead.getManager().getId() : null)
                 .marketologId(lead.getMarketolog() != null ? lead.getMarketolog().getId() : null)
                 .telephoneId(lead.getTelephone() != null ? lead.getTelephone().getId() : null)
+                .lastSeen(lead.getLastSeen())
                 .build();
     }
 
@@ -45,6 +46,7 @@ public class LeadMapper {
                 .operatorId(lead.getOperator() != null ? lead.getOperator().getId() : null)
                 .marketologId(lead.getMarketolog() != null ? lead.getMarketolog().getId() : null)
                 .telephoneId(lead.getTelephone() != null ? lead.getTelephone().getId() : null)
+                .lastSeen(lead.getLastSeen())
                 .build();
     }
 
@@ -62,10 +64,12 @@ public class LeadMapper {
                 .updateStatus(dto.getUpdateStatus())
                 .dateNewTry(dto.getDateNewTry())
                 .offer(dto.isOffer())
+                .lastSeen(dto.getLastSeen())
                 .operator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null)
                 .manager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null)
                 .marketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null)
                 .telephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null)
+
                 .build();
     }
 
@@ -84,12 +88,38 @@ public class LeadMapper {
         lead.setUpdateStatus(dto.getUpdateStatus());
         lead.setDateNewTry(dto.getDateNewTry());
         lead.setOffer(dto.isOffer());
+        lead.setLastSeen(dto.getLastSeen());
 
         lead.setOperator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null);
         lead.setManager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null);
         lead.setMarketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null);
         lead.setTelephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null);
     }
+
+    public void updateEntityFromTransfer(Lead lead,
+                                         LeadDtoTransfer dto,
+                                         OperatorRepository operatorRepository,
+                                         ManagerRepository managerRepository,
+                                         MarketologRepository marketologRepository,
+                                         TelephoneRepository telephoneRepository) {
+
+        if (dto.getTelephoneLead() != null) lead.setTelephoneLead(dto.getTelephoneLead());
+        if (dto.getCityLead() != null) lead.setCityLead(dto.getCityLead());
+        if (dto.getCommentsLead() != null) lead.setCommentsLead(dto.getCommentsLead());
+        if (dto.getLidStatus() != null) lead.setLidStatus(dto.getLidStatus());
+        if (dto.getCreateDate() != null) lead.setCreateDate(dto.getCreateDate());
+        if (dto.getUpdateStatus() != null) lead.setUpdateStatus(dto.getUpdateStatus());
+        if (dto.getDateNewTry() != null) lead.setDateNewTry(dto.getDateNewTry());
+        lead.setOffer(dto.isOffer());
+        if (dto.getLastSeen() != null) lead.setLastSeen(dto.getLastSeen());
+
+        lead.setOperator(dto.getOperatorId() != null ? operatorRepository.findById(dto.getOperatorId()).orElse(null) : null);
+        lead.setManager(dto.getManagerId() != null ? managerRepository.findById(dto.getManagerId()).orElse(null) : null);
+        lead.setMarketolog(dto.getMarketologId() != null ? marketologRepository.findById(dto.getMarketologId()).orElse(null) : null);
+        lead.setTelephone(dto.getTelephoneId() != null ? telephoneRepository.findById(dto.getTelephoneId()).orElse(null) : null);
+    }
+
+
 }
 
 

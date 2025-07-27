@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -44,10 +46,10 @@ public class LeadLastSeenCollectorServiceImpl {
     private LocalTime endTime;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    @Scheduled(cron = "0 40 18 * * *", zone = "Asia/Irkutsk")
-    public void scheduleNightlyCheck() {
-        startLastSeenCollection();
-    }
+//    @Scheduled(cron = "0 40 18 * * *", zone = "Asia/Irkutsk")
+//    public void scheduleNightlyCheck() {
+//        startLastSeenCollection();
+//    }
 
     @PostConstruct
     public void initActiveClients() {
@@ -72,7 +74,7 @@ public class LeadLastSeenCollectorServiceImpl {
         for (WhatsAppProperties.ClientConfig client : clients) {
             Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));
             List<Lead> leads = leadRepository.findAllByTelephoneAndStatusBeforeDate(
-                    telephoneId, "Новый", LocalDate.now());
+                    telephoneId, "Проверка", LocalDate.now());
 
             if (leads.isEmpty()) {
                 log.info("📭 Нет лидов для клиента {}", client.getId());

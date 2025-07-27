@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.dto.LeadUpdateDto;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -60,6 +61,36 @@ public class LeadSyncController {
     private final MarketologRepository marketologRepo;
     private final TelephoneRepository telephoneRepo;
 
+    /** Создаёт нового лида или обновляет существующего (по telephoneLead) */
+    @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> syncLead(@RequestBody LeadDtoTransfer dto,
+                                           @RequestHeader("Authorization") String authHeader) {
+        if (!authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+
+        log.info("\n==================== [SYNC LEAD] ====================");
+        log.info("📥 Получен LeadDtoTransfer: {}", dto);
+
+        Lead existing = leadRepository.findByTelephoneLead(dto.getTelephoneLead()).orElse(null);
+
+        if (existing != null) {
+            leadMapper.updateEntityFromTransfer(existing, dto, operatorRepo, managerRepo, marketologRepo, telephoneRepo);
+            leadRepository.save(existing);
+            log.info("🟩 Лид {} обновлён (ID={})", existing.getTelephoneLead(), existing.getId());
+            log.info("==================== [END SYNC LEAD] ====================\n");
+            return ResponseEntity.ok("Лид обновлён");
+        } else {
+            Lead newLead = leadMapper.toEntity(dto, operatorRepo, managerRepo, marketologRepo, telephoneRepo);
+            leadRepository.save(newLead);
+            log.info("🟢 Лид {} создан (ID={})", newLead.getTelephoneLead(), newLead.getId());
+            log.info("==================== [END SYNC LEAD] ====================\n");
+            return ResponseEntity.ok("Лид создан");
+        }
+    }
+
+
+
     @PostMapping(value = "/update", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, String>> updateLead(@RequestBody LeadUpdateDto dto) {
         log.info("\n==================== [SYNC UPDATE] ====================");
@@ -103,6 +134,7 @@ public class LeadSyncController {
                 .operator(original.getOperator())
                 .marketolog(original.getMarketolog())
                 .telephone(original.getTelephone())
+                .lastSeen(original.getLastSeen())
                 .build();
     }
 
@@ -142,6 +174,11 @@ public class LeadSyncController {
         if (!Objects.equals(oldLead.getMarketolog(), newLead.getMarketolog())) {
             String change = safeUserId(oldLead.getMarketolog()) + " → " + safeUserId(newLead.getMarketolog());
             changes.put("📈 Маркетолог", change);
+        }
+
+        if (!Objects.equals(oldLead.getLastSeen(), newLead.getLastSeen())) {
+            String change = safeUserId(oldLead.getLastSeen()) + " → " + safeUserId(newLead.getLastSeen());
+            changes.put("📈 Last Seen", change);
         }
 
         return changes;

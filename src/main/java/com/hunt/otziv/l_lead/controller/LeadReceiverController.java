@@ -46,3 +46,4 @@ public class LeadReceiverController {
         return ResponseEntity.ok("Лид успешно импортирован");
     }
 }
+
