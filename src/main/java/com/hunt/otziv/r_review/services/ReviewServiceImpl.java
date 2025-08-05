@@ -50,6 +50,7 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @Service
@@ -369,61 +370,155 @@ public class ReviewServiceImpl implements ReviewService{
 //    =====================================================================================================
 
 //    ============================== ORDER DETAIL AND REVIEW UPDATE AND SET PUBLISH DATE ===============================
+@Override
+@Transactional
+public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+    log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации (1–6 дней, растяжка по диапазону)");
 
-    @Override
-    @Transactional
-    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
+    try {
+        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
 
-        try {
-            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-
-            List<Review> reviews = saveOrderDetails.getReviews();
-            if (reviews.isEmpty()) {
-                log.error("Ошибка: список отзывов пуст");
-                return false;
-            }
-
-            int totalReviews = orderDetailsDTO.getReviews().size();
-            if (totalReviews == 0) {
-                log.error("Ошибка: список отзывов в DTO пуст");
-                return false;
-            }
-
-            int botCounter = reviews.getFirst().getBot().getCounter();
-            LocalDate startDate = getLocalDate(botCounter);
-            LocalDate endDate = startDate.plusDays(30);
-
-            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
-
-            BigDecimal step = BigDecimal.valueOf(totalDays)
-                    .divide(BigDecimal.valueOf(totalReviews - 1), 2, RoundingMode.HALF_UP);
-            BigDecimal currentOffset = BigDecimal.ZERO;
-
-            for (int i = 0; i < totalReviews; i++) {
-                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
-                long daysToAdd = currentOffset.setScale(0, RoundingMode.HALF_UP).longValue();
-                LocalDate publishDate = startDate.plusDays(daysToAdd);
-
-                checkUpdateReview(reviewDTO, publishDate);
-                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
-
-                currentOffset = currentOffset.add(step);
-            }
-
-            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-                log.info("Обновляем комментарий отзыва и Деталей Заказа");
-                saveOrderDetails.setComment(orderDetailsDTO.getComment());
-                orderDetailsService.save(saveOrderDetails);
-            }
-
-            log.info("Все прошло успешно, даты публикаций установлены равномерно, возвращаем TRUE");
-            return true;
-        } catch (Exception e) {
-            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
+        List<Review> reviews = saveOrderDetails.getReviews();
+        if (reviews.isEmpty()) {
+            log.error("Ошибка: список отзывов пуст");
             return false;
         }
+
+        int totalReviews = orderDetailsDTO.getReviews().size();
+        if (totalReviews == 0) {
+            log.error("Ошибка: список отзывов в DTO пуст");
+            return false;
+        }
+
+        int botCounter = reviews.getFirst().getBot().getCounter();
+        LocalDate startDate = getLocalDate(botCounter);
+
+        // Минимум 28 дней. Если отзывов больше — добавляем месяцы по 28 дней
+        int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
+        LocalDate endDate = startDate.plusDays(monthsNeeded * 28 - 1);
+        long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
+
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+
+        // Список смещений дат (0 = startDate)
+        List<Long> offsets = new ArrayList<>();
+
+        // 1. Первый отзыв — в первые 0–2 дня
+        offsets.add(random.nextLong(0, Math.min(3, totalDays + 1)));
+
+        // 2. Последний отзыв — в последние 0–2 дня
+        if (totalReviews > 1) {
+            offsets.add(totalDays - random.nextLong(0, Math.min(3, totalDays + 1)));
+        }
+
+        // 3. Остальные — случайно по диапазону
+        while (offsets.size() < totalReviews) {
+            long offset = random.nextLong(0, totalDays + 1);
+            if (!offsets.contains(offset)) {
+                offsets.add(offset);
+            }
+        }
+
+        // 4. Сортируем
+        Collections.sort(offsets);
+
+        // 5. Корректируем зазоры: минимум 1 день, максимум 6 дней
+        for (int i = 1; i < offsets.size(); i++) {
+            long prev = offsets.get(i - 1);
+            long current = offsets.get(i);
+            long gap = current - prev;
+
+            if (gap < 1) {
+                offsets.set(i, prev + 1);
+            } else if (gap > 6) {
+                offsets.set(i, prev + 6);
+            }
+        }
+
+        // 6. Ещё раз сортируем на случай коррекции
+        Collections.sort(offsets);
+
+        // 7. Присваиваем даты публикаций
+        for (int i = 0; i < totalReviews; i++) {
+            ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
+            LocalDate publishDate = startDate.plusDays(offsets.get(i));
+
+            checkUpdateReview(reviewDTO, publishDate);
+            log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
+        }
+
+        // 8. Обновляем комментарий, если изменился
+        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
+            log.info("Обновляем комментарий отзыва и Деталей Заказа");
+            saveOrderDetails.setComment(orderDetailsDTO.getComment());
+            orderDetailsService.save(saveOrderDetails);
+        }
+
+        log.info("Все прошло успешно: даты публикаций распределены с зазором 1–6 дней, первый и последний отзыв закреплены по краям диапазона");
+        return true;
+
+    } catch (Exception e) {
+        log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
+        return false;
     }
+}
+
+
+
+//    @Override
+//    @Transactional
+//    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+//        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
+//
+//        try {
+//            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+//
+//            List<Review> reviews = saveOrderDetails.getReviews();
+//            if (reviews.isEmpty()) {
+//                log.error("Ошибка: список отзывов пуст");
+//                return false;
+//            }
+//
+//            int totalReviews = orderDetailsDTO.getReviews().size();
+//            if (totalReviews == 0) {
+//                log.error("Ошибка: список отзывов в DTO пуст");
+//                return false;
+//            }
+//
+//            int botCounter = reviews.getFirst().getBot().getCounter();
+//            LocalDate startDate = getLocalDate(botCounter);
+//            LocalDate endDate = startDate.plusDays(30);
+//
+//            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
+//
+//            BigDecimal step = BigDecimal.valueOf(totalDays)
+//                    .divide(BigDecimal.valueOf(totalReviews - 1), 2, RoundingMode.HALF_UP);
+//            BigDecimal currentOffset = BigDecimal.ZERO;
+//
+//            for (int i = 0; i < totalReviews; i++) {
+//                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
+//                long daysToAdd = currentOffset.setScale(0, RoundingMode.HALF_UP).longValue();
+//                LocalDate publishDate = startDate.plusDays(daysToAdd);
+//
+//                checkUpdateReview(reviewDTO, publishDate);
+//                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
+//
+//                currentOffset = currentOffset.add(step);
+//            }
+//
+//            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
+//                log.info("Обновляем комментарий отзыва и Деталей Заказа");
+//                saveOrderDetails.setComment(orderDetailsDTO.getComment());
+//                orderDetailsService.save(saveOrderDetails);
+//            }
+//
+//            log.info("Все прошло успешно, даты публикаций установлены равномерно, возвращаем TRUE");
+//            return true;
+//        } catch (Exception e) {
+//            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
+//            return false;
+//        }
+//    }
 
 
     // Улучшенная версия метода getLocalDate
@@ -504,7 +599,7 @@ public class ReviewServiceImpl implements ReviewService{
 //            log.info("ОТПРАВКА СООБЩЕНИЯ О ДЕАКТИВАЦИИ");
             try {
                 int botCount = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
-                if (botCount < 20) {
+                if (botCount < 50) {
                     String textMail = "Город: " + review.getFilial().getCity().getTitle() +  ". Остаток у города: " + botCount;
                     emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить ботов для: " + textMail);
                     log.info("ОТПРАВКА МЕЙЛА О МАЛОМ КОЛИЧЕСТВЕ БОТОВ - УСПЕХ");

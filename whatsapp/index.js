@@ -617,6 +617,311 @@ function cleanStatus(raw) {
 }
 
 // --- Обработчик /lastseen ---
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   let page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//   await applyAntiDetect(page);
+//
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.html`);
+//   const imgPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.png`);
+//   const fragPath = path.join(localScreenshotDir, `fragment_${safePhone}_${timestamp}.html`);
+//
+//   console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+//
+//   const closeModals = async () => {
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+//           await page.waitForTimeout(1500);
+//           break;
+//         }
+//       }
+//     } catch (err) {
+//       console.warn(`[${clientId}] ⚠ Ошибка при закрытии модалки: ${err.message}`);
+//     }
+//   };
+//
+//   async function saveDebug(reason = '') {
+//     if (page.isClosed()) return;
+//     try {
+//       fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+//       const html = await page.content();
+//       const buffer = await page.screenshot();
+//       fs.writeFileSync(htmlPath, html);
+//       fs.writeFileSync(imgPath, buffer);
+//       console.log(`[${clientId}] 💾 Сохранены файлы (${reason})`);
+//     } catch (err) {
+//       console.error(`[${clientId}] ❌ Не удалось сохранить отладку: ${err.message}`);
+//     }
+//   }
+//
+//   try {
+//     const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     await page.waitForTimeout(12000);
+//     // await page.waitForTimeout(5000 + Math.random() * 5000);
+//     await closeModals();
+//
+//     // Проверяем баннер
+//     const banner = await page.$('div[role="alert"]');
+//     if (banner) {
+//       console.warn(`[${clientId}] ⚠ ${phone} — баннер "не зарегистрирован"`);
+//       await saveDebug('banner');
+//       if (!page.isClosed()) await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'banner' });
+//     }
+//
+//     // Ждём загрузки чата
+//     try {
+//       await page.waitForSelector('header', { timeout: 20000 });
+//       console.log(`[${clientId}] ✅ Чат загружен (номер активен)`);
+//       await page.waitForTimeout(8000);
+//     } catch {
+//       console.warn(`[${clientId}] ❌ header не найден (номер ${phone} не зарегистрирован)`);
+//       await saveDebug('no-header');
+//       if (!page.isClosed()) await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'header' });
+//     }
+//
+//     // Ищем статус
+//     const { statusText, fragment } = await safeEvaluate(page, () => {
+//       const allElements = Array.from(document.querySelectorAll('header *'));
+//       const regex = /(в сети|online|был|была|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4} в \d{1,2}:\d{2})/i;
+//       for (const el of allElements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text) || regex.test(aria) || regex.test(title)) {
+//           return { statusText: text || aria || title, fragment: el.outerHTML || '' };
+//         }
+//       }
+//       return { statusText: null, fragment: '' };
+//     });
+//
+//     if (!statusText) {
+//       console.warn(`[${clientId}] ⚠ Статус не найден`);
+//       await saveDebug('no-status');
+//       if (fragment) fs.writeFileSync(fragPath, fragment, 'utf8');
+//       if (!page.isClosed()) await page.close();
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: null, rawLastSeen: null, stage: 'noStatus' });
+//     }
+//
+//     if (statusText) {
+//       const cleaned = cleanStatus(statusText);
+//       console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned });
+//     } else {
+//       console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath})`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: null });
+//     }
+//   } catch (e) {
+//     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
+//     try {
+//       fs.writeFileSync(htmlPath, await page.content());
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     if (!page.isClosed()) await page.close();
+//     return res.status(500).json({ status: 'error', error: e.message });
+//   }
+// });
+
+
+
+
+
+
+//
+//
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   const page = await browser.newPage();
+//
+//
+//   try {
+//     await page.setUserAgent(globalUserAgent);
+//     await applyAntiDetect(page);
+//
+//     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//     const safePhone = sanitizeFileName(phone);
+//     const htmlPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.html`);
+//     const imgPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.png`);
+//     const fragPath = path.join(localScreenshotDir, `fragment_${safePhone}_${timestamp}.html`);
+//
+//     console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+//
+//     const closeModals = async () => {
+//       try {
+//         const buttons = await page.$$('div[role="dialog"] button');
+//         for (const btn of buttons) {
+//           const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//           if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//             await btn.click();
+//             console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+//             await page.waitForTimeout(5000);
+//             break;
+//           }
+//         }
+//       } catch (err) {
+//         console.warn(`[${clientId}] ⚠ Ошибка при закрытии модалки: ${err.message}`);
+//       }
+//     };
+//
+//     const saveDebug = async (reason = '') => {
+//       try {
+//         fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+//         const html = await page.content();
+//         const buffer = await page.screenshot();
+//         fs.writeFileSync(htmlPath, html);
+//         fs.writeFileSync(imgPath, buffer);
+//         console.log(`[${clientId}] 💾 Сохранены файлы (${reason})`);
+//       } catch (err) {
+//         console.error(`[${clientId}] ❌ Не удалось сохранить отладку: ${err.message}`);
+//       }
+//     };
+//
+//     const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     await page.waitForTimeout(10000);
+//     await closeModals();
+//
+//     const banner = await page.$('div[role="alert"]');
+//     if (banner) {
+//       console.warn(`[${clientId}] ⚠ ${phone} — баннер "не зарегистрирован"`);
+//       await saveDebug('banner');
+//       return res.json({
+//         status: 'ok',
+//         phone,
+//         registered: false,
+//         lastSeen: null,
+//         rawLastSeen: null,
+//         stage: 'banner'
+//       });
+//     }
+//
+//     try {
+//       await page.waitForSelector('header', { timeout: 20000 });
+//       console.log(`[${clientId}] ✅ Чат загружен`);
+//       await page.waitForTimeout(10000);
+//     } catch {
+//       console.warn(`[${clientId}] ❌ header не найден (номер ${phone} не зарегистрирован)`);
+//       await saveDebug('no-header');
+//       return res.json({
+//         status: 'ok',
+//         phone,
+//         registered: false,
+//         lastSeen: null,
+//         rawLastSeen: null,
+//         stage: 'header'
+//       });
+//     }
+//
+//     const { statusText, fragment } = await safeEvaluate(page, () => {
+//       const allElements = Array.from(document.querySelectorAll('header *'));
+//       const regex = /(в сети|online|был|была|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4} в \d{1,2}:\d{2})/i;
+//       for (const el of allElements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text) || regex.test(aria) || regex.test(title)) {
+//           return {
+//             statusText: text || aria || title,
+//             fragment: el.outerHTML || ''
+//           };
+//         }
+//       }
+//       return { statusText: null, fragment: '' };
+//     });
+//
+//     if (!statusText) {
+//       console.warn(`[${clientId}] ⚠ Статус не найден`);
+//       if (fragment) fs.writeFileSync(fragPath, fragment, 'utf8');
+//       await saveDebug('no-status');
+//       return res.json({
+//         status: 'ok',
+//         phone,
+//         registered: true,
+//         lastSeen: null,
+//         rawLastSeen: null,
+//         stage: 'noStatus'
+//       });
+//     }
+//
+//     const cleaned = cleanStatus(statusText);
+//     console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+//     return res.json({
+//       status: 'ok',
+//       phone,
+//       registered: true,
+//       lastSeen: cleaned,
+//       rawLastSeen: statusText,
+//       stage: 'ok'
+//     });
+//
+//   } catch (e) {
+//     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
+//     try {
+//       const htmlPath = path.join(localScreenshotDir, `error_${phone}_${Date.now()}.html`);
+//       fs.writeFileSync(htmlPath, await page.content());
+//       const imgPath = path.join(localScreenshotDir, `error_${phone}_${Date.now()}.png`);
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     return res.status(500).json({ status: 'error', error: e.message });
+//
+//   } finally {
+//     if (!page.isClosed()) await page.close();
+//   }
+// });
+
+
+const saveDebug = async (reason = '') => {
+  try {
+    fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+    const html = await page.content();
+    const buffer = await page.screenshot();
+    fs.writeFileSync(htmlPath, html);
+    fs.writeFileSync(imgPath, buffer);
+    console.log(`[${clientId}] 💾 Сохранены файлы (${reason})`);
+  } catch (err) {
+    console.error(`[${clientId}] ❌ Не удалось сохранить отладку: ${err.message}`);
+  }
+};
+
+const closeModals = async () => {
+  try {
+    const buttons = await page.$$('div[role="dialog"] button');
+    for (const btn of buttons) {
+      const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+      if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+        await btn.click();
+        console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+        await page.waitForTimeout(1500);
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn(`[${clientId}] ⚠ Ошибка при закрытии модалки: ${err.message}`);
+  }
+};
+
+
+//
 app.get('/lastseen/:phone', async (req, res) => {
   const phone = req.params.phone;
   if (!client || !client.pupPage) {
@@ -624,78 +929,47 @@ app.get('/lastseen/:phone', async (req, res) => {
   }
 
   const browser = await client.pupPage.browser();
-  let page = await browser.newPage();
-  await page.setUserAgent(globalUserAgent);
-  await applyAntiDetect(page);
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const safePhone = sanitizeFileName(phone);
-  const htmlPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.html`);
-  const imgPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.png`);
-  const fragPath = path.join(localScreenshotDir, `fragment_${safePhone}_${timestamp}.html`);
-
-  console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
-
-  const closeModals = async () => {
-    try {
-      const buttons = await page.$$('div[role="dialog"] button');
-      for (const btn of buttons) {
-        const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
-        if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
-          await btn.click();
-          console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
-          await page.waitForTimeout(1500);
-          break;
-        }
-      }
-    } catch (err) {
-      console.warn(`[${clientId}] ⚠ Ошибка при закрытии модалки: ${err.message}`);
-    }
-  };
-
-  async function saveDebug(reason = '') {
-    if (page.isClosed()) return;
-    try {
-      fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
-      const html = await page.content();
-      const buffer = await page.screenshot();
-      fs.writeFileSync(htmlPath, html);
-      fs.writeFileSync(imgPath, buffer);
-      console.log(`[${clientId}] 💾 Сохранены файлы (${reason})`);
-    } catch (err) {
-      console.error(`[${clientId}] ❌ Не удалось сохранить отладку: ${err.message}`);
-    }
-  }
+  const page = await browser.newPage();
 
   try {
+    await page.setUserAgent(globalUserAgent);
+    await applyAntiDetect(page);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const safePhone = sanitizeFileName(phone);
+    const htmlPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.html`);
+    const imgPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.png`);
+    const fragPath = path.join(localScreenshotDir, `fragment_${safePhone}_${timestamp}.html`);
+
+    console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+
+
+    // Загружаем чат
     const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(12000);
-    // await page.waitForTimeout(5000 + Math.random() * 5000);
     await closeModals();
 
-    // Проверяем баннер
+    // Проверяем баннер "не зарегистрирован"
     const banner = await page.$('div[role="alert"]');
     if (banner) {
       console.warn(`[${clientId}] ⚠ ${phone} — баннер "не зарегистрирован"`);
-      await saveDebug('banner');
-      if (!page.isClosed()) await page.close();
+      // await saveDebug('banner');
       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'banner' });
     }
 
-    // Ждём загрузки чата
+    // Ждём появления заголовка чата
     try {
       await page.waitForSelector('header', { timeout: 20000 });
       console.log(`[${clientId}] ✅ Чат загружен (номер активен)`);
-      await page.waitForTimeout(8000);
+      await page.waitForTimeout(11000);
     } catch {
       console.warn(`[${clientId}] ❌ header не найден (номер ${phone} не зарегистрирован)`);
       await saveDebug('no-header');
-      if (!page.isClosed()) await page.close();
       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'header' });
     }
 
-    // Ищем статус
+    // Ищем статус last seen
     const { statusText, fragment } = await safeEvaluate(page, () => {
       const allElements = Array.from(document.querySelectorAll('header *'));
       const regex = /(в сети|online|был|была|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4} в \d{1,2}:\d{2})/i;
@@ -712,30 +986,158 @@ app.get('/lastseen/:phone', async (req, res) => {
 
     if (!statusText) {
       console.warn(`[${clientId}] ⚠ Статус не найден`);
-      await saveDebug('no-status');
       if (fragment) fs.writeFileSync(fragPath, fragment, 'utf8');
-      if (!page.isClosed()) await page.close();
+      // await saveDebug('no-header');
       return res.json({ status: 'ok', phone, registered: true, lastSeen: null, rawLastSeen: null, stage: 'noStatus' });
     }
 
-    if (statusText) {
-      const cleaned = cleanStatus(statusText);
-      console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
-      return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned });
-    } else {
-      console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath})`);
-      return res.json({ status: 'ok', phone, registered: true, lastSeen: null });
-    }
+    const cleaned = cleanStatus(statusText);
+    console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+    return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned });
+
   } catch (e) {
     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
     try {
+      const htmlPath = path.join(localScreenshotDir, `error_${phone}_${Date.now()}.html`);
       fs.writeFileSync(htmlPath, await page.content());
+      const imgPath = path.join(localScreenshotDir, `error_${phone}_${Date.now()}.png`);
       await page.screenshot({ path: imgPath });
     } catch (_) {}
-    if (!page.isClosed()) await page.close();
     return res.status(500).json({ status: 'error', error: e.message });
+
+  } finally {
+    if (!page.isClosed()) await page.close();
   }
 });
+
+
+
+
+//
+// // --- Обработчик /lastseen ---
+// app.get('/lastseen/:phone', async (req, res) => {
+//   const phone = req.params.phone;
+//   if (!client || !client.pupPage) {
+//     return res.status(503).json({ status: 'error', error: 'Клиент не инициализирован' });
+//   }
+//
+//   const browser = await client.pupPage.browser();
+//   let page = await browser.newPage();
+//   await page.setUserAgent(globalUserAgent);
+//   await applyAntiDetect(page);
+//
+//   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+//   const safePhone = sanitizeFileName(phone);
+//   const htmlPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.html`);
+//   const imgPath = path.join(localScreenshotDir, `debug_${safePhone}_${timestamp}.png`);
+//   const fragPath = path.join(localScreenshotDir, `fragment_${safePhone}_${timestamp}.html`);
+//
+//   console.log(`[${clientId}] 🕒 Старт проверки ${phone} (${new Date().toISOString()})`);
+//
+//   const closeModals = async () => {
+//     try {
+//       const buttons = await page.$$('div[role="dialog"] button');
+//       for (const btn of buttons) {
+//         const text = await page.evaluate(el => el.textContent?.toLowerCase() || '', btn);
+//         if (['продолжить', 'понятно', 'отлично', 'далее', 'хорошо', 'готово'].some(t => text.includes(t))) {
+//           await btn.click();
+//           console.log(`[${clientId}] 🧹 Закрыто модальное окно`);
+//           await page.waitForTimeout(1500);
+//           break;
+//         }
+//       }
+//     } catch (err) {
+//       console.warn(`[${clientId}] ⚠ Ошибка при закрытии модалки: ${err.message}`);
+//     }
+//   };
+//
+//   async function saveDebug(reason = '') {
+//     if (page.isClosed()) return;
+//     try {
+//       fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+//       const html = await page.content();
+//       const buffer = await page.screenshot();
+//       fs.writeFileSync(htmlPath, html);
+//       fs.writeFileSync(imgPath, buffer);
+//       // console.log(`[${clientId}] 💾 Сохранены файлы (${reason})`);
+//     } catch (err) {
+//       // console.error(`[${clientId}] ❌ Не удалось сохранить отладку: ${err.message}`);
+//     }
+//   }
+//
+//   try {
+//     const url = `https://web.whatsapp.com/send?phone=${phone}&text&app_absent=0`;
+//     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+//     await page.waitForTimeout(12000);
+//     // await page.waitForTimeout(5000 + Math.random() * 5000);
+//     await closeModals();
+//
+//     // Проверяем баннер
+//     const banner = await page.$('div[role="alert"]');
+//     if (banner) {
+//       console.warn(`[${clientId}] ⚠ ${phone} — баннер "не зарегистрирован"`);
+//       // await saveDebug('banner');
+//       if (!page.isClosed()) await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'banner' });
+//     }
+//
+//     // Ждём загрузки чата
+//     try {
+//       await page.waitForSelector('header', { timeout: 20000 });
+//       console.log(`[${clientId}] ✅ Чат загружен (номер активен)`);
+//       await page.waitForTimeout(8000);
+//     } catch {
+//       console.warn(`[${clientId}] ❌ header не найден (номер ${phone} не зарегистрирован)`);
+//       // await saveDebug('no-header');
+//       if (!page.isClosed()) await page.close();
+//       return res.json({ status: 'ok', phone, registered: false, lastSeen: null, rawLastSeen: null, stage: 'header' });
+//     }
+//
+//     // Ищем статус
+//     const { statusText, fragment } = await safeEvaluate(page, () => {
+//       const allElements = Array.from(document.querySelectorAll('header *'));
+//       const regex = /(в сети|online|был|была|last seen|сегодня в|вчера в|\d{1,2} \D+ в \d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{4} в \d{1,2}:\d{2})/i;
+//       for (const el of allElements) {
+//         const text = el.textContent?.trim() || '';
+//         const aria = el.getAttribute?.('aria-label')?.trim() || '';
+//         const title = el.getAttribute?.('title')?.trim() || '';
+//         if (regex.test(text) || regex.test(aria) || regex.test(title)) {
+//           return { statusText: text || aria || title, fragment: el.outerHTML || '' };
+//         }
+//       }
+//       return { statusText: null, fragment: '' };
+//     });
+//
+//     if (!statusText) {
+//       console.warn(`[${clientId}] ⚠ Статус не найден`);
+//       // await saveDebug('no-status');
+//       if (fragment) fs.writeFileSync(fragPath, fragment, 'utf8');
+//       finally {
+//         if (!page.isClosed()) await page.close();
+//       }
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: null, rawLastSeen: null, stage: 'noStatus' });
+//     }
+//
+//     if (statusText) {
+//       const cleaned = cleanStatus(statusText);
+//       console.log(`[${clientId}] 📌 Статус найден: ${statusText}`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: cleaned });
+//     } else {
+//       console.warn(`[${clientId}] ⚠ Статус не найден (HTML: ${htmlPath})`);
+//       return res.json({ status: 'ok', phone, registered: true, lastSeen: null });
+//     }
+//   } catch (e) {
+//     console.error(`[${clientId}] ❌ Ошибка для ${phone}: ${e.message}`);
+//     try {
+//       fs.writeFileSync(htmlPath, await page.content());
+//       await page.screenshot({ path: imgPath });
+//     } catch (_) {}
+//     finally {
+//       if (!page.isClosed()) await page.close();
+//     }
+//     return res.status(500).json({ status: 'error', error: e.message });
+//   }
+// });
 
 
 

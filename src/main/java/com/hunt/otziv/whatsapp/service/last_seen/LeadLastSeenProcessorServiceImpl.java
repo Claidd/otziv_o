@@ -1,23 +1,15 @@
 package com.hunt.otziv.whatsapp.service.last_seen;
 
-import com.hunt.otziv.config.jwt.service.JwtService;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.repository.LeadSyncQueueRepository;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.serv.VpsSyncService;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
