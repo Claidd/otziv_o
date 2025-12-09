@@ -76,13 +76,22 @@
                                 <textarea  class="company__card__remember-text" th:utext="${review.botPassword}" th:id="'botPassword_' + ${review.id}"></textarea>
                                 <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
                             </div>
-                            
-                            <div class="company__card__text__lead"> <!-- Bot Login -->
-                                <label>
-                                    <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>
-                                </label>
-                                <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>
+
+                            <div class="company__card__text__lead"> <!-- Кнопка аккаунта бота -->
+                                <a class="company__card__text__lead-button"
+                                   th:href="@{'/bots/' + ${review.botId} + '/browser'}"
+                                   target="_blank">
+                                    вк
+                                </a>
                             </div>
+
+
+                            <!--                            <div class="company__card__text__lead"> &lt;!&ndash; Bot Login &ndash;&gt;-->
+<!--                                <label>-->
+<!--                                    <textarea  class="company__card__remember-text" th:utext="'https://vk.com/'" th:id="myInput5"></textarea>-->
+<!--                                </label>-->
+<!--                                <button type="submit" class="company__card__text__lead-button" th:onclick="myFunctionVk()">вк</button>-->
+<!--                            </div>-->
 
                             <!-- <form class="company__card__text__lead" target="_blank" th:action="@{${review.filial.url}}">
                                 <input type="hidden" name="_csrf" value="${_csrf.token}"/>

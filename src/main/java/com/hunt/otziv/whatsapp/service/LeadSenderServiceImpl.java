@@ -33,10 +33,17 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     private final LeadService leadService;
 
     private List<WhatsAppProperties.ClientConfig> clients;
+
+    /** Список для общего graceful shutdown (как было) */
     private final List<ScheduledExecutorService> executors = new ArrayList<>();
+
+    /** Быстрый доступ: clientId -> executor этого клиента */
+    private final Map<String, ScheduledExecutorService> executorsByClient = new ConcurrentHashMap<>();
+
+    /** Флаг активности клиента (ручная/автоматическая деактивация) */
     private final Map<String, Boolean> activeClients = new ConcurrentHashMap<>();
 
-    private final String NEW_STATUS = "Новый";
+    private static final String NEW_STATUS = "Новый";
 
     @PostConstruct
     public void initClients() {
@@ -47,6 +54,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
             log.warn("⚠️ В конфигурации WhatsAppProperties нет clients — список пустой");
             this.clients = new ArrayList<>();
         } else {
+            // Берём только операторов
             this.clients = loadedClients.stream()
                     .filter(client -> "operator".equalsIgnoreCase(client.getRole()))
                     .collect(Collectors.toList());
@@ -69,7 +77,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("==================================================================\n");
     }
 
-//    @Scheduled(cron = "0 00 11 * * *")
+    // @Scheduled(cron = "0 00 11 * * *")
     public void startDailyDispatch() {
         log.info("\n===================== START DAILY DISPATCH =======================");
 
@@ -98,7 +106,7 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         for (int i = 0; i < clients.size(); i++) {
             WhatsAppProperties.ClientConfig client = clients.get(i);
 
-            int delayStepSeconds = ThreadLocalRandom.current().nextInt(60, 181); //Клиент 1 — через 60 - 180 сек
+            int delayStepSeconds = ThreadLocalRandom.current().nextInt(60, 300); // клиент i стартует ступенькой 60–180 сек
             int initialDelay = i * delayStepSeconds;
 
             Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));
@@ -106,12 +114,15 @@ public class LeadSenderServiceImpl implements LeadSenderService {
 
             ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
             executors.add(executor);
+            executorsByClient.put(client.getId(), executor);
 
-            log.info("🟨 [DISPATCH] 📅 Клиент {}: старт через {} сек, лидов: {}", client.getId(), initialDelay, leadCount);
+            log.info("🟨 [DISPATCH] 📅 Клиент {}: старт через {} сек, лидов: {}",
+                    client.getId(), initialDelay, leadCount);
 
             executor.schedule(() -> {
                 leadProcessorService.processLead(client);
-                scheduleNextMessage(executor, client, leadCount);
+                // сразу запускаем рекурсивное планирование с актуальным числом лидов
+                scheduleNextMessage(executor, client);
             }, initialDelay, TimeUnit.SECONDS);
         }
 
@@ -122,52 +133,76 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         log.info("==================================================================\n");
     }
 
-    private void scheduleNextMessage(ScheduledExecutorService executor, WhatsAppProperties.ClientConfig client, int initialLeadCount) {
-        int delay = calculateRandomPeriodByLeadCount(initialLeadCount);
+    /** Планирование следующего сообщения с актуальным состоянием очереди лидов */
+    private void scheduleNextMessage(ScheduledExecutorService executor,
+                                     WhatsAppProperties.ClientConfig client) {
+        Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));
+        int currentLeads = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
+        int delay = calculateRandomPeriodByLeadCount(currentLeads);
 
         executor.schedule(() -> {
             if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
-                log.info("🟩 [DISPATCH] ✅ Клиент {} завершён (нет лидов)", client.getId());
+                log.info("🟩 [DISPATCH] ✅ Клиент {} завершён (деактивирован)", client.getId());
+                return;
+            }
+
+            // Если лидов уже нет — завершаем клиента и не планируем дальше
+            int left = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
+            if (left <= 0) {
+                log.info("📭 [DISPATCH] Нет новых лидов для клиента {} — останавливаем планировщик", client.getId());
+                stopClientScheduler(client.getId());
                 return;
             }
 
             leadProcessorService.processLead(client);
-            scheduleNextMessage(executor, client, initialLeadCount);
+            // Рекурсивно планируем следующий запуск
+            scheduleNextMessage(executor, client);
 
         }, delay, TimeUnit.SECONDS);
 
         LocalDateTime nextTime = LocalDateTime.now().plusSeconds(delay);
-        log.info("⏱ [DISPATCH] Клиент {}: следующее сообщение в {} (через {} сек, лидов было: {})",
+        log.info("⏱ [DISPATCH] Клиент {}: следующее сообщение в {} (через {} сек, новых лидов сейчас: {})",
                 client.getId(),
                 nextTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")),
                 delay,
-                initialLeadCount);
+                currentLeads);
     }
 
+    /** Рандомная пауза в зависимости от очереди */
     private int calculateRandomPeriodByLeadCount(int leadCount) {
-        if (leadCount <= 5) {
-            // 5–60 минут (в секундах)
+        if (leadCount <= 0) {
+            return 300; // дефолт, сюда обычно не попадём из-за ранней остановки
+        } else if (leadCount <= 5) {
+            // 15–60 минут (чуть поднял нижнюю границу, чтобы не жечь лимиты)
             return ThreadLocalRandom.current().nextInt(900, 3601);
         } else if (leadCount <= 10) {
-            // 5–40 минут
+            // 15–40 минут
             return ThreadLocalRandom.current().nextInt(900, 2401);
         } else if (leadCount <= 20) {
-            // 5–30 минут
+            // 10–30 минут
             return ThreadLocalRandom.current().nextInt(600, 1801);
         } else if (leadCount <= 30) {
             // 5–15 минут
             return ThreadLocalRandom.current().nextInt(300, 901);
         } else {
-            // фиксированное значение: 5 минут (минимум)
-            return 300;
+            // >=31 — фикс. 5 минут
+            return ThreadLocalRandom.current().nextInt(480, 1201);
         }
     }
-
 
     @PreDestroy
     public void shutdownExecutors() {
         log.info("\n====================== SHUTDOWN EXECUTORS =========================");
 
+        // Останавливаем «адресно» каждый executor клиента
+        executorsByClient.values().forEach(ex -> {
+            try {
+                ex.shutdown();
+            } catch (Exception ignore) {}
+        });
+        executorsByClient.clear();
+
+        // Плюс общий список (на случай старых ссылок)
         for (ScheduledExecutorService executor : executors) {
             try {
                 executor.shutdown();
@@ -177,14 +212,20 @@ public class LeadSenderServiceImpl implements LeadSenderService {
             } catch (InterruptedException e) {
                 executor.shutdownNow();
                 Thread.currentThread().interrupt();
+            } catch (Exception ignore) {
             }
         }
+        executors.clear();
 
         log.info("==================================================================\n");
     }
 
     public void stopClientScheduler(String clientId) {
         activeClients.put(clientId, false);
+        ScheduledExecutorService ex = executorsByClient.remove(clientId);
+        if (ex != null) {
+            ex.shutdownNow();
+        }
         log.info("🛑 [DISPATCH] Клиент {} деактивирован вручную", clientId);
     }
 
@@ -192,6 +233,187 @@ public class LeadSenderServiceImpl implements LeadSenderService {
         return clients;
     }
 }
+
+
+
+
+
+
+
+
+
+
+//
+//@Service
+//@Slf4j
+//@RequiredArgsConstructor
+//public class LeadSenderServiceImpl implements LeadSenderService {
+//
+//    private final WhatsAppProperties properties;
+//    private final LeadProcessorService leadProcessorService;
+//    private final AdminNotifierService adminNotifierService;
+//    private final LeadService leadService;
+//
+//    private List<WhatsAppProperties.ClientConfig> clients;
+//    private final List<ScheduledExecutorService> executors = new ArrayList<>();
+//    private final Map<String, Boolean> activeClients = new ConcurrentHashMap<>();
+//
+//    private final String NEW_STATUS = "Новый";
+//
+//    @PostConstruct
+//    public void initClients() {
+//        log.info("\n=========================== INIT CLIENTS ===========================");
+//
+//        List<WhatsAppProperties.ClientConfig> loadedClients = properties.getClients();
+//        if (loadedClients == null) {
+//            log.warn("⚠️ В конфигурации WhatsAppProperties нет clients — список пустой");
+//            this.clients = new ArrayList<>();
+//        } else {
+//            this.clients = loadedClients.stream()
+//                    .filter(client -> "operator".equalsIgnoreCase(client.getRole()))
+//                    .collect(Collectors.toList());
+//        }
+//        resetClientStates();
+//
+//        log.info("==================================================================\n");
+//    }
+//
+//    public void resetClientStates() {
+//        log.info("\n======================= RESET CLIENT STATES =======================");
+//
+//        activeClients.clear();
+//        for (WhatsAppProperties.ClientConfig client : clients) {
+//            activeClients.put(client.getId(), true);
+//            log.info("🟦 [DISPATCH] 🔁 Клиент {} активен после сброса", client.getId());
+//        }
+//        log.info("🟦 [DISPATCH] 🔄 Все клиенты активированы");
+//
+//        log.info("==================================================================\n");
+//    }
+//
+////    @Scheduled(cron = "0 00 11 * * *")
+//    public void startDailyDispatch() {
+//        log.info("\n===================== START DAILY DISPATCH =======================");
+//
+//        log.info("🟦 [DISPATCH] ⏰ Ежедневный запуск рассылки");
+//
+//        if (clients == null || clients.isEmpty()) {
+//            log.warn("🟥 [DISPATCH] ❌ Нет клиентов с ролью operator — рассылка не запущена");
+//            adminNotifierService.notifyAdmin("⚠️ Рассылка не запущена: нет активных клиентов с ролью operator");
+//            return;
+//        }
+//
+//        boolean noLeads = clients.stream()
+//                .map(c -> Long.valueOf(c.getId().replaceAll("\\D+", "")))
+//                .map(id -> leadService.countNewLeadsByClient(id, NEW_STATUS))
+//                .allMatch(count -> count == 0);
+//
+//        if (noLeads) {
+//            log.warn("🟥 [DISPATCH] 📭 У всех клиентов отсутствуют новые лиды");
+//            adminNotifierService.notifyAdmin("📭 Рассылка завершена: у всех клиентов нет новых лидов");
+//            return;
+//        }
+//
+//        adminNotifierService.notifyAdmin("🚀 Началась ежедневная рассылка сообщений по клиентам");
+//        resetClientStates();
+//
+//        for (int i = 0; i < clients.size(); i++) {
+//            WhatsAppProperties.ClientConfig client = clients.get(i);
+//
+//            int delayStepSeconds = ThreadLocalRandom.current().nextInt(60, 181); //Клиент 1 — через 60 - 180 сек
+//            int initialDelay = i * delayStepSeconds;
+//
+//            Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));
+//            int leadCount = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
+//
+//            ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+//            executors.add(executor);
+//
+//            log.info("🟨 [DISPATCH] 📅 Клиент {}: старт через {} сек, лидов: {}", client.getId(), initialDelay, leadCount);
+//
+//            executor.schedule(() -> {
+//                leadProcessorService.processLead(client);
+//                scheduleNextMessage(executor, client, leadCount);
+//            }, initialDelay, TimeUnit.SECONDS);
+//        }
+//
+//        leadProcessorService.resetState();
+//        log.info("🧹 [DISPATCH] Лимиты и ошибки сброшены — клиенты готовы");
+//        log.info("🟩 [DISPATCH] ✅ Планировщик запущен: {} клиентов", clients.size());
+//
+//        log.info("==================================================================\n");
+//    }
+//
+//    private void scheduleNextMessage(ScheduledExecutorService executor, WhatsAppProperties.ClientConfig client, int initialLeadCount) {
+//        int delay = calculateRandomPeriodByLeadCount(initialLeadCount);
+//
+//        executor.schedule(() -> {
+//            if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
+//                log.info("🟩 [DISPATCH] ✅ Клиент {} завершён (нет лидов)", client.getId());
+//                return;
+//            }
+//
+//            leadProcessorService.processLead(client);
+//            scheduleNextMessage(executor, client, initialLeadCount);
+//
+//        }, delay, TimeUnit.SECONDS);
+//
+//        LocalDateTime nextTime = LocalDateTime.now().plusSeconds(delay);
+//        log.info("⏱ [DISPATCH] Клиент {}: следующее сообщение в {} (через {} сек, лидов было: {})",
+//                client.getId(),
+//                nextTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")),
+//                delay,
+//                initialLeadCount);
+//    }
+//
+//    private int calculateRandomPeriodByLeadCount(int leadCount) {
+//        if (leadCount <= 5) {
+//            // 5–60 минут (в секундах)
+//            return ThreadLocalRandom.current().nextInt(900, 3601);
+//        } else if (leadCount <= 10) {
+//            // 5–40 минут
+//            return ThreadLocalRandom.current().nextInt(900, 2401);
+//        } else if (leadCount <= 20) {
+//            // 5–30 минут
+//            return ThreadLocalRandom.current().nextInt(600, 1801);
+//        } else if (leadCount <= 30) {
+//            // 5–15 минут
+//            return ThreadLocalRandom.current().nextInt(300, 901);
+//        } else {
+//            // фиксированное значение: 5 минут (минимум)
+//            return 300;
+//        }
+//    }
+//
+//
+//    @PreDestroy
+//    public void shutdownExecutors() {
+//        log.info("\n====================== SHUTDOWN EXECUTORS =========================");
+//
+//        for (ScheduledExecutorService executor : executors) {
+//            try {
+//                executor.shutdown();
+//                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+//                    executor.shutdownNow();
+//                }
+//            } catch (InterruptedException e) {
+//                executor.shutdownNow();
+//                Thread.currentThread().interrupt();
+//            }
+//        }
+//
+//        log.info("==================================================================\n");
+//    }
+//
+//    public void stopClientScheduler(String clientId) {
+//        activeClients.put(clientId, false);
+//        log.info("🛑 [DISPATCH] Клиент {} деактивирован вручную", clientId);
+//    }
+//
+//    public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
+//        return clients;
+//    }
+//}
 
 
 

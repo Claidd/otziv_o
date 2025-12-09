@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="'Браузер бота #' + ${botId}">Браузер бота</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: system-ui, sans-serif;
+        }
+        #topbar {
+            height: 40px;
+            background: #111827;
+            color: #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            font-size: 14px;
+        }
+        #browser-frame {
+            width: 100%;
+            height: calc(100% - 40px);
+            border: none;
+        }
+        #loading {
+            padding: 10px;
+            font-size: 14px;
+        }
+        button {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+<div id="topbar">
+    <div>
+        <span th:text="'Бот: ' + ${bot.fio} + ' (' + ${bot.login} + ')'"></span>
+    </div>
+    <div>
+        <span id="status">Запуск браузера…</span>
+        <button id="closeBtn">Закрыть сессию</button>
+    </div>
+</div>
+<iframe id="browser-frame" style="display:none;"></iframe>
+
+<script th:inline="javascript">
+    (function () {
+        // Чтобы IntelliJ не ругалась на [[...]]
+        const botId = /*[[${botId}]]*/ 0;
+
+        const statusEl = document.getElementById('status');
+        const iframe   = document.getElementById('browser-frame');
+        const closeBtn = document.getElementById('closeBtn');
+
+        async function openSession() {
+            try {
+                const resp = await fetch(`/api/bots/${botId}/browser/open`, {
+                    method: 'POST'
+                });
+
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    console.error('open FAILED', resp.status, text);
+                    statusEl.textContent = 'Ошибка запуска браузера';
+                    return;
+                }
+
+                const data = await resp.json();
+                console.log('open OK', data);
+
+                iframe.onload = function () {
+                    iframe.style.display = 'block';
+                    statusEl.textContent = 'Браузер запущен';
+                };
+
+                iframe.onerror = function (e) {
+                    console.warn('iframe ONERROR', e);
+                    statusEl.textContent = 'Не удалось открыть браузер';
+                };
+
+                iframe.src = data.vncUrl;
+            } catch (e) {
+                console.error('open EXCEPTION', e);
+                statusEl.textContent = 'Ошибка подключения: ' + e;
+            }
+        }
+
+        async function closeSession() {
+            try {
+                const resp = await fetch(`/api/bots/${botId}/browser/close`, {
+                    method: 'POST',
+                    keepalive: true
+                });
+                console.log('close status', resp.status);
+            } catch (e) {
+                console.warn('close EXCEPTION', e);
+            }
+        }
+
+        closeBtn.addEventListener('click', async () => {
+            closeBtn.disabled = true;
+            statusEl.textContent = 'Отключение…';
+            await closeSession();
+            statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';
+        });
+
+        window.addEventListener('beforeunload', closeSession);
+        window.addEventListener('pagehide', closeSession);
+
+        openSession();
+    })();
+</script>
+
+
+<!--<script th:inline="javascript">-->
+<!--    (function () {-->
+<!--        // чтобы IntelliJ не ругал [[...]]-->
+<!--        const botId = /*[[${botId}]]*/ 0;-->
+
+<!--        const statusEl = document.getElementById('status');-->
+<!--        const iframe = document.getElementById('browser-frame');-->
+<!--        const closeBtn = document.getElementById('closeBtn');-->
+
+<!--        let vncUrl = null;-->
+
+<!--        async function openSession() {-->
+<!--            try {-->
+<!--                const resp = await fetch(`/api/bots/${botId}/browser/open`, {-->
+<!--                    method: 'POST'-->
+<!--                });-->
+
+<!--                if (!resp.ok) {-->
+<!--                    const text = await resp.text();-->
+<!--                    console.error('open FAILED', resp.status, text);-->
+<!--                    statusEl.textContent = 'Ошибка запуска браузера';-->
+<!--                    return;-->
+<!--                }-->
+
+<!--                const data = await resp.json();-->
+<!--                console.log('open OK', data);-->
+
+<!--                vncUrl = data.vncUrl;-->
+
+<!--                // пока контейнер поднимается-->
+<!--                statusEl.textContent = 'Запуск браузера…';-->
+
+<!--                // ДАЁМ КОНТЕЙНЕРУ ВРЕМЯ ПРОСНУТЬСЯ-->
+<!--                // можно поиграть временем: 3000–5000 мс-->
+<!--                setTimeout(() => {-->
+<!--                    attachIframe();-->
+<!--                }, 4000);-->
+
+<!--            } catch (e) {-->
+<!--                console.error('open EXCEPTION', e);-->
+<!--                statusEl.textContent = 'Ошибка подключения: ' + e;-->
+<!--            }-->
+<!--        }-->
+
+<!--        function attachIframe() {-->
+<!--            if (!vncUrl) return;-->
+
+<!--            console.log('attach iframe url =', vncUrl);-->
+
+<!--            iframe.onload = function () {-->
+<!--                console.log('iframe ONLOAD');-->
+<!--                iframe.style.display = 'block';-->
+<!--                statusEl.textContent = 'Браузер запущен';-->
+<!--            };-->
+
+<!--            // onerror у iframe ненадёжный, так что просто лог-->
+<!--            iframe.onerror = function (e) {-->
+<!--                console.warn('iframe ONERROR', e);-->
+<!--                statusEl.textContent = 'Не удалось открыть браузер (ошибка загрузки)';-->
+<!--            };-->
+
+<!--            // без query-параметра-->
+<!--            iframe.src = vncUrl;-->
+<!--        }-->
+
+<!--        async function closeSession() {-->
+<!--            try {-->
+<!--                const resp = await fetch(`/api/bots/${botId}/browser/close`, {-->
+<!--                    method: 'POST',-->
+<!--                    keepalive: true-->
+<!--                });-->
+<!--                console.log('close status', resp.status);-->
+<!--            } catch (e) {-->
+<!--                console.warn('close EXCEPTION', e);-->
+<!--            }-->
+<!--        }-->
+
+<!--        closeBtn.addEventListener('click', async () => {-->
+<!--            closeBtn.disabled = true;-->
+<!--            statusEl.textContent = 'Отключение…';-->
+<!--            await closeSession();-->
+<!--            statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';-->
+<!--        });-->
+
+<!--        window.addEventListener('beforeunload', closeSession);-->
+<!--        window.addEventListener('pagehide', closeSession);-->
+
+<!--        openSession();-->
+<!--    })();-->
+<!--</script>-->
+
+
+
+
+</body>
+</html>
+
+
+<!--async function openSession() {-->
+<!--try {-->
+<!--const resp = await fetch(`/api/bots/${botId}/browser/open`, {-->
+<!--method: 'POST'-->
+<!--});-->
+<!--if (!resp.ok) {-->
+<!--statusEl.textContent = 'Ошибка запуска браузера';-->
+<!--return;-->
+<!--}-->
+<!--const data = await resp.json(); // { botId, vncUrl }-->
+<!--iframe.src = data.vncUrl;-->
+<!--iframe.style.display = 'block';-->
+<!--statusEl.textContent = 'Браузер запущен';-->
+<!--} catch (e) {-->
+<!--statusEl.textContent = 'Ошибка подключения: ' + e;-->
+<!--}-->
+<!--}-->
+
+<!--async function closeSession() {-->
+<!--try {-->
+<!--await fetch(`/api/bots/${botId}/browser/close`, {-->
+<!--method: 'POST',-->
+<!--keepalive: true-->
+<!--});-->
+<!--} catch (e) {-->
+<!--// молча-->
+<!--}-->
+<!--}-->

@@ -47,6 +47,8 @@ public class LeadTransferServiceImpl implements LeadTransferService {
         restTemplate.postForEntity(remoteUrl, request, String.class);
     }
 
+
+
     public void sendLeadUpdate(Lead lead) {
         LeadUpdateDto dto = leadMapper.toUpdateDto(lead);
         String token = jwtService.generateSyncToken();

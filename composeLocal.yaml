@@ -127,6 +127,48 @@ services:
       - internal_net
 
 
+  client1:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    container_name: client1
+    volumes:
+    - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
+    - "D:/Скрины:/app/screenshots" # монтируем локальную папку
+    ports:
+      - "3001:3000"
+    restart: always
+    environment:
+      - CLIENT_ID=client1
+      - SERVER_URL=http://nginx
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+    #     - PROXY_URL=socks5://192.168.3.151:1080
+    networks:
+      - internal_net
+
+  client2:
+#    image: claid38/otziv-whatsapp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    container_name: client2
+    volumes:
+      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
+      - "D:/Скрины:/app/screenshots" # монтируем локальную папку
+    ports:
+      - "3002:3000"
+    restart: always
+    depends_on:
+      - client1
+    environment:
+      - CLIENT_ID=client2
+      - SERVER_URL=http://nginx
+      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.152:1080
+    networks:
+      - internal_net
+
+
 #  whatsapp_vika:
 #    build:
 #      context: .
@@ -163,546 +205,548 @@ services:
 #    networks:
 #      - internal_net
 
-  client1:
-    build:
-      context: .
-      dockerfile: Dockerfile.whatsapp
+#  client1:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.whatsapp
+##    image: claid38/otziv-whatsapp:latest
+#    container_name: client1
+#    volumes:
+#      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
+#      - ./screenshots:/app/screenshots
+#      - ./html_dumps:/app/html_dumps
+#    ports:
+#      - "3001:3000"
+#    restart: always
+#    environment:
+#      - CLIENT_ID=client1
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.151:1080
+#    networks:
+#      - internal_net
+
+#  client2:
 #    image: claid38/otziv-whatsapp:latest
-    container_name: client1
-    volumes:
-      - ./whatsapp_auth_data/client1:/root/.config/whatsapp-web.js
-    ports:
-      - "3001:3000"
-    restart: always
-    environment:
-      - CLIENT_ID=client1
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.151:1080
-    networks:
-      - internal_net
-
-  client2:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client2
-    volumes:
-      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
-    ports:
-      - "3002:3000"
-    restart: always
-    depends_on:
-      - client1
-    environment:
-      - CLIENT_ID=client2
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.152:1080
-    networks:
-      - internal_net
-
-  client3:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client3
-    volumes:
-      - ./whatsapp_auth_data/client3:/root/.config/whatsapp-web.js
-    ports:
-      - "3003:3000"
-    restart: always
-    depends_on:
-      - client2
-    environment:
-      - CLIENT_ID=client3
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.153:1080
-    networks:
-      - internal_net
-
-
-  client4:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client4
-    volumes:
-      - ./whatsapp_auth_data/client4:/root/.config/whatsapp-web.js
-    ports:
-      - "3004:3000"
-    restart: always
-    depends_on:
-    - client3
-    environment:
-      - CLIENT_ID=client4
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.154:1080
-    networks:
-      - internal_net
-
-  client5:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client5
-    volumes:
-      - ./whatsapp_auth_data/client5:/root/.config/whatsapp-web.js
-    ports:
-      - "3005:3000"
-    restart: always
-    depends_on:
-      - client4
-    environment:
-      - CLIENT_ID=client5
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.155:1080
-    networks:
-      - internal_net
+#    container_name: client2
+#    volumes:
+#      - ./whatsapp_auth_data/client2:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3002:3000"
+#    restart: always
+#    depends_on:
+#      - client1
+#    environment:
+#      - CLIENT_ID=client2
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.152:1080
+#    networks:
+#      - internal_net
 #
-  client6:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client6
-    volumes:
-      - ./whatsapp_auth_data/client6:/root/.config/whatsapp-web.js
-    ports:
-      - "3006:3000"
-    restart: always
-    depends_on:
-      - client5
-    environment:
-      - CLIENT_ID=client6
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.156:1080
-    networks:
-      - internal_net
-
-  client7:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client7
-    volumes:
-      - ./whatsapp_auth_data/client7:/root/.config/whatsapp-web.js
-    ports:
-      - "3007:3000"
-    restart: always
-    depends_on:
-      - client6
-    environment:
-      - CLIENT_ID=client7
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.157:1080
-    networks:
-      - internal_net
-
-  client8:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client8
-    volumes:
-      - ./whatsapp_auth_data/client8:/root/.config/whatsapp-web.js
-    ports:
-      - "3008:3000"
-    restart: always
-    depends_on:
-      - client7
-    environment:
-      - CLIENT_ID=client8
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.158:1080
-    networks:
-      - internal_net
-
-  client9:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client9
-    volumes:
-      - ./whatsapp_auth_data/client9:/root/.config/whatsapp-web.js
-    ports:
-      - "3009:3000"
-    restart: always
-    depends_on:
-      - client8
-    environment:
-      - CLIENT_ID=client9
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.159:1080
-    networks:
-      - internal_net
-
-  client10:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client10
-    volumes:
-      - ./whatsapp_auth_data/client10:/root/.config/whatsapp-web.js
-    ports:
-      - "3010:3000"
-    restart: always
-    depends_on:
-      - client9
-    environment:
-      - CLIENT_ID=client10
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.160:1080
-    networks:
-      - internal_net
-
-  client11:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client11
-    volumes:
-      - ./whatsapp_auth_data/client11:/root/.config/whatsapp-web.js
-    ports:
-      - "3011:3000"
-    restart: always
-    depends_on:
-      - client10
-    environment:
-      - CLIENT_ID=client11
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.161:1080
-    networks:
-      - internal_net
-
-  client12:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client12
-    volumes:
-      - ./whatsapp_auth_data/client12:/root/.config/whatsapp-web.js
-    ports:
-      - "3012:3000"
-    restart: always
-    depends_on:
-      - client11
-    environment:
-      - CLIENT_ID=client12
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.162:1080
-    networks:
-      - internal_net
-
-  client13:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client13
-    volumes:
-      - ./whatsapp_auth_data/client13:/root/.config/whatsapp-web.js
-    ports:
-      - "3013:3000"
-    restart: always
-    depends_on:
-      - client12
-    environment:
-      - CLIENT_ID=client13
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.163:1080
-    networks:
-      - internal_net
-
-
-  client14:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client14
-    volumes:
-      - ./whatsapp_auth_data/client14:/root/.config/whatsapp-web.js
-    ports:
-      - "3014:3000"
-    restart: always
-    depends_on:
-      - client13
-    environment:
-      - CLIENT_ID=client14
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.164:1080
-    networks:
-      - internal_net
-
-  client15:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client15
-    volumes:
-      - ./whatsapp_auth_data/client15:/root/.config/whatsapp-web.js
-    ports:
-      - "3015:3000"
-    restart: always
-    depends_on:
-      - client14
-    environment:
-      - CLIENT_ID=client15
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.165:1080
-    networks:
-      - internal_net
-
-  client16:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client16
-    volumes:
-      - ./whatsapp_auth_data/client16:/root/.config/whatsapp-web.js
-    ports:
-      - "3016:3000"
-    restart: always
-    depends_on:
-      - client15
-    environment:
-      - CLIENT_ID=client16
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.166:1080
-    networks:
-      - internal_net
-
-  client17:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client17
-    volumes:
-      - ./whatsapp_auth_data/client17:/root/.config/whatsapp-web.js
-    ports:
-      - "3017:3000"
-    restart: always
-    depends_on:
-      - client16
-    environment:
-      - CLIENT_ID=client17
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.167:1080
-    networks:
-      - internal_net
-
-  client18:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client18
-    volumes:
-      - ./whatsapp_auth_data/client18:/root/.config/whatsapp-web.js
-    ports:
-      - "3018:3000"
-    restart: always
-    depends_on:
-      - client17
-    environment:
-      - CLIENT_ID=client18
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.168:1080
-    networks:
-      - internal_net
-
-  client19:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client19
-    volumes:
-      - ./whatsapp_auth_data/client19:/root/.config/whatsapp-web.js
-    ports:
-      - "3019:3000"
-    restart: always
-    depends_on:
-      - client18
-    environment:
-      - CLIENT_ID=client19
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.169:1080
-    networks:
-      - internal_net
-
-  client20:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client20
-    volumes:
-      - ./whatsapp_auth_data/client20:/root/.config/whatsapp-web.js
-    ports:
-      - "3020:3000"
-    restart: always
-    depends_on:
-      - client19
-    environment:
-      - CLIENT_ID=client20
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.170:1080
-    networks:
-      - internal_net
-
-  client21:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client21
-    volumes:
-      - ./whatsapp_auth_data/client21:/root/.config/whatsapp-web.js
-    ports:
-      - "3021:3000"
-    restart: always
-    depends_on:
-      - client20
-    environment:
-      - CLIENT_ID=client21
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.171:1080
-    networks:
-      - internal_net
-
-  client22:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client22
-    volumes:
-      - ./whatsapp_auth_data/client22:/root/.config/whatsapp-web.js
-    ports:
-      - "3022:3000"
-    restart: always
-    depends_on:
-      - client21
-    environment:
-      - CLIENT_ID=client22
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.172:1080
-    networks:
-      - internal_net
-
-  client23:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client23
-    volumes:
-      - ./whatsapp_auth_data/client23:/root/.config/whatsapp-web.js
-    ports:
-      - "3023:3000"
-    restart: always
-    depends_on:
-      - client22
-    environment:
-      - CLIENT_ID=client23
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.173:1080
-    networks:
-      - internal_net
-
-
-  client24:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client24
-    volumes:
-      - ./whatsapp_auth_data/client24:/root/.config/whatsapp-web.js
-    ports:
-      - "3024:3000"
-    restart: always
-    depends_on:
-      - client23
-    environment:
-      - CLIENT_ID=client24
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.174:1080
-    networks:
-      - internal_net
-
-  client25:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client25
-    volumes:
-      - ./whatsapp_auth_data/client25:/root/.config/whatsapp-web.js
-    ports:
-      - "3025:3000"
-    restart: always
-    depends_on:
-      - client24
-    environment:
-      - CLIENT_ID=client25
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.175:1080
-    networks:
-      - internal_net
-
-  client26:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client26
-    volumes:
-      - ./whatsapp_auth_data/client26:/root/.config/whatsapp-web.js
-    ports:
-      - "3026:3000"
-    restart: always
-    depends_on:
-      - client25
-    environment:
-      - CLIENT_ID=client26
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.176:1080
-    networks:
-      - internal_net
-
-  client27:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client27
-    volumes:
-      - ./whatsapp_auth_data/client27:/root/.config/whatsapp-web.js
-    ports:
-      - "3027:3000"
-    restart: always
-    depends_on:
-      - client26
-    environment:
-      - CLIENT_ID=client27
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.177:1080
-    networks:
-      - internal_net
-
-  client28:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client28
-    volumes:
-      - ./whatsapp_auth_data/client28:/root/.config/whatsapp-web.js
-    ports:
-      - "3028:3000"
-    restart: always
-    depends_on:
-      - client27
-    environment:
-      - CLIENT_ID=client28
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.178:1080
-    networks:
-      - internal_net
-
-  client29:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client29
-    volumes:
-      - ./whatsapp_auth_data/client29:/root/.config/whatsapp-web.js
-    ports:
-      - "3029:3000"
-    restart: always
-    depends_on:
-      - client28
-    environment:
-      - CLIENT_ID=client29
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.179:1080
-    networks:
-      - internal_net
-
-  client30:
-    image: claid38/otziv-whatsapp:latest
-    container_name: client30
-    volumes:
-      - ./whatsapp_auth_data/client30:/root/.config/whatsapp-web.js
-    ports:
-      - "3030:3000"
-    restart: always
-    depends_on:
-      - client29
-    environment:
-      - CLIENT_ID=client30
-      - SERVER_URL=http://nginx:80
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-      - PROXY_URL=socks5://192.168.3.180:1080
-    networks:
-      - internal_net
+#  client3:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client3
+#    volumes:
+#      - ./whatsapp_auth_data/client3:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3003:3000"
+#    restart: always
+#    depends_on:
+#      - client2
+#    environment:
+#      - CLIENT_ID=client3
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.153:1080
+#    networks:
+#      - internal_net
+#
+#
+#  client4:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client4
+#    volumes:
+#      - ./whatsapp_auth_data/client4:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3004:3000"
+#    restart: always
+#    depends_on:
+#    - client3
+#    environment:
+#      - CLIENT_ID=client4
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.154:1080
+#    networks:
+#      - internal_net
+#
+#  client5:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client5
+#    volumes:
+#      - ./whatsapp_auth_data/client5:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3005:3000"
+#    restart: always
+#    depends_on:
+#      - client4
+#    environment:
+#      - CLIENT_ID=client5
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.155:1080
+#    networks:
+#      - internal_net
+##
+#  client6:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client6
+#    volumes:
+#      - ./whatsapp_auth_data/client6:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3006:3000"
+#    restart: always
+#    depends_on:
+#      - client5
+#    environment:
+#      - CLIENT_ID=client6
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.156:1080
+#    networks:
+#      - internal_net
+#
+#  client7:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client7
+#    volumes:
+#      - ./whatsapp_auth_data/client7:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3007:3000"
+#    restart: always
+#    depends_on:
+#      - client6
+#    environment:
+#      - CLIENT_ID=client7
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.157:1080
+#    networks:
+#      - internal_net
+#
+#  client8:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client8
+#    volumes:
+#      - ./whatsapp_auth_data/client8:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3008:3000"
+#    restart: always
+#    depends_on:
+#      - client7
+#    environment:
+#      - CLIENT_ID=client8
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.158:1080
+#    networks:
+#      - internal_net
+#
+#  client9:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client9
+#    volumes:
+#      - ./whatsapp_auth_data/client9:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3009:3000"
+#    restart: always
+#    depends_on:
+#      - client8
+#    environment:
+#      - CLIENT_ID=client9
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.159:1080
+#    networks:
+#      - internal_net
+#
+#  client10:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client10
+#    volumes:
+#      - ./whatsapp_auth_data/client10:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3010:3000"
+#    restart: always
+#    depends_on:
+#      - client9
+#    environment:
+#      - CLIENT_ID=client10
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.160:1080
+#    networks:
+#      - internal_net
+#
+#  client11:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client11
+#    volumes:
+#      - ./whatsapp_auth_data/client11:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3011:3000"
+#    restart: always
+#    depends_on:
+#      - client10
+#    environment:
+#      - CLIENT_ID=client11
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.161:1080
+#    networks:
+#      - internal_net
+#
+#  client12:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client12
+#    volumes:
+#      - ./whatsapp_auth_data/client12:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3012:3000"
+#    restart: always
+#    depends_on:
+#      - client11
+#    environment:
+#      - CLIENT_ID=client12
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.162:1080
+#    networks:
+#      - internal_net
+#
+#  client13:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client13
+#    volumes:
+#      - ./whatsapp_auth_data/client13:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3013:3000"
+#    restart: always
+#    depends_on:
+#      - client12
+#    environment:
+#      - CLIENT_ID=client13
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.163:1080
+#    networks:
+#      - internal_net
+#
+#
+#  client14:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client14
+#    volumes:
+#      - ./whatsapp_auth_data/client14:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3014:3000"
+#    restart: always
+#    depends_on:
+#      - client13
+#    environment:
+#      - CLIENT_ID=client14
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.164:1080
+#    networks:
+#      - internal_net
+#
+#  client15:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client15
+#    volumes:
+#      - ./whatsapp_auth_data/client15:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3015:3000"
+#    restart: always
+#    depends_on:
+#      - client14
+#    environment:
+#      - CLIENT_ID=client15
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.165:1080
+#    networks:
+#      - internal_net
+#
+#  client16:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client16
+#    volumes:
+#      - ./whatsapp_auth_data/client16:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3016:3000"
+#    restart: always
+#    depends_on:
+#      - client15
+#    environment:
+#      - CLIENT_ID=client16
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.166:1080
+#    networks:
+#      - internal_net
+#
+#  client17:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client17
+#    volumes:
+#      - ./whatsapp_auth_data/client17:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3017:3000"
+#    restart: always
+#    depends_on:
+#      - client16
+#    environment:
+#      - CLIENT_ID=client17
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.167:1080
+#    networks:
+#      - internal_net
+#
+#  client18:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client18
+#    volumes:
+#      - ./whatsapp_auth_data/client18:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3018:3000"
+#    restart: always
+#    depends_on:
+#      - client17
+#    environment:
+#      - CLIENT_ID=client18
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.168:1080
+#    networks:
+#      - internal_net
+#
+#  client19:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client19
+#    volumes:
+#      - ./whatsapp_auth_data/client19:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3019:3000"
+#    restart: always
+#    depends_on:
+#      - client18
+#    environment:
+#      - CLIENT_ID=client19
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.169:1080
+#    networks:
+#      - internal_net
+#
+#  client20:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client20
+#    volumes:
+#      - ./whatsapp_auth_data/client20:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3020:3000"
+#    restart: always
+#    depends_on:
+#      - client19
+#    environment:
+#      - CLIENT_ID=client20
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.170:1080
+#    networks:
+#      - internal_net
+#
+#  client21:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client21
+#    volumes:
+#      - ./whatsapp_auth_data/client21:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3021:3000"
+#    restart: always
+#    depends_on:
+#      - client20
+#    environment:
+#      - CLIENT_ID=client21
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.171:1080
+#    networks:
+#      - internal_net
+#
+#  client22:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client22
+#    volumes:
+#      - ./whatsapp_auth_data/client22:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3022:3000"
+#    restart: always
+#    depends_on:
+#      - client21
+#    environment:
+#      - CLIENT_ID=client22
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.172:1080
+#    networks:
+#      - internal_net
+#
+#  client23:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client23
+#    volumes:
+#      - ./whatsapp_auth_data/client23:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3023:3000"
+#    restart: always
+#    depends_on:
+#      - client22
+#    environment:
+#      - CLIENT_ID=client23
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.173:1080
+#    networks:
+#      - internal_net
+#
+#
+#  client24:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client24
+#    volumes:
+#      - ./whatsapp_auth_data/client24:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3024:3000"
+#    restart: always
+#    depends_on:
+#      - client23
+#    environment:
+#      - CLIENT_ID=client24
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.174:1080
+#    networks:
+#      - internal_net
+#
+#  client25:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client25
+#    volumes:
+#      - ./whatsapp_auth_data/client25:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3025:3000"
+#    restart: always
+#    depends_on:
+#      - client24
+#    environment:
+#      - CLIENT_ID=client25
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.175:1080
+#    networks:
+#      - internal_net
+#
+#  client26:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client26
+#    volumes:
+#      - ./whatsapp_auth_data/client26:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3026:3000"
+#    restart: always
+#    depends_on:
+#      - client25
+#    environment:
+#      - CLIENT_ID=client26
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.176:1080
+#    networks:
+#      - internal_net
+#
+#  client27:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client27
+#    volumes:
+#      - ./whatsapp_auth_data/client27:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3027:3000"
+#    restart: always
+#    depends_on:
+#      - client26
+#    environment:
+#      - CLIENT_ID=client27
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.177:1080
+#    networks:
+#      - internal_net
+#
+#  client28:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client28
+#    volumes:
+#      - ./whatsapp_auth_data/client28:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3028:3000"
+#    restart: always
+#    depends_on:
+#      - client27
+#    environment:
+#      - CLIENT_ID=client28
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.178:1080
+#    networks:
+#      - internal_net
+#
+#  client29:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client29
+#    volumes:
+#      - ./whatsapp_auth_data/client29:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3029:3000"
+#    restart: always
+#    depends_on:
+#      - client28
+#    environment:
+#      - CLIENT_ID=client29
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.179:1080
+#    networks:
+#      - internal_net
+#
+#  client30:
+#    image: claid38/otziv-whatsapp:latest
+#    container_name: client30
+#    volumes:
+#      - ./whatsapp_auth_data/client30:/root/.config/whatsapp-web.js
+#    ports:
+#      - "3030:3000"
+#    restart: always
+#    depends_on:
+#      - client29
+#    environment:
+#      - CLIENT_ID=client30
+#      - SERVER_URL=http://nginx:80
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#      - PROXY_URL=socks5://192.168.3.180:1080
+#    networks:
+#      - internal_net

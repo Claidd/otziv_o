@@ -180,6 +180,20 @@ public class LeadServiceImpl implements LeadService {
         return userRepository.findByFio(operator);
     } // Взять лида по ФИО
 
+    @Override
+    @Transactional
+    public void markOfferSentAndPublish(Long leadId) {
+        Lead lead = leadsRepository.findById(leadId)
+                .orElseThrow(() -> new IllegalArgumentException("Lead not found: " + leadId));
+
+        lead.setOffer(true);
+        lead.setUpdateStatus(LocalDateTime.now());
+        leadsRepository.save(lead);
+
+        // событие публикуется ВНУТРИ той же транзакции
+        leadEventPublisher.publishUpdate(lead);
+    }
+
     //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
     @Override

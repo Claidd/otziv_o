@@ -9,8 +9,8 @@ services:
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files/
     restart: always
-    ports:
-      - '3306:3306'
+#    ports:
+#      - '3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -71,7 +71,7 @@ services:
   phpmyadmin:
     image: phpmyadmin:latest
     ports:
-      - "6571:80"
+      - "127.0.0.1:6571:80"     # ← было закомментировано, вернули, НО только на loopback
     volumes:
       - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
     restart: always
@@ -83,29 +83,7 @@ services:
     networks:
       - internal_net
 
-  vpn-proxy:
-    image: qmcgaw/gluetun:latest
-    container_name: vpn-proxy
-    cap_add:
-      - NET_ADMIN
-    environment:
-      - VPN_SERVICE_PROVIDER=custom
-      - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=+Gw0CzywSmBnqAqJ/AFxUvcdmJoLMTkYnXNVc2G4C3Q=
-      - WIREGUARD_ADDRESSES=10.64.128.252/32
-      - WIREGUARD_PUBLIC_KEY=veLqpZazR9j/Ol2G8TfrO32yEhc1i543MCN8rpy1FBA=
-      - WIREGUARD_ENDPOINT_IP=185.204.1.203
-      - WIREGUARD_ENDPOINT_PORT=51820
-      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0,::0/0
-      - FIREWALL=off
-      - HTTPPROXY=on
-      - HTTPPROXY_LOG=on
-      - DNS=10.64.0.1
-#    ports:
-#      - "8888:8888"
-    restart: always
-    networks:
-      - internal_net
+
 
 
   log-viewer:
@@ -123,20 +101,20 @@ services:
 
 #  http://o-ogo:ru:1002/qr
 
-  whatsapp_vika:
-    image: claid38/otziv-whatsapp
-    container_name: whatsapp_vika
-    volumes:
-      - ./whatsapp_auth_data/whatsapp_vika:/root/.config/whatsapp-web.js
-    ports:
-      - "1001:3000"
-    restart: always
-    environment:
-      - CLIENT_ID=whatsapp_vika
-      - SERVER_URL=https://o-ogo.ru
-      - AUTH_PATH=/root/.config/whatsapp-web.js
-    networks:
-      - internal_net
+#  whatsapp_vika:
+#    image: claid38/otziv-whatsapp
+#    container_name: whatsapp_vika
+#    volumes:
+#      - ./whatsapp_auth_data/whatsapp_vika:/root/.config/whatsapp-web.js
+#    ports:
+#      - "1001:3000"
+#    restart: always
+#    environment:
+#      - CLIENT_ID=whatsapp_vika
+#      - SERVER_URL=https://o-ogo.ru
+#      - AUTH_PATH=/root/.config/whatsapp-web.js
+#    networks:
+#      - internal_net
 
 
   whatsapp_lika:
@@ -144,17 +122,44 @@ services:
     container_name: whatsapp_lika
     volumes:
       - ./whatsapp_auth_data/whatsapp_lika:/root/.config/whatsapp-web.js
-    ports:
-      - "1002:3000"
+#    ports:
+#      - "1002:3000"
     restart: always
-    depends_on:
-      - whatsapp_vika
+#    depends_on:
+#      - whatsapp_vika
     environment:
       - CLIENT_ID=whatsapp_lika
       - SERVER_URL=https://o-ogo.ru
+#      - SERVER_URL=http://app:8080
       - AUTH_PATH=/root/.config/whatsapp-web.js
     networks:
       - internal_net
+
+#  vpn-proxy:
+#    image: qmcgaw/gluetun:latest
+#    container_name: vpn-proxy
+#    cap_add:
+#      - NET_ADMIN
+#    environment:
+#      - VPN_SERVICE_PROVIDER=custom
+#      - VPN_TYPE=wireguard
+#      - WIREGUARD_PRIVATE_KEY=+Gw0CzywSmBnqAqJ/AFxUvcdmJoLMTkYnXNVc2G4C3Q=
+#      - WIREGUARD_ADDRESSES=10.64.128.252/32
+#      - WIREGUARD_PUBLIC_KEY=veLqpZazR9j/Ol2G8TfrO32yEhc1i543MCN8rpy1FBA=
+#      - WIREGUARD_ENDPOINT_IP=185.204.1.203
+#      - WIREGUARD_ENDPOINT_PORT=51820
+#      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0,::0/0
+#      - FIREWALL=off
+#      - HTTPPROXY=on
+#      - HTTPPROXY_LOG=on
+#      - DNS=10.64.0.1
+#    #    ports:
+#    #      - "8888:8888"
+#    #    expose:
+#    #      - "8888"   # Делает порт 8888 доступным другим контейнерам
+#    restart: always
+#    networks:
+#      - internal_net
 
 #  client1:
 #    image: claid38/otziv-whatsapp
@@ -309,4 +314,6 @@ volumes:
 
 networks:
   internal_net:
+    driver: bridge
+
 

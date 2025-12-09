@@ -124,4 +124,13 @@ public class BotsController {
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     } // Берем роль пользователя
 
+    @GetMapping("/{botId}/browser")
+    public String botBrowserPage(@PathVariable Long botId, Model model) {
+        BotDTO bot = botService.findById(botId);
+
+        model.addAttribute("botId", bot.getId());
+        model.addAttribute("bot", bot);
+        return "bots/bot_browser";   // templates/bot-browser.html
+    }
+
 }

@@ -14,6 +14,10 @@ public class LeadEventPublisher {
     private final ApplicationEventPublisher eventPublisher;
 
     public void publishUpdate(Lead lead) {
+        if (lead == null || lead.getId() == null) {
+            log.warn("⚠️ publishUpdate: lead или lead.id пустой — событие не отправлено");
+            return;
+        }
         log.info("📢 Публикуем событие обновления лида {}", lead.getId());
         eventPublisher.publishEvent(new LeadUpdatedEvent(lead.getId()));
     }

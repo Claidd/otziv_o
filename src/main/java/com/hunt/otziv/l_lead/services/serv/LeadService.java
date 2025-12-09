@@ -99,6 +99,8 @@ public interface LeadService {
 
     List<Lead> findNewLeadsByClient(Long telephoneId, String status);
 
+    void markOfferSentAndPublish(Long id);
+
 
     //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
 }
