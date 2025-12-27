@@ -3,6 +3,8 @@ package com.hunt.otziv.c_companies.services;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Filial;
 
+import java.util.List;
+
 public interface FilialService {
     Filial save(FilialDTO filialDTO);
 
@@ -16,4 +18,6 @@ public interface FilialService {
     FilialDTO getFilialByIdToDTO(Long id);
     void updateFilial(FilialDTO filialDTO);
     Filial findFilialByUrl(String url);
+
+    List<Filial> findByCityId(Long id);
 }

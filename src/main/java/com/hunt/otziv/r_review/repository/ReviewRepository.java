@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.repository;
 
+import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
@@ -39,7 +40,12 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r FROM Review r LEFT JOIN FETCH r.product LEFT JOIN FETCH r.category LEFT JOIN FETCH r.subCategory LEFT JOIN FETCH r.bot LEFT JOIN FETCH r.filial LEFT JOIN FETCH r.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH r.orderDetails d LEFT JOIN FETCH d.product p LEFT JOIN FETCH p.productCategory LEFT JOIN FETCH d.order o LEFT JOIN FETCH o.company WHERE r.id IN :reviewId  ORDER BY r.changed")
     List<Review> findAll(List<Long> reviewId);
 
-
+    // ИЗМЕНЕНИЕ 6: Метод для поиска всех активных отзывов с ботами
+//    @Query("SELECT r FROM Review r WHERE r.publish = false AND r.bot IS NOT NULL")
+//    List<Review> findByPublishFalseAndBotIsNotNull();
+//
+//    @Query("SELECT r FROM Review r WHERE r.bot = :bot AND r.publish = false")
+//    List<Review> findByBotAndPublishFalse(@Param("bot") Bot bot);
 
     @Query("SELECT r FROM Review r LEFT JOIN FETCH r.category LEFT JOIN FETCH r.subCategory LEFT JOIN FETCH r.bot LEFT JOIN FETCH r.filial LEFT JOIN FETCH r.worker w LEFT JOIN FETCH w.user LEFT JOIN FETCH r.orderDetails d LEFT JOIN FETCH d.product p LEFT JOIN FETCH p.productCategory LEFT JOIN FETCH d.order o LEFT JOIN FETCH o.company WHERE r.orderDetails.order.id = :orderId")
     List<Review> getAllByOrderId(Long orderId);
@@ -50,6 +56,29 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("select COUNT(r) from Review r where r.publishedDate <= :localDate AND r.worker = :worker AND r.publish = false")
     int findAllByReviewsListStatus(LocalDate localDate, Worker worker);
+
+
+    @Query("SELECT r FROM Review r WHERE r.publish = false AND r.bot IS NOT NULL")
+    List<Review> findByPublishFalseAndBotIsNotNull();
+
+//    @Query("SELECT r FROM Review r WHERE r.publish = false AND r.bot IS NOT NULL AND r.filial.id IN :filialIds")
+//    List<Review> findByPublishFalseAndBotIsNotNullAndFilialIdIn(@Param("filialIds") List<Long> filialIds);
+
+    @Query("""
+    SELECT DISTINCT r FROM Review r 
+    WHERE r.publish = false 
+    AND r.bot IS NOT NULL 
+    AND r.bot.active = true 
+    AND r.filial.id IN :filialIds
+    """)
+    List<Review> findByPublishFalseAndBotIsNotNullAndFilialIdIn(
+            @Param("filialIds") List<Long> filialIds);
+
+
+
+    @Query("SELECT r FROM Review r WHERE r.bot = :bot AND r.publish = false")
+    List<Review> findByBotAndPublishFalse(@Param("bot") Bot bot);
+
 
 
     @Modifying

@@ -34,4 +34,5 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();
+
 }

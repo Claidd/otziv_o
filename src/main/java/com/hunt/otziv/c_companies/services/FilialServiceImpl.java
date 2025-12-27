@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -47,6 +49,11 @@ public class FilialServiceImpl implements FilialService{
     public Filial findFilialByUrl(String url) { // Взять филиал по названию и ссылке
         return filialRepository.findByUrl(url);
     } // Взять филиал по названию и ссылке
+
+    @Override
+    public List<Filial> findByCityId(Long id) {
+        return filialRepository.findByCityId(id);
+    }
 
     public void deleteFilial(Long filialId){ // Удаление филиала
         filialRepository.deleteById(filialId);
