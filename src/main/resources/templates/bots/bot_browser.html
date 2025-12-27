@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru"
-      xmlns:th="http://www.thymeleaf.org">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <title th:text="'Браузер бота #' + ${botId}">Браузер бота</title>
@@ -11,6 +10,7 @@
             height: 100%;
             overflow: hidden;
             font-family: system-ui, sans-serif;
+            background: #0b1220;
         }
         #topbar {
             height: 40px;
@@ -21,16 +21,37 @@
             justify-content: space-between;
             padding: 0 12px;
             font-size: 14px;
+            box-sizing: border-box;
         }
-        #browser-frame {
-            width: 100%;
+
+        /* ВАЖНО: скроллы здесь */
+        #frame-wrap {
             height: calc(100% - 40px);
+            overflow: auto;              /* <-- и вертикальный, и горизонтальный */
+            background: #111;
+        }
+
+        /* iframe всегда в DOM и с размерами, но “невидимый” до onload */
+        #browser-frame {
+            display: block;              /* <-- НЕ display:none */
+            width: 100%;
+            height: 100%;
             border: none;
+            visibility: hidden;          /* <-- вместо display:none */
         }
+
         #loading {
-            padding: 10px;
-            font-size: 14px;
+            position: absolute;
+            left: 12px;
+            top: 48px;
+            padding: 8px 10px;
+            background: rgba(17,24,39,0.85);
+            color: #e5e7eb;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
         }
+
         button {
             background: #ef4444;
             color: white;
@@ -39,11 +60,10 @@
             padding: 6px 10px;
             cursor: pointer;
         }
-        button:hover {
-            background: #dc2626;
-        }
+        button:hover { background: #dc2626; }
     </style>
 </head>
+
 <body>
 <div id="topbar">
     <div>
@@ -54,200 +74,216 @@
         <button id="closeBtn">Закрыть сессию</button>
     </div>
 </div>
-<iframe id="browser-frame" style="display:none;"></iframe>
+
+<div id="loading">Открываю VNC…</div>
+
+<div id="frame-wrap">
+    <iframe id="browser-frame" scrolling="yes"></iframe>
+</div>
 
 <script th:inline="javascript">
-    (function () {
-        // Чтобы IntelliJ не ругалась на [[...]]
+    (() => {
         const botId = /*[[${botId}]]*/ 0;
 
         const statusEl = document.getElementById('status');
         const iframe   = document.getElementById('browser-frame');
         const closeBtn = document.getElementById('closeBtn');
+        const loading  = document.getElementById('loading');
+
+        let closing = false;
 
         async function openSession() {
             try {
-                const resp = await fetch(`/api/bots/${botId}/browser/open`, {
-                    method: 'POST'
-                });
-
+                const resp = await fetch(`/api/bots/${botId}/browser/open`, { method: 'POST' });
                 if (!resp.ok) {
-                    const text = await resp.text();
-                    console.error('open FAILED', resp.status, text);
                     statusEl.textContent = 'Ошибка запуска браузера';
                     return;
                 }
-
                 const data = await resp.json();
-                console.log('open OK', data);
 
-                iframe.onload = function () {
-                    iframe.style.display = 'block';
+                iframe.onload = () => {
+                    iframe.style.visibility = 'visible';  // <-- показываем после загрузки
+                    loading.style.display = 'none';
                     statusEl.textContent = 'Браузер запущен';
                 };
-
-                iframe.onerror = function (e) {
-                    console.warn('iframe ONERROR', e);
+                iframe.onerror = () => {
                     statusEl.textContent = 'Не удалось открыть браузер';
                 };
 
-                iframe.src = data.vncUrl;
+                // ВАЖНО: добавляем noVNC параметры, чтобы был скролл и не было “уменьшения”
+                // Если data.vncUrl уже содержит параметры — аккуратно допиши их на бэке (лучше там).
+                const url = new URL(data.vncUrl, window.location.origin);
+                url.searchParams.set('autoconnect', '1');
+                url.searchParams.set('reconnect', '1');
+                url.searchParams.set('resize', 'none');  // <-- без fit-скейла
+                url.searchParams.set('clip', 'true');    // <-- появятся скроллы
+                iframe.src = url.toString();
+
             } catch (e) {
-                console.error('open EXCEPTION', e);
                 statusEl.textContent = 'Ошибка подключения: ' + e;
             }
         }
 
-        async function closeSession() {
+        function closeSessionOnce(reason) {
+            if (closing) return;
+            closing = true;
+
             try {
-                const resp = await fetch(`/api/bots/${botId}/browser/close`, {
-                    method: 'POST',
-                    keepalive: true
-                });
-                console.log('close status', resp.status);
-            } catch (e) {
-                console.warn('close EXCEPTION', e);
-            }
+                const url = `/api/bots/${botId}/browser/close`;
+                navigator.sendBeacon(url);
+                return;
+            } catch (e) {}
+
+            fetch(`/api/bots/${botId}/browser/close`, {
+                method: 'POST',
+                keepalive: true
+            }).catch(() => {});
         }
 
-        closeBtn.addEventListener('click', async () => {
+        closeBtn.addEventListener('click', () => {
             closeBtn.disabled = true;
             statusEl.textContent = 'Отключение…';
-            await closeSession();
+            closeSessionOnce('button');
             statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';
         });
 
-        window.addEventListener('beforeunload', closeSession);
-        window.addEventListener('pagehide', closeSession);
+        window.addEventListener('pagehide', () => closeSessionOnce('pagehide'), { once: true, capture: true });
 
         openSession();
     })();
 </script>
-
-
-<!--<script th:inline="javascript">-->
-<!--    (function () {-->
-<!--        // чтобы IntelliJ не ругал [[...]]-->
-<!--        const botId = /*[[${botId}]]*/ 0;-->
-
-<!--        const statusEl = document.getElementById('status');-->
-<!--        const iframe = document.getElementById('browser-frame');-->
-<!--        const closeBtn = document.getElementById('closeBtn');-->
-
-<!--        let vncUrl = null;-->
-
-<!--        async function openSession() {-->
-<!--            try {-->
-<!--                const resp = await fetch(`/api/bots/${botId}/browser/open`, {-->
-<!--                    method: 'POST'-->
-<!--                });-->
-
-<!--                if (!resp.ok) {-->
-<!--                    const text = await resp.text();-->
-<!--                    console.error('open FAILED', resp.status, text);-->
-<!--                    statusEl.textContent = 'Ошибка запуска браузера';-->
-<!--                    return;-->
-<!--                }-->
-
-<!--                const data = await resp.json();-->
-<!--                console.log('open OK', data);-->
-
-<!--                vncUrl = data.vncUrl;-->
-
-<!--                // пока контейнер поднимается-->
-<!--                statusEl.textContent = 'Запуск браузера…';-->
-
-<!--                // ДАЁМ КОНТЕЙНЕРУ ВРЕМЯ ПРОСНУТЬСЯ-->
-<!--                // можно поиграть временем: 3000–5000 мс-->
-<!--                setTimeout(() => {-->
-<!--                    attachIframe();-->
-<!--                }, 4000);-->
-
-<!--            } catch (e) {-->
-<!--                console.error('open EXCEPTION', e);-->
-<!--                statusEl.textContent = 'Ошибка подключения: ' + e;-->
-<!--            }-->
-<!--        }-->
-
-<!--        function attachIframe() {-->
-<!--            if (!vncUrl) return;-->
-
-<!--            console.log('attach iframe url =', vncUrl);-->
-
-<!--            iframe.onload = function () {-->
-<!--                console.log('iframe ONLOAD');-->
-<!--                iframe.style.display = 'block';-->
-<!--                statusEl.textContent = 'Браузер запущен';-->
-<!--            };-->
-
-<!--            // onerror у iframe ненадёжный, так что просто лог-->
-<!--            iframe.onerror = function (e) {-->
-<!--                console.warn('iframe ONERROR', e);-->
-<!--                statusEl.textContent = 'Не удалось открыть браузер (ошибка загрузки)';-->
-<!--            };-->
-
-<!--            // без query-параметра-->
-<!--            iframe.src = vncUrl;-->
-<!--        }-->
-
-<!--        async function closeSession() {-->
-<!--            try {-->
-<!--                const resp = await fetch(`/api/bots/${botId}/browser/close`, {-->
-<!--                    method: 'POST',-->
-<!--                    keepalive: true-->
-<!--                });-->
-<!--                console.log('close status', resp.status);-->
-<!--            } catch (e) {-->
-<!--                console.warn('close EXCEPTION', e);-->
-<!--            }-->
-<!--        }-->
-
-<!--        closeBtn.addEventListener('click', async () => {-->
-<!--            closeBtn.disabled = true;-->
-<!--            statusEl.textContent = 'Отключение…';-->
-<!--            await closeSession();-->
-<!--            statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';-->
-<!--        });-->
-
-<!--        window.addEventListener('beforeunload', closeSession);-->
-<!--        window.addEventListener('pagehide', closeSession);-->
-
-<!--        openSession();-->
-<!--    })();-->
-<!--</script>-->
-
-
-
-
 </body>
 </html>
 
 
-<!--async function openSession() {-->
-<!--try {-->
-<!--const resp = await fetch(`/api/bots/${botId}/browser/open`, {-->
-<!--method: 'POST'-->
-<!--});-->
-<!--if (!resp.ok) {-->
-<!--statusEl.textContent = 'Ошибка запуска браузера';-->
-<!--return;-->
-<!--}-->
-<!--const data = await resp.json(); // { botId, vncUrl }-->
-<!--iframe.src = data.vncUrl;-->
-<!--iframe.style.display = 'block';-->
-<!--statusEl.textContent = 'Браузер запущен';-->
-<!--} catch (e) {-->
-<!--statusEl.textContent = 'Ошибка подключения: ' + e;-->
-<!--}-->
-<!--}-->
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru"-->
+<!--      xmlns:th="http://www.thymeleaf.org">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <title th:text="'Браузер бота #' + ${botId}">Браузер бота</title>-->
+<!--    <style>-->
+<!--        html, body {-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            height: 100%;-->
+<!--            overflow: hidden;-->
+<!--            font-family: system-ui, sans-serif;-->
+<!--        }-->
+<!--        #topbar {-->
+<!--            height: 40px;-->
+<!--            background: #111827;-->
+<!--            color: #e5e7eb;-->
+<!--            display: flex;-->
+<!--            align-items: center;-->
+<!--            justify-content: space-between;-->
+<!--            padding: 0 12px;-->
+<!--            font-size: 14px;-->
+<!--        }-->
+<!--        #browser-frame {-->
+<!--            width: 100%;-->
+<!--            height: calc(100% - 40px);-->
+<!--            border: none;-->
+<!--        }-->
+<!--        #loading {-->
+<!--            padding: 10px;-->
+<!--            font-size: 14px;-->
+<!--        }-->
+<!--        button {-->
+<!--            background: #ef4444;-->
+<!--            color: white;-->
+<!--            border: none;-->
+<!--            border-radius: 4px;-->
+<!--            padding: 6px 10px;-->
+<!--            cursor: pointer;-->
+<!--        }-->
+<!--        button:hover {-->
+<!--            background: #dc2626;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--<div id="topbar">-->
+<!--    <div>-->
+<!--        <span th:text="'Бот: ' + ${bot.fio} + ' (' + ${bot.login} + ')'"></span>-->
+<!--    </div>-->
+<!--    <div>-->
+<!--        <span id="status">Запуск браузера…</span>-->
+<!--        <button id="closeBtn">Закрыть сессию</button>-->
+<!--    </div>-->
+<!--</div>-->
+<!--<iframe id="browser-frame" style="display:none;"></iframe>-->
 
-<!--async function closeSession() {-->
-<!--try {-->
-<!--await fetch(`/api/bots/${botId}/browser/close`, {-->
-<!--method: 'POST',-->
-<!--keepalive: true-->
-<!--});-->
-<!--} catch (e) {-->
-<!--// молча-->
-<!--}-->
-<!--}-->
+<!--<script th:inline="javascript">-->
+<!--    (() => {-->
+<!--        const botId = /*[[${botId}]]*/ 0;-->
+
+<!--        const statusEl = document.getElementById('status');-->
+<!--        const iframe   = document.getElementById('browser-frame');-->
+<!--        const closeBtn = document.getElementById('closeBtn');-->
+
+<!--        let closing = false;-->
+
+<!--        async function openSession() {-->
+<!--            try {-->
+<!--                const resp = await fetch(`/api/bots/${botId}/browser/open`, { method: 'POST' });-->
+<!--                if (!resp.ok) {-->
+<!--                    statusEl.textContent = 'Ошибка запуска браузера';-->
+<!--                    return;-->
+<!--                }-->
+<!--                const data = await resp.json();-->
+
+<!--                iframe.onload = () => {-->
+<!--                    iframe.style.display = 'block';-->
+<!--                    statusEl.textContent = 'Браузер запущен';-->
+<!--                };-->
+<!--                iframe.onerror = () => { statusEl.textContent = 'Не удалось открыть браузер'; };-->
+
+<!--                iframe.src = data.vncUrl + (data.vncUrl.includes('?') ? '&' : '?')-->
+<!--                    + 'autoconnect=1&resize=scale&reconnect=1&shared=1';-->
+
+
+<!--            } catch (e) {-->
+<!--                statusEl.textContent = 'Ошибка подключения: ' + e;-->
+<!--            }-->
+<!--        }-->
+
+<!--        function closeSessionOnce(reason) {-->
+<!--            if (closing) return;-->
+<!--            closing = true;-->
+
+<!--            // 1) Лучше sendBeacon для закрытия вкладки (самый надёжный вариант)-->
+<!--            try {-->
+<!--                const url = `/api/bots/${botId}/browser/close`;-->
+<!--                const ok = navigator.sendBeacon(url);-->
+<!--                console.log('close beacon', reason, ok);-->
+<!--                return;-->
+<!--            } catch (e) {-->
+<!--                // fallback ниже-->
+<!--            }-->
+
+<!--            // 2) fallback fetch (может не успеть при unload)-->
+<!--            fetch(`/api/bots/${botId}/browser/close`, {-->
+<!--                method: 'POST',-->
+<!--                keepalive: true-->
+<!--            }).catch(() => {});-->
+<!--        }-->
+
+<!--        // closeBtn.addEventListener('click', () => {-->
+<!--        //     closeBtn.disabled = true;-->
+<!--        //     statusEl.textContent = 'Отключение…';-->
+<!--        //     closeSessionOnce('button');-->
+<!--        //     statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';-->
+<!--        // });-->
+
+<!--        // ОСТАВЬ ТОЛЬКО ОДНО событие:-->
+<!--        window.addEventListener('pagehide', () => closeSessionOnce('pagehide'), { once: true, capture: true });-->
+
+<!--        // beforeunload лучше убрать, иначе часто будет дубль-->
+<!--        // window.addEventListener('beforeunload', ...);-->
+
+<!--        openSession();-->
+<!--    })();-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->

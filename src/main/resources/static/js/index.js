@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
     
 //     });
 
-    // График по месяцам
+    // График по месяцам в году
     document.addEventListener('DOMContentLoaded', function() {
         const monthlyCanvas = document.getElementById('grafic_pay_month');
         const map = monthlyCanvas.getAttribute('data-map');

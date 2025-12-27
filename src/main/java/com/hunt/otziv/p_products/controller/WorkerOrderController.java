@@ -223,7 +223,7 @@ public class WorkerOrderController {
 //            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(2), pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(30), pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Админа: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -231,7 +231,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Менеджера");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(30), principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -239,7 +239,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(3), principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -247,7 +247,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Владельца");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(2), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(30), principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Владельца: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -258,6 +258,7 @@ public class WorkerOrderController {
     public String AllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
+        model.addAttribute("keyword", keyword);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");

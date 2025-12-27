@@ -187,22 +187,58 @@
 
 
 <!-- ==================== ORDERS PAGINATION ======================== -->
+
+<!-- ==================== ORDERS PAGINATION ======================== -->
 <th:block th:fragment="ordersPagination" xmlns:th="http://www.w3.org/1999/xhtml">
     <div class="page__row2" id="pagination-1">
         <ul class="pagination">
+
             <li th:class="${orders.first ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1}, status = ${status})}" class="page-link">Предыдущая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1},
+                                        status=${status},
+                                        keyword=${keyword})}"
+                   class="page-link">Предыдущая</a>
             </li>
-            <li th:if="${orders.totalPages != null && orders.totalPages > 0}" th:each="i : ${#numbers.sequence(0, orders.totalPages - 1)}"
-                th:class="${orders.number == i ? 'active' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${i}, status = ${status})}" class="page-link" th:text="${i}">1</a>
+
+            <li th:if="${orders.totalPages != null && orders.totalPages > 0}"
+                th:each="i : ${#numbers.sequence(0, orders.totalPages - 1)}"
+                th:class="${orders.number == i ? 'active' : ''}"
+                class="page-item">
+                <a th:href="@{${urlFirst}(pageNumber=${i},
+                                        status=${status},
+                                        keyword=${keyword})}"
+                   class="page-link"
+                   th:text="${i + 1}">1</a>
             </li>
+
             <li th:class="${orders.last ? 'disabled' : ''}" class="page-item">
-                <a th:href="@{${urlFirst}(pageNumber=${orders.number + 1}, status = ${status})}" class="page-link">Следующая</a>
+                <a th:href="@{${urlFirst}(pageNumber=${orders.number + 1},
+                                        status=${status},
+                                        keyword=${keyword})}"
+                   class="page-link">Следующая</a>
             </li>
+
         </ul>
     </div>
 </th:block>
+
+
+<!--<th:block th:fragment="ordersPagination" xmlns:th="http://www.w3.org/1999/xhtml">-->
+<!--    <div class="page__row2" id="pagination-1">-->
+<!--        <ul class="pagination">-->
+<!--            <li th:class="${orders.first ? 'disabled' : ''}" class="page-item">-->
+<!--                <a th:href="@{${urlFirst}(pageNumber=${orders.number - 1}, status = ${status})}" class="page-link">Предыдущая</a>-->
+<!--            </li>-->
+<!--            <li th:if="${orders.totalPages != null && orders.totalPages > 0}" th:each="i : ${#numbers.sequence(0, orders.totalPages - 1)}"-->
+<!--                th:class="${orders.number == i ? 'active' : ''}" class="page-item">-->
+<!--                <a th:href="@{${urlFirst}(pageNumber=${i}, status = ${status})}" class="page-link" th:text="${i}">1</a>-->
+<!--            </li>-->
+<!--            <li th:class="${orders.last ? 'disabled' : ''}" class="page-item">-->
+<!--                <a th:href="@{${urlFirst}(pageNumber=${orders.number + 1}, status = ${status})}" class="page-link">Следующая</a>-->
+<!--            </li>-->
+<!--        </ul>-->
+<!--    </div>-->
+<!--</th:block>-->
 
 
 <!-- ==================== REVIEWSPAGINATION ======================== -->

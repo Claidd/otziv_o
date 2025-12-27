@@ -15,9 +15,13 @@
                             </div> -->
                             <div class="company__card__remember__box-serch">
 
-                                <form class="company__card_remember-search2" th:method="get">
+                                <form class="company__card_remember-search2" th:method="get" th:action="@{/worker/all_orders}">
                                     <!-- The text field -->
-                                    <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                                    <input class="company__card_remember-search__text"
+                                           type="text"
+                                           name="keyword"
+                                           id="keyword"
+                                           th:value="${keyword}">
                                     <!-- The button used to copy the text -->
                                     <input type="hidden" name="_csrf" value="${_csrf.token}"/>
                                     <button type="submit" class="company__card_remember-search__btn">Найти</button>
