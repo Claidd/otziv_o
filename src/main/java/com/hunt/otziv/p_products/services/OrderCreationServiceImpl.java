@@ -126,9 +126,11 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         // 1. Получаем филиал
         Filial filial = convertFilialDTOToFilial(orderDTO.getFilial());
 
-        // 2. Получаем значение vigul (если есть в OrderDTO, иначе false)
-        boolean vigul = false;
-        log.info("Создание отзывов с vigul = {}", vigul);
+        // 2. Получаем значение vigul
+        boolean vigul = false; // TODO: получить из orderDTO, если есть
+        int neededForOrder = orderDTO.getAmount();
+
+        log.info("Создание отзывов с vigul = {}, требуется {} ботов", vigul, neededForOrder);
 
         // 3. Получаем всех ботов для города
         List<Bot> allCityBots = botService.getFindAllByFilialCityId(filial.getCity().getId());
@@ -158,41 +160,43 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
         log.info("Идеальных ботов (не в этом филиале, не заняты в других): {}", idealBots.size());
 
-        // 7. Применяем фильтры vigul к идеальным ботам
-        List<Bot> filteredIdealBots = applyVigulFilters(idealBots, vigul);
+        // 7. Применяем фильтры vigul к идеальным ботам (передаем neededForOrder)
+        List<Bot> filteredIdealBots = applyVigulFilters(idealBots, vigul, neededForOrder);
         log.info("Идеальных ботов после фильтра vigul: {}", filteredIdealBots.size());
 
         List<Bot> availableBots = new ArrayList<>(filteredIdealBots);
 
         // 8. Если идеальных ботов недостаточно, ищем запасных
-        int neededForOrder = orderDTO.getAmount();
         if (availableBots.size() < neededForOrder) {
             // Запасные боты - не использовались в этом филиале, но могут быть заняты в других
             List<Bot> fallbackBots = allCityBots.stream()
                     .filter(Objects::nonNull)
                     .filter(bot -> bot.getId() != null)
-                    .filter(bot -> !usedBotIdsInFilial.contains(bot.getId())) // Главное правило!
+                    .filter(bot -> !usedBotIdsInFilial.contains(bot.getId()))
                     .filter(bot -> {
                         if (bot.getStatus() == null) return false;
                         String statusTitle = bot.getStatus().getBotStatusTitle();
                         return statusTitle != null && "Новый".equals(statusTitle.trim());
                     })
-                    .filter(bot -> !availableBots.contains(bot)) // Не дублируем уже выбранных
+                    .filter(bot -> !availableBots.contains(bot))
                     .collect(Collectors.toList());
 
             log.info("Запасных ботов (не в этом филиале, но могут быть заняты в других): {}", fallbackBots.size());
 
-            // Применяем фильтры vigul к запасным ботам
-            List<Bot> filteredFallbackBots = applyVigulFilters(fallbackBots, vigul);
+            // Применяем фильтры vigul к запасным ботам (передаем оставшееся количество)
+            int remainingNeeded = neededForOrder - availableBots.size();
+            List<Bot> filteredFallbackBots = applyVigulFilters(fallbackBots, vigul, remainingNeeded);
             log.info("Запасных ботов после фильтра vigul: {}", filteredFallbackBots.size());
 
             // Добавляем необходимое количество запасных ботов
-            int needed = neededForOrder - availableBots.size();
-            int toAdd = Math.min(needed, filteredFallbackBots.size());
+            int toAdd = Math.min(remainingNeeded, filteredFallbackBots.size());
             availableBots.addAll(filteredFallbackBots.subList(0, toAdd));
         }
 
-        log.info("Всего доступных ботов для заказа: {}", availableBots.size());
+        log.info("Всего доступных ботов для заказа: {}/{}", availableBots.size(), neededForOrder);
+
+        // ДОБАВИТЬ ВЫЗОВ СТАТИСТИКИ:
+        logBotSelectionStatistics(availableBots, neededForOrder, vigul);
 
         // 9. Создаем отзывы с УНИКАЛЬНЫМИ ботами
         Set<Long> usedBotIdsInThisOrder = new HashSet<>();
@@ -313,55 +317,48 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         return usedBotIds;
     }
 
-    /**
-     * Выделенный метод для применения фильтров по vigul
-     */
-    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
+    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul, int neededForOrder) {
         if (!vigul) {
-            // Для vigul = false
-            log.info("Фильтрация для vigul=false");
+            log.info("Фильтрация для vigul=false, требуется {} ботов", neededForOrder);
 
-            // Сначала ищем ботов с именем "Впиши Имя Фамилию"
-            List<Bot> strictFiltered = baseBots.stream()
-                    .filter(bot -> {
-                        if (bot.getFio() == null) {
-                            return false;
-                        }
-                        boolean hasCorrectName = "Впиши Имя Фамилию".equals(bot.getFio().trim());
-                        return hasCorrectName;
-                    })
+            // 1. Приоритет: боты с именем "Впиши Имя Фамилию"
+            List<Bot> priority1 = baseBots.stream()
+                    .filter(bot -> bot.getFio() != null &&
+                            "Впиши Имя Фамилию".equals(bot.getFio().trim()))
                     .collect(Collectors.toList());
 
-            log.info("Ботов с именем 'Впиши Имя Фамилию': {}", strictFiltered.size());
+            log.info("Приоритет 1 - Боты с именем 'Впиши Имя Фамилию': {}", priority1.size());
 
-            if (!strictFiltered.isEmpty()) {
-                return strictFiltered;
+            // Если ботов с именем достаточно - возвращаем их
+            if (priority1.size() >= neededForOrder) {
+                log.info("Ботов с именем достаточно, используем только их");
+                return priority1;
             }
 
-            log.warn("Нет ботов с именем 'Впиши Имя Фамилию', используем всех доступных ботов");
-            return baseBots;
-
-        } else {
-            // Для vigul = true
-            log.info("Фильтрация для vigul=true");
-
-            // Сначала ищем ботов с counter >= 3
-            List<Bot> strictFiltered = baseBots.stream()
+            // 2. Если не хватает, добавляем боты с counter >= 3
+            List<Bot> result = new ArrayList<>(priority1);
+            List<Bot> priority2 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot)) // исключаем уже выбранных
                     .filter(bot -> {
                         Integer counter = bot.getCounter();
                         if (counter == null) counter = 0;
-                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT; // >= 3
                     })
                     .collect(Collectors.toList());
 
-            log.info("Ботов с counter >= 3: {}", strictFiltered.size());
+            result.addAll(priority2);
+            log.info("Приоритет 2 - Боты с counter >= 3: {}", priority2.size());
+            log.info("Всего после приоритета 2: {}", result.size());
 
-            if (!strictFiltered.isEmpty()) {
-                return strictFiltered;
+            // Если после добавления ботов с counter >= 3 достаточно - возвращаем
+            if (result.size() >= neededForOrder) {
+                log.info("Ботов с именем и counter >= 3 достаточно");
+                return result;
             }
 
-            // Если нет ботов с counter >= 3, ищем с counter 0-2
-            List<Bot> fallbackFiltered = baseBots.stream()
+            // 3. Если все еще не хватает, добавляем боты с counter 0-2
+            List<Bot> priority3 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot) && !priority2.contains(bot))
                     .filter(bot -> {
                         Integer counter = bot.getCounter();
                         if (counter == null) counter = 0;
@@ -369,18 +366,149 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                     })
                     .collect(Collectors.toList());
 
-            log.info("Ботов с counter от 0 до 2: {}", fallbackFiltered.size());
+            result.addAll(priority3);
+            log.info("Приоритет 3 - Боты с counter 0-2: {}", priority3.size());
+            log.info("Всего после приоритета 3: {}", result.size());
 
-            if (!fallbackFiltered.isEmpty()) {
-                log.warn("Нет ботов с counter >= 3, используем ботов с counter от 0 до 2");
-                return fallbackFiltered;
+            // Если после добавления ботов с counter 0-2 достаточно - возвращаем
+            if (result.size() >= neededForOrder) {
+                log.info("Ботов достаточно после добавления counter 0-2");
+                return result;
             }
 
-            // Если совсем нет ботов с подходящим counter, используем всех
-            log.warn("Нет ботов с подходящим counter, используем всех доступных ботов");
-            return baseBots;
+            // 4. Если все еще не хватает, добавляем всех остальных ботов
+            List<Bot> priority4 = baseBots.stream()
+                    .filter(bot -> !result.contains(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority4);
+            log.info("Приоритет 4 - Все остальные боты: {}", priority4.size());
+            log.info("Всего доступных ботов: {}", result.size());
+
+            return result;
+
+        } else {
+            // Существующая логика для vigul=true
+            log.info("Фильтрация для vigul=true, требуется {} ботов", neededForOrder);
+
+            // 1. Приоритет: боты с counter >= 3
+            List<Bot> priority1 = baseBots.stream()
+                    .filter(bot -> {
+                        Integer counter = bot.getCounter();
+                        if (counter == null) counter = 0;
+                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+                    })
+                    .collect(Collectors.toList());
+
+            log.info("Приоритет 1 - Боты с counter >= 3: {}", priority1.size());
+
+            if (priority1.size() >= neededForOrder) {
+                return priority1;
+            }
+
+            // 2. Если не хватает, добавляем боты с counter 0-2
+            List<Bot> result = new ArrayList<>(priority1);
+            List<Bot> priority2 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot))
+                    .filter(bot -> {
+                        Integer counter = bot.getCounter();
+                        if (counter == null) counter = 0;
+                        return counter >= 0 && counter <= 2;
+                    })
+                    .collect(Collectors.toList());
+
+            result.addAll(priority2);
+            log.info("Приоритет 2 - Боты с counter 0-2: {}", priority2.size());
+            log.info("Всего после приоритета 2: {}", result.size());
+
+            if (result.size() >= neededForOrder) {
+                return result;
+            }
+
+            // 3. Если все еще не хватает, добавляем всех остальных
+            List<Bot> priority3 = baseBots.stream()
+                    .filter(bot -> !result.contains(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority3);
+            log.info("Приоритет 3 - Все остальные боты: {}", priority3.size());
+            log.info("Всего доступных ботов: {}", result.size());
+
+            return result;
         }
     }
+
+
+
+
+    /**
+     * Выделенный метод для применения фильтров по vigul
+     */
+//    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
+//        if (!vigul) {
+//            // Для vigul = false
+//            log.info("Фильтрация для vigul=false");
+//
+//            // Сначала ищем ботов с именем "Впиши Имя Фамилию"
+//            List<Bot> strictFiltered = baseBots.stream()
+//                    .filter(bot -> {
+//                        if (bot.getFio() == null) {
+//                            return false;
+//                        }
+//                        boolean hasCorrectName = "Впиши Имя Фамилию".equals(bot.getFio().trim());
+//                        return hasCorrectName;
+//                    })
+//                    .collect(Collectors.toList());
+//
+//            log.info("Ботов с именем 'Впиши Имя Фамилию': {}", strictFiltered.size());
+//
+//            if (!strictFiltered.isEmpty()) {
+//                return strictFiltered;
+//            }
+//
+//            log.warn("Нет ботов с именем 'Впиши Имя Фамилию', используем всех доступных ботов");
+//            return baseBots;
+//
+//        } else {
+//            // Для vigul = true
+//            log.info("Фильтрация для vigul=true");
+//
+//            // Сначала ищем ботов с counter >= 3
+//            List<Bot> strictFiltered = baseBots.stream()
+//                    .filter(bot -> {
+//                        Integer counter = bot.getCounter();
+//                        if (counter == null) counter = 0;
+//                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+//                    })
+//                    .collect(Collectors.toList());
+//
+//            log.info("Ботов с counter >= 3: {}", strictFiltered.size());
+//
+//            if (!strictFiltered.isEmpty()) {
+//                return strictFiltered;
+//            }
+//
+//            // Если нет ботов с counter >= 3, ищем с counter 0-2
+//            List<Bot> fallbackFiltered = baseBots.stream()
+//                    .filter(bot -> {
+//                        Integer counter = bot.getCounter();
+//                        if (counter == null) counter = 0;
+//                        return counter >= 0 && counter <= 2;
+//                    })
+//                    .collect(Collectors.toList());
+//
+//            log.info("Ботов с counter от 0 до 2: {}", fallbackFiltered.size());
+//
+//            if (!fallbackFiltered.isEmpty()) {
+//                log.warn("Нет ботов с counter >= 3, используем ботов с counter от 0 до 2");
+//                return fallbackFiltered;
+//            }
+//
+//            // Если совсем нет ботов с подходящим counter, используем всех
+//            log.warn("Нет ботов с подходящим counter, используем всех доступных ботов");
+//            return baseBots;
+//        }
+//    }
 
     /**
      * Метод для получения бота-заглушки
@@ -476,21 +604,25 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .build();
     }
 
-    private void logBotUsageStatistics(Filial filial, int neededForOrder,
-                                       List<Bot> availableBots) {
-        log.info("=== СТАТИСТИКА ИСПОЛЬЗОВАНИЯ БОТОВ ===");
-        log.info("Филиал: {}, город: {}",
-                filial.getId(), filial.getCity().getTitle());
-        log.info("Всего ботов в городе: {}",
-                botService.getFindAllByFilialCityId(filial.getCity().getId()).size());
-        log.info("Использовано в этом филиале: {}",
-                getUsedBotIdsInFilial(filial).size());
-        log.info("Занято в других филиалах: {}",
-                getUsedBotIdsGlobally(filial).size());
-        log.info("Доступно для заказа: {}", availableBots.size());
-        log.info("Требуется для заказа: {}", neededForOrder);
-        log.info("Дефицит: {}", Math.max(0, neededForOrder - availableBots.size()));
-        log.info("==============================");
+    private void logBotSelectionStatistics(List<Bot> selectedBots, int neededForOrder, boolean vigul) {
+        Map<String, Long> stats = selectedBots.stream()
+                .collect(Collectors.groupingBy(bot -> {
+                    if (bot.getFio() != null && "Впиши Имя Фамилию".equals(bot.getFio().trim())) {
+                        return "Имя 'Впиши Имя Фамилию'";
+                    }
+                    Integer counter = bot.getCounter();
+                    if (counter == null) counter = 0;
+                    if (counter >= 3) return "Counter >= 3";
+                    if (counter >= 0 && counter <= 2) return "Counter 0-2";
+                    return "Counter < 0 или null";
+                }, Collectors.counting()));
+
+        log.info("=== СТАТИСТИКА ВЫБОРА БОТОВ (vigul={}) ===", vigul);
+        log.info("Требуется ботов: {}", neededForOrder);
+        log.info("Выбрано ботов: {}", selectedBots.size());
+        stats.forEach((category, count) ->
+                log.info("  {}: {} ботов", category, count));
+        log.info("================================");
     }
 
 
@@ -515,12 +647,23 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     }
 
     private void notifyWorker(Order order) {
+        log.info("8. Отправляем уведомление работнику...");
+
         if (order.getWorker() != null && order.getWorker().getUser() != null) {
             Long chatId = order.getWorker().getUser().getTelegramChatId();
             if (chatId != null) {
                 String msg = "У вас новый заказ для: " + order.getCompany().getTitle();
-                telegramService.sendMessage(chatId, msg);
+                try {
+                    telegramService.sendMessage(chatId, msg);
+                    log.info("Уведомление отправлено работнику (ChatID: {})", chatId);
+                } catch (Exception e) {
+                    log.error("Ошибка при отправке уведомления работнику: {}", e.getMessage());
+                }
+            } else {
+                log.warn("У работника ID {} не указан chatId в Telegram", order.getWorker().getId());
             }
+        } else {
+            log.warn("У заказа нет работника или пользователя для уведомления");
         }
     }
     //    ================================================== CONVERTER =====================================================

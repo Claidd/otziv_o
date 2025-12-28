@@ -79,7 +79,9 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.bot = :bot AND r.publish = false")
     List<Review> findByBotAndPublishFalse(@Param("bot") Bot bot);
 
-
+    @Modifying
+    @Query("DELETE FROM Review r WHERE r.id IN :reviewIds")
+    int deleteByIdIn(@Param("reviewIds") List<Long> reviewIds);
 
     @Modifying
     @Query("DELETE FROM Review r WHERE r.id = :reviewId")

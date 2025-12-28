@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface OrderDetailsService {
@@ -18,4 +19,8 @@ public interface OrderDetailsService {
     void deleteOrderDetails(OrderDetails orderDetails);
 
     void saveOrder(Order order);
+
+    List<OrderDetails> findByOrderId(Long orderId);
+
+    void deleteAllByOrderId(Long orderId);
 }

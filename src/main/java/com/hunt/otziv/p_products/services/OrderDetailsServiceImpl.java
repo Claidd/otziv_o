@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -56,6 +57,17 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         orderRepository.save(order);
     }
 
+    @Override
+    public List<OrderDetails> findByOrderId(Long orderId) {
+        return orderDetailsRepository.findByOrderId(orderId);
+    }
+
+    @Transactional
+    public void deleteAllByOrderId(Long orderId) {
+        log.debug("Удаление всех деталей заказа ID: {}", orderId);
+        int deletedCount = orderDetailsRepository.deleteByOrderId(orderId);
+        log.info("Удалено {} деталей заказа ID: {}", deletedCount, orderId);
+    }
 
     public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
         return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));

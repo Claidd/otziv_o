@@ -659,19 +659,101 @@ public class OrderServiceImpl implements OrderService {
 
 
     //============================================ УДАЛЕНИЕ ЗАКАЗА =========================================================
-@Transactional
-public boolean deleteOrder(Long orderId, Principal principal){
-    String userRole = getRole(principal);
-    Order orderToDelete = orderRepository.findById(orderId)
-            .orElseThrow(() -> new UsernameNotFoundException(String.format("Order '%d' not found", orderId)));
-    if (canDeleteOrder(userRole, orderToDelete)) {
-        orderRepository.delete(orderToDelete);
-        log.info("Заказ удален Админом или Владельцем");
-        return true;
+//@Transactional
+//public boolean deleteOrder(Long orderId, Principal principal){
+//    String userRole = getRole(principal);
+//    Order orderToDelete = orderRepository.findById(orderId)
+//            .orElseThrow(() -> new UsernameNotFoundException(String.format("Order '%d' not found", orderId)));
+//    if (canDeleteOrder(userRole, orderToDelete)) {
+//        orderRepository.delete(orderToDelete);
+//        log.info("Заказ удален Админом или Владельцем");
+//        return true;
+//    }
+//    log.info("Заказ не удален из-за статуса или роли");
+//    return false;
+//}
+
+
+    @Transactional
+    public boolean deleteOrder(Long orderId, Principal principal) {
+        String userRole = getRole(principal);
+        log.info("Начало удаления заказа ID: {}, инициатор: {}, роль: {}",
+                orderId, principal.getName(), userRole);
+
+        Order orderToDelete = orderRepository.findById(orderId)
+                .orElseThrow(() -> {
+                    log.error("Заказ ID: {} не найден", orderId);
+                    return new UsernameNotFoundException(String.format("Order '%d' not found", orderId));
+                });
+
+//        log.info("Найден заказ ID: {}, статус: {}, компания: {}",
+//                orderId, orderToDelete.getStatus(), orderToDelete.getCompany());
+
+        if (canDeleteOrder(userRole, orderToDelete)) {
+            try {
+                // 1. Находим все детали заказа
+                List<OrderDetails> orderDetails = orderDetailsService.findByOrderId(orderId);
+                log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
+
+                // 2. Удаляем все отзывы, связанные с деталями этого заказа
+                int totalDeletedReviews = 0;
+                for (OrderDetails detail : orderDetails) {
+                    if (detail.getReviews() != null && !detail.getReviews().isEmpty()) {
+                        List<Long> reviewIds = detail.getReviews().stream()
+                                .map(Review::getId)
+                                .collect(Collectors.toList());
+
+                        log.info("Удаление отзывов для детали заказа ID: {}. Найдено отзывов: {}",
+                                detail.getId(), reviewIds.size());
+
+                        // Если у вас есть метод для массового удаления
+                        reviewService.deleteAllByIdIn(reviewIds);
+
+                        // Можно удалять по одному с выводом id
+//                        for (Long reviewId : reviewIds) {
+//                            try {
+//                                reviewService.deleteReview(reviewId);
+//                                log.debug("Отзыв ID: {} удален", reviewId);
+//                            } catch (Exception e) {
+//                                log.error("Ошибка при удалении отзыва ID: {}", reviewId, e);
+//                            }
+//                        }
+
+                        log.info("Успешно удалено {} отзывов для детали заказа ID: {}",
+                                reviewIds.size(), detail.getId());
+                        totalDeletedReviews += reviewIds.size();
+                    }
+                }
+                log.info("Всего удалено отзывов: {}", totalDeletedReviews);
+
+                // 3. Удаляем все детали заказа
+                log.info("Удаление всех деталей заказа ID: {}", orderId);
+                orderDetailsService.deleteAllByOrderId(orderId);
+                log.info("Успешно удалено {} деталей заказа", orderDetails.size());
+
+                // 4. Удаляем сам заказ
+                log.info("Удаление заказа ID: {}", orderId);
+                orderRepository.delete(orderToDelete);
+                log.info("Заказ ID: {} успешно удален", orderId);
+
+                // 5. Логируем общий результат
+                log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов",
+                        orderId, orderDetails.size(), totalDeletedReviews);
+
+                return true;
+
+            } catch (Exception e) {
+                log.error("Ошибка при удалении заказа ID: {}. Причина: {}", orderId, e.getMessage(), e);
+                throw e; // Транзакция откатится
+            }
+        }
+
+        log.warn("Заказ ID: {} не удален. Недостаточно прав или некорректный статус. Роль пользователя: {}, статус заказа: {}",
+                orderId, userRole, orderToDelete.getStatus());
+        return false;
     }
-    log.info("Заказ не удален из-за статуса или роли");
-    return false;
-}
+
+
 
     private boolean isAdminOrOwner(String role) {
         return ADMIN.equals(role) || OWNER.equals(role);

@@ -115,6 +115,14 @@ public class ReviewServiceImpl implements ReviewService{
         return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
     } // Берем все отзывы с датой для Владельца
 
+    @Transactional // удаление отзывов
+    public void deleteAllByIdIn(List<Long> reviewIds) {
+        if (reviewIds != null && !reviewIds.isEmpty()) {
+            log.debug("Удаление отзывов по списку ID: {}", reviewIds);
+            int deletedCount = reviewRepository.deleteByIdIn(reviewIds);
+            log.info("Удалено {} отзывов из базы данных", deletedCount);
+        }
+    }
 
     private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());

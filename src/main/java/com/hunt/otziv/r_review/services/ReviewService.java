@@ -59,4 +59,6 @@ public interface ReviewService {
     Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate);
 
     Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    void deleteAllByIdIn(List<Long> reviewIds);
 }
