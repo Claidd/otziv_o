@@ -51,6 +51,11 @@ public class WorkerServiceImpl implements WorkerService {
         return workerRepository.findAllToManagerList(managerList);
     }
 
+    @Override
+    public void save(Worker worker) {
+        workerRepository.save(worker);
+    }
+
     public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
     } // Взять всех работников по Id менеджера

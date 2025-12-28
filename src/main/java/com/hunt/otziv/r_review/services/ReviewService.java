@@ -1,6 +1,7 @@
 package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -61,4 +62,10 @@ public interface ReviewService {
     Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     void deleteAllByIdIn(List<Long> reviewIds);
+
+
+
+    void performNagulWithExceptions(Long reviewId, String name);
+
+    boolean hasActiveNagulReviews(Principal principal);
 }

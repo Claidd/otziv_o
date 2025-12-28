@@ -83,12 +83,21 @@
                         </div> <!-- card__content_button -->
 
                         <!-- PROGRESS BAR -->
+<!--                        <div class="progress">-->
+<!--                            <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${order.amount}" th:style="'width: ' + (${order.counter} / ${order.amount} * 100) + '%'" id="progress-bar">-->
+<!--                                <span th:text="${order.counter}"></span>-->
+<!--                            </div>-->
+<!--                        </div>-->
+
                         <div class="progress">
-                            <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${order.amount}" th:style="'width: ' + (${order.counter} / ${order.amount} * 100) + '%'" id="progress-bar">
-                                <span th:text="${order.counter}"></span>
+                            <div class="progress-bar" role="progressbar"
+                                 aria-valuemin="0"
+                                 aria-valuemax="${order.amount != null ? order.amount : 0}"
+                                 th:style="'width: ' + ${(order.amount != null && order.amount > 0 && order.counter != null) ? (order.counter / order.amount * 100) : 0} + '%;'"
+                                 id="progress-bar">
+                                <span th:text="${order.counter != null ? order.counter : 0}"></span>
                             </div>
                         </div>
-
                         <!-- КНОПКИ 2 -->
                         <div class="company__card__content_button"> <!-- card__content_button -->
                             

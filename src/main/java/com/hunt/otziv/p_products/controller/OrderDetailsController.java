@@ -1,5 +1,8 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.exceptions.BotTemplateNameException;
+import com.hunt.otziv.exceptions.NagulTooFastException;
+import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -8,6 +11,8 @@ import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -23,6 +28,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -274,20 +281,71 @@ public class OrderDetailsController {
         return "redirect:/worker/publish";
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
 
-    @PostMapping("/{companyId}/{orderId}/nagul_to_worker/{reviewId}") // Нажатие кнопки выгула.
-    public String nagulReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
-        log.info("1. Смена статуса отзыва на ВЫГУЛЯН - {}", principal != null ? principal.getName() : "Гость");
+    @PostMapping("/{companyId}/{orderId}/nagul_to_worker/{reviewId}")
+    public String nagulReviewToWorker(@PathVariable Long reviewId,
+                                      @PathVariable Long companyId,
+                                      @PathVariable Long orderId,
+                                      RedirectAttributes rm,
+                                      Principal principal) {
+
+        log.info("Запрос на выгул отзыва: reviewId={}, companyId={}, orderId={}, user={}",
+                reviewId, companyId, orderId, principal.getName());
+
         try {
-            reviewService.changeNagulReview(reviewId);
-            rm.addFlashAttribute("saveSuccess", "true");
-            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+            // Используем метод, который выбрасывает исключения
+            reviewService.performNagulWithExceptions(reviewId, principal.getName());
+
+            // Явно устанавливаем Boolean
+            rm.addFlashAttribute("saveSuccess", Boolean.TRUE);
+            rm.addFlashAttribute("message", "Отзыв успешно выгулен!");
+            log.info("Выгул успешен: reviewId={}, user={}", reviewId, principal.getName());
+
+        } catch (NagulTooFastException e) {
+            // Обработка исключения "слишком быстро"
+            LocalDateTime nextAvailableTime = LocalDateTime.now()
+                    .plusMinutes(e.getMinutesLeft())
+                    .plusSeconds(e.getSecondsLeft());
+
+            // Явно устанавливаем Boolean
+            rm.addFlashAttribute("saveSuccess", Boolean.FALSE);
+            rm.addFlashAttribute("errorMessage", e.getMessage());
+            rm.addFlashAttribute("nextAvailableTime",
+                    nextAvailableTime.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+
+            log.warn("Выгул отклонен (слишком быстро): reviewId={}, user={}, reason={}",
+                    reviewId, principal.getName(), e.getMessage());
+
+        } catch (BotTemplateNameException e) {
+            // Обработка исключения "шаблонное имя"
+            rm.addFlashAttribute("saveSuccess", Boolean.FALSE);
+            rm.addFlashAttribute("errorMessage", e.getMessage());
+
+            log.warn("Выгул отклонен (шаблонное имя): reviewId={}, user={}, reason={}",
+                    reviewId, principal.getName(), e.getMessage());
+
         } catch (Exception e) {
-            log.info("8. Все прошло плохо, вернулись в контроллер");
-            rm.addFlashAttribute("saveSuccess", "false");
-            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ НАГУЛЕН.");
+            // Обработка всех остальных исключений
+            log.error("Ошибка при выгуле: reviewId={}, user={}", reviewId, principal.getName(), e);
+            rm.addFlashAttribute("saveSuccess", Boolean.FALSE);
+            rm.addFlashAttribute("errorMessage", "Произошла ошибка при выполнении выгула");
         }
+
         return "redirect:/worker/nagul";
-    } // Нажатие кнопки выгула.
+    }
+//    @PostMapping("/{companyId}/{orderId}/nagul_to_worker/{reviewId}") // Нажатие кнопки выгула.
+//    public String nagulReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
+//        log.info("1. Смена статуса отзыва на ВЫГУЛЯН - {}", principal != null ? principal.getName() : "Гость");
+//        try {
+//            reviewService.changeNagulReview(reviewId);
+//            rm.addFlashAttribute("saveSuccess", "true");
+//            rm.addFlashAttribute("errorMessage", null); // Убираем сообщение об ошибке
+//        } catch (Exception e) {
+//            log.info("8. Все прошло плохо, вернулись в контроллер");
+//            rm.addFlashAttribute("saveSuccess", "false");
+//            rm.addFlashAttribute("errorMessage", "Сообщите менеджеру. Не удалось изменить статус и сохранить изменения, отзыв НЕ НАГУЛЕН.");
+//        }
+//        return "redirect:/worker/nagul";
+//    } // Нажатие кнопки выгула.
 
 
     private String gerRole(Principal principal){ // Берем роль пользователя

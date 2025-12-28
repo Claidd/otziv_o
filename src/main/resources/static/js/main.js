@@ -409,6 +409,19 @@ function deActivateBot(event, form) {
         }
     }, 5000);
 
+document.addEventListener('DOMContentLoaded', function() {
+    // Автоматически скрываем alert через 5 секунд
+    setTimeout(function() {
+        var alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            var bsAlert = new bootstrap.Alert(alert);
+            setTimeout(function() {
+                bsAlert.close();
+            }, 5000);
+        });
+    }, 5000);
+});
+
 
 
 

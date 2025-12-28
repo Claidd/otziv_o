@@ -88,6 +88,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
             // 3. Создаём и сохраняем отзывы с уникальными ботами
             List<Review> reviews = createReviewsWithUniqueBots(orderDTO, orderDetails);
+
             reviewService.saveAll(reviews);
             log.info("3. Сохранили {} отзывов с уникальными ботами", reviews.size());
 
@@ -223,6 +224,10 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             }
 
             Review review = createReviewWithBot(orderDTO, orderDetails, filial, assignedBot, vigul);
+
+            // ДОБАВЛЕН ВЫЗОВ НОВОГО МЕТОДА: проверяем и обновляем isVigul для отзыва
+            updateReviewVigulBasedOnBotCounter(review, assignedBot);
+
             reviewList.add(review);
         }
 
@@ -435,6 +440,42 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             log.info("Всего доступных ботов: {}", result.size());
 
             return result;
+        }
+    }
+
+    /**
+     * НОВЫЙ МЕТОД: Обновление isVigul отзыва на основе counter бота
+     * Если боту назначен бот с counter >= 3, то isVigul устанавливается в true
+     */
+    private void updateReviewVigulBasedOnBotCounter(Review review, Bot bot) {
+        if (review == null || bot == null) {
+            return;
+        }
+
+        // Проверяем, не является ли бот заглушкой
+        if (STUB_BOT_ID.equals(bot.getId())) {
+            log.debug("Бот ID {} является заглушкой, пропускаем обновление isVigul", bot.getId());
+            return;
+        }
+
+        // Получаем counter бота
+        Integer botCounter = bot.getCounter();
+        if (botCounter == null) {
+            botCounter = 0; // Если counter не установлен, считаем его равным 0
+        }
+
+        // Если counter >= 3, устанавливаем isVigul = true
+        if (botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
+            if (!review.isVigul()) { // Проверяем, не установлен ли уже isVigul в true
+                review.setVigul(true);
+                log.info("Обновлен отзыв ID {}: isVigul изменен с false на true (бот ID {} имеет counter={})",
+                        review.getId(), bot.getId(), botCounter);
+            } else {
+                log.debug("Отзыв ID {} уже имеет isVigul=true", review.getId());
+            }
+        } else {
+            log.debug("Бот ID {} имеет counter={} (<3), isVigul остается {}",
+                    bot.getId(), botCounter, review.isVigul());
         }
     }
 

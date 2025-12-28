@@ -258,17 +258,40 @@ public class OrderServiceImpl implements OrderService {
         return getPageOrders(orderPage,pageNumber,pageSize);
     } // Берем все заказы с поиском для Работника
 
-
     private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
-        Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, orderPage.size());
-
-        List<OrderDTOList> orderListDTOs = orderPage.subList(startAndEnd.getFirst(), startAndEnd.getSecond())
-                .stream()
+        // 1. Преобразуем ВСЕ заказы в DTO
+        List<OrderDTOList> allDTOs = orderPage.stream()
                 .map(this::toDTOListOrders)
+                .toList();
+
+        // 2. Сортируем ВЕСЬ список
+        List<OrderDTOList> sortedDTOs = allDTOs.stream()
+                .sorted(Comparator.comparingLong(OrderDTOList::getDayToChangeStatusAgo).reversed())
                 .collect(Collectors.toList());
-        return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
+
+        // 3. Создаем Pageable БЕЗ сортировки
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+
+        // 4. Используем calculateStartAndEnd
+        Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, sortedDTOs.size());
+
+        // 5. Берем подсписок
+        List<OrderDTOList> orderListDTOs = sortedDTOs.subList(startAndEnd.getFirst(), startAndEnd.getSecond());
+
+        // 6. Возвращаем страницу
+        return new PageImpl<>(orderListDTOs, pageable, sortedDTOs.size());
     }
+
+//    private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
+//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+//        Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, orderPage.size());
+//
+//        List<OrderDTOList> orderListDTOs = orderPage.subList(startAndEnd.getFirst(), startAndEnd.getSecond())
+//                .stream()
+//                .map(this::toDTOListOrders)
+//                .collect(Collectors.toList());
+//        return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
+//    }
 
     private Pair<Integer, Integer> calculateStartAndEnd(Pageable pageable, int size) {
         int start = (int) pageable.getOffset();
@@ -1054,8 +1077,10 @@ private boolean hasWorkerWithTelegram(Order order) {
 
             if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
                 bot.setStatus(botService.changeStatus(HIGH_STATUS));
+                bot.setActive(false);
             } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
                 bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
+                bot.setActive(false);
             }
 
             botService.save(bot);

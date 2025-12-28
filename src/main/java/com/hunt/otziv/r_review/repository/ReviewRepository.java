@@ -100,6 +100,18 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     int countByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 
 
+    // В ReviewRepository.java
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN TRUE ELSE FALSE END " +
+            "FROM Review r " +
+            "WHERE r.worker = :worker " +
+            "AND r.publishedDate <= :date " +
+            "AND r.publish = false " +
+            "AND r.vigul = false " +
+            "AND (r.bot IS NULL OR r.bot.counter <= 2)")
+    boolean existsActiveNagulReviews(@Param("worker") Worker worker,
+                                     @Param("date") LocalDate date);
+
+
     @Query("""
     SELECT 
         u.fio AS fio, 

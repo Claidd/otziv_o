@@ -7,6 +7,7 @@ import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -29,5 +30,9 @@ public class Worker {
     @OneToMany(mappedBy = "worker", orphanRemoval = true, fetch = FetchType.LAZY)
     @ToString.Exclude
     private List<Bot> bots;
+
+    // Добавьте это поле
+    @Column(name = "last_nagul_time")
+    private LocalDateTime lastNagulTime;
 
 }

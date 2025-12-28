@@ -16,7 +16,11 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.FilialRepository;
+import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.exceptions.BotTemplateNameException;
+import com.hunt.otziv.exceptions.NagulTooFastException;
+import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -38,6 +42,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -45,11 +50,12 @@ import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.Principal;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -73,10 +79,18 @@ public class ReviewServiceImpl implements ReviewService{
     private final UserService userService;
     private final EmailService emailService;
     private final ProductService productService;
-    private final FilialRepository filialRepository;
+    private final FilialService filialService;
 
     private static final Long STUB_BOT_ID = 1L; // ID бота-заглушки в базе
+    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3; // Максимум активных отзывов на бота
 
+    @Value("${app.nagul.cooldown}")
+    private int NAGUL_COOLDOWN_MINUTES;
+
+    private static final List<String> FORBIDDEN_PATTERNS = Arrays.asList(
+            "имя", "фамилия", "фамилию", "впиши", "отчество", "fio", "name", "surname",
+            "введите", "заполните", "укажите", "вставьте", "шаблон", "template", "пример"
+    );
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
         List<Long> reviewId;
@@ -150,6 +164,20 @@ public class ReviewServiceImpl implements ReviewService{
                 .collect(Collectors.toList());
 
         return new PageImpl<>(reviewDTOOnes, pageable, reviewPage.size());
+    }
+
+    // В ReviewService.java
+    public boolean hasActiveNagulReviews(Principal principal) {
+        if (principal == null) return false;
+
+        User user = userService.findByUserName(principal.getName()).orElse(null);
+        if (user == null) return false;
+
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) return false;
+
+        LocalDate today = LocalDate.now();
+        return reviewRepository.existsActiveNagulReviews(worker, today.plusDays(60));
     }
 
 //    private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
@@ -726,12 +754,15 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
                 Review review = getReviewToChangeBot(reviewId);
 
+                // УБИРАЕМ СОХРАНЕНИЕ wasVigul, так как getReviewToChangeBot уже обновляет vigul
+
                 if (review.getBot() == null) {
                     log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
                 } else if (review.getBot().getId() != null && review.getBot().getId() == 1L) {
                     log.warn("2. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
                 } else {
                     log.info("2. Установлен новый рандомный бот для отзыва ID {}", reviewId);
+                    // НЕ вызываем updateVigulBasedOnBotCounter здесь - он уже вызван в getReviewToChangeBot
                 }
 
                 reviewRepository.save(review);
@@ -751,6 +782,9 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     log.warn("Отзыв с id {} не найден", reviewId);
                     throw new RuntimeException("Отзыв не найден");
                 }
+
+                // СОХРАНЯЕМ ТЕКУЩЕЕ СОСТОЯНИЕ VIGUL
+                boolean wasVigul = review.isVigul();
 
                 // Получаем текущего бота отзыва для корректной деактивации
                 Bot currentBot = review.getBot();
@@ -802,6 +836,13 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     // Если нет доступных ботов, устанавливаем бота-заглушку
                     Bot stubBot = createStubBot();
                     review.setBot(stubBot);
+
+                    // ВАЖНО: Если назначаем заглушку, isVigul должен стать false
+                    if (review.isVigul()) {
+                        review.setVigul(false);
+                        log.info("Отзыв ID {}: isVigul изменен с true на false (назначен бот-заглушка)", reviewId);
+                    }
+
                     log.warn("6. Установлен бот-заглушка для отзыва ID {} (нет доступных ботов)", reviewId);
                 } else {
                     var random = new SecureRandom();
@@ -809,8 +850,12 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     Bot selectedBot = availableBots.get(randomIndex);
                     review.setBot(selectedBot);
                     log.info("6. Установлен новый бот ID {} для отзыва ID {}", selectedBot.getId(), reviewId);
+
+                    // ПРОВЕРЯЕМ И ОБНОВЛЯЕМ VIGUL НА ОСНОВАНИИ НОВОГО БОТА
+                    updateVigulBasedOnBotCounter(review);
                 }
 
+                log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
                 reviewRepository.save(review);
                 log.info("7. Сохранили изменения в БД");
 
@@ -820,36 +865,50 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
             }
         }
 
-        private Review getReviewToChangeBot(Long reviewId) {
-            Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
-            if (reviewOptional.isEmpty()) {
-                log.error("1. Отзыв с ID {} не найден", reviewId);
-                throw new RuntimeException("Отзыв не найден");
-            }
-
-            Review review = reviewOptional.get();
-            log.info("2. Достали отзыв по id {}", reviewId);
-
-            List<Bot> bots = findAllBotsMinusFilial(review);
-            log.info("3. Найдено доступных ботов: {}", bots.size());
-
-            if (bots.isEmpty()) {
-                log.error("4. Нет доступных ботов для отзыва ID {}", reviewId);
-                // Устанавливаем бота-заглушку
-                Bot stubBot = createStubBot();
-                review.setBot(stubBot);
-                log.info("5. Установлен бот-заглушка для отзыва ID {}", reviewId);
-            } else {
-                var random = new SecureRandom();
-                int randomIndex = random.nextInt(bots.size());
-                Bot selectedBot = bots.get(randomIndex);
-                review.setBot(selectedBot);
-                log.info("5. Установлен новый бот для отзыва ID {}: бот ID {}, имя: {}",
-                        reviewId, selectedBot.getId(), selectedBot.getFio());
-            }
-
-            return review;
+    private Review getReviewToChangeBot(Long reviewId) {
+        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
+        if (reviewOptional.isEmpty()) {
+            log.error("1. Отзыв с ID {} не найден", reviewId);
+            throw new RuntimeException("Отзыв не найден");
         }
+
+        Review review = reviewOptional.get();
+        log.info("2. Достали отзыв по id {}", reviewId);
+
+        // СОХРАНЯЕМ ТЕКУЩЕЕ СОСТОЯНИЕ VIGUL
+        boolean wasVigul = review.isVigul();
+
+        List<Bot> bots = findAllBotsMinusFilial(review);
+        log.info("3. Найдено доступных ботов: {}", bots.size());
+
+        if (bots.isEmpty()) {
+            log.error("4. Нет доступных ботов для отзыва ID {}", reviewId);
+            // Устанавливаем бота-заглушку
+            Bot stubBot = createStubBot();
+            review.setBot(stubBot);
+
+            // ВАЖНО: Если назначаем заглушку, isVigul должен стать false
+            if (review.isVigul()) {
+                review.setVigul(false);
+                log.info("Отзыв ID {}: isVigul изменен с true на false (назначен бот-заглушка)", reviewId);
+            }
+
+            log.info("5. Установлен бот-заглушка для отзыва ID {}", reviewId);
+        } else {
+            var random = new SecureRandom();
+            int randomIndex = random.nextInt(bots.size());
+            Bot selectedBot = bots.get(randomIndex);
+            review.setBot(selectedBot);
+            log.info("5. Установлен новый бот для отзыва ID {}: бот ID {}, имя: {}",
+                    reviewId, selectedBot.getId(), selectedBot.getFio());
+
+            // ПРОВЕРЯЕМ И ОБНОВЛЯЕМ VIGUL НА ОСНОВАНИИ НОВОГО БОТА
+            updateVigulBasedOnBotCounter(review);
+        }
+
+        log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
+        return review;
+    }
 
         // Метод для создания бота-заглушки
         private Bot createStubBot() {
@@ -925,6 +984,8 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         }
 
         public List<Bot> findAllBotsMinusFilial(Review review) {
+
+
             if (review == null) {
                 log.error("Ошибка: review == null");
                 return Collections.emptyList();
@@ -972,6 +1033,27 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
 
             boolean vigul = review.isVigul();
             log.info("Отзыв ID {} имеет vigul = {}", review.getId(), vigul);
+
+
+            // ДОБАВИМ ПРОВЕРКУ: если vigul = true, но нет ботов с counter >= 3
+            if (vigul) {
+                long botsWithCounter3OrMore = allBots.stream()
+                        .filter(bot -> bot != null && bot.getId() != null)
+                        .filter(bot -> {
+                            Integer counter = bot.getCounter();
+                            if (counter == null) counter = 0;
+                            return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+                        })
+                        .count();
+
+                log.info("Для отзыва с vigul=true найдено ботов с counter >= 3: {}", botsWithCounter3OrMore);
+
+                if (botsWithCounter3OrMore == 0) {
+                    log.warn("ВНИМАНИЕ: Отзыв ID {} имеет vigul=true, но в городе нет ботов с counter >= 3!",
+                            review.getId());
+                    // Можно добавить логику для автоматического изменения vigul здесь
+                }
+            }
 
             // Этап 1: Идеальные боты - не использовались в этом филиале и не заняты в других
             List<Bot> idealBots = allBots.stream()
@@ -1063,7 +1145,7 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 }
 
                 // Находим все филиалы того же города
-                List<Filial> filialsInSameCity = filialRepository.findByCityId(currentCity.getId());
+                List<Filial> filialsInSameCity = filialService.findByCityId(currentCity.getId());
                 if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
                     return usedBotIds;
                 }
@@ -1178,6 +1260,56 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 return false;
             }
         }
+
+    /**
+     * НОВЫЙ МЕТОД: Автоматическое обновление isVigul на основе counter назначенного бота
+     * Правила:
+     * 1. Если isVigul = true и новый бот имеет counter < 3 → isVigul = false
+     * 2. Если isVigul = false и новый бот имеет counter >= 3 → isVigul = true
+     */
+    /**
+     * НОВЫЙ МЕТОД: Автоматическое обновление isVigul на основе counter назначенного бота
+     * Правила:
+     * 1. Если isVigul = true и новый бот имеет counter < 3 → isVigul = false
+     * 2. Если isVigul = false и новый бот имеет counter >= 3 → isVigul = true
+     */
+    private void updateVigulBasedOnBotCounter(Review review) {
+        if (review == null || review.getBot() == null) {
+            return;
+        }
+
+        Bot bot = review.getBot();
+
+        // Пропускаем бота-заглушку (ID = 1) - для них отдельная обработка
+        if (STUB_BOT_ID.equals(bot.getId())) {
+            return;
+        }
+
+        // Получаем counter бота
+        Integer botCounter = bot.getCounter();
+        if (botCounter == null) {
+            botCounter = 0;
+        }
+
+        boolean currentVigul = review.isVigul();
+
+        // Правило 1: Если vigul = true, но бот имеет counter < 3
+        if (currentVigul && botCounter < MAX_ACTIVE_REVIEWS_PER_BOT) {
+            review.setVigul(false);
+            log.info("Отзыв ID {}: isVigul изменен с true на false (бот ID {} имеет counter={} < 3)",
+                    review.getId(), bot.getId(), botCounter);
+        }
+        // Правило 2: Если vigul = false, но бот имеет counter >= 3
+        else if (!currentVigul && botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
+            review.setVigul(true);
+            log.info("Отзыв ID {}: isVigul изменен с false на true (бот ID {} имеет counter={} >= 3)",
+                    review.getId(), bot.getId(), botCounter);
+        }
+        else {
+            log.debug("Отзыв ID {}: isVigul остается {} (бот ID {} имеет counter={})",
+                    review.getId(), currentVigul, bot.getId(), botCounter);
+        }
+    }
 
         public ReviewDTOOne toReviewDTOOne(Review review) {
             try {
@@ -1342,751 +1474,21 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//    @Override
-//    public void changeBot(Long reviewId) {
-//        // Замена бота
-//        try {
-//            log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
-//            Review review = getReviewToChangeBot(reviewId);
-//
-//            if (review.getBot() != null && review.getBot().getId() == -1L) {
-//                log.warn("2. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
-//            } else if (review.getBot() != null) {
-//                log.info("2. Установлен новый рандомный бот для отзыва ID {}", reviewId);
-//            } else {
-//                log.warn("2. Не удалось установить бота для отзыва ID {}", reviewId);
-//            }
-//
-//            reviewRepository.save(review);
-//            log.info("3. Сохранили отзыв в БД");
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
-//            throw new RuntimeException("Не удалось заменить бота: " + e.getMessage());
-//        }
-//    }
-//
-//    @Override
-//    public void deActivateAndChangeBot(Long reviewId, Long botId) {
-//        // Деактивация бота
-//        try {
-//            Review review = reviewRepository.findById(reviewId).orElse(null);
-//            if (review == null) {
-//                log.warn("Отзыв с id {} не найден", reviewId);
-//                throw new RuntimeException("Отзыв не найден");
-//            }
-//
-//            // Получаем текущего бота отзыва для корректной деактивации
-//            Bot currentBot = review.getBot();
-//            Long currentBotId = currentBot != null ? currentBot.getId() : null;
-//
-//            // Если передан botId = 0, но у отзыва есть реальный бот, используем ID реального бота
-//            if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
-//                botId = currentBotId;
-//                log.info("Используем ID реального бота отзыва: {}", botId);
-//            }
-//
-//            // Отправка email о малом количестве ботов
-//            try {
-//                // Проверяем, что у филиала есть город
-//                if (review.getFilial() != null && review.getFilial().getCity() != null) {
-//                    int botCount = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId()).size();
-//                    if (botCount < 50) {
-//                        String textMail = "Город: " + review.getFilial().getCity().getTitle() + ". Остаток у города: " + botCount;
-//                        emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить аккаунты для: " + textMail);
-//                        log.info("ОТПРАВКА МЕЙЛА О МАЛОМ КОЛИЧЕСТВЕ АККАУНТОВ - УСПЕХ");
-//                    } else {
-//                        log.info("ПИСЬМО не отправлялось - у города достаточно аккаунтов");
-//                    }
-//                } else {
-//                    log.warn("Не удалось отправить письмо: у филиала или города отсутствуют данные");
-//                }
-//            } catch (Exception e) {
-//                log.error("Сообщение о деактивации бота не отправилось", e);
-//            }
-//
-//            // Деактивируем старого бота, только если это не бот-заглушка (ID != -1) и ID > 0
-//            boolean deactivated = false;
-//            if (botId != null && botId != -1L && botId > 0) {
-//                deactivated = botActiveToFalse(botId);
-//                if (deactivated) {
-//                    log.info("4. Деактивировали старого бота ID {}", botId);
-//                } else {
-//                    log.warn("4. Не удалось деактивировать старого бота ID {}", botId);
-//                }
-//            } else {
-//                log.info("4. Пропускаем деактивацию: бот ID {} является заглушкой или невалидным", botId);
-//            }
-//
-//            // Получаем отзыв с новым ботом (или без бота, если нет доступных)
-//            Review updatedReview = getReviewToChangeBot(reviewId);
-//
-//            if (updatedReview.getBot() == null) {
-//                log.warn("5. Не удалось найти свободных ботов для отзыва ID {}", reviewId);
-//            } else if (updatedReview.getBot().getId() != null && updatedReview.getBot().getId() == -1L) {
-//                log.warn("5. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
-//            } else {
-//                log.info("5. Установили нового рандомного бота для отзыва ID {}", reviewId);
-//            }
-//
-//            reviewRepository.save(updatedReview);
-//            log.info("6. Сохранили изменения в БД");
-//
-//        } catch (Exception e) {
-//            log.error("Что-то пошло не так и бот не деактивирован", e);
-//            throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage());
-//        }
-//    }
-//
-//    private Review getReviewToChangeBot(Long reviewId) {
-//        // Установка нового бота в отзыв
-//        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
-//        if (reviewOptional.isEmpty()) {
-//            log.error("1. Отзыв с ID {} не найден", reviewId);
-//            throw new RuntimeException("Отзыв не найден");
-//        }
-//
-//        Review review = reviewOptional.get();
-//        log.info("2. Достали отзыв по id {}", reviewId);
-//
-//        List<Bot> bots = findAllBotsMinusFilial(review);
-//        log.info("3. Найдено доступных ботов: {}", bots.size());
-//
-//        if (bots.isEmpty()) {
-//            log.error("4. Нет доступных ботов для отзыва ID {}", reviewId);
-//
-//            // Создаем и устанавливаем бота-заглушку
-//            Bot stubBot = createStubBot();
-//            review.setBot(stubBot);
-//            log.info("5. Установлен бот-заглушка для отзыва ID {}", reviewId);
-//            return review;
-//        }
-//
-//        var random = new SecureRandom();
-//        int randomIndex = random.nextInt(bots.size());
-//        Bot selectedBot = bots.get(randomIndex);
-//        review.setBot(selectedBot);
-//
-//        log.info("5. Установлен новый бот для отзыва ID {}: бот ID {}, имя: {}",
-//                reviewId, selectedBot.getId(), selectedBot.getFio());
-//
-//        return review;
-//    }
-//
-//    // Метод для создания бота-заглушки (если нужно)
-//    private Bot createStubBot() {
-//        Bot stubBot = new Bot();
-//        stubBot.setId(-1L); // ID -1 указывает на заглушку
-//        stubBot.setFio("Нет доступных аккаунтов");
-//        stubBot.setLogin("no_bots_available");
-//        stubBot.setPassword("");
-//        stubBot.setCounter(0);
-//        stubBot.setActive(false);
-//        return stubBot;
-//    }
-//
-//    private boolean botActiveToFalse(Long botId) {
-//        // Изменение статуса бота как НЕ активный
-//        try {
-//            // Проверяем, не является ли бот заглушкой или невалидным
-//            if (botId == null || botId <= 0) {
-//                log.debug("Пропускаем деактивацию бота с ID {} (невалидный ID или заглушка)", botId);
-//                return false;
-//            }
-//
-//            Optional<Bot> botOptional;
-//            try {
-//                botOptional = Optional.ofNullable(botService.findBotById(botId));
-//            } catch (Exception e) {
-//                log.error("Ошибка при поиске бота ID {}: {}", botId, e.getMessage());
-//                return false;
-//            }
-//
-//            if (botOptional.isEmpty()) {
-//                log.error("1. Бот с ID {} не найден", botId);
-//                return false;
-//            }
-//
-//            Bot bot = botOptional.get();
-//            boolean wasActive = bot.isActive();
-//            bot.setActive(false);
-//
-//            try {
-//                botService.save(bot);
-//                log.info("2. Деактивировали бота {} (был активен: {})", botId, wasActive);
-//                return true;
-//            } catch (Exception e) {
-//                log.error("Ошибка при сохранении бота ID {}: {}", botId, e.getMessage());
-//                return false;
-//            }
-//
-//        } catch (Exception e) {
-//            log.error("3. Ошибка при деактивации бота {}: ", botId, e);
-//            log.info("Что-то пошло не так и деактивация бота не случилась");
-//            return false;
-//        }
-//    }
-//
-//    public List<Bot> findAllBotsMinusFilial(Review review) {
-//        // Проверка входных параметров
-//        if (review == null) {
-//            log.error("Ошибка: review == null");
-//            return Collections.emptyList();
-//        }
-//
-//        Filial filial = review.getFilial();
-//        if (filial == null) {
-//            log.error("Ошибка: у review отсутствует filial");
-//            return Collections.emptyList();
-//        }
-//
-//        City city = filial.getCity();
-//        if (city == null || city.getId() == null) {
-//            log.error("Ошибка: у filial отсутствует город или его ID");
-//            return Collections.emptyList();
-//        }
-//
-//        log.info("Поиск ботов для отзыва ID {}, филиал ID {}, город: {}",
-//                review.getId(), filial.getId(), city.getTitle());
-//
-//        // Получаем всех ботов для города
-//        List<Bot> allBots;
-//        try {
-//            allBots = botService.getFindAllByFilialCityId(city.getId());
-//        } catch (Exception e) {
-//            log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
-//            return Collections.emptyList();
-//        }
-//
-//        if (allBots == null || allBots.isEmpty()) {
-//            log.warn("Список ботов пуст для города: {}", city.getTitle());
-//            return Collections.emptyList();
-//        }
-//
-//        log.debug("Получено ботов из базы: {}", allBots.size());
-//
-//        // 1. Получаем ID ботов, которые уже использовались в этом филиале (ВСЕ отзывы)
-//        Set<Long> usedBotIdsInThisFilial = getUsedBotIdsInFilial(filial, review.getId());
-//        log.info("Ботов уже использованных в этом филиале: {}", usedBotIdsInThisFilial.size());
-//
-//        // 2. Получаем ID ботов, занятых в активных отзывах в других филиалах
-//        Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
-//        log.info("Ботов занятых в активных отзывах других филиалов: {}", usedBotIdsGlobally.size());
-//
-//        // Получаем значение vigul
-//        boolean vigul = review.isVigul();
-//        log.info("Отзыв ID {} имеет vigul = {}", review.getId(), vigul);
-//
-//        // Этап 1: Идеальные боты - не использовались в этом филиале и не заняты в других
-//        List<Bot> idealBots = allBots.stream()
-//                .filter(Objects::nonNull)
-//                .filter(bot -> bot.getId() != null)
-//                // Не использовались в этом филиале
-//                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-//                // Не заняты в активных отзывах других филиалов
-//                .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
-//                .filter(bot -> {
-//                    if (bot.getStatus() == null) return false;
-//                    String statusTitle = bot.getStatus().getBotStatusTitle();
-//                    return statusTitle != null && "Новый".equals(statusTitle.trim());
-//                })
-//                .collect(Collectors.toList());
-//
-//        log.info("Идеальных ботов (не в этом филиале, не заняты в других): {}", idealBots.size());
-//
-//        // Если есть идеальные боты, применяем фильтры vigul
-//        if (!idealBots.isEmpty()) {
-//            List<Bot> filteredBots = applyVigulFilters(idealBots, vigul);
-//            if (!filteredBots.isEmpty()) {
-//                log.info("Используем идеальных ботов: {}", filteredBots.size());
-//                return filteredBots;
-//            }
-//        }
-//
-//        // Этап 2: Запасной режим - боты, занятые в других филиалах, но не в этом
-//        List<Bot> fallbackBots = allBots.stream()
-//                .filter(Objects::nonNull)
-//                .filter(bot -> bot.getId() != null)
-//                // КРИТИЧЕСКИ ВАЖНО: все равно исключаем ботов, которые уже были в этом филиале
-//                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-//                .filter(bot -> {
-//                    if (bot.getStatus() == null) return false;
-//                    String statusTitle = bot.getStatus().getBotStatusTitle();
-//                    return statusTitle != null && "Новый".equals(statusTitle.trim());
-//                })
-//                .collect(Collectors.toList());
-//
-//        log.info("Запасных ботов (не в этом филиале, но могут быть заняты в других): {}", fallbackBots.size());
-//
-//        if (!fallbackBots.isEmpty()) {
-//            List<Bot> filteredBots = applyVigulFilters(fallbackBots, vigul);
-//            if (!filteredBots.isEmpty()) {
-//                log.warn("Используем запасных ботов (заняты в других филиалах): {}", filteredBots.size());
-//                return filteredBots;
-//            }
-//        }
-//
-//        // Этап 3: Все боты использованы - возвращаем пустой список
-//        log.error("ВСЕ боты уже использованы в этом филиале или не подходят по условиям vigul. Необходимо назначить бота-заглушку");
-//        return Collections.emptyList();
-//    }
-//
-//    /**
-//     * Получает ID ботов, которые уже использовались в этом филиале (все отзывы, включая опубликованные)
-//     */
-//    private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
-//        Set<Long> usedBotIds = new HashSet<>();
-//
-//        try {
-//            // Ищем ВСЕ отзывы этого филиала (и активные, и опубликованные)
-//            List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
-//
-//            if (allReviewsInFilial != null) {
-//                for (Review existingReview : allReviewsInFilial) {
-//                    // Исключаем текущий отзыв (при редактировании)
-//                    if (existingReview != null &&
-//                            existingReview.getId() != null &&
-//                            !existingReview.getId().equals(currentReviewId) &&
-//                            existingReview.getBot() != null &&
-//                            existingReview.getBot().getId() != null) {
-//
-//                        usedBotIds.add(existingReview.getBot().getId());
-//                        log.debug("Бот ID {} уже использовался в отзыве ID {} этого филиала",
-//                                existingReview.getBot().getId(), existingReview.getId());
-//                    }
-//                }
-//            }
-//            log.info("Всего ботов, использованных в филиале {}: {}",
-//                    filial.getId(), usedBotIds.size());
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
-//        }
-//
-//        return usedBotIds;
-//    }
-//
-//    /**
-//     * Получает ID ботов, занятых в активных отзывах других филиалов
-//     */
-//    /**
-//     * Получает ID ботов, занятых в активных отзывах других филиалов того же города
-//     */
-//    private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {
-//        Set<Long> usedBotIds = new HashSet<>();
-//
-//        try {
-//            // Получаем город текущего филиала
-//            City currentCity = currentFilial.getCity();
-//            if (currentCity == null || currentCity.getId() == null) {
-//                log.warn("У текущего филиала ID {} не указан город, пропускаем поиск занятых ботов", currentFilial.getId());
-//                return usedBotIds;
-//            }
-//
-//            log.debug("Ищем активные отзывы в городе ID: {}, название: {}",
-//                    currentCity.getId(), currentCity.getTitle());
-//
-//            // 1. Находим все филиалы того же города
-//            List<Filial> filialsInSameCity = filialRepository.findByCityId(currentCity.getId());
-//            if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
-//                log.debug("Нет других филиалов в городе ID {}", currentCity.getId());
-//                return usedBotIds;
-//            }
-//
-//            // 2. Собираем ID всех филиалов того же города (кроме текущего)
-//            List<Long> otherFilialIdsInCity = filialsInSameCity.stream()
-//                    .filter(filial -> filial != null && filial.getId() != null)
-//                    .filter(filial -> !filial.getId().equals(currentFilial.getId()))
-//                    .map(Filial::getId)
-//                    .collect(Collectors.toList());
-//
-//            log.debug("Найдено других филиалов в том же городе: {}", otherFilialIdsInCity.size());
-//
-//            if (otherFilialIdsInCity.isEmpty()) {
-//                log.debug("В городе только текущий филиал, нет других филиалов для проверки");
-//                return usedBotIds;
-//            }
-//
-//            // 3. Находим активные отзывы в этих филиалах
-//            List<Review> activeReviewsInSameCity;
-//            try {
-//                // Используем метод репозитория, который ищет по списку ID филиалов
-//                activeReviewsInSameCity = reviewRepository.findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
-//
-//                // ИЛИ если такого метода нет, можно использовать существующий метод и фильтровать в коде:
-//                // activeReviewsInSameCity = reviewRepository.findByPublishFalseAndBotIsNotNull().stream()
-//                //         .filter(review -> review.getFilial() != null &&
-//                //                review.getFilial().getId() != null &&
-//                //                otherFilialIdsInCity.contains(review.getFilial().getId()))
-//                //         .collect(Collectors.toList());
-//            } catch (Exception e) {
-//                log.error("Ошибка при поиске активных отзывов в том же городе", e);
-//                return usedBotIds;
-//            }
-//
-//            if (activeReviewsInSameCity != null) {
-//                for (Review existingReview : activeReviewsInSameCity) {
-//                    // Исключаем текущий отзыв (при редактировании)
-//                    if (existingReview != null &&
-//                            existingReview.getId() != null &&
-//                            !existingReview.getId().equals(currentReviewId) &&
-//                            existingReview.getBot() != null &&
-//                            existingReview.getBot().getId() != null) {
-//
-//                        usedBotIds.add(existingReview.getBot().getId());
-//                        log.debug("Бот ID {} занят в активном отзыве ID {} другого филиала того же города",
-//                                existingReview.getBot().getId(), existingReview.getId());
-//                    }
-//                }
-//            }
-//
-//            log.info("Найдено активных отзывов с ботами в других филиалах того же города: {}",
-//                    activeReviewsInSameCity != null ? activeReviewsInSameCity.size() : 0);
-//            log.info("Ботов занятых в активных отзывах других филиалов того же города: {}", usedBotIds.size());
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при получении глобально использованных ботов", e);
-//        }
-//
-//        return usedBotIds;
-//    }
-//
-//    /**
-//     * Выделенный метод для применения фильтров по vigul
-//     */
-//    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
-//        if (!vigul) {
-//            // Для vigul = false
-//            log.info("Фильтрация для vigul=false");
-//
-//            // Сначала ищем ботов с именем "Впиши Имя Фамилию"
-//            List<Bot> strictFiltered = baseBots.stream()
-//                    .filter(bot -> {
-//                        if (bot.getFio() == null) {
-//                            log.debug("Бот ID {} без имени", bot.getId());
-//                            return false;
-//                        }
-//                        boolean hasCorrectName = "Впиши Имя Фамилию".equals(bot.getFio().trim());
-//                        if (!hasCorrectName) {
-//                            log.debug("Бот ID {} имеет имя '{}'", bot.getId(), bot.getFio());
-//                        }
-//                        return hasCorrectName;
-//                    })
-//                    .collect(Collectors.toList());
-//
-//            log.info("Ботов с именем 'Впиши Имя Фамилию': {}", strictFiltered.size());
-//
-//            if (!strictFiltered.isEmpty()) {
-//                log.info("Используем ботов с именем 'Впиши Имя Фамилию'");
-//                return strictFiltered;
-//            }
-//
-//            log.warn("Нет ботов с именем 'Впиши Имя Фамилию', используем всех доступных ботов со статусом 'Новый'");
-//            return baseBots;
-//
-//        } else {
-//            // Для vigul = true
-//            log.info("Фильтрация для vigul=true");
-//
-//            // Сначала ищем ботов с counter >= 3
-//            List<Bot> strictFiltered = baseBots.stream()
-//                    .filter(bot -> {
-//                        Integer counter = bot.getCounter();
-//                        if (counter == null) {
-//                            counter = 0;
-//                            log.debug("Бот ID {} без counter, считаем 0", bot.getId());
-//                        }
-//                        boolean hasEnoughCounter = counter >= 3;
-//                        if (!hasEnoughCounter) {
-//                            log.debug("Бот ID {} имеет counter={}", bot.getId(), counter);
-//                        }
-//                        return hasEnoughCounter;
-//                    })
-//                    .collect(Collectors.toList());
-//
-//            log.info("Ботов с counter >= 3: {}", strictFiltered.size());
-//
-//            if (!strictFiltered.isEmpty()) {
-//                log.info("Используем ботов с counter >= 3");
-//                return strictFiltered;
-//            }
-//
-//            // Если нет ботов с counter >= 3, ищем с counter 0-2
-//            List<Bot> fallbackFiltered = baseBots.stream()
-//                    .filter(bot -> {
-//                        Integer counter = bot.getCounter();
-//                        if (counter == null) {
-//                            counter = 0;
-//                            log.debug("Бот ID {} без counter, считаем 0", bot.getId());
-//                        }
-//                        boolean hasValidCounter = counter >= 0 && counter <= 2;
-//                        if (!hasValidCounter) {
-//                            log.debug("Бот ID {} имеет counter={} (не в диапазоне 0-2)", bot.getId(), counter);
-//                        }
-//                        return hasValidCounter;
-//                    })
-//                    .collect(Collectors.toList());
-//
-//            log.info("Ботов с counter от 0 до 2: {}", fallbackFiltered.size());
-//
-//            if (!fallbackFiltered.isEmpty()) {
-//                log.warn("Нет ботов с counter >= 3, используем ботов с counter от 0 до 2");
-//                return fallbackFiltered;
-//            }
-//
-//            // Если совсем нет ботов с подходящим counter, используем всех
-//            log.warn("Нет ботов с подходящим counter, используем всех доступных ботов со статусом 'Новый'");
-//            return baseBots;
-//        }
-//    }
-//
-//    // Дополнительный метод для проверки, не "перегружен" ли бот
-//    private boolean isBotOverloaded(Bot bot) {
-//        try {
-//            // Находим, сколько активных отзывов у этого бота
-//            List<Review> botActiveReviews = reviewRepository.findByBotAndPublishFalse(bot);
-//
-//            // Если у бота больше N активных отзывов, считаем его перегруженным
-//            int maxActiveReviewsPerBot = 3; // Настройте по необходимости
-//            return botActiveReviews != null && botActiveReviews.size() >= maxActiveReviewsPerBot;
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при проверке загруженности бота ID {}", bot.getId(), e);
-//            return false;
-//        }
-//    }
-//
-//    public ReviewDTOOne toReviewDTOOne(Review review) {
-//        try {
-//            OrderDetails orderDetails = review.getOrderDetails();
-//            Bot bot = review.getBot();
-//
-//            // Проверяем, является ли бот заглушкой (ID = -1)
-//            boolean isStubBot = bot != null && bot.getId() != null && bot.getId() == -1L;
-//
-//            // ====================== ЛОГИКА ДЛЯ ИМЕНИ БОТА ======================
-//            String botFio;
-//
-//            if (orderDetails == null) {
-//                // Если нет заказа - "НЕТ ЗАКАЗА"
-//                botFio = "НЕТ ЗАКАЗА";
-//            } else if (bot == null) {
-//                // Если есть заказ, но бота нет - "Добавьте ботов и нажмите сменить"
-//                botFio = "Добавьте аккаунты и нажмите сменить";
-//            } else if (isStubBot) {
-//                // Если это бот-заглушка - "Нет доступных ботов"
-//                botFio = "Нет доступных аккаунтов";
-//            } else {
-//                // Если это обычный бот - берем его имя
-//                botFio = Optional.ofNullable(bot.getFio())
-//                        .filter(name -> !name.trim().isEmpty())
-//                        .orElse("Бот без имени");
-//            }
-//            // ====================== КОНЕЦ ЛОГИКИ ДЛЯ ИМЕНИ БОТА ======================
-//
-//            // ====================== ДАННЫЕ О КОМПАНИИ И ЗАКАЗЕ ======================
-//            String companyTitle = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getOrder)
-//                    .map(Order::getCompany)
-//                    .map(Company::getTitle)
-//                    .orElse("НЕТ ЗАКАЗА");
-//
-//            Long companyId = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getOrder)
-//                    .map(Order::getCompany)
-//                    .map(Company::getId)
-//                    .orElse(null);
-//
-//            UUID orderDetailsId = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getId)
-//                    .orElse(null);
-//
-//            Long orderId = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getOrder)
-//                    .map(Order::getId)
-//                    .orElse(null);
-//
-//            String productTitle = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getProduct)
-//                    .map(Product::getTitle)
-//                    .orElse("НЕТ ПРОДУКТА");
-//
-//            String comment = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getComment)
-//                    .orElse("");
-//
-//            String orderComments = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getOrder)
-//                    .map(Order::getZametka)
-//                    .orElse("");
-//
-//            String commentCompany = Optional.ofNullable(orderDetails)
-//                    .map(OrderDetails::getOrder)
-//                    .map(Order::getCompany)
-//                    .map(Company::getCommentsCompany)
-//                    .orElse("");
-//            // ====================== КОНЕЦ ДАННЫХ О КОМПАНИИ И ЗАКАЗЕ ======================
-//
-//            // ====================== ДАННЫЕ БОТА ======================
-//            Long botId;
-//            String botLogin;
-//            String botPassword;
-//            Integer botCounter;
-//
-//            if (isStubBot) {
-//                // Для бота-заглушки устанавливаем специальные значения
-//                botId = -1L;
-//                botLogin = "stub";
-//                botPassword = "stub";
-//                botCounter = 0;
-//            } else if (bot != null) {
-//                // Для обычного бота
-//                botId = Optional.ofNullable(bot.getId()).orElse(0L);
-//                botLogin = Optional.ofNullable(bot.getLogin()).orElse("none");
-//                botPassword = Optional.ofNullable(bot.getPassword()).orElse("none");
-//                botCounter = Optional.ofNullable(bot.getCounter()).orElse(0);
-//            } else {
-//                // Если бота нет (null)
-//                botId = 0L;
-//                botLogin = "none";
-//                botPassword = "none";
-//                botCounter = 0;
-//            }
-//            // ====================== КОНЕЦ ДАННЫХ БОТА ======================
-//
-//            // ====================== ДАННЫЕ РАБОТНИКА ======================
-//            String workerFio = Optional.ofNullable(review.getWorker())
-//                    .map(Worker::getUser)
-//                    .map(User::getFio)
-//                    .orElse("");
-//
-//            // Если worker не найден в Review, пробуем найти в Order
-//            if (workerFio.isEmpty()) {
-//                workerFio = Optional.ofNullable(orderDetails)
-//                        .map(OrderDetails::getOrder)
-//                        .map(Order::getManager)
-//                        .map(Manager::getUser)
-//                        .map(User::getFio)
-//                        .orElse("");
-//            }
-//            // ====================== КОНЕЦ ДАННЫХ РАБОТНИКА ======================
-//
-//            // ====================== ДАННЫЕ ФИЛИАЛА ======================
-//            String filialCity = Optional.ofNullable(review.getFilial())
-//                    .map(Filial::getCity)
-//                    .map(City::getTitle)
-//                    .orElse("");
-//
-//            String filialTitle = Optional.ofNullable(review.getFilial())
-//                    .map(Filial::getTitle)
-//                    .orElse("");
-//
-//            String filialUrl = Optional.ofNullable(review.getFilial())
-//                    .map(Filial::getUrl)
-//                    .orElse("");
-//            // ====================== КОНЕЦ ДАННЫХ ФИЛИАЛА ======================
-//
-//            // ====================== КАТЕГОРИИ ======================
-//            String category = Optional.ofNullable(review.getCategory())
-//                    .map(Category::getCategoryTitle)
-//                    .orElse("Нет категории");
-//
-//            String subCategory = Optional.ofNullable(review.getSubCategory())
-//                    .map(SubCategory::getSubCategoryTitle)
-//                    .orElse("Нет подкатегории");
-//            // ====================== КОНЕЦ КАТЕГОРИЙ ======================
-//
-//            // ====================== ДАТЫ ======================
-//            // Безопасное получение дат с значениями по умолчанию
-//            LocalDate created = review.getCreated() != null ? review.getCreated() : LocalDate.now();
-//            LocalDate changed = review.getChanged() != null ? review.getChanged() : created;
-//            LocalDate publishedDate = review.getPublishedDate() != null ? review.getPublishedDate() : LocalDate.now();
-//            // ====================== КОНЕЦ ДАТ ======================
-//
-//            // ====================== СОЗДАНИЕ DTO ======================
-//            return ReviewDTOOne.builder()
-//                    .id(review.getId())
-//                    .companyId(companyId)
-//                    .commentCompany(commentCompany)
-//                    .orderDetailsId(orderDetailsId)
-//                    .orderId(orderId)
-//                    .text(review.getText() != null ? review.getText() : "")
-//                    .answer(review.getAnswer() != null ? review.getAnswer() : "")
-//                    .category(category)
-//                    .subCategory(subCategory)
-//                    .botId(botId)
-//                    .botFio(botFio)
-//                    .botLogin(botLogin)
-//                    .botPassword(botPassword)
-//                    .botCounter(botCounter)
-//                    .companyTitle(companyTitle)
-//                    .productTitle(productTitle)
-//                    .filialCity(filialCity)
-//                    .filialTitle(filialTitle)
-//                    .filialUrl(filialUrl)
-//                    .workerFio(workerFio)
-//                    .created(created)
-//                    .changed(changed)
-//                    .publishedDate(publishedDate)
-//                    .publish(review.isPublish())
-//                    .vigul(review.isVigul())
-//                    .comment(comment)
-//                    .orderComments(orderComments)
-//                    .product(review.getProduct())
-//                    .url(review.getUrl() != null ? review.getUrl() : "")
-//                    .build();
-//            // ====================== КОНЕЦ СОЗДАНИЯ DTO ======================
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при преобразовании отзыва ID {} в DTO: {}",
-//                    review != null ? review.getId() : "null", e.getMessage(), e);
-//
-//            // Возвращаем DTO с информацией об ошибке
-//            return ReviewDTOOne.builder()
-//                    .id(review != null ? review.getId() : 0L)
-//                    .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
-//                    .botFio("ОШИБКА")
-//                    .text(review != null && review.getText() != null ? review.getText() : "Не удалось загрузить данные отзыва")
-//                    .build();
-//        }
-//    }
-
-
     public ReviewDTO getReviewDTOById(Long reviewId) {
-        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
-        if (reviewOptional.isEmpty()) {
-            log.error("Отзыв с ID {} не найден", reviewId);
+        try {
+            Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
+            if (reviewOptional.isEmpty()) {
+                log.error("Отзыв с ID {} не найден", reviewId);
+                return null;
+            }
+
+            Review review = reviewOptional.get();
+            return convertToReviewDTO(review);
+        } catch (EntityNotFoundException e) {
+            log.error("Ошибка при загрузке отзыва ID: {}. Причина: {}", reviewId, e.getMessage());
             return null;
         }
-
-        Review review = reviewOptional.get();
-        return convertToReviewDTO(review);
-    } // Взять дто отзыв по Id
+    }
 
     private ReviewDTO convertToReviewDTO(Review review) {
         if (review == null) {
@@ -2095,16 +1497,52 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         }
 
         OrderDetails orderDetails = review.getOrderDetails();
-        Bot bot = review.getBot();
 
-        // ОДНА И ТА ЖЕ логика для имени бота
-        boolean isStubBot = bot != null && bot.getId() != null && STUB_BOT_ID.equals(bot.getId());
+        // БЕЗОПАСНАЯ ЗАГРУЗКА БОТА
+        Bot bot = null;
+        boolean isStubBot = false;
+
+        try {
+            bot = review.getBot();
+            if (bot != null) {
+                // Пытаемся получить id бота - если бот удален, это выбросит исключение
+                Long botId = bot.getId();
+                isStubBot = botId != null && STUB_BOT_ID.equals(botId);
+            }
+        } catch (EntityNotFoundException e) {
+            log.warn("Бот для отзыва ID {} не найден в базе. Будет использована заглушка", review.getId());
+            bot = null; // Устанавливаем null, если бот удален
+        }
+
+        // Безопасное получение имени бота
         String botName = getBotName(orderDetails, bot, isStubBot);
 
         // Безопасное создание BotDTO
         BotDTO botDTO = null;
         if (bot != null && !isStubBot) {
-            botDTO = convertToBotDTO(bot);
+            try {
+                botDTO = convertToBotDTO(bot);
+            } catch (EntityNotFoundException e) {
+                log.warn("Не удалось создать DTO для бота отзыва ID {}. Причина: {}", review.getId(), e.getMessage());
+                botDTO = BotDTO.builder()
+                        .id(null)
+                        .login("УДАЛЕН")
+                        .fio("Бот был удален")
+                        .active(false)
+                        .counter(0)
+                        .status("Удален")
+                        .build();
+            }
+        } else if (bot == null) {
+            // Создаем DTO для удаленного бота
+            botDTO = BotDTO.builder()
+                    .id(null)
+                    .login("УДАЛЕН")
+                    .fio("Бот был удален")
+                    .active(false)
+                    .counter(0)
+                    .status("Удален")
+                    .build();
         }
 
         // Безопасное получение данных
@@ -2138,18 +1576,21 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 .build();
     }
 
-    // Единый метод для получения имени бота
     private String getBotName(OrderDetails orderDetails, Bot bot, boolean isStubBot) {
         if (orderDetails == null) {
             return "НЕТ ЗАКАЗА";
         } else if (bot == null) {
-            return "Добавьте аккаунты и нажмите сменить";
+            return "Бот был удален";
         } else if (isStubBot) {
             return "Нет доступных аккаунтов";
         } else {
-            return Optional.ofNullable(bot.getFio())
-                    .filter(name -> !name.trim().isEmpty())
-                    .orElse("Бот без имени");
+            try {
+                return Optional.ofNullable(bot.getFio())
+                        .filter(name -> !name.trim().isEmpty())
+                        .orElse("Бот без имени");
+            } catch (EntityNotFoundException e) {
+                return "Бот удален";
+            }
         }
     }
 
@@ -2447,6 +1888,346 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         review.setVigul(true);
         reviewRepository.save(review);
     }
+
+//    @Override
+//    @Transactional
+//    public void changeNagulReview(Long reviewId, String username) {
+//        User currentUser = userService.findByUserName(username)
+//                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+//        Worker worker = workerService.getWorkerByUserId(currentUser.getId());
+//
+//        // Проверка временного интервала
+//        if (worker.getLastNagulTime() != null) {
+//            LocalDateTime now = LocalDateTime.now();
+//            Duration duration = Duration.between(worker.getLastNagulTime(), now);
+//
+//            if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
+//                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
+//                long minutesLeft = secondsLeft / 60;
+//                long remainingSeconds = secondsLeft % 60;
+//
+//                // ВЫБРАСЫВАЕМ ИСКЛЮЧЕНИЕ
+//                throw new NagulTooFastException(minutesLeft, remainingSeconds);
+//            }
+//        }
+//
+//        // Проверка имени бота
+//        Review review = reviewRepository.findById(reviewId)
+//                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+//
+//        if (review.getBot() != null && review.getBot().getFio() != null) {
+//            String botFio = review.getBot().getFio().toLowerCase();
+//
+//            for (String pattern : FORBIDDEN_PATTERNS) {
+//                if (botFio.contains(pattern.toLowerCase())) {
+//                    // ВЫБРАСЫВАЕМ ИСКЛЮЧЕНИЕ
+//                    throw new BotTemplateNameException("Аккаунт не выгулян: имя бота содержит шаблонные слова");
+//                }
+//            }
+//        }
+//
+//        // Выполнение выгула
+//        review.setVigul(true);
+//        worker.setLastNagulTime(LocalDateTime.now());
+//
+//        workerService.save(worker);
+//        reviewRepository.save(review);
+//    }
+
+    @Override
+    @Transactional
+    public void performNagulWithExceptions(Long reviewId, String username) {
+        User currentUser = userService.findByUserName(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+        log.info("Пользователь {} (id={}) пытается выполнить выгул",
+                currentUser.getUsername(), currentUser.getId());
+
+        // Получаем роли пользователя
+        List<String> roles = currentUser.getRoles().stream()
+                .map(role -> role.getName())
+                .collect(Collectors.toList());
+        log.info("Роли пользователя: {}", roles);
+
+        // Определяем, является ли пользователь работником
+        boolean isWorker = roles.contains("ROLE_WORKER");
+        Worker worker = null;
+
+        // Проверка временного интервала только для работников
+        if (isWorker) {
+            worker = workerService.getWorkerByUserId(currentUser.getId());
+
+            if (worker == null) {
+                log.error("Для работника {} не найдена сущность Worker", currentUser.getUsername());
+                throw new RuntimeException("Ошибка: не найдена информация о работнике");
+            }
+
+            validateNagulCooldown(worker);
+        } else {
+            log.info("Пользователь {} не является работником, временные ограничения не применяются",
+                    currentUser.getUsername());
+        }
+
+        // Проверка имени бота (для всех ролей)
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+        validateBotName(review);
+
+        // Выполнение выгула
+        review.setVigul(true);
+
+        // Обновляем время последнего выгула только для работников
+        if (isWorker && worker != null) {
+            worker.setLastNagulTime(LocalDateTime.now());
+            workerService.save(worker);
+            log.info("Время последнего выгула обновлено для работника id={}", worker.getId());
+        }
+
+        reviewRepository.save(review);
+        log.info("Отзыв id={} помечен как выгуленный", reviewId);
+    }
+
+    // Метод проверки временного интервала (только для работников)
+    private void validateNagulCooldown(Worker worker) {
+        if (worker.getLastNagulTime() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            Duration duration = Duration.between(worker.getLastNagulTime(), now);
+
+            log.info("Последний выгул был: {}, прошло: {} секунд",
+                    worker.getLastNagulTime(), duration.getSeconds());
+
+            if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
+                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
+                long minutesLeft = secondsLeft / 60;
+                long remainingSeconds = secondsLeft % 60;
+
+                String message = String.format("Слишком быстрый выгул! Подождите еще %d мин %d сек",
+                        minutesLeft, remainingSeconds);
+                log.warn("Отказ в выгуле: {}", message);
+
+                throw new NagulTooFastException(minutesLeft, remainingSeconds);
+            }
+        } else {
+            log.info("У работника нет предыдущих выгулов, можно выполнять сразу");
+        }
+    }
+
+
+    /**
+     * Метод проверки имени бота с поддержкой инициалов
+     */
+    private void validateBotName(Review review) {
+        if (review.getBot() == null || review.getBot().getFio() == null) {
+            return;
+        }
+
+        String botFio = review.getBot().getFio().trim();
+        String botFioLower = botFio.toLowerCase();
+
+
+
+        // Проверка на пустое имя
+        if (botFio.isEmpty()) {
+            throw new BotTemplateNameException("Имя бота не может быть пустым");
+        }
+
+        // Проверка на цифры
+        if (botFio.matches(".*\\d.*")) {
+            throw new BotTemplateNameException("Аккаунт не выгулян: имя содержит цифры");
+        }
+
+        // ЯВНАЯ ПРОВЕРКА на конкретные запрещенные комбинации
+        List<String> forbiddenFullNames = Arrays.asList(
+                "имя фамилию",
+                "имя фамилия",
+                "впиши имя фамилию",
+                "впиши имя фамилия",
+                "фамилия имя",
+                "фамилию имя"
+        );
+
+        if (forbiddenFullNames.contains(botFioLower)) {
+            log.warn("Обнаружено запрещенное имя бота: {}", botFio);
+            throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
+        }
+
+        // Разделяем на части
+        String[] parts = botFio.split("\\s+");
+
+        // Должно быть 2 или 3 части
+        if (parts.length < 2 || parts.length > 3) {
+            throw new BotTemplateNameException("Аккаунт не выгулян: имя должно быть в формате 'Имя Фамилия' или 'Имя Фамилия И.О.'");
+        }
+
+        // Проверяем первые две части (имя и фамилию)
+        for (int i = 0; i < 2; i++) {
+            String word = parts[i];
+            String wordLower = word.toLowerCase();
+
+            // Проверка на запрещенные слова (включая новые)
+            for (String pattern : FORBIDDEN_PATTERNS) {
+                // Проверяем полное совпадение слова, а не частичное
+                if (wordLower.equals(pattern.toLowerCase())) {
+                    log.warn("Обнаружено запрещенное слово в имени бота: {}, слово: {}", botFio, word);
+                    throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
+                }
+            }
+
+            // Проверка формата имени/фамилии
+            if (!word.matches("^[А-ЯA-Z][а-яa-z]+$")) {
+                throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат имени или фамилии");
+            }
+
+            // Дополнительная проверка: имя и фамилия не должны быть слишком короткими
+            if (word.length() < 2) {
+                throw new BotTemplateNameException("Аккаунт не выгулян: имя или фамилия слишком короткие");
+            }
+        }
+
+        // Если есть третья часть, проверяем как инициалы
+        if (parts.length == 3) {
+            String initials = parts[2];
+            // РАСШИРЕННОЕ РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ для проверки инициалов
+            // Допустимые форматы: С.И., СИ, С., С, С.И, СИ.
+            if (!initials.matches("^[А-ЯA-Z](\\.?[А-ЯA-Z])?\\.?$")) {
+                log.warn("Инициалы '{}' не соответствуют формату в имени: {}", initials, botFio);
+                throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат инициалов. Допустимые форматы: С.И., СИ, С., С, С.И, СИ.");
+            }
+
+            // Дополнительная проверка: не должно быть двух точек подряд
+            if (initials.contains("..")) {
+                throw new BotTemplateNameException("Аккаунт не выгулян: некорректные инициалы (две точки подряд)");
+            }
+
+            // Проверка, что все буквы заглавные
+            String lettersOnly = initials.replace(".", "");
+            for (char c : lettersOnly.toCharArray()) {
+                if (!Character.isUpperCase(c)) {
+                    throw new BotTemplateNameException("Аккаунт не выгулян: инициалы должны быть заглавными буквами");
+                }
+            }
+        }
+
+        // Дополнительная проверка: имя не должно совпадать с фамилией
+        if (parts.length >= 2 && parts[0].equalsIgnoreCase(parts[1])) {
+            log.warn("Имя и фамилия одинаковые: {}", botFio);
+            throw new BotTemplateNameException("Аккаунт не выгулян: имя и фамилия не могут быть одинаковыми");
+        }
+
+        log.info("Имя бота прошло проверку: {}", botFio);
+    }
+
+    // Метод проверки имени бота
+//    private void validateBotName(Review review) {
+//        if (review.getBot() != null && review.getBot().getFio() != null) {
+//            String botFio = review.getBot().getFio().toLowerCase();
+//
+//            for (String pattern : FORBIDDEN_PATTERNS) {
+//                if (botFio.contains(pattern.toLowerCase())) {
+//                    log.warn("Обнаружено шаблонное имя бота: {}, шаблон: {}", botFio, pattern);
+//                    throw new BotTemplateNameException("Аккаунт не выгулян: имя не вписано");
+//                }
+//            }
+//        }
+//    }
+
+    // Дополнительный метод с возвратом NagulResult (если нужен)
+//     @Override
+//    @Transactional
+//    public NagulResult changeNagulReviewWithResult(Long reviewId, String username) {
+//        try {
+//            User currentUser = userService.findByUserName(username)
+//                    .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+//
+//            log.info("Пользователь {} (id={}) пытается выполнить выгул",
+//                    currentUser.getUsername(), currentUser.getId());
+//
+//            // Получаем роли пользователя
+//            List<String> roles = currentUser.getRoles().stream()
+//                    .map(role -> role.getName())
+//                    .collect(Collectors.toList());
+//            log.info("Роли пользователя: {}", roles);
+//
+//            // Определяем, является ли пользователь работником
+//            boolean isWorker = roles.contains("ROLE_WORKER");
+//            Worker worker = null;
+//
+//            // Проверка временного интервала только для работников
+//            if (isWorker) {
+//                worker = workerService.getWorkerByUserId(currentUser.getId());
+//
+//                if (worker == null) {
+//                    log.error("Для работника {} не найдена сущность Worker", currentUser.getUsername());
+//                    return NagulResult.error("Ошибка: не найдена информация о работнике");
+//                }
+//
+//                // Проверка временного интервала
+//                if (worker.getLastNagulTime() != null) {
+//                    LocalDateTime now = LocalDateTime.now();
+//                    Duration duration = Duration.between(worker.getLastNagulTime(), now);
+//
+//                    log.info("Последний выгул был: {}, прошло: {} секунд",
+//                            worker.getLastNagulTime(), duration.getSeconds());
+//
+//                    if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
+//                        LocalDateTime nextAvailableTime = worker.getLastNagulTime()
+//                                .plusMinutes(NAGUL_COOLDOWN_MINUTES);
+//
+//                        long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
+//                        long minutesLeft = secondsLeft / 60;
+//                        long remainingSeconds = secondsLeft % 60;
+//
+//                        String message = String.format("Слишком быстрый выгул! Подождите еще %d мин %d сек",
+//                                minutesLeft, remainingSeconds);
+//                        log.warn("Отказ в выгуле: {}", message);
+//
+//                        return NagulResult.tooFast(message, nextAvailableTime);
+//                    }
+//                }
+//            } else {
+//                log.info("Пользователь {} не является работником, временные ограничения не применяются",
+//                        currentUser.getUsername());
+//            }
+//
+//            // Проверка имени бота (для всех ролей)
+//            Review review = reviewRepository.findById(reviewId)
+//                    .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+//
+//            if (review.getBot() != null && review.getBot().getFio() != null) {
+//                String botFio = review.getBot().getFio().toLowerCase();
+//
+//                for (String pattern : FORBIDDEN_PATTERNS) {
+//                    if (botFio.contains(pattern.toLowerCase())) {
+//                        log.warn("Обнаружено шаблонное имя бота: {}, шаблон: {}", botFio, pattern);
+//                        return NagulResult.error("Аккаунт не выгулян: имя бота содержит шаблонные слова");
+//                    }
+//                }
+//            }
+//
+//            // Выполнение выгула
+//            review.setVigul(true);
+//
+//            // Обновляем время последнего выгула только для работников
+//            if (isWorker && worker != null) {
+//                worker.setLastNagulTime(LocalDateTime.now());
+//                workerService.save(worker);
+//                log.info("Время последнего выгула обновлено для работника id={}", worker.getId());
+//            }
+//
+//            reviewRepository.save(review);
+//            log.info("Отзыв id={} помечен как выгуленный", reviewId);
+//
+//            return NagulResult.success("Отзыв успешно выгулен!");
+//
+//        } catch (Exception e) {
+//            log.error("Ошибка при выгуле reviewId={}, username={}: {}",
+//                    reviewId, username, e.getMessage(), e);
+//            return NagulResult.error("Произошла ошибка при выполнении выгула: " + e.getMessage());
+//        }
+//    }
+
+
+
 
     public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate){
         int count = reviewRepository.countByWorkerAndStatusPublish(worker, localDate);

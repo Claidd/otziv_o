@@ -32,5 +32,7 @@ public interface WorkerService {
 
     Set<Worker> getAllWorkersToManagerList(List<Manager> managerList);
 
+    void save(Worker worker);
+
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }
