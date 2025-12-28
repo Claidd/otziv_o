@@ -124,19 +124,43 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
     private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){ // перевод отзыва в дто
         return reviews.stream().map(this::convertToReviewsDTO).collect(Collectors.toList());
     } // перевод отзыва в дто
-    private ReviewDTO convertToReviewsDTO(Review review){ // перевод отзыва в дто
+    private ReviewDTO convertToReviewsDTO(Review review) {
+        if (review == null) {
+            return ReviewDTO.builder()
+                    .id(null)
+                    .botName("Отзыв не найден")
+                    .build();
+        }
+
+        String botName = "Аккаунт не назначен";
+        String botLogin = null;
+        Long botId = null;
+
+        if (review.getBot() != null) {
+            botId = review.getBot().getId();
+            botName = review.getBot().getFio() != null ? review.getBot().getFio() : "Без имени";
+            botLogin = review.getBot().getLogin();
+        }
+
+        UUID orderDetailsId = null;
+        if (review.getOrderDetails() != null && review.getOrderDetails().getId() != null) {
+            orderDetailsId = review.getOrderDetails().getId();
+        }
+
         return ReviewDTO.builder()
                 .id(review.getId())
-                .text(review.getText())
-                .answer(review.getAnswer())
-                .orderDetailsId(review.getOrderDetails().getId())
+                .text(review.getText() != null ? review.getText() : "нет текста")
+                .answer(review.getAnswer() != null ? review.getAnswer() : "нет замечаний")
+                .orderDetailsId(orderDetailsId)
                 .publish(review.isPublish())
                 .publishedDate(review.getPublishedDate())
-                .botName(review.getBot().getFio())
+                .botName(botName)
+                .botLogin(botLogin)
+                .botId(botId)
                 .product(review.getProduct())
                 .url(review.getUrl() != null ? review.getUrl() : "")
                 .build();
-    } // перевод отзыва в дто
+    }// перевод отзыва в дто
 
 
 }

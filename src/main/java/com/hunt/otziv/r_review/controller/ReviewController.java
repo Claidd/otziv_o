@@ -139,24 +139,64 @@ public class ReviewController {
         return "redirect:/review/editReviews/{orderDetailId}";
     } // Страница редактирования Заказа - Post - СОХРАНИТЬ
 
-    @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
-    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal) throws Exception {
-        log.info("1. Начинаем обновлять данные Отзыва3. - {}", principal != null ? principal.getName() : "Гость");
-        if (reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO)){
-            log.info("Начинаем обновлять статус заказа");
-            orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
-            log.info("Обновили статус заказа");
-            log.info("5. Обновление Отзыва прошло успешно3");
-            rm.addFlashAttribute("saveSuccess", "true");
-            Long companyId = orderDetailDTO.getOrder().getCompany().getId();
+    @PostMapping("/editReviews/{orderDetailId}/publish")
+    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO,
+                                    RedirectAttributes rm, Model model, Principal principal) {
+        log.info("1. Начинаем обновлять данные Отзыва и публиковать - {}",
+                principal != null ? principal.getName() : "Гость");
+
+        try {
+            Long orderId = orderDetailDTO.getOrder().getId();
+
+            // 1. Сначала меняем статус заказа на "Публикация" (это назначит ботов если нужно)
+            log.info("Начинаем обновлять статус заказа на 'Публикация'");
+            boolean statusChanged = orderService.changeStatusForOrder(orderId, "Публикация");
+
+            if (!statusChanged) {
+                log.error("Не удалось изменить статус заказа на 'Публикация'");
+                rm.addFlashAttribute("errorMessage", "Ошибка при изменении статуса заказа");
+                return "redirect:/review/editReviews/{orderDetailId}";
+            }
+
+            log.info("Статус заказа успешно изменен на 'Публикация'");
+
+            // 2. Только после успешной смены статуса обновляем данные отзыва и даты публикации
+            boolean dataUpdated = reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO);
+
+            if (dataUpdated) {
+                log.info("5. Обновление отзыва и дат публикации прошло успешно");
+                rm.addFlashAttribute("saveSuccess", "true");
+            } else {
+                log.warn("Обновление данных отзыва завершилось с предупреждением");
+                rm.addFlashAttribute("warningMessage", "Даты публикации установлены, но возникли незначительные проблемы");
+            }
+
             return "redirect:/review/editReviews/{orderDetailId}";
-//            return "redirect:/ordersCompany/ordersDetails/" + companyId;
-        }
-        else {
-            log.info("2. Произошла какая-то ошибка");
+
+        } catch (Exception e) {
+            log.error("2. Произошла ошибка при публикации: ", e);
+            rm.addFlashAttribute("errorMessage", "Ошибка публикации: " + e.getMessage());
             return "redirect:/review/editReviews/{orderDetailId}";
         }
-    } // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
+    }
+
+//    @PostMapping("/editReviews/{orderDetailId}/publish") // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
+//    String ReviewsEditPostToPublish(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal) throws Exception {
+//        log.info("1. Начинаем обновлять данные Отзыва3. - {}", principal != null ? principal.getName() : "Гость");
+//        if (reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO)){
+//            log.info("Начинаем обновлять статус заказа");
+//            orderService.changeStatusForOrder(orderDetailDTO.getOrder().getId(), "Публикация");
+//            log.info("Обновили статус заказа");
+//            log.info("5. Обновление Отзыва прошло успешно3");
+//            rm.addFlashAttribute("saveSuccess", "true");
+//            Long companyId = orderDetailDTO.getOrder().getCompany().getId();
+//            return "redirect:/review/editReviews/{orderDetailId}";
+//        }
+//        else {
+//            log.info("2. Произошла какая-то ошибка");
+//            return "redirect:/review/editReviews/{orderDetailId}";
+//        }
+//    } // Страница редактирования Заказа - Post - ОПУБЛИКОВАТЬ
 
     @PostMapping("/editReviewses/{orderDetailId}") // Страница редактирования Заказа - Post - КОРРЕКТИРОВАТЬ
     String ReviewsEditPost2(@ModelAttribute("orderDetailDTO") OrderDetailsDTO orderDetailDTO, RedirectAttributes rm, Model model, Principal principal) throws Exception {

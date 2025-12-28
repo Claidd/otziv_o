@@ -57,6 +57,7 @@ import java.math.BigDecimal;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -80,16 +81,14 @@ public class OrderServiceImpl implements OrderService {
     private final ReviewService reviewService;
     private final OrderStatusService orderStatusService;
     private final ReviewArchiveService reviewArchiveService;
-    private final ZpService zpService;
-    private final PaymentCheckService paymentCheckService;
     private final UserService userService;
     private final CompanyStatusService companyStatusService;
-    private final EmailService emailService;
     private final TelegramService telegramService;
     private final PromoTextService textService;
     private final WhatsAppService whatsAppService;
     private final OrderTransactionService orderTransactionService;
     private final OrderStatusCheckerService orderStatusCheckerService;
+    private final BotAssignmentService botAssignmentService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -98,6 +97,7 @@ public class OrderServiceImpl implements OrderService {
     public static final String STATUS_TO_CHECK = "В проверку";
     public static final String STATUS_IN_CHECK = "На проверке";
     public static final String STATUS_CORRECTION= "Коррекция";
+    public static final String STATUS_TO_PUBLISH= "Публикация";
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -838,9 +838,10 @@ public class OrderServiceImpl implements OrderService {
                 case STATUS_TO_CHECK -> handleToCheckStatus(order);
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
+                case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
                 default -> {
-                order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                orderRepository.save(order);
+                    order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+                    orderRepository.save(order);
                     yield true;
                 }
             };
@@ -851,70 +852,433 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private boolean handleArchiveStatus(Order order) {
-        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
-        Company company = order.getCompany();
-        boolean hasUnpaidOrders = company.getOrderList().stream()
-                .anyMatch(o -> !o.getStatus().getTitle().equalsIgnoreCase(STATUS_PAYMENT));
-        if (hasUnpaidOrders) {
-            company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+
+    /**
+     * Обработка перевода заказа в статус "К публикации" с переназначением ботов
+     */
+    private boolean handleToPublicStatus(Order order) {
+        try {
+            log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===");
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
+
+            // Сохраняем предыдущий статус заказа
+            String previousOrderStatus = order.getStatus().getTitle();
+
+            // 1. Меняем статус заказа
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PUBLISH));
+
+            // 2. Управляем статусом компании
+            log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
+            autoManageCompanyStatus(order, STATUS_TO_PUBLISH);
+
+            // 3. Проверяем и назначаем ботов, если нужно (ВСЕГДА!)
+            assignBotsIfNeeded(order);
+
+            // 4. Получаем все отзывы из заказа
+            List<Review> reviews = order.getDetails().stream()
+                    .flatMap(detail -> detail.getReviews().stream())
+                    .collect(Collectors.toList());
+
+            if (reviews.isEmpty()) {
+                log.warn("В заказе ID {} нет отзывов", order.getId());
+            } else {
+                // Проверяем боты-заглушки
+                botAssignmentService.checkAndNotifyAboutStubBots(reviews);
+            }
+
+            // 5. Сохраняем заказ
+            orderRepository.save(order);
+
+            log.info("=== УСПЕШНЫЙ ПЕРЕВОД ЗАКАЗА ===");
+            if (previousOrderStatus.equals(STATUS_ARCHIVE)) {
+                log.info("Заказ ID {} переведен в статус 'К публикации' ИЗ АРХИВА", order.getId());
+
+                if (hasWorkerWithTelegram(order)) {
+                    String companyTitle = order.getCompany().getTitle();
+                    telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+                            companyTitle + ". Новый заказ из Архива. " +
+                                    "\n https://o-ogo.ru/worker/new_orders");
+                }
+            } else {
+                log.info("Заказ ID {} переведен в статус 'К публикации'", order.getId());
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===", e);
+            throw new RuntimeException("Ошибка при переводе заказа в статус 'К публикации'", e);
         }
+    }
+
+
+
+    private boolean handleArchiveStatus(Order order) {
+        log.info("=== АРХИВАЦИЯ ЗАКАЗА ID: {} ===", order.getId());
+
+        // 1. Меняем статус заказа на "Архив"
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
+
+        // 2. Автоматически управляем статусом компании
+        log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
+        autoManageCompanyStatus(order, STATUS_ARCHIVE);
+
+        // 3. Отвязываем ботов от отзывов
+        List<Review> reviews = order.getDetails().getFirst().getReviews();
+        if (reviews != null && !reviews.isEmpty()) {
+            log.info("Отвязываем ботов от {} отзывов", reviews.size());
+            for (Review review : reviews) {
+                if (review.getBot() != null) {
+                    log.debug("Отвязываем бота ID: {} от отзыва ID: {}",
+                            review.getBot().getId(), review.getId());
+                }
+                review.setBot(null);
+                reviewService.save(review);
+            }
+        }
+
+        // 4. Сохраняем заказ
         orderRepository.save(order);
-        companyService.save(company);
+
+        log.info("=== ЗАКАЗ ID {} УСПЕШНО АРХИВИРОВАН ===", order.getId());
         return true;
     }
 
     private boolean handleToCheckStatus(Order order) {
-        String clientId = order.getManager().getClientId();
-        String groupId = order.getCompany().getGroupId();
+        try {
+            log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===");
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
 
-        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
-                textService.findById(5) + "\n\n" +
-                "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
-                order.getDetails().getFirst().getId();
+            // 1. Проверяем и назначаем ботов, если нужно
+            assignBotsIfNeeded(order);
 
-        // Если groupId отсутствует — просто ставим статус без отправки сообщений
-        if (groupId == null || groupId.isBlank()) {
-            log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений", order.getCompany().getTitle());
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
-            orderRepository.save(order);
-            return true;
+            // 2. Управляем статусом компании
+            autoManageCompanyStatus(order, STATUS_TO_CHECK);
+
+            // 3. Подготавливаем сообщение
+            String clientId = order.getManager().getClientId();
+            String groupId = order.getCompany().getGroupId();
+
+            String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+                    textService.findById(5) + "\n\n" +
+                    "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
+                    order.getDetails().getFirst().getId();
+
+            // Если groupId отсутствует — просто ставим статус без отправки сообщений
+            if (groupId == null || groupId.isBlank()) {
+                log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений",
+                        order.getCompany().getTitle());
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+                orderRepository.save(order);
+                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (без отправки WhatsApp)",
+                        order.getId());
+                return true;
+            }
+
+            // 4. Отправляем сообщение и меняем статус
+            log.info("Отправляем сообщение в WhatsApp для заказа ID: {}", order.getId());
+            boolean result = sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
+
+            if (result) {
+                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (сообщение отправлено)",
+                        order.getId());
+            } else {
+                log.error("❌ Ошибка при отправке сообщения для заказа ID: {}", order.getId());
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===", e);
+            // Даже при ошибке попробуем изменить статус
+            try {
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+                orderRepository.save(order);
+                log.warn("Статус заказа ID {} изменен на 'На проверку' без дополнительных действий из-за ошибки",
+                        order.getId());
+            } catch (Exception ex) {
+                log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
+            }
+            return false;
         }
-
-        return sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
     }
+
+
 
 
     private boolean handleCorrectionStatus(Order order) {
-        if (hasWorkerWithTelegram(order)) {
-            String companyTitle = order.getCompany().getTitle();
-            String comments = order.getCompany().getCommentsCompany();
-            telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
-                    companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
-                            "\n https://o-ogo.ru/worker/correct");
+        try {
+            log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===");
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
+
+            // 1. Проверяем и назначаем ботов, если нужно
+            assignBotsIfNeeded(order);
+
+            // 2. Управляем статусом компании
+            autoManageCompanyStatus(order, STATUS_CORRECTION);
+
+            // 3. Отправляем уведомление в Telegram
+            if (hasWorkerWithTelegram(order)) {
+                String companyTitle = order.getCompany().getTitle();
+                String comments = order.getCompany().getCommentsCompany();
+                telegramService.sendMessage(
+                        order.getWorker().getUser().getTelegramChatId(),
+                        companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
+                                "\n https://o-ogo.ru/worker/correct"
+                );
+                log.info("Уведомление о коррекции отправлено в Telegram");
+            }
+
+            // 4. Меняем статус заказа
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
+            orderRepository.save(order);
+
+            log.info("✅ Заказ ID {} переведен в статус 'Коррекция'", order.getId());
+            return true;
+
+        } catch (Exception e) {
+            log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===", e);
+            // Даже при ошибке попробуем изменить статус
+            try {
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
+                orderRepository.save(order);
+                log.warn("Статус заказа ID {} изменен на 'Коррекция' без дополнительных действий из-за ошибки",
+                        order.getId());
+            } catch (Exception ex) {
+                log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
+            }
+            return false;
         }
-        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
-        orderRepository.save(order);
-        return true;
     }
+
+
+
 
     private boolean handlePublicStatus(Order order) {
-        String clientId = order.getManager().getClientId();
-        String groupId = order.getCompany().getGroupId();
+        try {
+            log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===");
 
-        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
-                "Здравствуйте, ваш заказ выполнен, просьба оплатить.  АЛЬФА-БАНК по счету https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И.  ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " +
-                order.getSum() + " руб.";
+            // 1. Проверяем и назначаем ботов, если нужно
+            assignBotsIfNeeded(order);
 
-        if (groupId == null || groupId.isBlank()) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
-            orderRepository.save(order);
-            log.info("✅ Статус заказа {} установлен в '{}' без отправки в WhatsApp (отсутствует groupId)", order.getId(), STATUS_PUBLIC);
-            return true;
+            // 2. Управляем статусом компании
+            log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
+            autoManageCompanyStatus(order, STATUS_PUBLIC);
+
+            // 3. Получаем данные для сообщения
+            String clientId = order.getManager().getClientId();
+            String groupId = order.getCompany().getGroupId();
+
+            String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+                    "Здравствуйте, ваш заказ выполнен, просьба оплатить. АЛЬФА-БАНК по счету " +
+                    "https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И. " +
+                    "ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " + order.getSum() + " руб.";
+
+            if (groupId == null || groupId.isBlank()) {
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+                orderRepository.save(order);
+                log.info("✅ Статус заказа {} установлен в '{}' без отправки в WhatsApp (отсутствует groupId)",
+                        order.getId(), STATUS_PUBLIC);
+                return true;
+            }
+
+            return sentMessageToGroup(STATUS_PUBLIC, order, clientId, groupId, message, STATUS_TO_PAY);
+
+        } catch (Exception e) {
+            log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===", e);
+            throw new RuntimeException("Ошибка при переводе заказа в статус 'Публикация'", e);
         }
-
-        return sentMessageToGroup(STATUS_PUBLIC, order, clientId, groupId, message, STATUS_TO_PAY);
     }
+
+    /**
+     * Проверяет и назначает ботов для отзывов заказа, если их нет
+     */
+    private void assignBotsIfNeeded(Order order) {
+        try {
+            if (order.getDetails() == null || order.getDetails().isEmpty()) {
+                log.warn("У заказа ID {} нет OrderDetails", order.getId());
+                return;
+            }
+            List<Review> reviews = order.getDetails().stream()
+                    .flatMap(detail -> detail.getReviews().stream())
+                    .collect(Collectors.toList());
+
+            if (reviews.isEmpty()) {
+                return;
+            }
+
+            // Проверяем, есть ли отзывы без ботов
+            long nullBotCount = reviews.stream()
+                    .filter(review -> review.getBot() == null)
+                    .count();
+
+            if (nullBotCount > 0) {
+                log.info("Найдено {} отзывов без ботов в заказе ID {}, назначаем...",
+                        nullBotCount, order.getId());
+
+                boolean botsAssigned = botAssignmentService.assignBotsToExistingReviews(
+                        reviews, order.getFilial());
+
+                if (botsAssigned) {
+                    log.info("Боты успешно назначены для {} отзывов", nullBotCount);
+                } else {
+                    log.warn("Не удалось назначить боты для отзывов");
+                }
+            }
+
+            // Проверяем боты-заглушки
+            botAssignmentService.checkAndNotifyAboutStubBots(reviews);
+
+        } catch (Exception e) {
+            log.error("Ошибка при проверке/назначении ботов: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Упрощенное управление статусом компании по четким правилам
+     */
+    private void autoManageCompanyStatus(Order changedOrder, String newOrderStatus) {
+        try {
+            log.info("🚀 === НАЧАЛО АВТОМАТИЧЕСКОГО УПРАВЛЕНИЯ СТАТУСОМ КОМПАНИИ ===");
+            log.info("📦 Заказ ID: {} меняет статус на: {}", changedOrder.getId(), newOrderStatus);
+
+            Company company = changedOrder.getCompany();
+            if (company == null) {
+                log.error("❌ Компания не найдена для заказа ID: {}", changedOrder.getId());
+                return;
+            }
+
+            String currentCompanyStatus = company.getStatus().getTitle();
+            log.info("🏢 Компания ID: {}, текущий статус: {}", company.getId(), currentCompanyStatus);
+
+            // Проверяем, есть ли другие активные неоплаченные заказы у компании
+            boolean hasOtherActiveOrders = hasOtherActiveUnpaidOrders(company, changedOrder);
+            log.info("🔍 Есть другие активные заказы: {}", hasOtherActiveOrders);
+
+            // ПРАВИЛО 1: При архивации заказа
+            if (newOrderStatus.equals(STATUS_ARCHIVE)) {
+                // Если нет других активных заказов -> компания в "Стоп"
+                if (!hasOtherActiveOrders) {
+                    log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет других активных заказов -> компания в 'Стоп'");
+                    company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+                    companyService.save(company);
+                    log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
+                } else {
+                    log.info("📌 ПРАВИЛО 1: Архивация заказа. Есть другие активные заказы -> статус компании не меняем");
+                }
+            }
+            // ПРАВИЛО 2: При активации заказа (из архива в активный статус)
+            else if (isActiveOrderStatus(newOrderStatus)) {
+                // Если компания в "Стопе" и нет других активных заказов -> компания в "Работе"
+                if (currentCompanyStatus.equals(STATUS_COMPANY_IN_STOP) && !hasOtherActiveOrders) {
+                    log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе' и нет других активных заказов -> 'В работе'");
+                    company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
+                    companyService.save(company);
+                    log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
+                } else if (currentCompanyStatus.equals(STATUS_COMPANY_IN_STOP) && hasOtherActiveOrders) {
+                    log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе', но есть другие активные заказы -> оставляем 'Стоп'");
+                } else {
+                    log.info("📌 ПРАВИЛО 2: Активация заказа. Статус компании не требует изменений");
+                }
+            }
+            // Другие статусы не влияют на статус компании
+            else {
+                log.info("📌 Статус заказа '{}' не влияет на статус компании", newOrderStatus);
+            }
+
+        } catch (Exception e) {
+            log.error("🔥 ОШИБКА в autoManageCompanyStatus: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Проверяет, есть ли у компании другие активные неоплаченные заказы (кроме указанного)
+     *
+     * Активный заказ = не оплачен и не в архиве
+     */
+    private boolean hasOtherActiveUnpaidOrders(Company company, Order currentOrder) {
+        try {
+            // Используйте правильный метод для получения списка заказов
+            // Вместо приведения типа, используйте метод, который возвращает List<Order>
+            Collection<Order> companyOrders = company.getOrderList();
+            if (companyOrders == null || companyOrders.isEmpty()) {
+                log.info("У компании ID {} нет других заказов", company.getId());
+                return false;
+            }
+
+            long otherActiveOrdersCount = companyOrders.stream()
+                    .filter(order -> !order.getId().equals(currentOrder.getId())) // исключаем текущий
+                    .filter(order -> {
+                        String orderStatus = order.getStatus().getTitle();
+                        boolean isActive = !orderStatus.equalsIgnoreCase(STATUS_PAYMENT) &&
+                                !orderStatus.equalsIgnoreCase(STATUS_ARCHIVE);
+                        if (isActive) {
+                            log.debug("Найден активный неоплаченный заказ ID: {}, статус: {}",
+                                    order.getId(), orderStatus);
+                        }
+                        return isActive;
+                    })
+                    .count();
+
+            log.info("У компании ID {} найдено {} других активных неоплаченных заказов (кроме заказа ID {})",
+                    company.getId(), otherActiveOrdersCount, currentOrder.getId());
+
+            return otherActiveOrdersCount > 0;
+
+        } catch (Exception e) {
+            log.error("Ошибка при проверке других активных заказов: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Проверяет, является ли статус заказа активным
+     */
+    private boolean isActiveOrderStatus(String status) {
+        Set<String> activeStatuses = Set.of(
+                STATUS_TO_PUBLISH,
+                STATUS_PUBLIC,
+                STATUS_TO_PAY,
+                STATUS_TO_CHECK,
+                STATUS_CORRECTION,
+                STATUS_IN_CHECK,
+                STATUS_NEW
+        );
+        return activeStatuses.contains(status);
+    }
+
+//    private boolean handleToCheckStatus(Order order) {
+//        String clientId = order.getManager().getClientId();
+//        String groupId = order.getCompany().getGroupId();
+//
+//        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+//                textService.findById(5) + "\n\n" +
+//                "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
+//                order.getDetails().getFirst().getId();
+//
+//        // Если groupId отсутствует — просто ставим статус без отправки сообщений
+//        if (groupId == null || groupId.isBlank()) {
+//            log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений", order.getCompany().getTitle());
+//            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+//            orderRepository.save(order);
+//            return true;
+//        }
+//
+//        return sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
+//    }
+//    private boolean handleCorrectionStatus(Order order) {
+//        if (hasWorkerWithTelegram(order)) {
+//            String companyTitle = order.getCompany().getTitle();
+//            String comments = order.getCompany().getCommentsCompany();
+//            telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+//                    companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
+//                            "\n https://o-ogo.ru/worker/correct");
+//        }
+//        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
+//        orderRepository.save(order);
+//        return true;
+//    }
+
 
 
     private boolean sentMessageToGroup(String title, Order order, String clientId, String groupId, String message, String statusToPay) {
@@ -988,6 +1352,8 @@ private boolean hasWorkerWithTelegram(Order order) {
         return false;
     }
 }
+
+
 
 
     //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
