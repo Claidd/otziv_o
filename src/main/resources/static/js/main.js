@@ -345,43 +345,55 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
 /* Замена бота*/
-  function changeBot(event, form) {
+function changeBot(event, form) {
     event.preventDefault();
     let formData = new FormData(form);
+
+    // ДОБАВИТЬ текущий номер страницы из URL
+    let urlParams = new URLSearchParams(window.location.search);
+    let currentPage = urlParams.get('pageNumber') || 0;
+    formData.append('pageNumber', currentPage);
+
     let orderId = formData.get("orderId");
     let reviewId = formData.get("reviewId");
     let pageName = formData.get("pageName");
+
     fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
         method: "POST",
         body: formData
     })
-    .then(response => response.text())  // Получаем HTML с сервера
-    .then(updatedReviewsHtml => {
-        document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
-    })
-    .catch(error => console.error("Ошибка при смене бота:", error));
+        .then(response => response.text())
+        .then(updatedReviewsHtml => {
+            document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+        })
+        .catch(error => console.error("Ошибка при смене бота:", error));
 }
 
-/* Замена бота*/
+/* Блокировка бота*/
 function deActivateBot(event, form) {
-  event.preventDefault();
-  let formData = new FormData(form);
-  let orderId = formData.get("orderId");
-  let reviewId = formData.get("reviewId");
-  let botId = formData.get("botId");
-  let pageName = formData.get("pageName");
-  fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
-      method: "POST",
-      body: formData
-  })
-  .then(response => response.text())  // Получаем HTML с сервера
-  .then(updatedReviewsHtml => {
-      document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
-  })
-  .catch(error => console.error("Ошибка при блокировке бота:", error));
+    event.preventDefault();
+    let formData = new FormData(form);
+
+    // ДОБАВИТЬ текущий номер страницы из URL
+    let urlParams = new URLSearchParams(window.location.search);
+    let currentPage = urlParams.get('pageNumber') || 0;
+    formData.append('pageNumber', currentPage);
+
+    let orderId = formData.get("orderId");
+    let reviewId = formData.get("reviewId");
+    let botId = formData.get("botId");
+    let pageName = formData.get("pageName");
+
+    fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
+        method: "POST",
+        body: formData
+    })
+        .then(response => response.text())
+        .then(updatedReviewsHtml => {
+            document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+        })
+        .catch(error => console.error("Ошибка при блокировке бота:", error));
 }
-
-
 
     // function myFunction2Gis(button) {
     //   /* Get the text field */

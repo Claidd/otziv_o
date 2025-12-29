@@ -1,5 +1,6 @@
 package com.hunt.otziv.c_cities.repository;
 
+
 import com.hunt.otziv.c_cities.model.City;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
@@ -13,4 +14,6 @@ public interface CityRepository extends CrudRepository<City, Integer> {
     List<City> findAll();
 
     City findById(Long id);
-}
+
+    }
+

@@ -1,0 +1,1229 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <title>O-otziv - Статистика по городам</title>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ================== FAVICON ======================= -->
+    <!-- <th:block th:insert="~{fragments/common :: favicon}"></th:block> -->
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles_index}"></th:block>
+    <!-- Дополнительные стили для этой страницы -->
+    <style>
+        /* Стили для страницы городов */
+        .cities-container {
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .cities-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #ffc600;
+        }
+
+        .cities-title {
+            font-size: 2.5rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .cities-subtitle {
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        /* Статистические карточки - теперь 5 в ряд */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #ffc600;
+        }
+
+        .stat-card-archive {
+            border-top-color: #36b9cc;
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .stat-card p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.3;
+        }
+
+        .stat-difference {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* Поиск и фильтры */
+        .search-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: 'laptev_brush';
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #ffc600;
+        }
+
+        .search-button {
+            padding: 12px 20px;
+            background: #ffc600;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: 'laptev_brush';
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .search-button:hover {
+            background: #ffae00;
+        }
+
+        /* Таблица */
+        .cities-table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .cities-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .cities-table th {
+            background-color: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            border-bottom: 2px solid #ffc600;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .cities-table td {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .cities-table tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        /* Задаем фиксированные ширины для колонок */
+        .cities-table th:nth-child(1),
+        .cities-table td:nth-child(1) {
+            width: 50px; /* # */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(2),
+        .cities-table td:nth-child(2) {
+            width: 30%; /* Город */
+        }
+
+        .cities-table th:nth-child(3),
+        .cities-table td:nth-child(3) {
+            width: 15%; /* Неопубликованных (все) */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(4),
+        .cities-table td:nth-child(4) {
+            width: 20%; /* Неопубликованных (без архивных) */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(5),
+        .cities-table td:nth-child(5) {
+            width: 15%; /* Статус */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(6),
+        .cities-table td:nth-child(6) {
+            width: 15%; /* Действия */
+            text-align: center;
+        }
+
+        /* Badges для количества отзывов */
+        .count-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+            margin: 2px;
+        }
+
+        .count-low {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .count-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .count-high {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Badge для неархивных отзывов */
+        .count-archive {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .count-difference {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Кнопки действий */
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+            font-family: 'laptev_brush';
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: #333;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .action-button:hover {
+            background: #ffc600;
+            border-color: #ffc600;
+            text-decoration: none;
+            color: #333;
+        }
+
+        /* Сортировка */
+        .sort-options {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .sort-button {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'laptev_brush';
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: #333;
+            display: inline-block;
+        }
+
+        .sort-button:hover {
+            background: #f0f0f0;
+            text-decoration: none;
+            color: #333;
+        }
+
+        .sort-button.active {
+            background: #ffc600;
+            border-color: #ffc600;
+            color: #333;
+        }
+
+        /* Пагинация */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        .pagination {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            gap: 5px;
+        }
+
+        .page-item {
+            margin: 0;
+        }
+
+        .page-link {
+            display: block;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            color: #333;
+            text-decoration: none;
+            background: white;
+            transition: all 0.3s;
+        }
+
+        .page-link:hover {
+            background: #ffc600;
+            border-color: #ffc600;
+        }
+
+        .page-item.active .page-link {
+            background: #ffc600;
+            border-color: #ffc600;
+            color: #333;
+        }
+
+        .page-item.disabled .page-link {
+            color: #999;
+            cursor: not-allowed;
+            background: #f5f5f5;
+        }
+
+        /* Пустое состояние */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #ffc600;
+        }
+
+        /* Информационные блоки */
+        .info-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .info-card h4 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 2px solid #ffc600;
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Легенда */
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .cities-table th:nth-child(2),
+            .cities-table td:nth-child(2) {
+                width: 25%;
+            }
+
+            .cities-table th:nth-child(3),
+            .cities-table td:nth-child(3) {
+                width: 15%;
+            }
+
+            .cities-table th:nth-child(4),
+            .cities-table td:nth-child(4) {
+                width: 20%;
+            }
+
+            .cities-table th:nth-child(5),
+            .cities-table td:nth-child(5) {
+                width: 15%;
+            }
+
+            .cities-table th:nth-child(6),
+            .cities-table td:nth-child(6) {
+                width: 15%;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .cities-container {
+                padding: 15px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .info-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .cities-container {
+                padding: 10px;
+            }
+
+            .cities-title {
+                font-size: 2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .stat-card {
+                padding: 12px;
+            }
+
+            .stat-card h3 {
+                font-size: 1.8rem;
+            }
+
+            .search-form {
+                flex-direction: column;
+            }
+
+            .cities-table-container {
+                overflow-x: auto;
+            }
+
+            .cities-table {
+                min-width: 800px; /* Минимальная ширина для горизонтального скролла */
+                table-layout: auto;
+            }
+
+            .action-buttons {
+                flex-direction: row;
+                flex-wrap: nowrap;
+            }
+
+            .sort-options {
+                justify-content: center;
+            }
+
+            .legend {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .cities-container {
+                padding: 5px;
+            }
+
+            .cities-title {
+                font-size: 1.8rem;
+            }
+
+            .stat-card h3 {
+                font-size: 1.6rem;
+            }
+
+            .search-button,
+            .action-button,
+            .sort-button {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .page-link {
+                padding: 6px 10px;
+                font-size: 0.85rem;
+            }
+        }
+
+        /* Дополнительные стили для лучшего отображения */
+        body {
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .wrapper {
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        .main-content {
+            width: 100%;
+        }
+
+        /* Дополнительные статистические карточки */
+        .stat-card-bots {
+            border-top-color: #6f42c1;
+        }
+
+        .stat-card-balance {
+            border-top-color: #20c997;
+        }
+
+        /* Статусные бейджи для ботов */
+        .bot-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .status-excess-high { background-color: #d4edda; color: #155724; }
+        .status-excess-medium { background-color: #fff3cd; color: #856404; }
+        .status-excess-low { background-color: #cce5ff; color: #004085; }
+        .status-balanced { background-color: #e2e3e5; color: #383d41; }
+        .status-deficit-low { background-color: #f8d7da; color: #721c24; }
+        .status-deficit-medium { background-color: #f5c6cb; color: #721c24; }
+        .status-deficit-high { background-color: #e74a3b; color: white; }
+        .status-critical { background-color: #721c24; color: white; }
+        .status-no-data { background-color: #6c757d; color: white; }
+
+        /* Круговые индикаторы */
+        .circle-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .circle-positive {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .circle-negative {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .circle-neutral {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        /* Табличные стили для новых колонок */
+        .cities-table th:nth-child(5),
+        .cities-table td:nth-child(5) {
+            width: 12%; /* Доступные аккаунты */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(6),
+        .cities-table td:nth-child(6) {
+            width: 10%; /* +- */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(7),
+        .cities-table td:nth-child(7) {
+            width: 15%; /* Статус */
+            text-align: center;
+        }
+
+        .cities-table th:nth-child(8),
+        .cities-table td:nth-child(8) {
+            width: 15%; /* Действия */
+            text-align: center;
+        }
+
+        /* Процентные индикаторы */
+        .percentage-indicator {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        /* Адаптивность для новых колонок */
+        @media (max-width: 1200px) {
+            .cities-table th:nth-child(5),
+            .cities-table td:nth-child(5) { width: 10%; }
+
+            .cities-table th:nth-child(6),
+            .cities-table td:nth-child(6) { width: 8%; }
+
+            .cities-table th:nth-child(7),
+            .cities-table td:nth-child(7) { width: 12%; }
+
+            .cities-table th:nth-child(8),
+            .cities-table td:nth-child(8) { width: 12%; }
+        }
+
+        @media (max-width: 768px) {
+            .cities-table {
+                min-width: 1000px;
+            }
+        }
+
+        /* Легенда для статусов ботов */
+        .status-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .status-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+
+        /* Стили для иконок сортировки */
+        .sort-button i {
+            margin-left: 5px;
+            font-size: 0.8rem;
+        }
+
+        .sort-button.active {
+            background: #ffc600;
+            border-color: #ffc600;
+            color: #333;
+        }
+
+        .sort-button.active:hover {
+            background: #ffae00;
+        }
+
+        /* Иконки направления сортировки */
+        .fa-arrow-up {
+            color: #28a745; /* Зеленый для возрастания */
+        }
+
+        .fa-arrow-down {
+            color: #dc3545; /* Красный для убывания */
+        }
+
+        /* Стили для кнопки сброса сортировки */
+        .sort-button.reset-sort {
+            background-color: #f8f9fa;
+            border-color: #dc3545;
+            color: #dc3545;
+            margin-left: 10px;
+        }
+
+        .sort-button.reset-sort:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        /* Стили для индикаторов активной сортировки */
+        .active-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.85rem;
+        }
+
+        .filter-badge-search {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        .filter-badge-sort {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .filter-badge .remove-btn {
+            color: inherit;
+            opacity: 0.7;
+            text-decoration: none;
+            margin-left: 5px;
+        }
+
+        .filter-badge .remove-btn:hover {
+            opacity: 1;
+        }
+
+
+
+        /* Улучшаем видимость таблицы на больших экранах */
+        @media (min-width: 1400px) {
+            .cities-table th,
+            .cities-table td {
+                padding: 20px 15px;
+            }
+        }
+
+        /* Адаптивность для активных фильтров */
+        @media (max-width: 768px) {
+            .active-filters {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .sort-button.reset-sort {
+                margin-left: 0;
+                margin-top: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="wrapper">
+    <!-- ==================== HEADER ======================== -->
+    <header th:replace="~{fragments/header :: header}"></header>
+
+    <!-- ==================== MAIN CONTENT ======================== -->
+    <div class="cities-container">
+
+        <!-- Заголовок страницы -->
+        <div class="cities-header">
+            <h1 class="cities-title">
+                <i class="fas fa-city"></i> Статистика по городам
+            </h1>
+            <p class="cities-subtitle">Неопубликованные отзывы по городам</p>
+        </div>
+
+        <!-- Легенда -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #d4edda;"></div>
+                <span>Мало отзывов (≤ 5)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #fff3cd;"></div>
+                <span>Среднее количество (6-15)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f8d7da;"></div>
+                <span>Много отзывов (> 15)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #d1ecf1; border: 1px solid #bee5eb;"></div>
+                <span>Неархивные отзывы</span>
+            </div>
+        </div>
+
+        <!-- Легенда статусов ботов -->
+        <div class="status-legend">
+            <div class="status-legend-item">
+                <div class="bot-status status-excess-high" style="width: 15px; height: 15px;"></div>
+                <span>Избыток (+300%)</span>
+            </div>
+            <div class="status-legend-item">
+                <div class="bot-status status-excess-medium" style="width: 15px; height: 15px;"></div>
+                <span>Избыток (+100%)</span>
+            </div>
+            <div class="status-legend-item">
+                <div class="bot-status status-balanced" style="width: 15px; height: 15px;"></div>
+                <span>Баланс (±10%)</span>
+            </div>
+            <div class="status-legend-item">
+                <div class="bot-status status-deficit-low" style="width: 15px; height: 15px;"></div>
+                <span>Дефицит (-50%)</span>
+            </div>
+            <div class="status-legend-item">
+                <div class="bot-status status-deficit-high" style="width: 15px; height: 15px;"></div>
+                <span>Дефицит (-100%)</span>
+            </div>
+            <div class="status-legend-item">
+                <div class="bot-status status-critical" style="width: 15px; height: 15px;"></div>
+                <span>Критический дефицит</span>
+            </div>
+        </div>
+
+        <!-- Общая статистика (5 карточек) -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 th:text="${totalCities}">0</h3>
+                <p>Всего городов</p>
+            </div>
+            <div class="stat-card">
+                <h3 th:text="${totalUnpublished}">0</h3>
+                <p>Неопубликованных отзывов</p>
+            </div>
+            <div class="stat-card stat-card-archive">
+                <h3 th:text="${totalUnpublishedNotArchive}">0</h3>
+                <p>Неопубликованных (без архивных)</p>
+                <div class="stat-difference" th:if="${totalUnpublished > 0}">
+                    (-<span th:text="${totalUnpublished - totalUnpublishedNotArchive}">0</span> архивных)
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3 th:text="${averagePerCity}">0</h3>
+                <p>Среднее на город</p>
+            </div>
+            <div class="stat-card stat-card-archive">
+                <h3 th:text="${averageNotArchivePerCity}">0</h3>
+                <p>Среднее без архивных</p>
+            </div>
+            <div class="stat-card stat-card-archive">
+                <h3 th:text="${totalUnpublishedNotArchive}">0</h3>
+                <p>Неопубликованных (без архивных)</p>
+            </div>
+            <div class="stat-card stat-card-bots">
+                <h3 th:text="${totalActiveBots}">0</h3>
+                <p>Доступных аккаунтов</p>
+            </div>
+            <div class="stat-card stat-card-balance">
+                <h3 th:text="${totalBotBalance}">0</h3>
+                <p>Общий баланс (+/-)</p>
+                <div class="stat-difference" th:if="${totalBotBalance != 0}">
+            <span th:classappend="${totalBotBalance > 0} ? 'text-success' : 'text-danger'">
+                <i th:classappend="${totalBotBalance > 0} ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
+                <span th:text="${totalBotBalance > 0} ? 'Профицит' : 'Дефицит'"></span>
+            </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Поиск и фильтры -->
+        <div class="search-section">
+            <form th:action="@{/admin/cities}" method="get" class="search-form">
+                <input type="text"
+                       class="search-input"
+                       name="search"
+                       th:value="${searchParam}"
+                       placeholder="Поиск по названию города...">
+                <button type="submit" class="search-button">
+                    <i class="fas fa-search"></i> Найти
+                </button>
+            </form>
+            <!-- Сортировка -->
+            <!-- Сортировка -->
+            <div class="sort-options">
+                <!-- Сортировка по названию -->
+                <a th:href="@{/admin/cities(
+        sort='name',
+        direction=${(sort == 'name' and direction == 'asc') ? 'desc' : 'asc'},
+        search=${searchParam},
+        page=0)}"
+                   th:classappend="${sort == 'name'} ? 'sort-button active' : 'sort-button'">
+                    По названию
+                    <span th:if="${sort == 'name'}">
+            <i th:classappend="${direction == 'asc'} ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
+        </span>
+                </a>
+
+                <!-- Сортировка по количеству всех отзывов -->
+                <a th:href="@{/admin/cities(
+        sort='countAll',
+        direction=${(sort == 'countAll' and direction == 'desc') ? 'asc' : 'desc'},
+        search=${searchParam},
+        page=0)}"
+                   th:classappend="${sort == 'countAll'} ? 'sort-button active' : 'sort-button'">
+                    По количеству (все)
+                    <span th:if="${sort == 'countAll'}">
+            <i th:classappend="${direction == 'desc'} ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+        </span>
+                </a>
+
+                <!-- Сортировка по количеству без архивных -->
+                <a th:href="@{/admin/cities(
+        sort='countArchive',
+        direction=${(sort == 'countArchive' and direction == 'desc') ? 'asc' : 'desc'},
+        search=${searchParam},
+        page=0)}"
+                   th:classappend="${sort == 'countArchive'} ? 'sort-button active' : 'sort-button'">
+                    По количеству (без архивных)
+                    <span th:if="${sort == 'countArchive'}">
+            <i th:classappend="${direction == 'desc'} ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+        </span>
+                </a>
+
+                <!-- Сортировка по ботам -->
+                <a th:href="@{/admin/cities(
+        sort='bots',
+        direction=${(sort == 'bots' and direction == 'desc') ? 'asc' : 'desc'},
+        search=${searchParam},
+        page=0)}"
+                   th:classappend="${sort == 'bots'} ? 'sort-button active' : 'sort-button'">
+                    По ботам
+                    <span th:if="${sort == 'bots'}">
+            <i th:classappend="${direction == 'desc'} ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+        </span>
+                </a>
+
+                <!-- Сортировка по балансу -->
+                <a th:href="@{/admin/cities(
+        sort='balance',
+        direction=${(sort == 'balance' and direction == 'desc') ? 'asc' : 'desc'},
+        search=${searchParam},
+        page=0)}"
+                   th:classappend="${sort == 'balance'} ? 'sort-button active' : 'sort-button'">
+                    По балансу
+                    <span th:if="${sort == 'balance'}">
+            <i th:classappend="${direction == 'desc'} ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+        </span>
+                </a>
+
+                <!-- Кнопка сброса сортировки (показывается только если есть активная сортировка) -->
+                <a th:if="${sort != null or direction != null}"
+                   th:href="@{/admin/cities(search=${searchParam}, page=0)}"
+                   class="sort-button reset-sort"
+                   title="Сбросить сортировку">
+                    <i class="fas fa-times"></i> Сбросить сортировку
+                </a>
+            </div>
+
+            <!-- Активные фильтры и сортировка -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <!-- Активный фильтр поиска -->
+                    <div th:if="${searchParam != null && !searchParam.isEmpty()}"
+                         style="display: inline-block; margin-right: 10px;">
+            <span style="background: #eee; padding: 5px 10px; border-radius: 5px; display: inline-flex; align-items: center;">
+                <i class="fas fa-filter" style="margin-right: 5px;"></i>
+                Фильтр: "<span th:text="${searchParam}"></span>"
+                <a th:href="@{/admin/cities(sort=${sort}, direction=${direction})}"
+                   style="margin-left: 10px; color: #ff0000; text-decoration: none;">
+                    <i class="fas fa-times"></i>
+                </a>
+            </span>
+                    </div>
+
+                    <!-- Активная сортировка -->
+                    <div th:if="${sort != null}" style="display: inline-block;">
+            <span style="background: #d4edda; padding: 5px 10px; border-radius: 5px; display: inline-flex; align-items: center;">
+                <i class="fas fa-sort" style="margin-right: 5px;"></i>
+                Сортировка:
+                <span th:switch="${sort}">
+                    <span th:case="'name'">По названию </span>
+                    <span th:case="'countAll'">По количеству (все) </span>
+                    <span th:case="'countArchive'">По количеству (без архивных) </span>
+                    <span th:case="'bots'">По ботам </span>
+                    <span th:case="'balance'">По балансу </span>
+                </span>
+                <span th:if="${direction == 'asc'}"> (возрастание)</span>
+                <span th:if="${direction == 'desc'}"> (убывание)</span>
+                <a th:href="@{/admin/cities(search=${searchParam})}"
+                   style="margin-left: 10px; color: #721c24; text-decoration: none;">
+                    <i class="fas fa-times"></i>
+                </a>
+            </span>
+                    </div>
+                </div>
+
+                <div>
+                    <!-- Кнопка сброса всего -->
+                    <a th:href="@{/admin/cities}" class="action-button">
+                        <i class="fas fa-redo"></i> Сбросить всё
+                    </a>
+                </div>
+            </div>
+
+        <!-- Таблица с городами -->
+        <div class="cities-table-container">
+            <table class="cities-table">
+                <thead>
+                <tr>
+                    <th width="50">#</th>
+                    <th>Город</th>
+                    <th width="140">Неопубликованных (все)</th>
+                    <th width="160">Неопубликованных (без архивных)</th>
+                    <th width="120">Доступные аккаунты</th>
+                    <th width="100">+-</th>
+                    <th width="150">Статус</th>
+                    <th width="150">Действия</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- Строка с данными города -->
+                <tr th:each="city, stat : ${cities}">
+                    <td th:text="${stat.count}">1</td>
+                    <td>
+                        <strong th:text="${city.cityTitle}">Город</strong><br>
+                        <small style="color: #666;">ID: <span th:text="${city.cityId}">0</span></small>
+                    </td>
+                    <td>
+        <span th:classappend="${city.unpublishedCount > 15} ? 'count-badge count-high' :
+                              (${city.unpublishedCount > 5} ? 'count-badge count-medium' : 'count-badge count-low')"
+              th:text="${city.unpublishedCount}">
+            0
+        </span>
+                    </td>
+                    <td>
+        <span class="count-badge count-archive"
+              th:text="${city.unpublishedNotArchiveCount}">
+            0
+        </span>
+                    </td>
+                    <td>
+        <span class="count-badge"
+              style="background-color: #6f42c1; color: white;"
+              th:text="${city.activeBotsCount}">
+            0
+        </span>
+                    </td>
+                    <td>
+        <span th:classappend="${city.botBalance > 0} ? 'circle-indicator circle-positive' :
+                              (${city.botBalance < 0} ? 'circle-indicator circle-negative' : 'circle-indicator circle-neutral')"
+              th:text="${city.botBalance}">
+            0
+        </span>
+                    </td>
+                    <td>
+        <span th:class="${city.botStatusCssClass}" th:text="${city.botStatus}">
+            Статус
+        </span>
+                        <span th:if="${city.botPercentage > 0}"
+                              class="percentage-indicator"
+                              th:styleappend="${city.botPercentage > 300} ? 'background-color: #d4edda; color: #155724;' :
+                      (${city.botPercentage > 100} ? 'background-color: #fff3cd; color: #856404;' :
+                      (${city.botPercentage > 50} ? 'background-color: #cce5ff; color: #004085;' : ''))"
+                              th:text="|${#numbers.formatDecimal(city.botPercentage, 0, 0)}%|">
+            100%
+        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <a th:href="@{'/admin/reviews?cityId=' + ${city.cityId} + '&published=false'}"
+                               class="action-button"
+                               title="Просмотреть отзывы">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a th:href="@{'/admin/bots?cityId=' + ${city.cityId} + '&active=true'}"
+                               class="action-button"
+                               title="Просмотреть ботов">
+                                <i class="fas fa-robot"></i>
+                            </a>
+                            <a th:href="@{'/admin/cities/' + ${city.cityId}}"
+                               class="action-button"
+                               title="Детали города">
+                                <i class="fas fa-info-circle"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <!-- Пагинация -->
+            <!-- Пагинация -->
+            <div th:if="${totalPages > 1}" class="pagination-container">
+                <div class="pagination">
+                    <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled' : ''">
+                        <a class="page-link"
+                           th:href="@{/admin/cities(
+                    page=${currentPage - 1},
+                    search=${searchParam},
+                    sort=${sort},
+                    direction=${direction})}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+
+                    <li th:each="pageNum : ${#numbers.sequence(1, totalPages)}"
+                        class="page-item"
+                        th:classappend="${pageNum == currentPage + 1} ? 'active' : ''">
+                        <a class="page-link"
+                           th:href="@{/admin/cities(
+                    page=${pageNum - 1},
+                    search=${searchParam},
+                    sort=${sort},
+                    direction=${direction})}"
+                           th:text="${pageNum}">1</a>
+                    </li>
+
+                    <li class="page-item" th:classappend="${currentPage + 1 == totalPages} ? 'disabled' : ''">
+                        <a class="page-link"
+                           th:href="@{/admin/cities(
+                    page=${currentPage + 1},
+                    search=${searchParam},
+                    sort=${sort},
+                    direction=${direction})}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="info-section">
+            <div class="info-card">
+                <h4><i class="fas fa-info-circle"></i> Информация</h4>
+                <p>
+                    <strong>Неопубликованные (все):</strong> все отзывы с статусом "не опубликовано".<br>
+                    <strong>Неопубликованные (без архивных):</strong> отзывы, у которых заказ не имеет статуса "архив".<br>
+                    <strong>Архивные заказы:</strong> заказы, которые завершены и перемещены в архив.
+                </p>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-clock"></i> Статистика обновления</h4>
+                <p>
+                    <strong>Дата генерации:</strong>
+                    <span th:text="${#temporals.format(currentDate, 'dd.MM.yyyy HH:mm')}">29.12.2024 12:00</span>
+                </p>
+                <p>
+                    <strong>Общее количество:</strong> <span th:text="${totalUnpublished}">0</span> отзывов
+                </p>
+                <p>
+                    <strong>Без архивных:</strong> <span th:text="${totalUnpublishedNotArchive}">0</span> отзывов
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== FOOTER ======================== -->
+    <footer th:replace="~{fragments/footer :: footer}"></footer>
+
+    <!-- ==================== JS ======================== -->
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+
+    <!-- Дополнительные скрипты -->
+    <script>
+        // Автообновление страницы каждые 15 минут
+        setTimeout(function() {
+            location.reload();
+        }, 900000);
+
+        // Подсветка строк таблицы
+        document.addEventListener('DOMContentLoaded', function() {
+            const rows = document.querySelectorAll('.cities-table tbody tr');
+            rows.forEach(row => {
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#f5f5f5';
+                });
+
+                row.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = '';
+                });
+            });
+        });
+
+        // Подсветка архивных отзывов
+        document.addEventListener('DOMContentLoaded', function() {
+            const rows = document.querySelectorAll('.cities-table tbody tr');
+            rows.forEach(row => {
+                const allCountElement = row.querySelector('.count-badge:not(.count-archive)');
+                const archiveCountElement = row.querySelector('.count-archive');
+
+                if (allCountElement && archiveCountElement) {
+                    const allCount = parseInt(allCountElement.textContent);
+                    const archiveCount = parseInt(archiveCountElement.textContent);
+
+                    if (allCount > 0 && archiveCount === 0) {
+                        row.style.borderLeft = '3px solid #ffc600';
+                    }
+                }
+            });
+        });
+    </script>
+</div>
+</body>
+</html>

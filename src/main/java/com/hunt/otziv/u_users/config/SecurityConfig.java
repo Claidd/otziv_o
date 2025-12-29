@@ -53,6 +53,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth", "/login", "/register").permitAll()
                         .requestMatchers("/api/auth").permitAll()
                         .requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers("/admin/cities/**").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers("/.well-known/acme-challenge/**").permitAll()
                         .requestMatchers("/access-denied").permitAll()
                         .requestMatchers("/lead/new_lead").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")

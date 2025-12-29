@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.repository;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
@@ -21,6 +22,103 @@ import java.util.UUID;
 
 @Repository
 public interface ReviewRepository extends CrudRepository<Review, Long> {
+
+    @Query("""
+    SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
+        c.id,
+        c.title,
+        CAST(COUNT(r) AS long),
+        CAST(SUM(CASE 
+            WHEN (r.orderDetails IS NULL 
+                  OR r.orderDetails.order IS NULL 
+                  OR r.orderDetails.order.status IS NULL 
+                  OR r.orderDetails.order.status.title != 'Архив') 
+            THEN 1 
+            ELSE 0 
+        END) AS long),
+        CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
+    )
+    FROM City c
+    LEFT JOIN c.filial f
+    LEFT JOIN Review r ON r.filial = f AND r.publish = false
+    GROUP BY c.id, c.title
+    HAVING COUNT(r) > 0
+    ORDER BY c.title
+""")
+    List<CityWithUnpublishedReviewsDTO> findCitiesWithUnpublishedReviewCount();
+
+    // Метод для получения всех данных с сортировкой (без пагинации)
+    @Query("""
+    SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
+        c.id,
+        c.title,
+        CAST(COUNT(r) AS long),
+        CAST(SUM(CASE 
+            WHEN (r.orderDetails IS NULL 
+                  OR r.orderDetails.order IS NULL 
+                  OR r.orderDetails.order.status IS NULL 
+                  OR r.orderDetails.order.status.title != 'Архив') 
+            THEN 1 
+            ELSE 0 
+        END) AS long),
+        CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
+    )
+    FROM City c
+    LEFT JOIN c.filial f
+    LEFT JOIN Review r ON r.filial = f AND r.publish = false
+    GROUP BY c.id, c.title
+    HAVING COUNT(r) > 0
+""")
+    List<CityWithUnpublishedReviewsDTO> findAllWithStats();
+
+    // Метод с поиском и сортировкой
+    @Query("""
+    SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
+        c.id,
+        c.title,
+        CAST(COUNT(r) AS long),
+        CAST(SUM(CASE 
+            WHEN (r.orderDetails IS NULL 
+                  OR r.orderDetails.order IS NULL 
+                  OR r.orderDetails.order.status IS NULL 
+                  OR r.orderDetails.order.status.title != 'Архив') 
+            THEN 1 
+            ELSE 0 
+        END) AS long),
+        CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
+    )
+    FROM City c
+    LEFT JOIN c.filial f
+    LEFT JOIN Review r ON r.filial = f AND r.publish = false
+    WHERE LOWER(c.title) LIKE LOWER(CONCAT('%', :search, '%'))
+    GROUP BY c.id, c.title
+    HAVING COUNT(r) > 0
+""")
+    List<CityWithUnpublishedReviewsDTO> findAllWithStatsBySearch(@Param("search") String search);
+//
+//    @Query("""
+//    SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
+//        c.id,
+//        c.title,
+//        CAST(COUNT(r) AS long),
+//        CAST(SUM(CASE
+//            WHEN (r.orderDetails IS NULL
+//                  OR r.orderDetails.order IS NULL
+//                  OR r.orderDetails.order.status IS NULL
+//                  OR r.orderDetails.order.status.title != 'Архив')
+//            THEN 1
+//            ELSE 0
+//        END) AS long),
+//        CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
+//    )
+//    FROM City c
+//    LEFT JOIN c.filial f
+//    LEFT JOIN Review r ON r.filial = f AND r.publish = false
+//    GROUP BY c.id, c.title
+//    HAVING COUNT(r) > 0
+//    ORDER BY c.title
+//""")
+//    List<CityWithUnpublishedReviewsDTO> findCitiesWithUnpublishedReviewCount();
 
     List<Review> findAllByOrderDetailsId(UUID orderDetailsId);
 
@@ -162,6 +260,20 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
 
 
+//    // Опционально: статистика по всем городам (включая те, где нет отзывов)
+//    @Query("""
+//        SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
+//            c.id,
+//            c.title,
+//            COUNT(CASE WHEN r.publish = false THEN 1 END)
+//        )
+//        FROM City c
+//        LEFT JOIN c.filial f
+//        LEFT JOIN Review r ON r.filial = f
+//        GROUP BY c.id, c.title
+//        ORDER BY c.title
+//    """)
+//    List<CityWithUnpublishedReviewsDTO> findAllCitiesWithReviewCount();
 
 //    @Query("""
 //    SELECT

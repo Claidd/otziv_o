@@ -16,6 +16,8 @@ public class CityDTO {
     private Long id;
 
     //    название города
-    private String cityTitle;
+    String cityTitle;
+
+    private Long unpublishedReviewCount;
 
 }

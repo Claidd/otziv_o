@@ -92,6 +92,9 @@ public class OrderDetailsController {
         int pageSize = 10; // желаемый размер страницы
         LocalDate localDate = LocalDate.now();
         reviewService.changeBot(reviewId);
+        log.info("changeBot вызван с параметрами: pageName={}, pageNumber={}, orderId={}, reviewId={}",
+                pageName, pageNumber, orderId, reviewId);
+
 //        System.out.println(pageName);
 
         if ("Заказ_Отзыв".equals(pageName)){ // возврат на страницу редактирования отзыва из отзыва
