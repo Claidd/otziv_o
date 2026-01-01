@@ -90,24 +90,27 @@
                                 <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
                                 <button type="submit" class="company__card__text__lead-button ">смена</button>
                             </form> -->
-                            <form class="company__card__text__lead"  onsubmit="changeBot(event, this)">
+                            <!-- Форма смены бота - ИСПРАВЛЕНО -->
+                            <form class="company__card__text__lead" onsubmit="changeBot(event, this)">
                                 <input type="hidden" name="_csrf" th:value="${_csrf.token}">
-                                <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
+                                <input type="hidden" name="pageName" value="Работник_Публикация">
+                                <!-- ДОБАВЛЕНО поле pageNumber -->
+                                <input type="hidden" name="pageNumber" value="">
                                 <input type="hidden" name="orderId" th:value="${review.orderId}">
                                 <input type="hidden" name="reviewId" th:value="${review.id}">
                                 <button type="submit" class="company__card__text__lead-button">смена</button>
                             </form>
-                            <!-- <form class="company__card__text__lead" th:method="post" th:action="@{'/ordersDetails/'+ ${review.companyId} + '/' + ${review.orderId} + '/deactivate_bot/' + ${review.id} + '/' + ${review.botId}}">
-                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
-                                <button type="submit"  class="company__card__text__lead-button ">блок</button>
-                            </form> -->
-                            <form class="company__card__text__lead"  onsubmit="deActivateBot(event, this)">
+
+                            <!-- Форма блокировки бота - ИСПРАВЛЕНО -->
+                            <form class="company__card__text__lead" onsubmit="deActivateBot(event, this)">
                                 <input type="hidden" name="_csrf" th:value="${_csrf.token}">
-                                <input style="display: none;" class="company__card_remember-search__text" type="text" value="Работник_Публикация" name="pageName" id="pageName">
+                                <input type="hidden" name="pageName" value="Работник_Публикация">
+                                <!-- ДОБАВЛЕНО поле pageNumber -->
+                                <input type="hidden" name="pageNumber" value="">
                                 <input type="hidden" name="orderId" th:value="${review.orderId}">
                                 <input type="hidden" name="reviewId" th:value="${review.id}">
                                 <input type="hidden" name="botId" th:value="${review.botId}">
-                                <button type="submit"  class="company__card__text__lead-button ">блок</button>
+                                <button type="submit" class="company__card__text__lead-button">блок</button>
                             </form>
 
                         </div> <!-- card__content_button -->

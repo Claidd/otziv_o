@@ -7,6 +7,8 @@ import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -174,6 +176,24 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
 
 
+    // Метод с пагинацией на уровне БД
+    Page<Review> findByWorkerAndPublishedDateAndPublishFalse(
+            Worker worker,
+            LocalDate publishedDate,
+            Pageable pageable);
+
+    // Добавьте этот метод для пагинации выгула работника
+    @Query("SELECT r FROM Review r WHERE " +
+            "r.worker = :worker AND " +
+            "r.publishedDate = :publishedDate AND " +
+            "r.publish = false AND " +
+            "r.vigul = false AND " +
+            "(r.bot IS NULL OR r.bot.counter <= 2)")
+    Page<Review> findReviewsForWorkerVigul(
+            @Param("worker") Worker worker,
+            @Param("publishedDate") LocalDate publishedDate,
+            Pageable pageable);
+
     @Query("SELECT r FROM Review r WHERE r.bot = :bot AND r.publish = false")
     List<Review> findByBotAndPublishFalse(@Param("bot") Bot bot);
 
@@ -214,7 +234,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     SELECT 
         u.fio AS fio, 
         COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews, 
-        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE NULL END) AS vigulCount
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter <= 2 THEN 1 ELSE NULL END) AS vigulCount
     FROM Review r 
     LEFT JOIN r.worker w 
     LEFT JOIN w.user u 
@@ -227,7 +247,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     SELECT 
         mu.fio AS fio, 
         COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews, 
-        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter < 2 THEN 1 ELSE NULL END) AS vigulCount
+        COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter <= 2 THEN 1 ELSE NULL END) AS vigulCount
     FROM Review r 
     LEFT JOIN r.orderDetails od 
     LEFT JOIN od.order o

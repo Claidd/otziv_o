@@ -347,16 +347,32 @@ document.addEventListener('DOMContentLoaded', function () {
 /* Замена бота*/
 function changeBot(event, form) {
     event.preventDefault();
-    let formData = new FormData(form);
 
-    // ДОБАВИТЬ текущий номер страницы из URL
+    // Получаем текущую страницу из URL
     let urlParams = new URLSearchParams(window.location.search);
     let currentPage = urlParams.get('pageNumber') || 0;
-    formData.append('pageNumber', currentPage);
+    currentPage = parseInt(currentPage) || 0;
 
+    // Защита от отрицательных значений
+    currentPage = Math.max(currentPage, 0);
+
+    // Находим поле pageNumber в форме и устанавливаем значение
+    let pageNumberInput = form.querySelector('input[name="pageNumber"]');
+    if (pageNumberInput) {
+        pageNumberInput.value = currentPage;
+    } else {
+        // Если поля нет, создаем его
+        let input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'pageNumber';
+        input.value = currentPage;
+        form.appendChild(input);
+    }
+
+    // Создаем FormData после обновления формы
+    let formData = new FormData(form);
     let orderId = formData.get("orderId");
     let reviewId = formData.get("reviewId");
-    let pageName = formData.get("pageName");
 
     fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
         method: "POST",
@@ -365,6 +381,19 @@ function changeBot(event, form) {
         .then(response => response.text())
         .then(updatedReviewsHtml => {
             document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+
+            // Если после обновления список пустой, возможно перейти на первую страницу
+            let isEmpty = updatedReviewsHtml.includes('empty') ||
+                updatedReviewsHtml.includes('нет отзывов') ||
+                updatedReviewsHtml.includes('СПИСОК КАРТОЧЕК') === false;
+
+            if (isEmpty && currentPage > 0) {
+                // Автоматически переходим на первую страницу
+                let newUrl = window.location.pathname + '?pageNumber=0';
+                window.history.replaceState({}, '', newUrl);
+                // Показываем сообщение (опционально)
+                console.log('Перенаправление на первую страницу, так как текущая пуста');
+            }
         })
         .catch(error => console.error("Ошибка при смене бота:", error));
 }
@@ -372,17 +401,33 @@ function changeBot(event, form) {
 /* Блокировка бота*/
 function deActivateBot(event, form) {
     event.preventDefault();
-    let formData = new FormData(form);
 
-    // ДОБАВИТЬ текущий номер страницы из URL
+    // Получаем текущую страницу из URL
     let urlParams = new URLSearchParams(window.location.search);
     let currentPage = urlParams.get('pageNumber') || 0;
-    formData.append('pageNumber', currentPage);
+    currentPage = parseInt(currentPage) || 0;
 
+    // Защита от отрицательных значений
+    currentPage = Math.max(currentPage, 0);
+
+    // Находим поле pageNumber в форме и устанавливаем значение
+    let pageNumberInput = form.querySelector('input[name="pageNumber"]');
+    if (pageNumberInput) {
+        pageNumberInput.value = currentPage;
+    } else {
+        // Если поля нет, создаем его
+        let input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'pageNumber';
+        input.value = currentPage;
+        form.appendChild(input);
+    }
+
+    // Создаем FormData после обновления формы
+    let formData = new FormData(form);
     let orderId = formData.get("orderId");
     let reviewId = formData.get("reviewId");
     let botId = formData.get("botId");
-    let pageName = formData.get("pageName");
 
     fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
         method: "POST",
