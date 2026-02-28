@@ -55,8 +55,8 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       DATABASE_URL: ${DATABASE_URL}
-      HTTP_PROXY: http://vpn-proxy:8888
-      HTTPS_PROXY: http://vpn-proxy:8888
+#      HTTP_PROXY: http://vpn-proxy:8888
+#      HTTPS_PROXY: http://vpn-proxy:8888
       TZ: Asia/Irkutsk
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Irkutsk
       JAVA_OPTS: "-Xmx512m"
@@ -86,6 +86,7 @@ services:
   log-viewer:
     image: amir20/dozzle
     container_name: log-viewer
+    restart: always
     ports:
       - "8081:8080"
     volumes:

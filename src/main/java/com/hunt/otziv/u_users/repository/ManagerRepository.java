@@ -34,6 +34,14 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
     List<Manager> findAllManagersWorkers(List<Manager> managers);
 
+    @Query("""
+    SELECT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    LEFT JOIN FETCH u.image
+""")
+    List<Manager> findAllWithUserAndImage();
+
 //    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.user u WHERE m IN (:managers)")
 //    List<Manager> findAllToManagerManagers(Set<Manager> managers);
 }

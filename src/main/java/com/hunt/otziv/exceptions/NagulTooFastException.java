@@ -5,7 +5,7 @@ public class NagulTooFastException extends RuntimeException {
     private final long secondsLeft;
 
     public NagulTooFastException(long minutesLeft, long secondsLeft) {
-        super(String.format("Слишком быстрый выгул! Подождите еще %d мин %d сек",
+        super(String.format("Слишком быстрый выгул! Выгуливайте еще %d мин %d сек",
                 minutesLeft, secondsLeft));
         this.minutesLeft = minutesLeft;
         this.secondsLeft = secondsLeft;

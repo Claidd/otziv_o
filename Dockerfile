@@ -19,8 +19,8 @@ RUN mvn clean package -DskipTests
 VOLUME /app/logs
 
 # Этап 2: Финальный образ для выполнения
-FROM eclipse-temurin:22-jdk-alpine
-RUN apk add --no-cache curl
+FROM eclipse-temurin:22-jdk-jammy
+RUN apt-get update && apt-get install -y mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
 # Указываем, что эта директория будет томом (для хэшей)

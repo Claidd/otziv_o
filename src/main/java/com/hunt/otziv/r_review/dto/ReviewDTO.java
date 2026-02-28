@@ -71,4 +71,6 @@ public class ReviewDTO {
     private String botLogin; // ← можно добавить
     private Long botId; // ← и ID бота для идентификации
 
+    private String botPassword;
+
 }

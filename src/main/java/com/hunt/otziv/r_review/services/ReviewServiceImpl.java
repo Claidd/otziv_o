@@ -340,6 +340,18 @@ public class ReviewServiceImpl implements ReviewService{
             }
         }
 
+        if (!Objects.equals(reviewDTO.getBotPassword(), saveReview.getBot().getPassword())) {
+            log.info("Обновляем Пароль Бота");
+            if (!reviewDTO.getBotPassword().isEmpty()) {
+                assert currentBot != null;
+                currentBot.setPassword(reviewDTO.getBotPassword());
+                botService.save(currentBot);
+                log.info("Обновляем Пароль Бота");
+            } else {
+                log.warn("У отзыва ID {} нет бота. Пароль бота не может быть обновлено", reviewId);
+            }
+        }
+
         if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
             log.info("Обновляем ответ на отзыв");
             saveReview.setAnswer(reviewDTO.getAnswer());
@@ -1597,6 +1609,7 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                         .id(null)
                         .login("УДАЛЕН")
                         .fio("Бот был удален")
+                        .password("")
                         .active(false)
                         .counter(0)
                         .status("Удален")
@@ -1608,6 +1621,7 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     .id(null)
                     .login("УДАЛЕН")
                     .fio("Бот был удален")
+                    .password("")
                     .active(false)
                     .counter(0)
                     .status("Удален")
@@ -1634,6 +1648,7 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 .subCategory(convertToSubCategoryDto(review.getSubCategory()))
                 .bot(botDTO)
                 .botName(botName)
+                .botPassword(botDTO != null ? botDTO.getPassword() : "")
                 .filial(convertToFilialDTO(review.getFilial()))
                 .orderDetails(convertToDetailsDTO(orderDetails))
                 .worker(convertToWorkerDTO(review.getWorker()))

@@ -344,70 +344,111 @@ document.addEventListener('DOMContentLoaded', function () {
       }
   }
 
+// Глобальные переменные
+let pendingFormDeactivate = null;
+
 /* Замена бота*/
 function changeBot(event, form) {
     event.preventDefault();
 
-    // Получаем текущую страницу из URL
-    let urlParams = new URLSearchParams(window.location.search);
-    let currentPage = urlParams.get('pageNumber') || 0;
-    currentPage = parseInt(currentPage) || 0;
+    // pageNumber
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentPage = parseInt(urlParams.get('pageNumber') || '0', 10);
+    currentPage = Math.max(currentPage || 0, 0);
 
-    // Защита от отрицательных значений
-    currentPage = Math.max(currentPage, 0);
-
-    // Находим поле pageNumber в форме и устанавливаем значение
     let pageNumberInput = form.querySelector('input[name="pageNumber"]');
-    if (pageNumberInput) {
-        pageNumberInput.value = currentPage;
-    } else {
-        // Если поля нет, создаем его
-        let input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'pageNumber';
-        input.value = currentPage;
-        form.appendChild(input);
+    if (!pageNumberInput) {
+        pageNumberInput = document.createElement('input');
+        pageNumberInput.type = 'hidden';
+        pageNumberInput.name = 'pageNumber';
+        form.appendChild(pageNumberInput);
     }
+    pageNumberInput.value = currentPage;
 
-    // Создаем FormData после обновления формы
-    let formData = new FormData(form);
-    let orderId = formData.get("orderId");
-    let reviewId = formData.get("reviewId");
+    const formData = new FormData(form);
+    const orderId = formData.get("orderId");
+    const reviewId = formData.get("reviewId");
+
+    const csrfToken =
+        formData.get("_csrf") || document.getElementById("csrfToken")?.value;
 
     fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
         method: "POST",
-        body: formData
+        body: formData,
+        headers: csrfToken ? { "X-CSRF-TOKEN": csrfToken } : {}
     })
-        .then(response => response.text())
-        .then(updatedReviewsHtml => {
-            document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+        .then(async (response) => {
+            const text = await response.text();
 
-            // Если после обновления список пустой, возможно перейти на первую страницу
-            let isEmpty = updatedReviewsHtml.includes('empty') ||
-                updatedReviewsHtml.includes('нет отзывов') ||
-                updatedReviewsHtml.includes('СПИСОК КАРТОЧЕК') === false;
-
-            if (isEmpty && currentPage > 0) {
-                // Автоматически переходим на первую страницу
-                let newUrl = window.location.pathname + '?pageNumber=0';
-                window.history.replaceState({}, '', newUrl);
-                // Показываем сообщение (опционально)
-                console.log('Перенаправление на первую страницу, так как текущая пуста');
+            if (!response.ok) {
+                console.error("changeBot HTTP error:", response.status, text);
+                alert(`Ошибка смены бота: HTTP ${response.status}`);
+                return null;
             }
+            return text;
+        })
+        .then((updatedReviewsHtml) => {
+            if (!updatedReviewsHtml) return;
+
+            const container = document.getElementById("reviewsContainer");
+            if (!container) {
+                console.error("reviewsContainer not found!");
+                return;
+            }
+
+            container.innerHTML = updatedReviewsHtml;
+            initModalHandlers();
         })
         .catch(error => console.error("Ошибка при смене бота:", error));
 }
 
-/* Блокировка бота*/
+
 function deActivateBot(event, form) {
     event.preventDefault();
+    console.log('deActivateBot called');
 
-    // Получаем текущую страницу из URL
-    let urlParams = new URLSearchParams(window.location.search);
+    // Сохраняем ссылку на форму
+    pendingFormDeactivate = form;
+    console.log('Form saved:', form);
+
+    // Показываем модальное окно
+    const modal = document.getElementById('confirmModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        console.log('Modal shown');
+    } else {
+        console.error('Modal element not found!');
+    }
+}
+
+// Функция для закрытия модального окна
+function closeModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    console.log('Modal closed');
+}
+
+// Функция для выполнения блокировки бота
+function performBotDeactivation() {
+    console.log('performBotDeactivation called');
+
+    if (!pendingFormDeactivate) {
+        console.error('No pending form!');
+        return;
+    }
+
+    // Сохраняем форму в локальную переменную
+    const form = pendingFormDeactivate;
+
+    // Создаем FormData из формы
+    const formData = new FormData(form);
+
+    // Добавляем текущую страницу
+    const urlParams = new URLSearchParams(window.location.search);
     let currentPage = urlParams.get('pageNumber') || 0;
     currentPage = parseInt(currentPage) || 0;
-
-    // Защита от отрицательных значений
     currentPage = Math.max(currentPage, 0);
 
     // Находим поле pageNumber в форме и устанавливаем значение
@@ -415,7 +456,6 @@ function deActivateBot(event, form) {
     if (pageNumberInput) {
         pageNumberInput.value = currentPage;
     } else {
-        // Если поля нет, создаем его
         let input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'pageNumber';
@@ -423,22 +463,232 @@ function deActivateBot(event, form) {
         form.appendChild(input);
     }
 
-    // Создаем FormData после обновления формы
-    let formData = new FormData(form);
-    let orderId = formData.get("orderId");
-    let reviewId = formData.get("reviewId");
-    let botId = formData.get("botId");
+    // Обновляем FormData
+    formData.set('pageNumber', currentPage);
 
+    const orderId = formData.get("orderId");
+    const reviewId = formData.get("reviewId");
+    const botId = formData.get("botId");
+
+    console.log('Sending request:', { orderId, reviewId, botId, currentPage });
+
+    // Отправляем запрос
     fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
         method: "POST",
         body: formData
     })
-        .then(response => response.text())
-        .then(updatedReviewsHtml => {
-            document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
         })
-        .catch(error => console.error("Ошибка при блокировке бота:", error));
+        .then(updatedReviewsHtml => {
+            console.log('Request successful');
+            // Обновляем контейнер с отзывами
+            const container = document.getElementById("reviewsContainer");
+            if (container) {
+                container.innerHTML = updatedReviewsHtml;
+                // ПЕРЕИНИЦИАЛИЗИРУЕМ ОБРАБОТЧИКИ ПОСЛЕ ОБНОВЛЕНИЯ DOM
+                initModalHandlers();
+            } else {
+                console.error('reviewsContainer not found!');
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error("Ошибка при блокировке бота:", error);
+            alert('Ошибка при блокировке бота: ' + error.message);
+        });
 }
+
+// Функция инициализации обработчиков модального окна
+function initModalHandlers() {
+    console.log('Initializing modal handlers');
+
+    // Находим элементы модального окна
+    const modal = document.getElementById('confirmModal');
+    const cancelBtn = document.getElementById('confirmCancel');
+    const confirmBtn = document.getElementById('confirmOk');
+
+    // Обработчик для кнопки отмены
+    if (cancelBtn) {
+        // Удаляем старый обработчик и добавляем новый
+        cancelBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Cancel button clicked');
+            pendingFormDeactivate = null;
+            closeModal();
+        };
+    }
+
+    // Обработчик для кнопки подтверждения
+    if (confirmBtn) {
+        confirmBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Confirm button clicked');
+
+            // Сохраняем форму перед закрытием
+            const formToProcess = pendingFormDeactivate;
+
+            // Закрываем модальное окно
+            closeModal();
+
+            // Выполняем блокировку с сохраненной формой
+            if (formToProcess) {
+                // Используем замыкание чтобы сохранить форму
+                setTimeout(function() {
+                    pendingFormDeactivate = formToProcess;
+                    performBotDeactivation();
+                }, 100);
+            }
+        };
+    }
+
+    // Закрытие модального окна при клике вне его
+    if (modal) {
+        modal.onclick = function(event) {
+            if (event.target === modal) {
+                console.log('Modal background clicked');
+                pendingFormDeactivate = null;
+                closeModal();
+            }
+        };
+    }
+}
+
+// Инициализация при загрузке DOM
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing modal handlers');
+    initModalHandlers();
+
+    // Обработчик Escape для закрытия модального окна
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const modal = document.getElementById('confirmModal');
+            if (modal && modal.style.display === 'flex') {
+                console.log('Escape key pressed');
+                pendingFormDeactivate = null;
+                closeModal();
+            }
+        }
+    });
+});
+
+// Также инициализируем при динамической загрузке
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('confirmModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    });
+} else {
+    // DOM уже загружен
+    const modal = document.getElementById('confirmModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/* Замена бота*/
+// function changeBot(event, form) {
+//     event.preventDefault();
+//
+//     // Получаем текущую страницу из URL
+//     let urlParams = new URLSearchParams(window.location.search);
+//     let currentPage = urlParams.get('pageNumber') || 0;
+//     currentPage = parseInt(currentPage) || 0;
+//
+//     // Защита от отрицательных значений
+//     currentPage = Math.max(currentPage, 0);
+//
+//     // Находим поле pageNumber в форме и устанавливаем значение
+//     let pageNumberInput = form.querySelector('input[name="pageNumber"]');
+//     if (pageNumberInput) {
+//         pageNumberInput.value = currentPage;
+//     } else {
+//         // Если поля нет, создаем его
+//         let input = document.createElement('input');
+//         input.type = 'hidden';
+//         input.name = 'pageNumber';
+//         input.value = currentPage;
+//         form.appendChild(input);
+//     }
+//
+//     // Создаем FormData после обновления формы
+//     let formData = new FormData(form);
+//     let orderId = formData.get("orderId");
+//     let reviewId = formData.get("reviewId");
+//
+//     fetch(`/ordersDetails/${orderId}/change_bot/${reviewId}`, {
+//         method: "POST",
+//         body: formData
+//     })
+//         .then(response => response.text())
+//         .then(updatedReviewsHtml => {
+//             document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+//
+//             // Если после обновления список пустой, возможно перейти на первую страницу
+//             let isEmpty = updatedReviewsHtml.includes('empty') ||
+//                 updatedReviewsHtml.includes('нет отзывов') ||
+//                 updatedReviewsHtml.includes('СПИСОК КАРТОЧЕК') === false;
+//
+//             if (isEmpty && currentPage > 0) {
+//                 // Автоматически переходим на первую страницу
+//                 let newUrl = window.location.pathname + '?pageNumber=0';
+//                 window.history.replaceState({}, '', newUrl);
+//                 // Показываем сообщение (опционально)
+//                 console.log('Перенаправление на первую страницу, так как текущая пуста');
+//             }
+//         })
+//         .catch(error => console.error("Ошибка при смене бота:", error));
+// }
+//
+// /* Блокировка бота*/
+// function deActivateBot(event, form) {
+//     event.preventDefault();
+//
+//     // Получаем текущую страницу из URL
+//     let urlParams = new URLSearchParams(window.location.search);
+//     let currentPage = urlParams.get('pageNumber') || 0;
+//     currentPage = parseInt(currentPage) || 0;
+//
+//     // Защита от отрицательных значений
+//     currentPage = Math.max(currentPage, 0);
+//
+//     // Находим поле pageNumber в форме и устанавливаем значение
+//     let pageNumberInput = form.querySelector('input[name="pageNumber"]');
+//     if (pageNumberInput) {
+//         pageNumberInput.value = currentPage;
+//     } else {
+//         // Если поля нет, создаем его
+//         let input = document.createElement('input');
+//         input.type = 'hidden';
+//         input.name = 'pageNumber';
+//         input.value = currentPage;
+//         form.appendChild(input);
+//     }
+//
+//     // Создаем FormData после обновления формы
+//     let formData = new FormData(form);
+//     let orderId = formData.get("orderId");
+//     let reviewId = formData.get("reviewId");
+//     let botId = formData.get("botId");
+//
+//     fetch(`/ordersDetails/${orderId}/deactivate_bot/${reviewId}/${botId}`, {
+//         method: "POST",
+//         body: formData
+//     })
+//         .then(response => response.text())
+//         .then(updatedReviewsHtml => {
+//             document.getElementById("reviewsContainer").innerHTML = updatedReviewsHtml;
+//         })
+//         .catch(error => console.error("Ошибка при блокировке бота:", error));
+// }
 
     // function myFunction2Gis(button) {
     //   /* Get the text field */
