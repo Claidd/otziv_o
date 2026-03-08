@@ -518,8 +518,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 //    }
 
 
-
-
     /**
      * Выделенный метод для применения фильтров по vigul
      */
@@ -703,8 +701,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 //                log.info("  {}: {} ботов", category, count));
 //        log.info("================================");
 //    }
-
-
     private Order saveOrder(OrderDTO orderDTO, Long productId) {
         Order order = toEntityOrderFromDTO(orderDTO, productId);
         return orderRepository.save(order);
@@ -747,22 +743,27 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     }
     //    ================================================== CONVERTER =====================================================
 
-    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO){ // Конвертер из DTO для работника
+    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO) { // Конвертер из DTO для работника
         return workerService.getWorkerById(workerDTO.getWorkerId());
     } // Конвертер из DTO для работника
-    private Company convertCompanyDTOToCompany(CompanyDTO companyDTO){ // Конвертер из DTO для компании
+
+    private Company convertCompanyDTOToCompany(CompanyDTO companyDTO) { // Конвертер из DTO для компании
         return companyService.getCompaniesById(companyDTO.getId());
     } // Конвертер из DTO для компании
-    private Manager convertManagerDTOToManager(ManagerDTO managerDTO){// Конвертер из DTO для менеджера
+
+    private Manager convertManagerDTOToManager(ManagerDTO managerDTO) {// Конвертер из DTO для менеджера
         return managerService.getManagerById(managerDTO.getManagerId());
     } // Конвертер из DTO для менеджера
-    private OrderStatus convertStatusDTOToStatus(OrderStatusDTO orderStatusDTO){// Конвертер из DTO для статуса заказа
+
+    private OrderStatus convertStatusDTOToStatus(OrderStatusDTO orderStatusDTO) {// Конвертер из DTO для статуса заказа
         return orderStatusService.getOrderStatusByTitle(orderStatusDTO.getTitle());
     } // Конвертер из DTO для статуса заказа
-    private Filial convertFilialDTOToFilial(FilialDTO filialDTO){// Конвертер из DTO для филиала
+
+    private Filial convertFilialDTOToFilial(FilialDTO filialDTO) {// Конвертер из DTO для филиала
         return filialService.getFilial(filialDTO.getId());
     } // Конвертер из DTO для филиала
-    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // Конвертер из DTO для заказа
+
+    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId) { // Конвертер из DTO для заказа
         Product product1 = productService.findById(productId);
         return Order.builder()
                 .amount(orderDTO.getAmount())
@@ -775,7 +776,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .status(convertStatusDTOToStatus(orderDTO.getStatus()))
                 .build();
     } // Конвертер из DTO для заказа
-    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){ // Конвертер из DTO для деталей заказа
+
+    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId) { // Конвертер из DTO для деталей заказа
         Product product1 = productService.findById(productId);
         return OrderDetails.builder()
                 .amount(orderDTO.getAmount())
@@ -786,14 +788,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .build();
     } // Конвертер из DTO для деталей заказа
 
-    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории
+    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO) { // Конвертер из DTO для категории
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
     } // Конвертер из DTO для категории
-    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO){// Конвертер из DTO для субкатегории
+
+    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO) {// Конвертер из DTO для субкатегории
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
     } // Конвертер из DTO для субкатегории
 
-    public OrderDTO convertToOrderDTOToRepeat(Order order){ // Конвертер DTO для создания нового заказа после завершения предыдущего
+    public OrderDTO convertToOrderDTOToRepeat(Order order) { // Конвертер DTO для создания нового заказа после завершения предыдущего
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
@@ -805,13 +808,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .status(convertToStatusDTO("Новый"))
                 .build();
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
-    private WorkerDTO convertToWorkerDTO(Worker worker){// Конвертер DTO для работника
+
+    private WorkerDTO convertToWorkerDTO(Worker worker) {// Конвертер DTO для работника
         return WorkerDTO.builder()
                 .workerId(worker.getId())
                 .user(worker.getUser())
                 .build();
     } // Конвертер DTO для работника
-    private ManagerDTO convertToManagerDTO(Manager manager){// Конвертер DTO для менеджера
+
+    private ManagerDTO convertToManagerDTO(Manager manager) {// Конвертер DTO для менеджера
         return ManagerDTO.builder()
                 .managerId(manager.getId())
                 .user(manager.getUser())
@@ -819,7 +824,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .clientId(manager.getClientId())
                 .build();
     } // Конвертер DTO для менеджера
-    private CompanyDTO convertToCompanyDTO(Company company){ // Конвертер DTO для компании
+
+    private CompanyDTO convertToCompanyDTO(Company company) { // Конвертер DTO для компании
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
@@ -839,19 +845,23 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .title(status)
                 .build();
     }
-    private FilialDTO convertToFilialDTO(Filial filial){// Конвертер DTO для филиала
+
+    private FilialDTO convertToFilialDTO(Filial filial) {// Конвертер DTO для филиала
         return FilialDTO.builder()
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .build();
     } // Конвертер DTO для филиала
-    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers){// Конвертер DTO для списка работников
+
+    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers) {// Конвертер DTO для списка работников
         return workers.stream().map(this::convertToWorkerDTO).collect(Collectors.toSet());
     } // Конвертер DTO для списка работников
-    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials){ // Конвертер DTO для списка филиалов
+
+    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials) { // Конвертер DTO для списка филиалов
         return filials.stream().map(this::convertToFilialDTO).collect(Collectors.toSet());
     } // Конвертер DTO для списка филиалов
+
     private CategoryDTO convertToCategoryDto(Category category) {// Конвертер DTO для категории
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId() != null ? category.getId() : null);
@@ -859,6 +869,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         // Other fields if needed
         return categoryDTO;
     } // Конвертер DTO для категории
+
     private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Конвертер DTO для субкатегории
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
         subCategoryDTO.setId(subCategory.getId() != null ? subCategory.getId() : 0L);

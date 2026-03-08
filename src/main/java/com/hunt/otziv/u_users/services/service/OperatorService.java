@@ -39,6 +39,10 @@ public interface OperatorService {
 
     Operator getOperatorByTelephoneId(Long telephoneId);
 
+    Set<Operator> getAllOperatorsToManagerList(List<Manager> managerList);
+
+    List<Long> findUserIdsByManagerIds(Set<Long> managerIds);
+
 //    @Query("SELECT o FROM Operator o JOIN o.telephones t WHERE t.id = :telephoneId")
 //    Operator getOperatorByTelephoneId(Long TelephoneId);
 }

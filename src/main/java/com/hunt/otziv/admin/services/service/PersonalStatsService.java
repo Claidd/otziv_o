@@ -4,9 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
+import com.hunt.otziv.l_lead.dto.LeadMonthStats;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
@@ -19,12 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -38,6 +35,7 @@ public class PersonalStatsService {
     private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
     private final LeadService leadService;
+    private final UserService userService;
     private final ObjectMapper objectMapper;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
@@ -47,18 +45,20 @@ public class PersonalStatsService {
     private static final int PERCENT_MULTIPLIER = 100;
     private static final long DEFAULT_IMAGE_ID = 1L;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public StatDTO getStats(LocalDate localDate, User user, String role) {
-        Set<Manager> managerList = user.getManagers() != null ? user.getManagers() : Collections.emptySet();
+        List<Long> managerIds = resolveManagerIds(user, role);
+        Set<Long> relevantUserIds = resolveRelevantUserIds(role, managerIds);
 
-        List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerList);
-        List<Zp> zps = getZarplataChecks(localDate, role, managerList);
+        List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerIds, relevantUserIds);
+        List<Zp> zps = getZarplataChecks(localDate, role, relevantUserIds);
 
-        List<Long> newLeadList = getNewLeadList(role, localDate, managerList);
-        List<Long> inWorkLeadList = getInWorkLeadList(role, localDate, managerList);
+        LocalLeadMonthStats leadStats = getLeadMonthStats(role, localDate, managerIds);
 
-        List<Long> newLeadListPrevMonth = getNewLeadList(role, localDate.minusMonths(1), managerList);
-        List<Long> inWorkLeadListPrevMonth = getInWorkLeadList(role, localDate.minusMonths(1), managerList);
+        long currentAll = leadStats.currentMonthAll();
+        long currentInWork = leadStats.currentMonthInWork();
+        long prevAll = leadStats.previousMonthAll();
+        long prevInWork = leadStats.previousMonthInWork();
 
         PeriodMetrics paymentMetrics = calculatePeriodMetrics(
                 pcs,
@@ -95,10 +95,10 @@ public class PersonalStatsService {
         statDTO.setPercent1MonthOrdersPay(calculatePercentageDifference(paymentMetrics.getMonth1Count(), paymentMetrics.getMonth2Count()));
         statDTO.setPercent2MonthOrdersPay(calculatePercentageDifference(paymentMetrics.getMonth2Count(), paymentMetrics.getMonth3Count()));
 
-        statDTO.setNewLeads(newLeadList.size());
-        statDTO.setLeadsInWork(inWorkLeadList.size());
-        statDTO.setPercent1NewLeadsPay(calculatePercentageDifference(newLeadList.size(), newLeadListPrevMonth.size()));
-        statDTO.setPercent2InWorkLeadsPay(calculatePercentageDifference(inWorkLeadList.size(), inWorkLeadListPrevMonth.size()));
+        statDTO.setNewLeads((int) currentAll);
+        statDTO.setLeadsInWork((int) currentInWork);
+        statDTO.setPercent1NewLeadsPay(calculatePercentageDifference((int) currentAll, (int) prevAll));
+        statDTO.setPercent2InWorkLeadsPay(calculatePercentageDifference((int) currentInWork, (int) prevInWork));
 
         statDTO.setZpPayMap(toJson(getDailySumMap(localDate, zps, Zp::getCreated, Zp::getSum)));
         statDTO.setSum1Day(zpMetrics.getDay1Sum().intValue());
@@ -156,55 +156,90 @@ public class PersonalStatsService {
         return userStatDTO;
     }
 
-    private List<PaymentCheck> getPaymentChecks(LocalDate localDate, String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(
-                role,
-                () -> paymentCheckService.findAllToDate(localDate),
-                owner -> paymentCheckService.findAllToDateByOwner(localDate, owner),
-                managerList
-        );
+    private List<Long> resolveManagerIds(User user, String role) {
+        if (!ROLE_OWNER.equals(role) || user == null || user.getId() == null) {
+            return Collections.emptyList();
+        }
+        return userService.findManagerIdsByUserId(user.getId());
     }
 
-    private List<Zp> getZarplataChecks(LocalDate localDate, String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(
-                role,
-                () -> zpService.findAllToDate(localDate),
-                owner -> zpService.findAllToDateByOwner(localDate, owner),
-                managerList
-        );
+    private Set<Long> resolveRelevantUserIds(String role, List<Long> managerIds) {
+        if (!ROLE_OWNER.equals(role) || managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        List<Long> ids = userService.findAllRelevantUserIdsForManagerIds(managerIds);
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        return new LinkedHashSet<>(ids);
     }
 
-    private List<Long> getInWorkLeadList(String role, LocalDate localDate, Set<Manager> managerList) {
-        return checkRoleAndExecute(
-                role,
-                () -> leadService.getAllLeadsByDateAndStatus(localDate, STATUS_IN_WORK),
-                owner -> leadService.getAllLeadsByDateAndStatusToOwner(localDate, STATUS_IN_WORK, owner),
-                managerList
-        );
-    }
-
-    private List<Long> getNewLeadList(String role, LocalDate localDate, Set<Manager> managerList) {
-        return checkRoleAndExecute(
-                role,
-                () -> leadService.getAllLeadsByDate(localDate),
-                owner -> leadService.getAllLeadsByDateToOwner(localDate, owner),
-                managerList
-        );
-    }
-
-    private <T> List<T> checkRoleAndExecute(
+    private List<PaymentCheck> getPaymentChecks(
+            LocalDate localDate,
             String role,
-            Supplier<List<T>> adminFunction,
-            Function<Set<Manager>, List<T>> ownerFunction,
-            Set<Manager> managerList
+            List<Long> managerIds,
+            Set<Long> relevantUserIds
     ) {
         if (ROLE_ADMIN.equals(role)) {
-            return adminFunction.get();
+            return paymentCheckService.findAllToDate(localDate);
         }
+
         if (ROLE_OWNER.equals(role)) {
-            return ownerFunction.apply(managerList);
+            if (relevantUserIds == null || relevantUserIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return paymentCheckService.findAllToDateByUserIds(localDate, relevantUserIds);
         }
-        return adminFunction.get();
+
+        return paymentCheckService.findAllToDate(localDate);
+    }
+
+    private List<Zp> getZarplataChecks(LocalDate localDate, String role, Set<Long> relevantUserIds) {
+        if (ROLE_ADMIN.equals(role)) {
+            return zpService.findAllToDate(localDate);
+        }
+
+        if (ROLE_OWNER.equals(role)) {
+            if (relevantUserIds == null || relevantUserIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return zpService.findAllToDateByUserIds(localDate, relevantUserIds);
+        }
+
+        return zpService.findAllToDate(localDate);
+    }
+
+    private LocalLeadMonthStats getLeadMonthStats(String role, LocalDate localDate, List<Long> managerIds) {
+        if (ROLE_OWNER.equals(role)) {
+            LeadMonthStats leadStats = leadService.getLeadMonthStatsForManagerIds(managerIds, STATUS_IN_WORK, localDate);
+
+            if (leadStats == null) {
+                return new LocalLeadMonthStats(0, 0, 0, 0);
+            }
+
+            return new LocalLeadMonthStats(
+                    leadStats.currentMonthAll(),
+                    leadStats.currentMonthInWork(),
+                    leadStats.previousMonthAll(),
+                    leadStats.previousMonthInWork()
+            );
+        }
+
+        List<Long> newLeadList = leadService.getAllLeadsByDate(localDate);
+        List<Long> inWorkLeadList = leadService.getAllLeadsByDateAndStatus(localDate, STATUS_IN_WORK);
+
+        LocalDate previousMonthDate = localDate.minusMonths(1);
+        List<Long> newLeadListPrevMonth = leadService.getAllLeadsByDate(previousMonthDate);
+        List<Long> inWorkLeadListPrevMonth = leadService.getAllLeadsByDateAndStatus(previousMonthDate, STATUS_IN_WORK);
+
+        return new LocalLeadMonthStats(
+                newLeadList != null ? newLeadList.size() : 0,
+                inWorkLeadList != null ? inWorkLeadList.size() : 0,
+                newLeadListPrevMonth != null ? newLeadListPrevMonth.size() : 0,
+                inWorkLeadListPrevMonth != null ? inWorkLeadListPrevMonth.size() : 0
+        );
     }
 
     private <T> Map<Integer, BigDecimal> getDailySumMap(
@@ -228,8 +263,10 @@ public class PersonalStatsService {
 
         for (T item : items) {
             LocalDate created = dateExtractor.apply(item);
-            if (created.getYear() == targetDate.getYear() && created.getMonth() == targetDate.getMonth()) {
-                result.merge(created.getDayOfMonth(), sumExtractor.apply(item), BigDecimal::add);
+            if (created != null
+                    && created.getYear() == targetDate.getYear()
+                    && created.getMonth() == targetDate.getMonth()) {
+                result.merge(created.getDayOfMonth(), safeBigDecimal(sumExtractor.apply(item)), BigDecimal::add);
             }
         }
 
@@ -249,11 +286,15 @@ public class PersonalStatsService {
 
         for (T item : items) {
             LocalDate created = dateExtractor.apply(item);
+            if (created == null) {
+                continue;
+            }
+
             int year = created.getYear();
             int month = created.getMonthValue();
 
             result.computeIfAbsent(year, y -> new HashMap<>())
-                    .merge(month, sumExtractor.apply(item), BigDecimal::add);
+                    .merge(month, safeBigDecimal(sumExtractor.apply(item)), BigDecimal::add);
         }
 
         return result;
@@ -324,6 +365,10 @@ public class PersonalStatsService {
         return user.getImage() != null ? user.getImage().getId() : DEFAULT_IMAGE_ID;
     }
 
+    private BigDecimal safeBigDecimal(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     private <T> PeriodMetrics calculatePeriodMetrics(
             List<T> items,
             Function<T, LocalDate> dateExtractor,
@@ -339,7 +384,11 @@ public class PersonalStatsService {
 
         for (T item : items) {
             LocalDate created = dateExtractor.apply(item);
-            BigDecimal sum = sumExtractor.apply(item);
+            BigDecimal sum = safeBigDecimal(sumExtractor.apply(item));
+
+            if (created == null) {
+                continue;
+            }
 
             if (created.isEqual(boundaries.previousDay)) {
                 metrics.day1Sum = metrics.day1Sum.add(sum);
@@ -517,6 +566,41 @@ public class PersonalStatsService {
 
         public int getMonth3Count() {
             return month3Count;
+        }
+    }
+
+    private static final class LocalLeadMonthStats {
+        private final long currentMonthAll;
+        private final long currentMonthInWork;
+        private final long previousMonthAll;
+        private final long previousMonthInWork;
+
+        private LocalLeadMonthStats(
+                long currentMonthAll,
+                long currentMonthInWork,
+                long previousMonthAll,
+                long previousMonthInWork
+        ) {
+            this.currentMonthAll = currentMonthAll;
+            this.currentMonthInWork = currentMonthInWork;
+            this.previousMonthAll = previousMonthAll;
+            this.previousMonthInWork = previousMonthInWork;
+        }
+
+        public long currentMonthAll() {
+            return currentMonthAll;
+        }
+
+        public long currentMonthInWork() {
+            return currentMonthInWork;
+        }
+
+        public long previousMonthAll() {
+            return previousMonthAll;
+        }
+
+        public long previousMonthInWork() {
+            return previousMonthInWork;
         }
     }
 }

@@ -18,10 +18,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.*;
+
 import org.springframework.security.core.GrantedAuthority;
+
 import java.util.List;
 import java.util.Map;
 
@@ -41,17 +44,29 @@ public class PersonalServiceImpl implements PersonalService {
     private static final long DEFAULT_IMAGE_ID = 1L;
 
     @Override
-    public UserLKDTO getUserLK(Principal principal) {
-        User user = userService.findByUserName(principal.getName()).orElseThrow();
+    public UserLKDTO getUserLK(User user) {
+        UserLKDTO dto = new UserLKDTO();
 
-        UserLKDTO userLKDTO = new UserLKDTO();
-        userLKDTO.setUsername(user.getUsername());
-        userLKDTO.setRole(extractShortRole(user));
-        userLKDTO.setImage(resolveImageId(user));
-        userLKDTO.setLeadCount(leadService.findAllByLidListStatus(principal.getName()).size());
-        userLKDTO.setReviewCount(reviewService.findAllByReviewListStatus(principal.getName()));
+        String shortRole = extractShortRole(user);
+        Long userId = user.getId();
 
-        return userLKDTO;
+        dto.setUsername(user.getUsername());
+        dto.setRole(shortRole);
+        dto.setImage(resolveImageId(user));
+
+        if ("MANAGER".equals(shortRole)) {
+            dto.setLeadCount((int) leadService.countNewLeadsForManagerUserId(userId));
+        } else {
+            dto.setLeadCount(0);
+        }
+
+        if ("WORKER".equals(shortRole)) {
+            dto.setReviewCount(reviewService.countReviewsForWorkerUserId(userId));
+        } else {
+            dto.setReviewCount(0);
+        }
+
+        return dto;
     }
 
     @Transactional
@@ -244,7 +259,7 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
     private String extractShortRole(User user) {
-        String fullRole = user.getRoles().iterator().next().getAuthority();
+        String fullRole = user.getRoles().iterator().next().getName();
         if (fullRole.startsWith("ROLE_")) {
             return fullRole.substring("ROLE_".length());
         }

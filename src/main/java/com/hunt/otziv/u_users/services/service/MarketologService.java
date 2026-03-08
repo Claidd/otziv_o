@@ -35,4 +35,6 @@ public interface MarketologService {
 
 
     List<Marketolog> getAllMarketologsToOwner(List<Manager> managers);
+
+    List<Long> findUserIdsByManagerIds(Set<Long> managerIds);
 }

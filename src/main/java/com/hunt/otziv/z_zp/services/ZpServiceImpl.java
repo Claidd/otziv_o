@@ -3,8 +3,12 @@ package com.hunt.otziv.z_zp.services;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.*;
+import com.hunt.otziv.u_users.repository.MarketologRepository;
+import com.hunt.otziv.u_users.repository.OperatorRepository;
+import com.hunt.otziv.u_users.repository.WorkerRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.z_zp.dto.ManagerZpAggregate;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
@@ -21,168 +25,218 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ZpServiceImpl implements ZpService{
+public class ZpServiceImpl implements ZpService {
 
     private final ZpRepository zpRepository;
     private final UserService userService;
 
-    public List<Zp> getAllWorkerZp(String login){
+    @Override
+    public List<Zp> getAllWorkerZp(String login) {
         LocalDate localDate = LocalDate.now();
         Long userId = userService.findByUserName(login).orElseThrow().getId();
         return zpRepository.getAllWorkerZp(userId, localDate);
     }
 
-    public List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth){
+    @Override
+    public List<Zp> getAllWorkerZp(Long userId) {
+        LocalDate localDate = LocalDate.now();
+        return zpRepository.getAllWorkerZp(userId, localDate);
+    }
+
+    @Override
+    public List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         Long userId = userService.findByUserName(login).orElseThrow().getId();
         return zpRepository.getAllWorkerZp(userId, firstDayOfMonth, lastDayOfMonth);
     }
 
-    public List<Zp> findAll(){
+    @Override
+    public List<Zp> getAllWorkerZpToDate(Long userId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return zpRepository.getAllWorkerZp(userId, firstDayOfMonth, lastDayOfMonth);
+    }
+
+    @Override
+    public List<Zp> findAll() {
         return zpRepository.findAll();
     }
 
-    public List<Zp> findAllToDate(LocalDate localDate){ // Берем все ЗП для админа
+    @Override
+    public List<Zp> findAllToDate(LocalDate localDate) {
         LocalDate localDate2 = localDate.minusYears(1);
         return zpRepository.findAllToDate(localDate, localDate2);
-    }  // Берем все ЗП для админа
+    }
 
-    public List<Zp> findAllToDateByUser(LocalDate localDate, Long userId) { // Берем все ЗП для Работника
+    @Override
+    public List<Zp> findAllToDateByUser(LocalDate localDate, Long userId) {
         LocalDate localDate2 = localDate.minusYears(1);
         return zpRepository.findAllToDateByUser(localDate, localDate2, userId);
-    } // Берем все ЗП для Работника
+    }
 
-    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
     @Override
     public Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
                 .stream()
                 .filter(obj -> {
                     String role = (String) obj[2];
-                    // Фильтруем только по ролям
                     return "ROLE_MANAGER".equals(role) || "ROLE_WORKER".equals(role);
                 })
-                .sorted(Comparator.comparing((Object[] obj) -> {
-                                    String role = (String) obj[2];
-                                    return rolePriority(role); // Сортируем сначала по приоритету роли
-                                })
-                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
-                )
-                .collect(Collectors.toMap(
-                        obj -> (String) obj[0],   // ФИО
-                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
-                        (e1, e2) -> e1,
-                        LinkedHashMap::new // Сохраняем порядок сортировки
-                ));
-    }
-    /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте и распределяем в мапу (фио, роль, сумма зп, кол-во заказов, кол-во отзывов **/
-    @Override
-    public Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        Map<String, Quadruple<String, Long, Long, Long>> results = zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
-                .stream()
-                .sorted(Comparator.comparing((Object[] obj) -> {
+                .sorted(
+                        Comparator.comparing((Object[] obj) -> {
                                     String role = (String) obj[2];
                                     return rolePriority(role);
                                 })
-                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder()) // Сортировка по зарплате
+                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder())
                 )
                 .collect(Collectors.toMap(
-                        obj -> (String) obj[0], // ФИО
+                        obj -> (String) obj[0],
+                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()),
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new
+                ));
+    }
+
+    @Override
+    public Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
+                .stream()
+                .sorted(
+                        Comparator.comparing((Object[] obj) -> {
+                                    String role = (String) obj[2];
+                                    return rolePriority(role);
+                                })
+                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder())
+                )
+                .collect(Collectors.toMap(
+                        obj -> (String) obj[0],
                         obj -> Quadruple.of(
-                                (String) obj[2], // Роль
-                                ((Number) obj[1]).longValue(), // Сумма зарплаты
-                                ((Number) obj[3]).longValue(), // Сумма выплат (amount)
-                                ((Long) obj[4]) // Количество отзывов
+                                (String) obj[2],
+                                ((Number) obj[1]).longValue(),
+                                ((Number) obj[3]).longValue(),
+                                ((Long) obj[4])
                         ),
                         (e1, e2) -> e1,
-                        LinkedHashMap::new // Сохранение порядка сортировки
+                        LinkedHashMap::new
                 ));
-//        System.out.println(results);
-        return results;
     }
 
-
-//    @Override
-//    public Map<String, Pair<String, Long>, Pair<Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-//        return zpRepository.findAllUsersWithZpToDate(firstDayOfMonth, lastDayOfMonth)
-//                .stream()
-//                .sorted(Comparator.comparing((Object[] obj) -> {
-//                                    String role = (String) obj[2];
-//                                    return rolePriority(role); // Сортируем сначала по приоритету роли
-//                                })
-//                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
-//                )
-//                .collect(Collectors.toMap(
-//                        obj -> (String) obj[0],   // ФИО
-//                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
-//                        (e1, e2) -> e1,
-//                        LinkedHashMap::new // Сохраняем порядок сортировки
-//                ));
-//    }
-
-
-    // Метод для присваивания приоритета ролям
     private int rolePriority(String role) {
-        if ("ROLE_MANAGER".equals(role)) return 1; // Менеджеры первыми
-        if ("ROLE_WORKER".equals(role)) return 2;  // Потом воркеры
-        if ("ROLE_OPERATOR".equals(role)) return 3;  // Потом воркеры
-        if ("ROLE_MARKETOLOG".equals(role)) return 4;  // Потом воркеры
-        return 5; // Все остальные в конце
+        if ("ROLE_MANAGER".equals(role)) {
+            return 1;
+        }
+        if ("ROLE_WORKER".equals(role)) {
+            return 2;
+        }
+        if ("ROLE_OPERATOR".equals(role)) {
+            return 3;
+        }
+        if ("ROLE_MARKETOLOG".equals(role)) {
+            return 4;
+        }
+        return 5;
     }
 
+    @Override
+    public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) {
+        if (localDate == null || managerList == null || managerList.isEmpty()) {
+            return Collections.emptyList();
+        }
 
+        List<Long> managerIds = managerList.stream()
+                .map(Manager::getId)
+                .filter(Objects::nonNull)
+                .toList();
 
+        return findAllToDateByOwnerIds(localDate, managerIds);
+    }
 
+    @Override
+    public Map<Long, ManagerZpAggregate> getManagerAggregates(Set<Long> userIds, LocalDate startDate, LocalDate endDate) {
+        return getUserAggregates(userIds, startDate, endDate);
+    }
 
-    public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) { // Берем все ЗП для всех менеджеров Владельца
-        LocalDate localDate2 = localDate.minusYears(1);
-        return zpRepository.findAllToDateByOwner(localDate, localDate2, getPeopleIdToZp(managerList));
-    } // Берем все ЗП для всех менеджеров Владельца
+    @Override
+    public Map<Long, ManagerZpAggregate> getUserAggregates(Set<Long> userIds, LocalDate startDate, LocalDate endDate) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
 
-    private Set<Long> getPeopleIdToZp(Set<Manager> managerList) { // Составление списка ид всех менеджеров и их работников Владельца
-        Set<Long> managerIds = managerList.stream().map(Manager::getUser).map(User::getId).collect(Collectors.toSet());
-        Set<Long> workersIds = managerList.stream().map(Manager::getUser).map(User::getWorkers).flatMap(workers -> workers.stream().map(Worker::getUser)).map(User::getId).collect(Collectors.toSet());
-        Set<Long> operatorIds = managerList.stream().map(Manager::getUser).map(User::getOperators).flatMap(operators -> operators.stream().map(Operator::getUser)).map(User::getId).collect(Collectors.toSet());
-        Set<Long> marketologIds = managerList.stream().map(Manager::getUser).map(User::getMarketologs).flatMap(marketologs -> marketologs.stream().map(Marketolog::getUser)).map(User::getId).collect(Collectors.toSet());
-        Set<Long> peopleId;
-        return peopleId = Stream.of(managerIds, operatorIds, marketologIds, workersIds)
-                .flatMap(Set::stream)
-                .collect(Collectors.toSet());
-    } // Составление списка ид всех менеджеров и их работников Владельца
+        return zpRepository.aggregateUserZpByUserIds(userIds, startDate, endDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> new ManagerZpAggregate(
+                                (BigDecimal) row[1],
+                                (Long) row[2],
+                                ((Number) row[3]).longValue()
+                        )
+                ));
+    }
 
-    public List<ZpDTO> getAllZpDTO(){
+    @Override
+    public List<ZpDTO> getAllZpDTO() {
         return toDTOList(zpRepository.findAll());
     }
 
+    @Override
     @Transactional
-    public boolean save(Order order) { // Сохранить ЗП и Чек в БД
+    public boolean save(Order order) {
         try {
             saveZpManager(order);
             saveZpWorker(order);
             return true;
         } catch (Exception e) {
             log.error("Ошибка при сохранении ЗП и Чека в БД", e);
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e);
         }
-    }// Сохранить ЗП и Чек в БД
+    }
 
+    @Override
     @Transactional
-    public boolean saveLeadZp(Lead lead){ // Сохранить ЗП за Лида
+    public boolean saveLeadZp(Lead lead) {
         try {
             saveZpMarketolog(lead);
             saveZpOperator(lead);
             return true;
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e);
         }
-        catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Zp> findAllToDateByUserIds(LocalDate localDate, Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
         }
-    } // Сохранить ЗП за Лида
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        return zpRepository.findAllToDateByUserIds(firstDayOfMonth, lastDayOfMonth, userIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Zp> findAllToDateByOwnerIds(LocalDate localDate, List<Long> managerIds) {
+        if (localDate == null || managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> relevantUserIds = userService.findAllRelevantUserIdsForManagerIds(managerIds);
+        if (relevantUserIds == null || relevantUserIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        return zpRepository.findAllToDateByUserIds(firstDayOfMonth, lastDayOfMonth, relevantUserIds);
+    }
 
     @Transactional
-    protected void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
+    protected void saveZpManager(Order order) {
         try {
             Zp managerZp = new Zp();
             managerZp.setFio(order.getManager().getUser().getFio());
@@ -193,13 +247,13 @@ public class ZpServiceImpl implements ZpService{
             managerZp.setAmount(order.getAmount());
             managerZp.setActive(true);
             zpRepository.save(managerZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при сохранении ЗП менеджера", e);
         }
+    }
 
-    } // Сохранить ЗП Менеджера в БД
     @Transactional
-    protected void saveZpWorker(Order order){ // Сохранить ЗП Работника в БД
+    protected void saveZpWorker(Order order) {
         try {
             Zp workerZp = new Zp();
             workerZp.setFio(order.getWorker().getUser().getFio());
@@ -210,13 +264,13 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setAmount(order.getAmount());
             workerZp.setActive(true);
             zpRepository.save(workerZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при сохранении ЗП работника", e);
         }
+    }
 
-    } // Сохранить ЗП Работника в БД
     @Transactional
-    protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
+    protected void saveZpMarketolog(Lead lead) {
         try {
             Zp marketologZp = new Zp();
             marketologZp.setFio(lead.getMarketolog().getUser().getFio());
@@ -227,14 +281,13 @@ public class ZpServiceImpl implements ZpService{
             marketologZp.setAmount(1);
             marketologZp.setActive(true);
             zpRepository.save(marketologZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при сохранении ЗП маркетолога", e);
         }
-
-    } // Сохранить ЗП Маркетолога в БД
+    }
 
     @Transactional
-    protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
+    protected void saveZpOperator(Lead lead) {
         try {
             Zp operatorZp = new Zp();
             operatorZp.setFio(lead.getOperator().getUser().getFio());
@@ -245,17 +298,18 @@ public class ZpServiceImpl implements ZpService{
             operatorZp.setAmount(1);
             operatorZp.setActive(true);
             zpRepository.save(operatorZp);
-        } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при сохранении ЗП оператора", e);
         }
+    }
 
-    } // Сохранить ЗП Оператора в БД
+    private List<ZpDTO> toDTOList(List<Zp> zpList) {
+        return zpList.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
 
-    private List<ZpDTO> toDTOList(List<Zp> zpList) { // Метод для преобразования из сущности Zp в ZpDTO
-        return zpList.stream().map(this::toDTO).collect(Collectors.toList());
-    } // Метод для преобразования из сущности Zp в ZpDTO
-
-    private ZpDTO toDTO(Zp zp) { // Метод для преобразования из сущности Zp в ZpDTO
+    private ZpDTO toDTO(Zp zp) {
         ZpDTO zpDTO = new ZpDTO();
         zpDTO.setId(zp.getId());
         zpDTO.setFio(zp.getFio());
@@ -267,10 +321,9 @@ public class ZpServiceImpl implements ZpService{
         zpDTO.setAmount(zp.getAmount());
         zpDTO.setSum(zp.getSum());
         return zpDTO;
-    } // Метод для преобразования из сущности Zp в ZpDTO
+    }
 
-
-    private Zp toEntity(ZpDTO zpDTO) { // Метод для преобразования из ZpDTO в сущность Zp
+    private Zp toEntity(ZpDTO zpDTO) {
         Zp zp = new Zp();
         zp.setFio(zpDTO.getFio());
         zp.setUserId(zpDTO.getUserId());
@@ -281,6 +334,5 @@ public class ZpServiceImpl implements ZpService{
         zp.setAmount(zpDTO.getAmount());
         zp.setSum(zpDTO.getSum());
         return zp;
-    } // Метод для преобразования из ZpDTO в сущность Zp
-
+    }
 }

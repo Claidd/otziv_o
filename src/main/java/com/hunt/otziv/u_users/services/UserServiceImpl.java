@@ -8,6 +8,7 @@ import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 
 import com.hunt.otziv.u_users.services.service.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
 import net.coobird.thumbnailator.geometry.Positions;
@@ -27,7 +28,9 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class UserServiceImpl  implements UserService {
+@RequiredArgsConstructor
+public class UserServiceImpl implements UserService {
+
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final OperatorService operatorService;
@@ -37,56 +40,128 @@ public class UserServiceImpl  implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final ImageRepository imageRepository;
 
-    public UserServiceImpl(UserRepository userRepository, RoleRepository roleRepository, RoleService roleService, OperatorService operatorService, ManagerService managerService, WorkerService workerService, MarketologService marketologService, PasswordEncoder passwordEncoder, ImageRepository imageRepository) {
-        this.userRepository = userRepository;
-        this.roleService = roleService;
-        this.operatorService = operatorService;
-        this.managerService = managerService;
-        this.workerService = workerService;
-        this.marketologService = marketologService;
-        this.passwordEncoder = passwordEncoder;
-        this.imageRepository = imageRepository;
+    // ===================================== SECURITY =====================================
+
+    @Override
+    public Optional<User> findByUserName(String username) {
+        return userRepository.findByUsername(username);
     }
 
-//      =====================================SECURITY=======================================================
+    private User findByUserNameWithAssignments(String username) {
+        return userRepository.findByUsernameWithAssignments(username)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        String.format("Пользователь '%s' не найден", username)
+                ));
+    }
 
-
-    public Optional<User> findByUserName(String username){ // Метод поиска юзера по имени в БД
-        return userRepository.findByUsername(username);
-    } // Метод поиска юзера по имени в БД
-
-    public List<User> getAllOwners(String roleName){
+    @Override
+    public List<User> getAllOwners(String roleName) {
         return userRepository.findAllOwners(roleName);
     }
 
-    @Transactional
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException { // Метод для секьюрити от имплеменитрованного DetailsUsers
+    @Override
+    @Transactional(readOnly = true)
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
+                String.format("Пользователь '%s' не найден", username)
         ));
-//        System.out.println(user.getUsername() + user.getPassword()
-//                + user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).toList());
+
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
-                user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
+                user.getRoles().stream()
+                        .map(role -> new SimpleGrantedAuthority(role.getName()))
+                        .collect(Collectors.toList())
         );
-    } // Метод для секьюрити от имплеменитрованного DetailsUsers
+    }
 
-//      =====================================SECURITY - END=======================================================
+    /**
+     * Легкий сбор всех userId, относящихся к owner:
+     * - userId менеджеров владельца
+     * - userId работников этих менеджеров
+     * - userId операторов этих менеджеров
+     * - userId маркетологов этих менеджеров
+     *
+     * Без загрузки полных entity-графов workers/operators/marketologs.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> findAllRelevantUserIdsForOwner(Set<Manager> managers) {
+        if (managers == null || managers.isEmpty()) {
+            return Collections.emptySet();
+        }
 
-//      =====================================CREATE USERS - START=======================================================
+        Set<Long> managerIds = managers.stream()
+                .filter(Objects::nonNull)
+                .map(Manager::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (managerIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        Set<Long> result = new HashSet<>();
+
+        List<Long> managerUserIds = managerService.findUserIdsByManagerIds(managerIds);
+        if (managerUserIds != null) {
+            result.addAll(managerUserIds);
+        }
+
+        List<Long> workerUserIds = workerService.findUserIdsByManagerIds(managerIds);
+        if (workerUserIds != null) {
+            result.addAll(workerUserIds);
+        }
+
+        List<Long> operatorUserIds = operatorService.findUserIdsByManagerIds(managerIds);
+        if (operatorUserIds != null) {
+            result.addAll(operatorUserIds);
+        }
+
+        List<Long> marketologUserIds = marketologService.findUserIdsByManagerIds(managerIds);
+        if (marketologUserIds != null) {
+            result.addAll(marketologUserIds);
+        }
+
+        return result;
+    }
 
 
     @Override
-    public List<RegistrationUserDTO> getAllUsers() { // Взять всех юзеров - начало
-//        log.info("Берем все юзеров");
+    @Transactional(readOnly = true)
+    public List<Long> findManagerIdsByUserId(Long userId) {
+        if (userId == null) {
+            return Collections.emptyList();
+        }
+        return userRepository.findManagerIdsByUserId(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> findAllRelevantUserIdsForManagerIds(List<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LinkedHashSet<Long> result = new LinkedHashSet<>();
+
+        result.addAll(userRepository.findManagerUserIdsByManagerIds(managerIds));
+        result.addAll(userRepository.findWorkerUserIdsByManagerIds(managerIds));
+        result.addAll(userRepository.findOperatorUserIdsByManagerIds(managerIds));
+        result.addAll(userRepository.findMarketologUserIdsByManagerIds(managerIds));
+
+        return new ArrayList<>(result);
+    }
+    // ===================================== CREATE USERS =====================================
+
+    @Override
+    public List<RegistrationUserDTO> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
-    } // Взять всех юзеров - конец
+    }
 
-    private RegistrationUserDTO toDto(User user){ // Перевод юзера в дто - начало
+    private RegistrationUserDTO toDto(User user) {
         return RegistrationUserDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -105,23 +180,25 @@ public class UserServiceImpl  implements UserService {
                 .coefficient(user.getCoefficient())
                 .image(user.getImage())
                 .build();
-    } // Перевод юзера в дто - конец
+    }
 
-//      =====================================CREATE USERS - START=======================================================
-
-    public User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException { // Создание нового пользователя "Клиент" - начало
+    @Override
+    public User save(RegistrationUserDTO userDto, MultipartFile file) throws IOException {
         log.info("3. Заходим в создание нового юзера и проверяем совпадение паролей");
-        if(!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
+
+        if (!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())) {
             throw new RuntimeException("Пароли не совпадают");
         }
+
         log.info("4. Создаем юзера");
+
         User user = User.builder()
                 .username(userDto.getUsername())
                 .password(passwordEncoder.encode(userDto.getPassword()))
-                .fio((userDto.getFio()))
+                .fio(userDto.getFio())
                 .email(userDto.getEmail())
                 .phoneNumber(changeNumberPhone(userDto.getPhoneNumber()))
-                .roles((List.of(roleService.getUserRole())))
+                .roles(List.of(roleService.getUserRole()))
                 .operators(userDto.getOperators())
                 .managers(userDto.getManagers())
                 .workers(userDto.getWorkers())
@@ -131,14 +208,12 @@ public class UserServiceImpl  implements UserService {
                 .image(toImageEntity(file))
                 .coefficient(new BigDecimal("0.05"))
                 .build();
+
         log.info("5. Юзер успешно создан");
         return userRepository.save(user);
-    } // Создание нового пользователя "Клиент" - конец
+    }
 
-//      =====================================CREATE USERS - START=======================================================
-
-    // Вспомогательный метод для корректировки номера телефона
-    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
+    public String changeNumberPhone(String phone) {
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "+79";
@@ -146,362 +221,326 @@ public class UserServiceImpl  implements UserService {
         } else {
             return phone;
         }
-    } // Вспомогательный метод для корректировки номера телефона
+    }
 
     @Override
-    public RegistrationUserDTO findById(Long id) { // Взять одного юзера по Id
+    public RegistrationUserDTO findById(Long id) {
         log.info("Начинается поиск пользователя по id - начало");
-            User user = userRepository.findById(id).orElseThrow();
+        User user = userRepository.findById(id).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(user);
-    } // Взять одного юзера по Id
+    }
 
     @Override
-    public List<String> getAllUsersByFio(String roleName) { // Взять одного юзера по названию роли и фио
+    public List<String> getAllUsersByFio(String roleName) {
         return userRepository.findAllActiveFioByRole(roleName);
-    } // Взять одного юзера по названию роли и фио
+    }
 
     @Override
-    public Optional<User> findByFio(String operator) { // Взять одного юзера по  фио
+    public Optional<User> findByFio(String operator) {
         return userRepository.findByFio(operator);
-    } // Взять одного юзера по  фио
+    }
 
-    //      =====================================UPDATE USERS - START=======================================================
+    // ===================================== UPDATE USERS =====================================
+
     @Override
-    @Transactional // Обновление юзера
-    public void updateProfile(RegistrationUserDTO userDTO, String role, OperatorDTO operatorDTO, ManagerDTO managerDTO, WorkerDTO workerDTO, MarketologDTO marketologDTO, MultipartFile imageFile) throws IOException {
+    @Transactional
+    public void updateProfile(
+            RegistrationUserDTO userDTO,
+            String role,
+            OperatorDTO operatorDTO,
+            ManagerDTO managerDTO,
+            WorkerDTO workerDTO,
+            MarketologDTO marketologDTO,
+            MultipartFile imageFile
+    ) throws IOException {
         log.info("Вошли в обновление");
-        String originalFilename = imageFile.getOriginalFilename();
 
-        if (userDTO.getOperators() == null){
+        String originalFilename = imageFile != null ? imageFile.getOriginalFilename() : null;
+
+        if (userDTO.getOperators() == null) {
             userDTO.setOperators(new HashSet<>());
         }
-        if (userDTO.getManagers() == null){
+        if (userDTO.getManagers() == null) {
             userDTO.setManagers(new HashSet<>());
         }
-        if (userDTO.getWorkers() == null){
+        if (userDTO.getWorkers() == null) {
             userDTO.setWorkers(new HashSet<>());
         }
-        if (userDTO.getMarketologs() == null){
+        if (userDTO.getMarketologs() == null) {
             userDTO.setMarketologs(new HashSet<>());
         }
 
-        /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
-        User saveUser = findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", userDTO.getUsername())));
+        User saveUser = findByUserNameWithAssignments(userDTO.getUsername());
         log.info("Достали юзера по имени из дто");
+
         boolean isChanged = false;
 
-        System.out.println(saveUser.getRoles().iterator().next().getName());
-        System.out.println(role);
+        String currentRole = saveUser.getRoles().iterator().next().getName();
 
-        System.out.println("change Role: " + !Objects.equals(saveUser.getRoles().iterator().next().getName(), role));
-        System.out.println("change operators: " + !Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
-        System.out.println("change managers: " + !Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
-        System.out.println("change workers: " + !Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
-        System.out.println("change marketologs: " + !Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
-        System.out.println("name: " + !Objects.equals(userDTO.getUsername(), saveUser.getUsername()));
-        System.out.println("coefficient: " + !Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient()));
-        System.out.println("image: " + (!imageFile.isEmpty()));
-
-        /*Проверяем не равна ли роль предыдущей, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(saveUser.getRoles().iterator().next().getName(), role)){
+        if (!Objects.equals(currentRole, role)) {
             log.info("Вошли в обновление роли");
+
             List<Role> roles = new ArrayList<>();
             roles.add(roleService.getUserRole(role));
             saveUser.setRoles(roles);
             isChanged = true;
-            log.info("Обновили роль");
-            if (role.equals("ROLE_OPERATOR")){
-                log.info("Вошли в удаления из менеджера в операторе");
-                managerService.deleteManager(saveUser);
-                log.info("Вышли из удаления из менеджера");
-                workerService.deleteWorker(saveUser);
-                log.info("Вышли из удаления из работника");
-                marketologService.deleteMarketolog(saveUser);
-                log.info("Вышли из удаления маркетолога в операторе");
-                operatorService.saveNewOperator(saveUser);
-                log.info("Создали нового оператора");
 
-            }
-            if (role.equals("ROLE_MANAGER")){
-                log.info("Вошли в удаления работника в менеджере");
+            log.info("Обновили роль");
+
+            if (role.equals("ROLE_OPERATOR")) {
+                managerService.deleteManager(saveUser);
                 workerService.deleteWorker(saveUser);
-                log.info("Вышли из удаления из работника");
-                log.info("Вошли в удаления оператора в менеджере");
-                operatorService.deleteOperator(saveUser);
-                log.info("Вышли из удаления из оператора в менеджере");
                 marketologService.deleteMarketolog(saveUser);
-                log.info("Вышли из удаления маркетолога в менеджере");
+                operatorService.saveNewOperator(saveUser);
+            }
+
+            if (role.equals("ROLE_MANAGER")) {
+                workerService.deleteWorker(saveUser);
+                operatorService.deleteOperator(saveUser);
+                marketologService.deleteMarketolog(saveUser);
                 managerService.saveNewManager(saveUser);
-                log.info("Создали нового менеджера");
             }
-            if (role.equals("ROLE_WORKER")){
-                log.info("Вошли в удаления менеджера в работнике");
+
+            if (role.equals("ROLE_WORKER")) {
                 managerService.deleteManager(saveUser);
-                log.info("Вышли из удаления менеджера в работнике");
-                log.info("Вошли в удаления оператора в работнике");
                 operatorService.deleteOperator(saveUser);
-                log.info("Вышли из удаление оператора в работнике");
-                log.info("Переходим в создание нового работника");
                 marketologService.deleteMarketolog(saveUser);
-                log.info("Вышли из удаления маркетолога в работнике");
                 workerService.saveNewWorker(saveUser);
-                log.info("Создали нового работника");
             }
-            if (role.equals("ROLE_MARKETOLOG")){
+
+            if (role.equals("ROLE_MARKETOLOG")) {
                 workerService.deleteWorker(saveUser);
-                log.info("Вышли из удаления из работника");
                 managerService.deleteManager(saveUser);
-                log.info("Вышли из удаления из менеджера");
                 operatorService.deleteOperator(saveUser);
-                log.info("Вышли из удаления из оператора");
                 marketologService.saveNewMarketolog(saveUser);
-                log.info("Создали нового маркетолога");
             }
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getEmail(), saveUser.getEmail())){
+
+        if (!Objects.equals(userDTO.getEmail(), saveUser.getEmail())) {
             saveUser.setEmail(userDTO.getEmail());
             isChanged = true;
             log.info("Обновили мейл");
         }
-        /*Проверяем не равен ли телефон предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getPhoneNumber(), saveUser.getPhoneNumber())){
+
+        if (!Objects.equals(userDTO.getPhoneNumber(), saveUser.getPhoneNumber())) {
             saveUser.setPhoneNumber(userDTO.getPhoneNumber());
             isChanged = true;
             log.info("Обновили телефон");
         }
-        /*Проверяем не равен ли имя предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getUsername(), saveUser.getUsername())){
+
+        if (!Objects.equals(userDTO.getUsername(), saveUser.getUsername())) {
             saveUser.setUsername(userDTO.getUsername());
             isChanged = true;
-            log.info("Обновили Имя");
+            log.info("Обновили имя");
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.isActive(), saveUser.isActive())){
+
+        if (!Objects.equals(userDTO.isActive(), saveUser.isActive())) {
             saveUser.setActive(userDTO.isActive());
-            System.out.println(userDTO.isActive());
             isChanged = true;
             log.info("Обновили активность");
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (originalFilename != null && (originalFilename.endsWith(".jpg") || originalFilename.endsWith(".png") || originalFilename.endsWith(".jpeg") || originalFilename.endsWith(".webp"))){
+
+        if (originalFilename != null
+                && (originalFilename.endsWith(".jpg")
+                || originalFilename.endsWith(".png")
+                || originalFilename.endsWith(".jpeg")
+                || originalFilename.endsWith(".webp"))) {
+
             Image imageDelete = saveUser.getImage();
-            if (imageDelete != null){
+            if (imageDelete != null) {
                 imageRepository.delete(imageDelete);
             }
+
             saveUser.setImage(toImageEntity(imageFile));
             isChanged = true;
             log.info("Обновили изображение");
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient())){
-            if (userDTO.getCoefficient().compareTo(new BigDecimal("0.30")) <= 0){
+
+        if (!Objects.equals(userDTO.getCoefficient(), saveUser.getCoefficient())) {
+            if (userDTO.getCoefficient().compareTo(new BigDecimal("0.30")) <= 0) {
                 saveUser.setCoefficient(userDTO.getCoefficient());
-                System.out.println(userDTO.getCoefficient());
                 isChanged = true;
                 log.info("Обновили коэффициент");
             }
         }
-        /*Проверяем не равен ли оператор предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getOperators(), saveUser.getOperators()) || operatorDTO.getOperatorId() != 0){
-            log.info("зашли в обновление операторов");
-            System.out.println(userDTO.getOperators()==null);
-            System.out.println(saveUser.getOperators()==null);
-            System.out.println(!Objects.equals(userDTO.getOperators(), saveUser.getOperators()));
-            System.out.println(operatorDTO.getOperatorId());
-            System.out.println(operatorDTO.getOperatorId() != 0);
-            System.out.println((userDTO.getOperators()==null && operatorDTO.getOperatorId() != 0));
-            log.info("зашли в обновление операторов");
-            System.out.println(operatorService.getOperatorById(operatorDTO.getOperatorId()));
-            userDTO.getOperators().add(operatorService.getOperatorById(operatorDTO.getOperatorId()));
-            saveUser.setOperators(userDTO.getOperators());
+
+        if (!Objects.equals(userDTO.getOperators(), saveUser.getOperators()) || operatorDTO.getOperatorId() != 0) {
+            log.info("Зашли в обновление операторов");
+
+            Set<Operator> updatedOperators = new HashSet<>(userDTO.getOperators());
+            if (operatorDTO.getOperatorId() != 0) {
+                updatedOperators.add(operatorService.getOperatorById(operatorDTO.getOperatorId()));
+            }
+
+            saveUser.setOperators(updatedOperators);
             isChanged = true;
             log.info("Обновили операторов");
         }
 
-        /*Проверяем не равен ли маркетолога предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()) || marketologDTO.getMarketologId() != 0){
-            log.info("зашли в обновление маркетологов");
-            System.out.println(userDTO.getMarketologs()==null);
-            System.out.println(saveUser.getMarketologs()==null);
-            System.out.println(!Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()));
-            System.out.println(marketologDTO.getMarketologId());
-            System.out.println(marketologDTO.getMarketologId() != 0);
-            System.out.println((userDTO.getMarketologs()==null && marketologDTO.getMarketologId() != 0));
-            log.info("зашли в обновление маркетологов");
-            System.out.println(marketologService.getMarketologById(marketologDTO.getMarketologId()));
-            userDTO.getMarketologs().add(marketologService.getMarketologById(marketologDTO.getMarketologId()));
-            saveUser.setMarketologs(userDTO.getMarketologs());
+        if (!Objects.equals(userDTO.getMarketologs(), saveUser.getMarketologs()) || marketologDTO.getMarketologId() != 0) {
+            log.info("Зашли в обновление маркетологов");
+
+            Set<Marketolog> updatedMarketologs = new HashSet<>(userDTO.getMarketologs());
+            if (marketologDTO.getMarketologId() != 0) {
+                updatedMarketologs.add(marketologService.getMarketologById(marketologDTO.getMarketologId()));
+            }
+
+            saveUser.setMarketologs(updatedMarketologs);
             isChanged = true;
             log.info("Обновили маркетологов");
         }
 
-        /*Проверяем не равен ли менеджера предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0){
-            System.out.println(userDTO.getManagers()==null);
-            System.out.println(saveUser.getManagers()==null);
-            System.out.println(!Objects.equals(userDTO.getManagers(), saveUser.getManagers()));
-            System.out.println(managerDTO.getManagerId());
-            System.out.println(managerDTO.getManagerId() != 0);
-            System.out.println((userDTO.getManagers()==null && managerDTO.getManagerId() != 0));
-            System.out.println(userDTO.getManagers());
-            log.info("зашли в обновление менеджеров");
-//            System.out.println(managerService.getManagerById(userDTO.getManager().getId()));
+        if (!Objects.equals(userDTO.getManagers(), saveUser.getManagers()) || managerDTO.getManagerId() != 0) {
+            log.info("Зашли в обновление менеджеров");
 
+            Set<Manager> existingManagers = saveUser.getManagers();
+            if (existingManagers == null) {
+                existingManagers = new HashSet<>();
+            }
 
-            if (managerDTO.getManagerId() != 0){
-//        Проверка есть ли уже какие-то менеджеры, если да, то добавляем, если нет то загружаем новый список
-                Set<Manager> existingManagers = saveUser.getManagers(); // пытаемся получить текущий список филиалов из компании
-                if (existingManagers == null) {
-                    existingManagers = new HashSet<>();// если он пустой, то создаем новый set
-                }
-                Set<Manager> newManager = new HashSet<>();
-                newManager.add(managerService.getManagerById(managerDTO.getManagerId()));// берем список из дто
-                existingManagers.addAll(newManager); // объединяем эти списки
-                saveUser.setManagers(existingManagers); // устанавливаем компании объединенный список
-                //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
+            if (managerDTO.getManagerId() != 0) {
+                existingManagers.add(managerService.getManagerById(managerDTO.getManagerId()));
+            } else if (userDTO.getManagers().size() == 1 && userDTO.getManager() != null && userDTO.getManager().getId() != null) {
+                Set<Manager> newManagerList = new HashSet<>();
+                newManagerList.add(managerService.getManagerById(userDTO.getManager().getId()));
+                existingManagers = newManagerList;
+            } else {
+                existingManagers.addAll(userDTO.getManagers());
             }
-            else if (userDTO.getManagers().size() == 1) {
-                Set<Manager> newManagerList2 = new HashSet<>();
-                newManagerList2.add(managerService.getManagerById(userDTO.getManager().getId()));
-                saveUser.setManagers(newManagerList2);
-            }
-            else {
-                //        Проверка есть ли уже какие-то менеджеры, если да, то добавляем, если нет то загружаем новый список
-                Set<Manager> existingManagers = saveUser.getManagers(); // пытаемся получить текущий список филиалов из компании
-                if (existingManagers == null) {
-                    existingManagers = new HashSet<>();// если он пустой, то создаем новый set
-                }
-                Set<Manager> newManager = userDTO.getManagers(); // берем список из дто
-                existingManagers.addAll(newManager); // объединяем эти списки
-                saveUser.setManagers(existingManagers); // устанавливаем компании объединенный список
-                //        Проверка есть ли уже какие-то филиалы, если да, то добавляем, если нет то загружаем новый список
-            }
+
+            saveUser.setManagers(existingManagers);
             isChanged = true;
-            log.info("Обновили менеджера");
-        }
-        /*Проверяем не равен ли специалист предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()) || workerDTO.getWorkerId() != 0){
-            System.out.println(saveUser.getWorkers()==null);
-            System.out.println(userDTO.getWorkers()==null);
-            System.out.println(!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()));
-            System.out.println(workerDTO.getWorkerId());
-            System.out.println(workerDTO.getWorkerId() != 0);
-            System.out.println((userDTO.getWorkers()==null && workerDTO.getWorkerId() != 0));
-            log.info("зашли в обновление работников");
-            userDTO.getWorkers().add(workerService.getWorkerById(workerDTO.getWorkerId()));
-            saveUser.setWorkers(userDTO.getWorkers());
-            isChanged = true;
-            log.info("Обновили специалиста");
+            log.info("Обновили менеджеров");
         }
 
-        /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
-         * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
-        if  (isChanged){
+        if (!Objects.equals(userDTO.getWorkers(), saveUser.getWorkers()) || workerDTO.getWorkerId() != 0) {
+            log.info("Зашли в обновление работников");
+
+            Set<Worker> updatedWorkers = new HashSet<>(userDTO.getWorkers());
+            if (workerDTO.getWorkerId() != 0) {
+                updatedWorkers.add(workerService.getWorkerById(workerDTO.getWorkerId()));
+            }
+
+            saveUser.setWorkers(updatedWorkers);
+            isChanged = true;
+            log.info("Обновили работников");
+        }
+
+        if (isChanged) {
             log.info("Начали сохранять обновленного юзера в БД");
             userRepository.save(saveUser);
             log.info("Сохранили обновленного юзера в БД");
-        }
-        else {
+        } else {
             log.info("Изменений не было, сущность в БД не изменена");
         }
-    } // Обновление юзера
+    }
 
+    // ===================================== DELETE LINKS =====================================
 
-    // Обновить профиль юзера - конец
-
-//      =====================================UPDATE USERS - START=======================================================
-
-    //      =====================================DELETE OPERATOR MANAGER WORKER =======================================================
     @Override
-    public void deleteOperator(String username, Long operatorId) { // Удаление оператора
+    @Transactional
+    public void deleteOperator(String username, Long operatorId) {
         log.info("1. Вошли в удаление оператора");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользователь '%s' не найден", username)
-        ));
+
+        User user = findByUserNameWithAssignments(username);
         log.info("2. Нашли юзера");
+
         Set<Operator> operators = user.getOperators();
         Iterator<Operator> iterator = operators.iterator();
+
         while (iterator.hasNext()) {
             Operator operator = iterator.next();
             if (operator.getId().equals(operatorId)) {
                 iterator.remove();
-                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+                break;
             }
         }
+
         user.setOperators(operators);
         log.info("3. Обновили список операторов");
+
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    } // Удаление оператора
+    }
 
     @Override
-    public void deleteManager(String username, Long managerId) { // Удаление менеджера
+    @Transactional
+    public void deleteManager(String username, Long managerId) {
         log.info("1. Вошли в удаление менеджера");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользователь '%s' не найден", username)
-        ));
+
+        User user = findByUserNameWithAssignments(username);
         log.info("2. Нашли юзера");
+
         Set<Manager> managers = user.getManagers();
         Iterator<Manager> iterator = managers.iterator();
+
         while (iterator.hasNext()) {
             Manager manager = iterator.next();
             if (manager.getId().equals(managerId)) {
                 iterator.remove();
-                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+                break;
             }
         }
+
         user.setManagers(managers);
         log.info("3. Обновили список менеджеров");
+
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    } // Удаление менеджера
+    }
 
     @Override
-    public void deleteWorker(String username, Long workerId) { // Удаление работника
+    @Transactional
+    public void deleteWorker(String username, Long workerId) {
         log.info("1. Вошли в удаление работника");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользователь '%s' не найден", username)
-        ));
+
+        User user = findByUserNameWithAssignments(username);
         log.info("2. Нашли юзера");
+
         Set<Worker> workers = user.getWorkers();
         Iterator<Worker> iterator = workers.iterator();
+
         while (iterator.hasNext()) {
             Worker worker = iterator.next();
             if (worker.getId().equals(workerId)) {
                 iterator.remove();
-                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+                break;
             }
         }
+
         user.setWorkers(workers);
         log.info("3. Обновили список работников");
+
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    } // Удаление работника
+    }
 
     @Override
-    public void deleteMarketolog(String username, Long marketologId) { // Удаление маркетолога
+    @Transactional
+    public void deleteMarketolog(String username, Long marketologId) {
         log.info("1. Вошли в удаление маркетолога из списка юзера");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользователь '%s' не найден", username)
-        ));
+
+        User user = findByUserNameWithAssignments(username);
         log.info("2. Нашли юзера");
+
         Set<Marketolog> marketologs = user.getMarketologs();
         Iterator<Marketolog> iterator = marketologs.iterator();
+
         while (iterator.hasNext()) {
             Marketolog marketolog = iterator.next();
             if (marketolog.getId().equals(marketologId)) {
                 iterator.remove();
-                break; // Если вы уверены, что operatorId уникален, то можно прервать цикл
+                break;
             }
         }
+
         user.setMarketologs(marketologs);
-        log.info("3. Обновили список работников");
+        log.info("3. Обновили список маркетологов");
+
         userRepository.save(user);
         log.info("4. Сохранили юзера");
-    } // Удаление маркетолога
+    }
 
     @Override
     public void save(User user) {
@@ -510,7 +549,7 @@ public class UserServiceImpl  implements UserService {
 
     @Override
     public Optional<User> findByChatId(long chatId) {
-            return userRepository.findByTelegramChatId(chatId);
+        return userRepository.findByTelegramChatId(chatId);
     }
 
     @Override
@@ -522,41 +561,23 @@ public class UserServiceImpl  implements UserService {
     public Map<String, Long> getAllWorkers() {
         List<Object[]> result = userRepository.getAllWorkersByRole();
 
-        Map<String, Long> map = result.stream()
+        return result.stream()
                 .collect(Collectors.toMap(
                         row -> (String) row[0],
                         row -> (Long) row[1]
                 ));
-        return map;
     }
 
-//    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (старый вариант)
-//        System.out.println(file);
-//        Image image = new Image();
-//        image.setName(file.getName());
-//        image.setOriginalFileName(file.getOriginalFilename());
-//        image.setContentType(file.getContentType());
-//        image.setSize(file.getSize());
-//        image.setBytes(file.getBytes());
-//        imageRepository.save(image);
-//        return image;
-//    } // Перевод картинки в сущность
-
-
-    private Image toImageEntity(MultipartFile file) throws IOException { // Перевод картинки в сущность (новый вариант)
-
-        // Создаем ByteArrayOutputStream для хранения сжатого изображения
+    private Image toImageEntity(MultipartFile file) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        // Обрезаем изображение до квадратной формы и изменяем его размер до 512x512 пикселей
         Thumbnails.of(file.getInputStream())
                 .size(512, 512)
                 .crop(Positions.CENTER)
-                .outputFormat("jpg") // Вы можете выбрать другой формат, например, "png"
-                .outputQuality(0.7) // Опционально: установите качество сжатия (0.0 - 1.0)
+                .outputFormat("jpg")
+                .outputQuality(0.7)
                 .toOutputStream(baos);
 
-        // Создаем сущность Image с обновленными данными
         Image image = new Image();
         image.setName(file.getName());
         image.setOriginalFileName(file.getOriginalFilename());
@@ -566,7 +587,5 @@ public class UserServiceImpl  implements UserService {
 
         imageRepository.save(image);
         return image;
-    } // Перевод картинки в сущность (новый вариант)
-
-
+    }
 }

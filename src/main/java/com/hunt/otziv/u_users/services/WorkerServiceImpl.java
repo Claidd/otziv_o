@@ -10,7 +10,9 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -22,29 +24,25 @@ public class WorkerServiceImpl implements WorkerService {
 
     private final WorkerRepository workerRepository;
 
-
-
-
     @Override
-    public Worker getWorkerById(Long workerId) {  // Взять работника по Id
+    public Worker getWorkerById(Long workerId) {
         return workerRepository.findById(workerId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + workerId));
-    } // Взять работника по Id
+    }
 
     @Override
-    public Worker getWorkerByUserId(Long id) { // Взять работника по Id юзера
-        return workerRepository.findByUserId(id).orElse(null);
-    } // Взять работника по Id юзера
+    public Worker getWorkerByUserId(Long id) {
+        return workerRepository.findByUserIdWithUserAndImage(id).orElse(null);
+    }
 
     @Override
     public List<Worker> getAllWorkers() {
-        return workerRepository.findAllWorkers();
-    } // Взять всех работников
+        return workerRepository.findAllWithUserAndImage();
+    }
 
     public List<Worker> getAllWorkersToManager(Manager manager) {
         return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers());
-//        return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers().stream().map(Worker::getId).collect(Collectors.toList()));
-    } // Взять всех работников
+    }
 
     @Override
     public Set<Worker> getAllWorkersToManagerList(List<Manager> managerList) {
@@ -56,52 +54,60 @@ public class WorkerServiceImpl implements WorkerService {
         workerRepository.save(worker);
     }
 
-    public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers){ // Взять всех работников по Id менеджера
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> findUserIdsByManagerIds(Set<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return workerRepository.findUserIdsByManagerIds(managerIds);
+    }
+
+    public Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers) {
         return workers.stream().map(this::toDTO).collect(Collectors.toSet());
-    } // Взять всех работников по Id менеджера
+    }
 
     @Override
     public Worker getWorkerByUsername(String login) {
         return workerRepository.findByUsername(login);
     }
 
-    private WorkerDTO toDTO(Worker worker){ // Перевод работника в дто
+    private WorkerDTO toDTO(Worker worker) {
         WorkerDTO workerDTO = new WorkerDTO();
         workerDTO.setWorkerId(worker.getId());
         workerDTO.setUser(worker.getUser());
         return workerDTO;
-    } // Перевод работника в дто
+    }
 
     @Override
-    public Worker getWorkerByUserIdToDelete(Long userId) { // Взять работника по Id  удалению
+    public Worker getWorkerByUserIdToDelete(Long userId) {
         return workerRepository.findById(userId).orElse(null);
-    } // Взять работника по Id  удалению
+    }
 
     @Override
-    public void deleteWorker(User user) { // Удаление работника
+    public void deleteWorker(User user) {
         log.info("Вошли в проверку есть ли такой работник при смене роли");
         Worker worker = workerRepository.findByUserId(user.getId()).orElse(null);
         log.info("Достали работника");
-        if (worker != null){
+
+        if (worker != null) {
             workerRepository.delete(worker);
             log.info("Удалили работника");
-        }
-        else {
+        } else {
             log.info("Не удалили работника так как такого нет в списке");
         }
-    } // Удаление работника
+    }
 
     @Override
-    public void saveNewWorker(User user) { // Сохранение нового работника
-        if (workerRepository.findByUserId(user.getId()).isPresent()){
+    public void saveNewWorker(User user) {
+        if (workerRepository.findByUserId(user.getId()).isPresent()) {
             log.info("Не добавили работника так как уже в списке");
-        }
-        else {
+        } else {
             log.info("Начали добавлять работника так как нет в списке");
             Worker worker = new Worker();
             worker.setUser(user);
             workerRepository.save(worker);
             log.info("Добавили работника так как нет в списке");
         }
-    } // Сохранение нового работника
+    }
 }

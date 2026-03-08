@@ -18,12 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
-import java.util.LinkedHashMap;
 
 @Service
 @Slf4j
@@ -32,120 +28,198 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     private final PaymentCheckRepository paymentCheckRepository;
     private final CompanyService companyService;
+    private final UserService userService;
 
-    public List<PaymentCheck> findAll(){
+    @Override
+    public List<PaymentCheck> findAll() {
         return paymentCheckRepository.findAll();
     }
 
-    public List<PaymentCheck> findAllToDate(LocalDate localDate){ // Взять все чеки из БД
+    @Override
+    public List<PaymentCheck> findAllToDate(LocalDate localDate) {
         LocalDate localDate2 = localDate.minusYears(1);
         return paymentCheckRepository.findAllToDate(localDate, localDate2);
-    } // Взять все чеки из БД
+    }
 
-    public List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList){ // Взять все чеки из БД с определенных менеджеров
+    @Override
+    public List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) {
         LocalDate localDate2 = localDate.minusYears(1);
-        List<Long> managerListLong = managerList.stream().map(Manager::getUser).map(User::getId).toList();
-//        System.out.println("Чеки для менеджеров - " + managerList);
-//        System.out.println(paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong));
+        List<Long> managerListLong = managerList.stream()
+                .map(Manager::getUser)
+                .map(User::getId)
+                .toList();
+
         return paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong);
-    } // Взять все чеки из БД с определенных менеджеров
+    }
 
     @Override
     public List<PaymentCheck> getAllWorkerPaymentToDate(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         return paymentCheckRepository.getAllWorkerPayments(managerId, firstDayOfMonth, lastDayOfMonth);
     }
 
+    @Override
+    public Map<Long, BigDecimal> getActiveManagerPaymentSums(Set<Long> managerIds, LocalDate startDate, LocalDate endDate) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Map.of();
+        }
 
+        return paymentCheckRepository.aggregateActiveManagerPayments(managerIds, startDate, endDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (BigDecimal) row[1]
+                ));
+    }
 
+    @Override
+    public Map<Long, BigDecimal> getActiveWorkerPaymentSums(Set<Long> workerIds, LocalDate startDate, LocalDate endDate) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return paymentCheckRepository.aggregateActiveWorkerPayments(workerIds, startDate, endDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (BigDecimal) row[1]
+                ));
+    }
+
+    @Override
+    public Map<Long, BigDecimal> getManagerPaymentSums(Set<Long> managerIds, LocalDate startDate, LocalDate endDate) {
+        // backward compatibility
+        return getActiveManagerPaymentSums(managerIds, startDate, endDate);
+    }
 
     @Override
     public Map<String, Pair<Long, Long>> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        // Получаем карту с суммами чеков
         Map<String, Long> check = paymentCheckRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
                 .stream()
                 .collect(Collectors.toMap(
-                        obj -> (String) obj[0],  // ФИО пользователя
-                        obj -> ((BigDecimal) obj[1]).longValue(), // Сумма чеков
-                        Long::sum, // Если у пользователя несколько чеков, складываем суммы
-                        LinkedHashMap::new // Сохраняем порядок сортировки
+                        obj -> (String) obj[0],
+                        obj -> ((BigDecimal) obj[1]).longValue(),
+                        Long::sum,
+                        LinkedHashMap::new
                 ));
 
-        // Получаем карту с количеством новых компаний
-        Map<String, Long> newCompanies = companyService.getAllNewCompanies2(firstDayOfMonth, lastDayOfMonth).stream()
-                .collect(Collectors.toMap(
-                        obj -> (String) obj[0],   // ФИО менеджера
-                        obj -> (Long) obj[1]      // Количество компаний
-                ));
-
-        // Объединяем две карты в одну с использованием Pair<Long, Long>
         Map<String, Pair<Long, Long>> result = new LinkedHashMap<>();
 
-        // Обрабатываем первую карту (с суммами чеков)
         for (Map.Entry<String, Long> entry : check.entrySet()) {
-            String fio = entry.getKey();
-            Long totalSum = entry.getValue();
-
-            // Получаем количество новых компаний для этого ФИО из второй карты
-            Long newCompaniesCount = newCompanies.getOrDefault(fio, 0L);
-
-            // Добавляем в результат
-            result.put(fio, Pair.of(totalSum, newCompaniesCount));
-        }
-
-        // Обрабатываем оставшиеся записи из второй карты (если такие есть)
-        for (Map.Entry<String, Long> entry : newCompanies.entrySet()) {
-            String fio = entry.getKey();
-
-            // Если этого ФИО нет в первой карте, добавляем с суммой чеков 0
-            result.putIfAbsent(fio, Pair.of(0L, entry.getValue()));
+            result.put(entry.getKey(), Pair.of(entry.getValue(), 0L));
         }
 
         return result;
     }
 
+//    @Override
+//    public Map<String, Pair<Long, Long>> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+//        Map<String, Long> check = paymentCheckRepository.findAllToDateToMap(firstDayOfMonth, lastDayOfMonth)
+//                .stream()
+//                .collect(Collectors.toMap(
+//                        obj -> (String) obj[0],
+//                        obj -> ((BigDecimal) obj[1]).longValue(),
+//                        Long::sum,
+//                        LinkedHashMap::new
+//                ));
+//
+//        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+//
+//        Map<String, Pair<Long, Long>> result = new LinkedHashMap<>();
+//
+//        for (Map.Entry<String, Long> entry : check.entrySet()) {
+//            String fio = entry.getKey();
+//            Long totalSum = entry.getValue();
+//            Long newCompaniesCount = newCompanies.getOrDefault(fio, 0L);
+//            result.put(fio, Pair.of(totalSum, newCompaniesCount));
+//        }
+//
+//        for (Map.Entry<String, Long> entry : newCompanies.entrySet()) {
+//            String fio = entry.getKey();
+//            result.putIfAbsent(fio, Pair.of(0L, entry.getValue()));
+//        }
+//
+//        return result;
+//    }
 
-
-
-
-
-
-    public List<CheckDTO> getAllCheckDTO(){
+    @Override
+    public List<CheckDTO> getAllCheckDTO() {
         return toDTOList(paymentCheckRepository.findAll());
     }
 
+    @Override
     @Transactional
-    public boolean save(Order order){ // Сохранить Чек в БД
+    public boolean save(Order order) {
         try {
             saveCheckCompany(order);
             return true;
-        }
-        catch (Exception e){
+        } catch (Exception e) {
+            log.error("Ошибка при сохранении PaymentCheck", e);
             return false;
         }
-    } // Сохранить Чек в БД
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaymentCheck> findAllToDateByUserIds(LocalDate localDate, Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        return paymentCheckRepository.findAllToDateByUserIds(firstDayOfMonth, lastDayOfMonth, userIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaymentCheck> findAllToDateByOwnerIds(LocalDate localDate, List<Long> managerIds) {
+        if (localDate == null || managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> relevantUserIds = userService.findAllRelevantUserIdsForManagerIds(managerIds);
+        if (relevantUserIds == null || relevantUserIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        return paymentCheckRepository.findAllToDateByRelevantUserIds(
+                firstDayOfMonth,
+                lastDayOfMonth,
+                relevantUserIds
+        );
+    }
 
     @Transactional
-    protected void saveCheckCompany(Order order){ // Сохранить Чек в БД
+    protected void saveCheckCompany(Order order) {
         log.info("Зашли в создание чека");
-        System.out.println(order.getSum());
+
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(order.getCompany().getTitle());
         paymentCheck.setCompanyId(order.getCompany().getId());
         paymentCheck.setSum(order.getSum());
         paymentCheck.setOrderId(order.getId());
         paymentCheck.setManagerId(order.getManager().getUser().getId());
-        paymentCheck.setWorkerId(order.getManager().getUser().getId());
+
+        // ВАЖНО: исправление бага — здесь должен быть worker, а не manager
+        paymentCheck.setWorkerId(order.getWorker().getUser().getId());
+
         paymentCheck.setActive(true);
-//        System.out.println(paymentCheck);
+
         paymentCheckRepository.save(paymentCheck);
         log.info("Чек сохранен");
-    } // Сохранить Чек в БД
+    }
 
-    private List<CheckDTO> toDTOList(List<PaymentCheck> paymentCheckList) { // Метод для преобразования из сущности paymentCheck в checkDTO
-        return paymentCheckList.stream().map(this::toDTO).collect(Collectors.toList());
-    } // Метод для преобразования из сущности paymentCheck в checkDTO
+    private List<CheckDTO> toDTOList(List<PaymentCheck> paymentCheckList) {
+        return paymentCheckList.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
 
-    private CheckDTO toDTO(PaymentCheck paymentCheck) { // Метод для преобразования из сущности paymentCheck в checkDTO
+    private CheckDTO toDTO(PaymentCheck paymentCheck) {
         CheckDTO checkDTO = new CheckDTO();
         checkDTO.setId(paymentCheck.getId());
         checkDTO.setTitle(paymentCheck.getTitle());
@@ -157,10 +231,9 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         checkDTO.setActive(paymentCheck.isActive());
         checkDTO.setSum(paymentCheck.getSum());
         return checkDTO;
-    } // Метод для преобразования из сущности paymentCheck в checkDTO
+    }
 
-
-    private PaymentCheck toEntity(CheckDTO checkDTO) { // Метод для преобразования из checkDTO в сущность Zp
+    private PaymentCheck toEntity(CheckDTO checkDTO) {
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(checkDTO.getTitle());
         paymentCheck.setCompanyId(checkDTO.getCompanyId());
@@ -171,5 +244,5 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         paymentCheck.setActive(checkDTO.isActive());
         paymentCheck.setSum(checkDTO.getSum());
         return paymentCheck;
-    } // Метод для преобразования из checkDTO в сущность Z
+    }
 }

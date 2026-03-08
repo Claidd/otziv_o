@@ -20,38 +20,59 @@ import java.util.UUID;
 
 public interface ReviewService {
 
-    Review save(Review review);
-    boolean deleteReview(Long reviewId);
-    List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId);
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
-    void changeBot(Long id);
-    void deActivateAndChangeBot(Long reviewId, Long botId);
-    ReviewDTO getReviewDTOById(Long reviewId);
-    Review getReviewById(Long reviewId);
-    void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId);
-    void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
-    boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
-    List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
-    List<Long> getReviewByWorkerId(Long workerId);
-    List<Review> findAllByListId(List<Long> reviewId);
-    int findAllByReviewListStatus(String username);
-    List<Review> getAllWorkerReviews(Long workerId);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
     List<Review> saveAll(List<Review> reviews);
 
-    void deleteReviewsByOrderId(Long orderId);
+    Review save(Review review);
+
+    boolean deleteReview(Long reviewId);
+
+    List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
+
+    List<Long> getReviewByWorkerId(Long workerId);
+
+    List<Review> findAllByListId(List<Long> reviewId);
+
+    List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId);
+
+    void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId);
+
+    void deleteReviewsByOrderId(Long reviewId);
 
     List<Review> findAllByFilial(Filial filial);
 
     void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId);
+
+    void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
+
+    boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
+
+    void changeBot(Long reviewId);
+
+    void deActivateAndChangeBot(Long reviewId, Long botId);
+
+    ReviewDTO getReviewDTOById(Long reviewId);
+
+    Review getReviewById(Long reviewId);
+
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
-    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
 
     void changeNagulReview(Long reviewId);
+
+    void performNagulWithExceptions(Long reviewId, String username);
 
     int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 
@@ -61,11 +82,17 @@ public interface ReviewService {
 
     Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
+    boolean hasActiveNagulReviews(java.security.Principal principal);
+
     void deleteAllByIdIn(List<Long> reviewIds);
 
+    // ========================= НОВЫЕ BATCH-МЕТОДЫ =========================
 
+    Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate);
 
-    void performNagulWithExceptions(Long reviewId, String name);
+    Map<Long, Integer> countOrdersByWorkerIdsAndStatusVigul(List<Long> workerIds, LocalDate localDate);
 
-    boolean hasActiveNagulReviews(Principal principal);
+//    int findAllByReviewListStatus(String name);
+
+    int countReviewsForWorkerUserId(Long userId);
 }

@@ -5,7 +5,7 @@
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${manager.imageId})}" >
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
@@ -13,7 +13,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -26,7 +26,7 @@
             <div  class="user-list">
                 <div th:each="marketolog : ${marketologs}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${marketolog.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${marketolog.imageId})}" >
                     </a>
                     <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
@@ -34,7 +34,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -47,7 +47,7 @@
             <div  class="user-list">
                 <div th:each="worker : ${workers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${worker.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${worker.imageId})}" >
                     </a>
                     <h2 th:text="${worker.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
@@ -55,7 +55,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -68,7 +68,7 @@
             <div  class="user-list">
                 <div th:each="operator : ${operators}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${operator.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${operator.imageId})}" >
                     </a>
                     <h2 th:text="${operator.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
@@ -76,7 +76,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -96,7 +96,7 @@
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${manager.imageId})}" >
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
@@ -104,7 +104,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -117,7 +117,7 @@
             <div  class="user-list">
                 <div th:each="marketolog : ${marketologs}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${marketolog.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${marketolog.imageId})}" >
                     </a>
                     <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">
@@ -125,7 +125,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -138,7 +138,7 @@
             <div  class="user-list">
                 <div th:each="worker : ${workers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${worker.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${worker.imageId})}" >
                     </a>
                     <h2 th:text="${worker.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
@@ -146,7 +146,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -159,7 +159,7 @@
             <div  class="user-list">
                 <div th:each="operator : ${operators}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${operator.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${operator.imageId})}" >
                     </a>
                     <h2 th:text="${operator.fio}">Дмитрий С.</h2>
                     <a sec:authorize="hasAnyRole('ADMIN', 'MANAGER')" th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
@@ -167,7 +167,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -185,7 +185,7 @@
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${manager.imageId})}" >
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
                         <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${manager.sum1Month} + ' руб.'">редактировать</p>
@@ -196,7 +196,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -209,7 +209,7 @@
             <div  class="user-list">
                 <div th:each="marketolog : ${marketologs}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${marketolog.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${marketolog.imageId})}" >
                     </a>
                     <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
                     <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${marketolog.sum1Month} + ' руб.'">редактировать</p>
@@ -221,7 +221,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -234,7 +234,7 @@
             <div  class="user-list">
                 <div th:each="worker : ${workers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${worker.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${worker.imageId})}" >
                     </a>
                     <h2 th:text="${worker.fio}">Дмитрий С.</h2>
                     <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${worker.sum1Month} + ' руб.'">редактировать</p>
@@ -258,7 +258,7 @@
             <div  class="user-list">
                 <div th:each="operator : ${operators}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${operator.login})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${operator.imageId})}" >
                     </a>
                     <h2 th:text="${operator.fio}">Дмитрий С.</h2>
                     <p sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  th:text="${operator.sum1Month} + ' руб.'">редактировать</p>
@@ -270,7 +270,7 @@
                     </a>
                 </div>
                 <a th:href="@{/allUsers}" class="user">
-                    <img th:src="@{/images/image/plus.png}"  alt="">
+                    <img loading="lazy" th:src="@{/images/image/plus.png}"  alt="">
                     <h2>Добавить</h2>
                     <p>Нового работника</p>
                 </a>
@@ -289,7 +289,7 @@
             <div  class="user-list">
                 <div th:each="manager : ${managers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${manager.userId})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${manager.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${manager.imageId})}" >
                     </a>
                     <h2 th:text="${manager.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${manager.userId})}">
@@ -309,7 +309,7 @@
             <div  class="user-list">
                 <div th:each="worker : ${workers}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${worker.userId})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${worker.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${worker.imageId})}" >
                     </a>
                     <h2 th:text="${worker.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${worker.userId})}">
@@ -327,7 +327,7 @@
             <div  class="user-list">
                 <div th:each="operator : ${operators}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${operator.userId})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${operator.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${operator.imageId})}" >
                     </a>
                     <h2 th:text="${operator.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${operator.userId})}">
@@ -346,7 +346,7 @@
             <div  class="user-list">
                 <div th:each="marketolog : ${marketologs}" class="user" >
                     <a th:href="@{/admin/user_info(staticFor=${marketolog.userId})}" name="staticFor" id="staticFor">
-                        <img th:src="@{/images/{id}(id=${marketolog.imageId})}" >
+                        <img loading="lazy" th:src="@{/images/{id}(id=${marketolog.imageId})}" >
                     </a>
                     <h2 th:text="${marketolog.fio}">Дмитрий С.</h2>
                     <a th:href="@{/allUsers/{userId}/edit(userId=${marketolog.userId})}">

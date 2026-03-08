@@ -12,6 +12,7 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.z_zp.dto.ManagerZpAggregate;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
@@ -24,11 +25,29 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -83,7 +102,7 @@ public class PersonalMapperService {
     }
 
     public List<MarketologsListDTO> getMarketologsToManager(Manager manager) {
-        return marketologService.getAllMarketologs().stream()
+        return marketologService.getAllMarketologsToManager(manager).stream()
                 .map(this::toMarketologsListDTO)
                 .collect(Collectors.toList());
     }
@@ -128,92 +147,319 @@ public class PersonalMapperService {
 
     @Transactional
     public List<ManagersListDTO> getManagersAndCount() {
-        return managerService.getAllManagers().stream()
-                .map(this::toManagersListDTOAndCount)
-                .collect(Collectors.toList());
+        List<Manager> managers = managerService.getAllManagers();
+        return buildManagersWithCount(managers, LocalDate.now());
     }
 
+    @Transactional
     public List<MarketologsListDTO> getMarketologsAndCount() {
-        return marketologService.getAllMarketologs().stream()
-                .map(this::toMarketologsListDTOAndCount)
-                .collect(Collectors.toList());
+        List<Marketolog> marketologs = marketologService.getAllMarketologs();
+        return buildMarketologsWithCount(marketologs, LocalDate.now());
     }
 
     @Transactional
     public List<WorkersListDTO> gerWorkersToAndCount() {
-        return workerService.getAllWorkers().stream()
-                .map(this::toWorkersListDTOAndCount)
-                .collect(Collectors.toList());
+        List<Worker> workers = workerService.getAllWorkers();
+        return buildWorkersWithCount(workers, LocalDate.now(), true);
     }
 
+    @Transactional
     public List<OperatorsListDTO> gerOperatorsAndCount() {
-        return operatorService.getAllOperators().stream()
-                .map(this::toOperatorsListDTOAndCount)
-                .collect(Collectors.toList());
+        List<Operator> operators = operatorService.getAllOperators();
+        return buildOperatorsWithCount(operators, LocalDate.now());
     }
 
     public List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managers) {
-        return managers.stream().map(this::toManagersListDTOAndCount).toList();
+        return buildManagersWithCount(managers, LocalDate.now());
     }
 
+    @Transactional
     public List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs) {
-        return allMarketologs.stream().map(this::toMarketologsListDTOAndCount).toList();
+        return buildMarketologsWithCount(allMarketologs, LocalDate.now());
     }
 
+    @Transactional
     public List<WorkersListDTO> getWorkersToAndCountToOwner(List<Worker> allWorkers) {
-        return allWorkers.stream().map(this::toWorkersListDTOAndCount).toList();
+        return buildWorkersWithCount(allWorkers, LocalDate.now(), true);
     }
 
+    @Transactional
     public List<OperatorsListDTO> getOperatorsAndCountToOwner(List<Operator> allOperators) {
-        return allOperators.stream().map(this::toOperatorsListDTOAndCount).toList();
+        return buildOperatorsWithCount(allOperators, LocalDate.now());
     }
 
     public List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate) {
-        return managerService.getAllManagers().stream()
-                .map(manager -> toManagersListDTOAndCountToDate(manager, localdate))
-                .collect(Collectors.toList());
+        List<Manager> managers = managerService.getAllManagers();
+        return buildManagersWithCount(managers, localdate);
     }
 
+    @Transactional
     public List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate) {
-        return marketologService.getAllMarketologs().stream()
-                .map(marketolog -> toMarketologsListDTOAndCountToDate(marketolog, localdate))
-                .collect(Collectors.toList());
+        List<Marketolog> marketologs = marketologService.getAllMarketologs();
+        return buildMarketologsWithCount(marketologs, localdate);
     }
 
+    @Transactional
     public List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate) {
-        return workerService.getAllWorkers().stream()
-                .map(worker -> toWorkersListDTOAndCountToDate(worker, localdate))
-                .collect(Collectors.toList());
+        List<Worker> workers = workerService.getAllWorkers();
+        return buildWorkersWithCount(workers, localdate, false);
     }
 
+    @Transactional
     public List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate) {
-        return operatorService.getAllOperators().stream()
-                .map(operator -> toOperatorsListDTOAndCountToDate(operator, localdate))
-                .collect(Collectors.toList());
+        List<Operator> operators = operatorService.getAllOperators();
+        return buildOperatorsWithCount(operators, localdate);
     }
 
     public List<ManagersListDTO> getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate localdate) {
-        return managerList.stream()
-                .map(manager -> toManagersListDTOAndCountToDate(manager, localdate))
-                .collect(Collectors.toList());
+        return buildManagersWithCount(managerList, localdate);
     }
 
+    @Transactional
     public List<MarketologsListDTO> getMarketologsAndCountToDateToOwner(List<Marketolog> marketologList, LocalDate localdate) {
-        return marketologList.stream()
-                .map(marketolog -> toMarketologsListDTOAndCountToDate(marketolog, localdate))
-                .collect(Collectors.toList());
+        return buildMarketologsWithCount(marketologList, localdate);
     }
 
+    @Transactional
     public List<WorkersListDTO> gerWorkersToAndCountToDateToOwner(List<Worker> workerList, LocalDate localdate) {
-        return workerList.stream()
-                .map(worker -> toWorkersListDTOAndCountToDate(worker, localdate))
-                .collect(Collectors.toList());
+        return buildWorkersWithCount(workerList, localdate, false);
     }
 
+    @Transactional
     public List<OperatorsListDTO> gerOperatorsAndCountToDateToOwner(List<Operator> operatorList, LocalDate localdate) {
-        return operatorList.stream()
-                .map(operator -> toOperatorsListDTOAndCountToDate(operator, localdate))
-                .collect(Collectors.toList());
+        return buildOperatorsWithCount(operatorList, localdate);
+    }
+
+    private List<ManagersListDTO> buildManagersWithCount(List<Manager> managers, LocalDate localDate) {
+        if (managers == null || managers.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        Set<Long> userIds = managers.stream()
+                .map(Manager::getUser)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, ManagerZpAggregate> zpAggregates =
+                zpService.getUserAggregates(userIds, firstDayOfMonth, lastDayOfMonth);
+
+        Map<Long, BigDecimal> paymentSums =
+                paymentCheckService.getActiveManagerPaymentSums(userIds, firstDayOfMonth, localDate);
+
+        Set<Manager> managerSet = new HashSet<>(managers);
+        Map<Long, Long> leadsInWork =
+                leadService.getManagerLeadsInWorkCount(managerSet, firstDayOfMonth, localDate);
+
+        List<ManagersListDTO> result = new ArrayList<>();
+
+        for (Manager manager : managers) {
+            Long userId = manager.getUser().getId();
+
+            ManagerZpAggregate zpAggregate = zpAggregates.getOrDefault(
+                    userId,
+                    new ManagerZpAggregate(BigDecimal.ZERO, 0L, 0L)
+            );
+
+            BigDecimal paymentSum = paymentSums.getOrDefault(userId, BigDecimal.ZERO);
+            Long leadsCount = leadsInWork.getOrDefault(userId, 0L);
+
+            result.add(ManagersListDTO.builder()
+                    .id(manager.getId())
+                    .userId(userId)
+                    .fio(manager.getUser().getFio())
+                    .login(manager.getUser().getUsername())
+                    .imageId(resolveImageId(manager.getUser()))
+                    .sum1Month(zpAggregate.getTotalSum().intValue())
+                    .order1Month((int) zpAggregate.getOrderCount())
+                    .review1Month((int) zpAggregate.getReviewAmount())
+                    .payment1Month(paymentSum.intValue())
+                    .leadsInWorkInMonth(leadsCount.intValue())
+                    .build());
+        }
+
+        return result;
+    }
+
+    private List<MarketologsListDTO> buildMarketologsWithCount(List<Marketolog> marketologs, LocalDate localDate) {
+        if (marketologs == null || marketologs.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        Set<Long> userIds = marketologs.stream()
+                .map(Marketolog::getUser)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, ManagerZpAggregate> zpAggregates =
+                zpService.getUserAggregates(userIds, firstDayOfMonth, lastDayOfMonth);
+
+        List<Long> marketologIds = marketologs.stream()
+                .map(Marketolog::getId)
+                .toList();
+
+        Map<Long, Long> newLeadsMap = leadService.countNewLeadsByMarketologIdsToDate(marketologIds, localDate);
+        Map<Long, Long> inWorkLeadsMap = leadService.countInWorkLeadsByMarketologIdsToDate(marketologIds, localDate);
+
+        List<MarketologsListDTO> result = new ArrayList<>();
+
+        for (Marketolog marketolog : marketologs) {
+            User user = marketolog.getUser();
+
+            ManagerZpAggregate zpAggregate = zpAggregates.getOrDefault(
+                    user.getId(),
+                    new ManagerZpAggregate(BigDecimal.ZERO, 0L, 0L)
+            );
+
+            Long newListLeads = newLeadsMap.getOrDefault(marketolog.getId(), 0L);
+            Long inWorkListLeads = inWorkLeadsMap.getOrDefault(marketolog.getId(), 0L);
+            Long percentInWork = safePercent(inWorkListLeads, newListLeads);
+
+            result.add(MarketologsListDTO.builder()
+                    .id(marketolog.getId())
+                    .userId(user.getId())
+                    .fio(user.getFio())
+                    .login(user.getUsername())
+                    .imageId(resolveImageId(user))
+                    .sum1Month(zpAggregate.getTotalSum().intValue())
+                    .order1Month((int) zpAggregate.getOrderCount())
+                    .review1Month((int) zpAggregate.getReviewAmount())
+                    .leadsNew(newListLeads)
+                    .leadsInWork(inWorkListLeads)
+                    .percentInWork(percentInWork)
+                    .build());
+        }
+
+        return result;
+    }
+
+    private List<WorkersListDTO> buildWorkersWithCount(List<Worker> workers, LocalDate localDate, boolean includeLiveCounters) {
+        if (workers == null || workers.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        Set<Long> userIds = workers.stream()
+                .map(Worker::getUser)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, ManagerZpAggregate> zpAggregates =
+                zpService.getUserAggregates(userIds, firstDayOfMonth, lastDayOfMonth);
+
+        List<Long> workerIds = workers.stream()
+                .map(Worker::getId)
+                .toList();
+
+        Map<Long, Integer> newOrdersMap = includeLiveCounters
+                ? orderService.countOrdersByWorkerIdsAndStatus(workerIds, STATUS_NEW)
+                : Map.of();
+
+        Map<Long, Integer> inCorrectMap = includeLiveCounters
+                ? orderService.countOrdersByWorkerIdsAndStatus(workerIds, STATUS_CORRECTION)
+                : Map.of();
+
+        Map<Long, Integer> publishMap = includeLiveCounters
+                ? reviewService.countOrdersByWorkerIdsAndStatusPublish(workerIds, localDate)
+                : Map.of();
+
+        Map<Long, Integer> vigulMap = includeLiveCounters
+                ? reviewService.countOrdersByWorkerIdsAndStatusVigul(workerIds, localDate)
+                : Map.of();
+
+        List<WorkersListDTO> result = new ArrayList<>();
+
+        for (Worker worker : workers) {
+            User user = worker.getUser();
+
+            ManagerZpAggregate zpAggregate = zpAggregates.getOrDefault(
+                    user.getId(),
+                    new ManagerZpAggregate(BigDecimal.ZERO, 0L, 0L)
+            );
+
+            WorkersListDTO.WorkersListDTOBuilder builder = WorkersListDTO.builder()
+                    .id(worker.getId())
+                    .userId(user.getId())
+                    .fio(user.getFio())
+                    .login(user.getUsername())
+                    .imageId(resolveImageId(user))
+                    .sum1Month(zpAggregate.getTotalSum().intValue())
+                    .order1Month((int) zpAggregate.getOrderCount())
+                    .review1Month((int) zpAggregate.getReviewAmount());
+
+            if (includeLiveCounters) {
+                builder.newOrder(newOrdersMap.getOrDefault(worker.getId(), 0));
+                builder.inCorrect(inCorrectMap.getOrDefault(worker.getId(), 0));
+                builder.intVigul(vigulMap.getOrDefault(worker.getId(), 0));
+                builder.publish(publishMap.getOrDefault(worker.getId(), 0));
+            }
+
+            result.add(builder.build());
+        }
+
+        return result;
+    }
+
+    private List<OperatorsListDTO> buildOperatorsWithCount(List<Operator> operators, LocalDate localDate) {
+        if (operators == null || operators.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+
+        Set<Long> userIds = operators.stream()
+                .map(Operator::getUser)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, ManagerZpAggregate> zpAggregates =
+                zpService.getUserAggregates(userIds, firstDayOfMonth, lastDayOfMonth);
+
+        List<Long> operatorIds = operators.stream()
+                .map(Operator::getId)
+                .toList();
+
+        Map<Long, Long> newLeadsMap = leadService.countNewLeadsByOperatorIdsToDate(operatorIds, localDate);
+        Map<Long, Long> inWorkLeadsMap = leadService.countInWorkLeadsByOperatorIdsToDate(operatorIds, localDate);
+
+        List<OperatorsListDTO> result = new ArrayList<>();
+
+        for (Operator operator : operators) {
+            User user = operator.getUser();
+
+            ManagerZpAggregate zpAggregate = zpAggregates.getOrDefault(
+                    user.getId(),
+                    new ManagerZpAggregate(BigDecimal.ZERO, 0L, 0L)
+            );
+
+            Long newListLeads = newLeadsMap.getOrDefault(operator.getId(), 0L);
+            Long inWorkListLeads = inWorkLeadsMap.getOrDefault(operator.getId(), 0L);
+            Long percentInWork = safePercent(inWorkListLeads, newListLeads);
+
+            result.add(OperatorsListDTO.builder()
+                    .id(operator.getId())
+                    .userId(user.getId())
+                    .fio(user.getFio())
+                    .login(user.getUsername())
+                    .imageId(resolveImageId(user))
+                    .sum1Month(zpAggregate.getTotalSum().intValue())
+                    .order1Month((int) zpAggregate.getOrderCount())
+                    .review1Month((int) zpAggregate.getReviewAmount())
+                    .leadsNew(newListLeads)
+                    .leadsInWork(inWorkListLeads)
+                    .percentInWork(percentInWork)
+                    .build());
+        }
+
+        return result;
     }
 
     private ManagersListDTO toManagersListDTO(Manager manager) {
@@ -258,233 +504,6 @@ public class PersonalMapperService {
                 .login(user.getUsername())
                 .imageId(resolveImageId(user))
                 .build();
-    }
-
-    private ManagersListDTO toManagersListDTOAndCount(Manager manager) {
-        LocalDate localDate = LocalDate.now();
-        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-
-        List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
-        BigDecimal sum30 = sumZp(zps);
-
-        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(
-                manager.getUser().getId(),
-                firstDayOfMonth,
-                lastDayOfMonth
-        );
-        BigDecimal sum30Payments = sumPaymentChecks(pcs);
-
-        Set<Manager> managerList = new HashSet<>();
-        managerList.add(manager);
-
-        List<Long> inWorkLeadList = leadService.getAllLeadsByDateAndStatusToOwnerForTelegram(
-                localDate,
-                STATUS_IN_WORK,
-                managerList
-        );
-
-        return ManagersListDTO.builder()
-                .id(manager.getId())
-                .userId(manager.getUser().getId())
-                .fio(manager.getUser().getFio())
-                .login(manager.getUser().getUsername())
-                .imageId(resolveImageId(manager.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .payment1Month(sum30Payments.intValue())
-                .leadsInWorkInMonth(inWorkLeadList.size())
-                .build();
-    }
-
-    private MarketologsListDTO toMarketologsListDTOAndCount(Marketolog marketolog) {
-        List<Zp> zps = zpService.getAllWorkerZp(marketolog.getUser().getUsername());
-        BigDecimal sum30 = sumZp(zps);
-
-        Long newListLeads = leadService.findAllByLidListNew(marketolog);
-        Long inWorkListLeads = leadService.findAllByLidListStatusInWork(marketolog);
-        Long percentInWork = safePercent(inWorkListLeads, newListLeads);
-
-        return MarketologsListDTO.builder()
-                .id(marketolog.getId())
-                .userId(marketolog.getUser().getId())
-                .fio(marketolog.getUser().getFio())
-                .login(marketolog.getUser().getUsername())
-                .imageId(resolveImageId(marketolog.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .leadsNew(newListLeads)
-                .leadsInWork(inWorkListLeads)
-                .percentInWork(percentInWork)
-                .build();
-    }
-
-    private WorkersListDTO toWorkersListDTOAndCount(Worker worker) {
-        LocalDate localDate = LocalDate.now();
-
-        List<Zp> zps = zpService.getAllWorkerZp(worker.getUser().getUsername());
-        BigDecimal sum30 = sumZp(zps);
-
-        int newOrderInt = orderService.countOrdersByWorkerAndStatus(worker, STATUS_NEW);
-        int inCorrectInt = orderService.countOrdersByWorkerAndStatus(worker, STATUS_CORRECTION);
-        int inVigulInt = reviewService.countOrdersByWorkerAndStatusVigul(worker, localDate);
-        int inPublishInt = reviewService.countOrdersByWorkerAndStatusPublish(worker, localDate);
-
-        return WorkersListDTO.builder()
-                .id(worker.getId())
-                .userId(worker.getUser().getId())
-                .fio(worker.getUser().getFio())
-                .login(worker.getUser().getUsername())
-                .imageId(resolveImageId(worker.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .newOrder(newOrderInt)
-                .inCorrect(inCorrectInt)
-                .intVigul(inVigulInt)
-                .publish(inPublishInt)
-                .build();
-    }
-
-    private OperatorsListDTO toOperatorsListDTOAndCount(Operator operator) {
-        List<Zp> zps = zpService.getAllWorkerZp(operator.getUser().getUsername());
-        BigDecimal sum30 = sumZp(zps);
-
-        Long newListLeads = leadService.findAllByLidListNew(operator);
-        Long inWorkListLeads = leadService.findAllByLidListStatusInWork(operator);
-        Long percentInWork = safePercent(inWorkListLeads, newListLeads);
-
-        return OperatorsListDTO.builder()
-                .id(operator.getId())
-                .userId(operator.getUser().getId())
-                .fio(operator.getUser().getFio())
-                .login(operator.getUser().getUsername())
-                .imageId(resolveImageId(operator.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .leadsNew(newListLeads)
-                .leadsInWork(inWorkListLeads)
-                .percentInWork(percentInWork)
-                .build();
-    }
-
-    private ManagersListDTO toManagersListDTOAndCountToDate(Manager manager, LocalDate localDate) {
-        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-
-        List<Zp> zps = zpService.getAllWorkerZpToDate(manager.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = sumZp(zps);
-
-        List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(
-                manager.getUser().getId(),
-                firstDayOfMonth,
-                localDate
-        );
-        BigDecimal sum30Payments = sumPaymentChecks(pcs);
-
-        return ManagersListDTO.builder()
-                .id(manager.getId())
-                .userId(manager.getUser().getId())
-                .fio(manager.getUser().getFio())
-                .login(manager.getUser().getUsername())
-                .imageId(resolveImageId(manager.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .payment1Month(sum30Payments.intValue())
-                .build();
-    }
-
-    private MarketologsListDTO toMarketologsListDTOAndCountToDate(Marketolog marketolog, LocalDate localDate) {
-        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-
-        List<Zp> zps = zpService.getAllWorkerZpToDate(marketolog.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = sumZp(zps);
-
-        Long newListLeads = leadService.findAllByLidListNewToDate(marketolog, localDate);
-        Long inWorkListLeads = leadService.findAllByLidListStatusInWorkToDate(marketolog, localDate);
-        Long percentInWork = safePercent(inWorkListLeads, newListLeads);
-
-        return MarketologsListDTO.builder()
-                .id(marketolog.getId())
-                .userId(marketolog.getUser().getId())
-                .fio(marketolog.getUser().getFio())
-                .login(marketolog.getUser().getUsername())
-                .imageId(resolveImageId(marketolog.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .leadsNew(newListLeads)
-                .leadsInWork(inWorkListLeads)
-                .percentInWork(percentInWork)
-                .build();
-    }
-
-    private WorkersListDTO toWorkersListDTOAndCountToDate(Worker worker, LocalDate localDate) {
-        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-
-        List<Zp> zps = zpService.getAllWorkerZpToDate(worker.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = sumZp(zps);
-
-        return WorkersListDTO.builder()
-                .id(worker.getId())
-                .userId(worker.getUser().getId())
-                .fio(worker.getUser().getFio())
-                .login(worker.getUser().getUsername())
-                .imageId(resolveImageId(worker.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .build();
-    }
-
-    private OperatorsListDTO toOperatorsListDTOAndCountToDate(Operator operator, LocalDate localDate) {
-        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
-        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-
-        List<Zp> zps = zpService.getAllWorkerZpToDate(operator.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = sumZp(zps);
-
-        Long newListLeads = leadService.findAllByLidListNewToDate(operator, localDate);
-        Long inWorkListLeads = leadService.findAllByLidListStatusInWorkToDate(operator, localDate);
-        Long percentInWork = safePercent(inWorkListLeads, newListLeads);
-
-        return OperatorsListDTO.builder()
-                .id(operator.getId())
-                .userId(operator.getUser().getId())
-                .fio(operator.getUser().getFio())
-                .login(operator.getUser().getUsername())
-                .imageId(resolveImageId(operator.getUser()))
-                .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(sumZpAmount(zps))
-                .leadsNew(newListLeads)
-                .leadsInWork(inWorkListLeads)
-                .percentInWork(percentInWork)
-                .build();
-    }
-
-    private BigDecimal sumZp(List<Zp> zps) {
-        return zps.stream()
-                .map(Zp::getSum)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private int sumZpAmount(List<Zp> zps) {
-        return zps.stream()
-                .mapToInt(Zp::getAmount)
-                .sum();
-    }
-
-    private BigDecimal sumPaymentChecks(List<PaymentCheck> checks) {
-        return checks.stream()
-                .map(PaymentCheck::getSum)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private Long safePercent(Long numerator, Long denominator) {

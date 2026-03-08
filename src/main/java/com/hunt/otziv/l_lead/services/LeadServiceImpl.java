@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import com.hunt.otziv.l_lead.dto.LeadMonthStats;
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Telephone;
@@ -27,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -38,9 +40,18 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import java.util.*;
+import java.util.stream.Collectors;
+
 @Service
 @Slf4j
 public class LeadServiceImpl implements LeadService {
+
+    private static final String STATUS_IN_WORK = "В работе";
+    private static final String STATUS_NEW = "Новый";
+    private static final String STATUS_SENT = "Отправленный";
+    private static final String STATUS_RESEND = "Напоминание";
+    private static final String STATUS_QUEUE = "К рассылке";
 
     private final LeadsRepository leadsRepository;
     private final UserRepository userRepository;
@@ -54,7 +65,17 @@ public class LeadServiceImpl implements LeadService {
     private final LeadEventPublisher leadEventPublisher;
     private final WhatsAppService whatsAppService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository,
+                           UserRepository userRepository,
+                           ManagerService managerService,
+                           OperatorService operatorService,
+                           MarketologService marketologService,
+                           ZpService zpService,
+                           UserService userService,
+                           TelephoneService telephoneService,
+                           LeadMapper leadMapper,
+                           LeadEventPublisher leadEventPublisher,
+                           WhatsAppService whatsAppService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -68,90 +89,86 @@ public class LeadServiceImpl implements LeadService {
         this.whatsAppService = whatsAppService;
     }
 
-    //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
+    @Override
+    public Lead save(LeadDTO leadDTO, String username) {
+        log.info("Заходим в создание нового лида");
 
-    public Lead save(LeadDTO leadDTO, String username){ // Создание нового пользователя "Лида" - начало
-        log.info("3. Заходим в создание нового лида и проверяем совпадение паролей");
-        User user = findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", username)
-        ));
+        User user = findByUserName(username).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", username))
+        );
+
+        Operator operator = operatorService.getOperatorByUserId(user.getId());
+        if (operator == null && user.getOperators() != null) {
+            operator = user.getOperators().stream().findFirst().orElse(null);
+        }
+
+        Marketolog marketolog = marketologService.getMarketologByUserId(user.getId());
+        if (marketolog == null && user.getMarketologs() != null) {
+            marketolog = user.getMarketologs().stream().findFirst().orElse(null);
+        }
+
+        Manager manager = user.getManagers() != null
+                ? user.getManagers().stream().findFirst().orElse(null)
+                : null;
+
         Lead lead = Lead.builder()
                 .telephoneLead(changeNumberPhone(leadDTO.getTelephoneLead()))
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
-                .operator(operatorService.getOperatorByUserId(user.getId()) != null ? operatorService.getOperatorByUserId(user.getId()) : user.getOperators().iterator().next())
-                .marketolog(marketologService.getMarketologByUserId(user.getId()) != null ? marketologService.getMarketologByUserId(user.getId()) : user.getMarketologs().iterator().next())
-                .manager(user.getManagers().iterator().hasNext() ? user.getManagers().iterator().next() : null)
+                .operator(operator)
+                .marketolog(marketolog)
+                .manager(manager)
                 .build();
-        log.info("5. Юзер успешно создан");
-//        this.save(user);
-        Lead lead1 = leadsRepository.save(lead);
-//        zpService.saveLeadZp(lead1);
-        return lead1;
-    } // Создание нового пользователя "Клиент" - конец
 
-    //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
+        Lead savedLead = leadsRepository.save(lead);
+        log.info("Лид успешно создан: id={}", savedLead.getId());
 
-    //    =============================== ОБНОВИТЬ ЮЗЕРА - НАЧАЛО =========================================
+        return savedLead;
+    }
 
     @Override
     @Transactional
-    public void updateProfile(LeadDTO leadDTO, Long id) {  // Обновить профиль юзера - начало
-        log.info("Вошли в обновление лида и ищем лида по id");
-        /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
-        Lead saveLead = findByIdAndToUpdate(id).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель с номером '%s' не найден", leadDTO.getTelephoneLead())
-        ));
-        log.info("Достали лида по ид из дто");
+    public void updateProfile(LeadDTO leadDTO, Long id) {
+        log.info("Вошли в обновление лида id={}", id);
+
+        Lead saveLead = findByIdAndToUpdate(id).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь с номером '%s' не найден", leadDTO.getTelephoneLead()))
+        );
+
         boolean isChanged = false;
 
-        /*Проверяем не равен ли телефон предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getTelephoneLead(), saveLead.getTelephoneLead())){
-//            saveUser.setRoles(List.of(roleService.getUserRole(role)));
+        if (!Objects.equals(leadDTO.getTelephoneLead(), saveLead.getTelephoneLead())) {
             saveLead.setTelephoneLead(leadDTO.getTelephoneLead());
             isChanged = true;
             log.info("Обновили телефон");
         }
 
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getCityLead(), saveLead.getCityLead())){
+        if (!Objects.equals(leadDTO.getCityLead(), saveLead.getCityLead())) {
             saveLead.setCityLead(leadDTO.getCityLead());
             isChanged = true;
             log.info("Обновили город");
         }
-        /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getCommentsLead(), saveLead.getCommentsLead())){
+
+        if (!Objects.equals(leadDTO.getCommentsLead(), saveLead.getCommentsLead())) {
             saveLead.setCommentsLead(leadDTO.getCommentsLead());
             isChanged = true;
             log.info("Обновили комментарий");
         }
-        /*Проверяем не равен ли апдейт время предыдущему, если нет, то меняем флаг на тру*/
-//        if (!Objects.equals(leadDTO.getUpdateStatus(), saveLead.getUpdateStatus())){
-//            saveLead.setUpdateStatus(leadDTO.getUpdateStatus());
-//            isChanged = true;
-//            log.info("Обновили дату изменения");
-//        }
-        /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator())){
-//            System.out.println(leadDTO.getOperator());
-//            System.out.println(saveLead.getOperator());
+
+        if (!Objects.equals(leadDTO.getOperator(), saveLead.getOperator())) {
             saveLead.setOperator(leadDTO.getOperator());
             isChanged = true;
             log.info("Обновили оператора");
         }
-        /*Проверяем не равен ли апдейт оператора, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getMarketolog(), saveLead.getMarketolog())){
-//            System.out.println(leadDTO.getMarketolog());
-//            System.out.println(saveLead.getMarketolog());
+
+        if (!Objects.equals(leadDTO.getMarketolog(), saveLead.getMarketolog())) {
             saveLead.setMarketolog(leadDTO.getMarketolog());
             isChanged = true;
             log.info("Обновили маркетолога");
         }
-        /*Проверяем не равен ли апдейт менеджера, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(leadDTO.getManager(), saveLead.getManager())){
-//            System.out.println(leadDTO.getManager());
-//            System.out.println(saveLead.getManager());
+
+        if (!Objects.equals(leadDTO.getManager(), saveLead.getManager())) {
             saveLead.setManager(leadDTO.getManager());
             isChanged = true;
             log.info("Обновили менеджера");
@@ -163,22 +180,18 @@ public class LeadServiceImpl implements LeadService {
             log.info("Обновили статус");
         }
 
-        /*если какое-то изменение было и флаг сменился на тру, то только тогда мы изменяем запись в БД
-         * А если нет, то и обращаться к базе данны и грузить ее мы не будем*/
-        if  (isChanged){
-            log.info("Начали сохранять обновленного лида в БД");
+        if (isChanged) {
             leadsRepository.save(saveLead);
-            log.info("Сохранили обновленного лида в БД Теперь запускаем отправку на сервер");
             leadEventPublisher.publishUpdate(saveLead);
+            log.info("Лид обновлен и событие отправлено");
+        } else {
+            log.info("Изменений не было, лид не обновлялся");
         }
-        else {
-            log.info("Изменений не было, лид в БД не изменена");
-        }
-    }   // Обновить профиль юзера - конец
+    }
 
     public Optional<User> findByFio(String operator) {
         return userRepository.findByFio(operator);
-    } // Взять лида по ФИО
+    }
 
     @Override
     @Transactional
@@ -190,329 +203,364 @@ public class LeadServiceImpl implements LeadService {
         lead.setUpdateStatus(LocalDateTime.now());
         leadsRepository.save(lead);
 
-        // событие публикуется ВНУТРИ той же транзакции
         leadEventPublisher.publishUpdate(lead);
     }
 
-    //    =============================== ОБНОВИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
     @Override
-    public List<Lead> findNewLeadsByClient(Long telephoneId, String status) {
-        return leadsRepository.findByTelephoneAndStatusBeforeDate(
-                telephoneId, status, LocalDate.now());
+    public Map<Long, Long> getManagerLeadsInWorkCount(Set<Manager> managerList, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Map.of();
+        }
+
+        return leadsRepository.aggregateManagerLeadsInWork(managerList, STATUS_IN_WORK, firstDayOfMonth, lastDayOfMonth)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
     }
 
-    public int countNewLeadsByClient(long telephoneId, String status) {
-        return leadsRepository.countByTelephoneAndStatusBeforeDate(
-                telephoneId, status, LocalDate.now());
+    @Override
+    public long countNewLeadsForManagerUserId( Long userId) {
+
+        return leadsRepository.countNewLeadsForManagerUserId(userId);
     }
 
+    @Override
+    public LeadMonthStats getLeadMonthStatsForManagers(Set<Manager> managerList, String inWorkStatus, LocalDate currentDate) {
+        if (managerList == null || managerList.isEmpty() || currentDate == null) {
+            return new LeadMonthStats(0L, 0L, 0L, 0L);
+        }
 
+        LocalDate currentMonthStart = currentDate.withDayOfMonth(1);
+        LocalDate currentMonthEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth());
 
-    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - НАЧАЛО =========================================
+        LocalDate previousMonthDate = currentDate.minusMonths(1);
+        LocalDate previousMonthStart = previousMonthDate.withDayOfMonth(1);
+        LocalDate previousMonthEnd = previousMonthDate.withDayOfMonth(previousMonthDate.lengthOfMonth());
 
+        List<Object[]> rows = leadsRepository.aggregateLeadStatsForTwoMonths(
+                managerList,
+                inWorkStatus,
+                previousMonthStart,
+                currentMonthEnd
+        );
+
+        long currentAll = 0L;
+        long currentInWork = 0L;
+        long previousAll = 0L;
+        long previousInWork = 0L;
+
+        int currentYear = currentMonthStart.getYear();
+        int currentMonth = currentMonthStart.getMonthValue();
+
+        int previousYear = previousMonthStart.getYear();
+        int previousMonth = previousMonthStart.getMonthValue();
+
+        for (Object[] row : rows) {
+            int year = ((Number) row[0]).intValue();
+            int month = ((Number) row[1]).intValue();
+            long total = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+            long inWork = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+
+            if (year == currentYear && month == currentMonth) {
+                currentAll = total;
+                currentInWork = inWork;
+            } else if (year == previousYear && month == previousMonth) {
+                previousAll = total;
+                previousInWork = inWork;
+            }
+        }
+
+        return new LeadMonthStats(
+                currentAll,
+                currentInWork,
+                previousAll,
+                previousInWork
+        );
+    }
 
     @Override
-    public Page<LeadDTO> getAllLeads(String status, String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов
-        log.info("Берем все лиды");
-        String userRole = getRole(principal);
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
-        Page<Lead> leadsPage;
-        List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех лидов для админа");
-            if (!keywords.isEmpty()){
-                leadsPage =  leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords,pageable);
-            }
-            else leadsPage = leadsRepository.findAllByLidStatus(status,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+    @Transactional
+    public LeadMonthStats getLeadMonthStatsForManagerIds(List<Long> managerIds, String statusInWork, LocalDate localDate) {
+        if (managerIds == null || managerIds.isEmpty() || localDate == null) {
+            return new LeadMonthStats(0L, 0L, 0L, 0L);
         }
-        if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех лидов для Менеджера");
-            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager,pageable);
-            }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManager(status, manager,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
-        if ("ROLE_MARKETOLOG".equals(userRole)){
-            log.info("Зашли список всех лидов для Маркетолога");
-            Marketolog marketolog = marketologService.getMarketologById(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog,pageable);
-            }
-            else leadsPage =leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
-        if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех лидов для Владельца");
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-            if (!keywords.isEmpty()){
-                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable);
-            }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
-        return Page.empty();
-    } // Взять всех лидов
 
+        LocalDate currentMonthStart = localDate.withDayOfMonth(1);
+        LocalDate previousMonthStart = currentMonthStart.minusMonths(1);
+        LocalDate currentMonthEnd = currentMonthStart.withDayOfMonth(currentMonthStart.lengthOfMonth());
+
+        List<Object[]> rows = leadsRepository.aggregateLeadMonthStatsForManagerIds(
+                managerIds,
+                statusInWork,
+                previousMonthStart,
+                currentMonthEnd
+        );
+
+        long currentMonthAll = 0L;
+        long currentMonthInWork = 0L;
+        long previousMonthAll = 0L;
+        long previousMonthInWork = 0L;
+
+        for (Object[] row : rows) {
+            Integer year = (Integer) row[0];
+            Integer month = (Integer) row[1];
+            Long allCount = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+            Long inWorkCount = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+
+            if (year == localDate.getYear() && month == localDate.getMonthValue()) {
+                currentMonthAll = allCount;
+                currentMonthInWork = inWorkCount;
+            } else if (year == previousMonthStart.getYear() && month == previousMonthStart.getMonthValue()) {
+                previousMonthAll = allCount;
+                previousMonthInWork = inWorkCount;
+            }
+        }
+
+        return new LeadMonthStats(
+                currentMonthAll,
+                currentMonthInWork,
+                previousMonthAll,
+                previousMonthInWork
+        );
+    }
 
     @Override
-    public Page<LeadDTO> getAllLeadsToWork(String status, String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов
+    public Page<LeadDTO> getAllLeads(String status, String keywords, Principal principal, int pageNumber, int pageSize) {
         log.info("Берем все лиды");
-        String userRole = getRole(principal);
+
+        String userRole = getRole();
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
-        Page<Lead> leadsPage;
-        List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole)){
-            log.info("Зашли список всех лидов для админа");
-            if (!keywords.isEmpty()){
-//                leadsPage =  leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords,pageable);
-                    leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords,pageable);
-            }
-            else leadsPage = leadsRepository.findAllByLidStatus(status,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+
+        if ("ROLE_ADMIN".equals(userRole)) {
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords, pageable)
+                    : leadsRepository.findAllByLidStatus(status, pageable);
+            return toLeadDtoPage(leadsPage, pageable);
         }
-        if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех лидов для Менеджера");
-            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-//                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager,pageable);
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager,pageable);
+
+        if ("ROLE_MANAGER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Manager manager = managerService.getManagerByUserId(currentUser.getId());
+            if (manager == null) {
+                return Page.empty(pageable);
             }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManager(status, manager,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager, pageable)
+                    : leadsRepository.findAllByLidStatusAndManager(status, manager, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
         }
-        if ("ROLE_MARKETOLOG".equals(userRole)){
-            log.info("Зашли список всех лидов для Маркетолога");
-            Marketolog marketolog = marketologService.getMarketologById(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog,pageable);
+
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Marketolog marketolog = marketologService.getMarketologByUserId(currentUser.getId());
+            if (marketolog == null) {
+                return Page.empty(pageable);
             }
-            else leadsPage =leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog, pageable)
+                    : leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
         }
-        if ("ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех лидов для Владельца");
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-            if (!keywords.isEmpty()){
-//                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable);
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
+
+        if ("ROLE_OWNER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            List<Manager> managerList = currentUser.getManagers() == null
+                    ? List.of()
+                    : currentUser.getManagers().stream().toList();
+
+            if (managerList.isEmpty()) {
+                return Page.empty(pageable);
             }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable)
+                    : leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
         }
-        return Page.empty();
-    } // Взять всех лидов
+
+        return Page.empty(pageable);
+    }
+
+    @Override
+    public Page<LeadDTO> getAllLeadsToWork(String status, String keywords, Principal principal, int pageNumber, int pageSize) {
+        log.info("Берем все лиды");
+
+        String userRole = getRole();
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
+
+        if ("ROLE_ADMIN".equals(userRole)) {
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords, pageable)
+                    : leadsRepository.findAllByLidStatus(status, pageable);
+            return toLeadDtoPage(leadsPage, pageable);
+        }
+
+        if ("ROLE_MANAGER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Manager manager = managerService.getManagerByUserId(currentUser.getId());
+            if (manager == null) {
+                return Page.empty(pageable);
+            }
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager, pageable)
+                    : leadsRepository.findAllByLidStatusAndManager(status, manager, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
+        }
+
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Marketolog marketolog = marketologService.getMarketologByUserId(currentUser.getId());
+            if (marketolog == null) {
+                return Page.empty(pageable);
+            }
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keywords, marketolog, pageable)
+                    : leadsRepository.findAllByLidStatusAndMarketolog(status, marketolog, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
+        }
+
+        if ("ROLE_OWNER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            List<Manager> managerList = currentUser.getManagers() == null
+                    ? List.of()
+                    : currentUser.getManagers().stream().toList();
+
+            if (managerList.isEmpty()) {
+                return Page.empty(pageable);
+            }
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable)
+                    : leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
+
+            return toLeadDtoPage(leadsPage, pageable);
+        }
+
+        return Page.empty(pageable);
+    }
 
     @Override
     public Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize) {
-        log.info("Берем один лид для оператора");
-
         Optional<Lead> lead;
 
-        if (keywords != null && !keywords.isEmpty()) {
-            lead = leadsRepository.findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(telephoneId, "%" + keywords + "%");
+        if (hasText(keywords)) {
+            lead = leadsRepository.findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(
+                    telephoneId, keywords
+            );
         } else {
-            lead = leadsRepository.findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(telephoneId, status);
+            lead = leadsRepository.findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(
+                    telephoneId, status
+            );
         }
 
         List<LeadDTO> leadDTOs = lead.map(this::toDto).map(List::of).orElse(List.of());
-
         return new PageImpl<>(leadDTOs, PageRequest.of(0, 1), leadDTOs.size());
     }
 
 
-
-
     @Override
-    public Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorId, String keywords, Principal principal, int pageNumber, int pageSize) {
-        Operator operator = operatorService.getOperatorById(operatorId);
-        log.info("🔍 Получаем все лиды оператора ID {} по ключу '{}'", operatorId, keywords);
-
+    public Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize) {
+        String userRole = getRole();
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
 
-        String keywordPattern = "%" + keywords.trim().toLowerCase() + "%";
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords, pageable)
+                    : leadsRepository.findAllByLidStatus(status, pageable);
 
-        Page<Lead> leadsPage = leadsRepository.getAllLeadsToOperatorAll(operator, keywordPattern, pageable);
+            List<LeadDTO> leadDTOs = leadsPage.getContent().stream()
+                    .map(this::toDto)
+                    .filter(Objects::nonNull)
+                    .filter(lead -> lead.getDateNewTry() != null
+                            && !lead.getDateNewTry().isAfter(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+                    .collect(Collectors.toList());
 
-        List<LeadDTO> leadDTOs = leadsPage.getContent()
-                .stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
 
-        return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        if ("ROLE_MANAGER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Manager manager = managerService.getManagerByUserId(currentUser.getId());
+            if (manager == null) {
+                return Page.empty(pageable);
+            }
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager, pageable)
+                    : leadsRepository.findAllByLidStatusAndManager(status, manager, pageable);
+
+            List<LeadDTO> leadDTOs = leadsPage.getContent().stream()
+                    .map(this::toDto)
+                    .filter(Objects::nonNull)
+                    .filter(lead -> lead.getDateNewTry() != null
+                            && !lead.getDateNewTry().isAfter(LocalDate.now()))
+                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
+                    .collect(Collectors.toList());
+
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+
+        return Page.empty(pageable);
     }
 
-
-
-
-    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
-
-    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ ПО ДАТЕ В НАПОМИНАНИИ - НАЧАЛО =========================================
-
     @Override
-    public Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов - к рассылке
-        log.info("Берем все лиды");
-        String userRole = getRole(principal);
-        System.out.println(userRole);
+    public Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize) {
+        String userRole = getRole();
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
-        Page<Lead> leadsPage;
-        List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
-            log.info("Зашли список всех лидов для админа");
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCase(status, keywords,pageable);
-            }
-            else leadsPage = leadsRepository.findAllByLidStatus(status,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
-                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
-        if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех лидов для менеджера");
-            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(status, keywords, manager,pageable);
-            }
-            else leadsPage = leadsRepository.findAllByLidStatusAndManager(status, manager,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
-                    .map(this::toDto)
-                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
-                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
-                    .collect(Collectors.toList());
-            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-        }
-//        if ("ROLE_OWNER".equals(userRole)){
-//            log.info("Зашли список всех лидов для Владельца");
-//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-//            if (!keywords.isEmpty()){
-//                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList,pageable);
-//            }
-//            else leadsPage = leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
-//            leadDTOs = leadsPage.getContent()
-//                    .stream()
-//                    .map(this::toDto)
-//                    .filter(lead -> lead.getDateNewTry().isEqual(LocalDate.now()) || lead.getDateNewTry().isBefore(LocalDate.now()))
-//                    .sorted(Comparator.comparing(LeadDTO::getDateNewTry))
-//                    .collect(Collectors.toList());
-//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-//        }
-        return Page.empty();
-    } // Взять всех лидов - к рассылке
 
-    //
-//    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
-//
-//    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ БЕЗ СТАТУСА - НАЧАЛО =========================================
-//
-    @Override
-    public Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize) { // Взять всех лидов без статуса - конец
-        String userRole = getRole(principal);
-        log.info("Берем все лиды" + userRole);
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("createDate").descending());
-        Page<Lead> leadsPage;
-        List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
-            log.info("Зашли список всех лидов для админа");
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords,pageable);
-            }
-            else leadsPage = leadsRepository.findAll(pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByTelephoneLeadContainingIgnoreCase(keywords, pageable)
+                    : leadsRepository.findAll(pageable);
+
+            List<LeadDTO> leadDTOs = leadsPage.getContent().stream()
                     .map(this::toDto)
-                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .filter(Objects::nonNull)
+                    .filter(lead -> lead.getCreateDate() != null && lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
                     .sorted(Comparator.comparing(LeadDTO::getCreateDate))
                     .collect(Collectors.toList());
+
             return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
         }
-        if ("ROLE_MANAGER".equals(userRole)){
-            log.info("Зашли список всех лидов для менеджера");
-            Manager manager = managerService.getManagerByUserId(userService.findByUserName(principal.getName()).orElseThrow().getId());
-            if (!keywords.isEmpty()){
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager,pageable);
+
+        if ("ROLE_MANAGER".equals(userRole)) {
+            User currentUser = requireCurrentUser(principal);
+            Manager manager = managerService.getManagerByUserId(currentUser.getId());
+            if (manager == null) {
+                return Page.empty(pageable);
             }
-            else leadsPage = leadsRepository.findAllByManager(manager,pageable);
-            leadDTOs = leadsPage.getContent()
-                    .stream()
+
+            Page<Lead> leadsPage = hasText(keywords)
+                    ? leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keywords, manager, pageable)
+                    : leadsRepository.findAllByManager(manager, pageable);
+
+            List<LeadDTO> leadDTOs = leadsPage.getContent().stream()
                     .map(this::toDto)
-                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .filter(Objects::nonNull)
+                    .filter(lead -> lead.getCreateDate() != null && lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
                     .sorted(Comparator.comparing(LeadDTO::getCreateDate))
                     .collect(Collectors.toList());
+
             return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
         }
-//        if ("ROLE_OWNER".equals(userRole)){
-//            log.info("Зашли список всех лидов для менеджера");
-//            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-//            if (!keywords.isEmpty()){
-//                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
-//            }
-//            else leadsPage = leadsRepository.findAllByManagerToOwner(managerList, pageable);
-//            leadDTOs = leadsPage.getContent()
-//                    .stream()
-//                    .map(this::toDto)
-//                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
-//                    .sorted(Comparator.comparing(LeadDTO::getCreateDate))
-//                    .collect(Collectors.toList());
-//            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
-//        }
-        return Page.empty();
-    } // Взять всех лидов без статуса - конец
 
-    private String getRole(Principal principal){ // Берем роль пользователя
-        // Получите текущий объект аутентификации
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // Получите имя текущего пользователя (пользователя, не роль)
-        String username = principal.getName();
-        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
-        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
-    } // Берем роль пользователя
-    //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
+        return Page.empty(pageable);
+    }
 
-
-    //    =============================== В DTO - НАЧАЛО =========================================
-    // Метод конвертации из класса Lead в класс LeadDTO
     public LeadDTO convertFromLead(Lead lead) {
-        log.info("Перевод лида в дто");
         LeadDTO leadDTO = new LeadDTO();
         leadDTO.setId(lead.getId());
         leadDTO.setTelephoneLead(lead.getTelephoneLead());
@@ -522,19 +570,11 @@ public class LeadServiceImpl implements LeadService {
         leadDTO.setCreateDate(lead.getCreateDate());
         leadDTO.setUpdateStatus(lead.getUpdateStatus());
         leadDTO.setDateNewTry(lead.getDateNewTry());
-        // Обратите внимание, что здесь мы присваиваем идентификатор пользователя вместо всего объекта User
-        // Если нужно больше данных о пользователе, то можно добавить соответствующие поля в LeadDTO
-        leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator() : null);
-        leadDTO.setManager(lead.getManager() != null ? lead.getManager() : null);
-        leadDTO.setMarketolog(lead.getMarketolog() != null ? lead.getMarketolog() : null);
+        leadDTO.setOperator(lead.getOperator());
+        leadDTO.setManager(lead.getManager());
+        leadDTO.setMarketolog(lead.getMarketolog());
         return leadDTO;
     }
-    //    =============================== В DTO - КОНЕЦ =========================================
-
-
-
-    //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
-    // меняем статус с нового на отправленное - начало
 
     @Override
     @Transactional
@@ -549,14 +589,14 @@ public class LeadServiceImpl implements LeadService {
 
         if (updatedSentCount >= telephone.getAmountAllowed()) {
             telephone.setTimer(LocalDateTime.now().plusMinutes(telephone.getBlockTime()));
-            telephone.setAmountSent(0); // сброс счётчика
+            telephone.setAmountSent(0);
         } else {
             telephone.setAmountSent(updatedSentCount);
         }
 
         telephoneService.saveTelephone(telephone);
 
-        lead.setLidStatus("К рассылке");
+        lead.setLidStatus(STATUS_QUEUE);
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(720));
 
@@ -564,82 +604,74 @@ public class LeadServiceImpl implements LeadService {
         leadEventPublisher.publishUpdate(lead);
     }
 
-
-    // меняем статус с нового на отправленное - конец
-
-
-    // меняем статус с нового на отправленное - начало
     @Override
     @Transactional
     public void changeStatusLeadOnSend(Long leadId) {
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", leadId)
-        ));
-        lead.setLidStatus("Отправленный");
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", leadId))
+        );
+
+        lead.setLidStatus(STATUS_SENT);
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(1));
+
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
     }
-    // меняем статус с нового на отправленное - конец
-
-
-    // 120363399937937645@g.us    - Анжелика
-    //     - Вика
 
     @Override
     @Transactional
     public void changeStatusLeadToWork(Long leadId, String newComment) {
-        log.info("🚀 Начинаем обработку перевода лида {} в статус TO_WORK", leadId);
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь с ID '%s' не найден", leadId))
+        );
 
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> {
-            log.error("❌ Лид с ID {} не найден в системе", leadId);
-            return new UsernameNotFoundException(String.format("Пользователь с ID '%s' не найден", leadId));
-        });
-
-        // Обновляем комментарий, если он изменился
         if (newComment != null && !newComment.equals(lead.getCommentsLead())) {
-            log.info("📝 Обновляем комментарий лида: {} → {}", lead.getCommentsLead(), newComment);
             lead.setCommentsLead(newComment);
         }
 
-        Operator operator = lead.getOperator();
-        log.info("🔄 Назначаем менеджера на основе счётчика оператора (ID: {}, Count: {})", operator.getId(), operator.getCount());
+        Operator operator = Optional.ofNullable(lead.getOperator())
+                .orElseThrow(() -> new IllegalStateException("У лида не назначен оператор"));
+
         assignManagerBasedOnOperatorCount(lead, operator);
 
         lead.setLidStatus(LeadStatus.TO_WORK.title);
         leadsRepository.save(lead);
-        log.info("✅ Статус лида {} установлен в '{}'", lead.getId(), LeadStatus.TO_WORK.title);
 
-        pushToWhatsApp(lead); //  Отправляем уведомление в Ватсапп
-
-        toggleOperatorManagerCount(operator); //  меняем счетчик у оператора
-        leadEventPublisher.publishUpdate(lead); //  Отправляем уведомление в Ватсаппотправляем изменения на сервер
-        log.info("✅ Обработка лида {} завершена", leadId);
+        pushToWhatsApp(lead);
+        toggleOperatorManagerCount(operator);
+        leadEventPublisher.publishUpdate(lead);
     }
 
     private void assignManagerBasedOnOperatorCount(Lead lead, Operator operator) {
         Long managerId = switch (operator.getCount()) {
             case 0 -> 2L;
             case 1 -> 3L;
-            default -> throw new IllegalStateException("Неизвестное значение счётчика оператора: " + operator.getCount());
+            default -> throw new IllegalStateException("Неизвестное значение счетчика оператора: " + operator.getCount());
         };
-        lead.setManager(managerService.getManagerById(managerId));
-        log.info("👤 Менеджер с ID {} назначен лиду {}", managerId, lead.getId());
+
+        Manager manager = managerService.getManagerById(managerId);
+        if (manager == null) {
+            throw new IllegalStateException("Менеджер с id=" + managerId + " не найден");
+        }
+
+        lead.setManager(manager);
     }
 
     private void toggleOperatorManagerCount(Operator operator) {
         int oldCount = operator.getCount();
-        int updatedCount = (oldCount == 0) ? 1 : 0;
-        operator.setCount(updatedCount);
+        operator.setCount(oldCount == 0 ? 1 : 0);
         operatorService.save(operator);
-        log.info("🔁 Счётчик оператора {} изменён: {} → {}", operator.getId(), oldCount, updatedCount);
     }
 
     private void pushToWhatsApp(Lead lead) {
+        if (lead.getManager() == null) {
+            return;
+        }
+
         Long managerId = lead.getManager().getId();
         String groupId = switch (managerId.intValue()) {
-            case 2 -> ""; // Можно заменить на реальную группу
+            case 2 -> "";
             case 3 -> "120363399937937645@g.us";
             default -> null;
         };
@@ -647,7 +679,6 @@ public class LeadServiceImpl implements LeadService {
         String clientId = lead.getManager().getClientId();
 
         if (clientId == null || clientId.isBlank()) {
-            log.warn("❌ Неизвестный клиент (clientId = null) для менеджера ID: {} — сообщение в WhatsApp не отправлено", managerId);
             return;
         }
 
@@ -655,262 +686,244 @@ public class LeadServiceImpl implements LeadService {
             String message = String.format("📨 Новая фирма:\n📞 %s\n🌆 %s\n💬 %s",
                     lead.getTelephoneLead(), lead.getCityLead(), lead.getCommentsLead());
 
-            log.info("🚀 Попытка отправить сообщение в группу через {} на {}", clientId, groupId);
             whatsAppService.sendMessageToGroup(clientId, groupId, message);
-            log.info("📲 Сообщение отправлено в WhatsApp-группу {} от менеджера {}", groupId, managerId);
-        } else {
-            log.warn("⚠️ WhatsApp-группа не указана для менеджера ID: {} — сообщение не отправлено", managerId);
         }
     }
-
-
-
-
-
 
     @Override
     public void changeCountToOperator(Long leadId) {
         Lead lead = leadsRepository.findById(leadId).orElseThrow();
-        Operator operator = lead.getTelephone().getTelephoneOperator();
-//        Operator operator = operatorService.getOperatorByTelephoneId(lead.getTelephone().getId());
-        System.out.println(operator);
-        int count = operator.getCount();
-        if (count == 0){
-            operator.setCount(1);
-        }
-        if (count >= 1){
-            operator.setCount(0);
-        }
+
+        Telephone telephone = Optional.ofNullable(lead.getTelephone())
+                .orElseThrow(() -> new IllegalStateException("У лида нет телефона"));
+
+        Operator operator = Optional.ofNullable(telephone.getTelephoneOperator())
+                .orElseThrow(() -> new IllegalStateException("У телефона нет оператора"));
+
+        operator.setCount(operator.getCount() == 0 ? 1 : 0);
         operatorService.save(operator);
-        log.info("поменяли счетчик выбора менеджера");
     }
 
     @Override
     @Transactional
-    public void changeStatusLeadOnReSend(Long leadId) { // меняем статус с отправленное на напоминание - начало
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", leadId)
-        ));
-        lead.setLidStatus("Напоминание");
+    public void changeStatusLeadOnReSend(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", leadId))
+        );
+
+        lead.setLidStatus(STATUS_RESEND);
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(2));
+
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
-    } // меняем статус с отправленное на напоминание - конец
+    }
 
     @Override
     @Transactional
-    public void changeStatusLeadOnArchive(Long leadId) { // меняем статус с напоминание на К рассылке - начало
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", leadId)
-        ));
-        lead.setLidStatus("К рассылке");
+    public void changeStatusLeadOnArchive(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", leadId))
+        );
+
+        lead.setLidStatus(STATUS_QUEUE);
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now().plusDays(90));
+
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
-    } // меняем статус с напоминание на К рассылке - конец
+    }
 
     @Override
     @Transactional
-    public void changeStatusLeadOnInWork(Long leadId) { // меняем статус с К рассылке на В работе - начало
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", leadId)
-        ));
-        lead.setLidStatus("В работе");
+    public void changeStatusLeadOnInWork(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", leadId))
+        );
+
+        lead.setLidStatus(STATUS_IN_WORK);
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now());
+
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
-    } // меняем статус с К рассылке на В работе - конец
+    }
 
     @Override
     @Transactional
-    public void changeStatusLeadOnNew(Long leadId) { // меняем статус с любого на Новый - начало
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Пользоваттель '%s' не найден", leadId)
-        ));
-        lead.setLidStatus("Новый");
+    public void changeStatusLeadOnNew(Long leadId) {
+        Lead lead = findByLeadId(leadId).orElseThrow(() ->
+                new UsernameNotFoundException(String.format("Пользователь '%s' не найден", leadId))
+        );
+
+        lead.setLidStatus(STATUS_NEW);
         lead.setUpdateStatus(LocalDateTime.now());
+
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
-    } // меняем статус с любого на Новый - конец
-
-
-    @Override
-    public List<Lead> findAllByLidListStatus(String username) {
-        Manager manager = managerService.getManagerByUserId(userService.findByUserName(username).orElseThrow().getId());
-        return leadsRepository.findAllByLidListStatus("Новый", manager);
-    }
-
-    @Override
-    public Long findAllByLidListNew(Marketolog marketolog) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
-    }
-
-    @Override
-    public Long findAllByLidListStatusInWork(Marketolog marketolog) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
-    }
-
-    @Override
-    public Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate) {
-        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
-    }
-
-    @Override
-    public Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
     }
 
 
-
-    @Override
-    public Long findAllByLidListNew(Operator operator) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListToOperator(operator, localDate);
-    }
-
-    @Override
-    public Long findAllByLidListStatusInWork(Operator operator) {
-        LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
-    }
-
-    @Override
-    public Long findAllByLidListNewToDate(Operator operator, LocalDate localDate) {
-        return leadsRepository.findAllByLidListToOperator(operator, localDate);
-    }
-
-
-
-    @Override
-    public Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
-    }
-
-//    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
-
-    public Optional<Lead> findByLeadId(Long leadId){ // Метод поиска юзера по имени в БД
+    public Optional<Lead> findByLeadId(Long leadId) {
         return leadsRepository.findById(leadId);
-    } // Метод поиска юзера по имени в БД - конец
+    }
 
     @Override
-    public LeadDTO findById(Long leadId) { // Взять одного лида дто по id
-        log.info("Начинается поиск пользователя по id - начало");
-        Lead lead = leadsRepository.findById(leadId).orElseThrow();
-        log.info("Начинается поиск пользователя по id - конец");
-        return toDto(lead);
-    } // Взять одного лида дто - конец
+    public LeadDTO findById(Long leadId) {
+        return toDto(leadsRepository.findByIdWithRelations(leadId).orElseThrow());
+    }
 
     @Override
-    public Optional<Lead> findByIdOptional(Long leadId) { // Взять одного лида дто по id
+    public Optional<Lead> findByIdOptional(Long leadId) {
         return leadsRepository.findById(leadId);
-    } // Взять одного лида дто - конец
+    }
 
     @Override
-    public Optional<Lead> findByIdAndToUpdate(Long id) { // Взять одного юзера - конец
-        log.info("Начинается поиск пользователя по id - начало");
+    public Optional<Lead> findByIdAndToUpdate(Long id) {
         return leadsRepository.findById(id);
-    } // Взять одного юзера - конец
+    }
 
-    public Optional<User> findByUserName(String username){ // Взять одного юзера по имени
+    public Optional<User> findByUserName(String username) {
         return userRepository.findByUsername(username);
-    } // Взять одного юзера по имени
+    }
 
-    // Перевод юзера в дто - начало
-    private LeadDTO toDto(Lead lead) {// Перевод юзера в дто - конец
+    private LeadDTO toDto(Lead lead) {
+        if (lead == null) {
+            return null;
+        }
+
+        LeadDTO.LeadDTOBuilder builder = LeadDTO.builder()
+                .id(lead.getId())
+                .telephoneLead(lead.getTelephoneLead())
+                .cityLead(lead.getCityLead())
+                .lidStatus(lead.getLidStatus())
+                .commentsLead(lead.getCommentsLead())
+                .createDate(lead.getCreateDate())
+                .updateStatus(lead.getUpdateStatus())
+                .dateNewTry(lead.getDateNewTry())
+                .operator(lead.getOperator())
+                .manager(lead.getManager())
+                .marketolog(lead.getMarketolog());
 
         if (lead.getTelephone() != null && lead.getTelephone().getTelephoneOperator() != null) {
-            return LeadDTO.builder()
-                    .id(lead.getId())
-                    .telephoneLead(lead.getTelephoneLead())
-                    .cityLead(lead.getCityLead())
-                    .lidStatus(lead.getLidStatus())
-                    .commentsLead(lead.getCommentsLead())
-                    .createDate(lead.getCreateDate())
-                    .updateStatus(lead.getUpdateStatus())
-                    .dateNewTry(lead.getDateNewTry())
-                    .operator(lead.getOperator())
-                    .manager(lead.getManager())
-                    .marketolog(lead.getMarketolog())
-                    .operatorId(lead.getTelephone().getTelephoneOperator().getId())
-                    .build();
+            builder.operatorId(lead.getTelephone().getTelephoneOperator().getId());
         }
-        else {
-            return LeadDTO.builder()
-                    .id(lead.getId())
-                    .telephoneLead(lead.getTelephoneLead())
-                    .cityLead(lead.getCityLead())
-                    .lidStatus(lead.getLidStatus())
-                    .commentsLead(lead.getCommentsLead())
-                    .createDate(lead.getCreateDate())
-                    .updateStatus(lead.getUpdateStatus())
-                    .dateNewTry(lead.getDateNewTry())
-                    .operator(lead.getOperator())
-                    .manager(lead.getManager())
-                    .marketolog(lead.getMarketolog())
-                    .build();
-        }
-    }// Перевод юзера в дто - конец
 
-    public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона
+        return builder.build();
+    }
+
+    public String changeNumberPhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return phone;
+        }
+
         String[] a = phone.split("9", 2);
         if (a.length > 1) {
             a[0] = "+79";
             String tel = a[0] + a[1];
-            String tel2 = tel.replace("-","");
-            String tel3 = tel2.replace("(", "");
-            String tel4 = tel3.replace(")","");
-            return tel4.replace(" ", "");
-        } else {
-            return phone;
+            return tel.replace("-", "")
+                    .replace("(", "")
+                    .replace(")", "")
+                    .replace(" ", "");
         }
-    } // Вспомогательный метод для корректировки номера телефона
 
-    public List<Long> getAllLeadsByDate(LocalDate localDate){
+        return phone;
+    }
+
+    @Override
+    public List<Long> getAllLeadsByDate(LocalDate localDate) {
         return leadsRepository.findIdListByDate(localDate);
     }
 
-    public List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList){
+    @Override
+    public List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Collections.emptyList();
+        }
         return leadsRepository.findIdListByDateToOwner(localDate, managerList);
     }
 
-
-
-    public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status){
+    @Override
+    public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status) {
         return leadsRepository.findIdListByDate(localDate, status);
     }
 
-    public List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList){
+    @Override
+    public List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Collections.emptyList();
+        }
         return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
     }
 
-    public List<Long> getAllLeadsByDate2Month(LocalDate localDate){
-        LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(localDate1);
+    public List<Long> getAllLeadsByDate2Month(LocalDate localDate) {
+        return leadsRepository.findIdListByDate(localDate.minusMonths(1));
     }
 
-    public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status){
-        LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(localDate1, status);
+    public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status) {
+        return leadsRepository.findIdListByDate(localDate.minusMonths(1), status);
     }
-
 
     @Override
-    public List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList) {
-        return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
+    public Map<Long, Long> countNewLeadsByOperatorIdsToDate(List<Long> operatorIds, LocalDate localDate) {
+        if (operatorIds == null || operatorIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return leadsRepository.countAllByOperatorIdsInMonth(operatorIds, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
     }
 
+    @Override
+    public Map<Long, Long> countInWorkLeadsByOperatorIdsToDate(List<Long> operatorIds, LocalDate localDate) {
+        if (operatorIds == null || operatorIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return leadsRepository.countAllByOperatorIdsAndStatusInMonth(operatorIds, STATUS_IN_WORK, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+    }
 
     @Override
-    public Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        // Получаем результат из базы данных (например, используя @Query)
+    public Map<Long, Long> countNewLeadsByMarketologIdsToDate(List<Long> marketologIds, LocalDate localDate) {
+        if (marketologIds == null || marketologIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return leadsRepository.countAllByMarketologIdsInMonth(marketologIds, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+    }
+
+    @Override
+    public Map<Long, Long> countInWorkLeadsByMarketologIdsToDate(List<Long> marketologIds, LocalDate localDate) {
+        if (marketologIds == null || marketologIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return leadsRepository.countAllByMarketologIdsAndStatusInMonth(marketologIds, STATUS_IN_WORK, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+    }
+
+    @Override
+    public Map<String, org.springframework.data.util.Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         List<Object[]> results = leadsRepository.getAllLeadsToMonth(statusInWork, firstDayOfMonth, lastDayOfMonth);
-
-        Map<String, Pair<Long, Long>> resultMap = new HashMap<>();
+        Map<String, org.springframework.data.util.Pair<Long, Long>> resultMap = new HashMap<>();
 
         for (Object[] row : results) {
             String operatorFio = (String) row[0];
@@ -921,35 +934,40 @@ public class LeadServiceImpl implements LeadService {
             Long allLeadsMarketolog = (Long) row[4];
             Long statusInWorkMarketolog = (Long) row[5];
 
-            // Обрабатываем оператора
-            resultMap.put(operatorFio, Pair.of(allLeadsOperator, statusInWorkOperator));
+            if (operatorFio != null) {
+                resultMap.put(operatorFio, org.springframework.data.util.Pair.of(
+                        allLeadsOperator != null ? allLeadsOperator : 0L,
+                        statusInWorkOperator != null ? statusInWorkOperator : 0L
+                ));
+            }
 
-            // Обрабатываем маркетолога
-            resultMap.put(marketologFio, Pair.of(allLeadsMarketolog, statusInWorkMarketolog));
+            if (marketologFio != null) {
+                resultMap.put(marketologFio, org.springframework.data.util.Pair.of(
+                        allLeadsMarketolog != null ? allLeadsMarketolog : 0L,
+                        statusInWorkMarketolog != null ? statusInWorkMarketolog : 0L
+                ));
+            }
         }
-//        System.out.println(resultMap);
+
         return resultMap;
     }
 
     @Override
     public Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        // Получаем результат из базы данных (например, используя @Query)
-        List<Object[]> results = leadsRepository.getAllLeadsToMonthToManager(status);
-
+        List<Object[]> results = leadsRepository.getAllLeadsToMonthToManager(status, firstDayOfMonth, lastDayOfMonth);
         Map<String, Long> resultMap = new HashMap<>();
 
         for (Object[] row : results) {
             String managerFio = (String) row[0];
-            Long allLeadsManager = (Long) row[1];
+            Long allLeadsManager = row[1] != null ? ((Number) row[1]).longValue() : 0L;
 
-            // Обрабатываем менеджера
-            resultMap.put(managerFio, allLeadsManager);
+            if (managerFio != null) {
+                resultMap.put(managerFio, allLeadsManager);
+            }
         }
-//        System.out.println(resultMap);
+
         return resultMap;
     }
-
-
 
     @Override
     public Optional<Lead> getByTelephoneLead(String telephoneNumber) {
@@ -963,7 +981,9 @@ public class LeadServiceImpl implements LeadService {
 
     @Override
     public int countNewLeadsByClient(Long telephoneId, String status) {
-        return leadsRepository.countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(telephoneId, LocalDate.now() , status);
+        return leadsRepository.countByTelephone_IdAndCreateDateLessThanEqualAndLidStatus(
+                telephoneId, LocalDate.now(), status
+        );
     }
 
     @Override
@@ -971,7 +991,7 @@ public class LeadServiceImpl implements LeadService {
         return leadMapper.toDtoTransfer(leadsRepository.findById(leadId).orElseThrow());
     }
 
-
+    @Override
     public List<Lead> findModifiedSince(LocalDateTime since) {
         return leadsRepository.findByUpdateStatusAfter(since);
     }
@@ -979,7 +999,7 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Transactional
     public void saveOrUpdateByTelephoneLead(Lead incomingLead) {
-        log.info("📨 saveOrUpdateByTelephoneLead: {}", incomingLead.getTelephoneLead());
+        log.info("saveOrUpdateByTelephoneLead: {}", incomingLead.getTelephoneLead());
 
         Optional<Lead> existing = leadsRepository.findByTelephoneLead(incomingLead.getTelephoneLead());
 
@@ -993,21 +1013,53 @@ public class LeadServiceImpl implements LeadService {
             lead.setCreateDate(incomingLead.getCreateDate());
             lead.setUpdateStatus(incomingLead.getUpdateStatus());
             lead.setDateNewTry(incomingLead.getDateNewTry());
-
             lead.setOperator(incomingLead.getOperator());
             lead.setManager(incomingLead.getManager());
             lead.setMarketolog(incomingLead.getMarketolog());
             lead.setTelephone(incomingLead.getTelephone());
 
             leadsRepository.save(lead);
-            log.info("🔁 Обновили существующего лида: {}", lead.getTelephoneLead());
-
         } else {
             leadsRepository.save(incomingLead);
-            log.info("🆕 Добавили нового лида: {}", incomingLead.getTelephoneLead());
         }
     }
 
+    private Page<LeadDTO> toLeadDtoPage(Page<Lead> leadsPage, Pageable pageable) {
+        List<LeadDTO> leadDTOs = leadsPage.getContent()
+                .stream()
+                .map(this::toDto)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
+        return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+    }
 
+    private User requireCurrentUser(Principal principal) {
+        if (principal == null) {
+            throw new UsernameNotFoundException("Principal == null");
+        }
+
+        return userService.findByUserName(principal.getName())
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден: " + principal.getName()));
+    }
+
+    private String getRole() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return "";
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst()
+                .orElse("");
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private String safeTrimLower(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
+    }
 }

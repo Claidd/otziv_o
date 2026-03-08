@@ -30,4 +30,6 @@ public interface ManagerService {
 
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);
+
+    List<Long> findUserIdsByManagerIds(Set<Long> managerIds);
 }

@@ -10,7 +10,9 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -77,8 +79,14 @@ public class ManagerServiceImpl implements ManagerService {
         return managerRepository.findAllManagersWorkers(managers);
     }
 
-//    @Override
-//    public List<Manager> getAllManagersToOwner(List<Manager> managers) {
-//        return managerRepository.findAllManagersToOwner(managers);
-//    }
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> findUserIdsByManagerIds(Set<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return managerRepository.findUserIdsByManagerIds(managerIds);
+    }
+
+
 }

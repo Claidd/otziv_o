@@ -493,17 +493,20 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findAllByOwnerAndStatus2(managerList, status).size();
     }
 
-    @Override
-    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
-    }
+//    @Override
+//    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+//        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+//    }
 
     @Override
     public Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth).stream()
+        log.debug("Getting new companies from {} to {}", firstDayOfMonth, lastDayOfMonth);
+
+        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth)
+                .stream()
                 .collect(Collectors.toMap(
-                        obj -> (String) obj[0],   // ФИО менеджера
-                        obj -> (Long) obj[1]      // Количество компаний
+                        obj -> (String) obj[0],
+                        obj -> (Long) obj[1]
                 ));
     }
 

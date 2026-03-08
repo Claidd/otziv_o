@@ -32,6 +32,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -63,6 +64,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -93,298 +95,397 @@ public class OrderServiceImpl implements OrderService {
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
     public static final String MANAGER = "ROLE_MANAGER";
+
     public static final String STATUS_NEW = "Новый";
     public static final String STATUS_TO_CHECK = "В проверку";
     public static final String STATUS_IN_CHECK = "На проверке";
-    public static final String STATUS_CORRECTION= "Коррекция";
-    public static final String STATUS_TO_PUBLISH= "Публикация";
+    public static final String STATUS_CORRECTION = "Коррекция";
+    public static final String STATUS_TO_PUBLISH = "Публикация";
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
     public static final String STATUS_ARCHIVE = "Архив";
+
     public static final String STATUS_COMPANY_IN_WORK = "В работе";
     public static final String STATUS_COMPANY_IN_STOP = "На стопе";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
+
     private static final int MEDIUM_COUNTER_THRESHOLD = 10;
     private static final int HIGH_COUNTER_THRESHOLD = 20;
     private static final String MEDIUM_STATUS = "Средний";
     private static final String HIGH_STATUS = "Высокий";
 
+    private final String siteText =
+            "1. Название и адрес филиала: Центр детских развлечений, г. Иркутск, мк-н, Юбилейный, 17.\n" +
+                    "2. Основная сфера деятельности: Организация детских праздников, проведение квестов и развлечений.\n" +
+                    "3. Как давно вы работаете: Работаем на рынке развлечений уже несколько лет.\n" +
+                    "4. Что именно вы предлагаете: Организацию детских дней рождения \"под ключ\" с квестами, играми, анимацией, фотосессиями и питанием.\n" +
+                    "5. Как выглядит вход: Интересный и яркий вход, оформленный в стиле детских приключений.\n" +
+                    "6. Интерьер: Уютное и красочное помещение с различными зонами для игр и отдыха.\n" +
+                    "7. Парковка и удобства: Есть парковочные места, комфортные условия для проведения мероприятий.\n" +
+                    "8. Цены: Стоимость различных пакетов услуг начинается от 1100 рублей за человека.\n" +
+                    "9. Хиты продаж: Популярные квесты \"Гарри Поттер\", \"Замок Дракулы\", а также пакеты дня рождения \"под ключ\".\n" +
+                    "10. Уникальные предложения: Организация питания, бесплатная чайная зона, красочные костюмы для игроков.\n" +
+                    "11. Имена и должности ключевых сотрудников: Не указано.\n" +
+                    "12. Опыт, специализация: Специализация в проведении детских мероприятий и квестов.\n" +
+                    "13. Акции и скидки: Скидки при большом количестве участников, скидка на повторное посещение.\n" +
+                    "14. Фразы для отзыва: \"Наш ребенок провел здесь незабываемый день рождения! Все организовано на высшем уровне.\"\n" +
+                    "15. Цитаты клиентов: \"Мои дети в восторге от проведенного времени! Спасибо за теплую атмосферу.\"\n" +
+                    "16. Как происходит заказ: Заказ услуг осуществляется по телефону или через онлайн-форму на сайте.\n" +
+                    "17. Гарантии и возвраты: Гарантия качества проведения мероприятий, возможность замены пакетов услуг.\n" +
+                    "18. Срок выполнения: Время проведения мероприятий зависит от выбранного пакета услуг, от 2 до 4 часов.\n" +
+                    "19. Прочая информация: Предоставляется широкий выбор развлечений для детей разного возраста и интересов, разнообразие квестов и анимаций.";
 
-    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
+    // =========================================================================================================
+    // ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ ==========================================
+    // =========================================================================================================
 
-    public Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize){ // Берем все заказы для выбранной компании по id
-        List<Long> orderId;
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize) {
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByCompanyIdAndKeyWord(companyId, keyword, keyword);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else{
-            orderId = orderRepository.findAllIdByCompanyId(companyId);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    }  // Берем все заказы для выбранной компании по id
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByCompanyIdAndKeyWord(companyId, keyword, keyword);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdByCompanyId(companyId);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public List<OrderDTO> getAllOrderDTO(){
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public List<OrderDTO> getAllOrderDTO() {
         return convertToOrderDTOList(orderRepository.findAll());
     }
-    public Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
-        List<Long> orderId;
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize) {
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByKeyWord(keyword, keyword);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else{
-            orderId = orderRepository.findAllIdToAdmin();
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    }  // Берем все заказы с поиском по названию компании или номеру
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordAndStatus(String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
-        List<Long> orderId;
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByKeyWord(keyword, keyword);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdToAdmin();
+            orderPage = orderRepository.findAll(orderIds);
+        }
+
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordAndStatus(String keyword, String status, int pageNumber, int pageSize) {
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByKeyWordAndStatus(keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else{
-            orderId = orderRepository.findAllIdByStatus(status);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    }  // Берем все заказы с поиском по названию компании или номеру
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByKeyWordAndStatus(keyword, status, keyword, status);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdByStatus(status);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> orderId;
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
+        Manager manager = resolveManagerFromPrincipal(principal);
+        if (manager == null) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByByManagerAndKeyWord(manager,keyword, keyword);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else {
-            orderId = orderRepository.findAllIdToManager(manager);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Менеджера
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByByManagerAndKeyWord(manager, keyword, keyword);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdToManager(manager);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> orderId;
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize) {
+        Manager manager = resolveManagerFromPrincipal(principal);
+        if (manager == null) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByManagerAndKeyWordAndStatus(manager,keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else {
-            orderId = orderRepository.findAllIdByManagerAndStatus(manager, status);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Менеджера
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByManagerAndKeyWordAndStatus(manager, keyword, status, keyword, status);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdByManagerAndStatus(manager, status);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwnerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-        List<Long> orderId;
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwnerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
+        List<Manager> managerList = resolveOwnerManagersFromPrincipal(principal);
+        if (managerList.isEmpty()) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByOwnerAndKeyWord(managerList, keyword, keyword);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else {
-            orderId = orderRepository.findAllIdToOwner(managerList);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Менеджера
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByOwnerAndKeyWord(managerList, keyword, keyword);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdToOwner(managerList);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-        List<Long> orderId;
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize) {
+        List<Manager> managerList = resolveOwnerManagersFromPrincipal(principal);
+        if (managerList.isEmpty()) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            System.out.println("отработал метод с ключевым словом");
-            orderId = orderRepository.findAllIdByOwnerAndKeyWordAndStatus(managerList,keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderId);
+
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByOwnerAndKeyWordAndStatus(managerList, keyword, status, keyword, status);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdByOwnerAndStatus(managerList, status);
+            orderPage = orderRepository.findAll(orderIds);
         }
-        else {
-            System.out.println("отработал метод с БЕЗ ключевго слова");
-            orderId = orderRepository.findAllIdByOwnerAndStatus(managerList, status);
-            orderPage = orderRepository.findAll(orderId);
+
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
+        Worker worker = resolveWorkerFromPrincipal(principal);
+        if (worker == null) {
+            return emptyOrderPage(pageNumber, pageSize);
         }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Менеджера
 
-
-
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> orderId;
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByByWorkerAndKeyWord(worker,keyword, keyword);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        else {
-            orderId = orderRepository.findAllIdToWorker(worker);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrdersToWorkers(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Работника
 
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByByWorkerAndKeyWord(worker, keyword, keyword);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdToWorker(worker);
+            orderPage = orderRepository.findAll(orderIds);
+        }
 
-    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы с поиском для Менеджера
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> orderId;
+        return getPageOrdersToWorkers(orderPage, pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize) {
+        Worker worker = resolveWorkerFromPrincipal(principal);
+        if (worker == null) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        List<Long> orderIds;
         List<Order> orderPage;
-        if (!keyword.isEmpty()){
-            orderId = orderRepository.findAllIdByWorkerAndKeyWordAndStatus(worker,keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderId);
+
+        if (hasText(keyword)) {
+            orderIds = orderRepository.findAllIdByWorkerAndKeyWordAndStatus(worker, keyword, status, keyword, status);
+            orderPage = orderRepository.findAll(orderIds);
+        } else {
+            orderIds = orderRepository.findAllIdByWorkerAndStatus(worker, status);
+            orderPage = orderRepository.findAll(orderIds);
         }
-        else {
-            orderId = orderRepository.findAllIdByWorkerAndStatus(worker, status);
-            orderPage = orderRepository.findAll(orderId);
-        }
-        return getPageOrders(orderPage,pageNumber,pageSize);
-    } // Берем все заказы с поиском для Работника
+
+        return getPageOrders(orderPage, pageNumber, pageSize);
+    }
 
     private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
-        // 1. Преобразуем ВСЕ заказы в DTO
+        if (orderPage == null || orderPage.isEmpty()) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
         List<OrderDTOList> allDTOs = orderPage.stream()
                 .map(this::toDTOListOrders)
+                .filter(Objects::nonNull)
                 .toList();
 
-        // 2. Сортируем ВЕСЬ список
         List<OrderDTOList> sortedDTOs = allDTOs.stream()
                 .sorted(Comparator.comparingLong(OrderDTOList::getDayToChangeStatusAgo).reversed())
                 .collect(Collectors.toList());
 
-        // 3. Создаем Pageable БЕЗ сортировки
         Pageable pageable = PageRequest.of(pageNumber, pageSize);
-
-        // 4. Используем calculateStartAndEnd
         Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, sortedDTOs.size());
 
-        // 5. Берем подсписок
         List<OrderDTOList> orderListDTOs = sortedDTOs.subList(startAndEnd.getFirst(), startAndEnd.getSecond());
-
-        // 6. Возвращаем страницу
         return new PageImpl<>(orderListDTOs, pageable, sortedDTOs.size());
     }
 
-//    private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
-//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
-//        Pair<Integer, Integer> startAndEnd = calculateStartAndEnd(pageable, orderPage.size());
-//
-//        List<OrderDTOList> orderListDTOs = orderPage.subList(startAndEnd.getFirst(), startAndEnd.getSecond())
-//                .stream()
-//                .map(this::toDTOListOrders)
-//                .collect(Collectors.toList());
-//        return new PageImpl<>(orderListDTOs, pageable, orderPage.size());
-//    }
-
-    private Pair<Integer, Integer> calculateStartAndEnd(Pageable pageable, int size) {
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), size);
-        return Pair.of(start, end);
-    }
-
-
     private Page<OrderDTOList> getPageOrdersToWorkers(List<Order> orderPage, int pageNumber, int pageSize) {
-        // Сортируем список заказов по статусу "В работе"
+        if (orderPage == null || orderPage.isEmpty()) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
         List<Order> sortedOrderPage = orderPage.stream()
-                .sorted(Comparator.comparing(order -> "Публикация".equals(order.getStatus().getTitle()) ? 0 : 1))
+                .sorted(Comparator.comparing(order -> "Публикация".equals(safeStatusTitle(order)) ? 0 : 1))
                 .toList();
-        // Создаем Pageable для разбиения на страницы
+
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("status").descending());
-        // Определяем начальный и конечный индексы для текущей страницы
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), sortedOrderPage.size());
-        // Преобразуем подсписок в DTO
+        int end = Math.min(start + pageable.getPageSize(), sortedOrderPage.size());
+
+        if (start >= sortedOrderPage.size()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, sortedOrderPage.size());
+        }
+
         List<OrderDTOList> orderListDTOs = sortedOrderPage.subList(start, end)
                 .stream()
                 .map(this::toDTOListOrders)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        // Возвращаем страницу с DTO
+
         return new PageImpl<>(orderListDTOs, pageable, sortedOrderPage.size());
     }
 
-    public Order getOrder(Long orderId){ // Взять заказ
-        return orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
-    } // Взять заказ
-    public OrderDTO getOrderDTO(Long orderId){ // Взять заказ DTO
-        return  toDTO(orderRepository.findById(orderId).orElseThrow());
-    } // Взять заказ DTO
-
-
-    //    ======================================== ВЗЯТЬ ЗАКАЗЫ ПО РОЛЯМ =============================================================
-
-
-
-
-
-    //    ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ =========================================================
     @Override
-    public OrderDTO newOrderDTO(Long id) { // Создание DTO заготовки для создания нового Отзыва
-        CompanyDTO companyDTO = companyService.getCompaniesDTOById(id); // берем компанию по id с переводом ее в дто нового заказа
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatus(List<Long> workerIds, String status) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return orderRepository.countByWorkerIdsAndStatus(workerIds, status)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Long) row[1]).intValue()
+                ));
+    }
+
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatus(Collection<Long> workerIds, String status) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Integer> result = new HashMap<>();
+        for (Object[] row : orderRepository.countByWorkerIdsAndStatus(workerIds, status)) {
+            Long workerId = (Long) row[0];
+            Long count = (Long) row[1];
+            result.put(workerId, count.intValue());
+        }
+        return result;
+    }
+
+    private Pair<Integer, Integer> calculateStartAndEnd(Pageable pageable, int size) {
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), size);
+        if (start > end) {
+            start = end;
+        }
+        return Pair.of(start, end);
+    }
+
+    @Override
+    public Order getOrder(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
+    }
+
+    @Override
+    public OrderDTO getOrderDTO(Long orderId) {
+        return toDTO(orderRepository.findById(orderId).orElseThrow());
+    }
+
+    // =========================================================================================================
+    // ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ ==========================================
+    // =========================================================================================================
+
+    @Override
+    public OrderDTO newOrderDTO(Long id) {
+        CompanyDTO companyDTO = companyService.getCompaniesDTOById(id);
         OrderDTO orderDTO = new OrderDTO();
-        orderDTO.setCompany(companyDTO); // устанавливаем заказу компанию
-        orderDTO.setWorkers(companyDTO.getWorkers()); // список работников в этой компании
+        orderDTO.setCompany(companyDTO);
+        orderDTO.setWorkers(companyDTO.getWorkers());
         orderDTO.setManager(companyDTO.getManager());
-        orderDTO.setStatus(orderStatusService.getOrderStatusDTOByTitle("Новый"));
+        orderDTO.setStatus(orderStatusService.getOrderStatusDTOByTitle(STATUS_NEW));
         orderDTO.setFilial(companyDTO.getFilial());
         return orderDTO;
-    } // Создание DTO заготовки для создания нового Отзыва
+    }
+
     @Transactional
-    protected Review createNewReview(Company company, OrderDetails orderDetails, Order order){ // Создание нового отзыва
-        List<Bot> bots = botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId());
+    protected Review createNewReview(Company company, OrderDetails orderDetails, Order order) {
+        List<Bot> bots = order != null && order.getWorker() != null
+                ? botService.getAllBotsByWorkerIdActiveIsTrue(order.getWorker().getId())
+                : Collections.emptyList();
+
         Bot selectedBot = null;
-        if (!bots.isEmpty()) {
-            var random = new SecureRandom();
+        if (bots != null && !bots.isEmpty()) {
+            SecureRandom random = new SecureRandom();
             selectedBot = bots.get(random.nextInt(bots.size()));
         }
-        var random = new SecureRandom();
+
+        Product product = orderDetails != null ? orderDetails.getProduct() : null;
+
         return Review.builder()
-                .category(company.getCategoryCompany())
-                .subCategory(company.getSubCategory())
+                .category(company != null ? company.getCategoryCompany() : null)
+                .subCategory(company != null ? company.getSubCategory() : null)
                 .text("Текст отзыва")
                 .answer("")
                 .orderDetails(orderDetails)
                 .bot(selectedBot)
-                .filial(order.getFilial())
+                .filial(order != null ? order.getFilial() : null)
                 .publish(false)
-                .worker(order.getWorker())
-                .product(orderDetails.getProduct())
-                .price(orderDetails.getProduct().getPrice())
+                .worker(order != null ? order.getWorker() : null)
+                .product(product)
+                .price(product != null ? product.getPrice() : null)
                 .build();
-    } // Создание нового отзыва
+    }
+
+    @Override
     @Transactional
-    public boolean addNewReview(Long orderId) { // Добавление нового отзыва
+    public boolean addNewReview(Long orderId) {
         try {
             log.info("1. Зашли в добавление нового отзыва");
 
             Order saveOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
 
-            OrderDetails orderDetails = saveOrder.getDetails().getFirst();
+            OrderDetails orderDetails = getFirstDetail(saveOrder);
+            if (orderDetails == null) {
+                log.error("У заказа {} отсутствуют детали заказа", orderId);
+                return false;
+            }
+
             Company saveCompany = saveOrder.getCompany();
+            if (saveCompany == null) {
+                log.error("У заказа {} отсутствует компания", orderId);
+                return false;
+            }
 
             log.info("2. Создаем новый отзыв");
 
             Review review = reviewService.save(createNewReview(saveCompany, orderDetails, saveOrder));
             log.info("3. Создали новый отзыв");
 
-            List<Review> newList = orderDetails.getReviews();
+            List<Review> newList = Optional.ofNullable(orderDetails.getReviews()).orElse(new ArrayList<>());
             newList.add(review);
             orderDetails.setReviews(newList);
 
@@ -400,23 +501,30 @@ public class OrderServiceImpl implements OrderService {
             log.error("Ошибка при создании нового отзыва", e);
             return false;
         }
-    }// Добавление нового отзыва
+    }
 
-
-
-
-
+    @Override
     @Transactional
     public boolean deleteNewReview(Long orderId, Long reviewId) {
         try {
             Order saveOrder = orderRepository.findById(orderId)
                     .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
 
-            OrderDetails orderDetails = saveOrder.getDetails().getFirst();
+            OrderDetails orderDetails = getFirstDetail(saveOrder);
+            if (orderDetails == null) {
+                log.error("У заказа {} отсутствуют детали заказа", orderId);
+                return false;
+            }
+
             Company saveCompany = saveOrder.getCompany();
+            if (saveCompany == null) {
+                log.error("У заказа {} отсутствует компания", orderId);
+                return false;
+            }
+
             log.info("1. Найден заказ и его детали");
 
-            List<Review> newList = orderDetails.getReviews();
+            List<Review> newList = Optional.ofNullable(orderDetails.getReviews()).orElse(new ArrayList<>());
             Review review = reviewService.getReviewById(reviewId);
             if (review == null) {
                 log.warn("Отзыв с ID '{}' не найден", reviewId);
@@ -432,7 +540,7 @@ public class OrderServiceImpl implements OrderService {
             reviewService.deleteReview(reviewId);
             log.info("3. Удалили отзыв");
 
-            saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() - 1);
+            saveCompany.setCounterNoPay(Math.max(0, saveCompany.getCounterNoPay() - 1));
             companyService.save(saveCompany);
             log.info("4. Обновили компанию");
 
@@ -443,62 +551,29 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-
-
     private void recalculateOrderAndDetails(OrderDetails orderDetails) {
-        // Пересчёт суммы всех отзывов
-        BigDecimal detailTotal = orderDetails.getReviews().stream()
+        if (orderDetails == null) {
+            return;
+        }
+
+        List<Review> reviews = Optional.ofNullable(orderDetails.getReviews()).orElse(Collections.emptyList());
+
+        BigDecimal detailTotal = reviews.stream()
                 .map(Review::getPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         orderDetails.setPrice(detailTotal);
-
-        // Пересчёт количества отзывов
-        orderDetails.setAmount(orderDetails.getReviews().size());
-
-        // Сохраняем OrderDetails
+        orderDetails.setAmount(reviews.size());
         orderDetailsService.save(orderDetails);
 
-        // Пересчёт суммы и количества в заказе
         Order order = orderDetails.getOrder();
-        order.setSum(detailTotal);
-        order.setAmount(orderDetails.getAmount());
-
-        // Сохраняем Order
-        orderDetailsService.saveOrder(order);
+        if (order != null) {
+            order.setSum(detailTotal);
+            order.setAmount(orderDetails.getAmount());
+            orderDetailsService.saveOrder(order);
+        }
     }
-
-//============================= СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS==================================
-
-//    @Transactional
-//    @Override
-//    public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
-//        try {
-//            Order order = saveOrder(orderDTO, productId);
-//            log.info("1. Сохранили ORDER");
-//            OrderDetails orderDetails = saveOrderDetails(order, orderDTO, productId);
-//            log.info("5. Сохранили ORDER-DETAIL с REVIEWS");
-//            log.info("6. Установили его в ORDER");
-//            updateOrder(order, orderDetails);
-//            log.info("9. Сохранили ORDER с ORDER-DETAIL в БД");
-//            log.info("10. Обновляем счетчик компании в БД");
-//            updateCompanyCounter(order, companyId);
-//
-//            if (order.getWorker() != null && order.getWorker().getUser() != null) {
-//                Long telegramChatId = order.getWorker().getUser().getTelegramChatId();
-//                if (telegramChatId != null) {
-//                    String resultBuilder = "У вас новый заказ для:  " +
-//                            order.getCompany().getTitle();
-//                    telegramService.sendMessage(telegramChatId, resultBuilder);
-//                }
-//            }
-//            return true;
-//        } catch (PersistenceException | NumberFormatException e) {  //replace these with exceptions you expect
-//            log.error("Ошибка при создании нового заказа с отзывами", e);
-//            throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
-//        }
-//    }
-
 
     private Order saveOrder(OrderDTO orderDTO, Long productId) {
         Order order = toEntityOrderFromDTO(orderDTO, productId);
@@ -508,15 +583,18 @@ public class OrderServiceImpl implements OrderService {
     private OrderDetails saveOrderDetails(Order order, OrderDTO orderDTO, Long productId) {
         OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, order, productId);
         OrderDetails savedOrderDetails = orderDetailsService.save(orderDetails);
-    //        Вариант для ручного создания текстов
+
         List<Review> reviews = toEntityListReviewsFromDTO(orderDTO, savedOrderDetails);
-        //        Вариант для Авто создания текстов
-//        List<Review> reviews = autoTextService.toEntityListReviewsFromDTO(orderDTO, savedOrderDetails);
         savedOrderDetails.setReviews(reviews);
+
         return orderDetailsService.save(savedOrderDetails);
     }
 
     private void updateOrder(Order order, OrderDetails orderDetails) {
+        if (order == null || orderDetails == null) {
+            return;
+        }
+
         List<OrderDetails> detailsList = Optional.ofNullable(order.getDetails()).orElse(new ArrayList<>());
         detailsList.add(orderDetails);
         order.setDetails(detailsList);
@@ -530,178 +608,156 @@ public class OrderServiceImpl implements OrderService {
         companyService.save(company);
     }
 
-    private int calculateCounterNoPayValue(Order order, Company company){
+    private int calculateCounterNoPayValue(Order order, Company company) {
+        if (order == null || company == null) {
+            return 0;
+        }
         return company.getCounterNoPay() + (order.getAmount() - company.getCounterNoPay());
     }
 
+    // =========================================================================================================
+    // ======================================== ЗАКАЗ UPDATE ====================================================
+    // =========================================================================================================
 
-
-//
-//============================ СОХРАНЕНИЕ НВООГО ORDER, ORDER_DETAIL И СПИСКА REVIEWS КОНЕЦ ============================
-//
-
-
-//    ======================================== СОЗДАНИЕ НОВЫХ ОТЗЫВОВ =========================================================
-
-
-
-
-    //    ======================================== ЗАКАЗ UPDATE =========================================================
-    // Обновить профиль юзера - начало
     @Override
     @Transactional
-    public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) { // Метод Обновления Заказа
+    public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
         log.info("2. Вошли в обновление данных Заказа");
-        Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+
+        Order saveOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+
         log.info("Достали Заказ");
         boolean isChanged = false;
-        System.out.println(orderDTO.getCommentsCompany());
-        /*Временная проверка сравнений*/
-        System.out.println("filial id: " + !Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId()));
-        System.out.println("filial url: " + !Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl()));
-        try {System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId()));} catch (Exception e) {// Логируем ошибку и пропускаем выполнение блока
-            log.error("Ошибка при обновлении работника заказа: ", e);}
-        System.out.println("worker: " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) + " " + !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId()));
-        System.out.println("manager: " + !Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId()));
-        System.out.println("complete: " + !Objects.equals(orderDTO.isComplete(), saveOrder.isComplete()));
-        System.out.println("заметка заказа: " + !Objects.equals(orderDTO.getOrderComments(), saveOrder.getZametka()));
-        System.out.println("комментарий компании: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
-        if (orderDTO.getCounter() != null){
-            System.out.println("счетчик: " + !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter()));
-        }
 
-        if (!Objects.equals(orderDTO.getFilial().getId(), saveOrder.getFilial().getId())){ /*Проверка смены названия*/
+        Filial currentFilial = saveOrder.getFilial();
+        Worker currentWorker = saveOrder.getWorker();
+        Manager currentManager = saveOrder.getManager();
+        OrderDetails firstDetail = getFirstDetail(saveOrder);
+        Review firstReview = getFirstReview(saveOrder);
+        Company company = saveOrder.getCompany();
+
+        if (orderDTO.getFilial() != null && currentFilial != null &&
+                !Objects.equals(orderDTO.getFilial().getId(), currentFilial.getId())) {
             log.info("Обновляем филиал заказа");
-            System.out.println(saveOrder.getFilial());
-            saveOrder.setFilial(convertFilialDTOToFilial(orderDTO.getFilial()));
-            log.info("Сменили филиал заказа");
-            Filial filial = filialService.getFilial(orderDTO.getFilial().getId());
-            List<Review> reviews = saveOrder.getDetails().getFirst().getReviews();
-            for (Review review : reviews)   {
-                review.setFilial(filial);
+
+            Filial newFilial = convertFilialDTOToFilial(orderDTO.getFilial());
+            saveOrder.setFilial(newFilial);
+
+            List<Review> reviews = getAllReviews(saveOrder);
+            for (Review review : reviews) {
+                review.setFilial(newFilial);
                 reviewService.save(review);
                 log.info("Сменили филиал у отзыва в заказе");
             }
 
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getFilial().getUrl(), saveOrder.getFilial().getUrl())){ /*Проверка смены филиала*/
-            log.info("Обновляем url филиала заказа");
-        }
+
         try {
-            // Проверяем, изменился ли работник
-            if (!Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getWorker().getId()) ||
-                    !Objects.equals(orderDTO.getWorker().getWorkerId(), saveOrder.getDetails().getFirst().getReviews().getFirst().getWorker().getId())) {
+            Long dtoWorkerId = orderDTO.getWorker() != null ? orderDTO.getWorker().getWorkerId() : null;
+            Long currentWorkerId = currentWorker != null ? currentWorker.getId() : null;
+            Long firstReviewWorkerId = firstReview != null && firstReview.getWorker() != null
+                    ? firstReview.getWorker().getId()
+                    : null;
+
+            if (!Objects.equals(dtoWorkerId, currentWorkerId) ||
+                    (firstReview != null && !Objects.equals(dtoWorkerId, firstReviewWorkerId))) {
 
                 log.info("Обновляем работника заказа");
                 Worker newWorker = convertWorkerDTOToWorker(orderDTO.getWorker());
-
-                // Обновляем основного работника в заказе
                 saveOrder.setWorker(newWorker);
 
-                // Обновляем работника в связанных отзывах
-                for (OrderDetails orderDetails : saveOrder.getDetails()) {
-                    for (Review review : orderDetails.getReviews()) {
+                for (OrderDetails detail : Optional.ofNullable(saveOrder.getDetails()).orElse(Collections.emptyList())) {
+                    for (Review review : Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList())) {
                         review.setWorker(newWorker);
                     }
                 }
+
                 isChanged = true;
             }
         } catch (Exception e) {
-            // Логируем ошибку и пропускаем выполнение блока
             log.error("Ошибка при обновлении работника заказа: ", e);
         }
-        if (!Objects.equals(orderDTO.getManager().getManagerId(), saveOrder.getManager().getId())){ /*Проверка смены работника*/
+
+        if (orderDTO.getManager() != null && currentManager != null &&
+                !Objects.equals(orderDTO.getManager().getManagerId(), currentManager.getId())) {
             log.info("Обновляем менеджера заказа");
             saveOrder.setManager(convertManagerDTOToManager(orderDTO.getManager()));
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.isComplete(), saveOrder.isComplete())){ /*Проверка статус заказа*/
+
+        if (!Objects.equals(orderDTO.isComplete(), saveOrder.isComplete())) {
             log.info("Обновляем статус выполнения Заказа");
             saveOrder.setComplete(orderDTO.isComplete());
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getOrderComments(), saveOrder.getZametka())){ /*Проверка комментария заказа*/
-            log.info("Обновляем выполнение комментария заказа");
+
+        if (!Objects.equals(orderDTO.getOrderComments(), saveOrder.getZametka())) {
+            log.info("Обновляем комментарий заказа");
             saveOrder.setZametka(orderDTO.getOrderComments());
             isChanged = true;
         }
-        if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
-            log.info("Обновляем выполнение комментария КОМПАНИИ");
-            saveOrder.getCompany().setCommentsCompany(orderDTO.getCommentsCompany());
+
+        if (company != null && !Objects.equals(orderDTO.getCommentsCompany(), company.getCommentsCompany())) {
+            log.info("Обновляем комментарий компании");
+            company.setCommentsCompany(orderDTO.getCommentsCompany());
             isChanged = true;
         }
 
-        if (orderDTO.getCounter() != null) {
-            if (!Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())) { /*Проверка комментария заказа*/
-                log.info("Обновляем выполнение счетчик опубликованных текстов в заказе");
-                saveOrder.setCounter(orderDTO.getCounter());
-                isChanged = true;
-            }
+        if (orderDTO.getCounter() != null && !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())) {
+            log.info("Обновляем счетчик опубликованных текстов в заказе");
+            saveOrder.setCounter(orderDTO.getCounter());
+            isChanged = true;
         }
 
-        if  (isChanged){
+        if (isChanged) {
             log.info("3. Начали сохранять обновленный Заказ в БД");
             orderRepository.save(saveOrder);
             log.info("4. Сохранили обновленный Заказ в БД");
-        }
-        else {
+        } else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    } // Метод Обновления Заказа
+    }
 
-    // Обновить профиль юзера - начало
     @Override
     @Transactional
-    public void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId) { // Метод Обновления Заказа
+    public void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId) {
         log.info("2. Вошли в обновление данных Заказа Для работника");
-        Order saveOrder = orderRepository.findById(orderId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+
+        Order saveOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+
         log.info("Достали Заказ");
         boolean isChanged = false;
-        System.out.println(orderDTO.getCommentsCompany());
-        /*Временная проверка сравнений*/
 
-        System.out.println("комментарий: " + !Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany()));
-
-
-        if (!Objects.equals(orderDTO.getCommentsCompany(), saveOrder.getCompany().getCommentsCompany())){ /*Проверка комментария заказа*/
-            log.info("Обновляем выполнение комментария заказа");
-            saveOrder.getCompany().setCommentsCompany(orderDTO.getCommentsCompany());
+        Company company = saveOrder.getCompany();
+        if (company != null && !Objects.equals(orderDTO.getCommentsCompany(), company.getCommentsCompany())) {
+            log.info("Обновляем комментарий компании");
+            company.setCommentsCompany(orderDTO.getCommentsCompany());
             isChanged = true;
         }
 
-        if  (isChanged){
+        if (isChanged) {
             log.info("3. Начали сохранять обновленный Заказ в БД");
             orderRepository.save(saveOrder);
             log.info("4. Сохранили обновленный Заказ в БД");
-        }
-        else {
+        } else {
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    } // Метод Обновления Заказа
+    }
 
+    // =========================================================================================================
+    // ======================================== УДАЛЕНИЕ ЗАКАЗА =================================================
+    // =========================================================================================================
 
-    //============================================ УДАЛЕНИЕ ЗАКАЗА =========================================================
-//@Transactional
-//public boolean deleteOrder(Long orderId, Principal principal){
-//    String userRole = getRole(principal);
-//    Order orderToDelete = orderRepository.findById(orderId)
-//            .orElseThrow(() -> new UsernameNotFoundException(String.format("Order '%d' not found", orderId)));
-//    if (canDeleteOrder(userRole, orderToDelete)) {
-//        orderRepository.delete(orderToDelete);
-//        log.info("Заказ удален Админом или Владельцем");
-//        return true;
-//    }
-//    log.info("Заказ не удален из-за статуса или роли");
-//    return false;
-//}
-
-
+    @Override
     @Transactional
     public boolean deleteOrder(Long orderId, Principal principal) {
         String userRole = getRole(principal);
-        log.info("Начало удаления заказа ID: {}, инициатор: {}, роль: {}",
-                orderId, principal.getName(), userRole);
+        String username = principal != null ? principal.getName() : "unknown";
+
+        log.info("Начало удаления заказа ID: {}, инициатор: {}, роль: {}", orderId, username, userRole);
 
         Order orderToDelete = orderRepository.findById(orderId)
                 .orElseThrow(() -> {
@@ -709,57 +765,42 @@ public class OrderServiceImpl implements OrderService {
                     return new UsernameNotFoundException(String.format("Order '%d' not found", orderId));
                 });
 
-//        log.info("Найден заказ ID: {}, статус: {}, компания: {}",
-//                orderId, orderToDelete.getStatus(), orderToDelete.getCompany());
-
         if (canDeleteOrder(userRole, orderToDelete)) {
             try {
-                // 1. Находим все детали заказа
                 List<OrderDetails> orderDetails = orderDetailsService.findByOrderId(orderId);
                 log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
 
-                // 2. Удаляем все отзывы, связанные с деталями этого заказа
                 int totalDeletedReviews = 0;
+
                 for (OrderDetails detail : orderDetails) {
-                    if (detail.getReviews() != null && !detail.getReviews().isEmpty()) {
-                        List<Long> reviewIds = detail.getReviews().stream()
+                    List<Review> reviews = Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList());
+
+                    if (!reviews.isEmpty()) {
+                        List<Long> reviewIds = reviews.stream()
                                 .map(Review::getId)
+                                .filter(Objects::nonNull)
                                 .collect(Collectors.toList());
 
-                        log.info("Удаление отзывов для детали заказа ID: {}. Найдено отзывов: {}",
-                                detail.getId(), reviewIds.size());
+                        log.info("Удаление отзывов для детали заказа ID: {}. Найдено отзывов: {}", detail.getId(), reviewIds.size());
 
-                        // Если у вас есть метод для массового удаления
-                        reviewService.deleteAllByIdIn(reviewIds);
-
-                        // Можно удалять по одному с выводом id
-//                        for (Long reviewId : reviewIds) {
-//                            try {
-//                                reviewService.deleteReview(reviewId);
-//                                log.debug("Отзыв ID: {} удален", reviewId);
-//                            } catch (Exception e) {
-//                                log.error("Ошибка при удалении отзыва ID: {}", reviewId, e);
-//                            }
-//                        }
-
-                        log.info("Успешно удалено {} отзывов для детали заказа ID: {}",
-                                reviewIds.size(), detail.getId());
-                        totalDeletedReviews += reviewIds.size();
+                        if (!reviewIds.isEmpty()) {
+                            reviewService.deleteAllByIdIn(reviewIds);
+                            log.info("Успешно удалено {} отзывов для детали заказа ID: {}", reviewIds.size(), detail.getId());
+                            totalDeletedReviews += reviewIds.size();
+                        }
                     }
                 }
+
                 log.info("Всего удалено отзывов: {}", totalDeletedReviews);
 
-                // 3. Удаляем все детали заказа
                 log.info("Удаление всех деталей заказа ID: {}", orderId);
                 orderDetailsService.deleteAllByOrderId(orderId);
                 log.info("Успешно удалено {} деталей заказа", orderDetails.size());
 
-                // 4. Удаляем сам заказ
                 log.info("Удаление заказа ID: {}", orderId);
                 orderRepository.delete(orderToDelete);
                 log.info("Заказ ID: {} успешно удален", orderId);
 
-                // 5. Логируем общий результат
                 log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов",
                         orderId, orderDetails.size(), totalDeletedReviews);
 
@@ -767,41 +808,51 @@ public class OrderServiceImpl implements OrderService {
 
             } catch (Exception e) {
                 log.error("Ошибка при удалении заказа ID: {}. Причина: {}", orderId, e.getMessage(), e);
-                throw e; // Транзакция откатится
+                throw e;
             }
         }
 
         log.warn("Заказ ID: {} не удален. Недостаточно прав или некорректный статус. Роль пользователя: {}, статус заказа: {}",
-                orderId, userRole, orderToDelete.getStatus());
+                orderId, userRole, safeStatusTitle(orderToDelete));
+
         return false;
     }
-
-
 
     private boolean isAdminOrOwner(String role) {
         return ADMIN.equals(role) || OWNER.equals(role);
     }
 
     private boolean isNewlyCreatedOrder(Order order) {
-        return STATUS_NEW.equals(order.getStatus().getTitle());
+        return STATUS_NEW.equals(safeStatusTitle(order));
     }
 
     private boolean canDeleteOrder(String role, Order orderToDelete) {
         return isAdminOrOwner(role) || (MANAGER.equals(role) && isNewlyCreatedOrder(orderToDelete));
     }
 
-
-
-//========================================= УДАЛЕНИЕ ЗАКАЗА КОНЕЦ ======================================================
-
-    private String getRole(Principal principal){
-        // Получите текущий объект аутентификации
+    private String getRole(Principal principal) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // Получите имя текущего пользователя (пользователя, не роль)
-        String username = principal.getName();
-        // Получите роль пользователя (предположим, что она хранится в поле "role" в объекте User)
-        return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
-    } // Берем роль пользователя
+        if (authentication == null) {
+            return "";
+        }
+
+        Object authPrincipal = authentication.getPrincipal();
+        if (authPrincipal instanceof UserDetails userDetails) {
+            return userDetails.getAuthorities().stream()
+                    .findFirst()
+                    .map(Object::toString)
+                    .orElse("");
+        }
+
+        return authentication.getAuthorities().stream()
+                .findFirst()
+                .map(Object::toString)
+                .orElse("");
+    }
+
+    // =========================================================================================================
+    // ======================================== СЧЕТЧИКИ ========================================================
+    // =========================================================================================================
 
     @Override
     public int getAllOrderDTOByStatus(String status) {
@@ -819,13 +870,18 @@ public class OrderServiceImpl implements OrderService {
     }
 
     public Review saveReviews(Review review, Worker newWorker) {
+        if (review == null) {
+            return null;
+        }
         review.setWorker(newWorker);
         return reviewService.save(review);
     }
 
-//========================= СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО================================================
+    // =========================================================================================================
+    // ======================================== СМЕНА СТАТУСА ЗАКАЗА ============================================
+    // =========================================================================================================
 
-
+    @Override
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
         try {
@@ -852,52 +908,37 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-
-    /**
-     * Обработка перевода заказа в статус "К публикации" с переназначением ботов
-     */
     private boolean handleToPublicStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===");
-            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
 
-            // Сохраняем предыдущий статус заказа
-            String previousOrderStatus = order.getStatus().getTitle();
+            String previousOrderStatus = safeStatusTitle(order);
 
-            // 1. Меняем статус заказа
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PUBLISH));
-
-            // 2. Управляем статусом компании
-            log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
             autoManageCompanyStatus(order, STATUS_TO_PUBLISH);
-
-            // 3. Проверяем и назначаем ботов, если нужно (ВСЕГДА!)
             assignBotsIfNeeded(order);
 
-            // 4. Получаем все отзывы из заказа
-            List<Review> reviews = order.getDetails().stream()
-                    .flatMap(detail -> detail.getReviews().stream())
-                    .collect(Collectors.toList());
-
+            List<Review> reviews = getAllReviews(order);
             if (reviews.isEmpty()) {
                 log.warn("В заказе ID {} нет отзывов", order.getId());
             } else {
-                // Проверяем боты-заглушки
                 botAssignmentService.checkAndNotifyAboutStubBots(reviews);
             }
 
-            // 5. Сохраняем заказ
             orderRepository.save(order);
 
             log.info("=== УСПЕШНЫЙ ПЕРЕВОД ЗАКАЗА ===");
-            if (previousOrderStatus.equals(STATUS_ARCHIVE)) {
+            if (STATUS_ARCHIVE.equals(previousOrderStatus)) {
                 log.info("Заказ ID {} переведен в статус 'К публикации' ИЗ АРХИВА", order.getId());
 
                 if (hasWorkerWithTelegram(order)) {
                     String companyTitle = order.getCompany().getTitle();
-                    telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
+                    telegramService.sendMessage(
+                            order.getWorker().getUser().getTelegramChatId(),
                             companyTitle + ". Новый заказ из Архива. " +
-                                    "\n https://o-ogo.ru/worker/new_orders");
+                                    "\n https://o-ogo.ru/worker/new_orders"
+                    );
                 }
             } else {
                 log.info("Заказ ID {} переведен в статус 'К публикации'", order.getId());
@@ -911,21 +952,14 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-
-
     private boolean handleArchiveStatus(Order order) {
         log.info("=== АРХИВАЦИЯ ЗАКАЗА ID: {} ===", order.getId());
 
-        // 1. Меняем статус заказа на "Архив"
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
-
-        // 2. Автоматически управляем статусом компании
-        log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
         autoManageCompanyStatus(order, STATUS_ARCHIVE);
 
-        // 3. Отвязываем ботов от отзывов
-        List<Review> reviews = order.getDetails().getFirst().getReviews();
-        if (reviews != null && !reviews.isEmpty()) {
+        List<Review> reviews = getAllReviews(order);
+        if (!reviews.isEmpty()) {
             log.info("Отвязываем ботов от {} отзывов", reviews.size());
             for (Review review : reviews) {
                 if (review.getBot() != null) {
@@ -937,7 +971,6 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        // 4. Сохраняем заказ
         orderRepository.save(order);
 
         log.info("=== ЗАКАЗ ID {} УСПЕШНО АРХИВИРОВАН ===", order.getId());
@@ -947,41 +980,40 @@ public class OrderServiceImpl implements OrderService {
     private boolean handleToCheckStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===");
-            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
 
-            // 1. Проверяем и назначаем ботов, если нужно
             assignBotsIfNeeded(order);
-
-            // 2. Управляем статусом компании
             autoManageCompanyStatus(order, STATUS_TO_CHECK);
 
-            // 3. Подготавливаем сообщение
-            String clientId = order.getManager().getClientId();
-            String groupId = order.getCompany().getGroupId();
+            String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
+            String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 
-            String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+            OrderDetails firstDetail = getFirstDetail(order);
+            if (firstDetail == null) {
+                log.warn("У заказа {} нет OrderDetails. Статус выставим без ссылки на проверку", order.getId());
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+                orderRepository.save(order);
+                return true;
+            }
+
+            String message = order.getCompany().getTitle() + ". " + safeFilialTitle(order) + "\n\n" +
                     textService.findById(5) + "\n\n" +
-                    "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
-                    order.getDetails().getFirst().getId();
+                    "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" + firstDetail.getId();
 
-            // Если groupId отсутствует — просто ставим статус без отправки сообщений
-            if (groupId == null || groupId.isBlank()) {
+            if (!hasText(groupId)) {
                 log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений",
                         order.getCompany().getTitle());
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
                 orderRepository.save(order);
-                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (без отправки WhatsApp)",
-                        order.getId());
+                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (без отправки WhatsApp)", order.getId());
                 return true;
             }
 
-            // 4. Отправляем сообщение и меняем статус
             log.info("Отправляем сообщение в WhatsApp для заказа ID: {}", order.getId());
             boolean result = sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
 
             if (result) {
-                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (сообщение отправлено)",
-                        order.getId());
+                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (сообщение отправлено)", order.getId());
             } else {
                 log.error("❌ Ошибка при отправке сообщения для заказа ID: {}", order.getId());
             }
@@ -990,7 +1022,6 @@ public class OrderServiceImpl implements OrderService {
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===", e);
-            // Даже при ошибке попробуем изменить статус
             try {
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
                 orderRepository.save(order);
@@ -1003,33 +1034,25 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-
-
-
     private boolean handleCorrectionStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===");
-            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), order.getStatus().getTitle());
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
 
-            // 1. Проверяем и назначаем ботов, если нужно
             assignBotsIfNeeded(order);
-
-            // 2. Управляем статусом компании
             autoManageCompanyStatus(order, STATUS_CORRECTION);
 
-            // 3. Отправляем уведомление в Telegram
             if (hasWorkerWithTelegram(order)) {
                 String companyTitle = order.getCompany().getTitle();
                 String comments = order.getCompany().getCommentsCompany();
                 telegramService.sendMessage(
                         order.getWorker().getUser().getTelegramChatId(),
-                        companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
+                        companyTitle + " отправлен в Коррекцию - " + safeString(order.getZametka()) + " " + safeString(comments) +
                                 "\n https://o-ogo.ru/worker/correct"
                 );
                 log.info("Уведомление о коррекции отправлено в Telegram");
             }
 
-            // 4. Меняем статус заказа
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
             orderRepository.save(order);
 
@@ -1038,7 +1061,6 @@ public class OrderServiceImpl implements OrderService {
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===", e);
-            // Даже при ошибке попробуем изменить статус
             try {
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
                 orderRepository.save(order);
@@ -1051,30 +1073,22 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-
-
-
     private boolean handlePublicStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===");
 
-            // 1. Проверяем и назначаем ботов, если нужно
             assignBotsIfNeeded(order);
-
-            // 2. Управляем статусом компании
-            log.info("Вызываем autoManageCompanyStatus для заказа ID: {}", order.getId());
             autoManageCompanyStatus(order, STATUS_PUBLIC);
 
-            // 3. Получаем данные для сообщения
-            String clientId = order.getManager().getClientId();
-            String groupId = order.getCompany().getGroupId();
+            String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
+            String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 
-            String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
+            String message = order.getCompany().getTitle() + ". " + safeFilialTitle(order) + "\n\n" +
                     "Здравствуйте, ваш заказ выполнен, просьба оплатить. АЛЬФА-БАНК по счету " +
                     "https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И. " +
                     "ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " + order.getSum() + " руб.";
 
-            if (groupId == null || groupId.isBlank()) {
+            if (!hasText(groupId)) {
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
                 orderRepository.save(order);
                 log.info("✅ Статус заказа {} установлен в '{}' без отправки в WhatsApp (отсутствует groupId)",
@@ -1090,24 +1104,18 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    /**
-     * Проверяет и назначает ботов для отзывов заказа, если их нет
-     */
     private void assignBotsIfNeeded(Order order) {
         try {
-            if (order.getDetails() == null || order.getDetails().isEmpty()) {
-                log.warn("У заказа ID {} нет OrderDetails", order.getId());
+            if (!hasDetails(order)) {
+                log.warn("У заказа ID {} нет OrderDetails", order != null ? order.getId() : null);
                 return;
             }
-            List<Review> reviews = order.getDetails().stream()
-                    .flatMap(detail -> detail.getReviews().stream())
-                    .collect(Collectors.toList());
 
+            List<Review> reviews = getAllReviews(order);
             if (reviews.isEmpty()) {
                 return;
             }
 
-            // Проверяем, есть ли отзывы без ботов
             long nullBotCount = reviews.stream()
                     .filter(review -> review.getBot() == null)
                     .count();
@@ -1126,17 +1134,13 @@ public class OrderServiceImpl implements OrderService {
                 }
             }
 
-            // Проверяем боты-заглушки
             botAssignmentService.checkAndNotifyAboutStubBots(reviews);
 
         } catch (Exception e) {
-            log.error("Ошибка при проверке/назначении ботов: {}", e.getMessage());
+            log.error("Ошибка при проверке/назначении ботов: {}", e.getMessage(), e);
         }
     }
 
-    /**
-     * Упрощенное управление статусом компании по четким правилам
-     */
     private void autoManageCompanyStatus(Order changedOrder, String newOrderStatus) {
         try {
             log.info("🚀 === НАЧАЛО АВТОМАТИЧЕСКОГО УПРАВЛЕНИЯ СТАТУСОМ КОМПАНИИ ===");
@@ -1148,16 +1152,13 @@ public class OrderServiceImpl implements OrderService {
                 return;
             }
 
-            String currentCompanyStatus = company.getStatus().getTitle();
+            String currentCompanyStatus = company.getStatus() != null ? company.getStatus().getTitle() : "";
             log.info("🏢 Компания ID: {}, текущий статус: {}", company.getId(), currentCompanyStatus);
 
-            // Проверяем, есть ли другие активные неоплаченные заказы у компании
             boolean hasOtherActiveOrders = hasOtherActiveUnpaidOrders(company, changedOrder);
             log.info("🔍 Есть другие активные заказы: {}", hasOtherActiveOrders);
 
-            // ПРАВИЛО 1: При архивации заказа
-            if (newOrderStatus.equals(STATUS_ARCHIVE)) {
-                // Если нет других активных заказов -> компания в "Стоп"
+            if (STATUS_ARCHIVE.equals(newOrderStatus)) {
                 if (!hasOtherActiveOrders) {
                     log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет других активных заказов -> компания в 'Стоп'");
                     company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
@@ -1166,23 +1167,18 @@ public class OrderServiceImpl implements OrderService {
                 } else {
                     log.info("📌 ПРАВИЛО 1: Архивация заказа. Есть другие активные заказы -> статус компании не меняем");
                 }
-            }
-            // ПРАВИЛО 2: При активации заказа (из архива в активный статус)
-            else if (isActiveOrderStatus(newOrderStatus)) {
-                // Если компания в "Стопе" и нет других активных заказов -> компания в "Работе"
-                if (currentCompanyStatus.equals(STATUS_COMPANY_IN_STOP) && !hasOtherActiveOrders) {
+            } else if (isActiveOrderStatus(newOrderStatus)) {
+                if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus) && !hasOtherActiveOrders) {
                     log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе' и нет других активных заказов -> 'В работе'");
                     company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
                     companyService.save(company);
                     log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
-                } else if (currentCompanyStatus.equals(STATUS_COMPANY_IN_STOP) && hasOtherActiveOrders) {
+                } else if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus) && hasOtherActiveOrders) {
                     log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе', но есть другие активные заказы -> оставляем 'Стоп'");
                 } else {
                     log.info("📌 ПРАВИЛО 2: Активация заказа. Статус компании не требует изменений");
                 }
-            }
-            // Другие статусы не влияют на статус компании
-            else {
+            } else {
                 log.info("📌 Статус заказа '{}' не влияет на статус компании", newOrderStatus);
             }
 
@@ -1191,15 +1187,8 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    /**
-     * Проверяет, есть ли у компании другие активные неоплаченные заказы (кроме указанного)
-     *
-     * Активный заказ = не оплачен и не в архиве
-     */
     private boolean hasOtherActiveUnpaidOrders(Company company, Order currentOrder) {
         try {
-            // Используйте правильный метод для получения списка заказов
-            // Вместо приведения типа, используйте метод, который возвращает List<Order>
             Collection<Order> companyOrders = company.getOrderList();
             if (companyOrders == null || companyOrders.isEmpty()) {
                 log.info("У компании ID {} нет других заказов", company.getId());
@@ -1207,14 +1196,13 @@ public class OrderServiceImpl implements OrderService {
             }
 
             long otherActiveOrdersCount = companyOrders.stream()
-                    .filter(order -> !order.getId().equals(currentOrder.getId())) // исключаем текущий
+                    .filter(order -> order != null && !Objects.equals(order.getId(), currentOrder.getId()))
                     .filter(order -> {
-                        String orderStatus = order.getStatus().getTitle();
-                        boolean isActive = !orderStatus.equalsIgnoreCase(STATUS_PAYMENT) &&
-                                !orderStatus.equalsIgnoreCase(STATUS_ARCHIVE);
+                        String orderStatus = safeStatusTitle(order);
+                        boolean isActive = !STATUS_PAYMENT.equalsIgnoreCase(orderStatus)
+                                && !STATUS_ARCHIVE.equalsIgnoreCase(orderStatus);
                         if (isActive) {
-                            log.debug("Найден активный неоплаченный заказ ID: {}, статус: {}",
-                                    order.getId(), orderStatus);
+                            log.debug("Найден активный неоплаченный заказ ID: {}, статус: {}", order.getId(), orderStatus);
                         }
                         return isActive;
                     })
@@ -1226,14 +1214,11 @@ public class OrderServiceImpl implements OrderService {
             return otherActiveOrdersCount > 0;
 
         } catch (Exception e) {
-            log.error("Ошибка при проверке других активных заказов: {}", e.getMessage());
+            log.error("Ошибка при проверке других активных заказов: {}", e.getMessage(), e);
             return false;
         }
     }
 
-    /**
-     * Проверяет, является ли статус заказа активным
-     */
     private boolean isActiveOrderStatus(String status) {
         Set<String> activeStatuses = Set.of(
                 STATUS_TO_PUBLISH,
@@ -1247,41 +1232,7 @@ public class OrderServiceImpl implements OrderService {
         return activeStatuses.contains(status);
     }
 
-//    private boolean handleToCheckStatus(Order order) {
-//        String clientId = order.getManager().getClientId();
-//        String groupId = order.getCompany().getGroupId();
-//
-//        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
-//                textService.findById(5) + "\n\n" +
-//                "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" +
-//                order.getDetails().getFirst().getId();
-//
-//        // Если groupId отсутствует — просто ставим статус без отправки сообщений
-//        if (groupId == null || groupId.isBlank()) {
-//            log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений", order.getCompany().getTitle());
-//            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
-//            orderRepository.save(order);
-//            return true;
-//        }
-//
-//        return sentMessageToGroup(STATUS_TO_CHECK, order, clientId, groupId, message, STATUS_IN_CHECK);
-//    }
-//    private boolean handleCorrectionStatus(Order order) {
-//        if (hasWorkerWithTelegram(order)) {
-//            String companyTitle = order.getCompany().getTitle();
-//            String comments = order.getCompany().getCommentsCompany();
-//            telegramService.sendMessage(order.getWorker().getUser().getTelegramChatId(),
-//                    companyTitle + " отправлен в Коррекцию - " + order.getZametka() + " " + comments +
-//                            "\n https://o-ogo.ru/worker/correct");
-//        }
-//        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
-//        orderRepository.save(order);
-//        return true;
-//    }
-
-
-
-    private boolean sentMessageToGroup(String title, Order order, String clientId, String groupId, String message, String statusToPay) {
+    private boolean sentMessageToGroup(String title, Order order, String clientId, String groupId, String message, String successStatus) {
         log.info("📨 Отправка сообщения в WhatsApp-группу:");
         log.info("🔹 Клиент: {}", clientId);
         log.info("🔹 Группа: {}", groupId);
@@ -1290,22 +1241,25 @@ public class OrderServiceImpl implements OrderService {
         String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
 
         if (result != null && result.toLowerCase().contains("ok")) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(statusToPay));
-            log.info("✅ Статус заказа успешно обновлён на: {}", statusToPay);
+            order.setStatus(orderStatusService.getOrderStatusByTitle(successStatus));
+            log.info("✅ Статус заказа успешно обновлён на: {}", successStatus);
         } else {
             log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: {}", result);
 
-            String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
-            String managerChatId = String.valueOf(order.getManager().getUser().getTelegramChatId());
+            String companyTitle = order.getCompany() != null ? order.getCompany().getTitle() : "Компания";
+            String managerChatId = order.getManager() != null && order.getManager().getUser() != null
+                    && order.getManager().getUser().getTelegramChatId() != null
+                    ? String.valueOf(order.getManager().getUser().getTelegramChatId())
+                    : null;
 
-            if (title.equals(STATUS_TO_CHECK) && hasManagerWithTelegram(order)) {
+            if (STATUS_TO_CHECK.equals(title) && hasManagerWithTelegram(order) && hasText(managerChatId)) {
                 String url = "https://o-ogo.ru/orders/all_orders?status=В%20проверку";
                 String text = companyTitle + " готов - На проверку\n" + url;
                 telegramService.sendMessage(Long.parseLong(managerChatId), text);
                 log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → В проверку", managerChatId);
             }
 
-            if (title.equals(STATUS_PUBLIC) && hasManagerWithTelegram(order)) {
+            if (STATUS_PUBLIC.equals(title) && hasManagerWithTelegram(order) && hasText(managerChatId)) {
                 String url = "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
                 String text = companyTitle + " Опубликован\n" + url;
                 telegramService.sendMessage(Long.parseLong(managerChatId), text);
@@ -1317,69 +1271,76 @@ public class OrderServiceImpl implements OrderService {
         }
 
         orderRepository.save(order);
-        log.info("💾 Заказ сохранён: ID {}. Компания - {} ", order.getId(),order.getCompany().getTitle());
+        log.info("💾 Заказ сохранён: ID {}. Компания - {}", order.getId(),
+                order.getCompany() != null ? order.getCompany().getTitle() : "null");
 
         return true;
     }
 
-
     private boolean hasManagerWithTelegram(Order order) {
-    try {
-        return order != null &&
-                order.getManager() != null &&
-                order.getManager().getUser() != null &&
-                order.getManager().getUser().getTelegramChatId() != null &&
-                order.getDetails() != null &&
-                !order.getDetails().isEmpty() &&
-                order.getDetails().getFirst() != null &&
-                order.getDetails().getFirst().getOrder() != null &&
-                order.getDetails().getFirst().getOrder().getCompany() != null;
-    } catch (Exception e) {
-        return false;
-    }
-}
-
-private boolean hasWorkerWithTelegram(Order order) {
-    try {
-        return order.getWorker() != null
-                && order.getWorker().getUser() != null
-                && order.getWorker().getUser().getTelegramChatId() != null
-                && order.getDetails() != null
-                && order.getDetails().getFirst() != null
-                && order.getDetails().getFirst().getOrder() != null
-                && order.getDetails().getFirst().getOrder().getCompany() != null;
-    } catch (Exception e) {
-        return false;
-    }
-}
-
-
-
-
-    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ ============================================
-    @Transactional
-    protected void saveReviewsToArchive(List<Review> reviews) { // сохранение отзывов в архив при отправке заказа в статус архив
-        for (Review review : reviews) {
-            reviewArchiveService.saveNewReviewArchive(review.getId());
+        try {
+            return order != null
+                    && order.getManager() != null
+                    && order.getManager().getUser() != null
+                    && order.getManager().getUser().getTelegramChatId() != null
+                    && hasDetails(order)
+                    && order.getCompany() != null;
+        } catch (Exception e) {
+            return false;
         }
-    } // сохранение отзывов в архив при отправке заказа в статус архив
+    }
 
+    private boolean hasWorkerWithTelegram(Order order) {
+        try {
+            return order != null
+                    && order.getWorker() != null
+                    && order.getWorker().getUser() != null
+                    && order.getWorker().getUser().getTelegramChatId() != null
+                    && hasDetails(order)
+                    && order.getCompany() != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     @Transactional
-    public Company checkStatusToCompany(Company company){
-        int result = 0;
-        for (Order order1 : company.getOrderList()) {
-            if (!order1.isComplete()) {
-                result = 1;
-                break;
+    protected void saveReviewsToArchive(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return;
+        }
+
+        for (Review review : reviews) {
+            if (review != null && review.getId() != null) {
+                reviewArchiveService.saveNewReviewArchive(review.getId());
             }
         }
-        if (result == 0){
+    }
+
+    @Override
+    @Transactional
+    public Company checkStatusToCompany(Company company) {
+        if (company == null) {
+            return null;
+        }
+
+        int result = 0;
+        Collection<Order> orders = company.getOrderList();
+        if (orders != null) {
+            for (Order order : orders) {
+                if (order != null && !order.isComplete()) {
+                    result = 1;
+                    break;
+                }
+            }
+        }
+
+        if (result == 0) {
             company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_NEW_ORDER));
         }
+
         return company;
     }
-    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ =============================
+
     @Override
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
@@ -1387,13 +1348,15 @@ private boolean hasWorkerWithTelegram(Order order) {
             Review review = reviewService.getReviewById(reviewId);
             Order order = validateAndRetrieveOrder(review, reviewId);
 
-            log.info("Достали отзыв id={} для компании: {}", reviewId, order.getCompany().getTitle());
+            log.info("Достали отзыв id={} для компании: {}", reviewId,
+                    order.getCompany() != null ? order.getCompany().getTitle() : "null");
 
-            // reviewArchiveService.saveNewReviewArchive(reviewId);
-//            log.info("Сохранили отзыв в архив");
-
-            updateBotCounterAndStatus(review.getBot());
-            log.info("Увеличили кол-во публикаций у бота");
+            if (review.getBot() != null) {
+                updateBotCounterAndStatus(review.getBot());
+                log.info("Увеличили кол-во публикаций у бота");
+            } else {
+                log.warn("У отзыва id={} нет бота, счетчик бота не обновлялся", reviewId);
+            }
 
             review.setPublish(true);
             reviewService.save(review);
@@ -1420,26 +1383,34 @@ private boolean hasWorkerWithTelegram(Order order) {
         if (review == null) {
             throw new IllegalStateException("Отзыв не найден: id=" + reviewId);
         }
+
         OrderDetails details = review.getOrderDetails();
         if (details == null || details.getOrder() == null) {
             throw new IllegalStateException("OrderDetails или Order отсутствуют у отзыва id=" + reviewId);
         }
+
         Order order = orderRepository.findById(details.getOrder().getId()).orElse(null);
         if (order == null || review.isPublish()) {
             throw new IllegalStateException("Заказ не найден или отзыв уже опубликован. id=" + reviewId);
         }
+
         return order;
     }
 
     protected int countPublishedReviews(Order order) {
-        return (int) order.getDetails().getFirst().getReviews().stream()
+        return (int) getAllReviews(order).stream()
                 .filter(Review::isPublish)
                 .count();
     }
 
     public void updateBotCounterAndStatus(Bot bot) {
         try {
-            bot.setCounter(bot.getCounter() + 1);
+            if (bot == null) {
+                return;
+            }
+
+            int currentCounter = bot.getCounter();
+            bot.setCounter(currentCounter + 1);
 
             if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
                 bot.setStatus(botService.changeStatus(HIGH_STATUS));
@@ -1451,20 +1422,21 @@ private boolean hasWorkerWithTelegram(Order order) {
 
             botService.save(bot);
         } catch (Exception e) {
-            log.error("Ошибка при обновлении бота id={}", bot.getId(), e);
+            log.error("Ошибка при обновлении бота id={}", bot != null ? bot.getId() : null, e);
             throw e;
         }
     }
 
+    @Override
     public int countOrdersByWorkerAndStatus(Worker worker, String status) {
         return orderRepository.countByWorkerAndStatus(worker, status);
     }
-    //====================== СМЕНА СТАТУСА ЗАКАЗА С ПРОВЕРКОЙ НА ОПЛАЧЕНО КОНЕЦ =============================
 
+    // =========================================================================================================
+    // ======================================== АГРЕГАЦИИ =======================================================
+    // =========================================================================================================
 
-
-
-
+    @Override
     public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
         List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect);
 
@@ -1472,8 +1444,8 @@ private boolean hasWorkerWithTelegram(Order order) {
         Map<String, Pair<Long, Long>> managerStats = new HashMap<>();
 
         for (Object[] row : results) {
-            String type = (String) row[0]; // "operator" или "manager"
-            String fio = (String) row[1];  // ФИО
+            String type = (String) row[0];
+            String fio = (String) row[1];
             long newOrders = ((Number) row[2]).longValue();
             long correctOrders = ((Number) row[3]).longValue();
 
@@ -1484,44 +1456,34 @@ private boolean hasWorkerWithTelegram(Order order) {
             }
         }
 
-        // Объединяем две мапы (если нужно)
         Map<String, Pair<Long, Long>> combinedStats = new HashMap<>(workerStats);
         combinedStats.putAll(managerStats);
 
         return combinedStats;
     }
 
-
-
     @Override
     public Map<String, Long> getAllOrdersToMonth(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         List<Object[]> results = orderRepository.getAllOrdersToMonth(status, firstDayOfMonth, lastDayOfMonth);
 
-        // Создадим две карты: одну для работников, другую для менеджеров
         Map<String, Long> workerOrders = new HashMap<>();
         Map<String, Long> managerOrders = new HashMap<>();
 
-        // Проходим по результатам и заполняем карты
         for (Object[] row : results) {
-            String workerFio = (String) row[0];  // ФИО работника
-            Long workerOrderCount = (Long) row[1];  // Количество заказов работника
+            String workerFio = (String) row[0];
+            Long workerOrderCount = (Long) row[1];
 
-            // Здесь добавляем логику для обработки заказов по менеджерам, если они есть в вашем запросе
-            String managerFio = (String) row[2];  // ФИО менеджера
-            Long managerOrderCount = (Long) row[3];  // Количество заказов менеджера
+            String managerFio = (String) row[2];
+            Long managerOrderCount = (Long) row[3];
 
-            // Обновляем карту работников
-            workerOrders.merge(workerFio, workerOrderCount, Long::sum);
-
-            // Обновляем карту менеджеров
-            managerOrders.merge(managerFio, managerOrderCount, Long::sum);
+            if (workerFio != null) {
+                workerOrders.merge(workerFio, workerOrderCount != null ? workerOrderCount : 0L, Long::sum);
+            }
+            if (managerFio != null) {
+                managerOrders.merge(managerFio, managerOrderCount != null ? managerOrderCount : 0L, Long::sum);
+            }
         }
 
-        // Для отладки выводим результаты
-//        System.out.println("Заказы по работникам: " + workerOrders);
-//        System.out.println("Заказы по менеджерам: " + managerOrders);
-
-        // Возвращаем объединенные результаты для работников и менеджеров
         Map<String, Long> allOrders = new HashMap<>();
         allOrders.putAll(workerOrders);
         allOrders.putAll(managerOrders);
@@ -1539,27 +1501,38 @@ private boolean hasWorkerWithTelegram(Order order) {
             String orderInPublished,
             String orderInWaitingPay1,
             String orderInWaitingPay2,
-            String orderNoPay) {
+            String orderNoPay
+    ) {
+        List<String> statuses = List.of(
+                orderInNew,
+                orderToCheck,
+                orderInCheck,
+                orderInCorrect,
+                orderInPublished,
+                orderInWaitingPay1,
+                orderInWaitingPay2,
+                orderNoPay
+        );
 
-        List<String> statuses = List.of(orderInNew, orderToCheck, orderInCheck, orderInCorrect,
-                orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay);
+        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(
+                statuses,
+                firstDayOfMonth.minusMonths(2),
+                lastDayOfMonth
+        );
 
-        List<Object[]> results = orderRepository.getOrdersByStatusForUsers(statuses, firstDayOfMonth.minusMonths(2), lastDayOfMonth);
-
-        // Используем LinkedHashMap, чтобы сначала добавить менеджеров, затем работников
         Map<String, Map<String, Long>> ordersMap = new LinkedHashMap<>();
-
-        // Отдельные списки для сортировки
         Map<String, Map<String, Long>> managerOrders = new LinkedHashMap<>();
         Map<String, Map<String, Long>> workerOrders = new LinkedHashMap<>();
 
         for (Object[] row : results) {
-            if (row.length < 4) continue; // Пропускаем некорректные данные
+            if (row.length < 4) {
+                continue;
+            }
 
-            String fio = (String) row[0];  // ФИО
-            String status = (String) row[1];  // Статус
-            Long count = row[2] != null ? (Long) row[2] : 0L;  // Количество заказов
-            String role = (String) row[3];  // 'manager' или 'worker'
+            String fio = (String) row[0];
+            String status = (String) row[1];
+            Long count = row[2] != null ? (Long) row[2] : 0L;
+            String role = (String) row[3];
 
             if ("manager".equals(role)) {
                 managerOrders.computeIfAbsent(fio, k -> new LinkedHashMap<>()).put(status, count);
@@ -1568,11 +1541,8 @@ private boolean hasWorkerWithTelegram(Order order) {
             }
         }
 
-        // Сначала добавляем менеджеров, потом работников
         ordersMap.putAll(managerOrders);
         ordersMap.putAll(workerOrders);
-
-//        System.out.println(ordersMap);
 
         return ordersMap;
     }
@@ -1582,201 +1552,292 @@ private boolean hasWorkerWithTelegram(Order order) {
         orderRepository.save(order);
     }
 
+    // =========================================================================================================
+    // ======================================== CONVERTER DTO ===================================================
+    // =========================================================================================================
 
-    //    ======================================== ЗАКАЗ UPDATE =========================================================
+    private List<OrderDTOList> toOrderDTOList(List<Order> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return Collections.emptyList();
+        }
 
+        return orders.stream()
+                .map(this::toDTOListOrders)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 
+    private OrderDTOList toDTOListOrders(Order order) {
+        if (order == null) {
+            return null;
+        }
 
-
-
-
-
-
-
-    //    ================================================== CONVERTER =====================================================
-
-    private List<OrderDTOList> toOrderDTOList(List<Order> orders){ // Конвертер DTO для списка заказов AllOrderListController/orders/
-        return orders.stream().map(this::toDTOListOrders).collect(Collectors.toList());
-    } // Конвертер DTO для списка заказов
-
-
-    private OrderDTOList toDTOListOrders (Order order){// Конвертер DTO для заказа
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = order.getChanged();
-        // Вычисляем разницу между датами
-//        Period period = Period.between(changedDate, now);
-        // Преобразуем период в дни
+        LocalDate changedDate = order.getChanged() != null ? order.getChanged() : now;
         long daysDifference = ChronoUnit.DAYS.between(changedDate, now);
+
+        OrderDetails firstDetail = getFirstDetail(order);
+
         return OrderDTOList.builder()
                 .id(order.getId())
-                .companyId(order.getCompany().getId())
-                .orderDetailsId(order.getDetails().iterator().next().getId())
-                .companyTitle(order.getCompany().getTitle())
-                .companyComments(order.getCompany().getCommentsCompany())
-                .filialTitle(order.getFilial().getTitle())
-                .filialUrl(order.getFilial().getUrl())
-                .status(order.getStatus().getTitle())
+                .companyId(order.getCompany() != null ? order.getCompany().getId() : null)
+                .orderDetailsId(firstDetail != null ? firstDetail.getId() : null)
+                .companyTitle(order.getCompany() != null ? order.getCompany().getTitle() : "Без компании")
+                .companyComments(order.getCompany() != null ? safeString(order.getCompany().getCommentsCompany()) : "")
+                .filialTitle(order.getFilial() != null ? safeString(order.getFilial().getTitle()) : "Без филиала")
+                .filialUrl(order.getFilial() != null ? safeString(order.getFilial().getUrl()) : "")
+                .status(safeStatusTitle(order))
                 .sum(order.getSum())
-                .companyUrlChat(order.getCompany().getUrlChat())
-                .companyTelephone(order.getCompany().getTelephone())
-                .managerPayText(order.getManager().getPayText())
+                .companyUrlChat(order.getCompany() != null ? safeString(order.getCompany().getUrlChat()) : "")
+                .companyTelephone(order.getCompany() != null ? safeString(order.getCompany().getTelephone()) : "")
+                .managerPayText(order.getManager() != null ? safeString(order.getManager().getPayText()) : "")
                 .amount(order.getAmount())
                 .counter(order.getCounter())
-                .workerUserFio(order.getWorker().getUser().getFio())
-                .categoryTitle(order.getCompany().getCategoryCompany() != null ? order.getCompany().getCategoryCompany().getCategoryTitle() : "Не выбрано")
-                .subCategoryTitle(order.getCompany().getSubCategory() != null ? order.getCompany().getSubCategory().getSubCategoryTitle() : "Не выбрано")
+                .workerUserFio(order.getWorker() != null && order.getWorker().getUser() != null
+                        ? safeString(order.getWorker().getUser().getFio())
+                        : "")
+                .categoryTitle(order.getCompany() != null && order.getCompany().getCategoryCompany() != null
+                        ? safeString(order.getCompany().getCategoryCompany().getCategoryTitle())
+                        : "Не выбрано")
+                .subCategoryTitle(order.getCompany() != null && order.getCompany().getSubCategory() != null
+                        ? safeString(order.getCompany().getSubCategory().getSubCategoryTitle())
+                        : "Не выбрано")
                 .created(order.getCreated())
                 .changed(order.getChanged())
                 .payDay(order.getPayDay())
                 .dayToChangeStatusAgo(daysDifference)
                 .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
                 .build();
-    } // Конвертер DTO для заказа на AllOrderListController/orders/
+    }
 
+    private List<OrderDTO> convertToOrderDTOList(List<Order> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return Collections.emptyList();
+        }
 
+        return orders.stream()
+                .map(this::toDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 
+    private OrderDTO toDTO(Order order) {
+        if (order == null) {
+            return null;
+        }
 
-
-
-    private List<OrderDTO> convertToOrderDTOList(List<Order> orders){ // Конвертер DTO для списка заказов
-        return orders.stream().map(this::toDTO).collect(Collectors.toList());
-    } // Конвертер DTO для списка заказов
-
-
-    private OrderDTO toDTO (Order order){// Конвертер DTO для заказа
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = order.getChanged();
-        // Вычисляем разницу между датами
+        LocalDate changedDate = order.getChanged() != null ? order.getChanged() : now;
         Period period = Period.between(changedDate, now);
-        // Преобразуем период в дни
-        int daysDifference = period.getDays();
+
+        OrderDetails firstDetail = getFirstDetail(order);
+
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
                 .sum(order.getSum())
                 .created(order.getCreated())
                 .changed(order.getChanged())
-                .status(convertToOrderDTO(order.getStatus()))
-                .company(convertToCompanyDTO(order.getCompany()))
-                .commentsCompany(order.getCompany().getCommentsCompany())
-                .filial(convertToFilialDTO(order.getFilial()))
-                .manager(convertToManagerDTO(order.getManager()))
-                .worker(convertToWorkerDTO(order.getWorker()))
+                .status(order.getStatus() != null ? convertToOrderDTO(order.getStatus()) : null)
+                .company(order.getCompany() != null ? convertToCompanyDTO(order.getCompany()) : null)
+                .commentsCompany(order.getCompany() != null ? safeString(order.getCompany().getCommentsCompany()) : "")
+                .filial(order.getFilial() != null ? convertToFilialDTO(order.getFilial()) : null)
+                .manager(order.getManager() != null ? convertToManagerDTO(order.getManager()) : null)
+                .worker(order.getWorker() != null ? convertToWorkerDTO(order.getWorker()) : null)
                 .details(convertToDetailsDTOList(order.getDetails()))
                 .complete(order.isComplete())
                 .counter(order.getCounter())
                 .dayToChangeStatusAgo(period.getDays())
-                .orderDetailsId(order.getDetails().getFirst().getId())
+                .orderDetailsId(firstDetail != null ? firstDetail.getId() : null)
                 .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
-                .groupId(order.getCompany().getGroupId())
+                .groupId(order.getCompany() != null ? order.getCompany().getGroupId() : null)
                 .build();
-    } // Конвертер DTO для заказа
-    private CompanyDTO convertToCompanyDTO(Company company){ // Конвертер DTO для компании
+    }
+
+    private CompanyDTO convertToCompanyDTO(Company company) {
+        if (company == null) {
+            return null;
+        }
+
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
                 .telephone(company.getTelephone())
                 .urlChat(company.getUrlChat())
-                .manager(convertToManagerDTO(company.getManager()))
-                .workers(convertToWorkerDTOList(company.getWorkers()))
-                .filials(convertToFilialDTOList(company.getFilial()))
+                .manager(company.getManager() != null ? convertToManagerDTO(company.getManager()) : null)
+                .workers(company.getWorkers() != null ? convertToWorkerDTOList(company.getWorkers()) : Collections.emptySet())
+                .filials(company.getFilial() != null ? convertToFilialDTOList(company.getFilial()) : Collections.emptySet())
                 .categoryCompany(company.getCategoryCompany() != null ? convertToCategoryDto(company.getCategoryCompany()) : null)
                 .subCategory(company.getSubCategory() != null ? convertToSubCategoryDto(company.getSubCategory()) : null)
                 .groupId(company.getGroupId())
                 .build();
-    } // Конвертер DTO для компании
+    }
 
-    private CategoryDTO convertToCategoryDto(Category category) {// Конвертер DTO для категории
+    private CategoryDTO convertToCategoryDto(Category category) {
+        if (category == null) {
+            return null;
+        }
+
         CategoryDTO categoryDTO = new CategoryDTO();
-        categoryDTO.setId(category.getId() != null ? category.getId() : null);
-        categoryDTO.setCategoryTitle(category.getCategoryTitle() != null ? category.getCategoryTitle() : null);
-        // Other fields if needed
+        categoryDTO.setId(category.getId());
+        categoryDTO.setCategoryTitle(category.getCategoryTitle());
         return categoryDTO;
-    } // Конвертер DTO для категории
-    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Конвертер DTO для субкатегории
+    }
+
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) {
+        if (subCategory == null) {
+            return null;
+        }
+
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
         subCategoryDTO.setId(subCategory.getId() != null ? subCategory.getId() : 0L);
-        subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle() != null ? subCategory.getSubCategoryTitle() : "Не выбрано");
-        // Other fields if needed
+        subCategoryDTO.setSubCategoryTitle(
+                subCategory.getSubCategoryTitle() != null ? subCategory.getSubCategoryTitle() : "Не выбрано"
+        );
         return subCategoryDTO;
-    } // Конвертер DTO для субкатегории
-    private ManagerDTO convertToManagerDTO(Manager manager){// Конвертер DTO для менеджера
+    }
+
+    private ManagerDTO convertToManagerDTO(Manager manager) {
+        if (manager == null) {
+            return null;
+        }
+
         return ManagerDTO.builder()
                 .managerId(manager.getId())
                 .user(manager.getUser())
                 .payText(manager.getPayText())
                 .clientId(manager.getClientId())
                 .build();
-    } // Конвертер DTO для менеджера
-    private OrderStatusDTO convertToOrderDTO(OrderStatus orderStatus){// Конвертер DTO для статуса заказа
+    }
+
+    private OrderStatusDTO convertToOrderDTO(OrderStatus orderStatus) {
+        if (orderStatus == null) {
+            return null;
+        }
+
         return OrderStatusDTO.builder()
                 .id(orderStatus.getId())
                 .title(orderStatus.getTitle())
                 .build();
-    } // Конвертер DTO для статуса заказа
-    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers){// Конвертер DTO для списка работников
-        return workers.stream().map(this::convertToWorkerDTO).collect(Collectors.toSet());
-    } // Конвертер DTO для списка работников
-    private WorkerDTO convertToWorkerDTO(Worker worker){// Конвертер DTO для работника
+    }
+
+    private Set<WorkerDTO> convertToWorkerDTOList(Set<Worker> workers) {
+        if (workers == null || workers.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        return workers.stream()
+                .map(this::convertToWorkerDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private WorkerDTO convertToWorkerDTO(Worker worker) {
+        if (worker == null) {
+            return null;
+        }
+
         return WorkerDTO.builder()
                 .workerId(worker.getId())
                 .user(worker.getUser())
                 .build();
-    } // Конвертер DTO для работника
-    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials){ // Конвертер DTO для списка филиалов
-        return filials.stream().map(this::convertToFilialDTO).collect(Collectors.toSet());
-    } // Конвертер DTO для списка филиалов
-    private FilialDTO convertToFilialDTO(Filial filial){// Конвертер DTO для филиала
+    }
+
+    private Set<FilialDTO> convertToFilialDTOList(Set<Filial> filials) {
+        if (filials == null || filials.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        return filials.stream()
+                .map(this::convertToFilialDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private FilialDTO convertToFilialDTO(Filial filial) {
+        if (filial == null) {
+            return null;
+        }
+
         return FilialDTO.builder()
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .build();
-    } // Конвертер DTO для филиала
-    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){// Конвертер DTO для списка деталей
-        return details.stream().map(this::convertToDetailsDTO).collect(Collectors.toList());
-    } // Конвертер DTO для списка деталей
-    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // Конвертер DTO для деталей
+    }
+
+    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details) {
+        if (details == null || details.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return details.stream()
+                .map(this::convertToDetailsDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails) {
+        if (orderDetails == null) {
+            return null;
+        }
+
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
                 .amount(orderDetails.getAmount())
                 .price(orderDetails.getPrice())
                 .publishedDate(orderDetails.getPublishedDate())
-                .product(convertToProductDTO(orderDetails.getProduct()))
-                .order(convertToOrderDTO(orderDetails.getOrder()))
+                .product(orderDetails.getProduct() != null ? convertToProductDTO(orderDetails.getProduct()) : null)
+                .order(orderDetails.getOrder() != null ? convertToOrderDTO(orderDetails.getOrder()) : null)
                 .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
                 .comment(orderDetails.getComment())
                 .build();
-    } // Конвертер DTO для деталей
-    private ProductDTO convertToProductDTO(Product product){// Конвертер DTO для продукта
+    }
+
+    private ProductDTO convertToProductDTO(Product product) {
+        if (product == null) {
+            return null;
+        }
+
         return ProductDTO.builder()
                 .id(product.getId())
                 .title(product.getTitle())
                 .price(product.getPrice())
                 .build();
-    } // Конвертер DTO для продукта
-    private OrderDTO convertToOrderDTO(Order order){ // Конвертер DTO для заказа
+    }
+
+    private OrderDTO convertToOrderDTO(Order order) {
+        if (order == null) {
+            return null;
+        }
+
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
-                .worker(convertToWorkerDTO(order.getWorker()))
-                .manager(convertToManagerDTO(order.getManager()))
-                .company(convertToCompanyDTO(order.getCompany()))
-                .groupId(order.getCompany().getGroupId())
+                .worker(order.getWorker() != null ? convertToWorkerDTO(order.getWorker()) : null)
+                .manager(order.getManager() != null ? convertToManagerDTO(order.getManager()) : null)
+                .company(order.getCompany() != null ? convertToCompanyDTO(order.getCompany()) : null)
+                .groupId(order.getCompany() != null ? order.getCompany().getGroupId() : null)
                 .build();
-    } // Конвертер DTO для заказа
-    public OrderDTO convertToOrderDTOToRepeat(Order order){ // Конвертер DTO для создания нового заказа после завершения предыдущего
+    }
+
+    @Override
+    public OrderDTO convertToOrderDTOToRepeat(Order order) {
+        if (order == null) {
+            return null;
+        }
+
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
-                .worker(convertToWorkerDTO(order.getWorker()))
-                .manager(convertToManagerDTO(order.getManager()))
-                .company(convertToCompanyDTO(order.getCompany()))
-                .filial(convertToFilialDTO(order.getFilial()))
-                .commentsCompany(order.getCompany().getCommentsCompany())
-                .status(convertToStatusDTO("Новый"))
+                .worker(order.getWorker() != null ? convertToWorkerDTO(order.getWorker()) : null)
+                .manager(order.getManager() != null ? convertToManagerDTO(order.getManager()) : null)
+                .company(order.getCompany() != null ? convertToCompanyDTO(order.getCompany()) : null)
+                .filial(order.getFilial() != null ? convertToFilialDTO(order.getFilial()) : null)
+                .commentsCompany(order.getCompany() != null ? order.getCompany().getCommentsCompany() : "")
+                .status(convertToStatusDTO(STATUS_NEW))
                 .build();
-    } // Конвертер DTO для создания нового заказа после завершения предыдущего
+    }
 
     private OrderStatusDTO convertToStatusDTO(String status) {
         return OrderStatusDTO.builder()
@@ -1784,349 +1845,294 @@ private boolean hasWorkerWithTelegram(Order order) {
                 .build();
     }
 
-    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){// Конвертер DTO для списка отзывов
-        return reviews.stream().map(this::convertToReviewsDTO).collect(Collectors.toList());
-    } // Конвертер DTO для списка отзывов
-    private ReviewDTO convertToReviewsDTO(Review review){// Конвертер DTO для отзыва
+    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return reviews.stream()
+                .map(this::convertToReviewsDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private ReviewDTO convertToReviewsDTO(Review review) {
+        if (review == null) {
+            return null;
+        }
+
         return ReviewDTO.builder()
                 .id(review.getId())
                 .text(review.getText())
                 .answer(review.getAnswer())
                 .build();
-    } // Конвертер DTO для отзыва
+    }
 
-//    ================================================== CONVERTER =====================================================
+    // =========================================================================================================
+    // ======================================== CONVERTER ENTITY =================================================
+    // =========================================================================================================
 
-    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO){ // Конвертер из DTO для работника
+    private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO) {
+        if (workerDTO == null || workerDTO.getWorkerId() == null) {
+            return null;
+        }
         return workerService.getWorkerById(workerDTO.getWorkerId());
-    } // Конвертер из DTO для работника
-    private Company convertCompanyDTOToCompany(CompanyDTO companyDTO){ // Конвертер из DTO для компании
+    }
+
+    private Company convertCompanyDTOToCompany(CompanyDTO companyDTO) {
+        if (companyDTO == null || companyDTO.getId() == null) {
+            return null;
+        }
         return companyService.getCompaniesById(companyDTO.getId());
-    } // Конвертер из DTO для компании
-    private Manager convertManagerDTOToManager(ManagerDTO managerDTO){// Конвертер из DTO для менеджера
+    }
+
+    private Manager convertManagerDTOToManager(ManagerDTO managerDTO) {
+        if (managerDTO == null || managerDTO.getManagerId() == null) {
+            return null;
+        }
         return managerService.getManagerById(managerDTO.getManagerId());
-    } // Конвертер из DTO для менеджера
-    private OrderStatus convertStatusDTOToStatus(OrderStatusDTO orderStatusDTO){// Конвертер из DTO для статуса заказа
+    }
+
+    private OrderStatus convertStatusDTOToStatus(OrderStatusDTO orderStatusDTO) {
+        if (orderStatusDTO == null || orderStatusDTO.getTitle() == null) {
+            return null;
+        }
         return orderStatusService.getOrderStatusByTitle(orderStatusDTO.getTitle());
-    } // Конвертер из DTO для статуса заказа
-    private Filial convertFilialDTOToFilial(FilialDTO filialDTO){// Конвертер из DTO для филиала
+    }
+
+    private Filial convertFilialDTOToFilial(FilialDTO filialDTO) {
+        if (filialDTO == null || filialDTO.getId() == null) {
+            return null;
+        }
         return filialService.getFilial(filialDTO.getId());
-    } // Конвертер из DTO для филиала
-    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId){ // Конвертер из DTO для заказа
-        Product product1 = productService.findById(productId);
+    }
+
+    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId) {
+        Product product = productService.findById(productId);
+
         return Order.builder()
                 .amount(orderDTO.getAmount())
-            .complete(false)
+                .complete(false)
                 .worker(convertWorkerDTOToWorker(orderDTO.getWorker()))
-            .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
-            .manager(convertManagerDTOToManager(orderDTO.getManager()))
-            .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
-            .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
-            .status(convertStatusDTOToStatus(orderDTO.getStatus()))
-            .build();
-} // Конвертер из DTO для заказа
-private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId){ // Конвертер из DTO для деталей заказа
-    Product product1 = productService.findById(productId);
-    return OrderDetails.builder()
-            .amount(orderDTO.getAmount())
-            .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
-            .order(order)
-            .product(product1)
-            .comment("")
-            .build();
-} // Конвертер из DTO для деталей заказа
+                .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
+                .manager(convertManagerDTOToManager(orderDTO.getManager()))
+                .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
+                .sum(product != null && product.getPrice() != null
+                        ? product.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount()))
+                        : BigDecimal.ZERO)
+                .status(convertStatusDTOToStatus(orderDTO.getStatus()))
+                .build();
+    }
 
-    private String siteText = "1. Название и адрес филиала: Центр детских развлечений, г. Иркутск, мк-н, Юбилейный, 17.\n" +
-            "2. Основная сфера деятельности: Организация детских праздников, проведение квестов и развлечений.\n" +
-            "3. Как давно вы работаете: Работаем на рынке развлечений уже несколько лет.\n" +
-            "4. Что именно вы предлагаете: Организацию детских дней рождения \"под ключ\" с квестами, играми, анимацией, фотосессиями и питанием.\n" +
-            "5. Как выглядит вход: Интересный и яркий вход, оформленный в стиле детских приключений.\n" +
-            "6. Интерьер: Уютное и красочное помещение с различными зонами для игр и отдыха.\n" +
-            "7. Парковка и удобства: Есть парковочные места, комфортные условия для проведения мероприятий.\n" +
-            "8. Цены: Стоимость различных пакетов услуг начинается от 1100 рублей за человека.\n" +
-            "9. Хиты продаж: Популярные квесты \"Гарри Поттер\", \"Замок Дракулы\", а также пакеты дня рождения \"под ключ\".\n" +
-            "10. Уникальные предложения: Организация питания, бесплатная чайная зона, красочные костюмы для игроков.\n" +
-            "11. Имена и должности ключевых сотрудников: Не указано.\n" +
-            "12. Опыт, специализация: Специализация в проведении детских мероприятий и квестов.\n" +
-            "13. Акции и скидки: Скидки при большом количестве участников, скидка на повторное посещение.\n" +
-            "14. Фразы для отзыва: \"Наш ребенок провел здесь незабываемый день рождения! Все организовано на высшем уровне.\"\n" +
-            "15. Цитаты клиентов: \"Мои дети в восторге от проведенного времени! Спасибо за теплую атмосферу.\"\n" +
-            "16. Как происходит заказ: Заказ услуг осуществляется по телефону или через онлайн-форму на сайте.\n" +
-            "17. Гарантии и возвраты: Гарантия качества проведения мероприятий, возможность замены пакетов услуг.\n" +
-            "18. Срок выполнения: Время проведения мероприятий зависит от выбранного пакета услуг, от 2 до 4 часов.\n" +
-            "19. Прочая информация: Предоставляется широкий выбор развлечений для детей разного возраста и интересов, разнообразие квестов и анимаций.";
+    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId) {
+        Product product = productService.findById(productId);
 
+        return OrderDetails.builder()
+                .amount(orderDTO.getAmount())
+                .price(product != null && product.getPrice() != null
+                        ? product.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount()))
+                        : BigDecimal.ZERO)
+                .order(order)
+                .product(product)
+                .comment("")
+                .build();
+    }
 
-
-
-
-    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails){ // Конвертер из DTO для списка отзывов
+    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
         List<Review> reviewList = new ArrayList<>();
-//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
+
+        Filial filial = convertFilialDTOToFilial(orderDTO.getFilial());
+        List<Bot> bots = findAllBotsMinusFilial(orderDTO, filial);
 
         for (int i = 0; i < orderDTO.getAmount(); i++) {
             Review review = toEntityReviewFromDTO(orderDTO.getCompany(), orderDetails, orderDTO.getFilial(), bots);
-            Review review2 = reviewService.save(review);
-            reviewList.add(review2);
+            Review saved = reviewService.save(review);
+            reviewList.add(saved);
         }
+
         return reviewList;
-    } // Конвертер из DTO для списка отзывов
-    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, FilialDTO filialDTO, List<Bot> bots){ // Конвертер из DTO для отзыва
-        var random = new SecureRandom();
+    }
+
+    private Review toEntityReviewFromDTO(CompanyDTO companyDTO, OrderDetails orderDetails, FilialDTO filialDTO, List<Bot> bots) {
+        SecureRandom random = new SecureRandom();
+        Product product = orderDetails != null ? orderDetails.getProduct() : null;
+
+        Bot selectedBot = (bots != null && !bots.isEmpty())
+                ? bots.get(random.nextInt(bots.size()))
+                : null;
+
         return Review.builder()
-                .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
-                .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
+                .category(companyDTO != null ? convertCategoryDTOToCompany(companyDTO.getCategoryCompany()) : null)
+                .subCategory(companyDTO != null ? convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()) : null)
                 .text("Текст отзыва")
                 .answer("")
                 .orderDetails(orderDetails)
-                .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
+                .bot(selectedBot)
                 .filial(convertFilialDTOToFilial(filialDTO))
                 .publish(false)
-                .worker(orderDetails.getOrder().getWorker())
-                .product(orderDetails.getProduct())
-                .price(orderDetails.getProduct().getPrice())
+                .worker(orderDetails != null && orderDetails.getOrder() != null ? orderDetails.getOrder().getWorker() : null)
+                .product(product)
+                .price(product != null ? product.getPrice() : null)
                 .build();
-    }// Конвертер из DTO для отзыва
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==================================      РАБОЧИЙ ВАРИАНТ   ДЛЯ СОЗДАНИЯ ОТЗЫВОВ 1м ВЫЗОВОМ              ==================================
-
-//    private List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
-//        List<Review> reviewList = new ArrayList<>();
-//
-//        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
-//        String siteRaw = websiteParserService.extractTextFromWebsite("naigru.ru");
-//
-//        int siteTokens = siteRaw != null ? siteRaw.length() : 0;
-//        log.info("🌐 Текст с сайта содержит приблизительно {} токенов", siteTokens);
-//
-//        String site = reviewGeneratorService.safeAnalyzeSiteText(siteRaw);
-//        log.info("📋 Компактный анализ сайта:\n{}", site);
-//        String category = orderDTO.getCompany().getSubCategory().getSubCategoryTitle();
-//        int totalAmount = orderDTO.getAmount();
-//
-//        Set<String> uniqueTexts = new LinkedHashSet<>();
-//        int maxAttempts = 10 * totalAmount;
-//        int attempts = 0;
-//        long startTime = System.nanoTime();
-//        int totalTokenCount = 0;
-//
-//        while (uniqueTexts.size() < totalAmount && attempts < maxAttempts) {
-//            int remaining = totalAmount - uniqueTexts.size();
-//            int batchSize = Math.min(remaining, 5); // ограничиваем батч до 5 штук
-//
-//            log.info("📦 Запрашиваем партию отзывов, размер: {}", batchSize);
-//
-//            List<String> batch = safeGenerateMultipleReviews(
-//                    category,
-//                    "позитивный",
-//                    site,
-//                    batchSize
-//            );
-//
-//            int batchTokens = batch.stream().mapToInt(s -> s != null ? s.length() : 0).sum();
-//            totalTokenCount += batchTokens;
-//            log.info("🔢 Получено {} отзывов, оценка токенов партии (приблизительно): {}", batch.size(), batchTokens);
-//
-//            for (String review : batch) {
-//                if (review == null || review.isBlank()) continue;
-//
-//                if (review.startsWith("⚠️")) {
-//                    log.warn("Пропущен отзыв с ошибкой: {}", review);
-//                    continue;
-//                }
-//
-//                if (uniqueTexts.contains(review)) {
-//                    log.debug("Пропущен дубликат отзыва: {}", review);
-//                    continue;
-//                }
-//
-//                uniqueTexts.add(review);
-//            }
-//
-//            if (uniqueTexts.size() < totalAmount) {
-//                String one = safeGenerateReview(category, "позитивный", site);
-//                if (one != null && !one.startsWith("⚠️") && !uniqueTexts.contains(one)) {
-//                    uniqueTexts.add(one);
-//                    totalTokenCount += one.length();
-//                } else if (one != null) {
-//                    log.debug("Одинарный отзыв не добавлен (дубликат или ошибка): {}", one);
-//                }
-//            }
-//
-//            attempts++;
-//
-//            try {
-//                Thread.sleep(300);
-//            } catch (InterruptedException e) {
-//                Thread.currentThread().interrupt();
-//            }
-//        }
-//
-//        long endTime = System.nanoTime();
-//        double durationSec = (endTime - startTime) / 1_000_000_000.0;
-//
-//        if (uniqueTexts.size() < totalAmount) {
-//            log.error("Не удалось получить нужное количество уникальных отзывов. Есть {} из {} за {} сек после {} попыток",
-//                    uniqueTexts.size(), totalAmount, String.format("%.2f", durationSec), attempts);
-//        } else {
-//            log.info("📝 Получено итогово {} уникальных отзывов за {} сек после {} попыток",
-//                    uniqueTexts.size(), String.format("%.2f", durationSec), attempts);
-//        }
-//
-//        log.info("📊 Общая оценка количества токенов всех отзывов: {}", totalTokenCount);
-//
-//        List<String> texts = new ArrayList<>(uniqueTexts).subList(0, Math.min(totalAmount, uniqueTexts.size()));
-//        for (String text : texts) {
-//            Review review = toEntityReviewFromDTO(
-//                    orderDTO.getCompany(),
-//                    orderDetails,
-//                    orderDTO.getFilial(),
-//                    bots,
-//                    text
-//            );
-//            Review saved = reviewService.save(review);
-//            if (saved != null) {
-//                reviewList.add(saved);
-//            } else {
-//                log.warn("Отзыв не сохранён, возможно, дубликат: {}", review.getText());
-//            }
-//        }
-//
-//        return reviewList;
-//    }
-//
-//
-//    private String safeGenerateReview(String category, String tone, String site) {
-//        int retries = 3;
-//        for (int i = 0; i < retries; i++) {
-//            try {
-//                return reviewGeneratorService.generateReview(category, tone, site);
-//            } catch (RuntimeException ex) {
-//                Throwable cause = ex.getCause();
-//                if (ex.getMessage() != null && ex.getMessage().contains("Rate limit reached")) {
-//                    log.warn("🚦 Rate limit при генерации отзыва, попытка {}/{}", i + 1, retries);
-//                    try {
-//                        Thread.sleep(6000);
-//                    } catch (InterruptedException e) {
-//                        Thread.currentThread().interrupt();
-//                    }
-//                } else if (cause instanceof SocketTimeoutException || cause instanceof InterruptedIOException) {
-//                    log.warn("⏱ Прерывание или timeout при генерации, попытка {}/{}", i + 1, retries);
-//                    try {
-//                        Thread.sleep(1000);
-//                    } catch (InterruptedException e) {
-//                        Thread.currentThread().interrupt();
-//                    }
-//                } else {
-//                    log.error("❌ Ошибка при генерации отзыва: {}", ex.getMessage(), ex);
-//                    throw ex;
-//                }
-//            }
-//        }
-//        return "⚠️ Ошибка: не удалось получить отзыв после ретраев";
-//    }
-//
-//    private List<String> safeGenerateMultipleReviews(String category, String tone, String site, int amount) {
-//        int retries = 3;
-//        for (int i = 0; i < retries; i++) {
-//            try {
-//                return reviewGeneratorService.generateMultipleReviews(category, tone, site, amount);
-//            } catch (RuntimeException ex) {
-//                Throwable cause = ex.getCause();
-//                if (ex.getMessage() != null && ex.getMessage().contains("Rate limit reached")) {
-//                    log.warn("🚦 Rate limit при batch генерации отзывов, попытка {}/{}", i + 1, retries);
-//                    try {
-//                        Thread.sleep(6000);
-//                    } catch (InterruptedException e) {
-//                        Thread.currentThread().interrupt();
-//                    }
-//                } else if (cause instanceof SocketTimeoutException || cause instanceof InterruptedIOException) {
-//                    log.warn("⏱ Прерывание или timeout при batch генерации отзывов, попытка {}/{}", i + 1, retries);
-//                    try {
-//                        Thread.sleep(1000);
-//                    } catch (InterruptedException e) {
-//                        Thread.currentThread().interrupt();
-//                    }
-//                } else {
-//                    log.error("❌ Ошибка при batch генерации отзывов: {}", ex.getMessage(), ex);
-//                    throw ex;
-//                }
-//            }
-//        }
-//        return Collections.emptyList();
-//    }
-
-    // ==================================      РАБОЧИЙ ВАРИАНТ                 ==================================
-
+    }
 
     private Review toEntityReviewFromDTO(
             CompanyDTO companyDTO,
             OrderDetails orderDetails,
             FilialDTO filialDTO,
             List<Bot> bots,
-            String textReview // <-- передаём уже готовый текст
+            String textReview
     ) {
-        var random = new SecureRandom();
+        SecureRandom random = new SecureRandom();
+        Product product = orderDetails != null ? orderDetails.getProduct() : null;
+
+        Bot selectedBot = (bots != null && !bots.isEmpty())
+                ? bots.get(random.nextInt(bots.size()))
+                : null;
 
         return Review.builder()
-                .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
-                .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
+                .category(companyDTO != null ? convertCategoryDTOToCompany(companyDTO.getCategoryCompany()) : null)
+                .subCategory(companyDTO != null ? convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()) : null)
                 .text(textReview != null ? textReview : "Текст отзыва")
                 .answer("")
                 .orderDetails(orderDetails)
-                .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
+                .bot(selectedBot)
                 .filial(convertFilialDTOToFilial(filialDTO))
                 .publish(false)
-                .worker(orderDetails.getOrder().getWorker())
-                .product(orderDetails.getProduct())
-                .price(orderDetails.getProduct().getPrice())
+                .worker(orderDetails != null && orderDetails.getOrder() != null ? orderDetails.getOrder().getWorker() : null)
+                .product(product)
+                .price(product != null ? product.getPrice() : null)
                 .build();
     }
 
-    private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
-            List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
-        System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
-            List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
+    private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial) {
+        if (filial == null || filial.getCity() == null || filial.getCity().getId() == null) {
+            return new ArrayList<>();
+        }
 
-            List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        System.out.println("Боты вытащенные из базы по определнному городу для удаления: " +  botsCompany.size());
-            bots.removeAll(botsCompany);
-        System.out.println("Оставшиеся: " + bots.size());
-            return bots;
+        List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
+        if (bots == null) {
+            bots = new ArrayList<>();
+        }
+
+        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
+        List<Bot> botsCompany = reviewListFilial == null
+                ? Collections.emptyList()
+                : reviewListFilial.stream()
+                .map(Review::getBot)
+                .filter(Objects::nonNull)
+                .toList();
+
+        bots.removeAll(botsCompany);
+        return bots;
     }
 
-    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории
+    private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO) {
+        if (categoryDTO == null || categoryDTO.getId() == null) {
+            return null;
+        }
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
-    } // Конвертер из DTO для категории
-    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO){// Конвертер из DTO для субкатегории
+    }
+
+    private SubCategory convertSubCompanyDTOToSubCompany(SubCategoryDTO subCategoryDTO) {
+        if (subCategoryDTO == null || subCategoryDTO.getId() == null) {
+            return null;
+        }
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
-    } // Конвертер из DTO для субкатегории
+    }
 
+    // =========================================================================================================
+    // ======================================== SAFE HELPERS ====================================================
+    // =========================================================================================================
 
+    private OrderDetails getFirstDetail(Order order) {
+        if (order == null || order.getDetails() == null || order.getDetails().isEmpty()) {
+            return null;
+        }
+        return order.getDetails().get(0);
+    }
 
-//    ==================================================================================================================
+    private Review getFirstReview(Order order) {
+        OrderDetails firstDetail = getFirstDetail(order);
+        if (firstDetail == null || firstDetail.getReviews() == null || firstDetail.getReviews().isEmpty()) {
+            return null;
+        }
+        return firstDetail.getReviews().get(0);
+    }
+
+    private List<Review> getAllReviews(Order order) {
+        if (order == null || order.getDetails() == null || order.getDetails().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return order.getDetails().stream()
+                .filter(Objects::nonNull)
+                .flatMap(detail -> Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList()).stream())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private boolean hasDetails(Order order) {
+        return order != null && order.getDetails() != null && !order.getDetails().isEmpty();
+    }
+
+    private String safeStatusTitle(Order order) {
+        if (order == null || order.getStatus() == null || order.getStatus().getTitle() == null) {
+            return "";
+        }
+        return order.getStatus().getTitle();
+    }
+
+    private String safeFilialTitle(Order order) {
+        return order != null && order.getFilial() != null
+                ? safeString(order.getFilial().getTitle())
+                : "Без филиала";
+    }
+
+    private String safeString(String value) {
+        return value == null ? "" : value;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private Page<OrderDTOList> emptyOrderPage(int pageNumber, int pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        return new PageImpl<>(Collections.emptyList(), pageable, 0);
+    }
+
+    private User resolveUserFromPrincipal(Principal principal) {
+        if (principal == null) {
+            return null;
+        }
+        return userService.findByUserName(principal.getName()).orElse(null);
+    }
+
+    private Manager resolveManagerFromPrincipal(Principal principal) {
+        User user = resolveUserFromPrincipal(principal);
+        if (user == null) {
+            return null;
+        }
+        return managerService.getManagerByUserId(user.getId());
+    }
+
+    private Worker resolveWorkerFromPrincipal(Principal principal) {
+        User user = resolveUserFromPrincipal(principal);
+        if (user == null) {
+            return null;
+        }
+        return workerService.getWorkerByUserId(user.getId());
+    }
+
+    private List<Manager> resolveOwnerManagersFromPrincipal(Principal principal) {
+        User user = resolveUserFromPrincipal(principal);
+        if (user == null || user.getManagers() == null) {
+            return Collections.emptyList();
+        }
+        return user.getManagers().stream().toList();
+    }
 }
-
-
-
-
-
-
 
 
 //@Transactional
@@ -2134,9 +2140,9 @@ private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, 
 //    try {
 //        Order order = orderRepository.findById(orderID).orElseThrow(() -> new NotFoundException("Order  not found for orderID: " + orderID));
 //        if (title.equals(STATUS_PAYMENT)){
-////                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
-////                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
-////                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
+/// /                log.info("1. Пришел запрос на перевод статуса заказа в статус Оплачено");
+/// /                log.info("1. Смотрим текущий статус заказа выполнен или нет - orderIsComplete: {}", order.isComplete());
+/// /                log.info("1. Проверка счетчиков order.getAmount() <= order.getCounter(): {}", Objects.equals(order.getAmount(), order.getCounter()));
 //
 //            if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())){
 //                log.info("2. Проверили, что заказ еще не бьл выполнен и что счетчкики совпадают");
@@ -2160,7 +2166,7 @@ private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, 
 //                        log.info("6. Заказ обновлен и сохранен");
 //                        companyService.save(checkStatusToCompany(company));
 //                        log.info("7. Компания сохранена, статус сменен на Готов к Новому заказу");
-////                             Создание нового заказа с отзывами
+/// /                             Создание нового заказа с отзывами
 //                        if (createNewOrderWithReviews(company.getId(), order.getDetails().getFirst().getProduct().getId(), convertToOrderDTOToRepeat(order))) {
 //                            log.info("8. Новый заказ создался автоматически - Успешно");
 //                            log.info("8. Оплата поступила, ЗП начислена Менеджеру и Работнику");
@@ -2257,30 +2263,6 @@ private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, 
 //    }
 //} // смена статуса для заказа с проверкой на Оплачено
 //
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //@Override

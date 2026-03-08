@@ -8,12 +8,16 @@ import com.hunt.otziv.u_users.services.service.OperatorService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
 public class OperatorServiceImpl implements OperatorService {
+
     private final OperatorRepository operatorRepository;
 
     public OperatorServiceImpl(OperatorRepository operatorRepository) {
@@ -21,57 +25,56 @@ public class OperatorServiceImpl implements OperatorService {
     }
 
     @Override
-    public Operator getOperatorById(Long id) { // Взять оператора по Id
+    public Operator getOperatorById(Long id) {
         return operatorRepository.findById(id)
-           .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
-    } // Взять оператора по Id
+                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+    }
 
     @Override
-    public Operator getOperatorByUserId(Long id) { // Взять оператора по Id юзера
-        return operatorRepository.findByUserId(id).orElse(null);
-    } // Взять оператора по Id юзера
+    public Operator getOperatorByUserId(Long id) {
+        return operatorRepository.findByUserIdWithUserAndImage(id).orElse(null);
+    }
 
     @Override
     public List<Operator> getAllOperators() {
-        return operatorRepository.findAllOperators();
-    } // Взять всех операторов
+        return operatorRepository.findAllWithUserAndImage();
+    }
 
     @Override
     public void delete(Long userId, Long operatorId) {
     }
 
     @Override
-    public void saveNewOperator(User user) { // Сохранить нового оператора
-        if (operatorRepository.findByUserId(user.getId()).isPresent()){
+    public void saveNewOperator(User user) {
+        if (operatorRepository.findByUserId(user.getId()).isPresent()) {
             log.info("Не добавили оператора так как уже в списке");
-        }
-        else {
+        } else {
             log.info("начали добавлять оператора так как нет в списке");
             Operator operator = new Operator();
             operator.setUser(user);
             operatorRepository.save(operator);
             log.info("Добавили оператора");
         }
-    } // Сохранить нового оператора
+    }
 
     @Override
-    public Operator getOperatorByUserIdToDelete(Long id) { // Найти оператора для удаления
+    public Operator getOperatorByUserIdToDelete(Long id) {
         return operatorRepository.findByUserId(id).orElse(null);
-    } // Найти оператора для удаления
+    }
 
     @Override
-    public void deleteOperator(User user) { // Удалить оператора
+    public void deleteOperator(User user) {
         log.info("Вошли в проверку при удалении есть ли такой оператор при смене роли");
         Operator operator = getOperatorByUserIdToDelete(user.getId());
         log.info("Достали опертора");
-        if (operator != null){
+
+        if (operator != null) {
             operatorRepository.delete(operator);
             log.info("Удалили оператора");
-        }
-        else {
+        } else {
             log.info("Не удалили оператора так как такого нет в списке");
         }
-    } // Удалить оператора
+    }
 
     @Override
     public List<Operator> getAllOperatorsToManager(Manager manager) {
@@ -88,4 +91,17 @@ public class OperatorServiceImpl implements OperatorService {
         return operatorRepository.getOperatorByTelephoneId(telephoneId);
     }
 
+    @Override
+    public Set<Operator> getAllOperatorsToManagerList(List<Manager> managerList) {
+        return operatorRepository.findAllByManagers(managerList);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> findUserIdsByManagerIds(Set<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return operatorRepository.findUserIdsByManagerIds(managerIds);
+    }
 }

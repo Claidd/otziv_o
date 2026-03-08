@@ -4,6 +4,7 @@ package com.hunt.otziv.u_users.services.service;
 
 
 import com.hunt.otziv.u_users.dto.*;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public interface UserService extends UserDetailsService{
 
@@ -48,7 +50,11 @@ public interface UserService extends UserDetailsService{
 
     List<User> getAllOwners(String roleName);
 
+    Set<Long> findAllRelevantUserIdsForOwner(Set<Manager> managers);
 
+    List<Long> findManagerIdsByUserId(Long userId);
+
+    List<Long> findAllRelevantUserIdsForManagerIds(List<Long> managerIds);
 //
 //    Object getUserByPrincipal(Principal principal);
 //    Optional<User> findByUserName(String username);

@@ -10,6 +10,10 @@ import java.util.List;
 
 public interface ImageRepository extends CrudRepository<Image, Long> {
 
-    @Query("SELECT u.fio, i.id, u.id FROM User u JOIN Image i ON u.image.id = i.id")
+    @Query("""
+       SELECT u.fio, u.image.id, u.id
+       FROM User u
+       WHERE u.image IS NOT NULL
+       """)
     List<Object[]> findAllToScore();
 }

@@ -1,9 +1,6 @@
 package com.hunt.otziv.l_lead.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,7 +17,8 @@ import java.util.Date;
 public class DispatchSettings {
 
     @Id
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
 
     @Column(name = "cron_expression")
     private String cronExpression;

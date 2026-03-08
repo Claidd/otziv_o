@@ -34,5 +34,7 @@ public interface WorkerService {
 
     void save(Worker worker);
 
+    List<Long> findUserIdsByManagerIds(Set<Long> managerIds);
+
 //    List<WorkerDTO> getAllWorkersIsActiveByUser(User user);
 }

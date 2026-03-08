@@ -15,26 +15,98 @@ import java.util.Set;
 
 @Repository
 public interface WorkerRepository extends CrudRepository<Worker, Long> {
+
     Optional<Worker> findById(Long id);
 
-    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user")
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            """)
     Set<Worker> findAll();
 
-    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user u WHERE :manager IN elements(u.managers)")
+    @Query("""
+    SELECT DISTINCT w
+    FROM Worker w
+    JOIN FETCH w.user u
+    LEFT JOIN FETCH u.image
+""")
+    Set<Worker> findAllWithUserAndImageSet();
+
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            WHERE :manager IN elements(u.managers)
+            """)
     List<Worker> findAllToManager(Manager manager);
 
-    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user u WHERE w IN (:workers)")
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            WHERE w IN (:workers)
+            """)
     List<Worker> findAllToManagerWorkers(Set<Worker> workers);
+
     Set<Worker> findAllByUserId(Long id);
+
     List<Worker> findAllByUser(User user);
+
+    @Query("""
+    SELECT w
+    FROM Worker w
+    JOIN FETCH w.user u
+    LEFT JOIN FETCH u.image
+    WHERE u.id = :id
+""")
     Optional<Worker> findByUserId(Long id);
 
-    @Query("SELECT w FROM Worker w LEFT JOIN FETCH w.user WHERE w.user.username = :username")
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            WHERE w.user.username = :username
+            """)
     Worker findByUsername(String username);
 
-    @Query("SELECT DISTINCT w FROM Worker w LEFT JOIN FETCH w.user u LEFT JOIN FETCH w.bots b LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
-    List<Worker> findAllWorkers();
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            """)
+    List<Worker> findAllWithUserAndImage();
 
-    @Query("SELECT DISTINCT w FROM Worker w LEFT JOIN FETCH w.user u LEFT JOIN FETCH w.bots b LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers m WHERE m IN :managerList")
+    @Query("""
+            SELECT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            WHERE w.user.id = :id
+            """)
+    Optional<Worker> findByUserIdWithUserAndImage(Long id);
+
+    @Query("""
+            SELECT DISTINCT w
+            FROM Worker w
+            JOIN FETCH w.user u
+            LEFT JOIN FETCH u.image
+            LEFT JOIN FETCH u.managers m
+            WHERE m IN :managerList
+            """)
     Set<Worker> findAllToManagerList(List<Manager> managerList);
+
+    @Query("""
+    SELECT DISTINCT w.user.id
+    FROM Worker w
+    JOIN w.user u
+    JOIN u.managers m
+    WHERE m.id IN :managerIds
+""")
+    List<Long> findUserIdsByManagerIds(@Param("managerIds") Set<Long> managerIds);
 }

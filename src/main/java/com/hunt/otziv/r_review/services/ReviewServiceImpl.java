@@ -37,6 +37,7 @@ import com.hunt.otziv.r_review.repository.ReviewArchiveRepository;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -63,10 +64,11 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ReviewServiceImpl implements ReviewService{
+public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final ReviewArchiveRepository reviewArchiveRepository;
@@ -81,8 +83,8 @@ public class ReviewServiceImpl implements ReviewService{
     private final ProductService productService;
     private final FilialService filialService;
 
-    private static final Long STUB_BOT_ID = 1L; // ID бота-заглушки в базе
-    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3; // Максимум активных отзывов на бота
+    private static final Long STUB_BOT_ID = 1L;
+    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
 
     @Value("${app.nagul.cooldown}")
     private int NAGUL_COOLDOWN_MINUTES;
@@ -92,44 +94,124 @@ public class ReviewServiceImpl implements ReviewService{
             "введите", "заполните", "укажите", "вставьте", "шаблон", "template", "пример"
     );
 
-    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
-    }  // Берем все заказы с поиском по названию компании или номеру
+    @Override
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
 
-    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
-    } // Берем все отзывы с датой для Работника
-
-    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-        reviewPage = reviewRepository.findAll(reviewId).stream().filter(review -> review.getOrderDetails().getOrder().getManager().equals(manager)).collect(Collectors.toList());
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
-    } // Берем все отзывы с датой для Менеджера
+        return reviewRepository.countByWorkerIdsAndStatusPublish(workerIds, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Long) row[1]).intValue()
+                ));
+    }
 
     @Override
-    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-        Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(),pageNumber,pageSize);
-    } // Берем все отзывы с датой для Владельца
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatusVigul(List<Long> workerIds, LocalDate localDate) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
 
-    @Transactional // удаление отзывов
+        return reviewRepository.countByWorkerIdsAndStatusVigul(workerIds, localDate)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Long) row[1]).intValue()
+                ));
+    }
+
+    @Override
+    public int countReviewsForWorkerUserId(Long userId) {
+        return reviewRepository.countReviewsForWorkerUserId(userId);
+    }
+
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(Collection<Long> workerIds, LocalDate localDate) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Integer> result = new HashMap<>();
+
+        for (Object[] row : reviewRepository.countByWorkerIdsAndStatusPublish(workerIds, localDate)) {
+            Long workerId = (Long) row[0];
+            Long count = (Long) row[1];
+            result.put(workerId, count.intValue());
+        }
+
+        return result;
+    }
+
+    public Map<Long, Integer> countOrdersByWorkerIdsAndStatusVigul(Collection<Long> workerIds, LocalDate localDate) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Integer> result = new HashMap<>();
+
+        for (Object[] row : reviewRepository.countByWorkerIdsAndStatusVigul(workerIds, localDate)) {
+            Long workerId = (Long) row[0];
+            Long count = (Long) row[1];
+            result.put(workerId, count.intValue());
+        }
+
+        return result;
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize) {
+        List<Long> reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
+
+        List<Long> reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
+
+        List<Long> reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
+        List<Review> reviewPage = reviewId.isEmpty()
+                ? Collections.emptyList()
+                : reviewRepository.findAll(reviewId).stream()
+                .filter(review -> {
+                    Order order = extractOrder(review);
+                    return order != null && Objects.equals(order.getManager(), manager);
+                })
+                .collect(Collectors.toList());
+
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+        if (managerList.isEmpty()) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
+
+        Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
+        List<Long> reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
+        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+    }
+
+    @Transactional
     public void deleteAllByIdIn(List<Long> reviewIds) {
         if (reviewIds != null && !reviewIds.isEmpty()) {
             log.debug("Удаление отзывов по списку ID: {}", reviewIds);
@@ -139,26 +221,25 @@ public class ReviewServiceImpl implements ReviewService{
     }
 
     private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
-        // Сначала проверяем, что список не пустой
         if (reviewPage.isEmpty()) {
             Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
-        // Рассчитываем правильный pageNumber, если он слишком большой
         int totalElements = reviewPage.size();
         int maxPageNumber = (int) Math.ceil((double) totalElements / pageSize) - 1;
 
-        // Если запрошенный pageNumber больше максимального, используем последнюю страницу
         if (pageNumber > maxPageNumber) {
-            pageNumber = maxPageNumber > 0 ? maxPageNumber : 0;
+            pageNumber = Math.max(maxPageNumber, 0);
+        }
+        if (pageNumber < 0) {
+            pageNumber = 0;
         }
 
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), totalElements);
 
-        // Дополнительная проверка на случай, если start всё равно больше end
         if (start >= totalElements) {
             start = 0;
             end = Math.min(pageSize, totalElements);
@@ -187,99 +268,66 @@ public class ReviewServiceImpl implements ReviewService{
         return new PageImpl<>(reviewDTOOnes, pageable, totalElements);
     }
 
-//    private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
-//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
-//        int start = (int)pageable.getOffset();
-//        int end = Math.min((start + pageable.getPageSize()), reviewPage.size());
-//
-//        List<ReviewDTOOne> reviewDTOOnes = reviewPage.subList(start, end)
-//                .stream()
-//                .map(review -> {
-//                    try {
-//                        return toReviewDTOOne(review);
-//                    } catch (Exception e) {
-//                        log.error("Ошибка при преобразовании отзыва ID {} в DTO: {}",
-//                                review.getId(), e.getMessage(), e);
-//                        // Возвращаем DTO с минимальной информацией об ошибке
-//                        return ReviewDTOOne.builder()
-//                                .id(review.getId())
-//                                .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
-//                                .botFio("ОШИБКА")
-//                                .text(review.getText() != null ? review.getText() : "")
-//                                .build();
-//                    }
-//                })
-//                .filter(Objects::nonNull) // Фильтруем null значения
-//                .collect(Collectors.toList());
-//
-//        return new PageImpl<>(reviewDTOOnes, pageable, reviewPage.size());
-//    }
-
-    // В ReviewService.java
     public boolean hasActiveNagulReviews(Principal principal) {
-        if (principal == null) return false;
+        if (principal == null) {
+            return false;
+        }
 
         User user = userService.findByUserName(principal.getName()).orElse(null);
-        if (user == null) return false;
+        if (user == null) {
+            return false;
+        }
 
         Worker worker = workerService.getWorkerByUserId(user.getId());
-        if (worker == null) return false;
+        if (worker == null) {
+            return false;
+        }
 
         LocalDate today = LocalDate.now();
         return reviewRepository.existsActiveNagulReviews(worker, today.plusDays(60));
     }
-
-//    private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
-//        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
-//        int start = (int)pageable.getOffset();
-//        int end = Math.min((start + pageable.getPageSize()), reviewPage.size());
-//        List<ReviewDTOOne> ReviewDTOOnes = reviewPage.subList(start, end)
-//                .stream()
-//                .map(this::toReviewDTOOne)
-//                .collect(Collectors.toList());
-//        return new PageImpl<>(ReviewDTOOnes, pageable, reviewPage.size());
-//    }
 
     @Override
     public List<Review> saveAll(List<Review> reviews) {
         return (List<Review>) reviewRepository.saveAll(reviews);
     }
 
-    public Review save(Review review){ // Сохранить отзыв в БД
+    public Review save(Review review) {
+        if (review == null) {
+            return null;
+        }
+
         if (!reviewRepository.existsByText(review.getText())) {
             log.info("1. Отзыв в БД отзывы сохранен");
             return reviewRepository.save(review);
         }
-        if (review.getText().equals("Текст отзыва")){
-//            System.out.println(review.getText());
+        if ("Текст отзыва".equals(review.getText())) {
             log.info("1. Отзыв в БД отзывы сохранен как шаблон");
             return reviewRepository.save(review);
         }
         log.info("1. Отзыв в БД отзывы НЕ сохранен, так как такой текст уже есть и это не шаблон");
         return review;
-    } // Сохранить отзыв в БД
+    }
 
-    public boolean deleteReview(Long reviewId){ // Удалить отзыв
-        reviewRepository.delete(Objects.requireNonNull(reviewRepository.findById(reviewId).orElse(null)));
+    public boolean deleteReview(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        if (review == null) {
+            return false;
+        }
+        reviewRepository.delete(review);
         return true;
-    } // Удалить отзыв
+    }
 
     @Override
-    public List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId) { // Взять все отзывы по Id
+    public List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId) {
         return reviewRepository.findAllByOrderDetailsId(orderDetailsId);
-    } // Вхять все отзывы по Id
+    }
 
-    public List<Review> getAllWorkerReviews(Long workerId){
+    public List<Review> getAllWorkerReviews(Long workerId) {
         List<Long> reviewId = getReviewByWorkerId(workerId);
         return findAllByListId(reviewId);
     }
 
-    @Override
-    public int findAllByReviewListStatus(String username) {
-        Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
-        LocalDate localDate = LocalDate.now();
-        return reviewRepository.findAllByReviewsListStatus(localDate, worker);
-    }
 
     @Override
     public List<Long> getReviewByWorkerId(Long workerId) {
@@ -288,33 +336,37 @@ public class ReviewServiceImpl implements ReviewService{
 
     @Override
     public List<Review> findAllByListId(List<Long> reviewId) {
+        if (reviewId == null || reviewId.isEmpty()) {
+            return Collections.emptyList();
+        }
         return reviewRepository.findAll(reviewId);
     }
 
-    public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId){ // Взять все отзывы по Id заказа
+    public List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId) {
         return reviewRepository.getAllByOrderId(orderId).stream().map(this::toReviewDTOOne).collect(Collectors.toList());
-    } // Взять все отзывы по Id заказа
+    }
 
-
-    //    ======================================== FILIAL UPDATE =========================================================
-    // Обновить профиль отзыв - начало
     @Override
     @Transactional
     public void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId) {
         log.info("2. Вошли в обновление данных Отзыв");
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
-        log.info("Достали Отзыв");
+
         boolean isChanged = false;
 
-        /*Временная проверка сравнений*/
-        log.info("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-        log.info("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-        log.info("comment: " + !Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment()));
-        log.info("url: " + !Objects.equals(reviewDTO.getUrl(), saveReview.getUrl()));
-        log.info("date publish: " + !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
-        log.info("date isPublish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-        log.info("product id: " + !Objects.equals(reviewDTO.getProduct().getId(), saveReview.getProduct().getId()));
+        Product dtoProduct = reviewDTO.getProduct();
+        Product currentProduct = saveReview.getProduct();
+        Long dtoProductId = dtoProduct != null ? dtoProduct.getId() : null;
+        Long currentProductId = currentProduct != null ? currentProduct.getId() : null;
+
+        log.info("text: {}", !Objects.equals(reviewDTO.getText(), saveReview.getText()));
+        log.info("answer: {}", !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
+        log.info("comment: {}", !Objects.equals(reviewDTO.getComment(), extractComment(saveReview.getOrderDetails())));
+        log.info("url: {}", !Objects.equals(reviewDTO.getUrl(), saveReview.getUrl()));
+        log.info("date publish: {}", !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
+        log.info("date isPublish: {}", !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+        log.info("product id: {}", !Objects.equals(dtoProductId, currentProductId));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
             log.info("Обновляем текст отзыва");
@@ -322,33 +374,27 @@ public class ReviewServiceImpl implements ReviewService{
             isChanged = true;
         }
 
-        // ИСПРАВЛЕНО: проверка на null бота
         Bot currentBot = saveReview.getBot();
-        String currentBotName = (currentBot != null) ? currentBot.getFio() : null;
+        String currentBotName = currentBot != null ? currentBot.getFio() : null;
 
         if (!Objects.equals(reviewDTO.getBotName(), currentBotName)) {
             log.info("Обновляем Имя Бота");
             if (currentBot != null) {
                 currentBot.setFio(reviewDTO.getBotName());
                 botService.save(currentBot);
-                log.info("Обновляем Имя Бота");
             } else {
                 log.warn("У отзыва ID {} нет бота. Имя бота не может быть обновлено", reviewId);
-                // Если нужно создать нового бота или назначить существующего:
-                // Здесь можно добавить логику назначения бота, если это необходимо
-                // Например: назначить бота из DTO или найти подходящего
             }
         }
 
-        if (!Objects.equals(reviewDTO.getBotPassword(), saveReview.getBot().getPassword())) {
+        String currentBotPassword = currentBot != null ? currentBot.getPassword() : null;
+        if (!Objects.equals(reviewDTO.getBotPassword(), currentBotPassword)) {
             log.info("Обновляем Пароль Бота");
-            if (!reviewDTO.getBotPassword().isEmpty()) {
-                assert currentBot != null;
+            if (currentBot != null && reviewDTO.getBotPassword() != null && !reviewDTO.getBotPassword().isEmpty()) {
                 currentBot.setPassword(reviewDTO.getBotPassword());
                 botService.save(currentBot);
-                log.info("Обновляем Пароль Бота");
-            } else {
-                log.warn("У отзыва ID {} нет бота. Пароль бота не может быть обновлено", reviewId);
+            } else if (currentBot == null) {
+                log.warn("У отзыва ID {} нет бота. Пароль бота не может быть обновлен", reviewId);
             }
         }
 
@@ -358,7 +404,7 @@ public class ReviewServiceImpl implements ReviewService{
             isChanged = true;
         }
 
-        if (!Objects.equals(reviewDTO.getComment(), saveReview.getOrderDetails().getComment())) {
+        if (!Objects.equals(reviewDTO.getComment(), extractComment(saveReview.getOrderDetails()))) {
             log.info("Обновляем комментарий отзыва");
             OrderDetails orderDetails = orderDetailsService.getOrderDetailById(reviewDTO.getOrderDetailsId());
             orderDetails.setComment(reviewDTO.getComment());
@@ -372,36 +418,32 @@ public class ReviewServiceImpl implements ReviewService{
             isChanged = true;
         }
 
-        // ИСПРАВЛЕНО: более безопасная проверка продукта
         boolean productChanged = false;
-        if (reviewDTO.getProduct() != null && saveReview.getProduct() != null) {
-            // Оба не null, сравниваем ID
-            if (!Objects.equals(reviewDTO.getProduct().getId(), saveReview.getProduct().getId())) {
+        if (dtoProduct != null && currentProduct != null) {
+            if (!Objects.equals(dtoProductId, currentProductId)) {
                 productChanged = true;
             }
-        } else if (reviewDTO.getProduct() != null || saveReview.getProduct() != null) {
-            // Один null, другой не null - явное изменение
+        } else if (dtoProduct != null || currentProduct != null) {
             productChanged = true;
         }
 
         if (productChanged) {
             log.info("Обновляем продукт отзыва");
 
-            if (reviewDTO.getProduct() != null) {
-                Product product = productService.findById(reviewDTO.getProduct().getId());
+            if (dtoProduct != null) {
+                Product product = productService.findById(dtoProductId);
                 saveReview.setProduct(product);
                 saveReview.setPrice(product.getPrice());
             } else {
-                // Если в DTO продукт null, но это маловероятно в нормальной работе
                 saveReview.setProduct(null);
                 saveReview.setPrice(null);
             }
 
-            // Сохраняем отзыв с новым продуктом
             reviewRepository.save(saveReview);
 
-            // Пересчитываем сумму деталей
-            recalculateOrderAndDetailsPrice(reviewDTO.getOrderDetailsId());
+            if (reviewDTO.getOrderDetailsId() != null) {
+                recalculateOrderAndDetailsPrice(reviewDTO.getOrderDetailsId());
+            }
         }
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
@@ -412,25 +454,21 @@ public class ReviewServiceImpl implements ReviewService{
             }
         }
 
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
+        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
         }
 
         if (isChanged) {
-            log.info("3. Начали сохранять обновленный Отзыв в БД");
             reviewRepository.save(saveReview);
-            log.info("4. Сохранили обновленный Отзыв в БД");
-        } else {
-            log.info("3. Изменений не было, сущность в БД не изменена");
         }
-    }// Обновление отзывов
+    }
 
     private void recalculateOrderAndDetailsPrice(UUID orderDetailsId) {
         OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailsId);
 
-        BigDecimal detailTotal = orderDetails.getReviews().stream()
+        BigDecimal detailTotal = safeReviews(orderDetails).stream()
                 .map(Review::getPrice)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -439,15 +477,14 @@ public class ReviewServiceImpl implements ReviewService{
         orderDetailsService.save(orderDetails);
 
         Order order = orderDetails.getOrder();
-        order.setSum(orderDetails.getPrice());
-        orderDetailsService.saveOrder(order);
+        if (order != null) {
+            order.setSum(orderDetails.getPrice());
+            orderDetailsService.saveOrder(order);
+        }
     }
 
-
-
-
     @Transactional
-    public void deleteReviewsByOrderId(Long reviewId){
+    public void deleteReviewsByOrderId(Long reviewId) {
         reviewRepository.deleteReviewByReviewId(reviewId);
     }
 
@@ -460,14 +497,16 @@ public class ReviewServiceImpl implements ReviewService{
     public void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId) {
         List<Review> reviews = reviewRepository.findAllByFilials(filials);
         Iterable<ReviewArchive> reviewArchives = reviewArchiveRepository.findAll();
+
         for (Review review : reviews) {
             review.setCategory(categoryService.getCategoryByIdCategory(categoryId));
             review.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
             reviewRepository.save(review);
         }
+
         for (ReviewArchive reviewArchive : reviewArchives) {
             for (Review review : reviews) {
-                if (review.getText().equals(reviewArchive.getText()) && !reviewArchive.getText().equals("Текст отзыва")){
+                if (Objects.equals(review.getText(), reviewArchive.getText()) && !"Текст отзыва".equals(reviewArchive.getText())) {
                     reviewArchive.setCategory(categoryService.getCategoryByIdCategory(categoryId));
                     reviewArchive.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
                     reviewArchiveRepository.save(reviewArchive);
@@ -476,520 +515,265 @@ public class ReviewServiceImpl implements ReviewService{
         }
     }
 
-//    =====================================================================================================
-
-    //    ======================================== ORDER DETAIL AND REVIEW UPDATE =========================================================
-    // Обновить профиль отзыв - начало
     @Override
     @Transactional
-    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) { // Обновление Деталей и Отзывов
+    public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) {
         log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа");
-        Review saveReview = reviewRepository.findById(reviewId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
-        OrderDetails saveOrderDetails  = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-        log.info("Достали Отзыв");
+        Review saveReview = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
+        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+
         boolean isChanged = false;
 
-        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
-            log.info("Обновляем текст отзыва");
+        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
             saveReview.setText(reviewDTO.getText());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())){ /*Проверка смены работника*/
-            log.info("Обновляем ответ на отзыв");
+        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
             saveReview.setAnswer(reviewDTO.getAnswer());
             isChanged = true;
         }
-        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())){ /*Проверка статус заказа*/
-            log.info("Обновляем комментарий отзыва и Деталей Заказа");
+        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
             saveOrderDetails.setComment(orderDetailsDTO.getComment());
             orderDetailsService.save(saveOrderDetails);
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())){ /*Проверка статус заказа*/
-            log.info("Обновляем публикацию отзыва");
+        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
             saveReview.setPublish(reviewDTO.isPublish());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())){ /*Проверка даты публикации*/
-            log.info("Обновляем дату публикации отзыва");
+        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
         }
 
-        if  (isChanged){
-            log.info("3. Начали сохранять обновленный Отзыв в БД");
+        if (isChanged) {
             reviewRepository.save(saveReview);
-            log.info("4. Сохранили обновленный Отзыв в БД");
         }
-        else {
-            log.info("3. Изменений не было, сущность в БД не изменена");
-        }
-    } // Обновление Деталей и Отзывов
-
-//    =====================================================================================================
-
-//    ============================== ORDER DETAIL AND REVIEW UPDATE AND SET PUBLISH DATE ===============================
-@Override
-@Transactional
-public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
-    log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации (1–6 дней, растяжка по диапазону)");
-
-    try {
-        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-
-        List<Review> reviews = saveOrderDetails.getReviews();
-        if (reviews.isEmpty()) {
-            log.error("Ошибка: список отзывов пуст");
-            return false;
-        }
-
-        int totalReviews = orderDetailsDTO.getReviews().size();
-        if (totalReviews == 0) {
-            log.error("Ошибка: список отзывов в DTO пуст");
-            return false;
-        }
-
-        int botCounter = reviews.getFirst().getBot().getCounter();
-        LocalDate startDate = getLocalDate(botCounter);
-
-        // Минимум 28 дней. Если отзывов больше — добавляем месяцы по 28 дней
-        int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
-        LocalDate endDate = startDate.plusDays(monthsNeeded * 28 - 1);
-        long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
-
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-
-        // Список смещений дат (0 = startDate)
-        List<Long> offsets = new ArrayList<>();
-
-        // 1. Первый отзыв — в первые 0–2 дня
-        offsets.add(random.nextLong(0, Math.min(3, totalDays + 1)));
-
-        // 2. Последний отзыв — в последние 0–2 дня
-        if (totalReviews > 1) {
-            offsets.add(totalDays - random.nextLong(0, Math.min(3, totalDays + 1)));
-        }
-
-        // 3. Остальные — случайно по диапазону
-        while (offsets.size() < totalReviews) {
-            long offset = random.nextLong(0, totalDays + 1);
-            if (!offsets.contains(offset)) {
-                offsets.add(offset);
-            }
-        }
-
-        // 4. Сортируем
-        Collections.sort(offsets);
-
-        // 5. Корректируем зазоры: минимум 1 день, максимум 6 дней
-        for (int i = 1; i < offsets.size(); i++) {
-            long prev = offsets.get(i - 1);
-            long current = offsets.get(i);
-            long gap = current - prev;
-
-            if (gap < 1) {
-                offsets.set(i, prev + 1);
-            } else if (gap > 6) {
-                offsets.set(i, prev + 6);
-            }
-        }
-
-        // 6. Ещё раз сортируем на случай коррекции
-        Collections.sort(offsets);
-
-        // 7. Присваиваем даты публикаций
-        for (int i = 0; i < totalReviews; i++) {
-            ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
-            LocalDate publishDate = startDate.plusDays(offsets.get(i));
-
-            checkUpdateReview(reviewDTO, publishDate);
-            log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
-        }
-
-        // 8. Обновляем комментарий, если изменился
-        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-            log.info("Обновляем комментарий отзыва и Деталей Заказа");
-            saveOrderDetails.setComment(orderDetailsDTO.getComment());
-            orderDetailsService.save(saveOrderDetails);
-        }
-
-        log.info("Все прошло успешно: даты публикаций распределены с зазором 1–6 дней, первый и последний отзыв закреплены по краям диапазона");
-        return true;
-
-    } catch (Exception e) {
-        log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
-        return false;
     }
-}
 
+    @Override
+    @Transactional
+    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
+        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации (1–6 дней, растяжка по диапазону)");
 
+        try {
+            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
 
-//    @Override
-//    @Transactional
-//    public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
-//        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение даты публикации");
-//
-//        try {
-//            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-//
-//            List<Review> reviews = saveOrderDetails.getReviews();
-//            if (reviews.isEmpty()) {
-//                log.error("Ошибка: список отзывов пуст");
-//                return false;
-//            }
-//
-//            int totalReviews = orderDetailsDTO.getReviews().size();
-//            if (totalReviews == 0) {
-//                log.error("Ошибка: список отзывов в DTO пуст");
-//                return false;
-//            }
-//
-//            int botCounter = reviews.getFirst().getBot().getCounter();
-//            LocalDate startDate = getLocalDate(botCounter);
-//            LocalDate endDate = startDate.plusDays(30);
-//
-//            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
-//
-//            BigDecimal step = BigDecimal.valueOf(totalDays)
-//                    .divide(BigDecimal.valueOf(totalReviews - 1), 2, RoundingMode.HALF_UP);
-//            BigDecimal currentOffset = BigDecimal.ZERO;
-//
-//            for (int i = 0; i < totalReviews; i++) {
-//                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
-//                long daysToAdd = currentOffset.setScale(0, RoundingMode.HALF_UP).longValue();
-//                LocalDate publishDate = startDate.plusDays(daysToAdd);
-//
-//                checkUpdateReview(reviewDTO, publishDate);
-//                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
-//
-//                currentOffset = currentOffset.add(step);
-//            }
-//
-//            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-//                log.info("Обновляем комментарий отзыва и Деталей Заказа");
-//                saveOrderDetails.setComment(orderDetailsDTO.getComment());
-//                orderDetailsService.save(saveOrderDetails);
-//            }
-//
-//            log.info("Все прошло успешно, даты публикаций установлены равномерно, возвращаем TRUE");
-//            return true;
-//        } catch (Exception e) {
-//            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
-//            return false;
-//        }
-//    }
+            List<Review> reviews = safeReviews(saveOrderDetails);
+            if (reviews.isEmpty()) {
+                log.error("Ошибка: список отзывов пуст");
+                return false;
+            }
 
+            if (orderDetailsDTO.getReviews() == null || orderDetailsDTO.getReviews().isEmpty()) {
+                log.error("Ошибка: список отзывов в DTO пуст");
+                return false;
+            }
 
-    // Улучшенная версия метода getLocalDate
+            Bot firstBot = reviews.get(0).getBot();
+            int botCounter = safeBotCounter(firstBot);
+            LocalDate startDate = getLocalDate(botCounter);
+
+            int totalReviews = orderDetailsDTO.getReviews().size();
+            int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
+            LocalDate endDate = startDate.plusDays(monthsNeeded * 28L - 1);
+            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
+
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+            List<Long> offsets = new ArrayList<>();
+
+            offsets.add(random.nextLong(0, Math.min(3, totalDays + 1)));
+
+            if (totalReviews > 1) {
+                offsets.add(totalDays - random.nextLong(0, Math.min(3, totalDays + 1)));
+            }
+
+            while (offsets.size() < totalReviews) {
+                long offset = random.nextLong(0, totalDays + 1);
+                if (!offsets.contains(offset)) {
+                    offsets.add(offset);
+                }
+            }
+
+            Collections.sort(offsets);
+
+            for (int i = 1; i < offsets.size(); i++) {
+                long prev = offsets.get(i - 1);
+                long current = offsets.get(i);
+                long gap = current - prev;
+
+                if (gap < 1) {
+                    offsets.set(i, prev + 1);
+                } else if (gap > 6) {
+                    offsets.set(i, prev + 6);
+                }
+            }
+
+            Collections.sort(offsets);
+
+            for (int i = 0; i < totalReviews; i++) {
+                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
+                LocalDate publishDate = startDate.plusDays(offsets.get(i));
+                checkUpdateReview(reviewDTO, publishDate);
+                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
+            }
+
+            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
+                saveOrderDetails.setComment(orderDetailsDTO.getComment());
+                orderDetailsService.save(saveOrderDetails);
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
+            return false;
+        }
+    }
+
     private LocalDate getLocalDate(int botCounter) {
         return botCounter < 2 ? LocalDate.now().plusDays(2) : LocalDate.now();
     }
 
+    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate) {
+        Review saveReview = reviewRepository.findById(reviewDTO.getId())
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
 
-
-//    =====================================================================================================
-
-    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate){ // Проверка обновлений отзыва
-        Review saveReview = reviewRepository.findById(reviewDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
-        log.info("Достали Отзыв");
         boolean isChanged = false;
-        /*Временная проверка сравнений*/
-//        System.out.println("text: " + !Objects.equals(reviewDTO.getText(), saveReview.getText()));
-//        System.out.println("answer: " + !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
-//        System.out.println("publish date: " + (!saveReview.isPublish()));
-//        System.out.println("active: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
-//        System.out.println("date publish: " + !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
 
-        if (!saveReview.isPublish()){ /*Проверка смены даты публикации*/
-            log.info("Обновляем дату публикации");
+        if (!saveReview.isPublish()) {
             saveReview.setPublishedDate(localDate);
             isChanged = true;
         }
 
-        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())){ /*Проверка смены названия*/
-            log.info("Обновляем текст отзыва");
+        if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
             saveReview.setText(reviewDTO.getText());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getUrl(), saveReview.getUrl())){ /*Проверка смены названия*/
-            log.info("Обновляем url отзыва");
+        if (!Objects.equals(reviewDTO.getUrl(), saveReview.getUrl())) {
             saveReview.setUrl(reviewDTO.getUrl());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())){ /*Проверка смены работника*/
-            log.info("Обновляем ответ на отзыв");
+        if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
             saveReview.setAnswer(reviewDTO.getAnswer());
             isChanged = true;
         }
-        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())){ /*Проверка статус заказа*/
-            log.info("Обновляем публикацию отзыва");
+        if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
             saveReview.setPublish(reviewDTO.isPublish());
             isChanged = true;
         }
 
-        if  (isChanged){
-            log.info("3. Начали сохранять обновленный Отзыв в БД");
+        if (isChanged) {
             reviewRepository.save(saveReview);
-            log.info("4. Сохранили обновленный Отзыв в БД");
         }
-        else {
-            log.info("3. Изменений не было, сущность в БД не изменена");
-        }
-    } // Проверка обновлений отзыва
-//    =================================== ЗАМЕНА И БЛОИРОКА БОТОВ ДЛЯ ЗАКАЗА ===========================================
+    }
 
+    @Override
+    public void changeBot(Long reviewId) {
+        try {
+            log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
+            Review review = getReviewToChangeBot(reviewId);
 
-
-//    private Review getReviewToChangeBot(Long reviewId) { // Установка нового бота в отзыв
-//        Review review = reviewRepository.findById(reviewId).orElse(null);
-//        assert review != null;
-//        log.info("2. Достали отзыв по id{}", reviewId);
-//        List<Bot> bots = findAllBotsMinusFilial(review);
-//        log.info("3. Достали ботов минус филиал");
-//        var random = new SecureRandom();
-//        review.setBot(bots.get(random.nextInt(bots.size())));
-//        return review;
-//    } // Установка нового бота в отзыв
-
-
-//    private void botActiveToFalse(Long botId){ // Изменение статуса бота как НЕ активный
-//        try {
-//            Bot bot = botService.findBotById(botId);
-//            bot.setActive(false);
-//            botService.save(bot);
-//            log.info("3. Дективировали бота {}", botId);
-//        }
-//        catch (Exception e){
-//            log.error("e: ", e);
-//            log.info("Что-то пошло не так и деактивация бота не случилась");
-//        }
-//    } // Изменение статуса бота как НЕ активный
-
-
-
-
-//    private List<Bot> findAllBotsMinusFilial(Review review) {
-//        if (review == null) {
-//            log.error("Ошибка: review == null");
-//            return Collections.emptyList();
-//        }
-//
-//        Filial filial = review.getFilial();
-//        if (filial == null) {
-//            log.error("Ошибка: у review отсутствует filial");
-//            return Collections.emptyList();
-//        }
-//
-//        City city = filial.getCity();
-//        if (city == null || city.getId() == null) {
-//            log.error("Ошибка: у filial отсутствует город или его ID");
-//            return Collections.emptyList();
-//        }
-//
-//        List<Bot> bots;
-//        try {
-//            bots = botService.getFindAllByFilialCityId(city.getId());
-//        } catch (Exception e) {
-//            log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
-//            return Collections.emptyList();
-//        }
-//
-//        log.info("Боты вытащенные из базы по городу: {} кол-во: {}", city.getTitle(), bots != null ? bots.size() : 0);
-//
-//        if (bots == null || bots.isEmpty()) {
-//            log.warn("Список ботов пуст или null");
-//            return Collections.emptyList();
-//        }
-//
-//        List<Review> reviewListFilial;
-//        try {
-//            reviewListFilial = reviewRepository.findAllByFilial(filial);
-//        } catch (Exception e) {
-//            log.error("Ошибка при получении отзывов по филиалу: {}", filial.getId(), e);
-//            return Collections.emptyList();
-//        }
-//
-//        if (reviewListFilial == null) {
-//            log.warn("Список отзывов филиала null");
-//            reviewListFilial = Collections.emptyList();
-//        }
-//
-//        List<Bot> botsCompany = reviewListFilial.stream()
-//                .map(Review::getBot)
-//                .filter(Objects::nonNull)
-//                .toList();
-//
-//        log.info("Боты уже использованные в этом городе (для удаления из списка): {}", botsCompany.size());
-//
-//        bots.removeAll(botsCompany);
-//        log.info("Оставшиеся: {}", bots.size());
-//
-//        return bots;
-//    }
-
-
-
-//    ================================ ЗАМЕНА И БЛОИРОКА БОТОВ ДЛЯ ЗАКАЗА КОНЕЦ ========================================
-
-
-
-        // ================================ ЗАМЕНА И БЛОКИРОВКА БОТОВ ========================================
-
-        @Override
-        public void changeBot(Long reviewId) {
-            try {
-                log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
-                Review review = getReviewToChangeBot(reviewId);
-
-                // УБИРАЕМ СОХРАНЕНИЕ wasVigul, так как getReviewToChangeBot уже обновляет vigul
-
-                if (review.getBot() == null) {
-                    log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
-                } else if (review.getBot().getId() != null && review.getBot().getId() == 1L) {
-                    log.warn("2. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
-                } else {
-                    log.info("2. Установлен новый рандомный бот для отзыва ID {}", reviewId);
-                    // НЕ вызываем updateVigulBasedOnBotCounter здесь - он уже вызван в getReviewToChangeBot
-                }
-
-                reviewRepository.save(review);
-                log.info("3. Сохранили отзыв в БД");
-
-            } catch (Exception e) {
-                log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
-                throw new RuntimeException("Не удалось заменить бота: " + e.getMessage());
+            if (review.getBot() == null) {
+                log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
+            } else if (Objects.equals(review.getBot().getId(), STUB_BOT_ID)) {
+                log.warn("2. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
+            } else {
+                log.info("2. Установлен новый рандомный бот для отзыва ID {}", reviewId);
             }
+
+            reviewRepository.save(review);
+            log.info("3. Сохранили отзыв в БД");
+
+        } catch (Exception e) {
+            log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
+            throw new RuntimeException("Не удалось заменить бота: " + e.getMessage(), e);
         }
+    }
 
-        @Override
-        public void deActivateAndChangeBot(Long reviewId, Long botId) {
-            try {
-                Review review = reviewRepository.findById(reviewId).orElse(null);
-                if (review == null) {
-                    log.warn("Отзыв с id {} не найден", reviewId);
-                    throw new RuntimeException("Отзыв не найден");
-                }
-
-                // СОХРАНЯЕМ ТЕКУЩЕЕ СОСТОЯНИЕ VIGUL
-                boolean wasVigul = review.isVigul();
-
-                // Получаем текущего бота отзыва для корректной деактивации
-                Bot currentBot = review.getBot();
-                Long currentBotId = currentBot != null ? currentBot.getId() : null;
-
-                // Если передан botId = 0, но у отзыва есть реальный бот, используем ID реального бота
-                if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
-                    botId = currentBotId;
-                    log.info("Используем ID реального бота отзыва: {}", botId);
-                }
-
-                // Отправка email о малом количестве ботов
-                try {
-                    if (review.getFilial() != null && review.getFilial().getCity() != null) {
-                        List<Bot> cityBots = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId());
-                        int botCount = cityBots != null ? cityBots.size() : 0;
-                        if (botCount < 50) {
-                            String textMail = "Город: " + review.getFilial().getCity().getTitle() + ". Остаток у города: " + botCount;
-                            emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить аккаунты для: " + textMail);
-                            log.info("ОТПРАВКА МЕЙЛА О МАЛОМ КОЛИЧЕСТВЕ АККАУНТОВ - УСПЕХ");
-                        } else {
-                            log.info("ПИСЬМО не отправлялось - у города достаточно аккаунтов");
-                        }
-                    } else {
-                        log.warn("Не удалось отправить письмо: у филиала или города отсутствуют данные");
-                    }
-                } catch (Exception e) {
-                    log.error("Сообщение о деактивации бота не отправилось", e);
-                }
-
-                // Деактивируем старого бота, только если это не бот-заглушка (ID != 1) и ID > 0
-                boolean deactivated = false;
-                if (botId != null && botId != 1L && botId > 0) {
-                    deactivated = botActiveToFalse(botId);
-                    if (deactivated) {
-                        log.info("4. Деактивировали старого бота ID {}", botId);
-                    } else {
-                        log.warn("4. Не удалось деактивировать старого бота ID {}", botId);
-                    }
-                } else {
-                    log.info("4. Пропускаем деактивацию: бот ID {} является заглушкой или невалидным", botId);
-                }
-
-                // Ищем нового бота и устанавливаем его в текущий объект review
-                List<Bot> availableBots = findAllBotsMinusFilial(review);
-                log.info("5. Найдено доступных ботов: {}", availableBots.size());
-
-                if (availableBots.isEmpty()) {
-                    // Если нет доступных ботов, устанавливаем бота-заглушку
-                    Bot stubBot = createStubBot();
-                    review.setBot(stubBot);
-
-                    // ВАЖНО: Если назначаем заглушку, isVigul должен стать false
-                    if (review.isVigul()) {
-                        review.setVigul(false);
-                        log.info("Отзыв ID {}: isVigul изменен с true на false (назначен бот-заглушка)", reviewId);
-                    }
-
-                    log.warn("6. Установлен бот-заглушка для отзыва ID {} (нет доступных ботов)", reviewId);
-                } else {
-                    var random = new SecureRandom();
-                    int randomIndex = random.nextInt(availableBots.size());
-                    Bot selectedBot = availableBots.get(randomIndex);
-                    review.setBot(selectedBot);
-                    log.info("6. Установлен новый бот ID {} для отзыва ID {}", selectedBot.getId(), reviewId);
-
-                    // ПРОВЕРЯЕМ И ОБНОВЛЯЕМ VIGUL НА ОСНОВАНИИ НОВОГО БОТА
-                    updateVigulBasedOnBotCounter(review);
-                }
-
-                log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
-                reviewRepository.save(review);
-                log.info("7. Сохранили изменения в БД");
-
-            } catch (Exception e) {
-                log.error("Что-то пошло не так и бот не деактивирован", e);
-                throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage());
+    @Override
+    public void deActivateAndChangeBot(Long reviewId, Long botId) {
+        try {
+            Review review = reviewRepository.findById(reviewId).orElse(null);
+            if (review == null) {
+                throw new RuntimeException("Отзыв не найден");
             }
+
+            boolean wasVigul = review.isVigul();
+
+            Bot currentBot = review.getBot();
+            Long currentBotId = currentBot != null ? currentBot.getId() : null;
+
+            if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
+                botId = currentBotId;
+                log.info("Используем ID реального бота отзыва: {}", botId);
+            }
+
+            try {
+                if (review.getFilial() != null && review.getFilial().getCity() != null) {
+                    List<Bot> cityBots = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId());
+                    int botCount = cityBots != null ? cityBots.size() : 0;
+                    if (botCount < 50) {
+                        String textMail = "Город: " + review.getFilial().getCity().getTitle() + ". Остаток у города: " + botCount;
+                        emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить аккаунты для: " + textMail);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Сообщение о деактивации бота не отправилось", e);
+            }
+
+            if (botId != null && !Objects.equals(botId, STUB_BOT_ID) && botId > 0) {
+                botActiveToFalse(botId);
+            }
+
+            List<Bot> availableBots = findAllBotsMinusFilial(review);
+
+            if (availableBots.isEmpty()) {
+                Bot stubBot = createStubBot();
+                review.setBot(stubBot);
+
+                if (review.isVigul()) {
+                    review.setVigul(false);
+                }
+            } else {
+                var random = new SecureRandom();
+                Bot selectedBot = availableBots.get(random.nextInt(availableBots.size()));
+                review.setBot(selectedBot);
+                updateVigulBasedOnBotCounter(review);
+            }
+
+            log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
+            reviewRepository.save(review);
+
+        } catch (Exception e) {
+            log.error("Что-то пошло не так и бот не деактивирован", e);
+            throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage(), e);
         }
+    }
 
     private Review getReviewToChangeBot(Long reviewId) {
         Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
         if (reviewOptional.isEmpty()) {
-            log.error("1. Отзыв с ID {} не найден", reviewId);
             throw new RuntimeException("Отзыв не найден");
         }
 
         Review review = reviewOptional.get();
-        log.info("2. Достали отзыв по id {}", reviewId);
-
-        // СОХРАНЯЕМ ТЕКУЩЕЕ СОСТОЯНИЕ VIGUL
         boolean wasVigul = review.isVigul();
 
         List<Bot> bots = findAllBotsMinusFilial(review);
-        log.info("3. Найдено доступных ботов: {}", bots.size());
 
         if (bots.isEmpty()) {
-            log.error("4. Нет доступных ботов для отзыва ID {}", reviewId);
-            // Устанавливаем бота-заглушку
             Bot stubBot = createStubBot();
             review.setBot(stubBot);
 
-            // ВАЖНО: Если назначаем заглушку, isVigul должен стать false
             if (review.isVigul()) {
                 review.setVigul(false);
-                log.info("Отзыв ID {}: isVigul изменен с true на false (назначен бот-заглушка)", reviewId);
             }
-
-            log.info("5. Установлен бот-заглушка для отзыва ID {}", reviewId);
         } else {
             var random = new SecureRandom();
-            int randomIndex = random.nextInt(bots.size());
-            Bot selectedBot = bots.get(randomIndex);
+            Bot selectedBot = bots.get(random.nextInt(bots.size()));
             review.setBot(selectedBot);
-            log.info("5. Установлен новый бот для отзыва ID {}: бот ID {}, имя: {}",
-                    reviewId, selectedBot.getId(), selectedBot.getFio());
-
-            // ПРОВЕРЯЕМ И ОБНОВЛЯЕМ VIGUL НА ОСНОВАНИИ НОВОГО БОТА
             updateVigulBasedOnBotCounter(review);
         }
 
@@ -997,363 +781,264 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         return review;
     }
 
-        // Метод для создания бота-заглушки
-        private Bot createStubBot() {
-            try {
-                Optional<Bot> stubBotOptional = Optional.ofNullable(botService.findBotById(STUB_BOT_ID));
-                if (stubBotOptional.isPresent()) {
-                    return stubBotOptional.get();
-                } else {
-                    log.warn("Бот-заглушка не найден в базе, создаем временного");
-                    // СОЗДАЕМ временного бота-заглушку
-                    Bot stubBot = new Bot();
-                    stubBot.setId(STUB_BOT_ID);
-                    stubBot.setFio("Нет доступных аккаунтов");
-                    stubBot.setLogin("stub_account");
-                    stubBot.setPassword("");
-                    stubBot.setCounter(0);
-                    stubBot.setActive(false);
-
-                    // Создаем временный статус
-                    StatusBot stubStatus = new StatusBot();
-                    stubStatus.setBotStatusTitle("Заглушка");
-                    stubBot.setStatus(stubStatus);
-
-                    return stubBot;
-                }
-            } catch (Exception e) {
-                log.error("Ошибка при получении бота-заглушки", e);
-                // Даже при ошибке возвращаем бота-заглушку
-                Bot stubBot = new Bot();
-                stubBot.setId(STUB_BOT_ID);
-                stubBot.setFio("Нет доступных аккаунтов");
-                stubBot.setLogin("stub_account");
-                stubBot.setPassword("");
-                stubBot.setCounter(0);
-                stubBot.setActive(false);
+    private Bot createStubBot() {
+        try {
+            Bot stubBot = botService.findBotById(STUB_BOT_ID);
+            if (stubBot != null) {
                 return stubBot;
             }
+
+            Bot temp = new Bot();
+            temp.setId(STUB_BOT_ID);
+            temp.setFio("Нет доступных аккаунтов");
+            temp.setLogin("stub_account");
+            temp.setPassword("");
+            temp.setCounter(0);
+            temp.setActive(false);
+
+            StatusBot stubStatus = new StatusBot();
+            stubStatus.setBotStatusTitle("Заглушка");
+            temp.setStatus(stubStatus);
+
+            return temp;
+
+        } catch (Exception e) {
+            log.error("Ошибка при получении бота-заглушки", e);
+
+            Bot temp = new Bot();
+            temp.setId(STUB_BOT_ID);
+            temp.setFio("Нет доступных аккаунтов");
+            temp.setLogin("stub_account");
+            temp.setPassword("");
+            temp.setCounter(0);
+            temp.setActive(false);
+            return temp;
         }
+    }
 
-
-        private boolean botActiveToFalse(Long botId) {
-            try {
-
-                if (botId == null || botId <= 0 || STUB_BOT_ID.equals(botId)) {
-                    log.debug("Пропускаем деактивацию бота с ID {} (невалидный ID или заглушка)", botId);
-                    return false;
-                }
-
-                Optional<Bot> botOptional = Optional.ofNullable(botService.findBotById(botId));
-
-                if (botOptional.isEmpty()) {
-                    log.error("1. Бот с ID {} не найден", botId);
-                    return false;
-                }
-
-                Bot bot = botOptional.get();
-                boolean wasActive = bot.isActive();
-                bot.setActive(false);
-
-                try {
-                    botService.save(bot);
-                    log.info("2. Деактивировали бота {} (был активен: {})", botId, wasActive);
-                    return true;
-                } catch (Exception e) {
-                    log.error("Ошибка при сохранении бота ID {}: {}", botId, e.getMessage());
-                    return false;
-                }
-
-            } catch (Exception e) {
-                log.error("3. Ошибка при деактивации бота {}: ", botId, e);
+    private boolean botActiveToFalse(Long botId) {
+        try {
+            if (botId == null || botId <= 0 || STUB_BOT_ID.equals(botId)) {
                 return false;
             }
+
+            Bot bot = botService.findBotById(botId);
+            if (bot == null) {
+                return false;
+            }
+
+            bot.setActive(false);
+            botService.save(bot);
+            return true;
+
+        } catch (Exception e) {
+            log.error("3. Ошибка при деактивации бота {}: ", botId, e);
+            return false;
         }
+    }
 
-        public List<Bot> findAllBotsMinusFilial(Review review) {
-
-
-            if (review == null) {
-                log.error("Ошибка: review == null");
-                return Collections.emptyList();
-            }
-
-            Filial filial = review.getFilial();
-            if (filial == null) {
-                log.error("Ошибка: у review отсутствует filial");
-                return Collections.emptyList();
-            }
-
-            City city = filial.getCity();
-            if (city == null || city.getId() == null) {
-                log.error("Ошибка: у filial отсутствует город или его ID");
-                return Collections.emptyList();
-            }
-
-            log.info("Поиск ботов для отзыва ID {}, филиал ID {}, город: {}",
-                    review.getId(), filial.getId(), city.getTitle());
-
-            // Получаем всех ботов для города через репозиторий
-            List<Bot> allBots;
-            try {
-                allBots = botService.getFindAllByFilialCityId(city.getId());
-                log.info("2. всех ботов для города {} allBots - {} ", city.getId(), allBots.size());
-            } catch (Exception e) {
-                log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
-                return Collections.emptyList();
-            }
-
-            if (allBots == null || allBots.isEmpty()) {
-                log.warn("Список ботов пуст для города: {}", city.getTitle());
-                return Collections.emptyList();
-            }
-
-            log.debug("Получено ботов из базы: {}", allBots.size());
-
-            // 1. Получаем ID ботов, которые уже использовались в этом филиале (ВСЕ отзывы)
-            Set<Long> usedBotIdsInThisFilial = getUsedBotIdsInFilial(filial, review.getId());
-            log.info("Ботов уже использованных в этом филиале: {}", usedBotIdsInThisFilial.size());
-
-            // 2. Получаем ID ботов, занятых в активных отзывах в других филиалах ТОГО ЖЕ ГОРОДА
-            Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
-            log.info("Ботов занятых в активных отзывах других филиалов того же города: {} - это количество уникальных bot_id в этих отзывах", usedBotIdsGlobally.size());
-
-            boolean vigul = review.isVigul();
-            log.info("Отзыв ID {} имеет vigul = {}", review.getId(), vigul);
-
-
-            // ДОБАВИМ ПРОВЕРКУ: если vigul = true, но нет ботов с counter >= 3
-            if (vigul) {
-                long botsWithCounter3OrMore = allBots.stream()
-                        .filter(bot -> bot != null && bot.getId() != null)
-                        .filter(bot -> {
-                            Integer counter = bot.getCounter();
-                            if (counter == null) counter = 0;
-                            return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
-                        })
-                        .count();
-
-                log.info("Для отзыва с vigul=true найдено ботов с counter >= 3: {}", botsWithCounter3OrMore);
-
-                if (botsWithCounter3OrMore == 0) {
-                    log.warn("ВНИМАНИЕ: Отзыв ID {} имеет vigul=true, но в городе нет ботов с counter >= 3!",
-                            review.getId());
-                    // Можно добавить логику для автоматического изменения vigul здесь
-                }
-            }
-
-            // Этап 1: Идеальные боты - не использовались в этом филиале и не заняты в других
-            List<Bot> idealBots = allBots.stream()
-                    .filter(Objects::nonNull)
-                    .filter(bot -> bot.getId() != null)
-                    .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-                    .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
-                    .filter(bot -> {
-                        if (bot.getStatus() == null) return false;
-                        String statusTitle = bot.getStatus().getBotStatusTitle();
-                        return statusTitle != null && "Новый".equals(statusTitle.trim());
-                    })
-                    .collect(Collectors.toList());
-
-            log.info("Идеальных ботов (не в этом филиале, не заняты в других): {}", idealBots.size());
-
-            // Если есть идеальные боты, применяем фильтры vigul
-            if (!idealBots.isEmpty()) {
-                List<Bot> filteredBots = applyVigulFilters(idealBots, vigul);
-                if (!filteredBots.isEmpty()) {
-                    log.info("Используем идеальных ботов: {}", filteredBots.size());
-                    return filteredBots;
-                }
-            }
-
-            // Этап 2: Запасной режим - боты, занятые в других филиалах, но не в этом
-            List<Bot> fallbackBots = allBots.stream()
-                    .filter(Objects::nonNull)
-                    .filter(bot -> bot.getId() != null)
-                    .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-                    .filter(bot -> {
-                        if (bot.getStatus() == null) return false;
-                        String statusTitle = bot.getStatus().getBotStatusTitle();
-                        return statusTitle != null && "Новый".equals(statusTitle.trim());
-                    })
-                    .collect(Collectors.toList());
-
-            log.info("Запасных ботов (не в этом филиале, но могут быть заняты в других): {}", fallbackBots.size());
-
-            if (!fallbackBots.isEmpty()) {
-                List<Bot> filteredBots = applyVigulFilters(fallbackBots, vigul);
-                if (!filteredBots.isEmpty()) {
-                    log.warn("Используем запасных ботов (заняты в других филиалах): {}", filteredBots.size());
-                    return filteredBots;
-                }
-            }
-
-            // Этап 3: Все боты использованы - возвращаем пустой список
-            log.error("ВСЕ боты уже использованы в этом филиале или не подходят по условиям vigul. Необходимо назначить бота-заглушку");
+    public List<Bot> findAllBotsMinusFilial(Review review) {
+        if (review == null) {
             return Collections.emptyList();
         }
 
-        private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
-            Set<Long> usedBotIds = new HashSet<>();
+        Filial filial = review.getFilial();
+        if (filial == null) {
+            return Collections.emptyList();
+        }
 
-            try {
-                List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
+        City city = filial.getCity();
+        if (city == null || city.getId() == null) {
+            return Collections.emptyList();
+        }
 
-                if (allReviewsInFilial != null) {
-                    for (Review existingReview : allReviewsInFilial) {
-                        if (existingReview != null &&
-                                existingReview.getId() != null &&
-                                !existingReview.getId().equals(currentReviewId) &&
-                                existingReview.getBot() != null &&
-                                existingReview.getBot().getId() != null) {
+        List<Bot> allBots;
+        try {
+            allBots = botService.getFindAllByFilialCityId(city.getId());
+        } catch (Exception e) {
+            log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
+            return Collections.emptyList();
+        }
 
-                            usedBotIds.add(existingReview.getBot().getId());
-                        }
+        if (allBots == null || allBots.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<Long> usedBotIdsInThisFilial = getUsedBotIdsInFilial(filial, review.getId());
+        Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
+
+        boolean vigul = review.isVigul();
+
+        List<Bot> idealBots = allBots.stream()
+                .filter(Objects::nonNull)
+                .filter(bot -> bot.getId() != null)
+                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
+                .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
+                .filter(bot -> {
+                    if (bot.getStatus() == null) {
+                        return false;
+                    }
+                    String statusTitle = bot.getStatus().getBotStatusTitle();
+                    return statusTitle != null && "Новый".equals(statusTitle.trim());
+                })
+                .collect(Collectors.toList());
+
+        if (!idealBots.isEmpty()) {
+            List<Bot> filteredBots = applyVigulFilters(idealBots, vigul);
+            if (!filteredBots.isEmpty()) {
+                return filteredBots;
+            }
+        }
+
+        List<Bot> fallbackBots = allBots.stream()
+                .filter(Objects::nonNull)
+                .filter(bot -> bot.getId() != null)
+                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
+                .filter(bot -> {
+                    if (bot.getStatus() == null) {
+                        return false;
+                    }
+                    String statusTitle = bot.getStatus().getBotStatusTitle();
+                    return statusTitle != null && "Новый".equals(statusTitle.trim());
+                })
+                .collect(Collectors.toList());
+
+        if (!fallbackBots.isEmpty()) {
+            List<Bot> filteredBots = applyVigulFilters(fallbackBots, vigul);
+            if (!filteredBots.isEmpty()) {
+                return filteredBots;
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
+    private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
+        Set<Long> usedBotIds = new HashSet<>();
+
+        try {
+            List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
+
+            if (allReviewsInFilial != null) {
+                for (Review existingReview : allReviewsInFilial) {
+                    if (existingReview != null
+                            && existingReview.getId() != null
+                            && !existingReview.getId().equals(currentReviewId)
+                            && existingReview.getBot() != null
+                            && existingReview.getBot().getId() != null) {
+                        usedBotIds.add(existingReview.getBot().getId());
                     }
                 }
-                log.info("Всего ботов, использованных в филиале {}: {}",
-                        filial.getId(), usedBotIds.size());
-
-            } catch (Exception e) {
-                log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
             }
-
-            return usedBotIds;
+        } catch (Exception e) {
+            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
         }
 
-        private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {
-            Set<Long> usedBotIds = new HashSet<>();
+        return usedBotIds;
+    }
 
-            try {
-                City currentCity = currentFilial.getCity();
-                if (currentCity == null || currentCity.getId() == null) {
-                    log.warn("У текущего филиала ID {} не указан город", currentFilial.getId());
-                    return usedBotIds;
-                }
+    private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {
+        Set<Long> usedBotIds = new HashSet<>();
 
-                // Находим все филиалы того же города
-                List<Filial> filialsInSameCity = filialService.findByCityId(currentCity.getId());
-                if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
-                    return usedBotIds;
-                }
+        try {
+            City currentCity = currentFilial.getCity();
+            if (currentCity == null || currentCity.getId() == null) {
+                return usedBotIds;
+            }
 
-                // Собираем ID всех филиалов того же города (кроме текущего)
-                List<Long> otherFilialIdsInCity = filialsInSameCity.stream()
-                        .filter(filial -> filial != null && filial.getId() != null)
-                        .filter(filial -> !filial.getId().equals(currentFilial.getId()))
-                        .map(Filial::getId)
-                        .collect(Collectors.toList());
+            List<Filial> filialsInSameCity = filialService.findByCityId(currentCity.getId());
+            if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
+                return usedBotIds;
+            }
 
-                if (otherFilialIdsInCity.isEmpty()) {
-                    return usedBotIds;
-                }
+            List<Long> otherFilialIdsInCity = filialsInSameCity.stream()
+                    .filter(filial -> filial != null && filial.getId() != null)
+                    .filter(filial -> !filial.getId().equals(currentFilial.getId()))
+                    .map(Filial::getId)
+                    .collect(Collectors.toList());
 
-                // Находим активные отзывы в этих филиалах
-                List<Review> activeReviewsInSameCity = reviewRepository
-                        .findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
+            if (otherFilialIdsInCity.isEmpty()) {
+                return usedBotIds;
+            }
 
-                if (activeReviewsInSameCity != null) {
-                    for (Review existingReview : activeReviewsInSameCity) {
-                        if (existingReview != null &&
-                                existingReview.getId() != null &&
-                                !existingReview.getId().equals(currentReviewId) &&
-                                existingReview.getBot() != null &&
-                                existingReview.getBot().getId() != null) {
+            List<Review> activeReviewsInSameCity = reviewRepository
+                    .findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
 
-                            usedBotIds.add(existingReview.getBot().getId());
-                        }
+            if (activeReviewsInSameCity != null) {
+                for (Review existingReview : activeReviewsInSameCity) {
+                    if (existingReview != null
+                            && existingReview.getId() != null
+                            && !existingReview.getId().equals(currentReviewId)
+                            && existingReview.getBot() != null
+                            && existingReview.getBot().getId() != null) {
+                        usedBotIds.add(existingReview.getBot().getId());
                     }
                 }
-
-                log.info("Найдено активных отзывов с ботами в других филиалах того же города  {} - это количество записей в таблице Review, где publish = false и бот не null:",
-                        activeReviewsInSameCity != null ? activeReviewsInSameCity.size() : 0);
-
-            } catch (Exception e) {
-                log.error("Ошибка при получении глобально использованных ботов", e);
             }
 
-            return usedBotIds;
+        } catch (Exception e) {
+            log.error("Ошибка при получении глобально использованных ботов", e);
         }
 
-        private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
-            if (!vigul) {
-                log.info("Фильтрация для vigul=false");
+        return usedBotIds;
+    }
 
-                List<Bot> strictFiltered = baseBots.stream()
-                        .filter(bot -> {
-                            if (bot.getFio() == null) return false;
-                            return "Впиши Имя Фамилию".equals(bot.getFio().trim());
-                        })
-                        .collect(Collectors.toList());
-                log.info("Всего ботов: переданных в фильтр Впиши Имя Фамилию': {}", baseBots.size());
-                log.info("Ботов с именем 'Впиши Имя Фамилию': {}", strictFiltered.size());
+    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
+        if (!vigul) {
+            List<Bot> strictFiltered = baseBots.stream()
+                    .filter(bot -> {
+                        if (bot.getFio() == null) {
+                            return false;
+                        }
+                        return "Впиши Имя Фамилию".equals(bot.getFio().trim());
+                    })
+                    .collect(Collectors.toList());
 
-                if (!strictFiltered.isEmpty()) {
-                    return strictFiltered;
-                }
-
-                log.warn("Нет ботов с именем 'Впиши Имя Фамилию', используем всех доступных ботов");
-                return baseBots;
-
-            } else {
-                log.info("Фильтрация для vigul=true");
-
-                List<Bot> strictFiltered = baseBots.stream()
-                        .filter(bot -> {
-                            Integer counter = bot.getCounter();
-                            if (counter == null) counter = 0;
-                            return counter >= 3;
-                        })
-                        .collect(Collectors.toList());
-
-                log.info("Всего ботов: переданных в фильтр с counter >= 3: {}", baseBots.size());
-                log.info("Ботов с counter >= 3: {}", strictFiltered.size());
-
-                if (!strictFiltered.isEmpty()) {
-                    return strictFiltered;
-                }
-
-                List<Bot> fallbackFiltered = baseBots.stream()
-                        .filter(bot -> {
-                            Integer counter = bot.getCounter();
-                            if (counter == null) counter = 0;
-                            return counter >= 0 && counter <= 2;
-                        })
-                        .collect(Collectors.toList());
-
-                log.info("Ботов с counter от 0 до 2: {}", fallbackFiltered.size());
-
-                if (!fallbackFiltered.isEmpty()) {
-                    log.warn("Нет ботов с counter >= 3, используем ботов с counter от 0 до 2");
-                    return fallbackFiltered;
-                }
-
-                log.warn("Нет ботов с подходящим counter, используем всех доступных ботов");
-                return baseBots;
+            if (!strictFiltered.isEmpty()) {
+                return strictFiltered;
             }
+
+            return baseBots;
+
+        } else {
+            List<Bot> strictFiltered = baseBots.stream()
+                    .filter(bot -> safeBotCounter(bot) >= 3)
+                    .collect(Collectors.toList());
+
+            if (!strictFiltered.isEmpty()) {
+                return strictFiltered;
+            }
+
+            List<Bot> fallbackFiltered = baseBots.stream()
+                    .filter(bot -> {
+                        int counter = safeBotCounter(bot);
+                        return counter >= 0 && counter <= 2;
+                    })
+                    .collect(Collectors.toList());
+
+            if (!fallbackFiltered.isEmpty()) {
+                return fallbackFiltered;
+            }
+
+            return baseBots;
+        }
+    }
+
+    private boolean isBotOverloaded(Bot bot) {
+        if (bot == null || bot.getId() == null) {
+            return false;
         }
 
-        private boolean isBotOverloaded(Bot bot) {
-            if (bot == null || bot.getId() == null) {
-                return false;
-            }
-
-            try {
-                List<Review> botActiveReviews = reviewRepository.findByBotAndPublishFalse(bot);
-                int maxActiveReviewsPerBot = 3;
-                return botActiveReviews != null && botActiveReviews.size() >= maxActiveReviewsPerBot;
-            } catch (Exception e) {
-                log.error("Ошибка при проверке загруженности бота ID {}", bot.getId(), e);
-                return false;
-            }
+        try {
+            List<Review> botActiveReviews = reviewRepository.findByBotAndPublishFalse(bot);
+            int maxActiveReviewsPerBot = 3;
+            return botActiveReviews != null && botActiveReviews.size() >= maxActiveReviewsPerBot;
+        } catch (Exception e) {
+            log.error("Ошибка при проверке загруженности бота ID {}", bot.getId(), e);
+            return false;
         }
+    }
 
-    /**
-     * НОВЫЙ МЕТОД: Автоматическое обновление isVigul на основе counter назначенного бота
-     * Правила:
-     * 1. Если isVigul = true и новый бот имеет counter < 3 → isVigul = false
-     * 2. Если isVigul = false и новый бот имеет counter >= 3 → isVigul = true
-     */
     private void updateVigulBasedOnBotCounter(Review review) {
         if (review == null || review.getBot() == null) {
             return;
@@ -1361,199 +1046,176 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
 
         Bot bot = review.getBot();
 
-        // Пропускаем бота-заглушку (ID = 1) - для них отдельная обработка
         if (STUB_BOT_ID.equals(bot.getId())) {
             return;
         }
 
-        // Получаем counter бота
-        Integer botCounter = bot.getCounter();
-        if (botCounter == null) {
-            botCounter = 0;
-        }
-
+        int botCounter = safeBotCounter(bot);
         boolean currentVigul = review.isVigul();
 
-        // Правило 1: Если vigul = true, но бот имеет counter < 3
         if (currentVigul && botCounter < MAX_ACTIVE_REVIEWS_PER_BOT) {
             review.setVigul(false);
-            log.info("Отзыв ID {}: isVigul изменен с true на false (бот ID {} имеет counter={} < 3)",
-                    review.getId(), bot.getId(), botCounter);
-        }
-        // Правило 2: Если vigul = false, но бот имеет counter >= 3
-        else if (!currentVigul && botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
+        } else if (!currentVigul && botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
             review.setVigul(true);
-            log.info("Отзыв ID {}: isVigul изменен с false на true (бот ID {} имеет counter={} >= 3)",
-                    review.getId(), bot.getId(), botCounter);
-        }
-        else {
-            log.debug("Отзыв ID {}: isVigul остается {} (бот ID {} имеет counter={})",
-                    review.getId(), currentVigul, bot.getId(), botCounter);
         }
     }
 
-        public ReviewDTOOne toReviewDTOOne(Review review) {
-            try {
-                OrderDetails orderDetails = review.getOrderDetails();
-                Bot bot = review.getBot();
+    public ReviewDTOOne toReviewDTOOne(Review review) {
+        try {
+            OrderDetails orderDetails = review != null ? review.getOrderDetails() : null;
+            Bot bot = review != null ? review.getBot() : null;
 
-                boolean isStubBot = bot != null && bot.getId() != null && STUB_BOT_ID.equals(bot.getId());
+            boolean isStubBot = bot != null && bot.getId() != null && STUB_BOT_ID.equals(bot.getId());
 
-                String botFio;
-                if (orderDetails == null) {
-                    botFio = "НЕТ ЗАКАЗА";
-                } else if (bot == null) {
-                    botFio = "Добавьте аккаунты и нажмите сменить";
-                } else if (isStubBot) {
-                    botFio = "Нет доступных аккаунтов";
-                } else {
-                    botFio = Optional.ofNullable(bot.getFio())
-                            .filter(name -> !name.trim().isEmpty())
-                            .orElse("Бот без имени");
-                }
+            String botFio;
+            if (orderDetails == null) {
+                botFio = "НЕТ ЗАКАЗА";
+            } else if (bot == null) {
+                botFio = "Добавьте аккаунты и нажмите сменить";
+            } else if (isStubBot) {
+                botFio = "Нет доступных аккаунтов";
+            } else {
+                botFio = Optional.ofNullable(bot.getFio())
+                        .filter(name -> !name.trim().isEmpty())
+                        .orElse("Бот без имени");
+            }
 
+            String companyTitle = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getOrder)
+                    .map(Order::getCompany)
+                    .map(Company::getTitle)
+                    .orElse("НЕТ ЗАКАЗА");
 
+            Long companyId = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getOrder)
+                    .map(Order::getCompany)
+                    .map(Company::getId)
+                    .orElse(null);
 
+            UUID orderDetailsId = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getId)
+                    .orElse(null);
 
-                String companyTitle = Optional.ofNullable(orderDetails)
+            Long orderId = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getOrder)
+                    .map(Order::getId)
+                    .orElse(null);
+
+            String productTitle = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getProduct)
+                    .map(Product::getTitle)
+                    .orElse("НЕТ ПРОДУКТА");
+
+            String comment = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getComment)
+                    .orElse("");
+
+            String orderComments = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getOrder)
+                    .map(Order::getZametka)
+                    .orElse("");
+
+            String commentCompany = Optional.ofNullable(orderDetails)
+                    .map(OrderDetails::getOrder)
+                    .map(Order::getCompany)
+                    .map(Company::getCommentsCompany)
+                    .orElse("");
+
+            String workerFio = Optional.ofNullable(review.getWorker())
+                    .map(Worker::getUser)
+                    .map(User::getFio)
+                    .orElse("");
+
+            if (workerFio.isEmpty()) {
+                workerFio = Optional.ofNullable(orderDetails)
                         .map(OrderDetails::getOrder)
-                        .map(Order::getCompany)
-                        .map(Company::getTitle)
-                        .orElse("НЕТ ЗАКАЗА");
-
-                Long companyId = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getOrder)
-                        .map(Order::getCompany)
-                        .map(Company::getId)
-                        .orElse(null);
-
-                UUID orderDetailsId = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getId)
-                        .orElse(null);
-
-                Long orderId = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getOrder)
-                        .map(Order::getId)
-                        .orElse(null);
-
-                String productTitle = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getProduct)
-                        .map(Product::getTitle)
-                        .orElse("НЕТ ПРОДУКТА");
-
-                String comment = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getComment)
-                        .orElse("");
-
-                String orderComments = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getOrder)
-                        .map(Order::getZametka)
-                        .orElse("");
-
-                String commentCompany = Optional.ofNullable(orderDetails)
-                        .map(OrderDetails::getOrder)
-                        .map(Order::getCompany)
-                        .map(Company::getCommentsCompany)
-                        .orElse("");
-
-
-                String workerFio = Optional.ofNullable(review.getWorker())
-                        .map(Worker::getUser)
+                        .map(Order::getManager)
+                        .map(Manager::getUser)
                         .map(User::getFio)
                         .orElse("");
-
-                if (workerFio.isEmpty()) {
-                    workerFio = Optional.ofNullable(orderDetails)
-                            .map(OrderDetails::getOrder)
-                            .map(Order::getManager)
-                            .map(Manager::getUser)
-                            .map(User::getFio)
-                            .orElse("");
-                }
-
-                String filialCity = Optional.ofNullable(review.getFilial())
-                        .map(Filial::getCity)
-                        .map(City::getTitle)
-                        .orElse("");
-
-                String filialTitle = Optional.ofNullable(review.getFilial())
-                        .map(Filial::getTitle)
-                        .orElse("");
-
-                String filialUrl = Optional.ofNullable(review.getFilial())
-                        .map(Filial::getUrl)
-                        .orElse("");
-
-                String category = Optional.ofNullable(review.getCategory())
-                        .map(Category::getCategoryTitle)
-                        .orElse("Нет категории");
-
-                String subCategory = Optional.ofNullable(review.getSubCategory())
-                        .map(SubCategory::getSubCategoryTitle)
-                        .orElse("Нет подкатегории");
-
-                LocalDate created = review.getCreated() != null ? review.getCreated() : LocalDate.now();
-                LocalDate changed = review.getChanged() != null ? review.getChanged() : created;
-                LocalDate publishedDate = review.getPublishedDate() != null ? review.getPublishedDate() : null;
-
-
-                // БЕЗОПАСНОЕ получение данных бота с значениями по умолчанию
-                Long botId = null;
-                String botLogin = "";
-                String botPassword = "";
-                Integer botCounter = 0; // Важно: инициализируем 0
-
-                if (bot != null) {
-                    botId = bot.getId();
-                    botLogin = Optional.ofNullable(bot.getLogin()).orElse("");
-                    botPassword = Optional.ofNullable(bot.getPassword()).orElse("");
-                    botCounter = Optional.of(bot.getCounter()).orElse(0); // Здесь исправление
-                }
-                return ReviewDTOOne.builder()
-                        .id(review.getId())
-                        .companyId(companyId)
-                        .commentCompany(commentCompany)
-                        .orderDetailsId(orderDetailsId)
-                        .orderId(orderId)
-                        .text(review.getText() != null ? review.getText() : "")
-                        .answer(review.getAnswer() != null ? review.getAnswer() : "")
-                        .category(category)
-                        .subCategory(subCategory)
-                        .botId(botId)  // Теперь безопасно
-                        .botFio(botFio)
-                        .botLogin(botLogin)
-                        .botPassword(botPassword)
-                        .botCounter(botCounter)
-                        .companyTitle(companyTitle)
-                        .productTitle(productTitle)
-                        .filialCity(filialCity)
-                        .filialTitle(filialTitle)
-                        .filialUrl(filialUrl)
-                        .workerFio(workerFio)
-                        .created(created)
-                        .changed(changed)
-                        .publishedDate(publishedDate)
-                        .publish(review.isPublish())
-                        .vigul(review.isVigul())
-                        .comment(comment)
-                        .orderComments(orderComments)
-                        .product(review.getProduct())
-                        .url(review.getUrl() != null ? review.getUrl() : "")
-                        .build();
-
-            } catch (Exception e) {
-                log.error("Ошибка при преобразовании отзыва ID {} в DTO: {}",
-                        review != null ? review.getId() : "null", e.getMessage(), e);
-
-                return ReviewDTOOne.builder()
-                        .id(review != null ? review.getId() : 0L)
-                        .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
-                        .botFio("ОШИБКА")
-                        .text(review != null && review.getText() != null ? review.getText() : "Не удалось загрузить данные отзыва")
-                        .build();
             }
-        }
 
+            String filialCity = Optional.ofNullable(review.getFilial())
+                    .map(Filial::getCity)
+                    .map(City::getTitle)
+                    .orElse("");
+
+            String filialTitle = Optional.ofNullable(review.getFilial())
+                    .map(Filial::getTitle)
+                    .orElse("");
+
+            String filialUrl = Optional.ofNullable(review.getFilial())
+                    .map(Filial::getUrl)
+                    .orElse("");
+
+            String category = Optional.ofNullable(review.getCategory())
+                    .map(Category::getCategoryTitle)
+                    .orElse("Нет категории");
+
+            String subCategory = Optional.ofNullable(review.getSubCategory())
+                    .map(SubCategory::getSubCategoryTitle)
+                    .orElse("Нет подкатегории");
+
+            LocalDate created = review.getCreated() != null ? review.getCreated() : LocalDate.now();
+            LocalDate changed = review.getChanged() != null ? review.getChanged() : created;
+            LocalDate publishedDate = review.getPublishedDate();
+
+            Long botId = null;
+            String botLogin = "";
+            String botPassword = "";
+            Integer botCounter = 0;
+
+            if (bot != null) {
+                botId = bot.getId();
+                botLogin = Optional.ofNullable(bot.getLogin()).orElse("");
+                botPassword = Optional.ofNullable(bot.getPassword()).orElse("");
+                botCounter = safeBotCounter(bot);
+            }
+
+            return ReviewDTOOne.builder()
+                    .id(review.getId())
+                    .companyId(companyId)
+                    .commentCompany(commentCompany)
+                    .orderDetailsId(orderDetailsId)
+                    .orderId(orderId)
+                    .text(review.getText() != null ? review.getText() : "")
+                    .answer(review.getAnswer() != null ? review.getAnswer() : "")
+                    .category(category)
+                    .subCategory(subCategory)
+                    .botId(botId)
+                    .botFio(botFio)
+                    .botLogin(botLogin)
+                    .botPassword(botPassword)
+                    .botCounter(botCounter)
+                    .companyTitle(companyTitle)
+                    .productTitle(productTitle)
+                    .filialCity(filialCity)
+                    .filialTitle(filialTitle)
+                    .filialUrl(filialUrl)
+                    .workerFio(workerFio)
+                    .created(created)
+                    .changed(changed)
+                    .publishedDate(publishedDate)
+                    .publish(review.isPublish())
+                    .vigul(review.isVigul())
+                    .comment(comment)
+                    .orderComments(orderComments)
+                    .product(review.getProduct())
+                    .url(review.getUrl() != null ? review.getUrl() : "")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Ошибка при преобразовании отзыва ID {} в DTO: {}",
+                    review != null ? review.getId() : "null", e.getMessage(), e);
+
+            return ReviewDTOOne.builder()
+                    .id(review != null ? review.getId() : 0L)
+                    .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
+                    .botFio("ОШИБКА")
+                    .text(review != null && review.getText() != null ? review.getText() : "Не удалось загрузить данные отзыва")
+                    .build();
+        }
+    }
 
     public ReviewDTO getReviewDTOById(Long reviewId) {
         try {
@@ -1579,32 +1241,27 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
 
         OrderDetails orderDetails = review.getOrderDetails();
 
-        // БЕЗОПАСНАЯ ЗАГРУЗКА БОТА
         Bot bot = null;
         boolean isStubBot = false;
 
         try {
             bot = review.getBot();
             if (bot != null) {
-                // Пытаемся получить id бота - если бот удален, это выбросит исключение
                 Long botId = bot.getId();
                 isStubBot = botId != null && STUB_BOT_ID.equals(botId);
             }
         } catch (EntityNotFoundException e) {
             log.warn("Бот для отзыва ID {} не найден в базе. Будет использована заглушка", review.getId());
-            bot = null; // Устанавливаем null, если бот удален
+            bot = null;
         }
 
-        // Безопасное получение имени бота
         String botName = getBotName(orderDetails, bot, isStubBot);
 
-        // Безопасное создание BotDTO
-        BotDTO botDTO = null;
+        BotDTO botDTO;
         if (bot != null && !isStubBot) {
             try {
                 botDTO = convertToBotDTO(bot);
             } catch (EntityNotFoundException e) {
-                log.warn("Не удалось создать DTO для бота отзыва ID {}. Причина: {}", review.getId(), e.getMessage());
                 botDTO = BotDTO.builder()
                         .id(null)
                         .login("УДАЛЕН")
@@ -1616,7 +1273,6 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                         .build();
             }
         } else if (bot == null) {
-            // Создаем DTO для удаленного бота
             botDTO = BotDTO.builder()
                     .id(null)
                     .login("УДАЛЕН")
@@ -1626,15 +1282,12 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     .counter(0)
                     .status("Удален")
                     .build();
+        } else {
+            botDTO = convertToBotDTO(bot);
         }
 
-        // Безопасное получение данных
-        String comment = "";
-        UUID orderDetailsId = null;
-        if (orderDetails != null) {
-            comment = Optional.ofNullable(orderDetails.getComment()).orElse("");
-            orderDetailsId = orderDetails.getId();
-        }
+        String comment = orderDetails != null ? Optional.ofNullable(orderDetails.getComment()).orElse("") : "";
+        UUID orderDetailsId = orderDetails != null ? orderDetails.getId() : null;
 
         return ReviewDTO.builder()
                 .id(review.getId())
@@ -1642,7 +1295,7 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 .answer(Optional.ofNullable(review.getAnswer()).orElse(""))
                 .created(Optional.ofNullable(review.getCreated()).orElse(LocalDate.now()))
                 .changed(Optional.ofNullable(review.getChanged()).orElse(LocalDate.now()))
-                .publishedDate(Optional.ofNullable(review.getPublishedDate()).orElse(null))
+                .publishedDate(review.getPublishedDate())
                 .publish(review.isPublish())
                 .category(convertToCategoryDto(review.getCategory()))
                 .subCategory(convertToSubCategoryDto(review.getSubCategory()))
@@ -1683,7 +1336,6 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
             return null;
         }
 
-        // Если это бот-заглушка, возвращаем специальный DTO
         if (STUB_BOT_ID.equals(bot.getId())) {
             return BotDTO.builder()
                     .id(STUB_BOT_ID)
@@ -1697,118 +1349,76 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                     .build();
         }
 
-        // Для обычного бота с безопасным получением данных
         return BotDTO.builder()
                 .id(bot.getId())
                 .login(Optional.ofNullable(bot.getLogin()).orElse(""))
                 .password(Optional.ofNullable(bot.getPassword()).orElse(""))
                 .fio(Optional.ofNullable(bot.getFio()).orElse("Аккаунт без имени"))
                 .active(bot.isActive())
-                .counter(Optional.of(bot.getCounter()).orElse(0)) // Здесь тоже исправляем
-                .status(bot.getStatus() != null ?
-                        Optional.ofNullable(bot.getStatus().getBotStatusTitle()).orElse("Неизвестен") :
-                        "Неизвестен")
+                .counter(safeBotCounter(bot))
+                .status(bot.getStatus() != null
+                        ? Optional.ofNullable(bot.getStatus().getBotStatusTitle()).orElse("Неизвестен")
+                        : "Неизвестен")
                 .worker(bot.getWorker())
                 .build();
-    }// Перевод отзыва в дто
+    }
 
+    private List<ReviewDTO> convertToReviewDTOList(List<Review> reviews) {
+        return reviews.stream().map(this::convertToReviewDTO).collect(Collectors.toList());
+    }
 
-
-
-//    public ReviewDTO getReviewDTOById(Long reviewId){ // Взять дто отзыв по Id
-//        Review review = reviewRepository.findById(reviewId).orElse(null);
-//        assert review != null;
-//        return ReviewDTO.builder()
-//                .id(review.getId())
-//                .text(review.getText())
-//                .answer(review.getAnswer())
-//                .created(review.getCreated())
-//                .changed(review.getChanged())
-//                .publishedDate(review.getPublishedDate())
-//                .publish(review.isPublish())
-//                .category(convertToCategoryDto(review.getCategory()))
-//                .subCategory(convertToSubCategoryDto(review.getSubCategory()))
-//                .bot(convertToBotDTO(review.getBot()))
-//                .botName(review.getBot() != null && review.getBot().getFio() != null? review.getBot().getFio() : "Добавьте ботов и нажмите сменить")
-//                .filial(convertToFilialDTO(review.getFilial()))
-//                .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
-//                .worker(convertToWorkerDTO(review.getWorker()))
-//                .comment(review.getOrderDetails().getComment())
-//                .orderDetailsId(review.getOrderDetails().getId())
-//                .product(review.getProduct())
-//                .price(review.getPrice())
-//                .url(review.getUrl())
-//                .build();
-//    } // Взять дто отзыв по Id
-
-    //    ============================================== CONVERTER TO DTO ==============================================
-    private List<ReviewDTO> convertToReviewDTOList(List<Review> reviews){ // Перевод отзыва в дто
-            return reviews.stream().map(this::convertToReviewDTO).collect(Collectors.toList());
-        } // Перевод отзыва в дто
-//    private ReviewDTO convertToReviewDTO(Review review){ // Перевод отзыва в дто
-//            assert review != null;
-//            return ReviewDTO.builder()
-//                    .id(review.getId())
-//                    .text(review.getText())
-//                    .answer(review.getAnswer())
-//                    .created(review.getCreated())
-//                    .changed(review.getChanged())
-//                    .publishedDate(review.getPublishedDate())
-//                    .publish(review.isPublish())
-//                    .category(convertToCategoryDto(review.getCategory()))
-//                    .subCategory(convertToSubCategoryDto(review.getSubCategory()))
-//                    .bot(convertToBotDTO(review.getBot()))
-//                    .filial(convertToFilialDTO(review.getFilial()))
-//                    .orderDetails(convertToDetailsDTO(review.getOrderDetails()))
-//                    .worker(convertToWorkerDTO(review.getWorker()))
-//                    .comment(review.getOrderDetails().getComment())
-//                    .orderDetailsId(review.getOrderDetails().getId())
-//                    .product(review.getProduct())
-//                    .url(review.getUrl())
-//                    .build();
-//        } // Перевод отзыва в дто
-    private CategoryDTO convertToCategoryDto(Category category) { // Перевод категории в дто
+    private CategoryDTO convertToCategoryDto(Category category) {
+        if (category == null) {
+            return null;
+        }
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId());
         categoryDTO.setCategoryTitle(category.getCategoryTitle());
         return categoryDTO;
-    } // Перевод категории в дто
-    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) { // Перевод подкатегории в дто
+    }
+
+    private SubCategoryDTO convertToSubCategoryDto(SubCategory subCategory) {
+        if (subCategory == null) {
+            return null;
+        }
         SubCategoryDTO subCategoryDTO = new SubCategoryDTO();
         subCategoryDTO.setId(subCategory.getId());
         subCategoryDTO.setSubCategoryTitle(subCategory.getSubCategoryTitle());
         return subCategoryDTO;
-    } // Перевод подкатегории в дто
-    private FilialDTO convertToFilialDTO(Filial filial){ // Перевод филиала в дто
+    }
+
+    private FilialDTO convertToFilialDTO(Filial filial) {
+        if (filial == null) {
+            return null;
+        }
         return FilialDTO.builder()
                 .id(filial.getId())
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .build();
-    } // Перевод филиала в дто
-//    private BotDTO convertToBotDTO(Bot bot){ // Перевод бота в дто
-//        log.info("Перевод Бота в дто");
-//        return BotDTO.builder()
-//                .id(bot.getId())
-//                .login(bot.getLogin())
-//                .password(bot.getPassword())
-//                .fio(bot.getFio())
-//                .active(bot.isActive())
-//                .counter(bot.getCounter())
-//                .status(bot.getStatus().getBotStatusTitle())
-//                .worker(bot.getWorker() != null ? bot.getWorker() : null)
-//                .build();
-//    } // Перевод бота в дто
-    private WorkerDTO convertToWorkerDTO(Worker worker){ // Перевод работника в дто
+    }
+
+    private WorkerDTO convertToWorkerDTO(Worker worker) {
+        if (worker == null) {
+            return null;
+        }
         return WorkerDTO.builder()
                 .workerId(worker.getId())
                 .user(worker.getUser())
                 .build();
-    } // Перевод работника в дто
-    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details){ // Перевод деталей в дто
+    }
+
+    private List<OrderDetailsDTO> convertToDetailsDTOList(List<OrderDetails> details) {
+        if (details == null) {
+            return Collections.emptyList();
+        }
         return details.stream().map(this::convertToDetailsDTO).collect(Collectors.toList());
-    } // Перевод деталей в дто
-    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // Перевод деталей в дто
+    }
+
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails) {
+        if (orderDetails == null) {
+            return null;
+        }
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
                 .amount(orderDetails.getAmount())
@@ -1818,180 +1428,153 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
                 .order(convertToOrderDTO(orderDetails.getOrder()))
                 .comment(orderDetails.getComment())
                 .build();
-    } // Перевод деталей в дто
-    private ProductDTO convertToProductDTO(Product product){ // Перевод продуктов в дто
+    }
+
+    private ProductDTO convertToProductDTO(Product product) {
+        if (product == null) {
+            return null;
+        }
         return ProductDTO.builder()
                 .id(product.getId())
                 .title(product.getTitle())
                 .price(product.getPrice())
                 .build();
-    } // Перевод продуктов в дто
-    private OrderDTO convertToOrderDTO(Order order){ // Перевод заказа в дто
+    }
+
+    private OrderDTO convertToOrderDTO(Order order) {
+        if (order == null) {
+            return null;
+        }
         return OrderDTO.builder()
                 .id(order.getId())
                 .company(convertToCompanyDTO(order.getCompany()))
                 .build();
-    } // Перевод заказа в дто
-    private CompanyDTO convertToCompanyDTO(Company company){ // Перевод компании в дто
+    }
+
+    private CompanyDTO convertToCompanyDTO(Company company) {
+        if (company == null) {
+            return null;
+        }
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
                 .build();
-    } // Перевод компании в дто
-    public Review getReviewById(Long reviewId){  // Взять отзыв по Id
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        assert review != null;
-        return review;
-    } // Взять отзыв по Id
-    //    ============================================== CONVERTER TO DTO ==============================================
+    }
 
-    //    ============================================ CONVERTER TO ENTITY =============================================
-    private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO){ // Перевод категории дто в сущность
+    public Review getReviewById(Long reviewId) {
+        return reviewRepository.findById(reviewId).orElse(null);
+    }
+
+    private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO) {
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
-    } // Перевод категории дто в сущность
-    private SubCategory convertSubCompanyDTOToSubCategory(SubCategoryDTO subCategoryDTO){ // Перевод подкатегории дто в сущность
+    }
+
+    private SubCategory convertSubCompanyDTOToSubCategory(SubCategoryDTO subCategoryDTO) {
         return subCategoryService.getSubCategoryById(subCategoryDTO.getId());
-    } // Перевод подкатегории дто в сущность
-    //    ============================================ CONVERTER TO ENTITY =============================================
+    }
 
-
-
-    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize) { // Берем все заказы с поиском по названию компании или номеру
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize) {
+        List<Long> reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
 
         List<Review> filteredReviews = reviewPage.stream()
                 .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review ->
-                        !review.isVigul() &&
-                                // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-                                (review.getBot() == null || review.getBot().getCounter() <= 2)
-                )
+                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
                 .collect(Collectors.toList());
 
         return getSafePageReviews(filteredReviews, pageNumber, pageSize);
     }
 
-    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
-        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
 
-        // ВАЖНО: Фильтруем только те отзывы, которые имеют orderDetails
-        // ИЗМЕНЕНИЕ: Показываем все отзывы, даже без orderDetails
-        List<Review> filteredPage = reviewRepository.findAll(reviewId).stream()
+        List<Long> reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
+
+        List<Review> filteredPage = reviewId.isEmpty()
+                ? Collections.emptyList()
+                : reviewRepository.findAll(reviewId).stream()
                 .filter(review -> {
-                    // Если нет orderDetails - все равно показываем
-                    if (review.getOrderDetails() == null) {
+                    Order order = extractOrder(review);
+                    if (order == null) {
                         return true;
                     }
-
-                    // Если orderDetails есть, проверяем менеджера
-                    // Добавляем проверки на все звенья цепочки
-                    if (review.getOrderDetails().getOrder() == null) {
-                        // Заказ есть, но детали заказа null
+                    if (order.getManager() == null) {
                         return true;
                     }
-
-                    if (review.getOrderDetails().getOrder().getManager() == null) {
-                        // Заказ есть, но менеджер не назначен
-                        return true;
-                    }
-
-                    // Проверяем, принадлежит ли менеджеру
-                    return review.getOrderDetails().getOrder().getManager().equals(manager);
+                    return order.getManager().equals(manager);
                 })
                 .collect(Collectors.toList());
 
         List<Review> filteredReviews = filteredPage.stream()
                 .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review ->
-                        !review.isVigul() &&
-                                // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-                                (review.getBot() == null || review.getBot().getCounter() <= 2)
-                )
+                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
                 .collect(Collectors.toList());
 
         return getSafePageReviews(filteredReviews, pageNumber, pageSize);
     }
 
     @Override
-    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+        if (managerList.isEmpty()) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
+
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
+        List<Long> reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
 
         List<Review> filteredReviews = reviewPage.stream()
                 .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review ->
-                        !review.isVigul() &&
-                                // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-                                (review.getBot() == null || review.getBot().getCounter() <= 2)
-                )
+                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
                 .collect(Collectors.toList());
 
         return getSafePageReviews(filteredReviews, pageNumber, pageSize);
     }
 
     @Override
-    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(
-            LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        User user = requireUser(principal);
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize);
+        }
 
-        Worker worker = workerService.getWorkerByUserId(
-                Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-
-        // Получаем ID отзывов для работника
         List<Long> reviewIds = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
 
         if (reviewIds == null || reviewIds.isEmpty()) {
-            // Возвращаем пустую страницу
-            Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
-            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+            return emptyReviewPage(pageNumber, pageSize);
         }
 
-        // Загружаем все отзывы по ID
         List<Review> reviews = reviewRepository.findAll(reviewIds);
 
-        // Фильтруем по условиям выгула
         List<Review> filteredReviews = reviews.stream()
-                .filter(review -> !review.isVigul())  // Только не выгуленные
-                .filter(review -> {
-                    if (review.getBot() == null) {
-                        return true;  // Если бота нет - подходит
-                    }
-                    Integer counter = review.getBot().getCounter();
-                    return counter == null || counter <= 2;  // counter <= 2
-                })
-                .sorted(Comparator.comparing(Review::getPublishedDate))  // Сортируем по дате
+                .filter(review -> !review.isVigul())
+                .filter(review -> safeBotCounter(review.getBot()) <= 2)
+                .sorted(Comparator.comparing(Review::getPublishedDate))
                 .collect(Collectors.toList());
 
-        // Используем безопасную пагинацию
         return getSafePageReviews(filteredReviews, pageNumber, pageSize);
     }
 
-    // Добавьте этот метод для безопасной пагинации
     private Page<ReviewDTOOne> getSafePageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
         int totalElements = reviewPage.size();
 
-        // Если список пустой
         if (totalElements == 0) {
             Pageable pageable = PageRequest.of(0, pageSize, Sort.by("publishedDate").descending());
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
-        // Рассчитываем максимальную страницу
         int totalPages = (int) Math.ceil((double) totalElements / pageSize);
         if (totalPages == 0) {
             totalPages = 1;
         }
 
-        // Корректируем pageNumber
         int correctedPageNumber = pageNumber;
         if (pageNumber >= totalPages) {
             correctedPageNumber = totalPages - 1;
@@ -2004,7 +1587,6 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         int start = correctedPageNumber * pageSize;
         int end = Math.min(start + pageSize, totalElements);
 
-        // Проверка на выход за границы
         if (start > end) {
             start = 0;
             end = Math.min(pageSize, totalElements);
@@ -2019,213 +1601,15 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         return new PageImpl<>(reviewDTOOnes, pageable, totalElements);
     }
 
-
-//
-//    // Добавьте этот метод для безопасной пагинации
-//    private Page<ReviewDTOOne> getSafePageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
-//        int totalElements = reviewPage.size();
-//
-//        // Если список пустой
-//        if (totalElements == 0) {
-//            Pageable pageable = PageRequest.of(0, pageSize, Sort.by("publishedDate").descending());
-//            return new PageImpl<>(Collections.emptyList(), pageable, 0);
-//        }
-//
-//        // Рассчитываем максимальную страницу
-//        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
-//        if (totalPages == 0) {
-//            totalPages = 1;
-//        }
-//
-//        // Корректируем pageNumber
-//        int correctedPageNumber = pageNumber;
-//        if (pageNumber >= totalPages) {
-//            correctedPageNumber = totalPages - 1;
-//        }
-//        if (pageNumber < 0) {
-//            correctedPageNumber = 0;
-//        }
-//
-//        Pageable pageable = PageRequest.of(correctedPageNumber, pageSize, Sort.by("publishedDate").descending());
-//        int start = correctedPageNumber * pageSize;
-//        int end = Math.min(start + pageSize, totalElements);
-//
-//        // Проверка на выход за границы
-//        if (start > end) {
-//            start = 0;
-//            end = Math.min(pageSize, totalElements);
-//        }
-//
-//        List<ReviewDTOOne> reviewDTOOnes = reviewPage.subList(start, end)
-//                .stream()
-//                .map(this::toReviewDTOOne)
-//                .filter(Objects::nonNull)
-//                .collect(Collectors.toList());
-//
-//        return new PageImpl<>(reviewDTOOnes, pageable, totalElements);
-//    }
-
-//    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Работника
-//        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-//        List<Long> reviewId;
-//        List<Review> reviewPage;
-//        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
-//        reviewPage = reviewRepository.findAll(reviewId);
-//        return getPageReviews(
-//                reviewPage.stream()
-//                        .sorted(Comparator.comparing(Review::getPublishedDate))
-//                        .filter(review ->
-//                                !review.isVigul() &&
-//                                        // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-//                                        (review.getBot() == null || review.getBot().getCounter() < 2)
-//                        )
-//                        .toList(),
-//                pageNumber,
-//                pageSize
-//        );
-//    } // Берем все отзывы с датой для Работника
-
-//    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Менеджера
-//        Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-//        List<Long> reviewId;
-//        List<Review> reviewPage;
-//        reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-//        // ВАЖНО: Фильтруем только те отзывы, которые имеют orderDetails
-//        // ИЗМЕНЕНИЕ: Показываем все отзывы, даже без orderDetails
-//        reviewPage = reviewRepository.findAll(reviewId).stream()
-//                .filter(review -> {
-//                    // Если нет orderDetails - все равно показываем
-//                    if (review.getOrderDetails() == null) {
-//                        return true;
-//                    }
-//
-//                    // Если orderDetails есть, проверяем менеджера
-//                    // Добавляем проверки на все звенья цепочки
-//                    if (review.getOrderDetails().getOrder() == null) {
-//                        // Заказ есть, но детали заказа null
-//                        return true;
-//                    }
-//
-//                    if (review.getOrderDetails().getOrder().getManager() == null) {
-//                        // Заказ есть, но менеджер не назначен
-//                        return true;
-//                    }
-//
-//                    // Проверяем, принадлежит ли менеджеру
-//                    return review.getOrderDetails().getOrder().getManager().equals(manager);
-//                })
-//                .toList();
-//        return getPageReviews(
-//                reviewPage.stream()
-//                        .sorted(Comparator.comparing(Review::getPublishedDate))
-//                        .filter(review ->
-//                                !review.isVigul() &&
-//                                        // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-//                                        (review.getBot() == null || review.getBot().getCounter() < 2)
-//                        )
-//                        .toList(),
-//                pageNumber,
-//                pageSize
-//        );
-//    } // Берем все отзывы с датой для Менеджера
-//
-//    @Override
-//    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) { // Берем все отзывы с датой для Владельца
-//        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-//        Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-//        List<Long> reviewId;
-//        List<Review> reviewPage;
-//        reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
-//        reviewPage = reviewRepository.findAll(reviewId);
-//        return getPageReviews(
-//                reviewPage.stream()
-//                        .sorted(Comparator.comparing(Review::getPublishedDate))
-//                        .filter(review ->
-//                                !review.isVigul() &&
-//                                        // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-//                                        (review.getBot() == null || review.getBot().getCounter() < 2)
-//                        )
-//                        .toList(),
-//                pageNumber,
-//                pageSize
-//        );
-//
-//    }
-
-
-
-//    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize){ // Берем все заказы с поиском по названию компании или номеру
-//        List<Long> reviewId;
-//        List<Review> reviewPage;
-//        reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
-//        reviewPage = reviewRepository.findAll(reviewId);
-//        return getPageReviews(
-//                reviewPage.stream()
-//                        .sorted(Comparator.comparing(Review::getPublishedDate))
-//                        .filter(review ->
-//                                !review.isVigul() &&
-//                                        // Если бот есть, проверяем counter < 2, если бота нет - пропускаем
-//                                        (review.getBot() == null || review.getBot().getCounter() < 2)
-//                        )
-//                        .toList(),
-//                pageNumber,
-//                pageSize
-//        );
-//    }  // Берем все заказы с поиском по названию компании или номеру
-//
-
     @Override
     public void changeNagulReview(Long reviewId) {
         Review review = reviewRepository.findById(reviewId).orElse(null);
-        assert review != null;
+        if (review == null) {
+            return;
+        }
         review.setVigul(true);
         reviewRepository.save(review);
     }
-
-//    @Override
-//    @Transactional
-//    public void changeNagulReview(Long reviewId, String username) {
-//        User currentUser = userService.findByUserName(username)
-//                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
-//        Worker worker = workerService.getWorkerByUserId(currentUser.getId());
-//
-//        // Проверка временного интервала
-//        if (worker.getLastNagulTime() != null) {
-//            LocalDateTime now = LocalDateTime.now();
-//            Duration duration = Duration.between(worker.getLastNagulTime(), now);
-//
-//            if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
-//                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
-//                long minutesLeft = secondsLeft / 60;
-//                long remainingSeconds = secondsLeft % 60;
-//
-//                // ВЫБРАСЫВАЕМ ИСКЛЮЧЕНИЕ
-//                throw new NagulTooFastException(minutesLeft, remainingSeconds);
-//            }
-//        }
-//
-//        // Проверка имени бота
-//        Review review = reviewRepository.findById(reviewId)
-//                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
-//
-//        if (review.getBot() != null && review.getBot().getFio() != null) {
-//            String botFio = review.getBot().getFio().toLowerCase();
-//
-//            for (String pattern : FORBIDDEN_PATTERNS) {
-//                if (botFio.contains(pattern.toLowerCase())) {
-//                    // ВЫБРАСЫВАЕМ ИСКЛЮЧЕНИЕ
-//                    throw new BotTemplateNameException("Аккаунт не выгулян: имя бота содержит шаблонные слова");
-//                }
-//            }
-//        }
-//
-//        // Выполнение выгула
-//        review.setVigul(true);
-//        worker.setLastNagulTime(LocalDateTime.now());
-//
-//        workerService.save(worker);
-//        reviewRepository.save(review);
-//    }
 
     @Override
     @Transactional
@@ -2233,82 +1617,53 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         User currentUser = userService.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-        log.info("Пользователь {} (id={}) пытается выполнить выгул",
-                currentUser.getUsername(), currentUser.getId());
-
-        // Получаем роли пользователя
         List<String> roles = currentUser.getRoles().stream()
-                .map(role -> role.getName())
+                .map(Role::getName)
                 .collect(Collectors.toList());
-        log.info("Роли пользователя: {}", roles);
 
-        // Определяем, является ли пользователь работником
         boolean isWorker = roles.contains("ROLE_WORKER");
         Worker worker = null;
 
-        // Проверка временного интервала только для работников
         if (isWorker) {
             worker = workerService.getWorkerByUserId(currentUser.getId());
 
             if (worker == null) {
-                log.error("Для работника {} не найдена сущность Worker", currentUser.getUsername());
                 throw new RuntimeException("Ошибка: не найдена информация о работнике");
             }
 
             validateNagulCooldown(worker);
-        } else {
-            log.info("Пользователь {} не является работником, временные ограничения не применяются",
-                    currentUser.getUsername());
         }
 
-        // Проверка имени бота (для всех ролей)
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+
         validateBotName(review);
 
-        // Выполнение выгула
         review.setVigul(true);
 
-        // Обновляем время последнего выгула только для работников
         if (isWorker && worker != null) {
             worker.setLastNagulTime(LocalDateTime.now());
             workerService.save(worker);
-            log.info("Время последнего выгула обновлено для работника id={}", worker.getId());
         }
 
         reviewRepository.save(review);
-        log.info("Отзыв id={} помечен как выгуленный", reviewId);
     }
 
-    // Метод проверки временного интервала (только для работников)
     private void validateNagulCooldown(Worker worker) {
         if (worker.getLastNagulTime() != null) {
             LocalDateTime now = LocalDateTime.now();
             Duration duration = Duration.between(worker.getLastNagulTime(), now);
 
-            log.info("Последний выгул был: {}, прошло: {} секунд",
-                    worker.getLastNagulTime(), duration.getSeconds());
-
             if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
-                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
+                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60L - duration.getSeconds();
                 long minutesLeft = secondsLeft / 60;
                 long remainingSeconds = secondsLeft % 60;
 
-                String message = String.format("Слишком быстрый выгул! Выгуливайте еще %d мин %d сек",
-                        minutesLeft, remainingSeconds);
-                log.warn("Отказ в выгуле: {}", message);
-
                 throw new NagulTooFastException(minutesLeft, remainingSeconds);
             }
-        } else {
-            log.info("У работника нет предыдущих выгулов, можно выполнять сразу");
         }
     }
 
-
-    /**
-     * Метод проверки имени бота с поддержкой инициалов
-     */
     private void validateBotName(Review review) {
         if (review.getBot() == null || review.getBot().getFio() == null) {
             return;
@@ -2317,19 +1672,14 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         String botFio = review.getBot().getFio().trim();
         String botFioLower = botFio.toLowerCase();
 
-
-
-        // Проверка на пустое имя
         if (botFio.isEmpty()) {
             throw new BotTemplateNameException("Имя бота не может быть пустым");
         }
 
-        // Проверка на цифры
         if (botFio.matches(".*\\d.*")) {
             throw new BotTemplateNameException("Аккаунт не выгулян: имя содержит цифры");
         }
 
-        // ЯВНАЯ ПРОВЕРКА на конкретные запрещенные комбинации
         List<String> forbiddenFullNames = Arrays.asList(
                 "имя фамилию",
                 "имя фамилия",
@@ -2340,59 +1690,44 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
         );
 
         if (forbiddenFullNames.contains(botFioLower)) {
-            log.warn("Обнаружено запрещенное имя бота: {}", botFio);
             throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
         }
 
-        // Разделяем на части
         String[] parts = botFio.split("\\s+");
 
-        // Должно быть 2 или 3 части
         if (parts.length < 2 || parts.length > 3) {
             throw new BotTemplateNameException("Аккаунт не выгулян: имя должно быть в формате 'Имя Фамилия' или 'Имя Фамилия И.О.'");
         }
 
-        // Проверяем первые две части (имя и фамилию)
         for (int i = 0; i < 2; i++) {
             String word = parts[i];
             String wordLower = word.toLowerCase();
 
-            // Проверка на запрещенные слова (включая новые)
             for (String pattern : FORBIDDEN_PATTERNS) {
-                // Проверяем полное совпадение слова, а не частичное
                 if (wordLower.equals(pattern.toLowerCase())) {
-                    log.warn("Обнаружено запрещенное слово в имени бота: {}, слово: {}", botFio, word);
                     throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
                 }
             }
 
-            // Проверка формата имени/фамилии
             if (!word.matches("^[А-ЯA-Z][а-яa-z]+$")) {
                 throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат имени или фамилии");
             }
 
-            // Дополнительная проверка: имя и фамилия не должны быть слишком короткими
             if (word.length() < 2) {
                 throw new BotTemplateNameException("Аккаунт не выгулян: имя или фамилия слишком короткие");
             }
         }
 
-        // Если есть третья часть, проверяем как инициалы
         if (parts.length == 3) {
             String initials = parts[2];
-            // РАСШИРЕННОЕ РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ для проверки инициалов
-            // Допустимые форматы: С.И., СИ, С., С, С.И, СИ.
             if (!initials.matches("^[А-ЯA-Z](\\.?[А-ЯA-Z])?\\.?$")) {
-                log.warn("Инициалы '{}' не соответствуют формату в имени: {}", initials, botFio);
                 throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат инициалов. Допустимые форматы: С.И., СИ, С., С, С.И, СИ.");
             }
 
-            // Дополнительная проверка: не должно быть двух точек подряд
             if (initials.contains("..")) {
                 throw new BotTemplateNameException("Аккаунт не выгулян: некорректные инициалы (две точки подряд)");
             }
 
-            // Проверка, что все буквы заглавные
             String lettersOnly = initials.replace(".", "");
             for (char c : lettersOnly.toCharArray()) {
                 if (!Character.isUpperCase(c)) {
@@ -2401,206 +1736,93 @@ public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDet
             }
         }
 
-        // Дополнительная проверка: имя не должно совпадать с фамилией
-        if (parts.length >= 2 && parts[0].equalsIgnoreCase(parts[1])) {
-            log.warn("Имя и фамилия одинаковые: {}", botFio);
+        if (parts[0].equalsIgnoreCase(parts[1])) {
             throw new BotTemplateNameException("Аккаунт не выгулян: имя и фамилия не могут быть одинаковыми");
         }
-
-        log.info("Имя бота прошло проверку: {}", botFio);
     }
 
-    // Метод проверки имени бота
-//    private void validateBotName(Review review) {
-//        if (review.getBot() != null && review.getBot().getFio() != null) {
-//            String botFio = review.getBot().getFio().toLowerCase();
-//
-//            for (String pattern : FORBIDDEN_PATTERNS) {
-//                if (botFio.contains(pattern.toLowerCase())) {
-//                    log.warn("Обнаружено шаблонное имя бота: {}, шаблон: {}", botFio, pattern);
-//                    throw new BotTemplateNameException("Аккаунт не выгулян: имя не вписано");
-//                }
-//            }
-//        }
-//    }
-
-    // Дополнительный метод с возвратом NagulResult (если нужен)
-//     @Override
-//    @Transactional
-//    public NagulResult changeNagulReviewWithResult(Long reviewId, String username) {
-//        try {
-//            User currentUser = userService.findByUserName(username)
-//                    .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
-//
-//            log.info("Пользователь {} (id={}) пытается выполнить выгул",
-//                    currentUser.getUsername(), currentUser.getId());
-//
-//            // Получаем роли пользователя
-//            List<String> roles = currentUser.getRoles().stream()
-//                    .map(role -> role.getName())
-//                    .collect(Collectors.toList());
-//            log.info("Роли пользователя: {}", roles);
-//
-//            // Определяем, является ли пользователь работником
-//            boolean isWorker = roles.contains("ROLE_WORKER");
-//            Worker worker = null;
-//
-//            // Проверка временного интервала только для работников
-//            if (isWorker) {
-//                worker = workerService.getWorkerByUserId(currentUser.getId());
-//
-//                if (worker == null) {
-//                    log.error("Для работника {} не найдена сущность Worker", currentUser.getUsername());
-//                    return NagulResult.error("Ошибка: не найдена информация о работнике");
-//                }
-//
-//                // Проверка временного интервала
-//                if (worker.getLastNagulTime() != null) {
-//                    LocalDateTime now = LocalDateTime.now();
-//                    Duration duration = Duration.between(worker.getLastNagulTime(), now);
-//
-//                    log.info("Последний выгул был: {}, прошло: {} секунд",
-//                            worker.getLastNagulTime(), duration.getSeconds());
-//
-//                    if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
-//                        LocalDateTime nextAvailableTime = worker.getLastNagulTime()
-//                                .plusMinutes(NAGUL_COOLDOWN_MINUTES);
-//
-//                        long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60 - duration.getSeconds();
-//                        long minutesLeft = secondsLeft / 60;
-//                        long remainingSeconds = secondsLeft % 60;
-//
-//                        String message = String.format("Слишком быстрый выгул! Подождите еще %d мин %d сек",
-//                                minutesLeft, remainingSeconds);
-//                        log.warn("Отказ в выгуле: {}", message);
-//
-//                        return NagulResult.tooFast(message, nextAvailableTime);
-//                    }
-//                }
-//            } else {
-//                log.info("Пользователь {} не является работником, временные ограничения не применяются",
-//                        currentUser.getUsername());
-//            }
-//
-//            // Проверка имени бота (для всех ролей)
-//            Review review = reviewRepository.findById(reviewId)
-//                    .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
-//
-//            if (review.getBot() != null && review.getBot().getFio() != null) {
-//                String botFio = review.getBot().getFio().toLowerCase();
-//
-//                for (String pattern : FORBIDDEN_PATTERNS) {
-//                    if (botFio.contains(pattern.toLowerCase())) {
-//                        log.warn("Обнаружено шаблонное имя бота: {}, шаблон: {}", botFio, pattern);
-//                        return NagulResult.error("Аккаунт не выгулян: имя бота содержит шаблонные слова");
-//                    }
-//                }
-//            }
-//
-//            // Выполнение выгула
-//            review.setVigul(true);
-//
-//            // Обновляем время последнего выгула только для работников
-//            if (isWorker && worker != null) {
-//                worker.setLastNagulTime(LocalDateTime.now());
-//                workerService.save(worker);
-//                log.info("Время последнего выгула обновлено для работника id={}", worker.getId());
-//            }
-//
-//            reviewRepository.save(review);
-//            log.info("Отзыв id={} помечен как выгуленный", reviewId);
-//
-//            return NagulResult.success("Отзыв успешно выгулен!");
-//
-//        } catch (Exception e) {
-//            log.error("Ошибка при выгуле reviewId={}, username={}: {}",
-//                    reviewId, username, e.getMessage(), e);
-//            return NagulResult.error("Произошла ошибка при выполнении выгула: " + e.getMessage());
-//        }
-//    }
-
-
-
-
-    public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate){
-        int count = reviewRepository.countByWorkerAndStatusPublish(worker, localDate);
-//        System.out.println(worker.getUser().getFio() + " " + count);
-        return count;
+    public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate) {
+        return reviewRepository.countByWorkerAndStatusPublish(worker, localDate);
     }
 
-    public int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate){
-        List<Long> reviewId;
-        List<Review> reviewPage;
-        reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
-        reviewPage = reviewRepository.findAll(reviewId);
-        int count = reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).filter(review -> !(review.isVigul()) && review.getBot().getCounter() < 2).toList().size();
-//        System.out.println(worker.getUser().getFio() + " " + count);
-        return count;
+    public int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate) {
+        List<Long> reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
+        return (int) reviewPage.stream()
+                .sorted(Comparator.comparing(Review::getPublishedDate))
+                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
+                .count();
     }
 
     @Override
     public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
-        Map<String, Pair<Long, Long>> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2)).stream()
+        return reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2)).stream()
                 .collect(Collectors.toMap(
-                        row -> (String) row[0], // ФИО (работник) или ФИО (менеджер)
-                        row -> Pair.of(((Number) row[2]).longValue(), ((Number) row[1]).longValue()) // totalReviews и vigulCount
+                        row -> (String) row[0],
+                        row -> Pair.of(((Number) row[2]).longValue(), ((Number) row[1]).longValue())
                 ));
-//        System.out.println(results);
-
-        return results;
     }
-
-
-//    @Override
-//    public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
-//        List<Object[]> results = reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate);
-//
-//        return results.stream()
-//                .collect(Collectors.toMap(
-//                        row -> (String) row[0],  // ФИО
-//                        row -> Pair.of((Long) row[1], (Long) row[2]) // Количество всего, количество с isVigul = false
-//                ));
-//    }
-
-
-
-
-
 
     @Override
     public Map<String, Long> getAllReviewsToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         List<Object[]> results = reviewRepository.getAllReviewsToMonth(firstDayOfMonth, lastDayOfMonth);
 
-        // Создадим две карты: одну для работников, другую для менеджеров
         Map<String, Long> workerReviews = new HashMap<>();
         Map<String, Long> managerReviews = new HashMap<>();
 
-        // Проходим по результатам и заполняем карты
         for (Object[] row : results) {
-            String workerFio = (String) row[0];  // ФИО работника
-            Long workerReviewCount = (Long) row[1];  // Количество отзывов работника
+            String workerFio = (String) row[0];
+            Long workerReviewCount = (Long) row[1];
 
-            String managerFio = (String) row[2];  // ФИО менеджера
-            Long managerReviewCount = (Long) row[3];  // Количество отзывов менеджера
+            String managerFio = (String) row[2];
+            Long managerReviewCount = (Long) row[3];
 
-            // Обновляем карту работников
-            workerReviews.merge(workerFio, workerReviewCount, Long::sum);
-
-            // Обновляем карту менеджеров
-            managerReviews.merge(managerFio, managerReviewCount, Long::sum);
+            if (workerFio != null) {
+                workerReviews.merge(workerFio, workerReviewCount, Long::sum);
+            }
+            if (managerFio != null) {
+                managerReviews.merge(managerFio, managerReviewCount, Long::sum);
+            }
         }
 
-//         Для отладки выводим результаты
-//        System.out.println("Отзывы по работникам: " + workerReviews);
-//        System.out.println("Отзывы по менеджерам: " + managerReviews);
-
-        // Возвращаем карту с результатами по работникам и менеджерам
         Map<String, Long> allReviews = new HashMap<>();
         allReviews.putAll(workerReviews);
         allReviews.putAll(managerReviews);
         return allReviews;
     }
 
+    private User requireUser(Principal principal) {
+        if (principal == null) {
+            throw new UsernameNotFoundException("Principal == null");
+        }
+        return userService.findByUserName(principal.getName())
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден: " + principal.getName()));
+    }
 
+    private Page<ReviewDTOOne> emptyReviewPage(int pageNumber, int pageSize) {
+        Pageable pageable = PageRequest.of(Math.max(pageNumber, 0), pageSize, Sort.by("publishedDate").descending());
+        return new PageImpl<>(Collections.emptyList(), pageable, 0);
+    }
 
+    private List<Review> safeReviews(OrderDetails orderDetails) {
+        if (orderDetails == null || orderDetails.getReviews() == null) {
+            return Collections.emptyList();
+        }
+        return orderDetails.getReviews();
+    }
+
+    private int safeBotCounter(Bot bot) {
+        return bot != null ? bot.getCounter() : 0;
+    }
+
+    private String extractComment(OrderDetails orderDetails) {
+        return orderDetails != null ? orderDetails.getComment() : null;
+    }
+
+    private Order extractOrder(Review review) {
+        if (review == null || review.getOrderDetails() == null) {
+            return null;
+        }
+        return review.getOrderDetails().getOrder();
+    }
 }

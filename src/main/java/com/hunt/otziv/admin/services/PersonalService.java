@@ -13,7 +13,7 @@ import java.util.Map;
 
 public interface PersonalService {
 
-    UserLKDTO getUserLK(Principal principal);
+    UserLKDTO getUserLK(User user);
 
     StatDTO getStats(LocalDate localDate, User user, String role);
 

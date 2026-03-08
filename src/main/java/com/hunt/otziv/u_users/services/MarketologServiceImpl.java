@@ -12,13 +12,16 @@ import com.hunt.otziv.u_users.services.service.OperatorService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
 @Service
 @Slf4j
 public class MarketologServiceImpl implements MarketologService {
+
     private final MarketologRepository marketologRepository;
 
     public MarketologServiceImpl(MarketologRepository marketologRepository) {
@@ -26,22 +29,24 @@ public class MarketologServiceImpl implements MarketologService {
     }
 
     @Override
-    public Marketolog getMarketologById(Long id) { // Взять маркетолога по Id
-        return marketologRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
-    } // Взять маркетолога по Id
+    public Marketolog getMarketologById(Long id) {
+        return marketologRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+    }
 
     @Override
-    public Marketolog getMarketologByUserId(Long id) { // Взять маркетолога по Id юзера
-        return marketologRepository.findByUserId(id).orElse(null);
-    } // Взять маркетолога по Id юзера
+    public Marketolog getMarketologByUserId(Long id) {
+        return marketologRepository.findByUserIdWithUserAndImage(id).orElse(null);
+    }
 
     @Override
-    public List<Marketolog> getAllMarketologs() { // Взять всех маркетологов
-        return marketologRepository.findAllMarketologs();
-    } // Взять всех маркетологов
-    public List<Marketolog> getAllMarketologsToManager(Manager manager) { // Взять всех маркетологов
+    public List<Marketolog> getAllMarketologs() {
+        return marketologRepository.findAllWithUserAndImage();
+    }
+
+    public List<Marketolog> getAllMarketologsToManager(Manager manager) {
         return marketologRepository.findAllToManagerMarketologs(manager.getUser().getMarketologs());
-    } // Взять всех маркетологов
+    }
 
     @Override
     public List<Marketolog> getAllMarketologsToOwner(List<Manager> managers) {
@@ -49,40 +54,47 @@ public class MarketologServiceImpl implements MarketologService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Long> findUserIdsByManagerIds(Set<Long> managerIds) {
+        if (managerIds == null || managerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return marketologRepository.findUserIdsByManagerIds(managerIds);
+    }
+
+    @Override
     public void delete(Long userId, Long marketologId) {
     }
 
     @Override
-    public void saveNewMarketolog(User user) { // Сохранить нового маркетолога
-        if (marketologRepository.findByUserId(user.getId()).isPresent()){
+    public void saveNewMarketolog(User user) {
+        if (marketologRepository.findByUserId(user.getId()).isPresent()) {
             log.info("Не добавили оператора так как уже в списке");
-        }
-        else {
+        } else {
             log.info("начали добавлять оператора так как нет в списке");
             Marketolog marketolog = new Marketolog();
             marketolog.setUser(user);
             marketologRepository.save(marketolog);
             log.info("Добавили оператора");
         }
-    } // Сохранить нового маркетолога
+    }
 
     @Override
-    public Marketolog getMarketologByUserIdToDelete(Long id) { // Найти маркетолога для удаления
+    public Marketolog getMarketologByUserIdToDelete(Long id) {
         return marketologRepository.findByUserId(id).orElse(null);
-    } // Найти маркетолога для удаления
+    }
 
     @Override
-    public void deleteMarketolog(User user) { // Удалить маркетолога
+    public void deleteMarketolog(User user) {
         log.info("Вошли в проверку при удалении есть ли такой маркетолог при смене роли");
         Marketolog marketolog = getMarketologByUserIdToDelete(user.getId());
         log.info("Достали маркетолога");
-        if (marketolog != null){
+
+        if (marketolog != null) {
             marketologRepository.delete(marketolog);
             log.info("Удалили маркетолога");
-        }
-        else {
+        } else {
             log.info("Не удалили маркетолога так как такого нет в списке");
         }
-    } // Удалить маркетолога
-
+    }
 }

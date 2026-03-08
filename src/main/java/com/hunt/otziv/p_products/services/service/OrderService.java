@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 
 public interface OrderService {
+    Map<Long, Integer> countOrdersByWorkerIdsAndStatus(List<Long> workerIds, String status);
     OrderDTO newOrderDTO(Long id);
     boolean addNewReview(Long orderId);
     boolean deleteNewReview(Long orderId, Long reviewId);

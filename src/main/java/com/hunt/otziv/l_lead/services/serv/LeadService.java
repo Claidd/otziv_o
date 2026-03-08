@@ -1,10 +1,10 @@
 package com.hunt.otziv.l_lead.services.serv;
 
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import com.hunt.otziv.l_lead.dto.LeadMonthStats;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import org.springframework.data.domain.Page;
@@ -18,66 +18,51 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public interface LeadService {
-    //    =============================== СОЗДАНИЕ И ОБНОВЛЕНИЕ =========================================
-    // сохранение нового лида
-    Lead save(LeadDTO leadDTO, String id);
-    // метод обнолвдения данных лида
-    void updateProfile(LeadDTO leadDTO, Long id);
-    // метод поиска лидав по id
-    Optional<Lead> findByIdAndToUpdate(Long id);
-    LeadDTO findById(Long id);
-    Optional<Lead> findByIdOptional(Long leadId);
-    Optional<User> findByFio(String operator);
-    List<Long> getAllLeadsByDate(LocalDate localDate);
-    List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
-    void changeStatusLeadOnSendAndTelephone(Long leadId);
 
-    //    =============================== ВЫВОД ЛИДОВ ПО СПИСКАМ И СТАТУСАМ =========================================
-    // метод вывода всех лидов
-    Page<LeadDTO> getAllLeads(String status, String keyword, Principal principal, int pageNumber, int pageSize);
-    // метод вывода всех новых лидов по телефону
-    Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keyword, Principal principal, int pageNumber, int pageSize);
-    // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
+public interface LeadService {
+
+    Lead save(LeadDTO leadDTO, String username);
+
+    void updateProfile(LeadDTO leadDTO, Long id);
+
+    void markOfferSentAndPublish(Long leadId);
+
+
+    Map<Long, Long> getManagerLeadsInWorkCount(Set<Manager> managerList, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    Page<LeadDTO> getAllLeads(String status, String keywords, Principal principal, int pageNumber, int pageSize);
+
+    Page<LeadDTO> getAllLeadsToWork(String status, String keywords, Principal principal, int pageNumber, int pageSize);
+
+    Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keywords, Principal principal, int pageNumber, int pageSize);
+
+
     Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize);
-    // метод поиска одного лида по id и перевод его в дто
+
     Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize);
 
+    void changeStatusLeadOnSendAndTelephone(Long leadId);
 
-    //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
-    // меняем статус с нового на отправленное
     void changeStatusLeadOnSend(Long leadId);
-    // меняем статус с нового на напоминание
-    void changeStatusLeadOnReSend(Long leadId);
-    // меняем статус с напоминание на К рассылке
-    void changeStatusLeadOnArchive(Long leadId);
-    // меняем статус с К рассылке на В работе
-    void changeStatusLeadOnInWork (Long leadId);
-    // меняем статус с любого на Новый
-    void changeStatusLeadOnNew (Long leadId);
-    Long findAllByLidListNew(Marketolog marketolog);
-    Long findAllByLidListNew(Operator operator);
 
-    List<Lead> findAllByLidListStatus(String name);
-    Long findAllByLidListStatusInWork(Marketolog marketolog);
-
-    Long findAllByLidListStatusInWork(Operator operator);
-    Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate);
-    Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate);
-    Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate);
-    Long findAllByLidListNewToDate(Operator operator, LocalDate localDate);
-
-    List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList);
-
-    List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList);
-
-    List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList);
-
-    Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
-
-    Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    void changeStatusLeadToWork(Long leadId, String newComment);
 
     void changeCountToOperator(Long leadId);
+
+    void changeStatusLeadOnReSend(Long leadId);
+
+    void changeStatusLeadOnArchive(Long leadId);
+
+    void changeStatusLeadOnInWork(Long leadId);
+
+    void changeStatusLeadOnNew(Long leadId);
+
+
+    LeadDTO findById(Long leadId);
+
+    Optional<Lead> findByIdOptional(Long leadId);
+
+    Optional<Lead> findByIdAndToUpdate(Long id);
 
     Optional<Lead> getByTelephoneLead(String telephoneNumber);
 
@@ -87,20 +72,33 @@ public interface LeadService {
 
     LeadDtoTransfer findByIdToTransfer(Long leadId);
 
-    List<Lead> findModifiedSince(LocalDateTime since);
-
     void saveOrUpdateByTelephoneLead(Lead incomingLead);
 
-    void changeStatusLeadToWork(Long leadId, String commentsLead);
+    Map<Long, Long> countNewLeadsByOperatorIdsToDate(List<Long> operatorIds, LocalDate localDate);
 
-    Page<LeadDTO> getAllLeadsToWork(String title, String keyword, Principal principal, int pageNumber, int pageSize);
+    Map<Long, Long> countInWorkLeadsByOperatorIdsToDate(List<Long> operatorIds, LocalDate localDate);
 
-    Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
+    Map<Long, Long> countNewLeadsByMarketologIdsToDate(List<Long> marketologIds, LocalDate localDate);
 
-    List<Lead> findNewLeadsByClient(Long telephoneId, String status);
+    Map<Long, Long> countInWorkLeadsByMarketologIdsToDate(List<Long> marketologIds, LocalDate localDate);
 
-    void markOfferSentAndPublish(Long id);
+    Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
+    Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
-    //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
+    List<Lead> findModifiedSince(LocalDateTime since);
+
+    List<Long> getAllLeadsByDate(LocalDate localDate);
+
+    List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList);
+
+    List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status);
+
+    List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList);
+
+    long countNewLeadsForManagerUserId(Long userId);
+
+    LeadMonthStats getLeadMonthStatsForManagers(Set<Manager> managerList, String inWorkStatus, LocalDate currentDate);
+
+    LeadMonthStats getLeadMonthStatsForManagerIds(List<Long> managerIds, String statusInWork, LocalDate localDate);
 }

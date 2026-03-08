@@ -13,9 +13,10 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.data.util.Pair;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -204,6 +205,70 @@ public class PersonalReportService {
 
         return resultBuilder.toString();
     }
+//
+//    public List<UserData> getPersonalsAndCountToScore(LocalDate localDate) {
+//        LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
+//        LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
+//
+//        Map<String, Quadruple<String, Long, Long, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
+//        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+//        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+//        Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll(STATUS_NEW, STATUS_CORRECTION);
+//        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+//        Map<String, Pair<Long, Long>> imagesIds = imageService.getAllImages();
+//        Map<String, Pair<Long, Long>> leadsNewAndInWork = leadService.getAllLeadsToMonth(STATUS_IN_WORK, firstDayOfMonth, lastDayOfMonth);
+//
+//        long zpTotal = zps.values().stream()
+//                .mapToLong(Quadruple::getSecond)
+//                .sum();
+//
+//        List<UserData> result = new ArrayList<>();
+//
+//        for (Map.Entry<String, Quadruple<String, Long, Long, Long>> entry : zps.entrySet()) {
+//            String fio = entry.getKey();
+//            Quadruple<String, Long, Long, Long> pair = entry.getValue();
+//
+//            Long totalSum = getFirstOrDefault(pcs, fio, 0L);
+//            Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
+//            Long newOrderCount = getFirstOrDefault(newOrders, fio, 0L);
+//            Long correctOrders = getSecondOrDefault(newOrders, fio, 0L);
+//            Long inVigul = getFirstOrDefault(inPublishAndVigul, fio, 0L);
+//            Long inPublishCount = getSecondOrDefault(inPublishAndVigul, fio, 0L);
+//            Long imageId = getFirstOrDefault(imagesIds, fio, DEFAULT_IMAGE_ID);
+//            Long userId = getSecondOrDefault(imagesIds, fio, 0L);
+//
+//            Long ordersCount = pair.getThird();
+//            Long reviewsCount = pair.getFourth();
+//            Long leadsNew = getFirstOrDefault(leadsNewAndInWork, fio, 0L);
+//            Long leadsInWork = getSecondOrDefault(leadsNewAndInWork, fio, 0L);
+//            Long percentInWork = safePercent(leadsInWork, leadsNew);
+//
+//            String role = pair.getFirst();
+//
+//            result.add(new UserData(
+//                    fio,
+//                    role,
+//                    pair.getSecond(),
+//                    totalSum,
+//                    zpTotal,
+//                    newCompanyCount,
+//                    newOrderCount,
+//                    correctOrders,
+//                    inVigul,
+//                    inPublishCount,
+//                    imageId,
+//                    userId,
+//                    ordersCount,
+//                    reviewsCount,
+//                    leadsNew,
+//                    leadsInWork,
+//                    percentInWork,
+//                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
+//            ));
+//        }
+//
+//        return result;
+//    }
 
     public List<UserData> getPersonalsAndCountToScore(LocalDate localDate) {
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);

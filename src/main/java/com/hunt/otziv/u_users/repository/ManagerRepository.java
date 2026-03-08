@@ -6,6 +6,7 @@ import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.Set;
 public interface ManagerRepository extends CrudRepository<Manager, Long> {
 
     // найти менеджера по id
-    Optional<Manager> findById(Long id);
+//    Optional<Manager> findById(Long id);
 
     // найти оператора по id
 
@@ -25,13 +26,28 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH m.companies c LEFT JOIN FETCH m.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers")
     List<Manager> findAllManagers();
 
-    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.user WHERE m.user.id = :id")
+    @Query("""
+    SELECT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    LEFT JOIN FETCH u.image
+    WHERE u.id = :id
+""")
     Optional<Manager> findByUserId(Long id);
 
     @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH m.companies c LEFT JOIN FETCH m.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
     List<Manager> findAllManagersToOwner(List<Manager> managers);
 
-    @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
+//    @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
+//    List<Manager> findAllManagersWorkers(List<Manager> managers);
+
+    @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    LEFT JOIN FETCH u.image
+    WHERE m IN :managers
+""")
     List<Manager> findAllManagersWorkers(List<Manager> managers);
 
     @Query("""
@@ -42,6 +58,11 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
 """)
     List<Manager> findAllWithUserAndImage();
 
-//    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.user u WHERE m IN (:managers)")
-//    List<Manager> findAllToManagerManagers(Set<Manager> managers);
+    @Query("""
+    SELECT m.user.id
+    FROM Manager m
+    WHERE m.id IN :managerIds
+""")
+    List<Long> findUserIdsByManagerIds(@Param("managerIds") Set<Long> managerIds);
+
 }
