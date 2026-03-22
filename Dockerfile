@@ -1,33 +1,46 @@
-## Используйте официальный образ OpenJDK для Java 19
-#FROM openjdk:19-jdk-alpine
-## Установите рабочую директорию внутри контейнера
-#WORKDIR /app
-## Скопируйте JAR-файл приложения в контейнер
-#COPY target/otziv-1.jar /app/app.jar
-## Экспонируйте порт, на котором работает приложение
-#EXPOSE 8080
-## Запустите приложение при старте контейнера
-#CMD ["java", "-jar", "app.jar"]
-
-
 # Этап 1: Сборка
 FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
-VOLUME /app/logs
 
 # Этап 2: Финальный образ для выполнения
 FROM eclipse-temurin:22-jdk-jammy
 RUN apt-get update && apt-get install -y mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/otziv-1.jar /app/app.jar
+
 # Указываем, что эта директория будет томом (для хэшей)
 VOLUME /app/logs
 VOLUME /app/sent-hashes
 
 EXPOSE 8080
+
+## Установите метку BUILD_NO_CACHE
+LABEL BUILD_NO_CACHE="1"
+
+CMD ["java", "-jar", "app.jar"]
+
+
+# Этап 1: Сборка
+#FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
+#WORKDIR /app
+#COPY pom.xml .
+#COPY src ./src
+#RUN mvn clean package -DskipTests
+#VOLUME /app/logs
+#
+## Этап 2: Финальный образ для выполнения
+#FROM eclipse-temurin:22-jdk-jammy
+#RUN apt-get update && apt-get install -y mysql-client && rm -rf /var/lib/apt/lists/*
+#WORKDIR /app
+#COPY --from=build /app/target/otziv-1.jar /app/app.jar
+## Указываем, что эта директория будет томом (для хэшей)
+#VOLUME /app/logs
+#VOLUME /app/sent-hashes
+#
+#EXPOSE 8080
 
 ## Установите метку BUILD_NO_CACHE
 LABEL BUILD_NO_CACHE="1"

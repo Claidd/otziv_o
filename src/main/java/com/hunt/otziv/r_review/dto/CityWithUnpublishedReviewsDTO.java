@@ -17,6 +17,28 @@ public class CityWithUnpublishedReviewsDTO {
     private String botStatus; // Статус соотношения
     private Double botPercentage; // Процент соотношения
 
+
+    // Явные геттеры для методов, используемых в компараторах
+    public Long getUnpublishedCount() {
+        return unpublishedCount != null ? unpublishedCount : 0L;
+    }
+
+    public Long getUnpublishedNotArchiveCount() {
+        return unpublishedNotArchiveCount != null ? unpublishedNotArchiveCount : 0L;
+    }
+
+    public Long getActiveBotsCount() {
+        return activeBotsCount != null ? activeBotsCount : 0L;
+    }
+
+    public Long getBotBalance() {
+        return botBalance != null ? botBalance : 0L;
+    }
+
+    public String getCityTitle() {
+        return cityTitle != null ? cityTitle : "";
+    }
+
     // Конструктор для репозитория
     public CityWithUnpublishedReviewsDTO(Long cityId, String cityTitle,
                                          Long unpublishedCount, Long unpublishedNotArchiveCount,

@@ -2,7 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.services.PersonalService;
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+//import com.hunt.otziv.t_telegrambot.MyTelegramBot;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class NotificationSchedulerToTelegramImpl implements NotificationSchedulerToTelegram{
-    private final MyTelegramBot myTelegramBot;
+//    private final MyTelegramBot myTelegramBot;
     private final UserService userService;
     private final PersonalService personalService;
 
@@ -100,7 +100,8 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
     private void sendMessageSafe(Long chatId, String message, String who) {
         try {
-            myTelegramBot.sendMessage(chatId, message, "Markdown");
+//            myTelegramBot.sendMessage(chatId, message, "Markdown");
+            log.info("заглушка NotificationSchedulerToTelegramImpl");
         } catch (Exception e) {
             log.error("Ошибка отправки Telegram-сообщения для {}: {}", who, e.getMessage());
         }

@@ -1,6 +1,6 @@
 package com.hunt.otziv.whatsapp.service;
 
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+//import com.hunt.otziv.t_telegrambot.MyTelegramBot;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminNotifierServiceImpl implements AdminNotifierService {
 
-    private final MyTelegramBot telegramBotClient;
+//    private final MyTelegramBot telegramBotClient;
 
     // Список chatId админов
     private static final List<Long> ADMIN_CHAT_IDS = List.of(
@@ -25,8 +25,8 @@ public class AdminNotifierServiceImpl implements AdminNotifierService {
     public void notifyAdmin(String message) {
         for (Long chatId : ADMIN_CHAT_IDS) {
             try {
-                telegramBotClient.sendMessage(chatId, message, "Markdown");
-                log.info("📩 Уведомление отправлено админу {}: {}", chatId, message);
+//                telegramBotClient.sendMessage(chatId, message, "Markdown");
+//                log.info("📩 Уведомление отправлено админу {}: {}", chatId, message);
             } catch (Exception e) {
                 log.error("❌ Ошибка при отправке админу {}: {}", chatId, e.getMessage(), e);
             }
