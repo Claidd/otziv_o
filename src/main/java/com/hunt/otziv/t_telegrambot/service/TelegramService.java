@@ -12,7 +12,9 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public class TelegramService extends TelegramLongPollingBot {
+//public class TelegramService extends TelegramLongPollingBot {
+public class TelegramService {
+
 
     @Value("${telegram.bot.token}")
     private String botToken;
@@ -20,31 +22,34 @@ public class TelegramService extends TelegramLongPollingBot {
     @Value("${telegram.bot.username}")
     private String botUsername;
 
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    @Override
-    public String getBotToken() {
-        return botToken;
-    }
-
-    @Override
-    public void onUpdateReceived(Update update) {
-
-    }
+//    @Override
+//    public String getBotUsername() {
+//        return botUsername;
+//    }
+//
+//    @Override
+//    public String getBotToken() {
+//        return botToken;
+//    }
+//
+//    @Override
+//    public void onUpdateReceived(Update update) {
+//
+//    }
 
     public void sendMessage(long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(text);
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
+        // Заглущка отправки
+        log.info("заглушка отправки сообщения в ТГ");
+
+        // ОТПРАВКА СООБЩЕНИЯ в Телеграмм
+//        SendMessage message = new SendMessage();
+//        message.setChatId(String.valueOf(chatId));
+//        message.setText(text);
+//        try {
+//            execute(message);
+//        } catch (TelegramApiException e) {
+//            e.printStackTrace();
+//        }
+
     }
-
-
 }

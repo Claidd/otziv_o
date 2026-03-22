@@ -1,6 +1,6 @@
 package com.hunt.otziv.whatsapp.service;
 
-import com.hunt.otziv.t_telegrambot.MyTelegramBot;
+//import com.hunt.otziv.t_telegrambot.MyTelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -13,13 +13,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    private final MyTelegramBot myTelegramBot;
+//    private final MyTelegramBot myTelegramBot;
 
     @Async
     public void sendAdminAlert(String msg, List<Long> adminChatIds) {
         for (Long chatId : adminChatIds) {
             try {
-                myTelegramBot.sendMessage(chatId, msg, "Markdown");
+//                myTelegramBot.sendMessage(chatId, msg, "Markdown");
+                log.info("заглушка NotificationService");
             } catch (Exception e) {
                 log.error("❌ Ошибка при отправке Telegram-сообщения админу {}: {}", chatId, e.getMessage());
             }
