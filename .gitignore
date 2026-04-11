@@ -19,6 +19,7 @@ target/
 .key
 .yaml
 .env
+.env.*
 .sql
 ### NetBeans ###
 /nbproject/private/
