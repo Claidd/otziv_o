@@ -18,7 +18,7 @@ public class AdminNotifierServiceImpl implements AdminNotifierService {
     // Список chatId админов
     private static final List<Long> ADMIN_CHAT_IDS = List.of(
             794146111L,       // админ №1
-            828987226L        // админ №2
+            828987226L        // админ №23
     );
 
     @Override
