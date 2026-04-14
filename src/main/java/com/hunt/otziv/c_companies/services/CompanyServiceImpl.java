@@ -127,7 +127,7 @@ public class CompanyServiceImpl implements CompanyService{
                 if (telegramChatId != null && company1.getTitle() != null ) {
                     String resultBuilder =
 
-                                    "Добавлена новая компания: " + company1.getTitle() + "\n" +
+                            "Добавлена новая компания: " + company1.getTitle() + "\n" +
                                     "https://o-ogo.ru/companies/company?status=Новая";
 
                     telegramService.sendMessage(telegramChatId, resultBuilder);
@@ -146,7 +146,7 @@ public class CompanyServiceImpl implements CompanyService{
     } // Взять все компании
 
 
-// ======================================== JUST ADMIN ===============================================================
+    // ======================================== JUST ADMIN ===============================================================
     public Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус
         List<Long> companyId;
         List<Company> companyPage;
@@ -219,8 +219,8 @@ public class CompanyServiceImpl implements CompanyService{
         List<Long> companyId;
         List<Company> companyPage;
         if (!keyword.isEmpty()){
-                companyId = companyRepository.findAllByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status);
-                companyPage = companyRepository.findAll(companyId);
+            companyId = companyRepository.findAllByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status);
+            companyPage = companyRepository.findAll(companyId);
         }
         else {
             companyId = companyRepository.findAllByManagerAndStatus(manager, status);
@@ -493,20 +493,17 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findAllByOwnerAndStatus2(managerList, status).size();
     }
 
-//    @Override
-//    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-//        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
-//    }
+    @Override
+    public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
+        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+    }
 
     @Override
     public Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        log.debug("Getting new companies from {} to {}", firstDayOfMonth, lastDayOfMonth);
-
-        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth)
-                .stream()
+        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth).stream()
                 .collect(Collectors.toMap(
-                        obj -> (String) obj[0],
-                        obj -> (Long) obj[1]
+                        obj -> (String) obj[0],   // ФИО менеджера
+                        obj -> (Long) obj[1]      // Количество компаний
                 ));
     }
 
@@ -764,7 +761,7 @@ public class CompanyServiceImpl implements CompanyService{
         return filialDTO;
     }
 
-//    ======================================== COMPANY UPDATE =========================================================
+    //    ======================================== COMPANY UPDATE =========================================================
     // Обновить профиль юзера - начало
     @Override
     @Transactional
@@ -898,7 +895,7 @@ public class CompanyServiceImpl implements CompanyService{
 
 //    =====================================================================================================
 
-public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление работника
+    public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление работника
         try {
             log.info("2. Вошли в удаление работника из списка работников компании");
             Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
@@ -910,8 +907,8 @@ public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление
         catch (Exception e){
             return false;
         }
-} // Удаление работника
-@Transactional
+    } // Удаление работника
+    @Transactional
     public boolean deleteFilial(Long companyId, Long filialId){ // Удаление филиала
         try {
             log.info("2. Вошли в удаление филиала из списка филиалов компании");
@@ -927,7 +924,7 @@ public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление
         }
     } // Удаление филиала
 
-//    =====================================================================================================
+    //    =====================================================================================================
     private User convertUserDTOToUser(UserDTO userDTO){ // перевод юзера из Дто в сущность
         return userService.findByUserName(userDTO.getUsername()).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", userDTO.getUsername())

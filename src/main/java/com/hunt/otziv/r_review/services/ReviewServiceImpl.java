@@ -364,6 +364,7 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("url: {}", !Objects.equals(reviewDTO.getUrl(), saveReview.getUrl()));
         log.info("date publish: {}", !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate()));
         log.info("date isPublish: {}", !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
+        log.info("Выгул: {}", !Objects.equals(reviewDTO.isVigul(), saveReview.isVigul()));
         log.info("product id: {}", !Objects.equals(dtoProductId, currentProductId));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
@@ -452,6 +453,14 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            if (!Objects.equals(reviewDTO.isVigul(), saveReview.isVigul())) {
+                log.info("Обновляем выгул отзыва");
+                saveReview.setVigul(reviewDTO.isVigul());
+                isChanged = true;
+            }
+        }
+
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
@@ -479,6 +488,13 @@ public class ReviewServiceImpl implements ReviewService {
             order.setSum(orderDetails.getPrice());
             orderDetailsService.saveOrder(order);
         }
+    }
+
+    @Override
+    public int findAllByReviewListStatus(String username) {
+        Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
+        LocalDate localDate = LocalDate.now();
+        return reviewRepository.findAllByReviewsListStatus(localDate, worker);
     }
 
     @Transactional
@@ -1295,6 +1311,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .changed(Optional.ofNullable(review.getChanged()).orElse(LocalDate.now()))
                 .publishedDate(review.getPublishedDate())
                 .publish(review.isPublish())
+                .vigul(review.isVigul())
                 .category(convertToCategoryDto(review.getCategory()))
                 .subCategory(convertToSubCategoryDto(review.getSubCategory()))
                 .bot(botDTO)

@@ -6,7 +6,6 @@ import com.hunt.otziv.z_zp.dto.CheckDTO;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import org.springframework.data.util.Pair;
 
-import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
@@ -15,38 +14,15 @@ import java.util.Set;
 
 public interface PaymentCheckService {
 
+    boolean save(Order order);
+    List<CheckDTO> getAllCheckDTO();
     List<PaymentCheck> findAll();
 
     List<PaymentCheck> findAllToDate(LocalDate localDate);
 
     List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
-    List<PaymentCheck> getAllWorkerPaymentToDate(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    List<PaymentCheck> getAllWorkerPaymentToDate(Long id, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
-    /**
-     * Новый batch-метод для менеджеров.
-     */
-    Map<Long, BigDecimal> getActiveManagerPaymentSums(Set<Long> managerIds, LocalDate startDate, LocalDate endDate);
-
-    /**
-     * На будущее: batch-метод для работников.
-     */
-    Map<Long, BigDecimal> getActiveWorkerPaymentSums(Set<Long> workerIds, LocalDate startDate, LocalDate endDate);
-
-    /**
-     * Оставлен для обратной совместимости.
-     */
-    Map<Long, BigDecimal> getManagerPaymentSums(Set<Long> managerIds, LocalDate startDate, LocalDate endDate);
-
-    Map<String, Pair<Long, Long>> getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
-
-    List<CheckDTO> getAllCheckDTO();
-
-    boolean save(Order order);
-
-    List<PaymentCheck> findAllToDateByUserIds(LocalDate localDate, Set<Long> userIds);
-
-    List<PaymentCheck> findAllToDateByOwnerIds(LocalDate localDate, List<Long> managerIds);
-
-
+    Map<String, Pair<Long, Long>>  getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }

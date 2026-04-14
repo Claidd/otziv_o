@@ -10,90 +10,74 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface PersonalService {
-
-    UserLKDTO getUserLK(User user);
-
-    StatDTO getStats(LocalDate localDate, User user, String role);
-
-    UserStatDTO getWorkerReviews(User user, LocalDate localDate);
-
-    List<ManagersListDTO> getManagers();
-
-    List<MarketologsListDTO> getMarketologs();
-
     List<WorkersListDTO> gerWorkers();
-
+    List<WorkersListDTO> gerWorkersToAndCount();
+    List<MarketologsListDTO> getMarketologs();
+    List<MarketologsListDTO> getMarketologsAndCount();
+    List<ManagersListDTO> getManagers();
+    List<ManagersListDTO> getManagersAndCount();
     List<OperatorsListDTO> gerOperators();
-
-    List<ManagersListDTO> getManagersToManager(Principal principal);
-
+    List<OperatorsListDTO> gerOperatorsAndCount();
+    //    StatDTO getStats();
+    UserStatDTO getWorkerReviews(User user, LocalDate localDate);
     List<MarketologsListDTO> getMarketologsToManager(Manager manager);
 
     List<WorkersListDTO> gerWorkersToManager(Manager manager);
 
     List<OperatorsListDTO> gerOperatorsToManager(Manager manager);
+    UserLKDTO getUserLK(Principal principal);
+//    StatDTO getStats2(LocalDate localDate, Principal principal, String userRole);
+//    UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);
 
-    List<ManagersListDTO> getManagersToOwner(List<Manager> managers);
+    List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
+    List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);
+    List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);
+    List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate);
 
+    List<ManagersListDTO> getManagersToOwner(List<Manager> managerList);
+    List<WorkersListDTO>  getWorkersToOwner(List<Worker> allWorkers);
     List<MarketologsListDTO> getMarketologsToOwner(List<Marketolog> allMarketologs);
-
     List<OperatorsListDTO> gerOperatorsToOwner(List<Operator> allOperators);
 
-    List<WorkersListDTO> getWorkersToOwner(List<Worker> allWorkers);
 
-    List<OperatorsListDTO> gerOperatorsToOwner(Manager manager);
 
-    List<ManagersListDTO> getManagersAndCount();
+    List<OperatorsListDTO> getOperatorsAndCountToOwner(List<Operator> allOperators);
+    List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managerList);
+    List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs);
+    List<WorkersListDTO>  getWorkersToAndCountToOwner(List<Worker> allWorkers);
 
-    List<MarketologsListDTO> getMarketologsAndCount();
+    StatDTO getStats(LocalDate date, User user, String userRole);
 
-    List<WorkersListDTO> gerWorkersToAndCount();
+    Object getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate date);
 
-    List<OperatorsListDTO> gerOperatorsAndCount();
+    Object getMarketologsAndCountToDateToOwner(List<Marketolog> allMarketologs, LocalDate date);
+
+    Object gerWorkersToAndCountToDateToOwner(List<Worker> allWorkers, LocalDate date);
+
+    Object gerOperatorsAndCountToDateToOwner(List<Operator> allOperators, LocalDate date);
 
     Map<String, UserData> getPersonalsAndCountToMap();
 
-    String displayResult(Map<String, UserData> result);
 
-    String displayResultToTelegramAdmin(Map<String, UserData> result);
+    String displayResult(Map<String, UserData> personalsAndCountToMap);
+
 
     List<UserData> getPersonalsAndCountToScore(LocalDate localDate);
 
     Map<String, UserData> getPersonalsAndCountToMapToOwner(Long userId);
 
+    String displayResultToManager(Map<String, UserData> personalsAndCountToMapToOwner);
+
     Map<String, UserData> getPersonalsAndCountToMapToManager(Long userId);
 
-    String displayResultToManager(Map<String, UserData> result);
+    Map<String, UserData>  getPersonalsAndCountToMapToWorker(Long userId);
 
-    Map<String, UserData> getPersonalsAndCountToMapToWorker(Long userId);
+    String displayResultToWorker(Map<String, UserData> personalsAndCountToMapToWorker);
 
-    String displayResultToWorker(Map<String, UserData> result);
-
-    List<ManagersListDTO> getManagersAndCountToOwner(List<Manager> managers);
-
-    List<MarketologsListDTO> getMarketologsAndCountToOwner(List<Marketolog> allMarketologs);
-
-    List<WorkersListDTO> getWorkersToAndCountToOwner(List<Worker> allWorkers);
-
-    List<OperatorsListDTO> getOperatorsAndCountToOwner(List<Operator> allOperators);
-
-    List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
-
-    List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);
-
-    List<WorkersListDTO> gerWorkersToAndCountToDate(LocalDate localdate);
-
-    List<OperatorsListDTO> gerOperatorsAndCountToDate(LocalDate localdate);
-
-    List<ManagersListDTO> getManagersAndCountToDateToOwner(List<Manager> managerList, LocalDate localdate);
-
-    List<MarketologsListDTO> getMarketologsAndCountToDateToOwner(List<Marketolog> marketologList, LocalDate localdate);
-
-    List<WorkersListDTO> gerWorkersToAndCountToDateToOwner(List<Worker> workerList, LocalDate localdate);
-
-    List<OperatorsListDTO> gerOperatorsAndCountToDateToOwner(List<Operator> operatorList, LocalDate localdate);
+    String displayResultToTelegramAdmin(Map<String, UserData> result);
 }

@@ -73,4 +73,6 @@ public class ReviewDTO {
 
     private String botPassword;
 
+    private boolean vigul;
+
 }

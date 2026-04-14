@@ -95,4 +95,6 @@ public interface ReviewService {
 //    int findAllByReviewListStatus(String name);
 
     int countReviewsForWorkerUserId(Long userId);
+
+    int findAllByReviewListStatus(String name);
 }

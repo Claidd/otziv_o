@@ -27,7 +27,7 @@ public interface CompanyService {
     CompanyDTO getCompaniesDTOById(Long id); // взять одну компанию по id с переводом их в DTO
     Company getCompaniesById(Long id); // взять одну компанию по id
 
-//    List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
     Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     void updateCompany(CompanyDTO companyDTO, WorkerDTO workerDTO, Long companyId);
