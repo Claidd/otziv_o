@@ -1,0 +1,97 @@
+<app-admin-layout title="Моя команда" active="team">
+  <section class="team-toolbar">
+    <div>
+      <p class="eyebrow">PERSONAL</p>
+      <h2>Сотрудники и показатели месяца</h2>
+    </div>
+
+    <div class="toolbar-actions">
+      <label>
+        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); load()">
+      </label>
+      <button type="button" (click)="load()" [disabled]="loading()">
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading() ? 'Обновляю' : 'Обновить' }}
+      </button>
+      @if (team()?.canAddUsers) {
+        <a class="button" [href]="addUserUrl()">
+          <span class="material-icons-sharp">person_add</span>
+          Добавить
+        </a>
+      }
+    </div>
+  </section>
+
+  @if (error()) {
+    <p class="load-error">{{ error() }}</p>
+  }
+
+  @if (team()) {
+    @for (section of sections; track section.key) {
+      <section class="team-section">
+        <div class="section-title">
+          <span class="material-icons-sharp">{{ section.icon }}</span>
+          <h2>{{ section.title }}</h2>
+          <small>{{ members(section).length }}</small>
+        </div>
+
+        <div class="people-grid">
+          @for (member of members(section); track memberTrack(member)) {
+            <article class="person-card">
+              @if (team()?.canOpenUserInfo) {
+                <a class="avatar-link" [routerLink]="['/admin/user-info', member.userId]">
+                  <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                </a>
+              } @else {
+                <div class="avatar-link">
+                  <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                </div>
+              }
+
+              <div class="person-main">
+                <h3>{{ member.fio || member.login }}</h3>
+                <p>{{ member.login }}</p>
+              </div>
+
+              @if (statRows(section.key, member).length) {
+                <dl>
+                  @for (row of statRows(section.key, member); track row.label) {
+                    <div>
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              }
+
+              @if (section.key === 'worker' && statusRows(member).length) {
+                <div class="status-list">
+                  @for (row of statusRows(member); track row.label) {
+                    <span>{{ row.label }} {{ row.value }}</span>
+                  }
+                </div>
+              }
+
+              @if (team()?.canEditUsers) {
+                <a class="edit-link" [href]="editUrl(member.userId)">
+                  <span class="material-icons-sharp">edit</span>
+                  Редактировать
+                </a>
+              }
+            </article>
+          } @empty {
+            <article class="empty-section">
+              <span class="material-icons-sharp">person_search</span>
+              <p>Нет сотрудников в этом разделе</p>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  } @else if (loading()) {
+    <section class="empty-state">
+      <span class="material-icons-sharp">hourglass_top</span>
+      <p>Загружаю команду</p>
+    </section>
+  }
+</app-admin-layout>

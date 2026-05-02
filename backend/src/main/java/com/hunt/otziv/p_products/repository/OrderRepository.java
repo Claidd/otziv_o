@@ -5,6 +5,8 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -54,29 +56,92 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Query("SELECT o.id FROM Order o ORDER BY o.changed")
     List<Long> findAllIdToAdmin();
 
+    @Query(
+            value = "SELECT o.id FROM Order o",
+            countQuery = "SELECT COUNT(o.id) FROM Order o"
+    )
+    Page<Long> findPageIdToAdmin(Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed")
     List<Long> findAllIdToManager(@Param("manager") Manager manager);
+
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.manager = :manager",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager"
+    )
+    Page<Long> findPageIdToManager(@Param("manager") Manager manager,
+                                   Pageable pageable);
 
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed")
     List<Long> findAllIdToWorker(@Param("worker") Worker worker);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.worker = :worker
+                ORDER BY CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+            """,
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker"
+    )
+    Page<Long> findPageIdToWorkerForBoard(@Param("worker") Worker worker,
+                                          Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers ORDER BY o.changed")
     List<Long> findAllIdToOwner(@Param("managers") List<Manager> managers);
 
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.manager IN :managers",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager IN :managers"
+    )
+    Page<Long> findPageIdToOwner(@Param("managers") List<Manager> managers,
+                                 Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByStatus(@Param("status") String status);
+
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.status.title = :status",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.status.title = :status"
+    )
+    Page<Long> findPageIdByStatus(@Param("status") String status,
+                                  Pageable pageable);
 
     @Query("SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByManagerAndStatus(@Param("manager") Manager manager,
                                            @Param("status") String status);
 
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager AND o.status.title = :status"
+    )
+    Page<Long> findPageIdByManagerAndStatus(@Param("manager") Manager manager,
+                                            @Param("status") String status,
+                                            Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByWorkerAndStatus(@Param("worker") Worker worker,
                                           @Param("status") String status);
 
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker AND o.status.title = :status"
+    )
+    Page<Long> findPageIdByWorkerAndStatus(@Param("worker") Worker worker,
+                                           @Param("status") String status,
+                                           Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") List<Manager> managers,
                                          @Param("status") String status);
+
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.manager IN :managers AND o.status.title = :status"
+    )
+    Page<Long> findPageIdByOwnerAndStatus(@Param("managers") List<Manager> managers,
+                                          @Param("status") String status,
+                                          Pageable pageable);
 
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") Set<Manager> managers,
@@ -92,29 +157,90 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Long> findAllIdByKeyWord(@Param("keyword") String keyword,
                                   @Param("keyword2") String keyword2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+            """
+    )
+    Page<Long> findPageIdByKeyWord(@Param("keyword") String keyword,
+                                   @Param("keyword2") String keyword2,
+                                   Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.manager = :manager
-          AND LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
         ORDER BY o.changed
     """)
     List<Long> findAllIdByByManagerAndKeyWord(@Param("manager") Manager manager,
                                               @Param("keyword") String keyword,
                                               @Param("keyword2") String keyword2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByByManagerAndKeyWord(@Param("manager") Manager manager,
+                                               @Param("keyword") String keyword,
+                                               @Param("keyword2") String keyword2,
+                                               Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.worker = :worker
-          AND LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
         ORDER BY o.changed
     """)
     List<Long> findAllIdByByWorkerAndKeyWord(@Param("worker") Worker worker,
                                              @Param("keyword") String keyword,
                                              @Param("keyword2") String keyword2);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                ORDER BY CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByByWorkerAndKeyWordForBoard(@Param("worker") Worker worker,
+                                                      @Param("keyword") String keyword,
+                                                      @Param("keyword2") String keyword2,
+                                                      Pageable pageable);
 
     @Query("""
         SELECT o.id
@@ -128,6 +254,27 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                           @Param("keyword") String keyword,
                                           @Param("keyword2") String keyword2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE (o.manager IN :managers
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE (o.manager IN :managers
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
+            """
+    )
+    Page<Long> findPageIdByOwnerAndKeyWord(@Param("managers") List<Manager> managers,
+                                           @Param("keyword") String keyword,
+                                           @Param("keyword2") String keyword2,
+                                           Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
@@ -140,12 +287,32 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                            @Param("keyword2") String keyword2,
                                            @Param("status2") String status2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+            """
+    )
+    Page<Long> findPageIdByKeyWordAndStatus(@Param("keyword") String keyword,
+                                            @Param("status") String status,
+                                            @Param("keyword2") String keyword2,
+                                            @Param("status2") String status2,
+                                            Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.manager = :manager
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+          AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
         ORDER BY o.changed
     """)
     List<Long> findAllIdByManagerAndKeyWordAndStatus(@Param("manager") Manager manager,
@@ -154,12 +321,35 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                      @Param("keyword2") String keyword2,
                                                      @Param("status2") String status2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """
+    )
+    Page<Long> findPageIdByManagerAndKeyWordAndStatus(@Param("manager") Manager manager,
+                                                      @Param("keyword") String keyword,
+                                                      @Param("status") String status,
+                                                      @Param("keyword2") String keyword2,
+                                                      @Param("status2") String status2,
+                                                      Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.worker = :worker
-          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+          AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+           OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
         ORDER BY o.changed
     """)
     List<Long> findAllIdByWorkerAndKeyWordAndStatus(@Param("worker") Worker worker,
@@ -167,6 +357,29 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                     @Param("status") String status,
                                                     @Param("keyword2") String keyword2,
                                                     @Param("status2") String status2);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """
+    )
+    Page<Long> findPageIdByWorkerAndKeyWordAndStatus(@Param("worker") Worker worker,
+                                                     @Param("keyword") String keyword,
+                                                     @Param("status") String status,
+                                                     @Param("keyword2") String keyword2,
+                                                     @Param("status2") String status2,
+                                                     Pageable pageable);
 
     @Query("""
         SELECT o.id
@@ -181,20 +394,80 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                    @Param("keyword2") String keyword2,
                                                    @Param("status2") String status2);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
+                   OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
+                   OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+            """
+    )
+    Page<Long> findPageIdByOwnerAndKeyWordAndStatus(@Param("managers") List<Manager> managers,
+                                                    @Param("keyword") String keyword,
+                                                    @Param("status") String status,
+                                                    @Param("keyword2") String keyword2,
+                                                    @Param("status2") String status2,
+                                                    Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.company.id = :companyId ORDER BY o.changed")
     List<Long> findAllIdByCompanyId(@Param("companyId") long companyId);
+
+    @Query(
+            value = "SELECT o.id FROM Order o WHERE o.company.id = :companyId",
+            countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.company.id = :companyId"
+    )
+    Page<Long> findPageIdByCompanyId(@Param("companyId") long companyId,
+                                     Pageable pageable);
 
     @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.company.id = :companyId
-          AND LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+          AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+           OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
         ORDER BY o.changed
     """)
     List<Long> findAllIdByCompanyIdAndKeyWord(@Param("companyId") long companyId,
                                               @Param("keyword") String keyword,
                                               @Param("keyword2") String keyword2);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.company.id = :companyId
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.company.id = :companyId
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByCompanyIdAndKeyWord(@Param("companyId") long companyId,
+                                               @Param("keyword") String keyword,
+                                               @Param("keyword2") String keyword2,
+                                               Pageable pageable);
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.status.title = :status")
+    int countByStatusTitle(@Param("status") String status);
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager AND o.status.title = :status")
+    int countByManagerAndStatusTitle(@Param("manager") Manager manager,
+                                     @Param("status") String status);
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager IN :managers AND o.status.title = :status")
+    int countByManagersAndStatusTitle(@Param("managers") Set<Manager> managers,
+                                      @Param("status") String status);
 
     @Query("SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker AND o.status.title = :status")
     int countByWorkerAndStatus(@Param("worker") Worker worker,

@@ -41,7 +41,10 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -81,6 +84,9 @@ public class ReviewServiceImpl implements ReviewService {
     private final ProductService productService;
     private final FilialService filialService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
@@ -96,6 +102,19 @@ public class ReviewServiceImpl implements ReviewService {
             "имя", "фамилия", "фамилию", "впиши", "отчество", "fio", "name", "surname",
             "введите", "заполните", "укажите", "вставьте", "шаблон", "template", "пример"
     );
+
+    private enum ReviewBoardMode {
+        PUBLISH,
+        ORDER_STATUS,
+        VIGUL
+    }
+
+    private enum ReviewBoardScope {
+        ADMIN,
+        WORKER,
+        MANAGER,
+        OWNER
+    }
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -163,110 +182,470 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize) {
-        List<Long> reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+        return getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize, "asc");
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublish(localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Worker worker = workerService.getWorkerByUserId(user.getId());
         if (worker == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublish(worker, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByManagerByPublish(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Manager manager = managerService.getManagerByUserId(user.getId());
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-        List<Review> reviewPage = reviewId.isEmpty()
-                ? Collections.emptyList()
-                : reviewRepository.findAll(reviewId).stream()
-                .filter(review -> {
-                    Order order = extractOrder(review);
-                    return order != null && Objects.equals(order.getManager(), manager);
-                })
-                .collect(Collectors.toList());
-
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublish(
+                manager.getUser().getWorkers(), manager, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
         if (managerList.isEmpty()) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        List<Long> reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(Comparator.comparing(Review::getPublishedDate)).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublish(workerList, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize) {
-        List<Long> reviewId = reviewRepository.findAllByOrderStatus(status);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(reviewPublishedDateComparator()).toList(), pageNumber, pageSize);
+        return getAllReviewDTOByOrderStatusToAdmin(status, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize, String sortDirection) {
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByOrderStatus(status, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByWorkerByOrderStatus(status, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Worker worker = workerService.getWorkerByUserId(user.getId());
         if (worker == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewId = reviewRepository.findAllByWorkerAndOrderStatus(worker, status);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(reviewPublishedDateComparator()).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndOrderStatus(worker, status, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByManagerByOrderStatus(status, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Manager manager = managerService.getManagerByUserId(user.getId());
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewId = reviewRepository.findAllByWorkersAndOrderStatus(manager.getUser().getWorkers(), status);
-        List<Review> reviewPage = reviewId.isEmpty()
-                ? Collections.emptyList()
-                : reviewRepository.findAll(reviewId).stream()
-                .filter(review -> {
-                    Order order = extractOrder(review);
-                    return order != null && Objects.equals(order.getManager(), manager);
-                })
-                .collect(Collectors.toList());
-
-        return getPageReviews(reviewPage.stream().sorted(reviewPublishedDateComparator()).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndOrderStatus(
+                manager.getUser().getWorkers(), manager, status, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByOwnerByOrderStatus(status, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
         if (managerList.isEmpty()) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        List<Long> reviewId = reviewRepository.findAllByWorkersAndOrderStatus(workerList, status);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return getPageReviews(reviewPage.stream().sorted(reviewPublishedDateComparator()).toList(), pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndOrderStatus(workerList, status, pageable);
+        return getReviewDTOPage(reviewIds);
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.ADMIN,
+                localDate, null, null, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByWorkerByPublish(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByManagerByPublish(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.MANAGER,
+                localDate, null, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByOwnerByPublish(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+        if (managerList.isEmpty()) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.OWNER,
+                localDate, null, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByOrderStatusToAdmin(status, pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.ADMIN,
+                null, status, null, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByWorkerByOrderStatus(status, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.WORKER,
+                null, status, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByManagerByOrderStatus(status, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.MANAGER,
+                null, status, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByOwnerByOrderStatus(status, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+        if (managerList.isEmpty()) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.OWNER,
+                null, status, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    private Page<ReviewDTOOne> getReviewDTOPage(Page<Long> reviewIds) {
+        if (reviewIds.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), reviewIds.getPageable(), reviewIds.getTotalElements());
+        }
+
+        List<Long> ids = reviewIds.getContent();
+        Map<Long, Integer> orderById = new HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            orderById.put(ids.get(i), i);
+        }
+
+        List<ReviewDTOOne> reviewDTOOnes = reviewRepository.findAll(ids).stream()
+                .sorted(Comparator.comparingInt(review -> orderById.getOrDefault(review.getId(), Integer.MAX_VALUE)))
+                .map(review -> {
+                    try {
+                        return toReviewDTOOne(review);
+                    } catch (Exception e) {
+                        log.error("Ошибка при преобразовании отзыва ID {} в DTO: {}",
+                                review.getId(), e.getMessage(), e);
+                        return ReviewDTOOne.builder()
+                                .id(review.getId())
+                                .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
+                                .botFio("ОШИБКА")
+                                .text(review.getText() != null ? review.getText() : "")
+                                .build();
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(reviewDTOOnes, reviewIds.getPageable(), reviewIds.getTotalElements());
+    }
+
+    private Pageable reviewPageable(int pageNumber, int pageSize, String sortDirection) {
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortDirection)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        Sort sort = Sort.by(direction, "publishedDate").and(Sort.by(direction, "id"));
+        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
+    }
+
+    private Page<Long> findReviewIdsForBoard(
+            ReviewBoardMode mode,
+            ReviewBoardScope scope,
+            LocalDate localDate,
+            String status,
+            Worker worker,
+            Manager manager,
+            Set<Worker> workers,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        }
+
+        String joins = """
+                LEFT JOIN r.bot b
+                LEFT JOIN r.filial f
+                LEFT JOIN f.city city
+                LEFT JOIN r.worker rw
+                LEFT JOIN rw.user wu
+                LEFT JOIN r.product rp
+                LEFT JOIN r.category cat
+                LEFT JOIN r.subCategory sub
+                LEFT JOIN r.orderDetails d
+                LEFT JOIN d.product dp
+                LEFT JOIN d.order o
+                LEFT JOIN o.company c
+                LEFT JOIN o.status os
+                LEFT JOIN o.manager om
+                LEFT JOIN om.user mu
+                """;
+
+        List<String> conditions = new ArrayList<>();
+        switch (mode) {
+            case PUBLISH -> {
+                conditions.add("r.publishedDate <= :localDate");
+                conditions.add("r.publish = false");
+            }
+            case ORDER_STATUS -> conditions.add("os.title = :status");
+            case VIGUL -> {
+                conditions.add("r.publishedDate <= :localDate");
+                conditions.add("r.publish = false");
+                conditions.add("r.vigul = false");
+                conditions.add("(b IS NULL OR b.counter <= 2)");
+            }
+        }
+
+        switch (scope) {
+            case WORKER -> conditions.add("r.worker = :worker");
+            case OWNER -> conditions.add("r.worker IN :workers");
+            case MANAGER -> {
+                conditions.add("r.worker IN :workers");
+                if (mode == ReviewBoardMode.VIGUL) {
+                    conditions.add("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)");
+                } else {
+                    conditions.add("o.manager = :manager");
+                }
+            }
+            case ADMIN -> {
+            }
+        }
+
+        Long keywordLong = parseKeywordLong(keyword);
+        UUID keywordUuid = parseKeywordUuid(keyword);
+        conditions.add(reviewKeywordPredicate(keywordLong != null, keywordUuid != null));
+
+        String where = " WHERE " + String.join(" AND ", conditions);
+        String direction = "desc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
+        String orderBy = " ORDER BY r.publishedDate " + direction + ", r.id " + direction;
+
+        TypedQuery<Long> idQuery = entityManager.createQuery(
+                "SELECT DISTINCT r.id FROM Review r " + joins + where + orderBy,
+                Long.class
+        );
+        TypedQuery<Long> countQuery = entityManager.createQuery(
+                "SELECT COUNT(DISTINCT r.id) FROM Review r " + joins + where,
+                Long.class
+        );
+
+        bindReviewBoardParameters(idQuery, mode, scope, localDate, status, worker, manager, workers, keyword, keywordLong, keywordUuid);
+        bindReviewBoardParameters(countQuery, mode, scope, localDate, status, worker, manager, workers, keyword, keywordLong, keywordUuid);
+
+        idQuery.setFirstResult((int) pageable.getOffset());
+        idQuery.setMaxResults(pageable.getPageSize());
+
+        return new PageImpl<>(idQuery.getResultList(), pageable, countQuery.getSingleResult());
+    }
+
+    private String reviewKeywordPredicate(boolean hasKeywordLong, boolean hasKeywordUuid) {
+        List<String> parts = new ArrayList<>(List.of(
+                "LOWER(COALESCE(r.text, '')) LIKE :keyword",
+                "LOWER(COALESCE(r.answer, '')) LIKE :keyword",
+                "LOWER(COALESCE(c.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(c.commentsCompany, '')) LIKE :keyword",
+                "LOWER(COALESCE(o.zametka, '')) LIKE :keyword",
+                "LOWER(COALESCE(os.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(city.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(f.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(b.fio, '')) LIKE :keyword",
+                "LOWER(COALESCE(wu.fio, '')) LIKE :keyword",
+                "LOWER(COALESCE(mu.fio, '')) LIKE :keyword",
+                "LOWER(COALESCE(rp.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(dp.title, '')) LIKE :keyword",
+                "LOWER(COALESCE(cat.categoryTitle, '')) LIKE :keyword",
+                "LOWER(COALESCE(sub.subCategoryTitle, '')) LIKE :keyword",
+                "LOWER(COALESCE(d.comment, '')) LIKE :keyword"
+        ));
+
+        if (hasKeywordLong) {
+            parts.add("r.id = :keywordLong");
+            parts.add("o.id = :keywordLong");
+            parts.add("c.id = :keywordLong");
+        }
+        if (hasKeywordUuid) {
+            parts.add("d.id = :keywordUuid");
+        }
+
+        return "(" + String.join(" OR ", parts) + ")";
+    }
+
+    private void bindReviewBoardParameters(
+            TypedQuery<Long> query,
+            ReviewBoardMode mode,
+            ReviewBoardScope scope,
+            LocalDate localDate,
+            String status,
+            Worker worker,
+            Manager manager,
+            Set<Worker> workers,
+            String keyword,
+            Long keywordLong,
+            UUID keywordUuid
+    ) {
+        if (mode == ReviewBoardMode.PUBLISH || mode == ReviewBoardMode.VIGUL) {
+            query.setParameter("localDate", localDate);
+        }
+        if (mode == ReviewBoardMode.ORDER_STATUS) {
+            query.setParameter("status", status);
+        }
+        if (scope == ReviewBoardScope.WORKER) {
+            query.setParameter("worker", worker);
+        }
+        if (scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) {
+            query.setParameter("workers", workers);
+        }
+        if (scope == ReviewBoardScope.MANAGER) {
+            query.setParameter("manager", manager);
+        }
+
+        query.setParameter("keyword", "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%");
+        if (keywordLong != null) {
+            query.setParameter("keywordLong", keywordLong);
+        }
+        if (keywordUuid != null) {
+            query.setParameter("keywordUuid", keywordUuid);
+        }
+    }
+
+    private Long parseKeywordLong(String keyword) {
+        if (!hasText(keyword)) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (!trimmed.matches("\\d+")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(trimmed);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private UUID parseKeywordUuid(String keyword) {
+        if (!hasText(keyword)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(keyword.trim());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     @Transactional
@@ -1663,92 +2042,119 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize) {
-        List<Long> reviewId = reviewRepository.findAllByPublishedDateAndPublish(localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
+        return getAllReviewDTOAndDateToAdminToVigul(localDate, pageNumber, pageSize, "asc");
+    }
 
-        List<Review> filteredReviews = reviewPage.stream()
-                .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
-                .collect(Collectors.toList());
-
-        return getSafePageReviews(filteredReviews, pageNumber, pageSize);
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublishToVigul(localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByManagerByPublishToVigul(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Manager manager = managerService.getManagerByUserId(user.getId());
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewId = reviewRepository.findAllByManagersAndPublishedDateAndPublish(manager.getUser().getWorkers(), localDate);
-
-        List<Review> filteredPage = reviewId.isEmpty()
-                ? Collections.emptyList()
-                : reviewRepository.findAll(reviewId).stream()
-                .filter(review -> {
-                    Order order = extractOrder(review);
-                    if (order == null) {
-                        return true;
-                    }
-                    if (order.getManager() == null) {
-                        return true;
-                    }
-                    return order.getManager().equals(manager);
-                })
-                .collect(Collectors.toList());
-
-        List<Review> filteredReviews = filteredPage.stream()
-                .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
-                .collect(Collectors.toList());
-
-        return getSafePageReviews(filteredReviews, pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublishToVigul(
+                manager.getUser().getWorkers(), manager, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByOwnerByPublishToVigul(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
         if (managerList.isEmpty()) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        List<Long> reviewId = reviewRepository.findAllByOwnersAndPublishedDateAndPublish(workerList, localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-
-        List<Review> filteredReviews = reviewPage.stream()
-                .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
-                .collect(Collectors.toList());
-
-        return getSafePageReviews(filteredReviews, pageNumber, pageSize);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublishToVigul(workerList, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
     }
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
+        return getAllReviewDTOByWorkerByPublishToVigul(localDate, principal, pageNumber, pageSize, "asc");
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection) {
         User user = requireUser(principal);
         Worker worker = workerService.getWorkerByUserId(user.getId());
         if (worker == null) {
-            return emptyReviewPage(pageNumber, pageSize);
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        List<Long> reviewIds = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublishToVigul(worker, localDate, pageable);
+        return getReviewDTOPage(reviewIds);
+    }
 
-        if (reviewIds == null || reviewIds.isEmpty()) {
-            return emptyReviewPage(pageNumber, pageSize);
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOAndDateToAdminToVigul(localDate, pageNumber, pageSize, sortDirection);
         }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.ADMIN,
+                localDate, null, null, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
 
-        List<Review> reviews = reviewRepository.findAll(reviewIds);
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByManagerByPublishToVigul(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.MANAGER,
+                localDate, null, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
+    }
 
-        List<Review> filteredReviews = reviews.stream()
-                .filter(review -> !review.isVigul())
-                .filter(review -> safeBotCounter(review.getBot()) <= 2)
-                .sorted(Comparator.comparing(Review::getPublishedDate))
-                .collect(Collectors.toList());
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByOwnerByPublishToVigul(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+        if (managerList.isEmpty()) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.OWNER,
+                localDate, null, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
+    }
 
-        return getSafePageReviews(filteredReviews, pageNumber, pageSize);
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
+        if (!hasText(keyword)) {
+            return getAllReviewDTOByWorkerByPublishToVigul(localDate, principal, pageNumber, pageSize, sortDirection);
+        }
+        User user = requireUser(principal);
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
     private Page<ReviewDTOOne> getSafePageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
@@ -1935,12 +2341,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public int countOrdersByWorkerAndStatusVigul(Worker worker, LocalDate localDate) {
-        List<Long> reviewId = reviewRepository.findAllByWorkerAndPublishedDateAndPublish(worker, localDate);
-        List<Review> reviewPage = reviewId.isEmpty() ? Collections.emptyList() : reviewRepository.findAll(reviewId);
-        return (int) reviewPage.stream()
-                .sorted(Comparator.comparing(Review::getPublishedDate))
-                .filter(review -> !review.isVigul() && safeBotCounter(review.getBot()) <= 2)
-                .count();
+        return reviewRepository.countByWorkerAndStatusVigul(worker, localDate);
     }
 
     @Override
@@ -1989,7 +2390,11 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private Page<ReviewDTOOne> emptyReviewPage(int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(Math.max(pageNumber, 0), pageSize, Sort.by("publishedDate").descending());
+        return emptyReviewPage(pageNumber, pageSize, "asc");
+    }
+
+    private Page<ReviewDTOOne> emptyReviewPage(int pageNumber, int pageSize, String sortDirection) {
+        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
         return new PageImpl<>(Collections.emptyList(), pageable, 0);
     }
 

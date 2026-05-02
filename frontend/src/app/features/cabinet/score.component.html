@@ -1,0 +1,83 @@
+<app-admin-layout title="Рейтинг" active="score">
+  <section class="score-toolbar">
+    <div>
+      <p class="eyebrow">SCORE</p>
+      <h2>Показатели сотрудников за месяц</h2>
+    </div>
+
+    <div class="toolbar-actions">
+      <label>
+        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); load()">
+      </label>
+      <button type="button" (click)="load()" [disabled]="loading()">
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading() ? 'Обновляю' : 'Обновить' }}
+      </button>
+    </div>
+  </section>
+
+  @if (error()) {
+    <p class="load-error">{{ error() }}</p>
+  }
+
+  @if (score()) {
+    @if (!score()?.financeVisible) {
+      <section class="notice">
+        <span class="material-icons-sharp">lock</span>
+        <p>Финансовые суммы скрыты для твоей роли. Рейтинг показывает рабочие счетчики.</p>
+      </section>
+    }
+
+    @for (section of sections; track section.key) {
+      <section class="score-section">
+        <div class="section-title">
+          <span class="material-icons-sharp">{{ section.icon }}</span>
+          <h2>{{ section.title }}</h2>
+          <small>{{ users(section).length }}</small>
+        </div>
+
+        <div class="score-grid">
+          @for (user of users(section); track userTrack(user)) {
+            <article class="score-card">
+              <div class="rank">{{ $index + 1 }}</div>
+
+              @if (score()?.financeVisible && user.userId) {
+                <a class="avatar-link" [routerLink]="['/admin/user-info', user.userId]">
+                  <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                </a>
+              } @else {
+                <div class="avatar-link">
+                  <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
+                </div>
+              }
+
+              <div class="person-main">
+                <h3>{{ user.fio }}</h3>
+                <p>{{ user.role }}</p>
+              </div>
+
+              <dl>
+                @for (row of rows(section, user); track row.label) {
+                  <div>
+                    <dt>{{ row.label }}</dt>
+                    <dd>{{ row.value }}</dd>
+                  </div>
+                }
+              </dl>
+            </article>
+          } @empty {
+            <article class="empty-section">
+              <span class="material-icons-sharp">leaderboard</span>
+              <p>Пока нет данных для рейтинга</p>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  } @else if (loading()) {
+    <section class="empty-state">
+      <span class="material-icons-sharp">hourglass_top</span>
+      <p>Загружаю рейтинг</p>
+    </section>
+  }
+</app-admin-layout>

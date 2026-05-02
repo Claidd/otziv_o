@@ -22,19 +22,51 @@ public interface ReviewService {
 
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     List<Review> saveAll(List<Review> reviews);
 
@@ -78,11 +110,27 @@ public interface ReviewService {
 
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
 
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByOwnerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     void changeNagulReview(Long reviewId);
 

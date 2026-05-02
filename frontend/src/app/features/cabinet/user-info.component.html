@@ -1,0 +1,78 @@
+<app-admin-layout title="Профиль сотрудника" active="team">
+  <section class="profile-toolbar">
+    <a class="back-link" routerLink="/admin/team">
+      <span class="material-icons-sharp">arrow_back</span>
+      Команда
+    </a>
+
+    <div class="toolbar-actions">
+      <label>
+        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); load()">
+      </label>
+      <button type="button" (click)="load()" [disabled]="loading()">
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading() ? 'Обновляю' : 'Обновить' }}
+      </button>
+    </div>
+  </section>
+
+  @if (error()) {
+    <p class="load-error">{{ error() }}</p>
+  }
+
+  @if (payload()) {
+    <section class="person-head">
+      <img [src]="imageUrl(payload()?.workerZp)" [alt]="payload()?.workerZp?.fio">
+      <div>
+        <p class="eyebrow">USER INFO</p>
+        <h2>{{ payload()?.workerZp?.fio }}</h2>
+        <p>Коэффициент: {{ payload()?.workerZp?.coefficient || 0 }}</p>
+      </div>
+    </section>
+
+    <section class="metric-grid">
+      @for (metric of metrics(); track metric.label) {
+        <article class="metric-card" [class]="tone(metric.percent)">
+          <div>
+            <h3>{{ metric.label }}</h3>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <div class="percent-ring">
+            <span>{{ metric.percent }}%</span>
+          </div>
+        </article>
+      }
+    </section>
+
+    <section class="chart-grid">
+      <article class="chart-card">
+        <div class="chart-head">
+          <h3>Зарплаты по дням</h3>
+          <small>{{ payload()?.date }}</small>
+        </div>
+        <div class="bar-chart">
+          @for (point of chartFrom(payload()?.workerZp?.zpPayMap); track point.label) {
+            <span [style.height.%]="point.height" [title]="point.label + ': ' + point.value"></span>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="chart-head">
+          <h3>Зарплаты по месяцам</h3>
+          <small>годовой срез</small>
+        </div>
+        <div class="bar-chart month">
+          @for (point of chartFrom(payload()?.workerZp?.zpPayMapMonth); track point.label) {
+            <span [style.height.%]="point.height" [title]="point.label + ': ' + point.value"></span>
+          }
+        </div>
+      </article>
+    </section>
+  } @else if (loading()) {
+    <section class="empty-state">
+      <span class="material-icons-sharp">hourglass_top</span>
+      <p>Загружаю профиль</p>
+    </section>
+  }
+</app-admin-layout>

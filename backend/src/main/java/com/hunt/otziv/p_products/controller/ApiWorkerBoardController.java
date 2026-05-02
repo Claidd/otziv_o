@@ -332,14 +332,7 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
-        Page<ReviewDTOOne> source = loadReviewPage(principal, authentication, section, 0, Integer.MAX_VALUE);
-        List<ReviewDTOOne> reviews = source.getContent().stream()
-                .filter(review -> !SECTION_BAD.equals(section) || ORDER_STATUS_UNPAID.equalsIgnoreCase(safe(review.getOrderStatus()).trim()))
-                .filter(review -> matchesReviewKeyword(review, keyword))
-                .sorted(reviewComparator(sortDirection))
-                .toList();
-
-        return pageReviews(reviews, pageNumber, pageSize, sortDirection);
+        return loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, keyword);
     }
 
     private Page<ReviewDTOOne> loadReviewPage(
@@ -349,44 +342,67 @@ public class ApiWorkerBoardController {
             int pageNumber,
             int pageSize
     ) {
+        return loadReviewPage(principal, authentication, section, pageNumber, pageSize, "desc");
+    }
+
+    private Page<ReviewDTOOne> loadReviewPage(
+            Principal principal,
+            Authentication authentication,
+            String section,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
+        return loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, "");
+    }
+
+    private Page<ReviewDTOOne> loadReviewPage(
+            Principal principal,
+            Authentication authentication,
+            String section,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            String keyword
+    ) {
         LocalDate date = SECTION_NAGUL.equals(section) ? LocalDate.now().plusDays(60) : LocalDate.now();
 
         if (SECTION_BAD.equals(section)) {
             if (hasRole(authentication, "ADMIN")) {
-                return reviewService.getAllReviewDTOByOrderStatusToAdmin(ORDER_STATUS_UNPAID, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOByOrderStatusToAdmin(ORDER_STATUS_UNPAID, pageNumber, pageSize, sortDirection, keyword);
             }
             if (hasRole(authentication, "OWNER")) {
-                return reviewService.getAllReviewDTOByOwnerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOByOwnerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize, sortDirection, keyword);
             }
             if (hasRole(authentication, "MANAGER")) {
-                return reviewService.getAllReviewDTOByManagerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOByManagerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize, sortDirection, keyword);
             }
-            return reviewService.getAllReviewDTOByWorkerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize);
+            return reviewService.getAllReviewDTOByWorkerByOrderStatus(ORDER_STATUS_UNPAID, principal, pageNumber, pageSize, sortDirection, keyword);
         }
 
         if (SECTION_NAGUL.equals(section)) {
             if (hasRole(authentication, "ADMIN")) {
-                return reviewService.getAllReviewDTOAndDateToAdminToVigul(date, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOAndDateToAdminToVigul(date, pageNumber, pageSize, sortDirection, keyword);
             }
             if (hasRole(authentication, "OWNER")) {
-                return reviewService.getAllReviewDTOByOwnerByPublishToVigul(date, principal, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOByOwnerByPublishToVigul(date, principal, pageNumber, pageSize, sortDirection, keyword);
             }
             if (hasRole(authentication, "MANAGER")) {
-                return reviewService.getAllReviewDTOByManagerByPublishToVigul(date, principal, pageNumber, pageSize);
+                return reviewService.getAllReviewDTOByManagerByPublishToVigul(date, principal, pageNumber, pageSize, sortDirection, keyword);
             }
-            return reviewService.getAllReviewDTOByWorkerByPublishToVigul(date, principal, pageNumber, pageSize);
+            return reviewService.getAllReviewDTOByWorkerByPublishToVigul(date, principal, pageNumber, pageSize, sortDirection, keyword);
         }
 
         if (hasRole(authentication, "ADMIN")) {
-            return reviewService.getAllReviewDTOAndDateToAdmin(date, pageNumber, pageSize);
+            return reviewService.getAllReviewDTOAndDateToAdmin(date, pageNumber, pageSize, sortDirection, keyword);
         }
         if (hasRole(authentication, "OWNER")) {
-            return reviewService.getAllReviewDTOByOwnerByPublish(date, principal, pageNumber, pageSize);
+            return reviewService.getAllReviewDTOByOwnerByPublish(date, principal, pageNumber, pageSize, sortDirection, keyword);
         }
         if (hasRole(authentication, "MANAGER")) {
-            return reviewService.getAllReviewDTOByManagerByPublish(date, principal, pageNumber, pageSize);
+            return reviewService.getAllReviewDTOByManagerByPublish(date, principal, pageNumber, pageSize, sortDirection, keyword);
         }
-        return reviewService.getAllReviewDTOByWorkerByPublish(date, principal, pageNumber, pageSize);
+        return reviewService.getAllReviewDTOByWorkerByPublish(date, principal, pageNumber, pageSize, sortDirection, keyword);
     }
 
     private List<BotResponse> loadBots(Principal principal, Authentication authentication) {
@@ -620,6 +636,12 @@ public class ApiWorkerBoardController {
                 .thenComparing(ReviewDTOOne::getId, Comparator.nullsLast(Comparator.naturalOrder()));
 
         return "asc".equals(sortDirection) ? comparator : comparator.reversed();
+    }
+
+    private Sort reviewSort(String sortDirection) {
+        return "asc".equals(sortDirection)
+                ? Sort.by("publishedDate").ascending()
+                : Sort.by("publishedDate").descending();
     }
 
     private String normalizeSection(String section) {

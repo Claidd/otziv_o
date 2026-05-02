@@ -152,34 +152,30 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     public Page<CompanyListDTO> getAllCompaniesDTOListToList(String keywords, String status, int pageNumber, int pageSize, String sortDirection){ // Показ всех компаний + поиск + статус
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyId = companyRepository.findAllIdByStatusAndKeyword(keywords, status, keywords, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdByStatusAndKeyword(keywords, status, keywords, status, pageable);
         }
         else {
-            companyId = companyRepository.findAllIdByStatus(status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdByStatus(status, pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
     } // Показ всех компаний + поиск + статус
 
 
     public Page<CompanyListDTO> getAllCompaniesDTOListToListToSend(String keywords, String status, int pageNumber, int pageSize){ // Показ всех компаний + поиск + статус + для рассылки
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, "desc");
+        Page<Long> companyIds;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyId = companyRepository.findAllIdByStatusAndKeyword(keywords, status, keywords, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdByStatusAndKeyword(keywords, status, keywords, status, pageable);
         }
         else {
-            companyId = companyRepository.findAllIdByStatus(status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdByStatus(status, pageable);
         }
-        return getPageIsAfter(companyPage,pageNumber,pageSize);
+        return getCompanyDTOPage(companyIds, true);
     } // Показ всех компаний + поиск + статус + для рассылки
 
 
@@ -189,18 +185,16 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     public Page<CompanyListDTO> getAllCompaniesDTOList(String keywords, int pageNumber, int pageSize, String sortDirection) {
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyId = companyRepository.findAllToAdminWithFetchWithKeyWord(keywords,keywords);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageToAdminWithFetchWithKeyWord(keywords,keywords, pageable);
         }
         else {
-            companyId = companyRepository.findAllIdToAdmin();
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdToAdmin(pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
     }
 
 
@@ -212,17 +206,15 @@ public class CompanyServiceImpl implements CompanyService{
 
     public Page<CompanyListDTO> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection){ // Берем все заказы  Менеджера + поиск
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyId = companyRepository.findAllByManagerAndKeyWord(manager,keyword,  manager, keyword);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManagerAndKeyWord(manager,keyword,  manager, keyword, pageable);
         }
         else {
-            companyId = companyRepository.findAllByManager(manager);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManager(manager, pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
     } // Берем все заказы  Менеджера + поиск
 
 
@@ -232,32 +224,28 @@ public class CompanyServiceImpl implements CompanyService{
 
     public Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection){ // Берем все заказы Менеджера + поиск + статус
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyId = companyRepository.findAllByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status, pageable);
         }
         else {
-            companyId = companyRepository.findAllByManagerAndStatus(manager, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManagerAndStatus(manager, status, pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
     } // Берем все заказы Менеджера + поиск + статус
 
     public Page<CompanyListDTO> getAllCompanyDTOAndKeywordByManagerToSend(Principal principal, String keyword, String status, int pageNumber, int pageSize){ // Берем все заказы Менеджера + поиск + статус
         Manager manager = managerService.getManagerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, "desc");
+        Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyId = companyRepository.findAllByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManagerAndStatusAndKeyWords(manager,keyword, status, manager, keyword, status, pageable);
         }
         else{
-            companyId = companyRepository.findAllByManagerAndStatus(manager, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByManagerAndStatus(manager, status, pageable);
         }
-        return getPageIsAfter(companyPage,pageNumber,pageSize);
+        return getCompanyDTOPage(companyIds, true);
     } // Берем все заказы Менеджера + поиск + статус
 
     @Override
@@ -268,17 +256,15 @@ public class CompanyServiceImpl implements CompanyService{
     @Override
     public Page<CompanyListDTO> getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection) { // Берем все заказы Владельца + поиск + статус
         List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyId = companyRepository.findAllByOwnerListAndStatusAndKeyWords(managerList, keyword, status, keyword, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByOwnerListAndStatusAndKeyWords(managerList, keyword, status, keyword, status, pageable);
         }
         else{
-            companyId = companyRepository.findAllByOwnerAndStatusToOwner(managerList, status);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByOwnerAndStatusToOwner(managerList, status, pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
     } // Берем все заказы Владельца + поиск + статус
 
     @Override
@@ -289,18 +275,47 @@ public class CompanyServiceImpl implements CompanyService{
     @Override
     public Page<CompanyListDTO> getAllCompaniesDTOListOwner(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
         List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
-        List<Long> companyId;
-        List<Company> companyPage;
+        Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> companyIds;
         if (!keyword.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyId = companyRepository.findAllByOwnerAndKeyWord(managerList, keyword,keyword);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageByOwnerAndKeyWord(managerList, keyword,keyword, pageable);
         }
         else {
-            companyId = companyRepository.findAllIdToOwner(managerList);
-            companyPage = companyRepository.findAll(companyId);
+            companyIds = companyRepository.findPageIdToOwner(managerList, pageable);
         }
-        return getPage(companyPage,pageNumber,pageSize, sortDirection);
+        return getCompanyDTOPage(companyIds);
+    }
+
+    private Page<CompanyListDTO> getCompanyDTOPage(Page<Long> companyIds) {
+        return getCompanyDTOPage(companyIds, false);
+    }
+
+    private Page<CompanyListDTO> getCompanyDTOPage(Page<Long> companyIds, boolean onlyAfterDateNewTry) {
+        if (companyIds.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), companyIds.getPageable(), companyIds.getTotalElements());
+        }
+
+        List<Long> ids = companyIds.getContent();
+        Map<Long, Integer> orderById = new HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            orderById.put(ids.get(i), i);
+        }
+
+        List<CompanyListDTO> companyListDTOs = companyRepository.findAll(ids).stream()
+                .sorted(Comparator.comparingInt(company -> orderById.getOrDefault(company.getId(), Integer.MAX_VALUE)))
+                .map(this::convertCompanyListDTO)
+                .filter(company -> !onlyAfterDateNewTry || LocalDate.now().isAfter(company.getDateNewTry()))
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(companyListDTOs, companyIds.getPageable(), companyIds.getTotalElements());
+    }
+
+    private Pageable companyPageable(int pageNumber, int pageSize, String sortDirection) {
+        Sort sort = "asc".equalsIgnoreCase(sortDirection)
+                ? Sort.by("updateStatus").descending()
+                : Sort.by("updateStatus").ascending();
+        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
     }
 
 
@@ -535,17 +550,17 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public int getAllCompanyDTOByStatus(String status) {
-        return companyRepository.findAllIdByStatus(status).size();
+        return companyRepository.countByStatusTitle(status);
     }
 
     @Override
     public int getAllCompanyDTOByStatusToManager(Manager manager, String status) {
-        return companyRepository.findAllByManagerAndStatus(manager, status).size();
+        return companyRepository.countByManagerAndStatusTitle(manager, status);
     }
 
     @Override
     public int getAllCompanyDTOByStatusToOwner(Set<Manager> managerList, String status) {
-        return companyRepository.findAllByOwnerAndStatus2(managerList, status).size();
+        return companyRepository.countByManagersAndStatusTitle(managerList, status);
     }
 
     @Override

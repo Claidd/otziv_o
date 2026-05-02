@@ -147,18 +147,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize, String sortDirection) {
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByCompanyIdAndKeyWord(companyId, keyword, keyword);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByCompanyIdAndKeyWord(companyId, keyword, keyword, pageable);
         } else {
-            orderIds = orderRepository.findAllIdByCompanyId(companyId);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByCompanyId(companyId, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -173,18 +171,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderDTOList> getAllOrderDTOAndKeyword(String keyword, int pageNumber, int pageSize, String sortDirection) {
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByKeyWord(keyword, keyword);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByKeyWord(keyword, keyword, pageable);
         } else {
-            orderIds = orderRepository.findAllIdToAdmin();
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdToAdmin(pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -194,18 +190,16 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderDTOList> getAllOrderDTOAndKeywordAndStatus(String keyword, String status, int pageNumber, int pageSize, String sortDirection) {
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByKeyWordAndStatus(keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByKeyWordAndStatus(keyword, status, keyword, status, pageable);
         } else {
-            orderIds = orderRepository.findAllIdByStatus(status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByStatus(status, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -220,18 +214,16 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByByManagerAndKeyWord(manager, keyword, keyword);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByByManagerAndKeyWord(manager, keyword, keyword, pageable);
         } else {
-            orderIds = orderRepository.findAllIdToManager(manager);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdToManager(manager, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -246,18 +238,16 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByManagerAndKeyWordAndStatus(manager, keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByManagerAndKeyWordAndStatus(manager, keyword, status, keyword, status, pageable);
         } else {
-            orderIds = orderRepository.findAllIdByManagerAndStatus(manager, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByManagerAndStatus(manager, status, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -272,18 +262,16 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByOwnerAndKeyWord(managerList, keyword, keyword);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByOwnerAndKeyWord(managerList, keyword, keyword, pageable);
         } else {
-            orderIds = orderRepository.findAllIdToOwner(managerList);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdToOwner(managerList, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -298,18 +286,16 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByOwnerAndKeyWordAndStatus(managerList, keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByOwnerAndKeyWordAndStatus(managerList, keyword, status, keyword, status, pageable);
         } else {
-            orderIds = orderRepository.findAllIdByOwnerAndStatus(managerList, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByOwnerAndStatus(managerList, status, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize, sortDirection);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -319,18 +305,16 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = workerBoardPageable(pageNumber, pageSize);
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByByWorkerAndKeyWord(worker, keyword, keyword);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByByWorkerAndKeyWordForBoard(worker, keyword, keyword, pageable);
         } else {
-            orderIds = orderRepository.findAllIdToWorker(worker);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdToWorkerForBoard(worker, pageable);
         }
 
-        return getPageOrdersToWorkers(orderPage, pageNumber, pageSize);
+        return getOrderDTOPage(orderIds);
     }
 
     @Override
@@ -340,18 +324,47 @@ public class OrderServiceImpl implements OrderService {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        List<Long> orderIds;
-        List<Order> orderPage;
+        Pageable pageable = orderPageable(pageNumber, pageSize, "desc");
+        Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findAllIdByWorkerAndKeyWordAndStatus(worker, keyword, status, keyword, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByWorkerAndKeyWordAndStatus(worker, keyword, status, keyword, status, pageable);
         } else {
-            orderIds = orderRepository.findAllIdByWorkerAndStatus(worker, status);
-            orderPage = orderRepository.findAll(orderIds);
+            orderIds = orderRepository.findPageIdByWorkerAndStatus(worker, status, pageable);
         }
 
-        return getPageOrders(orderPage, pageNumber, pageSize);
+        return getOrderDTOPage(orderIds);
+    }
+
+    private Page<OrderDTOList> getOrderDTOPage(Page<Long> orderIds) {
+        if (orderIds.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), orderIds.getPageable(), orderIds.getTotalElements());
+        }
+
+        List<Long> ids = orderIds.getContent();
+        Map<Long, Integer> orderById = new HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            orderById.put(ids.get(i), i);
+        }
+
+        List<OrderDTOList> orderListDTOs = orderRepository.findAll(ids).stream()
+                .sorted(Comparator.comparingInt(order -> orderById.getOrDefault(order.getId(), Integer.MAX_VALUE)))
+                .map(this::toDTOListOrders)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(orderListDTOs, orderIds.getPageable(), orderIds.getTotalElements());
+    }
+
+    private Pageable orderPageable(int pageNumber, int pageSize, String sortDirection) {
+        Sort sort = "asc".equalsIgnoreCase(sortDirection)
+                ? Sort.by("changed").descending()
+                : Sort.by("changed").ascending();
+        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
+    }
+
+    private Pageable workerBoardPageable(int pageNumber, int pageSize) {
+        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1));
     }
 
     private Page<OrderDTOList> getPageOrders(List<Order> orderPage, int pageNumber, int pageSize) {
@@ -906,17 +919,17 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public int getAllOrderDTOByStatus(String status) {
-        return orderRepository.findAllIdByStatus(status).size();
+        return orderRepository.countByStatusTitle(status);
     }
 
     @Override
     public int getAllOrderDTOByStatusToManager(Manager manager, String status) {
-        return orderRepository.findAllIdByManagerAndStatus(manager, status).size();
+        return orderRepository.countByManagerAndStatusTitle(manager, status);
     }
 
     @Override
     public int getAllOrderDTOByStatusToOwner(Set<Manager> managerList, String status) {
-        return orderRepository.findAllIdByOwnerAndStatus(managerList, status).size();
+        return orderRepository.countByManagersAndStatusTitle(managerList, status);
     }
 
     public Review saveReviews(Review review, Worker newWorker) {

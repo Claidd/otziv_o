@@ -98,28 +98,200 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false")
     List<Long> findAllByPublishedDateAndPublish(@Param("localDate") LocalDate localDate);
 
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false"
+    )
+    Page<Long> findPageIdsByPublishedDateAndPublish(@Param("localDate") LocalDate localDate,
+                                                    Pageable pageable);
+
     @Query("SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
     List<Long> findAllByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker,
                                                          @Param("localDate") LocalDate localDate);
+
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false"
+    )
+    Page<Long> findPageIdsByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker,
+                                                             @Param("localDate") LocalDate localDate,
+                                                             Pageable pageable);
 
     @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false")
     List<Long> findAllByManagersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                            @Param("localDate") LocalDate localDate);
 
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.orderDetails.order.manager = :manager",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.orderDetails.order.manager = :manager"
+    )
+    Page<Long> findPageIdsByManagerAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
+                                                              @Param("manager") Manager manager,
+                                                              @Param("localDate") LocalDate localDate,
+                                                              Pageable pageable);
+
     @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false")
     List<Long> findAllByOwnersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                          @Param("localDate") LocalDate localDate);
 
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false"
+    )
+    Page<Long> findPageIdsByWorkersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
+                                                              @Param("localDate") LocalDate localDate,
+                                                              Pageable pageable);
+
     @Query("SELECT r.id FROM Review r WHERE r.orderDetails.order.status.title = :status")
     List<Long> findAllByOrderStatus(@Param("status") String status);
+
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.orderDetails.order.status.title = :status",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.orderDetails.order.status.title = :status"
+    )
+    Page<Long> findPageIdsByOrderStatus(@Param("status") String status,
+                                        Pageable pageable);
 
     @Query("SELECT r.id FROM Review r WHERE r.worker = :worker AND r.orderDetails.order.status.title = :status")
     List<Long> findAllByWorkerAndOrderStatus(@Param("worker") Worker worker,
                                              @Param("status") String status);
 
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker = :worker AND r.orderDetails.order.status.title = :status",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.orderDetails.order.status.title = :status"
+    )
+    Page<Long> findPageIdsByWorkerAndOrderStatus(@Param("worker") Worker worker,
+                                                 @Param("status") String status,
+                                                 Pageable pageable);
+
     @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.orderDetails.order.status.title = :status")
     List<Long> findAllByWorkersAndOrderStatus(@Param("workers") Set<Worker> workers,
                                               @Param("status") String status);
+
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.orderDetails.order.status.title = :status",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.orderDetails.order.status.title = :status"
+    )
+    Page<Long> findPageIdsByWorkersAndOrderStatus(@Param("workers") Set<Worker> workers,
+                                                  @Param("status") String status,
+                                                  Pageable pageable);
+
+    @Query(
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.orderDetails.order.status.title = :status AND r.orderDetails.order.manager = :manager",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.orderDetails.order.status.title = :status AND r.orderDetails.order.manager = :manager"
+    )
+    Page<Long> findPageIdsByManagerAndOrderStatus(@Param("workers") Set<Worker> workers,
+                                                  @Param("manager") Manager manager,
+                                                  @Param("status") String status,
+                                                  Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT r.id
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """,
+            countQuery = """
+                SELECT COUNT(r.id)
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """
+    )
+    Page<Long> findPageIdsByPublishedDateAndPublishToVigul(@Param("localDate") LocalDate localDate,
+                                                           Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT r.id
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.worker = :worker
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """,
+            countQuery = """
+                SELECT COUNT(r.id)
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.worker = :worker
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """
+    )
+    Page<Long> findPageIdsByWorkerAndPublishedDateAndPublishToVigul(@Param("worker") Worker worker,
+                                                                    @Param("localDate") LocalDate localDate,
+                                                                    Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT r.id
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.worker IN :workers
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """,
+            countQuery = """
+                SELECT COUNT(r.id)
+                FROM Review r
+                LEFT JOIN r.bot b
+                WHERE r.worker IN :workers
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+            """
+    )
+    Page<Long> findPageIdsByWorkersAndPublishedDateAndPublishToVigul(@Param("workers") Set<Worker> workers,
+                                                                     @Param("localDate") LocalDate localDate,
+                                                                     Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT r.id
+                FROM Review r
+                LEFT JOIN r.bot b
+                LEFT JOIN r.orderDetails d
+                LEFT JOIN d.order o
+                WHERE r.worker IN :workers
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+                  AND (o IS NULL OR o.manager IS NULL OR o.manager = :manager)
+            """,
+            countQuery = """
+                SELECT COUNT(r.id)
+                FROM Review r
+                LEFT JOIN r.bot b
+                LEFT JOIN r.orderDetails d
+                LEFT JOIN d.order o
+                WHERE r.worker IN :workers
+                  AND r.publishedDate <= :localDate
+                  AND r.publish = false
+                  AND r.vigul = false
+                  AND (b IS NULL OR b.counter <= 2)
+                  AND (o IS NULL OR o.manager IS NULL OR o.manager = :manager)
+            """
+    )
+    Page<Long> findPageIdsByManagerAndPublishedDateAndPublishToVigul(@Param("workers") Set<Worker> workers,
+                                                                     @Param("manager") Manager manager,
+                                                                     @Param("localDate") LocalDate localDate,
+                                                                     Pageable pageable);
 
     @Query("""
         SELECT DISTINCT r
@@ -224,6 +396,19 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
     int countByWorkerAndStatusPublish(@Param("worker") Worker worker,
                                       @Param("localDate") LocalDate localDate);
+
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        LEFT JOIN r.bot b
+        WHERE r.worker = :worker
+          AND r.publishedDate <= :localDate
+          AND r.publish = false
+          AND r.vigul = false
+          AND (b IS NULL OR b.counter <= 2)
+    """)
+    int countByWorkerAndStatusVigul(@Param("worker") Worker worker,
+                                    @Param("localDate") LocalDate localDate);
 
     @Query("""
         SELECT r.worker.id, COUNT(r.id)
