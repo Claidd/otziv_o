@@ -33,6 +33,9 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     @Query("SELECT z FROM Zp z WHERE (YEAR(z.created) = YEAR(:localDate) OR YEAR(z.created) = YEAR(:localDate2)) AND z.userId IN :peopleId")
     List<Zp> findAllToDateByOwner(LocalDate localDate, LocalDate localDate2, Set<Long> peopleId);
 
+    @Query("SELECT z FROM Zp z WHERE z.userId IN :peopleId")
+    List<Zp> findAllByOwner(Set<Long> peopleId);
+
 
     @Query("SELECT z FROM Zp z WHERE (YEAR(z.created) = YEAR(:localDate) OR YEAR(z.created) = YEAR(:localDate2)) AND z.userId = :userId")
     List<Zp> findAllToDateByUser(LocalDate localDate, LocalDate localDate2, Long userId);

@@ -84,6 +84,8 @@ public class PersonalServiceImpl implements PersonalService {
         //      СТАТИСТИКА берем все чеки и зп
         List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerList);
         List<Zp> zps = getZarplataChecks(localDate, role, managerList);
+        List<PaymentCheck> pcsHistory = getPaymentChecksHistory(role, managerList);
+        List<Zp> zpsHistory = getZarplataChecksHistory(role, managerList);
 
 
         //      СТАТИСТИКА новых лидов и тех, что поступили в работу
@@ -165,8 +167,8 @@ public class PersonalServiceImpl implements PersonalService {
         Long imageId = 1L;
         StatDTO statDTO = new StatDTO();
         statDTO.setOrderPayMap(getJSON(getDailySalarySumMap(localDate, pcs)));
-        statDTO.setOrderPayMapMonth(getJSONMonth(getYearlyMonthlySalarySumMap(pcs)));
-        statDTO.setZpPayMapMonth(getJSONMonth(getYearlyMonthlyZpSumMap(zps)));
+        statDTO.setOrderPayMapMonth(getJSONMonth(getYearlyMonthlySalarySumMap(pcsHistory)));
+        statDTO.setZpPayMapMonth(getJSONMonth(getYearlyMonthlyZpSumMap(zpsHistory)));
 
         statDTO.setSum1DayPay(sum1Pay.intValue());
         statDTO.setSum1WeekPay(sum7Pay.intValue());
@@ -212,6 +214,14 @@ public class PersonalServiceImpl implements PersonalService {
 
     private List<Zp> getZarplataChecks(LocalDate localDate, String role, Set<Manager> managerList) {
         return checkRoleAndExecute(role, () -> zpService.findAllToDate(localDate), owner -> zpService.findAllToDateByOwner(localDate, owner), managerList);
+    }
+
+    private List<PaymentCheck> getPaymentChecksHistory(String role, Set<Manager> managerList) {
+        return checkRoleAndExecute(role, paymentCheckService::findAll, paymentCheckService::findAllByOwner, managerList);
+    }
+
+    private List<Zp> getZarplataChecksHistory(String role, Set<Manager> managerList) {
+        return checkRoleAndExecute(role, zpService::findAll, zpService::findAllByOwner, managerList);
     }
 
     private List<Long> getInWorkLeadList(String role, LocalDate localDate, Set<Manager> managerList) {

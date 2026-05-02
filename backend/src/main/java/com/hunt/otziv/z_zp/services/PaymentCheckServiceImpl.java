@@ -50,6 +50,14 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         return paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong);
     } // Взять все чеки из БД с определенных менеджеров
 
+    public List<PaymentCheck> findAllByOwner(Set<Manager> managerList) {
+        List<Long> managerIds = managerList.stream().map(Manager::getUser).map(User::getId).toList();
+        if (managerIds.isEmpty()) {
+            return List.of();
+        }
+        return paymentCheckRepository.findAllByManagers(managerIds);
+    }
+
     @Override
     public List<PaymentCheck> getAllWorkerPaymentToDate(Long managerId, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         return paymentCheckRepository.getAllWorkerPayments(managerId, firstDayOfMonth, lastDayOfMonth);

@@ -511,57 +511,6 @@ select {
   background: #c461dc;
 }
 
-.order-create-products {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-
-.order-create-product {
-  display: grid;
-  min-height: 5.2rem;
-  align-content: center;
-  gap: 0.25rem;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: 0.8rem;
-  padding: 0.55rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-field-background);
-  text-align: left;
-  transition: background .45s ease, border-color .45s ease, color .45s ease;
-}
-
-.order-create-product strong,
-.order-create-product span,
-.order-create-product small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.order-create-product strong {
-  font-size: 0.9rem;
-}
-
-.order-create-product span,
-.order-create-product small {
-  color: var(--otziv-info);
-  font-size: 0.74rem;
-  font-weight: 900;
-}
-
-.order-create-product.active {
-  border-color: transparent;
-  color: white;
-  background: #36708d;
-}
-
-.order-create-product.active span,
-.order-create-product.active small {
-  color: rgba(255, 255, 255, 0.82);
-}
-
 .progress {
   overflow: hidden;
   min-height: 1.2rem;

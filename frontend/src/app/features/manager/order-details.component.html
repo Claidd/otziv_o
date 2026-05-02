@@ -258,7 +258,7 @@
               }
             </div>
 
-            <div class="bot-line">
+            <div class="bot-line" [class.bot-line--empty]="hasUnavailableBot(review)">
               <span>{{ botLabel(review) }}</span>
             </div>
 
@@ -329,14 +329,14 @@
       </div>
 
       <footer class="details-actions">
+        <button type="button" (click)="sendToCheck()" [disabled]="isMutating('send-check')">
+          {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
+        </button>
         <a [href]="editAllReviewsUrl()" target="_blank" rel="noopener">
           Изменить все отзывы
         </a>
         <button type="button" (click)="addReview()" [disabled]="isMutating('add-review')">
           {{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}
-        </button>
-        <button type="button" (click)="sendToCheck()" [disabled]="isMutating('send-check')">
-          {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
         </button>
       </footer>
 

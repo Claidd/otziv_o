@@ -31,6 +31,24 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     @Query("SELECT b FROM Bot b WHERE b.botCity.id = :cityId AND b.active = true")
     List<Bot> findAllByFilialCityId(Long cityId);
 
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        WHERE b.active = true
+          AND b.fio IN :fioValues
+          AND b.botCity.id IN :cityIds
+          AND b.status IS NOT NULL
+          AND b.status.botStatusTitle = :status
+        ORDER BY b.id
+    """)
+    List<Bot> findReserveBots(
+            @Param("fioValues") List<String> fioValues,
+            @Param("cityIds") List<Long> cityIds,
+            @Param("status") String status
+    );
+
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();

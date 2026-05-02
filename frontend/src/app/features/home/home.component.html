@@ -1,11 +1,15 @@
-<app-admin-layout title="Личный кабинет" active="dashboard">
-  <section class="hero-card">
-    <div>
-      <p class="eyebrow">OTZIV</p>
-      <h2>{{ auth.authenticated() ? 'Добро пожаловать' : 'Вход в рабочее пространство' }}</h2>
+<app-admin-layout
+  title="Личный кабинет"
+  active="dashboard"
+  [profileImageUrl]="profileImageUrl()"
+  [profileImageAlt]="cabinet()?.workerZp?.fio || 'Фото профиля'"
+>
+  <section class="hero-card" [class.hero-card--authenticated]="auth.authenticated()">
+    <div class="hero-intro">
+      <h2>{{ auth.authenticated() ? (cabinet()?.workerZp?.fio || 'Личный кабинет') : 'Вход в рабочее пространство' }}</h2>
       <p>
         @if (auth.authenticated()) {
-          Здесь собраны быстрые переходы, роли, состояние backend и текущая сессия.
+          {{ cabinet()?.user?.role || businessRoles()[0] || 'USER' }} · {{ cabinet()?.user?.username || auth.tokenParsed()?.['preferred_username'] || 'user' }}
         } @else {
           Войди через Keycloak справа сверху или создай новый клиентский аккаунт.
         }
@@ -23,42 +27,19 @@
           Регистрация
         </a>
       } @else {
-        <button type="button" class="secondary" (click)="loadCurrentUser()" [disabled]="loading()">
+        <button type="button" class="secondary refresh-button" (click)="loadCabinet()" [disabled]="cabinetLoading()">
           <span class="material-icons-sharp">refresh</span>
-          {{ loading() ? 'Обновляю' : 'Обновить профиль' }}
+          {{ cabinetLoading() ? 'Обновляю' : 'Обновить кабинет' }}
         </button>
-        <button type="button" class="secondary" (click)="loadHealth()" [disabled]="healthLoading()">
+        <button type="button" class="secondary health-button" (click)="loadHealth(true)" [disabled]="healthLoading()">
           <span class="material-icons-sharp">monitor_heart</span>
           {{ healthLoading() ? 'Проверяю' : 'Проверить backend' }}
         </button>
+        <label class="date-control">
+          <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="cabinetDate.set($event); loadCabinet()">
+        </label>
       }
     </div>
-  </section>
-
-  <section class="analyse">
-    <article class="metric-card blue">
-      <div>
-        <h3>Сессия</h3>
-        <h1>{{ auth.authenticated() ? 'Активна' : 'Гость' }}</h1>
-      </div>
-      <span class="material-icons-sharp">verified_user</span>
-    </article>
-
-    <article class="metric-card green">
-      <div>
-        <h3>Backend</h3>
-        <h1>{{ health()?.status || (healthLoading() ? '...' : '-') }}</h1>
-      </div>
-      <span class="material-icons-sharp">dns</span>
-    </article>
-
-    <article class="metric-card yellow">
-      <div>
-        <h3>Токен до</h3>
-        <h1>{{ auth.expiresAt()?.toLocaleTimeString() || '-' }}</h1>
-      </div>
-      <span class="material-icons-sharp">schedule</span>
-    </article>
   </section>
 
   @if (auth.error()) {
@@ -73,13 +54,112 @@
     <p class="error">{{ healthError() }}</p>
   }
 
+  @if (cabinetError()) {
+    <p class="error">{{ cabinetError() }}</p>
+  }
+
   @if (auth.authenticated()) {
+    @if (cabinet()) {
+      <section class="cabinet-metrics">
+        @for (metric of cabinetMetrics(); track metric.label) {
+          <article class="metric-card" [class]="tone(metric.percent)">
+            <div>
+              <h3>{{ metric.label }}</h3>
+              <h1>{{ metric.value }}</h1>
+            </div>
+            <span>{{ metric.percent }}%</span>
+          </article>
+        }
+      </section>
+
+      <section class="chart-grid">
+        <article class="chart-card">
+          <div class="chart-head">
+            <h2>Зарплаты по дням</h2>
+            <small>{{ cabinet()?.date }}</small>
+          </div>
+          @let salaryDaily = dailyChartFrom(cabinet()?.workerZp?.zpPayMap);
+          <div class="daily-legend">
+            <span><i></i>{{ selectedMonthLabel() }}</span>
+          </div>
+          <div class="bar-chart-frame">
+            <div class="y-axis">
+              @for (tick of salaryDaily.ticks; track $index) {
+                <span>{{ tick }}</span>
+              }
+            </div>
+            <div class="bar-chart daily salary">
+              @for (point of salaryDaily.points; track point.label) {
+                <div class="bar-item" [title]="point.label + ': ' + moneyLabel(point.value)">
+                  <span class="bar" [style.height.%]="point.height"></span>
+                  <span class="bar-label">{{ point.label }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+
+        <article class="chart-card">
+          <div class="chart-head">
+            <h2>Зарплаты по месяцам</h2>
+            <small>все годы</small>
+          </div>
+          @let salaryYearly = yearlyLineChartFrom(cabinet()?.workerZp?.zpPayMapMonth);
+          <div class="line-legend">
+            @for (series of salaryYearly.series; track series.label) {
+              <span><i [style.background]="series.color"></i>{{ series.label }}</span>
+            }
+          </div>
+          <div class="line-chart-frame">
+            <div class="y-axis line">
+              @for (tick of salaryYearly.ticks; track $index) {
+                <span>{{ tick }}</span>
+              }
+            </div>
+            <div class="line-chart-scroll">
+              <div class="line-chart-plot">
+                <svg class="line-chart" [attr.viewBox]="salaryYearly.viewBox" preserveAspectRatio="none" role="img" aria-label="Зарплаты по месяцам">
+                  @for (lineY of salaryYearly.gridLines; track lineY) {
+                    <line class="grid-line" [attr.x1]="salaryYearly.plotStart" [attr.x2]="salaryYearly.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
+                  }
+                  @for (series of salaryYearly.series; track series.label) {
+                    <polyline class="year-line" [attr.points]="series.points" [attr.stroke]="series.color"></polyline>
+                  }
+                </svg>
+                @for (series of salaryYearly.series; track series.label) {
+                  @for (point of series.pointsData; track point.label) {
+                    <span
+                      class="chart-dot"
+                      [style.left.%]="point.x"
+                      [style.top.%]="point.y"
+                      [style.background]="series.color"
+                      [title]="series.label + ' · ' + point.label + ': ' + moneyLabel(point.value)"
+                    ></span>
+                  }
+                }
+              </div>
+              <div class="x-axis line">
+                @for (month of salaryYearly.months; track month) {
+                  <span>{{ month }}</span>
+                }
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    } @else if (cabinetLoading()) {
+      <section class="panel empty">
+        <span class="material-icons-sharp">hourglass_top</span>
+        <h2>Загружаю личный кабинет</h2>
+      </section>
+    }
+
     <section class="dashboard-grid">
       <article class="panel profile-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">account_circle</span>
           <div>
-            <p class="eyebrow">PROFILE</p>
+            <p class="eyebrow">SESSION</p>
             <h2>{{ me()?.preferredUsername || auth.tokenParsed()?.['preferred_username'] || 'Пользователь' }}</h2>
           </div>
         </div>
@@ -90,12 +170,12 @@
             <dd>{{ me()?.email || '-' }}</dd>
           </div>
           <div>
-            <dt>Issuer</dt>
-            <dd>{{ me()?.issuer || '-' }}</dd>
+            <dt>Backend</dt>
+            <dd>{{ health()?.status || (healthLoading() ? '...' : '-') }}</dd>
           </div>
           <div>
-            <dt>Subject</dt>
-            <dd>{{ me()?.subject || '-' }}</dd>
+            <dt>Токен до</dt>
+            <dd>{{ auth.expiresAt()?.toLocaleTimeString() || '-' }}</dd>
           </div>
         </dl>
       </article>
@@ -116,17 +196,6 @@
             <span>Нет бизнес-ролей</span>
           }
         </div>
-      </article>
-
-      <article class="panel next-panel">
-        <div class="panel-title">
-          <span class="material-icons-sharp">route</span>
-          <div>
-            <p class="eyebrow">NEXT</p>
-            <h2>Следующий перенос</h2>
-          </div>
-        </div>
-        <p>Следующим рабочим модулем логично переносить “Лиды”: там сразу проверим роли, REST API и новый Angular UI.</p>
       </article>
     </section>
 
@@ -162,19 +231,6 @@
         }
       </div>
     </section>
-
-    @if (me()) {
-      <section class="panel technical">
-        <div class="panel-title">
-          <span class="material-icons-sharp">data_object</span>
-          <div>
-            <p class="eyebrow">DEBUG</p>
-            <h2>Backend /api/me</h2>
-          </div>
-        </div>
-        <pre>{{ me() | json }}</pre>
-      </section>
-    }
   } @else {
     <section class="panel empty">
       <span class="material-icons-sharp">login</span>

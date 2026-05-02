@@ -1,7 +1,8 @@
-import { Component, computed, inject, Input, signal } from '@angular/core';
+import { Component, computed, effect, inject, Input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
+import { CabinetApi } from '../core/cabinet.api';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -21,15 +22,21 @@ type ShellLink = {
 })
 export class AdminLayoutComponent {
   private readonly auth = inject(AuthService);
+  private readonly cabinetApi = inject(CabinetApi);
   private readonly themeStorageKey = 'otziv-theme';
+  private loadedHeaderProfileFor: string | null = null;
 
   @Input() title = 'Админка';
   @Input() active = '';
   @Input() hideSidebarBeforeLogin = true;
   @Input() rightPanelMode: 'default' | 'custom' = 'default';
+  @Input() profileImageUrl: string | null = null;
+  @Input() profileImageAlt = 'Фото профиля';
 
+  readonly brandLogoUrl = `${appEnvironment.legacyBaseUrl}/images/image/logo-o.png`;
   readonly authenticated = this.auth.authenticated;
   readonly theme = signal<ThemeMode>(this.getInitialTheme());
+  readonly headerProfileFallbackUrl = signal<string | null>(null);
 
   readonly headerLinks: ShellLink[] = [
     { label: 'Главная', icon: 'home', active: 'dashboard', routerLink: '/', roles: [] },
@@ -38,7 +45,7 @@ export class AdminLayoutComponent {
     { label: 'Маркетолог', icon: 'campaign', active: 'marketolog', href: `${appEnvironment.legacyBaseUrl}/admin/analyse`, roles: ['ADMIN', 'OWNER', 'MARKETOLOG'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Личный кабинет', icon: 'dashboard', active: 'cabinet', routerLink: '/', roles: [] }
+    { label: 'Личный кабинет', icon: 'dashboard', active: 'dashboard', routerLink: '/', roles: [] }
   ];
 
   readonly sidebarLinks: ShellLink[] = [
@@ -46,6 +53,9 @@ export class AdminLayoutComponent {
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
+    { label: 'Моя команда', icon: 'badge', active: 'team', routerLink: '/admin/team', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
+    { label: 'Рейтинг', icon: 'leaderboard', active: 'score', routerLink: '/admin/score', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'] },
+    { label: 'Аналитика', icon: 'analytics', active: 'analytics', routerLink: '/admin/analyse', roles: ['ADMIN', 'OWNER'] },
     { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
     { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },
     { label: 'Миграция', icon: 'sync', active: 'migration', routerLink: '/legacy-migration', roles: ['ADMIN', 'OWNER'] },
@@ -88,6 +98,15 @@ export class AdminLayoutComponent {
 
   constructor() {
     this.applyTheme(this.theme());
+    effect(() => {
+      if (!this.authenticated()) {
+        this.loadedHeaderProfileFor = null;
+        this.headerProfileFallbackUrl.set(null);
+        return;
+      }
+
+      this.loadHeaderProfile(this.username());
+    });
   }
 
   displaySidebar(): boolean {
@@ -98,12 +117,28 @@ export class AdminLayoutComponent {
     return this.active === link.active;
   }
 
+  routerLinkFor(link: ShellLink): string | undefined {
+    if (link.label === 'Личный кабинет' && this.hasAdminAnalyticsHome()) {
+      return '/admin/analyse';
+    }
+
+    return link.routerLink;
+  }
+
   login(): void {
     void this.auth.login(window.location.pathname || '/');
   }
 
   logout(): void {
     void this.auth.logout();
+  }
+
+  headerProfileImageUrl(): string | null {
+    return this.profileImageUrl || this.headerProfileFallbackUrl();
+  }
+
+  headerProfileImageAlt(): string {
+    return this.profileImageUrl ? this.profileImageAlt : 'Фото профиля';
   }
 
   setTheme(theme: ThemeMode): void {
@@ -124,6 +159,28 @@ export class AdminLayoutComponent {
     }
 
     return requiredRoles.some((role) => roles.has(role));
+  }
+
+  private hasAdminAnalyticsHome(): boolean {
+    const roles = new Set(this.realmRoles());
+    return roles.has('ADMIN') || roles.has('OWNER');
+  }
+
+  private loadHeaderProfile(username: string): void {
+    if (!username || this.loadedHeaderProfileFor === username) {
+      return;
+    }
+
+    this.loadedHeaderProfileFor = username;
+    this.cabinetApi.getProfile().subscribe({
+      next: (profile) => {
+        const imageId = profile.workerZp?.imageId || profile.user?.image;
+        this.headerProfileFallbackUrl.set(imageId ? this.cabinetApi.imageUrl(imageId) : null);
+      },
+      error: () => {
+        this.headerProfileFallbackUrl.set(null);
+      }
+    });
   }
 
   private realmRoles(): string[] {

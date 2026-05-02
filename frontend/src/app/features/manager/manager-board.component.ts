@@ -17,6 +17,7 @@ import {
   ManagerSection,
   OrderCardItem,
   OrderEditPayload,
+  OrderProductOption,
   OrderUpdateRequest
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
@@ -69,6 +70,7 @@ type ManagerHistoryView = {
 })
 export class ManagerBoardComponent {
   private readonly historyStateKey = 'otzivManagerView';
+  private readonly preferredCreateOrderProduct = 'отзыв2гис+';
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
@@ -1120,13 +1122,32 @@ export class ManagerBoardComponent {
   }
 
   private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
+    const defaultProductId = this.preferredOrderProduct(payload.products)?.id
+      ?? payload.defaultProductId
+      ?? payload.products[0]?.id
+      ?? null;
+    const defaultAmount = payload.amounts.includes(5)
+      ? 5
+      : payload.defaultAmount ?? payload.amounts[0] ?? 5;
+
     this.createOrderPayload.set(payload);
     this.createOrderDraft.set({
-      productId: payload.defaultProductId ?? payload.products[0]?.id ?? null,
-      amount: payload.defaultAmount ?? payload.amounts[0] ?? 1,
+      productId: defaultProductId,
+      amount: defaultAmount,
       workerId: payload.defaultWorkerId ?? payload.workers[0]?.id ?? null,
       filialId: payload.defaultFilialId ?? payload.filials[0]?.id ?? null
     });
+  }
+
+  private preferredOrderProduct(products: OrderProductOption[]): OrderProductOption | undefined {
+    return products.find((product) => this.normalizeProductLabel(product.label) === this.preferredCreateOrderProduct);
+  }
+
+  private normalizeProductLabel(label: string): string {
+    return label
+      .toLocaleLowerCase('ru-RU')
+      .replace(/ё/g, 'е')
+      .replace(/\s+/g, '');
   }
 
   private openCreatedCompanyOrders(companyId: number, companyTitle: string): void {

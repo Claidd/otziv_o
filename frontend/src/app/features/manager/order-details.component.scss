@@ -450,6 +450,16 @@
   white-space: nowrap;
 }
 
+.bot-line--empty {
+  border-color: rgba(255, 0, 96, 0.34);
+  background: #ffe5ed;
+}
+
+.bot-line--empty span {
+  color: #7a1032;
+  text-transform: uppercase;
+}
+
 .review-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -10,6 +10,10 @@ import { ManagerBoardComponent } from './features/manager/manager-board.componen
 import { OrderDetailsComponent } from './features/manager/order-details.component';
 import { ReviewCheckComponent } from './features/review-check/review-check.component';
 import { WorkerBoardComponent } from './features/worker/worker-board.component';
+import { AdminAnalyticsComponent } from './features/cabinet/admin-analytics.component';
+import { ScoreComponent } from './features/cabinet/score.component';
+import { TeamComponent } from './features/cabinet/team.component';
+import { UserInfoComponent } from './features/cabinet/user-info.component';
 
 export const routes: Routes = [
   {
@@ -45,7 +49,7 @@ export const routes: Routes = [
     component: OrderDetailsComponent,
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER']
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
     }
   },
   {
@@ -54,6 +58,38 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
+    }
+  },
+  {
+    path: 'admin/team',
+    component: TeamComponent,
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
+    }
+  },
+  {
+    path: 'admin/score',
+    component: ScoreComponent,
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+    }
+  },
+  {
+    path: 'admin/analyse',
+    component: AdminAnalyticsComponent,
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/user-info/:userId',
+    component: UserInfoComponent,
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {

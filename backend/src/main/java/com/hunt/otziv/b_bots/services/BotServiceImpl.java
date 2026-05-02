@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -14,13 +15,24 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.security.Principal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class BotServiceImpl implements BotService {
+    private static final String READY_STATUS = "Новый";
+    private static final List<Long> RESERVE_BOT_CITY_IDS = List.of(0L, 325L);
+    private static final List<String> RESERVE_BOT_NAMES = List.of(
+            "Впишите Имя Фамилию",
+            "Впиши Имя Фамилию",
+            "Впишите Фамилию Имя"
+    );
+
     private final UserService userService;
     private final StatusBotService statusBotService;
     private final BotsRepository botsRepository;
@@ -189,6 +201,39 @@ public class BotServiceImpl implements BotService {
     public List<Bot> getFindAllByFilialCityId(Long cityId){ // Взять всех ботов по id работнику и активности
         return botsRepository.findAllByFilialCityId(cityId);
     } // Взять всех ботов по id работнику и активности
+
+    @Override
+    @Transactional
+    public Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds) {
+        if (targetCity == null || targetCity.getId() == null) {
+            log.warn("Не удалось закрепить резервного бота: целевой город не указан");
+            return Optional.empty();
+        }
+
+        Set<Long> excludedIds = excludedBotIds == null
+                ? Set.of()
+                : excludedBotIds.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        Bot reserveBot = botsRepository.findReserveBots(RESERVE_BOT_NAMES, RESERVE_BOT_CITY_IDS, READY_STATUS).stream()
+                .filter(bot -> bot.getId() != null)
+                .filter(bot -> !excludedIds.contains(bot.getId()))
+                .findFirst()
+                .orElse(null);
+
+        if (reserveBot == null) {
+            log.warn("Нет резервных ботов с именем {} в городах-заглушках {}", RESERVE_BOT_NAMES, RESERVE_BOT_CITY_IDS);
+            return Optional.empty();
+        }
+
+        reserveBot.setBotCity(targetCity);
+        reserveBot.setActive(true);
+        Bot savedBot = botsRepository.save(reserveBot);
+        log.info("Резервный бот ID {} закреплен за городом {} ({})",
+                savedBot.getId(), targetCity.getTitle(), targetCity.getId());
+        return Optional.of(savedBot);
+    }
 
 
     @Override

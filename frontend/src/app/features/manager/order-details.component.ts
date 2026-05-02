@@ -732,8 +732,16 @@ export class OrderDetailsComponent {
   }
 
   botLabel(review: OrderReviewItem): string {
+    if (this.hasUnavailableBot(review)) {
+      return 'нет доступных аккаунтов';
+    }
+
     const counter = review.botCounter ? ` ${review.botCounter}` : '';
     return `${review.botFio || 'Аккаунт не назначен'}${counter}`;
+  }
+
+  hasUnavailableBot(review: OrderReviewItem): boolean {
+    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
   }
 
   trackReview(_index: number, review: OrderReviewItem): number {

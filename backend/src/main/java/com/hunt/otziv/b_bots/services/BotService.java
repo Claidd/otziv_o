@@ -3,10 +3,13 @@ package com.hunt.otziv.b_bots.services;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 
 import java.security.Principal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface BotService {
 
@@ -40,4 +43,6 @@ public interface BotService {
     StatusBot changeStatus(String status);
 
     List<Bot> getFindAllByFilialCityId(Long cityId);
+
+    Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds);
 }

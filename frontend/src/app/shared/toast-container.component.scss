@@ -10,50 +10,74 @@
 }
 
 .toast {
+  --toast-bg: #eef6ff;
+  --toast-border: #8ab9ec;
+  --toast-ink: #183b63;
+  --toast-muted: #426782;
+  --toast-icon-bg: #6c9bcf;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
+  grid-template-columns: 2.15rem minmax(0, 1fr) 1.8rem;
+  align-items: center;
   gap: 0.75rem;
-  border: 1px solid rgba(103, 116, 131, 0.16);
-  border-left: 0.38rem solid currentColor;
+  border: 1px solid var(--toast-border);
   border-radius: 0.75rem;
-  padding: 0.85rem 0.9rem;
-  color: var(--otziv-primary);
-  background: var(--otziv-white);
-  box-shadow: 0 1rem 2rem rgba(54, 57, 73, 0.18);
+  padding: 0.9rem;
+  color: var(--toast-ink);
+  background: var(--toast-bg);
+  box-shadow: 0 1rem 2.4rem rgba(22, 35, 57, 0.22);
   pointer-events: auto;
   animation: toast-in 0.22s ease-out;
 }
 
 .toast--success {
-  color: var(--otziv-success);
+  --toast-bg: #dff8e9;
+  --toast-border: #33b982;
+  --toast-ink: #124f36;
+  --toast-muted: #25674b;
+  --toast-icon-bg: #1b9c85;
 }
 
 .toast--error {
-  color: var(--otziv-danger);
+  --toast-bg: #ffe5ed;
+  --toast-border: #ff4f86;
+  --toast-ink: #7a1032;
+  --toast-muted: #9c3153;
+  --toast-icon-bg: #ff0060;
 }
 
 .toast--info {
-  color: var(--otziv-primary);
+  --toast-bg: #e6f2ff;
+  --toast-border: #6c9bcf;
+  --toast-ink: #1e456f;
+  --toast-muted: #496b8e;
+  --toast-icon-bg: #6c9bcf;
 }
 
 .toast-icon {
-  margin-top: 0.08rem;
-  font-size: 1.45rem;
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--toast-icon-bg);
+  font-size: 1.35rem;
+  box-shadow: 0 0.45rem 1rem rgba(54, 57, 73, 0.16);
 }
 
 .toast strong {
   display: block;
-  color: var(--otziv-dark);
-  font-size: 0.9rem;
+  color: var(--toast-ink);
+  font-size: 0.94rem;
+  font-weight: 900;
   line-height: 1.15;
 }
 
 .toast p {
   margin: 0.25rem 0 0;
-  color: var(--otziv-info);
-  font-size: 0.78rem;
-  font-weight: 700;
+  color: var(--toast-muted);
+  font-size: 0.8rem;
+  font-weight: 760;
   line-height: 1.25;
 }
 
@@ -65,14 +89,14 @@
   border: 0;
   border-radius: 50%;
   padding: 0;
-  color: var(--otziv-info);
-  background: transparent;
+  color: var(--toast-muted);
+  background: rgba(255, 255, 255, 0.45);
   cursor: pointer;
 }
 
 .toast button:hover {
-  color: var(--otziv-dark);
-  background: var(--otziv-light);
+  color: var(--toast-ink);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .toast button span {

@@ -332,10 +332,10 @@
         aria-labelledby="order-create-title"
         (click)="$event.stopPropagation()"
       >
-        <header class="lead-edit-head">
+        <header class="lead-edit-head order-create-head">
           <div>
-            <small>Компания #{{ createOrderPayload()?.companyId }}</small>
-            <h2 id="order-create-title">Новый заказ</h2>
+            <small>Новый заказ</small>
+            <h2 id="order-create-title">{{ createOrderPayload()?.companyTitle || (createOrderPayload()?.companyId ? 'Компания #' + createOrderPayload()?.companyId : 'Компания') }}</h2>
           </div>
           <button type="button" class="lead-edit-close" (click)="closeCompanyOrderCreate()" [disabled]="createOrderSaving()" title="Закрыть">
             <span class="material-icons-sharp">close</span>
@@ -352,9 +352,14 @@
 
         @if (createOrderPayload(); as orderCreate) {
           @if (createOrderDraft(); as draft) {
-            <form class="lead-edit-form" #orderCreateForm="ngForm" (ngSubmit)="createCompanyOrder()">
-              <section class="lead-edit-field lead-edit-field--wide order-create-product-section">
-                <span>Продукт</span>
+            <form class="lead-edit-form order-create-form" #orderCreateForm="ngForm" (ngSubmit)="createCompanyOrder()">
+              <section class="order-create-section order-create-product-section">
+                <div class="order-create-section-title">
+                  <span>Продукт</span>
+                  @if (selectedCreateOrderProduct(); as selectedProduct) {
+                    <strong>{{ selectedProduct.label }}</strong>
+                  }
+                </div>
                 <div class="order-create-products">
                   @for (product of orderCreate.products; track trackProduct($index, product)) {
                     <button
@@ -363,11 +368,19 @@
                       [class.active]="draft.productId === product.id"
                       (click)="setCreateOrderField('productId', product.id)"
                     >
-                      <strong>{{ product.label }}</strong>
-                      <span>{{ product.price ?? 0 | number:'1.0-0' }} руб/шт</span>
-                      @if (product.photo) {
-                        <small>фото</small>
-                      }
+                      <span class="order-create-product-check material-icons-sharp">done</span>
+                      <span class="order-create-product-body">
+                        <strong>{{ product.label }}</strong>
+                        <span class="order-create-product-meta">
+                          <span class="order-create-product-price">{{ (product.price ?? 0) | number:'1.0-0' }} руб/шт</span>
+                          @if (product.photo) {
+                            <span class="order-create-product-badge">
+                              <span class="material-icons-sharp">image</span>
+                              фото
+                            </span>
+                          }
+                        </span>
+                      </span>
                     </button>
                   } @empty {
                     <p class="empty">Продуктов нет</p>
@@ -375,53 +388,58 @@
                 </div>
               </section>
 
-              <div class="lead-edit-grid">
-                <label class="lead-edit-field">
-                  <span>Количество в месяц</span>
-                  <select
-                    name="createOrderAmount"
-                    required
-                    [ngModel]="draft.amount"
-                    (ngModelChange)="setCreateOrderField('amount', +$event)"
-                  >
-                    @for (amount of orderCreate.amounts; track amount) {
-                      <option [ngValue]="amount">{{ amount }}</option>
-                    }
-                  </select>
-                </label>
+              <div class="order-create-main">
+                <div class="lead-edit-grid order-create-grid">
+                  <label class="lead-edit-field">
+                    <span>Количество в месяц</span>
+                    <select
+                      name="createOrderAmount"
+                      required
+                      [ngModel]="draft.amount"
+                      (ngModelChange)="setCreateOrderField('amount', +$event)"
+                    >
+                      @for (amount of orderCreate.amounts; track amount) {
+                        <option [ngValue]="amount">{{ amount }}</option>
+                      }
+                    </select>
+                  </label>
 
-                <label class="lead-edit-field">
-                  <span>Сумма</span>
-                  <input type="text" [value]="(createOrderTotal() | number:'1.0-0') + ' руб.'" readonly>
-                </label>
+                  <label class="lead-edit-field">
+                    <span>Специалист</span>
+                    <select
+                      name="createOrderWorkerId"
+                      required
+                      [ngModel]="draft.workerId"
+                      (ngModelChange)="setCreateOrderField('workerId', $event)"
+                    >
+                      @for (worker of orderCreate.workers; track trackOption($index, worker)) {
+                        <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                      }
+                    </select>
+                  </label>
 
-                <label class="lead-edit-field">
-                  <span>Специалист</span>
-                  <select
-                    name="createOrderWorkerId"
-                    required
-                    [ngModel]="draft.workerId"
-                    (ngModelChange)="setCreateOrderField('workerId', $event)"
-                  >
-                    @for (worker of orderCreate.workers; track trackOption($index, worker)) {
-                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
-                    }
-                  </select>
-                </label>
+                  <label class="lead-edit-field order-create-field-wide">
+                    <span>Филиал</span>
+                    <select
+                      name="createOrderFilialId"
+                      required
+                      [ngModel]="draft.filialId"
+                      (ngModelChange)="setCreateOrderField('filialId', $event)"
+                    >
+                      @for (filial of orderCreate.filials; track filial.id) {
+                        <option [ngValue]="filial.id">{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</option>
+                      }
+                    </select>
+                  </label>
+                </div>
 
-                <label class="lead-edit-field">
-                  <span>Филиал</span>
-                  <select
-                    name="createOrderFilialId"
-                    required
-                    [ngModel]="draft.filialId"
-                    (ngModelChange)="setCreateOrderField('filialId', $event)"
-                  >
-                    @for (filial of orderCreate.filials; track filial.id) {
-                      <option [ngValue]="filial.id">{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</option>
-                    }
-                  </select>
-                </label>
+                <aside class="order-create-summary">
+                  <span>Сумма заказа</span>
+                  <strong>{{ createOrderTotal() | number:'1.0-0' }} руб.</strong>
+                  @if (selectedCreateOrderProduct(); as selectedProduct) {
+                    <small>{{ draft.amount }} x {{ (selectedProduct.price ?? 0) | number:'1.0-0' }} руб/шт</small>
+                  }
+                </aside>
               </div>
 
               <div class="lead-edit-actions">

@@ -117,7 +117,7 @@ app-admin-layout {
 
 .admin-content {
   min-width: 0;
-  padding: 1.4rem 0 2rem;
+  padding: 0.95rem 0 2rem;
 }
 
 .page-heading {
@@ -125,8 +125,8 @@ app-admin-layout {
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: clamp(0.9rem, 1.5vw, 1.65rem);
-  min-height: 3.2rem;
-  margin-bottom: 1.2rem;
+  min-height: 2.7rem;
+  margin-bottom: 0.8rem;
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
@@ -266,6 +266,11 @@ app-admin-layout {
   font-weight: 800;
 }
 
+.avatar-image {
+  display: block;
+  object-fit: cover;
+}
+
 button.login-pill {
   flex: 0 0 auto;
   min-height: 2.1rem;
@@ -302,6 +307,12 @@ button.login-pill.logout {
   width: 7.4rem;
   height: 7.4rem;
   object-fit: contain;
+}
+
+.profile-card img.profile-card-photo {
+  border: 4px solid var(--otziv-light);
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .reminders {
@@ -412,14 +423,12 @@ button.login-pill.logout {
     width: min(100% - 24px, 620px);
   }
 
-  .page-heading {
-    grid-template-columns: 1fr;
-    align-items: flex-start;
+  .admin-content {
+    padding-top: 0.75rem;
   }
 
-  .top-links {
-    justify-content: flex-start;
-    gap: 1rem;
+  .page-heading {
+    display: none;
   }
 
   .admin-sidebar {

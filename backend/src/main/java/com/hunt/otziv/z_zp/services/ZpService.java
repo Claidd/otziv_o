@@ -27,6 +27,8 @@ public interface ZpService {
 
     List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
+    List<Zp> findAllByOwner(Set<Manager> managerList);
+
     List<Zp> findAllToDateByUser(LocalDate localDate, Long id);
 
     Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);

@@ -142,6 +142,14 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.findAllToDateByOwner(localDate, localDate2, getPeopleIdToZp(managerList));
     } // Берем все ЗП для всех менеджеров Владельца
 
+    public List<Zp> findAllByOwner(Set<Manager> managerList) {
+        Set<Long> peopleIds = getPeopleIdToZp(managerList);
+        if (peopleIds.isEmpty()) {
+            return List.of();
+        }
+        return zpRepository.findAllByOwner(peopleIds);
+    }
+
     private Set<Long> getPeopleIdToZp(Set<Manager> managerList) { // Составление списка ид всех менеджеров и их работников Владельца
         Set<Long> managerIds = managerList.stream().map(Manager::getUser).map(User::getId).collect(Collectors.toSet());
         Set<Long> workersIds = managerList.stream().map(Manager::getUser).map(User::getWorkers).flatMap(workers -> workers.stream().map(Worker::getUser)).map(User::getId).collect(Collectors.toSet());

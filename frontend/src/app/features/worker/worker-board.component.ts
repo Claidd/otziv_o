@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { appEnvironment } from '../../core/app-environment';
 import {
   ManagerApi,
@@ -42,7 +43,7 @@ type ReviewEditDraft = ReviewUpdateRequest;
 
 @Component({
   selector: 'app-worker-board',
-  imports: [AdminLayoutComponent, FormsModule],
+  imports: [AdminLayoutComponent, FormsModule, RouterLink],
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
 })
@@ -1019,11 +1020,19 @@ export class WorkerBoardComponent {
   }
 
   botLabel(review: WorkerReviewItem): string {
+    if (this.hasUnavailableBot(review)) {
+      return 'нет доступных аккаунтов';
+    }
+
     if (review.botFio) {
       return `${review.botFio} ${review.botCounter || ''}`.trim();
     }
 
     return review.productTitle || 'Аккаунт';
+  }
+
+  hasUnavailableBot(review: WorkerReviewItem): boolean {
+    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
   }
 
   reviewDate(review: WorkerReviewItem): string {

@@ -209,7 +209,11 @@
               </span>
             }
 
-            <a class="details-button" [href]="orderDetailsUrl(order)">Подробнее</a>
+            @if (activeSection() === 'new' || activeSection() === 'correct') {
+              <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
+            } @else {
+              <a class="details-button" [href]="orderDetailsUrl(order)">Подробнее</a>
+            }
 
             <footer>
               <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
@@ -466,7 +470,7 @@
               }
             </div>
 
-            <div class="bot-line">
+            <div class="bot-line" [class.bot-line--empty]="hasUnavailableBot(review)">
               <span>{{ botLabel(review) }}</span>
             </div>
 

@@ -34,6 +34,11 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
+    private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
+            "Впишите Имя Фамилию",
+            "Впиши Имя Фамилию",
+            "Впишите Фамилию Имя"
+    );
 
     @Override
     @Transactional
@@ -59,7 +64,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         Set<Long> usedBotIdsInThisOrder = new HashSet<>();
 
         for (int i = 0; i < neededForOrder; i++) {
-            Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i);
+            Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, filial);
 
             // Создаем отзыв
             Review review = createReviewWithBot(orderDTO, orderDetails, filial, assignedBot, vigul);
@@ -101,30 +106,16 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededBots);
 
             if (availableBots.isEmpty()) {
-                log.error("Нет доступных ботов для назначения! Будет использована заглушка");
-
-                // Назначаем всем отзывам бота-заглушку
-                Bot stubBot = getStubBot();
-                for (Review review : reviewsWithoutBots) {
-                    review.setBot(stubBot);
-                    log.warn("Отзыву ID {} назначен бот-заглушка", review.getId());
-                }
-
-                // Сохраняем отзывы
-                reviewService.saveAll(reviewsWithoutBots);
-
-                // Отправляем уведомление
-                sendStubBotAlert(neededBots, neededBots);
-
-                return false;
+                log.warn("Обычных доступных ботов нет, будет выполнен поиск резервных аккаунтов");
             }
 
             // 4. Назначаем ботов отзывам
             Set<Long> usedBotIdsInThisOrder = new HashSet<>();
             int assignedCount = 0;
+            int reviewIndex = 0;
 
             for (Review review : reviewsWithoutBots) {
-                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, assignedCount);
+                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, reviewIndex, filial);
 
                 // Назначаем бота отзыву
                 review.setBot(assignedBot);
@@ -132,7 +123,10 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 // Обновляем isVigul на основе counter бота
                 updateReviewVigulBasedOnBotCounter(review, assignedBot);
 
-                assignedCount++;
+                if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
+                    assignedCount++;
+                }
+                reviewIndex++;
             }
 
             // 5. Сохраняем обновленные отзывы
@@ -151,7 +145,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             }
 
             log.info("=== УСПЕШНОЕ ПЕРЕНАЗНАЧЕНИЕ БОТОВ ===");
-            log.info("Переназначено {} ботов из {} отзывов", assignedCount, reviewsWithoutBots.size());
+            log.info("Переназначено {} реальных ботов из {} отзывов", assignedCount, reviewsWithoutBots.size());
 
             return assignedCount > 0;
 
@@ -281,7 +275,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     // ============ ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
 
-    private Bot findAndAssignUniqueBot(List<Bot> availableBots, Set<Long> usedBotIdsInThisOrder, int reviewIndex) {
+    private Bot findAndAssignUniqueBot(List<Bot> availableBots, Set<Long> usedBotIdsInThisOrder, int reviewIndex, Filial filial) {
         Bot assignedBot = null;
 
         // Ищем первого доступного бота, который еще не использован в этом заказе
@@ -297,12 +291,33 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         if (assignedBot == null) {
-            // Если ботов не хватает, создаем бота-заглушку
+            assignedBot = claimReserveBot(filial, usedBotIdsInThisOrder, reviewIndex);
+        }
+
+        if (assignedBot == null) {
             assignedBot = getStubBot();
-            log.warn("Нет доступных ботов! Создан бот-заглушка для отзыва {}", reviewIndex + 1);
+            log.warn("Нет доступных и резервных ботов! Назначена заглушка для отзыва {}", reviewIndex + 1);
         }
 
         return assignedBot;
+    }
+
+    private Bot claimReserveBot(Filial filial, Set<Long> usedBotIdsInThisOrder, int reviewIndex) {
+        if (filial == null || filial.getCity() == null) {
+            log.warn("Резервный бот не назначен для отзыва {}: у филиала нет города", reviewIndex + 1);
+            return null;
+        }
+
+        Optional<Bot> reserveBot = botService.claimReserveBotForCity(filial.getCity(), usedBotIdsInThisOrder);
+        if (reserveBot.isEmpty()) {
+            return null;
+        }
+
+        Bot bot = reserveBot.get();
+        usedBotIdsInThisOrder.add(bot.getId());
+        log.warn("Назначен резервный бот ID {} ({}) для отзыва {} и закреплен за городом {}",
+                bot.getId(), bot.getFio(), reviewIndex + 1, filial.getCity().getTitle());
+        return bot;
     }
 
     private Review createReviewWithBot(OrderDTO orderDTO, OrderDetails orderDetails,
@@ -413,11 +428,10 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
             // 1. Приоритет: боты с именем "Впиши Имя Фамилию"
             List<Bot> priority1 = baseBots.stream()
-                    .filter(bot -> bot.getFio() != null &&
-                            "Впиши Имя Фамилию".equals(bot.getFio().trim()))
+                    .filter(this::isTemplateBotName)
                     .collect(Collectors.toList());
 
-            log.info("Приоритет 1 - Боты с именем 'Впиши Имя Фамилию': {}", priority1.size());
+            log.info("Приоритет 1 - Боты с шаблонным именем {}: {}", TEMPLATE_BOT_NAMES, priority1.size());
 
             if (priority1.size() >= neededForOrder) {
                 log.info("Ботов с именем достаточно, используем только их");
@@ -567,8 +581,8 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private void logBotSelectionStatistics(List<Bot> selectedBots, int neededForOrder, boolean vigul) {
         Map<String, Long> stats = selectedBots.stream()
                 .collect(Collectors.groupingBy(bot -> {
-                    if (bot.getFio() != null && "Впиши Имя Фамилию".equals(bot.getFio().trim())) {
-                        return "Имя 'Впиши Имя Фамилию'";
+                    if (isTemplateBotName(bot)) {
+                        return "Шаблонное имя";
                     }
                     Integer counter = bot.getCounter();
                     if (counter == null) counter = 0;
@@ -583,5 +597,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         stats.forEach((category, count) ->
                 log.info("  {}: {} ботов", category, count));
         log.info("================================");
+    }
+
+    private boolean isTemplateBotName(Bot bot) {
+        return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
     }
 }

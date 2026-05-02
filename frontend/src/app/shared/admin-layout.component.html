@@ -2,14 +2,14 @@
   @if (displaySidebar()) {
   <aside class="admin-sidebar">
     <a class="brand" routerLink="/">
-      <img src="/assets/images/logo.png" alt="">
+      <img [src]="brandLogoUrl" alt="">
       <h2>Компания<span>О!</span></h2>
     </a>
 
     <nav class="sidebar-card" aria-label="Site navigation">
       @for (link of visibleSidebarLinks(); track link.label) {
         @if (link.routerLink) {
-          <a [routerLink]="link.routerLink" [class.active]="isActive(link)">
+          <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">
             <span class="material-icons-sharp">{{ link.icon }}</span>
             <strong>{{ link.label }}</strong>
           </a>
@@ -31,7 +31,7 @@
         <nav class="top-links" aria-label="Role sections">
           @for (link of visibleHeaderLinks(); track link.label) {
             @if (link.routerLink) {
-              <a [routerLink]="link.routerLink" [class.active]="isActive(link)">{{ link.label }}</a>
+              <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">{{ link.label }}</a>
             } @else {
               <a [href]="link.href" [class.active]="isActive(link)">{{ link.label }}</a>
             }
@@ -67,11 +67,16 @@
 
       @if (authenticated()) {
         <div class="profile">
+          @let headerPhotoUrl = headerProfileImageUrl();
           <div>
             <p><b>{{ username() }}</b></p>
             <small>{{ primaryRole() }}</small>
           </div>
-          <span class="avatar">{{ initials() }}</span>
+          @if (headerPhotoUrl) {
+            <img class="avatar avatar-image" [src]="headerPhotoUrl" [alt]="headerProfileImageAlt()">
+          } @else {
+            <span class="avatar">{{ initials() }}</span>
+          }
         </div>
         <button type="button" class="login-pill logout" (click)="logout()">ЛОГАУТ</button>
       } @else {
@@ -83,9 +88,13 @@
       <ng-content select="[admin-right-content]"></ng-content>
     } @else {
       <article class="profile-card">
-        <img src="/assets/images/logo.png" alt="">
-        <h2>Компания О!</h2>
-        <p>Повышение репутации</p>
+        <img
+          [class.profile-card-photo]="profileImageUrl"
+          [src]="profileImageUrl || brandLogoUrl"
+          [alt]="profileImageUrl ? profileImageAlt : 'Компания О!'"
+        >
+        <h2>{{ profileImageUrl ? username() : 'Компания О!' }}</h2>
+        <p>{{ profileImageUrl ? primaryRole() : 'Повышение репутации' }}</p>
       </article>
 
       <section class="reminders">

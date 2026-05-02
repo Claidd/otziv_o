@@ -83,6 +83,11 @@ public class ReviewServiceImpl implements ReviewService {
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
+    private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
+            "Впишите Имя Фамилию",
+            "Впиши Имя Фамилию",
+            "Впишите Фамилию Имя"
+    );
 
     @Value("${app.nagul.cooldown}")
     private int NAGUL_COOLDOWN_MINUTES;
@@ -819,11 +824,17 @@ public class ReviewServiceImpl implements ReviewService {
             List<Bot> availableBots = findAllBotsMinusFilial(review);
 
             if (availableBots.isEmpty()) {
-                Bot stubBot = createStubBot();
-                review.setBot(stubBot);
+                Bot reserveBot = claimReserveBot(review, Set.of());
+                if (reserveBot != null) {
+                    review.setBot(reserveBot);
+                    updateVigulBasedOnBotCounter(review);
+                } else {
+                    Bot stubBot = createStubBot();
+                    review.setBot(stubBot);
 
-                if (review.isVigul()) {
-                    review.setVigul(false);
+                    if (review.isVigul()) {
+                        review.setVigul(false);
+                    }
                 }
             } else {
                 var random = new SecureRandom();
@@ -853,11 +864,17 @@ public class ReviewServiceImpl implements ReviewService {
         List<Bot> bots = findAllBotsMinusFilial(review);
 
         if (bots.isEmpty()) {
-            Bot stubBot = createStubBot();
-            review.setBot(stubBot);
+            Bot reserveBot = claimReserveBot(review, Set.of());
+            if (reserveBot != null) {
+                review.setBot(reserveBot);
+                updateVigulBasedOnBotCounter(review);
+            } else {
+                Bot stubBot = createStubBot();
+                review.setBot(stubBot);
 
-            if (review.isVigul()) {
-                review.setVigul(false);
+                if (review.isVigul()) {
+                    review.setVigul(false);
+                }
             }
         } else {
             var random = new SecureRandom();
@@ -1075,12 +1092,7 @@ public class ReviewServiceImpl implements ReviewService {
     private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
         if (!vigul) {
             List<Bot> strictFiltered = baseBots.stream()
-                    .filter(bot -> {
-                        if (bot.getFio() == null) {
-                            return false;
-                        }
-                        return "Впиши Имя Фамилию".equals(bot.getFio().trim());
-                    })
+                    .filter(this::isTemplateBotName)
                     .collect(Collectors.toList());
 
             if (!strictFiltered.isEmpty()) {
@@ -1626,6 +1638,22 @@ public class ReviewServiceImpl implements ReviewService {
         return review;
     }
 
+    private Bot claimReserveBot(Review review, Set<Long> excludedBotIds) {
+        if (review == null || review.getFilial() == null || review.getFilial().getCity() == null) {
+            return null;
+        }
+
+        Optional<Bot> reserveBot = botService.claimReserveBotForCity(review.getFilial().getCity(), excludedBotIds);
+        reserveBot.ifPresent(bot -> log.warn(
+                "Для отзыва ID {} назначен резервный бот ID {} ({}) и закреплен за городом {}",
+                review.getId(),
+                bot.getId(),
+                bot.getFio(),
+                review.getFilial().getCity().getTitle()
+        ));
+        return reserveBot.orElse(null);
+    }
+
     private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO) {
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
     }
@@ -1974,6 +2002,10 @@ public class ReviewServiceImpl implements ReviewService {
 
     private int safeBotCounter(Bot bot) {
         return bot != null ? bot.getCounter() : 0;
+    }
+
+    private boolean isTemplateBotName(Bot bot) {
+        return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
     }
 
     private String extractComment(OrderDetails orderDetails) {
