@@ -5,6 +5,7 @@ networks:
 volumes:
   mysql_data:
   sent_hashes:
+  keycloak_pg_data:
 
 services:
   mysql:
@@ -49,11 +50,13 @@ services:
 
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       args:
         BUILD_NO_CACHE: 1
     restart: always
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       - mysql
     environment:
@@ -66,6 +69,12 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_USERNAME: ${MAIL_USERNAME}
       DATABASE_URL: ${DATABASE_URL}
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/otziv
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/otziv/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_REALM: otziv
+      KEYCLOAK_ADMIN_CLIENT_ID: otziv-backend
+      KEYCLOAK_ADMIN_CLIENT_SECRET: change-me-local-secret
       TZ: Asia/Irkutsk
       JAVA_OPTS: "-Xmx512m"
     env_file:
@@ -95,18 +104,96 @@ services:
     networks:
       internal_net:
 
-#  log-viewer:
-#    image: amir20/dozzle
-#    container_name: log-viewer
-#    ports:
-#      - "8081:8080"
-#    volumes:
-#      - ./data/app-logs:/logs
-#      - /var/run/docker.sock:/var/run/docker.sock  # ✅ главное изменение
-#    environment:
-#      - DOZZLE_LEVEL=info
-#    networks:
-#      - internal_net
+  log-viewer:
+    image: amir20/dozzle
+    container_name: log-viewer
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./data/app-logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock  # ✅ главное изменение
+    environment:
+      - DOZZLE_LEVEL=info
+    networks:
+      - internal_net
+
+  keycloak-postgres:
+    image: postgres:17
+    container_name: otziv-keycloak-postgres
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U keycloak" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - internal_net
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: otziv-keycloak
+    command: start-dev --import-realm
+    ports:
+      - "8180:8080"
+      - "9000:9000"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_METRICS_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infrastructure/keycloak/realm-config.json:/opt/keycloak/data/import/realm-config.json:ro
+    depends_on:
+      keycloak-postgres:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: otziv-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - internal_net
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: otziv-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_METRICS_ENABLED: "true"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards
+    networks:
+      - internal_net
+
+
+
+
+
+
+
+
+
+
 
 #  vpn-proxy:
 #    image: qmcgaw/gluetun:latest

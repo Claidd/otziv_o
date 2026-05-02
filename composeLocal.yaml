@@ -45,7 +45,7 @@ services:
 
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       args:
         BUILD_NO_CACHE: 1

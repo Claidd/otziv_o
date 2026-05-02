@@ -1,6 +1,6 @@
 HELP.md
 target/
-!.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 ### STS ###
@@ -12,15 +12,19 @@ target/
 .springBeans
 .sts4-cache
 ### IntelliJ IDEA ###
-.idea
+backend/.idea
+.idea/
 *.iws
 *.iml
 *.ipr
 .key
+*.key
+*.crt
+*.pem
 .yaml
 .env
 .env.*
-.sql
+!backend/.env.local.example
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
@@ -32,6 +36,16 @@ build/
 !**/src/test/**/build/
 ### VS Code ###
 .vscode/
+
+### Runtime/build noise ###
+logs/
+*.log
+data/
+frontend/angular-dev-server.*.log
+data/app-logs/
+data/nginx/logs/
+docker/sent-hashes/
+sent-hashes/
 
 # managed
 **.data.json

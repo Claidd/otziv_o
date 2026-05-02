@@ -1,2 +1,0 @@
-ALTER TABLE leads
-    ADD COLUMN last_seen DATETIME NULL;
