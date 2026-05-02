@@ -1,0 +1,192 @@
+<th:block th:fragment="default(route)" xmlns:th="http://www.w3.org/1999/xhtml">
+    <!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles_bootstrap}"></th:block>
+
+        <title>Компании менеджера O! Company!</title>
+    </head>
+    <body>
+
+    <!-- создаем внешнюю обертку -->
+    <div class="wrapper">
+        <header th:replace="~{fragments/header :: header}"></header>
+
+        <!-- ==================== MAIN START ======================== -->
+
+
+
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+        <div class="container">
+            <div class="row py-2 pt-1 mt-1">
+                <div class="col-12 pt-5">
+                    <form th:action="@{/companies/new_company_to_operator}" method="post" th:object="${newCompany}">
+                        <div class="form-group">
+                            <label for="title">Название компании</label>
+                            <input type="text" id="title" th:field="*{title}" class="form-control"
+                                   placeholder="">
+                            <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('title')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
+                        <div class="form-group d-none">
+                            <label for="telephone">Номер телефона</label>
+                            <input type="text" id="telephone" th:field="*{telephone}" th:value="${telephone}" class="form-control"
+                                   placeholder="">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('telephone')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="urlChat">Ссылка на чат</label>
+                            <input type="text" id="urlChat" th:field="*{urlChat}" th:value="${urlChat}" class="form-control"
+                                   placeholder="">
+                            <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('urlChat')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
+                        <div class="form-group d-none">
+                            <label for="city">Город</label>
+                            <input type="hidden" id="city" th:field="*{city}" th:value="${newCompany.getCity()}" class="form-control"
+                                   placeholder="">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('city')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" th:field="*{email}" class="form-control"
+                                   placeholder="">
+                            <!--Проходимся по ошибкам через ич, если они появились после валидации и показываем-->
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('email')}" th:text="${err}">Validation
+                                error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="category">Категория:</label>
+                            <select  class="form-control" th:field="*{categoryCompany.id}" id="category" name="selectedCategory.id">
+                                <option value="">Выберите категорию...</option>
+                                <option th:each="category : ${categories}" th:value="${category.id}" th:text="${category.categoryTitle}"></option>
+                            </select>
+                            <small class="form-text text-danger" th:text="${errorUrl}"
+                                   >Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="subcategory">Подкатегория:</label>
+                            <select class="form-control" th:field="*{subCategory.id}" id="subcategory" name="selectedSubcategory.id">
+                                <option value="">Выберите подкатегорию...</option>
+                            </select>
+                            <small class="form-text text-danger" th:text="${errorUrl}"
+                                   >Validation error</small>
+                        </div>
+
+                        <div class="mb-3" >
+                            <label for="inputManagers" class="form-label">Специалист</label> <br>
+                            <select id="inputManagers" name="managerId" th:field="*{worker.workerId}"  class="form-control form-select form-select-lg">
+                                <option value="">Выберите специалиста...</option>
+                                <option th:each="specialist : ${newCompany.user.workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}" ></option>
+<!--                                <option th:each="specialist : ${workers}" th:value="${specialist.id}" th:text="${specialist.user.fio}" ></option>-->
+<!--                                <option th:unless="${!workers.contains(worker)}" th:value="${worker.id}" th:text="${worker.user.fio}" th:selected="${worker.user.fio != null}"></option>&ndash;&gt;-->
+                            </select>
+<!--                            <a th:href="@{/allUsers/delete/manager/{username}/{managerId}(username = ${editUserDto.username}, managerId=${manager.id})}">Удалить</a>-->
+                        </div>
+
+
+
+                        <div class="form-group d-none">
+                            <label for="manager">Укажите менеджера</label>
+                            <input type="text" id="manager" th:field="*{manager.user.fio}"  class="form-control"
+                                   placeholder="Укажите оператора">
+                            <input type="hidden" id="manager_id" th:field="*{manager.managerId}"  class="form-control"
+                                   placeholder="Укажите оператора">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('manager')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+
+                        <div class="form-group d-none">
+                            <label for="operator">Укажите оператора</label>
+                            <input type="text" id="operator" th:field="*{operator}" th:value="${operator}" class="form-control"
+                                   placeholder="Укажите оператора">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('operator')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+                        
+
+
+                        <div class="form-group d-none">
+                            <label for="status">Укажите статус компании</label>
+                            <input type="hidden" id="status" th:field="*{status.title}" class="form-control"
+                                   placeholder="">
+                            <input type="hidden" id="status_id" th:field="*{status.id}" class="form-control"
+                                   placeholder="">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('status')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filial_city">Город филиала:</label>
+                            <select  class="form-control" th:field="*{filial.city.id}" id="city" name="selectedCity.id">
+                                <option value="">Выберите город...</option>
+                                <option th:each="city : ${cities}" th:value="${city.id}" th:text="${city.cityTitle}"></option>
+                            </select>
+                            <small class="form-text text-danger" th:text="${errorUrl}"
+                                   >Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filial_title">Укажите первый филиала</label>
+                            <input type="text" id="filial_title" th:field="*{filial.title}" class="form-control"
+                                   placeholder="например: Филиал 1 или Юбиленый, 17">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.title')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filial_url">Укажите ссылку 2ГИС (должна быть уникальной)</label>
+                            <input type="text" id="filial_url" th:field="*{filial.url}" class="form-control"
+                                   placeholder="">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('filial.url')}"
+                                   th:text="${err}">Validation error</small>
+                            
+                        </div>
+
+                        <div class="form-group d-none">
+                            <label for="commentsCompany">Укажите комментарий</label>
+                            <input type="hidden" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
+                                   placeholder="* необязательное поле">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('commentsCompany')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+
+
+                        <div class="form-group d-none">
+                            <label for="user">Создатель компании</label>
+                            <input type="text" id="user" th:field="*{user.fio}"  class="form-control"
+                                   placeholder="">
+                            <input type="hidden" id="user_username" th:field="*{user.username}"  class="form-control"
+                                   placeholder="">
+                            <input type="hidden" name="leadId" th:value="${leadId}">
+                            <small class="form-text text-danger" th:each="err : ${#fields.errors('user')}"
+                                   th:text="${err}">Validation error</small>
+                        </div>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <button  type="submit" class="btn btn-primary mt-3">Создать</button>
+                        <th:block th:insert="~{fragments/common :: backDen}"></th:block>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!---------------------------------------- ФОРМА ВВОДА ДАННЫХ -------------------------------------------------------->
+
+
+
+        <!-- ===================== MAIN END ======================== -->
+
+        <header th:replace="~{fragments/footer :: footer}"></header>
+    </div> <!-- wrapper -->
+    <th:block th:insert="~{fragments/common :: js}"></th:block>
+    </body>
+    </html>

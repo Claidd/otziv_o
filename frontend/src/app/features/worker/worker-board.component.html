@@ -1,0 +1,947 @@
+<app-admin-layout [title]="title()" active="worker" rightPanelMode="custom">
+  <section class="worker-workspace" [class.menu-open]="mobileMenuOpen()">
+    <button
+      type="button"
+      class="mobile-menu-toggle"
+      [class.active]="mobileMenuOpen()"
+      [attr.aria-expanded]="mobileMenuOpen()"
+      aria-controls="worker-menu-panel"
+      (click)="toggleMobileMenu()"
+    >
+      Меню
+      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
+    </button>
+
+    <div id="worker-menu-panel" class="worker-menu-panel" [class.open]="mobileMenuOpen()">
+      <header class="worker-toolbar">
+        <nav class="worker-dropdowns" aria-label="Меню специалиста">
+          <select class="worker-section-select" [ngModel]="activeSection()" (ngModelChange)="handleSectionMenu($event)" aria-label="Раздел специалиста">
+            @for (section of sections; track trackSection($index, section)) {
+              <option [ngValue]="section.key">{{ section.label }}</option>
+            }
+          </select>
+
+          <div class="section-tabs" aria-label="Статусы специалиста">
+            @for (section of sections; track trackSection($index, section)) {
+              <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
+                <span class="material-icons-sharp">{{ section.icon }}</span>
+                {{ section.label }}
+              </button>
+            }
+          </div>
+        </nav>
+
+        <div class="search-line toolbar-search" [class.has-clear]="keyword()">
+          <label>
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Найти"
+              [ngModel]="keyword()"
+              (ngModelChange)="keyword.set($event)"
+              (keyup.enter)="search()"
+            >
+          </label>
+
+          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+
+          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+
+          <button type="button" class="icon-button sort-toggle" (click)="toggleSortDirection()" [disabled]="loading()" title="Сортировка">
+            <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+          </button>
+
+          @if (keyword()) {
+            <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+      </header>
+    </div>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    @if (board()?.message) {
+      <p class="notice" [class.warning]="board()?.warning">{{ board()?.message }}</p>
+    }
+
+    <h2 class="workspace-title">{{ title() }}</h2>
+
+    @if (isOrderSection()) {
+      <section class="worker-cards order-cards">
+        @for (order of currentOrders(); track trackOrder($index, order)) {
+          <article class="worker-card order-card">
+            <header>
+              <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">
+                {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
+              </a>
+              <small>#{{ order.id }}</small>
+            </header>
+
+            <div class="meta-row">
+              <span>{{ order.status || '-' }}</span>
+              <span>{{ orderAmountLabel(order) }}</span>
+            </div>
+
+            @if (permissions().canSeePhoneAndPayment) {
+              <div class="phone-row">
+                <a [href]="orderChatUrl(order)" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
+                <button type="button" (click)="copyPhone(order.companyTelephone)" title="Скопировать телефон">
+                  {{ copied() === 'телефон' ? '✓' : 'T' }}
+                </button>
+              </div>
+
+              <div class="card-actions order-links">
+                <button type="button" (click)="copyOrderText(order, 'check')">текст</button>
+                <a [href]="order.orderDetailsId ? '/review/editReviews/' + order.orderDetailsId : orderDetailsUrl(order)" target="_blank" rel="noopener">url</a>
+                <button type="button" (click)="copyOrderText(order, 'payment')">счет</button>
+                <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">ссылка</a>
+              </div>
+            }
+
+            <div class="progress">
+              <div class="progress-bar" [style.width.%]="progress(order)">
+                <span>{{ order.counter || 0 }}</span>
+              </div>
+            </div>
+
+            @if (permissions().canManageOrderStatuses) {
+              <div class="card-actions order-status-actions">
+                @for (action of orderStatusActions; track trackAction($index, action)) {
+                  <button
+                    type="button"
+                    [disabled]="isMutating('order-' + order.id + '-' + action.status)"
+                    (click)="updateOrderStatus(order, action)"
+                    [title]="action.status"
+                  >
+                    {{ action.label }}
+                  </button>
+                }
+
+                <span class="worker-chip worker-chip--action" [title]="order.workerUserFio || 'Специалист не назначен'">
+                  {{ order.workerUserFio || '-' }}
+                </span>
+              </div>
+            }
+
+            <div class="meta-row">
+              <span>{{ order.categoryTitle || 'Категория' }}</span>
+              <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+            </div>
+
+            <div
+              class="order-note-editor"
+              [class.editing]="isOrderNoteEditing(order)"
+              [class.expanded]="isOrderNoteExpanded(order)"
+              [class.saved]="isOrderNoteSaved(order)"
+            >
+              @if (isOrderNoteEditing(order)) {
+                <textarea
+                  [name]="'order-note-' + order.id"
+                  [ngModel]="orderNoteDraft(order)"
+                  (ngModelChange)="setOrderNoteDraft(order, $event)"
+                  [readonly]="isMutating(orderNoteMutationKey(order))"
+                  aria-label="Заметка заказа"
+                  placeholder="нет заметок"
+                ></textarea>
+
+                <div class="note-edit-actions">
+                  <button
+                    type="button"
+                    class="cancel"
+                    (click)="cancelOrderNoteEdit(order)"
+                    [disabled]="isMutating(orderNoteMutationKey(order))"
+                    title="Отменить"
+                  >
+                    X
+                  </button>
+                  <button
+                    type="button"
+                    class="save"
+                    (click)="saveOrderNote(order)"
+                    [disabled]="isMutating(orderNoteMutationKey(order)) || !isOrderNoteChanged(order)"
+                    title="Сохранить заметку"
+                  >
+                    <span class="material-icons-sharp">{{ isOrderNoteSaved(order) ? 'check' : 'save' }}</span>
+                  </button>
+                </div>
+              } @else {
+                <div
+                  class="order-note-view"
+                  [class.can-edit]="permissions().canEditNotes"
+                  (click)="startOrderNoteEdit(order)"
+                  (keydown.enter)="startOrderNoteEdit(order)"
+                  (keydown.space)="$event.preventDefault(); startOrderNoteEdit(order)"
+                  [attr.role]="permissions().canEditNotes ? 'button' : null"
+                  [attr.tabindex]="permissions().canEditNotes ? 0 : null"
+                  [title]="permissions().canEditNotes ? 'Нажмите, чтобы редактировать заметку' : 'Редактирование заметок недоступно'"
+                >
+                  <span class="order-note-text">{{ orderNoteText(order) }}</span>
+
+                  @if (shouldShowExpander(orderNoteText(order))) {
+                    <span
+                      class="note-expand-toggle"
+                      role="button"
+                      tabindex="0"
+                      (click)="toggleOrderNote($event, order)"
+                      (keydown.enter)="toggleOrderNote($event, order)"
+                      (keydown.space)="$event.preventDefault(); toggleOrderNote($event, order)"
+                    >
+                      {{ isOrderNoteExpanded(order) ? 'свернуть' : 'развернуть' }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (!permissions().canManageOrderStatuses) {
+              <span class="worker-chip" [title]="order.workerUserFio || 'Специалист не назначен'">
+                {{ order.workerUserFio || '-' }}
+              </span>
+            }
+
+            <a class="details-button" [href]="orderDetailsUrl(order)">Подробнее</a>
+
+            <footer>
+              <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
+              @if ((activeSection() === 'new' || activeSection() === 'correct') && canOpenOrderEditModal()) {
+                <a href="" (click)="$event.preventDefault(); openOrderEdit(order)">заказ</a>
+              } @else {
+                <a [href]="orderEditUrl(order)">заказ</a>
+              }
+            </footer>
+          </article>
+        } @empty {
+          <div class="empty">
+            <span class="material-icons-sharp">inventory_2</span>
+            <h2>Заказов нет</h2>
+          </div>
+        }
+      </section>
+    }
+
+    @if (isReviewSection()) {
+      <section class="worker-cards review-cards">
+        @for (review of currentReviews(); track trackReview($index, review)) {
+          <article
+            class="worker-card review-card"
+            [class.published]="review.publish"
+            [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
+          >
+            <header>
+              <a [href]="review.filialUrl || reviewEditUrl(review)" target="_blank" rel="noopener">{{ review.companyTitle || 'Компания' }}</a>
+              <div class="review-id-line">
+                #{{ review.id }}
+                @if (needsReviewPhoto(review)) {
+                  @if (hasReviewPhoto(review)) {
+                    <a
+                      class="review-photo-link"
+                      [href]="reviewPhotoUrl(review)"
+                      target="_blank"
+                      rel="noopener"
+                      title="Открыть фото"
+                      aria-label="Открыть фото отзыва"
+                    >
+                      <span class="material-icons-sharp">photo_camera</span>
+                    </a>
+                  } @else {
+                    <span class="review-photo-link review-photo-link--missing" title="Фото требуется" aria-label="Фото требуется">
+                      <span class="material-icons-sharp">photo_camera</span>
+                    </span>
+                  }
+                }
+                @if (hasReviewNote(review) || isReviewNoteEditing(review)) {
+                  <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle(review)" [title]="reviewNoteTitle(review)">
+                    <span class="material-icons-sharp">priority_high</span>
+                    <span class="review-note-popover">
+                      @if (hasReviewOwnNote(review) || isReviewNoteEditing(review)) {
+                        <label class="review-note-section">
+                          <span>Заметка отзыва</span>
+                          <textarea
+                            [name]="'review-note-' + review.id"
+                            [readonly]="!isReviewNoteEditing(review)"
+                            [ngModel]="reviewNoteValue(review)"
+                            (ngModelChange)="setReviewNoteDraft(review.id, $event)"
+                            (focus)="startReviewNoteEdit(review)"
+                            (click)="startReviewNoteEdit(review)"
+                            aria-label="Заметка отзыва"
+                          ></textarea>
+
+                          @if (isReviewNoteEditing(review)) {
+                            <span class="note-edit-actions">
+                              <button
+                                type="button"
+                                class="cancel"
+                                (click)="cancelReviewNoteEdit(review)"
+                                [disabled]="isMutating('save-note-' + review.id)"
+                                title="Отменить"
+                              >
+                                X
+                              </button>
+                              <button
+                                type="button"
+                                class="save"
+                                (click)="saveReviewNote(review)"
+                                [disabled]="isMutating('save-note-' + review.id) || !isReviewNoteChanged(review)"
+                                title="Сохранить заметку"
+                              >
+                                <span class="material-icons-sharp">
+                                  {{ isReviewNoteSaved(review) ? 'check' : 'save' }}
+                                </span>
+                              </button>
+                            </span>
+                          }
+                        </label>
+                      }
+
+                      @if (hasReviewOrderNote(review)) {
+                        <label class="review-note-section">
+                          <span>Заметка заказа</span>
+                          <textarea
+                            [name]="'order-note-' + review.id"
+                            [readonly]="!isSideNoteEditing(review, 'order')"
+                            [ngModel]="sideNoteValue(review, 'order')"
+                            (ngModelChange)="setSideNoteDraft(review, 'order', $event)"
+                            (focus)="startSideNoteEdit(review, 'order')"
+                            (click)="startSideNoteEdit(review, 'order')"
+                            aria-label="Заметка заказа"
+                          ></textarea>
+
+                          @if (isSideNoteEditing(review, 'order')) {
+                            <span class="note-edit-actions">
+                              <button type="button" class="cancel" (click)="cancelSideNoteEdit(review, 'order')" [disabled]="isMutating('save-side-order-' + review.id)">X</button>
+                              <button
+                                type="button"
+                                class="save"
+                                (click)="saveSideNote(review, 'order')"
+                                [disabled]="isMutating('save-side-order-' + review.id) || !isSideNoteChanged(review, 'order')"
+                                title="Сохранить заметку заказа"
+                              >
+                                <span class="material-icons-sharp">{{ isSideNoteSaved(review, 'order') ? 'check' : 'save' }}</span>
+                              </button>
+                            </span>
+                          }
+                        </label>
+                      }
+
+                      @if (hasReviewCompanyNote(review)) {
+                        <label class="review-note-section">
+                          <span>Заметка компании</span>
+                          <textarea
+                            [name]="'company-note-' + review.id"
+                            [readonly]="!isSideNoteEditing(review, 'company')"
+                            [ngModel]="sideNoteValue(review, 'company')"
+                            (ngModelChange)="setSideNoteDraft(review, 'company', $event)"
+                            (focus)="startSideNoteEdit(review, 'company')"
+                            (click)="startSideNoteEdit(review, 'company')"
+                            aria-label="Заметка компании"
+                          ></textarea>
+
+                          @if (isSideNoteEditing(review, 'company')) {
+                            <span class="note-edit-actions">
+                              <button type="button" class="cancel" (click)="cancelSideNoteEdit(review, 'company')" [disabled]="isMutating('save-side-company-' + review.id)">X</button>
+                              <button
+                                type="button"
+                                class="save"
+                                (click)="saveSideNote(review, 'company')"
+                                [disabled]="isMutating('save-side-company-' + review.id) || !isSideNoteChanged(review, 'company')"
+                                title="Сохранить заметку компании"
+                              >
+                                <span class="material-icons-sharp">{{ isSideNoteSaved(review, 'company') ? 'check' : 'save' }}</span>
+                              </button>
+                            </span>
+                          }
+                        </label>
+                      }
+                    </span>
+                  </span>
+                }
+              </div>
+            </header>
+
+            <div
+              class="review-field-editor review-field-editor--text"
+              [class.editing]="isReviewFieldEditing(review, 'text')"
+              [class.expanded]="isReviewTextOpen(review)"
+            >
+              <div class="review-text-box">
+                <textarea
+                  [name]="'review-text-' + review.id"
+                  [readonly]="!isReviewFieldEditing(review, 'text')"
+                  [ngModel]="reviewFieldValue(review, 'text')"
+                  (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
+                  (focus)="startReviewFieldEdit(review, 'text')"
+                  (click)="startReviewFieldEdit(review, 'text')"
+                  aria-label="Текст отзыва"
+                  placeholder="Текст отзыва"
+                ></textarea>
+
+                @if (shouldShowReviewTextToggle(review)) {
+                  <span
+                    class="review-text-toggle"
+                    role="button"
+                    tabindex="0"
+                    [attr.aria-expanded]="isReviewTextExpanded(review)"
+                    (click)="toggleReviewText(review)"
+                    (keydown.enter)="toggleReviewText(review)"
+                    (keydown.space)="$event.preventDefault(); toggleReviewText(review)"
+                  >
+                    {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
+                  </span>
+                }
+              </div>
+
+              @if (isReviewFieldEditing(review, 'text')) {
+                <div class="review-field-edit-actions">
+                  <span class="field-save-actions">
+                    <button
+                      type="button"
+                      class="cancel"
+                      (click)="cancelReviewFieldEdit(review, 'text')"
+                      [disabled]="isMutating('save-text-' + review.id)"
+                      title="Отменить"
+                    >
+                      X
+                    </button>
+                    <button
+                      type="button"
+                      class="save"
+                      (click)="saveReviewField(review, 'text')"
+                      [disabled]="isMutating('save-text-' + review.id) || !isReviewFieldChanged(review, 'text') || !reviewFieldValue(review, 'text').trim()"
+                      title="Сохранить текст"
+                    >
+                      <span class="material-icons-sharp">
+                        {{ isReviewFieldSaved(review, 'text') ? 'check' : 'save' }}
+                      </span>
+                    </button>
+                  </span>
+                </div>
+              }
+            </div>
+
+            <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
+              <textarea
+                [name]="'review-answer-' + review.id"
+                [readonly]="!isReviewFieldEditing(review, 'answer')"
+                [ngModel]="reviewFieldValue(review, 'answer')"
+                (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
+                (focus)="startReviewFieldEdit(review, 'answer')"
+                (click)="startReviewFieldEdit(review, 'answer')"
+                aria-label="Ответ на отзыв или замечание"
+                placeholder="Ответ на отзыв или замечание"
+              ></textarea>
+
+              @if (isReviewFieldEditing(review, 'answer')) {
+                <div class="review-field-edit-actions">
+                  <button
+                    type="button"
+                    class="cancel"
+                    (click)="cancelReviewFieldEdit(review, 'answer')"
+                    [disabled]="isMutating('save-answer-' + review.id)"
+                    title="Отменить"
+                  >
+                    X
+                  </button>
+                  <button
+                    type="button"
+                    class="save"
+                    (click)="saveReviewField(review, 'answer')"
+                    [disabled]="isMutating('save-answer-' + review.id) || !isReviewFieldChanged(review, 'answer')"
+                    title="Сохранить замечание"
+                  >
+                    <span class="material-icons-sharp">
+                      {{ isReviewFieldSaved(review, 'answer') ? 'check' : 'save' }}
+                    </span>
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="bot-line">
+              <span>{{ botLabel(review) }}</span>
+            </div>
+
+            <div class="review-actions">
+              <button type="button" (click)="copyReviewValue(review, 'url')">
+                {{ copied() === 'url-' + review.id ? 'готово' : 'ссылка' }}
+              </button>
+              <button type="button" (click)="copyReviewValue(review, 'login')">
+                {{ copied() === 'login-' + review.id ? 'готово' : 'логин' }}
+              </button>
+              <button type="button" (click)="copyReviewValue(review, 'password')">
+                {{ copied() === 'password-' + review.id ? 'готово' : 'пароль' }}
+              </button>
+              <a [href]="botBrowserUrl(review)" target="_blank" rel="noopener">вк</a>
+              <button type="button" (click)="copyReviewValue(review, 'text')">
+                {{ copied() === 'text-' + review.id ? 'готово' : 'текст' }}
+              </button>
+              <button type="button" (click)="copyReviewValue(review, 'answer')">
+                {{ copied() === 'answer-' + review.id ? 'готово' : 'ответ' }}
+              </button>
+              <button type="button" (click)="changeReviewBot(review)" [disabled]="isMutating('review-' + review.id + '-change-bot')">
+                {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
+              </button>
+              <button type="button" (click)="deactivateReviewBot(review)" [disabled]="!review.botId || isMutating('review-' + review.id + '-block-bot')">
+                {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              class="publish-button"
+              (click)="markReviewDone(review)"
+              [disabled]="isMutating('review-' + review.id + '-publish') || isMutating('review-' + review.id + '-nagul')"
+            >
+              {{ activeSection() === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ' }}
+            </button>
+
+            <footer>
+              <span>{{ reviewDate(review) }}</span>
+              @if (canOpenReviewEditModal()) {
+                <a href="" (click)="$event.preventDefault(); openReviewEdit(review)">{{ review.workerFio || 'специалист' }}</a>
+              } @else {
+                <a [href]="reviewEditUrl(review)">{{ review.workerFio || 'специалист' }}</a>
+              }
+            </footer>
+          </article>
+        } @empty {
+          <div class="empty">
+            <span class="material-icons-sharp">rate_review</span>
+            <h2>Отзывов нет</h2>
+          </div>
+        }
+      </section>
+    }
+
+    <footer class="pager">
+      <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
+        <span class="material-icons-sharp">chevron_left</span>
+      </button>
+      <span>{{ currentPage().number + 1 }} / {{ currentPage().totalPages || 1 }}</span>
+      <button type="button" class="icon-button" (click)="nextPage()" [disabled]="currentPage().last || loading()" title="Следующая">
+        <span class="material-icons-sharp">chevron_right</span>
+      </button>
+    </footer>
+
+    <section class="mobile-lead-stats mobile-worker-stats" aria-label="Статистика специалиста">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <button
+          type="button"
+          class="stat-card"
+          [class.blue]="metric.tone === 'blue'"
+          [class.green]="metric.tone === 'green'"
+          [class.teal]="metric.tone === 'teal'"
+          [class.yellow]="metric.tone === 'yellow'"
+          [class.pink]="metric.tone === 'pink'"
+          [class.gray]="metric.tone === 'gray'"
+          (click)="openMetric(metric)"
+        >
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </button>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="lead-stats worker-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <button
+        type="button"
+        class="stat-card"
+        [class.blue]="metric.tone === 'blue'"
+        [class.green]="metric.tone === 'green'"
+        [class.teal]="metric.tone === 'teal'"
+        [class.yellow]="metric.tone === 'yellow'"
+        [class.pink]="metric.tone === 'pink'"
+        [class.gray]="metric.tone === 'gray'"
+        (click)="openMetric(metric)"
+      >
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </button>
+    }
+  </section>
+
+  @if (orderLoading() || editOrder()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeOrderEdit()">
+      <section
+        class="lead-edit-modal order-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-edit-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Заказ #{{ editOrder()?.id }}</small>
+            <h2 id="order-edit-title">Редактирование заказа</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (orderError()) {
+          <p class="error compact">{{ orderError() }}</p>
+        }
+
+        @if (orderLoading() && !editOrder()) {
+          <p class="empty">Загружаю заказ...</p>
+        }
+
+        @if (editOrder(); as order) {
+          @if (orderDraft(); as draft) {
+            <form class="lead-edit-form" #orderEditForm="ngForm" (ngSubmit)="saveOrderEdit()">
+              <div class="lead-edit-grid">
+                <label class="lead-edit-field">
+                  <span>Компания</span>
+                  <input type="text" [value]="order.companyTitle" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Статус</span>
+                  <input type="text" [value]="order.status" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Филиал</span>
+                  <select
+                    name="orderFilialId"
+                    [ngModel]="draft.filialId"
+                    (ngModelChange)="setOrderEditField('filialId', $event)"
+                  >
+                    @for (filial of order.filials; track trackOption($index, filial)) {
+                      <option [ngValue]="filial.id">{{ optionLabel(filial) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Специалист</span>
+                  <select
+                    name="orderWorkerId"
+                    [ngModel]="draft.workerId"
+                    (ngModelChange)="setOrderEditField('workerId', $event)"
+                  >
+                    @for (worker of order.workers; track trackOption($index, worker)) {
+                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Менеджер</span>
+                  <select
+                    name="orderManagerId"
+                    [ngModel]="draft.managerId"
+                    (ngModelChange)="setOrderEditField('managerId', $event)"
+                  >
+                    @for (manager of order.managers; track trackOption($index, manager)) {
+                      <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Опубликовано</span>
+                  <input
+                    name="orderCounter"
+                    type="number"
+                    min="0"
+                    [ngModel]="draft.counter"
+                    (ngModelChange)="setOrderEditField('counter', +$event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Кол-во отзывов</span>
+                  <input type="text" [value]="order.amount ?? 0" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Сумма</span>
+                  <input type="text" [value]="(order.sum ?? 0) + ' руб.'" readonly>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий заказа</span>
+                  <textarea
+                    name="orderComments"
+                    rows="3"
+                    [ngModel]="draft.orderComments"
+                    (ngModelChange)="setOrderEditField('orderComments', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий компании</span>
+                  <textarea
+                    name="orderCompanyComments"
+                    rows="3"
+                    [ngModel]="draft.commentsCompany"
+                    (ngModelChange)="setOrderEditField('commentsCompany', $event)"
+                  ></textarea>
+                </label>
+
+                @if (order.canComplete) {
+                  <label class="lead-edit-field">
+                    <span>Отметка о выполнении</span>
+                    <input
+                      name="orderComplete"
+                      type="checkbox"
+                      [ngModel]="draft.complete"
+                      (ngModelChange)="setOrderEditField('complete', $event)"
+                    >
+                  </label>
+                }
+
+                <label class="lead-edit-field">
+                  <span>Дата создания</span>
+                  <input type="text" [value]="order.created" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата изменений</span>
+                  <input type="text" [value]="order.changed" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата оплаты</span>
+                  <input type="text" [value]="order.payDay || '-'" readonly>
+                </label>
+              </div>
+
+              <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
+                @if (order.canDelete) {
+                  <button type="button" class="danger" (click)="deleteOrderEdit()" [disabled]="orderSaving() || orderDeleting()">
+                    {{ orderDeleting() ? 'Удаляю...' : 'Удалить' }}
+                  </button>
+                }
+
+                <div class="lead-edit-actions-group">
+                  <button type="button" class="secondary" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()">Отмена</button>
+                  <button type="submit" [disabled]="orderSaving() || orderDeleting() || orderEditForm.invalid">
+                    {{ orderSaving() ? 'Сохраняю...' : 'Сохранить' }}
+                  </button>
+                </div>
+              </div>
+            </form>
+          }
+        }
+      </section>
+    </div>
+  }
+
+  @if (reviewEditLoading() || editReview()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeReviewEdit()">
+      <section
+        class="lead-edit-modal review-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="review-edit-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Отзыв #{{ editReview()?.id }}</small>
+            <h2 id="review-edit-title">Редактирование отзыва</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeReviewEdit()" [disabled]="reviewEditBusy()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (reviewEditError()) {
+          <p class="error compact">{{ reviewEditError() }}</p>
+        }
+
+        @if (reviewEditLoading() && !editReview()) {
+          <p class="empty">Загружаю отзыв...</p>
+        }
+
+        @if (editReview(); as review) {
+          @if (reviewEditDraft(); as draft) {
+            <form class="lead-edit-form" #reviewEditForm="ngForm" (ngSubmit)="saveReviewEdit()">
+              <div class="lead-edit-grid">
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Текст</span>
+                  <textarea
+                    name="reviewText"
+                    rows="7"
+                    required
+                    [ngModel]="draft.text"
+                    (ngModelChange)="setReviewEditField('text', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Ответ на отзыв</span>
+                  <textarea
+                    name="reviewAnswer"
+                    rows="4"
+                    [ngModel]="draft.answer"
+                    (ngModelChange)="setReviewEditField('answer', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий</span>
+                  <textarea
+                    name="reviewComment"
+                    rows="3"
+                    [ngModel]="draft.comment"
+                    (ngModelChange)="setReviewEditField('comment', $event)"
+                  ></textarea>
+                </label>
+
+                @if (canEditReviewDates()) {
+                  <label class="lead-edit-field">
+                    <span>Дата создания</span>
+                    <input
+                      name="reviewCreated"
+                      type="date"
+                      [ngModel]="draft.created"
+                      (ngModelChange)="setReviewEditField('created', $event || null)"
+                    >
+                  </label>
+
+                  <label class="lead-edit-field">
+                    <span>Дата изменений</span>
+                    <input
+                      name="reviewChanged"
+                      type="date"
+                      [ngModel]="draft.changed"
+                      (ngModelChange)="setReviewEditField('changed', $event || null)"
+                    >
+                  </label>
+                }
+
+                <label class="lead-edit-field">
+                  <span>Дата публикации</span>
+                  <input
+                    name="reviewPublishedDate"
+                    type="date"
+                    [ngModel]="draft.publishedDate"
+                    (ngModelChange)="setReviewEditField('publishedDate', $event || null)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Продукт</span>
+                  <select
+                    name="reviewProduct"
+                    [ngModel]="draft.productId"
+                    (ngModelChange)="setReviewEditField('productId', $event)"
+                  >
+                    <option [ngValue]="null">-- Выберите продукт --</option>
+                    @for (product of productOptions(); track product.id) {
+                      <option [ngValue]="product.id">{{ product.label }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Имя бота</span>
+                  <input
+                    name="reviewBotName"
+                    type="text"
+                    [ngModel]="draft.botName"
+                    (ngModelChange)="setReviewEditField('botName', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Пароль бота</span>
+                  <input
+                    name="reviewBotPassword"
+                    type="text"
+                    [ngModel]="draft.botPassword"
+                    (ngModelChange)="setReviewEditField('botPassword', $event)"
+                  >
+                </label>
+
+                @if (canEditReviewPublish()) {
+                  <label class="review-edit-check">
+                    <input
+                      name="reviewPublish"
+                      type="checkbox"
+                      [ngModel]="draft.publish"
+                      (ngModelChange)="setReviewEditField('publish', $event)"
+                    >
+                    <span>Активность</span>
+                  </label>
+                }
+
+                @if (canEditReviewVigul()) {
+                  <label class="review-edit-check">
+                    <input
+                      name="reviewVigul"
+                      type="checkbox"
+                      [ngModel]="draft.vigul"
+                      (ngModelChange)="setReviewEditField('vigul', $event)"
+                    >
+                    <span>Выгул</span>
+                  </label>
+                }
+
+                @if (productNeedsPhoto(draft.productId) || draft.url.trim()) {
+                  <label class="lead-edit-field lead-edit-field--wide">
+                    <span>URL для фото</span>
+                    <textarea
+                      name="reviewPhotoUrl"
+                      rows="2"
+                      [ngModel]="draft.url"
+                      (ngModelChange)="setReviewEditField('url', $event)"
+                    ></textarea>
+                  </label>
+
+                  <div class="review-edit-photo lead-edit-field--wide">
+                    @if (draft.url.trim()) {
+                      <a [href]="draft.url" target="_blank" rel="noopener">Открыть фото</a>
+                    }
+                    @if (productNeedsPhoto(draft.productId)) {
+                      <label>
+                        <span>{{ reviewEditUploading() ? 'Загружаю...' : 'Загрузить фото' }}</span>
+                        <input type="file" accept="image/*" (change)="uploadReviewPhoto($event)" [disabled]="reviewEditBusy()">
+                      </label>
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDeleteReviews()">
+                @if (canDeleteReviews()) {
+                  <button type="button" class="danger" (click)="deleteReviewEdit()" [disabled]="reviewEditBusy()">
+                    {{ reviewEditDeleting() ? 'Удаляю...' : 'Удалить' }}
+                  </button>
+                }
+
+                <div class="lead-edit-actions-group">
+                  <button type="button" class="secondary" (click)="closeReviewEdit()" [disabled]="reviewEditBusy()">Отмена</button>
+                  <button type="submit" [disabled]="reviewEditBusy() || reviewEditForm.invalid">
+                    {{ reviewEditSaving() ? 'Сохраняю...' : 'Сохранить' }}
+                  </button>
+                </div>
+              </div>
+            </form>
+          }
+        }
+      </section>
+    </div>
+  }
+</app-admin-layout>

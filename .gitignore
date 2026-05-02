@@ -1,4 +1,8 @@
 HELP.md
+*.key
+*.crt
+*.pem
+*.yaml
 target/
 !backend/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

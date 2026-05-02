@@ -1,0 +1,882 @@
+<app-admin-layout [title]="layoutTitle()" active="manager" rightPanelMode="custom">
+  <section class="manager-workspace" [class.menu-open]="mobileMenuOpen()">
+    <button
+      type="button"
+      class="mobile-menu-toggle"
+      [class.active]="mobileMenuOpen()"
+      [attr.aria-expanded]="mobileMenuOpen()"
+      aria-controls="manager-menu-panel"
+      (click)="toggleMobileMenu()"
+    >
+      Меню
+      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
+    </button>
+
+    <div id="manager-menu-panel" class="manager-menu-panel" [class.open]="mobileMenuOpen()">
+      <div class="mobile-menu-heading">
+        <h1>{{ layoutTitle() }}</h1>
+        <nav class="mobile-role-links" aria-label="Разделы">
+          @for (link of mobileNavLinks; track link.label) {
+            @if (link.routerLink) {
+              <a [routerLink]="link.routerLink">{{ link.label }}</a>
+            } @else {
+              <a [href]="link.href">{{ link.label }}</a>
+            }
+          }
+        </nav>
+      </div>
+
+      <header class="manager-toolbar">
+        <nav class="manager-dropdowns" aria-label="Меню менеджера">
+          <select [ngModel]="''" (ngModelChange)="handleTopMenu($event)" aria-label="Лиды">
+            <option value="">Лиды</option>
+            <option value="leads">Лид кабинет</option>
+          </select>
+
+          <select
+            [ngModel]="activeSection() === 'companies' ? 'companies:' + companyStatus() : ''"
+            (ngModelChange)="handleTopMenu($event)"
+            aria-label="Компании"
+          >
+            <option value="">Компании</option>
+            @for (status of companyStatusOptions(); track trackStatus($index, status)) {
+              <option [value]="'companies:' + status">{{ status }}</option>
+            }
+          </select>
+
+          <select
+            [ngModel]="activeSection() === 'orders' ? 'orders:' + orderStatus() : ''"
+            (ngModelChange)="handleTopMenu($event)"
+            aria-label="Заказы"
+          >
+            <option value="">Заказы</option>
+            @for (status of orderStatusOptions(); track trackStatus($index, status)) {
+              <option [value]="'orders:' + status">{{ status }}</option>
+            }
+          </select>
+
+          <select [ngModel]="''" (ngModelChange)="handleTopMenu($event)" aria-label="Прочее">
+            <option value="">Прочее</option>
+            <option [value]="'href:' + legacyCategoriesUrl">Категории</option>
+            <option [value]="'href:' + legacyWorkersUrl">Специалисты</option>
+          </select>
+        </nav>
+
+        <div class="quick-links">
+          <a [href]="legacyNewCompanyUrl">Новая компания</a>
+          <a [href]="legacyCategoriesUrl">Категории</a>
+          <a [href]="legacyWorkersUrl">Специалисты</a>
+        </div>
+      </header>
+
+      <section class="copy-search">
+        <div class="promo-strip" aria-label="Промо-тексты">
+          @for (item of promoItems(); track item.label) {
+            <button type="button" (click)="copyPromo(item)" [disabled]="!item.text">
+              <span class="material-icons-sharp">content_copy</span>
+              {{ copied() === item.label ? 'скопировано' : item.label }}
+            </button>
+          }
+        </div>
+
+        <div class="search-line" [class.has-clear]="keyword()">
+          <label>
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Найти"
+              [ngModel]="keyword()"
+              (ngModelChange)="keyword.set($event)"
+              (keyup.enter)="search()"
+            >
+          </label>
+
+          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+
+          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+
+          <button
+            type="button"
+            class="icon-button sort-toggle"
+            (click)="toggleSortDirection()"
+            [disabled]="loading()"
+            [title]="sortTitle()"
+            [attr.aria-label]="sortTitle()"
+          >
+            <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+          </button>
+
+          @if (keyword()) {
+            <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    <h2 class="workspace-title">{{ title() }}</h2>
+
+    @if (activeSection() === 'companies') {
+      <section class="manager-cards company-cards">
+        @for (company of currentCompanies(); track trackCompany($index, company)) {
+          <article class="manager-card company-card">
+            <header>
+              <a [href]="companyFilialUrl(company)" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
+              <small>#{{ company.id }}</small>
+            </header>
+
+            <div class="phone-row">
+              <a [href]="companyChatUrl(company)" target="_blank" rel="noopener">{{ company.telephone || '-' }}</a>
+              <button type="button" (click)="copyPhone(company.telephone)" title="Скопировать телефон">
+                {{ copied() === 'телефон' ? '✓' : 'T' }}
+              </button>
+            </div>
+
+            <div class="meta-row">
+              <span>{{ company.status || '-' }}</span>
+              <button
+                type="button"
+                class="order-create-trigger"
+                (click)="openCompanyOrderCreate(company)"
+                [title]="'Создать заказ: ' + (company.title || 'компания')"
+              >
+                Заказ
+              </button>
+            </div>
+
+            <details class="comment-details">
+              <summary>
+                <span>{{ company.commentsCompany || 'Комментарий' }}</span>
+              </summary>
+            </details>
+
+            <details class="card-more">
+              <summary>Еще</summary>
+
+              <div class="card-actions">
+                @for (action of companyActions; track trackAction($index, action)) {
+                  <button
+                    type="button"
+                    [disabled]="isMutating('company-' + company.id + '-' + action.status)"
+                    (click)="updateCompanyStatus(company, action)"
+                    [title]="action.status"
+                  >
+                    <span class="material-icons-sharp">{{ action.icon }}</span>
+                    {{ action.label }}
+                  </button>
+                }
+              </div>
+
+              <div class="meta-row">
+                <span>Филиалов:</span>
+                <span>{{ company.countFilials || 0 }}</span>
+              </div>
+            </details>
+
+            <a
+              href=""
+              class="details-button"
+              (click)="$event.preventDefault(); openCompanyOrders(company)"
+              [title]="'Показать заказы: ' + (company.title || 'компания')"
+            >
+              Подробнее
+            </a>
+
+            <footer>
+              <span>{{ company.manager || '-' }}</span>
+              <a href="" (click)="$event.preventDefault(); openCompanyEdit(company)">компания - {{ company.city || 'город' }}</a>
+            </footer>
+          </article>
+        } @empty {
+          <div class="empty">
+            <span class="material-icons-sharp">business</span>
+            <h2>Компаний нет</h2>
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="manager-cards order-cards">
+        @for (order of currentOrders(); track trackOrder($index, order)) {
+          <article class="manager-card order-card" [class.order-card--company-context]="selectedCompany()">
+            <header>
+              <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">
+                {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
+              </a>
+              <small>#{{ order.id }}</small>
+            </header>
+
+            <div class="meta-row">
+              <span>{{ order.status || '-' }}</span>
+              <span>{{ order.sum || 0 | number:'1.0-0' }} руб.</span>
+            </div>
+
+            <div class="phone-row">
+              <a [href]="orderChatUrl(order)" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
+              @if (!selectedCompany()) {
+                <button type="button" (click)="copyPhone(order.companyTelephone)" title="Скопировать телефон">
+                  {{ copied() === 'телефон' ? '✓' : 'T' }}
+                </button>
+              }
+            </div>
+
+            <div class="card-actions order-links">
+              <button type="button" (click)="copyOrderText(order, 'review')">
+                текст
+              </button>
+              <a [href]="orderReviewUrl(order)" target="_blank" rel="noopener">
+                url
+              </a>
+              <button type="button" (click)="copyOrderText(order, 'payment')">
+                счет
+              </button>
+              <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">
+                ссылка
+              </a>
+            </div>
+
+            <div class="progress">
+              <div class="progress-bar" [style.width.%]="progress(order)">
+                <span>{{ order.counter || 0 }}</span>
+              </div>
+            </div>
+
+            <div class="card-actions order-status-actions">
+              @for (action of orderActions(order); track trackAction($index, action)) {
+                <button
+                  type="button"
+                  [disabled]="isMutating('order-' + order.id + '-' + action.status)"
+                  (click)="updateOrderStatus(order, action)"
+                  [title]="action.status"
+                >
+                  {{ action.label }}
+                </button>
+              }
+              <span class="order-worker-chip" [title]="order.workerUserFio || 'Специалист не назначен'">
+                {{ order.workerUserFio || '-' }}
+              </span>
+            </div>
+
+            <div class="meta-row">
+              <span>{{ order.categoryTitle || 'Категория' }}</span>
+              <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+            </div>
+
+            <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
+
+            <footer>
+              <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
+              <a href="" (click)="$event.preventDefault(); openOrderEdit(order)">заказ</a>
+            </footer>
+          </article>
+        } @empty {
+          <div class="empty">
+            <span class="material-icons-sharp">inventory_2</span>
+            <h2>Заказов нет</h2>
+          </div>
+        }
+      </section>
+    }
+
+    <footer class="pager">
+      <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
+        <span class="material-icons-sharp">chevron_left</span>
+      </button>
+      <span>{{ currentPage().number + 1 }} / {{ currentPage().totalPages || 1 }}</span>
+      <button type="button" class="icon-button" (click)="nextPage()" [disabled]="currentPage().last || loading()" title="Следующая">
+        <span class="material-icons-sharp">chevron_right</span>
+      </button>
+    </footer>
+
+    <section class="mobile-lead-stats mobile-manager-stats" aria-label="Статистика менеджера">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <button type="button" class="stat-card" [class]="metric.tone" (click)="openMetric(metric)">
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </button>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="lead-stats manager-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <button type="button" class="stat-card" [class]="metric.tone" (click)="openMetric(metric)">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </button>
+    }
+  </section>
+
+  @if (createOrderLoading() || createOrderPayload()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeCompanyOrderCreate()">
+      <section
+        class="lead-edit-modal order-create-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-create-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Компания #{{ createOrderPayload()?.companyId }}</small>
+            <h2 id="order-create-title">Новый заказ</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeCompanyOrderCreate()" [disabled]="createOrderSaving()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (createOrderError()) {
+          <p class="error compact">{{ createOrderError() }}</p>
+        }
+
+        @if (createOrderLoading() && !createOrderPayload()) {
+          <p class="empty">Загружаю продукты...</p>
+        }
+
+        @if (createOrderPayload(); as orderCreate) {
+          @if (createOrderDraft(); as draft) {
+            <form class="lead-edit-form" #orderCreateForm="ngForm" (ngSubmit)="createCompanyOrder()">
+              <section class="lead-edit-field lead-edit-field--wide order-create-product-section">
+                <span>Продукт</span>
+                <div class="order-create-products">
+                  @for (product of orderCreate.products; track trackProduct($index, product)) {
+                    <button
+                      type="button"
+                      class="order-create-product"
+                      [class.active]="draft.productId === product.id"
+                      (click)="setCreateOrderField('productId', product.id)"
+                    >
+                      <strong>{{ product.label }}</strong>
+                      <span>{{ product.price ?? 0 | number:'1.0-0' }} руб/шт</span>
+                      @if (product.photo) {
+                        <small>фото</small>
+                      }
+                    </button>
+                  } @empty {
+                    <p class="empty">Продуктов нет</p>
+                  }
+                </div>
+              </section>
+
+              <div class="lead-edit-grid">
+                <label class="lead-edit-field">
+                  <span>Количество в месяц</span>
+                  <select
+                    name="createOrderAmount"
+                    required
+                    [ngModel]="draft.amount"
+                    (ngModelChange)="setCreateOrderField('amount', +$event)"
+                  >
+                    @for (amount of orderCreate.amounts; track amount) {
+                      <option [ngValue]="amount">{{ amount }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Сумма</span>
+                  <input type="text" [value]="(createOrderTotal() | number:'1.0-0') + ' руб.'" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Специалист</span>
+                  <select
+                    name="createOrderWorkerId"
+                    required
+                    [ngModel]="draft.workerId"
+                    (ngModelChange)="setCreateOrderField('workerId', $event)"
+                  >
+                    @for (worker of orderCreate.workers; track trackOption($index, worker)) {
+                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Филиал</span>
+                  <select
+                    name="createOrderFilialId"
+                    required
+                    [ngModel]="draft.filialId"
+                    (ngModelChange)="setCreateOrderField('filialId', $event)"
+                  >
+                    @for (filial of orderCreate.filials; track filial.id) {
+                      <option [ngValue]="filial.id">{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</option>
+                    }
+                  </select>
+                </label>
+              </div>
+
+              <div class="lead-edit-actions">
+                <button type="button" class="secondary" (click)="closeCompanyOrderCreate()" [disabled]="createOrderSaving()">Отмена</button>
+                <button
+                  type="submit"
+                  [disabled]="createOrderSaving() || orderCreateForm.invalid || !draft.productId || !draft.workerId || !draft.filialId"
+                >
+                  {{ createOrderSaving() ? 'Создаю...' : 'Создать заказ' }}
+                </button>
+              </div>
+            </form>
+          }
+        }
+      </section>
+    </div>
+  }
+
+  @if (orderLoading() || editOrder()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeOrderEdit()">
+      <section
+        class="lead-edit-modal order-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-edit-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Заказ #{{ editOrder()?.id }}</small>
+            <h2 id="order-edit-title">Редактирование заказа</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (orderError()) {
+          <p class="error compact">{{ orderError() }}</p>
+        }
+
+        @if (orderLoading() && !editOrder()) {
+          <p class="empty">Загружаю заказ...</p>
+        }
+
+        @if (editOrder(); as order) {
+          @if (orderDraft(); as draft) {
+            <form class="lead-edit-form" #orderEditForm="ngForm" (ngSubmit)="saveOrderEdit()">
+              <div class="lead-edit-grid">
+                <label class="lead-edit-field">
+                  <span>Компания</span>
+                  <input type="text" [value]="order.companyTitle" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Статус</span>
+                  <input type="text" [value]="order.status" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Филиал</span>
+                  <select
+                    name="orderFilialId"
+                    [ngModel]="draft.filialId"
+                    (ngModelChange)="setOrderEditField('filialId', $event)"
+                  >
+                    @for (filial of order.filials; track trackOption($index, filial)) {
+                      <option [ngValue]="filial.id">{{ optionLabel(filial) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Специалист</span>
+                  <select
+                    name="orderWorkerId"
+                    [ngModel]="draft.workerId"
+                    (ngModelChange)="setOrderEditField('workerId', $event)"
+                  >
+                    @for (worker of order.workers; track trackOption($index, worker)) {
+                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Менеджер</span>
+                  <select
+                    name="orderManagerId"
+                    [ngModel]="draft.managerId"
+                    (ngModelChange)="setOrderEditField('managerId', $event)"
+                  >
+                    @for (manager of order.managers; track trackOption($index, manager)) {
+                      <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Опубликовано</span>
+                  <input
+                    name="orderCounter"
+                    type="number"
+                    min="0"
+                    [ngModel]="draft.counter"
+                    (ngModelChange)="setOrderEditField('counter', +$event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Кол-во отзывов</span>
+                  <input type="text" [value]="order.amount ?? 0" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Сумма</span>
+                  <input type="text" [value]="(order.sum ?? 0) + ' руб.'" readonly>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий заказа</span>
+                  <textarea
+                    name="orderComments"
+                    rows="3"
+                    [ngModel]="draft.orderComments"
+                    (ngModelChange)="setOrderEditField('orderComments', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий компании</span>
+                  <textarea
+                    name="orderCompanyComments"
+                    rows="3"
+                    [ngModel]="draft.commentsCompany"
+                    (ngModelChange)="setOrderEditField('commentsCompany', $event)"
+                  ></textarea>
+                </label>
+
+                @if (order.canComplete) {
+                  <label class="lead-edit-field">
+                    <span>Отметка о выполнении</span>
+                    <input
+                      name="orderComplete"
+                      type="checkbox"
+                      [ngModel]="draft.complete"
+                      (ngModelChange)="setOrderEditField('complete', $event)"
+                    >
+                  </label>
+                }
+
+                <label class="lead-edit-field">
+                  <span>Дата создания</span>
+                  <input type="text" [value]="order.created" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата изменений</span>
+                  <input type="text" [value]="order.changed" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата оплаты</span>
+                  <input type="text" [value]="order.payDay || '-'" readonly>
+                </label>
+              </div>
+
+              <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
+                @if (order.canDelete) {
+                  <button type="button" class="danger" (click)="deleteOrderEdit()" [disabled]="orderSaving() || orderDeleting()">
+                    {{ orderDeleting() ? 'Удаляю...' : 'Удалить' }}
+                  </button>
+                }
+
+                <div class="lead-edit-actions-group">
+                  <button type="button" class="secondary" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()">Отмена</button>
+                  <button type="submit" [disabled]="orderSaving() || orderDeleting() || orderEditForm.invalid">
+                    {{ orderSaving() ? 'Сохраняю...' : 'Сохранить' }}
+                  </button>
+                </div>
+              </div>
+            </form>
+          }
+        }
+      </section>
+    </div>
+  }
+
+  @if (editLoading() || editCompany()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeCompanyEdit()">
+      <section
+        class="lead-edit-modal company-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="company-edit-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Компания #{{ editCompany()?.id }}</small>
+            <h2 id="company-edit-title">Редактирование компании</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeCompanyEdit()" [disabled]="editSaving() || !!editDeleteKey()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (editError()) {
+          <p class="error compact">{{ editError() }}</p>
+        }
+
+        @if (editLoading() && !editCompany()) {
+          <p class="empty">Загружаю компанию...</p>
+        }
+
+        @if (editCompany(); as company) {
+          @if (editDraft(); as draft) {
+            <form class="lead-edit-form" #companyEditForm="ngForm" (ngSubmit)="saveCompanyEdit()">
+              <div class="lead-edit-grid">
+                <label class="lead-edit-field">
+                  <span>Название</span>
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    [ngModel]="draft.title"
+                    (ngModelChange)="setCompanyEditField('title', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Телефон</span>
+                  <input
+                    name="telephone"
+                    type="text"
+                    required
+                    [ngModel]="draft.telephone"
+                    (ngModelChange)="setCompanyEditField('telephone', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Ссылка на чат</span>
+                  <input
+                    name="urlChat"
+                    type="text"
+                    required
+                    [ngModel]="draft.urlChat"
+                    (ngModelChange)="setCompanyEditField('urlChat', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Город компании</span>
+                  <input
+                    name="city"
+                    type="text"
+                    [ngModel]="draft.city"
+                    (ngModelChange)="setCompanyEditField('city', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Email</span>
+                  <input
+                    name="email"
+                    type="email"
+                    [ngModel]="draft.email"
+                    (ngModelChange)="setCompanyEditField('email', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Категория</span>
+                  <select
+                    name="categoryId"
+                    [ngModel]="draft.categoryId"
+                    (ngModelChange)="changeCompanyCategory($event)"
+                  >
+                    @for (category of company.categories; track trackOption($index, category)) {
+                      <option [ngValue]="category.id">{{ optionLabel(category) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Подкатегория</span>
+                  <select
+                    name="subCategoryId"
+                    [ngModel]="draft.subCategoryId"
+                    (ngModelChange)="setCompanyEditField('subCategoryId', $event)"
+                  >
+                    @for (subCategory of company.subCategories; track trackOption($index, subCategory)) {
+                      <option [ngValue]="subCategory.id">{{ optionLabel(subCategory) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Статус</span>
+                  <select
+                    name="statusId"
+                    required
+                    [ngModel]="draft.statusId"
+                    (ngModelChange)="setCompanyEditField('statusId', $event)"
+                  >
+                    @for (status of company.statuses; track trackOption($index, status)) {
+                      <option [ngValue]="status.id">{{ optionLabel(status) }}</option>
+                    }
+                  </select>
+                </label>
+
+                @if (company.canChangeManager) {
+                  <label class="lead-edit-field">
+                    <span>Менеджер</span>
+                    <select
+                      name="managerId"
+                      [ngModel]="draft.managerId"
+                      (ngModelChange)="setCompanyEditField('managerId', $event)"
+                    >
+                      @for (manager of company.managers; track trackOption($index, manager)) {
+                        <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                      }
+                    </select>
+                  </label>
+                }
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий</span>
+                  <textarea
+                    name="commentsCompany"
+                    rows="3"
+                    [ngModel]="draft.commentsCompany"
+                    (ngModelChange)="setCompanyEditField('commentsCompany', $event)"
+                  ></textarea>
+                </label>
+
+                <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+                  <span>Специалисты компании</span>
+                  <div class="company-edit-list">
+                    @for (worker of company.currentWorkers; track trackOption($index, worker)) {
+                      <div class="company-edit-row">
+                        <span>{{ optionLabel(worker) }}</span>
+                        <button type="button" class="secondary" (click)="deleteCompanyWorker(worker)" [disabled]="!!editDeleteKey()">
+                          {{ editDeleteKey() === 'worker-' + worker.id ? 'Удаляю...' : 'Удалить' }}
+                        </button>
+                      </div>
+                    } @empty {
+                      <small>Специалисты не назначены</small>
+                    }
+                  </div>
+                </section>
+
+                <label class="lead-edit-field">
+                  <span>Добавить специалиста</span>
+                  <select
+                    name="newWorkerId"
+                    [ngModel]="draft.newWorkerId"
+                    (ngModelChange)="setCompanyEditField('newWorkerId', $event)"
+                  >
+                    <option [ngValue]="null">Не добавлять</option>
+                    @for (worker of company.workers; track trackOption($index, worker)) {
+                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Активность</span>
+                  <input
+                    name="active"
+                    type="checkbox"
+                    [ngModel]="draft.active"
+                    (ngModelChange)="setCompanyEditField('active', $event)"
+                  >
+                </label>
+
+                <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+                  <span>Филиалы</span>
+                  <div class="company-edit-list">
+                    @for (filial of company.filials; track filial.id) {
+                      <div class="company-edit-row">
+                        <a [href]="filialEditUrl(filial.id)" target="_blank" rel="noopener">
+                          {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
+                        </a>
+                        <button type="button" class="secondary" (click)="deleteCompanyFilial(filial.id, filial.title)" [disabled]="!!editDeleteKey()">
+                          {{ editDeleteKey() === 'filial-' + filial.id ? 'Удаляю...' : 'Удалить' }}
+                        </button>
+                      </div>
+                    } @empty {
+                      <small>Филиалы не добавлены</small>
+                    }
+                  </div>
+                </section>
+
+                <label class="lead-edit-field">
+                  <span>Город нового филиала</span>
+                  <select
+                    name="newFilialCityId"
+                    [ngModel]="draft.newFilialCityId"
+                    (ngModelChange)="setCompanyEditField('newFilialCityId', $event)"
+                  >
+                    <option [ngValue]="null">Не добавлять</option>
+                    @for (city of company.cities; track trackOption($index, city)) {
+                      <option [ngValue]="city.id">{{ optionLabel(city) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Адрес нового филиала</span>
+                  <input
+                    name="newFilialTitle"
+                    type="text"
+                    [ngModel]="draft.newFilialTitle"
+                    (ngModelChange)="setCompanyEditField('newFilialTitle', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Ссылка 2ГИС нового филиала</span>
+                  <input
+                    name="newFilialUrl"
+                    type="text"
+                    [ngModel]="draft.newFilialUrl"
+                    (ngModelChange)="setCompanyEditField('newFilialUrl', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата создания</span>
+                  <input type="text" [value]="company.createDate" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Дата изменений</span>
+                  <input type="text" [value]="company.updateStatus" readonly>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Следующая рассылка</span>
+                  <input type="text" [value]="company.dateNewTry" readonly>
+                </label>
+              </div>
+
+              <div class="lead-edit-actions">
+                <button type="button" class="secondary" (click)="closeCompanyEdit()" [disabled]="editSaving() || !!editDeleteKey()">Отмена</button>
+                <button type="submit" [disabled]="editSaving() || !!editDeleteKey() || companyEditForm.invalid">
+                  {{ editSaving() ? 'Сохраняю...' : 'Сохранить' }}
+                </button>
+              </div>
+            </form>
+          }
+        }
+      </section>
+    </div>
+  }
+</app-admin-layout>

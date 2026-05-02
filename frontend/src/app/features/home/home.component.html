@@ -1,0 +1,185 @@
+<app-admin-layout title="Личный кабинет" active="dashboard">
+  <section class="hero-card">
+    <div>
+      <p class="eyebrow">OTZIV</p>
+      <h2>{{ auth.authenticated() ? 'Добро пожаловать' : 'Вход в рабочее пространство' }}</h2>
+      <p>
+        @if (auth.authenticated()) {
+          Здесь собраны быстрые переходы, роли, состояние backend и текущая сессия.
+        } @else {
+          Войди через Keycloak справа сверху или создай новый клиентский аккаунт.
+        }
+      </p>
+    </div>
+
+    <div class="actions">
+      @if (!auth.authenticated()) {
+        <a class="button secondary" routerLink="/legacy-migration">
+          <span class="material-icons-sharp">sync</span>
+          Миграция
+        </a>
+        <a class="button" routerLink="/register-client">
+          <span class="material-icons-sharp">person_add</span>
+          Регистрация
+        </a>
+      } @else {
+        <button type="button" class="secondary" (click)="loadCurrentUser()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Обновляю' : 'Обновить профиль' }}
+        </button>
+        <button type="button" class="secondary" (click)="loadHealth()" [disabled]="healthLoading()">
+          <span class="material-icons-sharp">monitor_heart</span>
+          {{ healthLoading() ? 'Проверяю' : 'Проверить backend' }}
+        </button>
+      }
+    </div>
+  </section>
+
+  <section class="analyse">
+    <article class="metric-card blue">
+      <div>
+        <h3>Сессия</h3>
+        <h1>{{ auth.authenticated() ? 'Активна' : 'Гость' }}</h1>
+      </div>
+      <span class="material-icons-sharp">verified_user</span>
+    </article>
+
+    <article class="metric-card green">
+      <div>
+        <h3>Backend</h3>
+        <h1>{{ health()?.status || (healthLoading() ? '...' : '-') }}</h1>
+      </div>
+      <span class="material-icons-sharp">dns</span>
+    </article>
+
+    <article class="metric-card yellow">
+      <div>
+        <h3>Токен до</h3>
+        <h1>{{ auth.expiresAt()?.toLocaleTimeString() || '-' }}</h1>
+      </div>
+      <span class="material-icons-sharp">schedule</span>
+    </article>
+  </section>
+
+  @if (auth.error()) {
+    <p class="error">{{ auth.error() }}</p>
+  }
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  @if (healthError()) {
+    <p class="error">{{ healthError() }}</p>
+  }
+
+  @if (auth.authenticated()) {
+    <section class="dashboard-grid">
+      <article class="panel profile-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">account_circle</span>
+          <div>
+            <p class="eyebrow">PROFILE</p>
+            <h2>{{ me()?.preferredUsername || auth.tokenParsed()?.['preferred_username'] || 'Пользователь' }}</h2>
+          </div>
+        </div>
+
+        <dl>
+          <div>
+            <dt>Email</dt>
+            <dd>{{ me()?.email || '-' }}</dd>
+          </div>
+          <div>
+            <dt>Issuer</dt>
+            <dd>{{ me()?.issuer || '-' }}</dd>
+          </div>
+          <div>
+            <dt>Subject</dt>
+            <dd>{{ me()?.subject || '-' }}</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="panel roles-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">admin_panel_settings</span>
+          <div>
+            <p class="eyebrow">ACCESS</p>
+            <h2>Роли</h2>
+          </div>
+        </div>
+
+        <div class="chip-list">
+          @for (role of businessRoles(); track role) {
+            <span>{{ role }}</span>
+          } @empty {
+            <span>Нет бизнес-ролей</span>
+          }
+        </div>
+      </article>
+
+      <article class="panel next-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">route</span>
+          <div>
+            <p class="eyebrow">NEXT</p>
+            <h2>Следующий перенос</h2>
+          </div>
+        </div>
+        <p>Следующим рабочим модулем логично переносить “Лиды”: там сразу проверим роли, REST API и новый Angular UI.</p>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <span class="material-icons-sharp">apps</span>
+        <div>
+          <p class="eyebrow">SECTIONS</p>
+          <h2>Быстрые действия</h2>
+        </div>
+      </div>
+
+      <div class="action-grid">
+        @for (action of visibleActions(); track action.label) {
+          @if (action.routerLink) {
+            <a class="action-card" [routerLink]="action.routerLink">
+              <span class="material-icons-sharp">{{ action.icon }}</span>
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.description }}</small>
+            </a>
+          } @else {
+            <a class="action-card" [href]="action.href">
+              <span class="material-icons-sharp">{{ action.icon }}</span>
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.description }}</small>
+            </a>
+          }
+        } @empty {
+          <div class="empty-inline">
+            <span class="material-icons-sharp">lock</span>
+            <p>Для твоей роли пока нет быстрых действий.</p>
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (me()) {
+      <section class="panel technical">
+        <div class="panel-title">
+          <span class="material-icons-sharp">data_object</span>
+          <div>
+            <p class="eyebrow">DEBUG</p>
+            <h2>Backend /api/me</h2>
+          </div>
+        </div>
+        <pre>{{ me() | json }}</pre>
+      </section>
+    }
+  } @else {
+    <section class="panel empty">
+      <span class="material-icons-sharp">login</span>
+      <h2>Вход через Keycloak</h2>
+      <p>После входа здесь появятся разделы, доступные по твоей роли.</p>
+    </section>
+  }
+</app-admin-layout>

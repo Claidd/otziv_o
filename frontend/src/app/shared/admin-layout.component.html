@@ -1,0 +1,122 @@
+<div class="admin-layout" [class.sidebar-hidden]="!displaySidebar()">
+  @if (displaySidebar()) {
+  <aside class="admin-sidebar">
+    <a class="brand" routerLink="/">
+      <img src="/assets/images/logo.png" alt="">
+      <h2>Компания<span>О!</span></h2>
+    </a>
+
+    <nav class="sidebar-card" aria-label="Site navigation">
+      @for (link of visibleSidebarLinks(); track link.label) {
+        @if (link.routerLink) {
+          <a [routerLink]="link.routerLink" [class.active]="isActive(link)">
+            <span class="material-icons-sharp">{{ link.icon }}</span>
+            <strong>{{ link.label }}</strong>
+          </a>
+        } @else {
+          <a [href]="link.href" [class.active]="isActive(link)">
+            <span class="material-icons-sharp">{{ link.icon }}</span>
+            <strong>{{ link.label }}</strong>
+          </a>
+        }
+      }
+    </nav>
+  </aside>
+  }
+
+  <main class="admin-content">
+    <header class="page-heading">
+      <h1>{{ title }}</h1>
+      @if (visibleHeaderLinks().length) {
+        <nav class="top-links" aria-label="Role sections">
+          @for (link of visibleHeaderLinks(); track link.label) {
+            @if (link.routerLink) {
+              <a [routerLink]="link.routerLink" [class.active]="isActive(link)">{{ link.label }}</a>
+            } @else {
+              <a [href]="link.href" [class.active]="isActive(link)">{{ link.label }}</a>
+            }
+          }
+        </nav>
+      }
+    </header>
+    <ng-content></ng-content>
+  </main>
+
+  <section class="admin-right" aria-label="Account summary">
+    <div class="right-nav">
+      <div class="mode-switch" aria-label="Theme mode">
+        <button
+          type="button"
+          class="theme-button"
+          aria-label="Светлая тема"
+          [class.active]="theme() === 'light'"
+          (click)="setTheme('light')"
+        >
+          <span class="material-icons-sharp">light_mode</span>
+        </button>
+        <button
+          type="button"
+          class="theme-button"
+          aria-label="Темная тема"
+          [class.active]="theme() === 'dark'"
+          (click)="setTheme('dark')"
+        >
+          <span class="material-icons-sharp">dark_mode</span>
+        </button>
+      </div>
+
+      @if (authenticated()) {
+        <div class="profile">
+          <div>
+            <p><b>{{ username() }}</b></p>
+            <small>{{ primaryRole() }}</small>
+          </div>
+          <span class="avatar">{{ initials() }}</span>
+        </div>
+        <button type="button" class="login-pill logout" (click)="logout()">ЛОГАУТ</button>
+      } @else {
+        <button type="button" class="login-pill" (click)="login()">ЛОГИН</button>
+      }
+    </div>
+
+    @if (rightPanelMode === 'custom') {
+      <ng-content select="[admin-right-content]"></ng-content>
+    } @else {
+      <article class="profile-card">
+        <img src="/assets/images/logo.png" alt="">
+        <h2>Компания О!</h2>
+        <p>Повышение репутации</p>
+      </article>
+
+      <section class="reminders">
+        <div class="reminders-head">
+          <h2>Напоминания</h2>
+          <span class="material-icons-sharp">notifications_none</span>
+        </div>
+
+        <article class="notification">
+          <span class="notification-icon material-icons-sharp">verified_user</span>
+          <div>
+            <h3>Keycloak</h3>
+            <small>Пользователи и роли</small>
+          </div>
+          <span class="material-icons-sharp muted">more_vert</span>
+        </article>
+
+        <article class="notification danger">
+          <span class="notification-icon material-icons-sharp">analytics</span>
+          <div>
+            <h3>Prometheus</h3>
+            <small>Метрики backend</small>
+          </div>
+          <span class="material-icons-sharp muted">more_vert</span>
+        </article>
+
+        <a class="home-link" routerLink="/">
+          <span class="material-icons-sharp">logout</span>
+          <strong>На главную</strong>
+        </a>
+      </section>
+    }
+  </section>
+</div>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Вход</title>
+    <!-- ==================== META ======================== -->
+    <th:block th:insert="~{fragments/common :: meta}"></th:block>
+    <!-- ================== FAVICON ======================= -->
+    <!-- <th:block th:insert="~{fragments/common :: favicon}"></th:block> -->
+    <!-- ==================== STYLE ======================== -->
+    <th:block th:insert="~{fragments/common :: styles_index_boot}"></th:block>
+    <!-- ==================== TITLE ======================== -->
+
+</head>
+
+<body>
+    <div class="wrapper">
+        <header th:replace="~{fragments/header :: header}"></header>
+
+
+        <div class="container">
+            <div class="d-flex justify-content-center py-1 pt-3 mt-3 mb-5 pb-5" >
+                <div class="col-lg-8 col-md-10 col-sm-10 col-xs-10s mt-5 pt-5">
+                    <form th:action="@{/process-login}" method="post">
+                        <div class="form-group">
+                            <label for="username">Имя пользователя</label>
+                            <input type="text" class="form-control" id="username" name="username"
+                                placeholder="Введите имя пользователя">
+                            <small class="form-text text-danger" th:if="${param.error != null}">Некорректное имя пользователя
+                                или пароль</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Пароль</label>
+                            <input type="password" class="form-control" id="password" name="password"
+                                placeholder="Введите пароль">
+                        </div>
+                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                        <button type="submit" class="btn btn-primary">Логин</button>
+                        <a class="px-3" th:href="@{/register}">Зарегистрироваться</a>
+                        <div th:if="${param.error}" class="form-text text-danger">
+                            Ошибка аутентификации
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== FOOTER ======================== -->
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        <!-- ==================== JS ======================== -->  
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+    </div>
+</body>
+
+</html>

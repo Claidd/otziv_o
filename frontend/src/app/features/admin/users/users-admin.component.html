@@ -1,0 +1,305 @@
+<app-admin-layout title="Пользователи" active="users" rightPanelMode="custom">
+  <section class="users-workspace">
+    <header class="users-toolbar">
+      <nav class="user-tabs" aria-label="Фильтр пользователей">
+        @for (tab of statusTabs; track trackStatus($index, tab)) {
+          <button
+            type="button"
+            [class.active]="statusFilter() === tab.key"
+            (click)="setStatusFilter(tab.key)"
+          >
+            <span class="material-icons-sharp">{{ tab.icon }}</span>
+            {{ tab.label }}
+            <small>{{ statusTotal(tab.key) }}</small>
+          </button>
+        }
+      </nav>
+
+      <div class="quick-links">
+        <a routerLink="/admin/users/new">Новый пользователь</a>
+        <a routerLink="/legacy-migration">Миграция</a>
+        <button type="button" (click)="loadUsers()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Загрузка' : 'Обновить' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="users-search">
+      <label>
+        <span class="material-icons-sharp">search</span>
+        <input
+          type="text"
+          placeholder="Найти пользователя"
+          [value]="userSearch()"
+          (input)="userSearch.set($any($event.target).value)"
+        >
+      </label>
+
+      <select [value]="roleFilter()" (change)="roleFilter.set($any($event.target).value)" aria-label="Фильтр по роли">
+        <option value="all">Все роли</option>
+        @for (role of availableRoles; track trackRole($index, role)) {
+          <option [value]="role">{{ roleLabel(role) }}</option>
+        }
+      </select>
+
+      <button type="button" class="icon-button" (click)="clearFilters()" title="Сбросить фильтры">
+        <span class="material-icons-sharp">filter_alt_off</span>
+      </button>
+    </section>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    <section class="users-grid">
+      <article class="users-card table-card">
+        <div class="table-head">
+          <div>
+            <p class="eyebrow">ACCOUNT</p>
+            <h2>Список пользователей</h2>
+          </div>
+          <span>{{ filteredUsers().length }} / {{ users().length }}</span>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Логин</th>
+                <th>ФИО</th>
+                <th>Email</th>
+                <th>Роли</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (user of filteredUsers(); track trackUser($index, user)) {
+                <tr
+                  [class.selected]="selectedUser()?.id === user.id"
+                  [class.unlinked]="!user.keycloakLinked"
+                  (click)="selectUser(user)"
+                >
+                  <td>
+                    <strong>{{ user.username }}</strong>
+                    <span>{{ user.authProvider || '-' }}</span>
+                  </td>
+                  <td>{{ user.fio || '-' }}</td>
+                  <td>{{ user.email || '-' }}</td>
+                  <td>
+                    <span class="role-pills">
+                      @for (role of user.roles; track trackRole($index, role)) {
+                        <b>{{ roleLabel(role) }}</b>
+                      }
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-pill" [class.off]="!user.active">{{ user.active ? 'Включен' : 'Отключен' }}</span>
+                    @if (!user.keycloakLinked) {
+                      <span class="status-pill warn">Нужна миграция</span>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="no-results">По этим фильтрам пользователей нет.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <form class="users-card editor-card" [formGroup]="form" (ngSubmit)="save()">
+        @if (selectedUser()) {
+          <div class="editor-title">
+            <div>
+              <p class="eyebrow">EDIT</p>
+              <h2>{{ selectedUser()?.username }}</h2>
+            </div>
+            <span [class.warn]="!selectedUser()?.keycloakLinked">
+              {{ selectedUser()?.keycloakLinked ? 'Keycloak' : 'Миграция' }}
+            </span>
+          </div>
+
+          <div class="editor-grid">
+            <label>
+              <span>Email</span>
+              <input type="email" formControlName="email">
+            </label>
+
+            <label>
+              <span>ФИО</span>
+              <input type="text" formControlName="fio">
+            </label>
+
+            <label>
+              <span>Телефон</span>
+              <input type="text" formControlName="phoneNumber">
+            </label>
+
+            <label>
+              <span>Коэффициент</span>
+              <input type="number" min="0" max="1" step="0.01" formControlName="coefficient">
+            </label>
+          </div>
+
+          <label class="checkbox wide">
+            <input type="checkbox" formControlName="enabled">
+            <span>Включен</span>
+          </label>
+
+          <section class="role-block">
+            <span>Роли</span>
+            <div class="role-grid">
+              @for (role of availableRoles; track trackRole($index, role)) {
+                <label class="checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isRoleSelected(role)"
+                    (change)="toggleRole(role, $any($event.target).checked)"
+                  >
+                  <span>{{ roleLabel(role) }}</span>
+                </label>
+              }
+            </div>
+          </section>
+
+          @if (form.invalid && form.touched) {
+            <p class="error compact">Проверь email и выбери хотя бы одну роль.</p>
+          }
+
+          <div class="actions">
+            <button type="submit" [disabled]="saving() || !selectedUser()?.keycloakLinked">
+              <span class="material-icons-sharp">save</span>
+              {{ saving() ? 'Сохраняю' : 'Сохранить' }}
+            </button>
+          </div>
+
+          @if (savedUser()) {
+            <p class="success compact">Профиль {{ savedUser()?.username }} сохранен.</p>
+          }
+
+          <section class="assignments" [formGroup]="assignmentForm">
+            <div class="editor-title">
+              <div>
+                <p class="eyebrow">LINKS</p>
+                <h2>Связи в команде</h2>
+              </div>
+              <span>{{ assignmentsLoading() ? 'Загрузка' : 'Готово' }}</span>
+            </div>
+
+            @if (assignmentsError()) {
+              <p class="error compact">{{ assignmentsError() }}</p>
+            }
+
+            <section class="role-block">
+              <span>Менеджеры</span>
+              <div class="role-grid">
+                @for (manager of assignmentOptions().managers; track manager.id) {
+                  <label class="checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isAssignmentSelected('managerIds', manager.id)"
+                      (change)="toggleAssignment('managerIds', manager.id, $any($event.target).checked)"
+                    >
+                    <span>{{ manager.fio || manager.username }}</span>
+                  </label>
+                }
+              </div>
+            </section>
+
+            <section class="role-block">
+              <span>Работники</span>
+              <div class="role-grid">
+                @for (worker of assignmentOptions().workers; track worker.id) {
+                  <label class="checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isAssignmentSelected('workerIds', worker.id)"
+                      (change)="toggleAssignment('workerIds', worker.id, $any($event.target).checked)"
+                    >
+                    <span>{{ worker.fio || worker.username }}</span>
+                  </label>
+                }
+              </div>
+            </section>
+
+            <section class="role-block">
+              <span>Операторы</span>
+              <div class="role-grid">
+                @for (operator of assignmentOptions().operators; track operator.id) {
+                  <label class="checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isAssignmentSelected('operatorIds', operator.id)"
+                      (change)="toggleAssignment('operatorIds', operator.id, $any($event.target).checked)"
+                    >
+                    <span>{{ operator.fio || operator.username }}</span>
+                  </label>
+                }
+              </div>
+            </section>
+
+            <section class="role-block">
+              <span>Маркетологи</span>
+              <div class="role-grid">
+                @for (marketolog of assignmentOptions().marketologs; track marketolog.id) {
+                  <label class="checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isAssignmentSelected('marketologIds', marketolog.id)"
+                      (change)="toggleAssignment('marketologIds', marketolog.id, $any($event.target).checked)"
+                    >
+                    <span>{{ marketolog.fio || marketolog.username }}</span>
+                  </label>
+                }
+              </div>
+            </section>
+
+            <div class="actions">
+              <button type="button" (click)="saveAssignments()" [disabled]="assignmentsSaving()">
+                <span class="material-icons-sharp">hub</span>
+                {{ assignmentsSaving() ? 'Сохраняю связи' : 'Сохранить связи' }}
+              </button>
+            </div>
+
+            @if (savedAssignments()) {
+              <p class="success compact">Связи команды сохранены.</p>
+            }
+          </section>
+        } @else {
+          <div class="empty">
+            <span class="material-icons-sharp">person_search</span>
+            <h2>Выбери пользователя</h2>
+            <p>Здесь будут профиль, роли и связи внутри команды.</p>
+          </div>
+        }
+      </form>
+    </section>
+
+    <section class="mobile-lead-stats mobile-user-stats" aria-label="Статистика пользователей">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <article class="stat-card" [class]="metric.tone">
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </article>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="lead-stats user-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <article class="stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+  </section>
+</app-admin-layout>

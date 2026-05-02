@@ -1,0 +1,543 @@
+<app-admin-layout [title]="title()" active="manager" [hideSidebarBeforeLogin]="false" rightPanelMode="custom">
+  <section class="review-check-workspace">
+    <header class="details-topbar">
+      <div class="details-title">
+        <h1>{{ title() }}</h1>
+      </div>
+    </header>
+
+    @if (loading() && !details()) {
+      <div class="empty-state">
+        <span class="material-icons-sharp">hourglass_top</span>
+        <p>Загружаю отзывы...</p>
+      </div>
+    }
+
+    @if (error()) {
+      <div class="empty-state error-state">
+        <span class="material-icons-sharp">error</span>
+        <p>{{ error() }}</p>
+        <button type="button" class="secondary ghost" (click)="loadReviewCheck()">Повторить</button>
+      </div>
+    }
+
+    @if (details(); as details) {
+      @if (!details.reviews.length) {
+        <div class="empty-state">
+          <span class="material-icons-sharp">rate_review</span>
+          <p>Список отзывов пуст. Сообщите менеджеру об этом.</p>
+        </div>
+      } @else {
+        <form class="review-check-form" (ngSubmit)="saveReviews()">
+          <div class="review-carousel">
+            @if (!details.approved) {
+              <span class="review-edit-hint" aria-hidden="true">
+                <span class="material-icons-sharp">arrow_downward</span>
+                <strong>текст можно редактировать нажав на него</strong>
+              </span>
+            }
+
+            <section class="review-cards" aria-label="Отзывы на проверке" (scroll)="onReviewCarouselScroll($event)">
+              @for (review of details.reviews; track trackReview($index, review)) {
+                <article
+                  class="review-card"
+                  [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
+                >
+                  <header>
+                    <span class="review-card-title">{{ details.companyTitle || 'Компания' }}</span>
+                    <div class="review-id-line">
+                      #{{ review.id }}
+                      @if (hasReviewPhoto(review)) {
+                        <a
+                          class="review-photo-link"
+                          [href]="reviewPhotoUrl(review)"
+                          target="_blank"
+                          rel="noopener"
+                          title="Открыть фото"
+                          aria-label="Открыть фото отзыва"
+                        >
+                          <span class="material-icons-sharp">photo_camera</span>
+                        </a>
+                      } @else if (needsReviewPhoto(review)) {
+                        <span class="review-photo-link review-photo-link--missing" title="Фото требуется" aria-label="Фото требуется">
+                          <span class="material-icons-sharp">photo_camera</span>
+                        </span>
+                      }
+                      @if (details.permissions.canSeeInternalInfo && (hasReviewNote(review) || isReviewNoteEditing(review))) {
+                        <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle(review)" [title]="reviewNoteTitle(review)">
+                          <span class="material-icons-sharp">priority_high</span>
+                          <span class="review-note-popover">
+                            @if (hasReviewOwnNote(review) || isReviewNoteEditing(review)) {
+                              <label class="review-note-section">
+                                <span>Заметка отзыва</span>
+                                <textarea
+                                  [name]="'review-note-' + review.id"
+                                  [readonly]="!isReviewNoteEditing(review)"
+                                  [ngModel]="reviewNoteValue(review)"
+                                  (ngModelChange)="setReviewNoteDraft(review.id, $event)"
+                                  (focus)="startReviewNoteEdit(review)"
+                                  (click)="startReviewNoteEdit(review)"
+                                  aria-label="Заметка отзыва"
+                                ></textarea>
+
+                                @if (isReviewNoteEditing(review)) {
+                                  <span class="note-edit-actions">
+                                    <button
+                                      type="button"
+                                      class="cancel"
+                                      (click)="cancelReviewNoteEdit(review)"
+                                      [disabled]="isMutating('save-note-' + review.id)"
+                                      title="Отменить"
+                                    >
+                                      X
+                                    </button>
+                                    <button
+                                      type="button"
+                                      class="save"
+                                      (click)="saveReviewNote(review)"
+                                      [disabled]="isMutating('save-note-' + review.id) || !isReviewNoteChanged(review)"
+                                      title="Сохранить заметку"
+                                    >
+                                      <span class="material-icons-sharp">
+                                        {{ isReviewNoteSaved(review) ? 'check' : 'save' }}
+                                      </span>
+                                    </button>
+                                  </span>
+                                }
+                              </label>
+                            }
+
+                            @if (hasReviewOrderNote(review) || isSideNoteEditing('order')) {
+                              <label class="review-note-section">
+                                <span>Заметка заказа</span>
+                                <textarea
+                                  [name]="'order-note-' + review.id"
+                                  [readonly]="!isSideNoteEditing('order')"
+                                  [ngModel]="reviewOrderNoteValue(details, review)"
+                                  (ngModelChange)="setSideNoteDraft('order', $event)"
+                                  (focus)="startSideNoteEdit(details, 'order')"
+                                  (click)="startSideNoteEdit(details, 'order')"
+                                  aria-label="Заметка заказа"
+                                ></textarea>
+
+                                @if (isSideNoteEditing('order')) {
+                                  <span class="note-edit-actions">
+                                    <button type="button" class="cancel" (click)="cancelSideNoteEdit('order')" [disabled]="isMutating('save-side-order')">X</button>
+                                    <button
+                                      type="button"
+                                      class="save"
+                                      (click)="saveSideNote(details, 'order')"
+                                      [disabled]="isMutating('save-side-order') || !isSideNoteChanged(details, 'order')"
+                                      title="Сохранить заметку заказа"
+                                    >
+                                      <span class="material-icons-sharp">{{ isSideNoteSaved('order') ? 'check' : 'save' }}</span>
+                                    </button>
+                                  </span>
+                                }
+                              </label>
+                            }
+
+                            @if (hasReviewCompanyNote(review) || isSideNoteEditing('company')) {
+                              <label class="review-note-section">
+                                <span>Заметка компании</span>
+                                <textarea
+                                  [name]="'company-note-' + review.id"
+                                  [readonly]="!isSideNoteEditing('company')"
+                                  [ngModel]="reviewCompanyNoteValue(details, review)"
+                                  (ngModelChange)="setSideNoteDraft('company', $event)"
+                                  (focus)="startSideNoteEdit(details, 'company')"
+                                  (click)="startSideNoteEdit(details, 'company')"
+                                  aria-label="Заметка компании"
+                                ></textarea>
+
+                                @if (isSideNoteEditing('company')) {
+                                  <span class="note-edit-actions">
+                                    <button type="button" class="cancel" (click)="cancelSideNoteEdit('company')" [disabled]="isMutating('save-side-company')">X</button>
+                                    <button
+                                      type="button"
+                                      class="save"
+                                      (click)="saveSideNote(details, 'company')"
+                                      [disabled]="isMutating('save-side-company') || !isSideNoteChanged(details, 'company')"
+                                      title="Сохранить заметку компании"
+                                    >
+                                      <span class="material-icons-sharp">{{ isSideNoteSaved('company') ? 'check' : 'save' }}</span>
+                                    </button>
+                                  </span>
+                                }
+                              </label>
+                            }
+                          </span>
+                        </span>
+                      }
+                    </div>
+                  </header>
+
+                  <div
+                    class="review-field-editor review-field-editor--text"
+                    [class.editing]="isReviewFieldEditing(review, 'text')"
+                    [class.expanded]="isReviewTextOpen(review)"
+                  >
+                    <div class="review-text-box">
+                      <textarea
+                        [name]="'text-' + review.id"
+                        [readonly]="!isReviewFieldEditing(review, 'text')"
+                        [ngModel]="reviewFieldValue(review, 'text')"
+                        (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
+                        (focus)="startReviewFieldEdit(review, 'text')"
+                        (click)="startReviewFieldEdit(review, 'text')"
+                        aria-label="Текст отзыва"
+                        placeholder="Текст отзыва"
+                      ></textarea>
+
+                      @if (shouldShowReviewTextToggle(review)) {
+                        <span
+                          class="review-text-toggle"
+                          role="button"
+                          tabindex="0"
+                          [attr.aria-expanded]="isReviewTextExpanded(review)"
+                          (click)="toggleReviewText(review)"
+                          (keydown.enter)="toggleReviewText(review)"
+                          (keydown.space)="$event.preventDefault(); toggleReviewText(review)"
+                        >
+                          {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
+                        </span>
+                      }
+                    </div>
+
+                    @if (isReviewFieldEditing(review, 'text')) {
+                      <div class="review-field-edit-actions">
+                        <span class="field-save-actions">
+                          <button
+                            type="button"
+                            class="cancel"
+                            (click)="cancelReviewFieldEdit(review, 'text')"
+                            [disabled]="isMutating('save-text-' + review.id)"
+                            title="Отменить"
+                          >
+                            X
+                          </button>
+                          <button
+                            type="button"
+                            class="save"
+                            (click)="saveReviewField(review, 'text')"
+                            [disabled]="isMutating('save-text-' + review.id) || !isReviewFieldChanged(review, 'text') || !reviewFieldValue(review, 'text').trim()"
+                            title="Сохранить текст"
+                          >
+                            <span class="material-icons-sharp">
+                              {{ isReviewFieldSaved(review, 'text') ? 'check' : 'save' }}
+                            </span>
+                          </button>
+                        </span>
+                      </div>
+                    }
+                  </div>
+
+                  <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
+                    <textarea
+                      [name]="'answer-' + review.id"
+                      [readonly]="!isReviewFieldEditing(review, 'answer')"
+                      [ngModel]="reviewFieldValue(review, 'answer')"
+                      (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
+                      (focus)="startReviewFieldEdit(review, 'answer')"
+                      (click)="startReviewFieldEdit(review, 'answer')"
+                      aria-label="Замечания к отзыву"
+                      placeholder="Впишите сюда замечания к отзыву, если есть"
+                    ></textarea>
+
+                    @if (isReviewFieldEditing(review, 'answer')) {
+                      <div class="review-field-edit-actions">
+                        <button
+                          type="button"
+                          class="cancel"
+                          (click)="cancelReviewFieldEdit(review, 'answer')"
+                          [disabled]="isMutating('save-answer-' + review.id)"
+                          title="Отменить"
+                        >
+                          X
+                        </button>
+                        <button
+                          type="button"
+                          class="save"
+                          (click)="saveReviewField(review, 'answer')"
+                          [disabled]="isMutating('save-answer-' + review.id) || !isReviewFieldChanged(review, 'answer')"
+                          title="Сохранить замечание"
+                        >
+                          <span class="material-icons-sharp">
+                            {{ isReviewFieldSaved(review, 'answer') ? 'check' : 'save' }}
+                          </span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+
+                  @if (details.permissions.canSeeBot && review.botName) {
+                    <div class="bot-line">
+                      <span>{{ review.botName }}</span>
+                    </div>
+                  } @else if (review.productTitle) {
+                    <div class="bot-line">
+                      <span>{{ review.productTitle }}</span>
+                    </div>
+                  }
+
+                  <footer>
+                    <span>{{ reviewDate(review) }}</span>
+                    @if (details.approved) {
+                      <span>одобрено</span>
+                    } @else if (needsReviewPhoto(review)) {
+                      <span class="missing-photo-text">нужно фото</span>
+                    }
+                  </footer>
+                </article>
+              }
+            </section>
+
+            @if (details.reviews.length > 1) {
+              <span class="mobile-swipe-hint" aria-hidden="true">
+                <span class="material-icons-sharp">chevron_right</span>
+              </span>
+
+              <div class="review-carousel-dots" aria-hidden="true">
+                @for (dotReview of details.reviews; track trackReviewDot($index, dotReview); let i = $index) {
+                  <span [class.active]="activeReviewSlide() === i"></span>
+                }
+              </div>
+            }
+          </div>
+
+          @if (details.permissions.canApprovePublication) {
+            <footer class="details-actions details-actions--after-cards">
+              @if (!details.approved) {
+                <span class="approve-publication-hint" aria-hidden="true">
+                  <span class="material-icons-sharp">arrow_downward</span>
+                  <strong>разрешите публикацию</strong>
+                </span>
+              }
+
+              <button
+                type="button"
+                class="approve-publication-button"
+                [class.approved]="details.approved"
+                (click)="approveReviews()"
+                [disabled]="busy() || details.approved"
+              >
+                {{ details.approved ? 'разрешена публикация' : isAction('approve') ? 'РАЗРЕШАЮ...' : 'РАЗРЕШИТЬ ПУБЛИКАЦИЮ' }}
+              </button>
+            </footer>
+          }
+
+          <section class="check-comment-card">
+            <label>
+              <span>На коррекцию</span>
+              <textarea
+                name="check-comment"
+                rows="4"
+                placeholder="Общие замечания по отзывам"
+                [ngModel]="commentValue(details)"
+                (ngModelChange)="setComment($event)"
+              ></textarea>
+            </label>
+          </section>
+
+          @if (details.permissions.canSendCorrection) {
+            <footer class="details-actions details-actions--correction">
+              <button type="button" (click)="sendToCorrection()" [disabled]="busy()">
+                {{ isAction('correction') ? 'ОТПРАВЛЯЮ...' : 'КОРРЕКЦИЯ' }}
+              </button>
+            </footer>
+          }
+        </form>
+      }
+
+      <section class="mobile-review-check-side" aria-label="Сводка проверки">
+        @if (details.permissions.canSeeInternalInfo && (hasInternalNotes(details) || canEditNotes(details))) {
+          <article class="side-note-card">
+            <h2>Заметка заказа</h2>
+            <textarea
+              [readonly]="!isSideNoteEditing('order')"
+              [ngModel]="sideNoteValue(details, 'order')"
+              (ngModelChange)="setSideNoteDraft('order', $event)"
+              (focus)="startSideNoteEdit(details, 'order')"
+              (click)="startSideNoteEdit(details, 'order')"
+              aria-label="Заметка заказа"
+            ></textarea>
+            @if (isSideNoteEditing('order')) {
+              <div class="note-edit-actions">
+                <button type="button" class="cancel" (click)="cancelSideNoteEdit('order')" [disabled]="isMutating('save-side-order')">X</button>
+                <button
+                  type="button"
+                  class="save"
+                  (click)="saveSideNote(details, 'order')"
+                  [disabled]="isMutating('save-side-order') || !isSideNoteChanged(details, 'order')"
+                >
+                  <span class="material-icons-sharp">{{ isSideNoteSaved('order') ? 'check' : 'save' }}</span>
+                </button>
+              </div>
+            }
+          </article>
+
+          <article class="side-note-card">
+            <h2>Заметка компании</h2>
+            <textarea
+              [readonly]="!isSideNoteEditing('company')"
+              [ngModel]="sideNoteValue(details, 'company')"
+              (ngModelChange)="setSideNoteDraft('company', $event)"
+              (focus)="startSideNoteEdit(details, 'company')"
+              (click)="startSideNoteEdit(details, 'company')"
+              aria-label="Заметка компании"
+            ></textarea>
+            @if (isSideNoteEditing('company')) {
+              <div class="note-edit-actions">
+                <button type="button" class="cancel" (click)="cancelSideNoteEdit('company')" [disabled]="isMutating('save-side-company')">X</button>
+                <button
+                  type="button"
+                  class="save"
+                  (click)="saveSideNote(details, 'company')"
+                  [disabled]="isMutating('save-side-company') || !isSideNoteChanged(details, 'company')"
+                >
+                  <span class="material-icons-sharp">{{ isSideNoteSaved('company') ? 'check' : 'save' }}</span>
+                </button>
+              </div>
+            }
+          </article>
+        }
+
+        <div class="mobile-stats-grid">
+          <article class="stat-card blue">
+            <div>
+              <span>Всего отзывов</span>
+              <strong>{{ details.reviews.length }}</strong>
+            </div>
+            <i class="material-icons-sharp">reviews</i>
+          </article>
+          <article class="stat-card green">
+            <div>
+              <span>Одобрено</span>
+              <strong>{{ reviewedCount(details) }}</strong>
+            </div>
+            <i class="material-icons-sharp">task_alt</i>
+          </article>
+        </div>
+      </section>
+    }
+  </section>
+
+  <section admin-right-content class="review-check-side">
+    @if (details(); as details) {
+      @if (details.permissions.canSeeInternalInfo && (hasInternalNotes(details) || canEditNotes(details))) {
+        <article class="side-note-card">
+          <h2>Заметка заказа</h2>
+          <textarea
+            [readonly]="!isSideNoteEditing('order')"
+            [ngModel]="sideNoteValue(details, 'order')"
+            (ngModelChange)="setSideNoteDraft('order', $event)"
+            (focus)="startSideNoteEdit(details, 'order')"
+            (click)="startSideNoteEdit(details, 'order')"
+            aria-label="Заметка заказа"
+          ></textarea>
+          @if (isSideNoteEditing('order')) {
+            <div class="note-edit-actions">
+              <button type="button" class="cancel" (click)="cancelSideNoteEdit('order')" [disabled]="isMutating('save-side-order')">X</button>
+              <button
+                type="button"
+                class="save"
+                (click)="saveSideNote(details, 'order')"
+                [disabled]="isMutating('save-side-order') || !isSideNoteChanged(details, 'order')"
+              >
+                <span class="material-icons-sharp">{{ isSideNoteSaved('order') ? 'check' : 'save' }}</span>
+              </button>
+            </div>
+          }
+        </article>
+
+        <article class="side-note-card">
+          <h2>Заметка компании</h2>
+          <textarea
+            [readonly]="!isSideNoteEditing('company')"
+            [ngModel]="sideNoteValue(details, 'company')"
+            (ngModelChange)="setSideNoteDraft('company', $event)"
+            (focus)="startSideNoteEdit(details, 'company')"
+            (click)="startSideNoteEdit(details, 'company')"
+            aria-label="Заметка компании"
+          ></textarea>
+          @if (isSideNoteEditing('company')) {
+            <div class="note-edit-actions">
+              <button type="button" class="cancel" (click)="cancelSideNoteEdit('company')" [disabled]="isMutating('save-side-company')">X</button>
+              <button
+                type="button"
+                class="save"
+                (click)="saveSideNote(details, 'company')"
+                [disabled]="isMutating('save-side-company') || !isSideNoteChanged(details, 'company')"
+              >
+                <span class="material-icons-sharp">{{ isSideNoteSaved('company') ? 'check' : 'save' }}</span>
+              </button>
+            </div>
+          }
+        </article>
+      }
+
+      @if (details.workerFio) {
+        <article class="side-note-card worker-card">
+          <h2>Специалист</h2>
+          <p>
+            <span>{{ details.workerFio }}</span>
+          </p>
+        </article>
+      }
+
+      @if (showStaffActions(details)) {
+        <article class="staff-actions-card">
+          <h2>Действия</h2>
+          @if (details.permissions.canOpenManagerLinks) {
+            <a routerLink="/manager" [queryParams]="managerCompanyOrdersQuery(details)">
+              <span class="material-icons-sharp">business</span>
+              Компания
+            </a>
+            <a [routerLink]="managerOrderRoute(details)">
+              <span class="material-icons-sharp">inventory_2</span>
+              Заказ
+            </a>
+          }
+
+          @if (details.permissions.canSendToCheck) {
+            <button type="button" (click)="sendToCheck()" [disabled]="busy()">
+              <span class="material-icons-sharp">manage_search</span>
+              {{ isAction('send-check') ? 'Отправляю...' : 'На проверку' }}
+            </button>
+          }
+
+          @if (details.permissions.canMarkPaid) {
+            <button type="button" (click)="markPaid()" [disabled]="busy()">
+              <span class="material-icons-sharp">payments</span>
+              {{ isAction('pay-ok') ? 'Отмечаю...' : 'Оплатили' }}
+            </button>
+          }
+        </article>
+      }
+
+      <article class="stat-card blue">
+        <div>
+          <span>Всего отзывов</span>
+          <strong>{{ details.reviews.length }}</strong>
+        </div>
+        <i class="material-icons-sharp">reviews</i>
+      </article>
+
+      <article class="stat-card green">
+        <div>
+          <span>Одобрено</span>
+          <strong>{{ reviewedCount(details) }}</strong>
+        </div>
+        <i class="material-icons-sharp">task_alt</i>
+      </article>
+
+      <article class="stat-card teal">
+        <div>
+          <span>Статус</span>
+          <strong>{{ details.approved ? 'Одобрено' : 'Не одобрено' }}</strong>
+        </div>
+        <i class="material-icons-sharp">fact_check</i>
+      </article>
+    }
+  </section>
+</app-admin-layout>

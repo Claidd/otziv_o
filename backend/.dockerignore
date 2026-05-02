@@ -1,0 +1,9 @@
+
+target/
+.idea/
+.env
+.env.*
+data/
+logs/
+sent-hashes/
+*.iml

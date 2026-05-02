@@ -1,0 +1,25 @@
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- Основной контент - Начало -->
+    <main>
+        
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/circle/user-zp :: user-zp}"></th:block>
+        <!-- Пользователи конец -->
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_zp :: grafic_zp}"></th:block>
+        <!-- График ЗП конец -->
+
+        <!-- График ЗП - Начало -->
+        <th:block th:insert="~{admin/fragments/grafics/grafic_zp_month :: grafic_zp_month}"></th:block>
+        <!-- График ЗП конец -->
+
+
+
+    </main>
+    <!-- Основной контент - Конец -->
+    
+
+</th:block>

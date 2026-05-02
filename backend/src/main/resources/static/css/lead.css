@@ -1,0 +1,1094 @@
+/* ============== ОБЩИЕ НАСТРОЙКИ START ============ */
+
+/* подключаем шрифт */
+@font-face {
+    font-family: 'laptev_brush';
+    src:
+         url('../font/laptev_brush.otf');
+}
+
+:root{
+    --color-primary: #6C9BCF;
+    --color-danger: #FF0060;
+    --color-success: #1B9C85;
+    --color-warning: #F7D060;
+    --color-white: #fff;
+    --color-info-dark: #7d8da1;
+    --color-dark: #363949;
+    --color-light: rgba(132, 139, 200, 0.18);
+    --color-dark-variant: #677483;
+    --color-background: #f6f6f9;
+
+    --card-border-radius: 2rem;
+    --border-radius-1: 0.4rem;
+    --border-radius-2: 1.2rem;
+
+    --card-padding: 1.8rem;
+    --padding-1: 1.2rem;
+
+    --box-shadow: 0 2rem 3rem var(--color-light);
+}
+
+.dark-mode-variables{
+    --color-background: #181a1e;
+    --color-white: #202528;
+    --color-dark: #edeffd;
+    --color-dark-variant: #a3bdcc;
+    --color-light: rgba(0, 0, 0, 0.4);
+    --box-shadow: 0 2rem 3rem var(--color-light);
+}
+
+
+/* ширина блока складывается из ширины контента (width), значений отступов (margin), полей (padding) и границ (border). Аналогично обстоит и с высотой блока. Свойство box-sizing позволяет изменить этот алгоритм, чтобы свойства width и height задавали размеры не контента, а размеры блока. устанавливаем наследование как у родителя */
+html {
+    box-sizing: border-box;
+}
+
+*, *::after, *::before {
+    box-sizing: inherit;
+    /* убираем отступы все отступы и стили */
+    margin: 0;
+    padding: 0;
+}
+
+/* задаем высоту страницы в 100% */
+html, body {
+    height: 100%;
+}
+
+ul {
+    /* всем спискам убираем точки впереди */
+    list-style: none;
+}
+
+a {
+    /* всем ссылкам убираем нижнее подчеркивание */
+    text-decoration: none;
+    /* меняем цвет ссылок на цвет родителя */
+    color: inherit;
+    color: var(--color-dark);
+}
+
+body {
+    /* width: 100vw; */
+    height: 100vh;
+    font-family: 'laptev_brush';
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.wrapper {
+    /* устанавливаем минимальную высоту обертки в 100% страницы */
+    min-height: 100%;
+    display: flex;
+    /* устанавливаем добавление дивов друг под другом */
+    flex-direction: column;
+    position: relative;
+}
+
+.container {
+    /* устанавливаем максимальную ширину */
+    max-width: 100%;
+    /* max-width: 1620px; */
+    /* выравниваем по середине. 1 верх и низ, 2 лево право */
+    margin: 0 auto;
+    /* устанавливаем отступы от краев */
+    padding: 0 10px;
+    flex: 1 0 auto;
+}
+
+/* настройки всеъ заголовков */
+.section-title {
+    margin-bottom: 50px;
+    font-size: 48px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.company__section-title {
+    margin-top: 2rem;
+    margin-bottom: 50px;
+    font-size: 48px;
+    font-weight: 700;
+    text-align: center;
+}
+/* ============== ОБЩИЕ НАСТРОЙКИ END ============ */
+
+/* ================= LEADS START =============== */
+
+.leads {
+    padding: 100px 0 150px;
+}
+
+.contacts__title {
+    margin-bottom: 20px;
+}
+
+.contact__text {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 50px;
+    padding: 0 100px;
+}
+
+.form {
+    max-width: 580px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.form__input {
+    width: 270px;
+    padding: 18px 20px;
+    display: inline-block;
+    /* font-family: 'Play', sans-serif; */
+    border: 1px solid #000;
+    margin-bottom: 50px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+    font-family: 'laptev_brush';
+}
+
+/* обращение к плейсхолдеру */
+.form__input::placeholder, 
+.form__textarea::placeholder  {
+    /* font-family: 'Play', sans-serif; */
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+    opacity: .5;
+}
+
+.form__textarea {
+    font-family: 'laptev_brush';
+    width: 100%;
+    resize: none;
+    padding: 28px 20px;
+    height: 290px;
+    border: 1px solid #000;
+    /* font-family: 'Play', sans-serif; */
+    margin-bottom: 50px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+    margin-bottom: 50px;
+}
+
+.form__btn {
+    text-transform: uppercase;
+    color: #fff;
+    /* font-family: 'Play', sans-serif; */
+    background-color: #151515;
+    font-size: 16px;
+    font-weight: 400;
+    padding: 13px 61px;
+    /* выравниваем так как это флекс элемент */
+    margin: 0 auto;
+    border: none;
+}
+
+/* ================= LEADS END =============== */
+
+
+/* =================== MAIN START ================== */
+.main {
+    /* ставим 1, чтобы контейнер растянулся во всю страницу */
+    flex-grow: 1;
+}
+
+/* =================== TOP START =================== */
+
+.top {
+    color: #fff;
+    /* выравниваем текст по середине */
+    text-align: center;
+    padding-top: 180px;
+    padding-bottom: 50px;
+    position: absolute;
+    z-index: 5;
+    /* растягиваем элементыпосле позиционирования */
+    left: 0;
+    right: 0;
+}
+
+.title {
+    padding-bottom: 40px;
+    font-size: 96px;
+    font-weight: 700;
+}
+
+.top__link {
+    /* задаем фон кнопки */
+    background-color: #151515;
+    /* задаем отступы кнопки */
+    padding: 10px;
+    /* задаем максимальную ширину */
+    max-width: 430px;
+    /* растягиваем на всю ширину указанную выше */
+    width: 100%;
+    /* означает элемент, который продолжает находиться в строке ( inline ), но при этом может иметь важные свойства блока */
+    display: inline-block;
+    text-transform: uppercase;
+    font-size: 36px;
+    font-weight: 700;
+}
+
+/* ==================== TOP END ==================== */
+
+
+
+/* ================== CHOOSE START ================ */
+
+.choose {
+    padding: 100px 0 150px;
+}
+
+.company__lead__card {
+    padding: 0px 0 100px;
+}
+
+.tabs {
+    margin-bottom: 70px;
+}
+
+.tabs__btn__lead{
+    padding: 0 0px 50px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
+}
+
+.tabs__btn__lead-item {
+    font-family: 'laptev_brush';
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    padding: 0;
+    color: var(--color-dark);
+}
+
+.tabs__btn__lead-item--active {
+    color: #0066FF;
+}
+
+.tabs__content-item {
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 100px 40px;
+}
+
+.tabs__content-item.tabs__content-item--active {
+    display: grid;
+}
+
+.card {
+    text-align: center;
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+    border-radius: 1.2rem;
+}
+
+.card:hover {
+    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
+}
+
+.card__content {
+    padding: 0 5px;
+    /* border: 1px solid #0066FF; */
+    border-top: 0;
+}
+
+.card__title {
+    padding-top: 20px;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.card__text {
+    margin-bottom: 20px;
+}
+
+.card__price {
+    margin-bottom: 20px;
+    font-style: 24px;
+    font-weight: 700;
+}
+
+.card__link {
+    display: block;
+    color: #0066FF;
+    /* border: 1px solid #0066FF; */
+    border-top: 0;
+}
+
+.card__img {
+    width: 100%;
+}
+
+.card__text__lead-button {
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    color: none;
+    font-family: 'laptev_brush';
+}
+
+
+
+.menu-container {
+    text-align: center;
+    /* margin: 10px; */
+}
+/* Стрелка-кнопка */
+.menu-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    font-size: 24px;
+    padding: 10px;
+    cursor: pointer;
+    display: none; /* Скрыта по умолчанию */
+    justify-content: center;
+    align-items: center;
+}
+.menu-toggle::after {
+    content: "▼"; /* Стрелка вниз */
+    font-size: 24px;
+    transition: transform 0.3s ease;
+}
+.menu-toggle.active::after {
+    transform: rotate(180deg); /* Поворот стрелки вверх */
+}
+/* Контент меню */
+.menu-content {
+    padding: 10px;
+    /* border: 1px solid #ccc; */
+    border-radius: 5px;
+    /* background-color: #f9f9f9; */
+    margin-top: 5px;
+}
+
+
+
+/* =================== CHOOSE END ================= */
+
+/* ================== LEADS EDIT START ================ */
+
+.edit__lead {
+    padding: 100px 0 150px;
+}
+
+.edit__box {
+    /* display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; */
+}
+
+/* ================== LEADS EDIT END ================ */
+
+/* ================== LEADS CARD START ================ */
+
+.lead__card {
+    padding: 100px 0 150px;
+}
+
+.tabs__lead {
+    margin-bottom: 70px;
+}
+
+.company__tabs__lead {
+    margin-bottom: 70px;
+}
+
+
+
+.tabs__btn__lead-item {
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    padding: 0;
+}
+.tabs__btn__lead__a-item {
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    padding: 0;
+    text-align: center;
+}
+
+.tabs__btn__lead-item--active {
+    color: #d45cec;
+}
+
+/* Меняет количество */
+.tabs__content__lead-item{
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 100px 40px;
+    /* margin-top: 5rem; */
+}
+/* Меняет количество */
+
+/* Меняет количество */
+.tabs__content__lead-item2{
+    display: none;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 100px 40px;
+    margin-top: 5rem;
+}
+/* Меняет количество */
+
+.tabs__content__lead-item1{
+    display: none;
+    justify-content: center;
+    align-items: center;
+    margin-top: 5rem;
+}
+
+.card__textarea__lead {
+    width: 100%;
+    min-height: 60px;
+    border-radius: 16px;
+    border: 1px solid #ccc;
+    padding: 8px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.card__textarea__lead:focus::placeholder {
+    color: transparent;
+}
+
+.card__remember {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 40px;
+    margin-bottom: 50px;
+}
+
+.card__remember__box {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    height: 40px;
+    width: 100%;
+}
+
+.card_remember-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 23%;
+    cursor: pointer;
+}
+
+.card_remember-content:hover {
+    background-color: #d45cec;
+}
+
+.card_remember-content__btn {
+    text-decoration: none;
+    background: none;
+    border: none;
+    color: none;
+    font-family: 'laptev_brush';
+    width: 100%;
+    height: 100%;
+    /* margin-right: 5px; */
+}
+
+.card_remember-content__btn:hover {
+    color: #fff;
+}
+
+.card__remember-text {
+    width: 0.1px;
+    font-size: 1px;
+    text-decoration: none;
+    background: none;
+    border: none;
+    color: none;
+    font-family: 'laptev_brush';
+}
+.card__remember__box-serch {
+    display: flex;
+    justify-content: right;
+    width: 100%;
+    height: 40px;
+ }
+
+.card_remember-search {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 90%;
+    cursor: pointer;
+}
+
+.card_remember-search__text {
+    font-size: 18px;
+    margin-left: 20px;
+    width: 90%;
+    border: none;
+}
+
+.card_remember-search__btn {
+    text-decoration: none;
+    background: none;
+    border: none;
+    color: none;
+    width: 10%;
+    text-align: right;
+    margin-right: 20px;
+    font-family: 'laptev_brush';
+}
+
+.tabs__content__lead-item.tabs__content__lead-item--active {
+    display: grid;
+}
+
+.tabs__content__lead-item2.tabs__content__lead-item--active {
+    display: grid;
+}
+
+.tabs__content__lead-item1.tabs__content__lead-item--active {
+    display: grid;
+}
+
+.card__link__lead__more {
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    color: none;
+    font-family: 'laptev_brush';
+}
+
+
+.card__lead {
+    text-align: center;
+    /* серый не прозрачный фон */
+    /* border: 1px solid #5b5a5afe; */
+    /* серый прозрачный фон */
+    border: 1px solid #5b5a5a38;
+    /* фиолетовый прозрачный фон */
+    /* border: 1px solid #e418ff38; */
+    /* box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18); */
+    border-radius: 1.2rem;
+}
+
+.card__lead:hover {
+    box-shadow: 0 2rem 3rem rgba(132, 139, 200, 0.18);
+}
+
+.card__content__lead {
+    padding: 0 5px;
+    /* border: 1px solid #0066FF; */
+    border-top: 0;
+}
+
+.card__title__lead {
+    padding-top: 20px;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.company__card__content__phone {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 40px;
+    
+}
+
+.company__card__title__lead {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+/* =========================================== */
+.company__card__text__lead-button{
+    background: none;
+    border: none;
+    text-decoration: none;
+    padding: 0;
+    color: none;
+    width: 97%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    font-family: 'laptev_brush';
+    font-size: 24px;
+    color: #218294;
+    display: block;
+    position: relative;
+    transition: .5s;
+    overflow: hidden;
+}
+
+
+.company__card__text__lead-button::before,
+.company__card__text__lead-button::after {
+    position: absolute;
+    content: '';
+    width: 100%;
+    height: 100%;
+    background:  #ff9500;
+    top: 0;
+    left: -100%;
+    opacity: .5;
+    transition: .3s;
+    z-index: -1;
+}
+
+.company__card__text__lead-button:after {
+    opacity: 1;
+    transition-delay: .2s;
+}
+
+.company__card__text__lead-button:hover{
+    color: #000;
+}
+
+.company__card__text__lead-button:hover::before, .butt:hover::after {
+    left: 0;
+}
+
+/* =========================================== */
+
+/* =========================================== */
+.company__telephone__button__tel{
+    background: none;
+    border: none;
+    text-decoration: none;
+    padding: 0;
+    color: none;
+    width: 20%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+    font-family: 'laptev_brush';
+    font-size: 24px;
+    color: #218294;
+    display: block;
+    position: relative;
+    transition: .5s;
+    overflow: hidden;
+}
+
+
+.company__telephone__button__tel::before,
+.company__telephone__button__tel::after {
+    position: absolute;
+    content: '';
+    width: 100%;
+    height: 100%;
+    background:  #ff9500;
+    /* background:  #d45cec; */
+    top: 0;
+    left: -100%;
+    opacity: .5;
+    transition: .3s;
+    z-index: -1;
+}
+
+.company__telephone__button__tel:after {
+    opacity: 1;
+    transition-delay: .2s;
+}
+
+.company__telephone__button__tel:hover{
+    color: #000;
+}
+
+.company__telephone__button__tel:hover::before, .butt:hover::after {
+    left: 0;
+}
+
+/* =========================================== */
+
+.card__content__city {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-around;
+    flex-direction: row;
+}
+
+.card__content__author {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-around;
+    flex-direction: row;
+}
+
+.card__text__city__lead {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 40px;
+    width: 45%;
+    font-size: 24px;
+}
+
+.card__content_button {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-evenly;
+    flex-direction: row;
+    margin-bottom: 20px;
+}
+
+/* кнопки в рабюоту */
+.card__text__lead {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 40px;
+    width: 20%;
+}
+
+.card__text__lead-button{
+    background: none;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    color: none;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    cursor: pointer;
+}
+
+.card__text__lead-button:hover  {
+    background-color: #d45cec;
+    text-decoration: none;
+    text-decoration-style: none;
+    color: #fff;
+}
+/* кнопки в работу */
+
+
+.card__content__comments {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #5b5a5a38;
+    border-radius: 1.2rem;
+    height: 46px;
+}
+
+.card__text__lead2 {
+    height: 40px;
+    overflow-x:hidden; 
+}
+
+.card__price__lead {
+    margin-bottom: 20px;
+    font-style: 24px;
+    font-weight: 700;
+}
+
+.card__link__lead {
+    display: block;
+    color: #000;
+    text-transform: uppercase;
+    margin-top: 10px;
+    font-size: 0.75rem;
+    font-family: 'laptev_brush';
+}
+
+.card__img__lead {
+    width: 100%;
+}
+
+
+/* =================== LEADS CARD END ================= */
+
+/* ==================== MAIN END =================== */
+
+
+
+
+
+
+
+/* ==================== MEDIA START =================== */
+@media (max-width: 1500px) {
+/* Меняет количество */
+.tabs__content__lead-item{
+    grid-template-columns: repeat(4, 1fr);
+}
+/* Меняет количество */
+}
+
+
+
+/* ==================== 1180 =================== */
+@media (max-width: 1180px) {
+
+
+    .tabs__content-item {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .tabs__content__lead-item{
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+}
+/* ==================== 1040 =================== */
+
+
+@media (max-width: 1040px) {
+
+    .tabs__btn {
+        padding: 0 0 50px;
+        gap: 20px;
+    }
+
+}
+
+/* ==================== 860 =================== */
+
+
+@media (max-width: 860px) {
+
+    /* настраиваем бургер меню */
+
+    .tabs__btn__lead{
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .tabs__btn__lead-item{
+        margin-bottom: 20px;
+    }
+
+    .tabs__content-item {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .tabs__content__lead-item {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ==================== 768 =================== */
+
+@media (max-width: 768px) {
+
+    .tabs__btn__lead__a-item {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+}
+
+    /* ==================== 650 =================== */
+
+    @media (max-width: 650px) {
+
+
+        .card__lead{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+        .card_remember-content{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+
+        .card_remember-search{
+            box-shadow: 0 0rem 1.5rem rgba(132, 139, 200, 0.18); 
+        }
+
+
+        .card__lead:hover{
+            box-shadow: none;
+        }
+
+        .card_remember-content:hover{
+            box-shadow: none;
+        }
+
+
+
+        .card_remember-search:hover{
+            box-shadow: none;
+        }
+
+        .tabs__content-item {
+            grid-template-columns: repeat(1, 1fr);
+        }
+
+        .contact__text {
+            padding: 0;
+        }
+
+        .form__input {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        .tabs__btn-item {
+            tab-size: 18px;
+        }
+
+        .tabs__content__lead-item {
+            grid-template-columns: repeat(1, 1fr);
+            margin-top: 10px;
+            grid-template-columns: repeat(10, minmax(370px, 1fr));
+            overflow-x: scroll;
+        }
+
+        .tabs__btn__lead-item{
+            tab-size: 18px;
+        }
+
+        .card__remember {
+            margin-top: 20px;
+            margin-bottom: 70px;
+            flex-direction: column;
+        }
+
+        .card__remember__box-serch {
+            margin-top: 20px;
+            
+        }
+
+        .card_remember-search {
+            width: 100%;
+        }
+
+        .company__section-title{
+            margin-top: 0;
+        }
+
+        .company__section-title{
+            margin: 0px;
+        }
+    
+        .tabs__btn__lead-item{
+            margin-top: 0px;
+            margin-bottom: 0px;
+        }
+
+        .menu-toggle {
+            display: flex; /* Показываем кнопку */
+        }
+        .menu-content {
+            display: none; /* Меню скрыто по умолчанию */
+        }
+
+        .header {
+            padding: 0px;
+        }
+
+        .page__row-footer{
+            margin-top: 1rem;
+        }
+}
+
+
+    /* ==================== 540 =================== */
+
+@media (max-width: 540px) {
+
+    .tabs__btn__lead{
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+   
+
+
+    .section-title {
+        font-size: 34px;
+    }
+
+    .company__section-title {
+        margin-top: 0;
+        font-size: 34px;
+    }
+
+
+    .tabs__btn {
+        flex-direction: column;
+    }
+
+    .tabs__content-item {
+        gap: 40px;
+    }
+
+
+    .lead__card {
+        padding: 50px 0;
+    }
+
+    .tabs__content__lead-item {
+        gap: 40px;
+        grid-template-columns: repeat(10, minmax(330px, 1fr));
+    }
+
+    .company__lead__card {
+        padding: 0px 0;
+    }
+}
+
+    /* ==================== 300 =================== */
+@media (max-width: 300px) {
+
+    .section-title {
+        font-size: 28px;
+    }
+
+    .company__section-title {
+        font-size: 28px;
+    }
+}
+
+/* ===================== MEDIA END ==================== */

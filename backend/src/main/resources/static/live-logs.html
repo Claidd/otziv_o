@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Logs</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #111;
+            color: #ccc;
+            padding: 10px;
+        }
+
+        #log {
+            white-space: pre-wrap;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid #444;
+            padding: 10px;
+            background: #000;
+        }
+
+        .controls {
+            margin-bottom: 10px;
+        }
+
+        label {
+            margin-right: 15px;
+        }
+
+        .line-error { color: #f55; }
+        .line-info { color: #ccc; }
+        .line-debug { color: #5af; }
+    </style>
+</head>
+<body>
+
+<h2 style="color:#0f0">Live Логи (WebSocket)</h2>
+
+<div class="controls">
+    <label><input type="checkbox" class="level" value="ERROR" checked> ERROR</label>
+    <label><input type="checkbox" class="level" value="INFO" checked> INFO</label>
+    <label><input type="checkbox" class="level" value="DEBUG" checked> DEBUG</label>
+    <button onclick="clearLog()">🧼 Очистить</button>
+    <button onclick="togglePause()" id="pauseBtn">⏸ Пауза</button>
+    <button onclick="downloadLog()">💾 Скачать</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+    const logDiv = document.getElementById("log");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const levels = new Set(["ERROR", "INFO", "DEBUG"]);
+    let paused = false;
+
+    // Обработка чекбоксов
+    document.querySelectorAll('.level').forEach(cb => {
+        cb.addEventListener('change', () => {
+            cb.checked ? levels.add(cb.value) : levels.delete(cb.value);
+        });
+    });
+
+    // Очистка логов на экране
+    function clearLog() {
+        logDiv.innerHTML = "";
+    }
+
+    // Пауза / Пуск
+    function togglePause() {
+        paused = !paused;
+        pauseBtn.innerText = paused ? "▶️ Пуск" : "⏸ Пауза";
+    }
+
+    // Скачать лог
+    function downloadLog() {
+        const a = document.createElement("a");
+        a.href = "/logs/download";
+        a.download = "app.log";
+        a.click();
+    }
+
+    // WebSocket подключение
+    const ws = new WebSocket("ws://" + window.location.host + "/ws/logs");
+
+    ws.onmessage = function(event) {
+        if (paused) return;
+
+        const line = event.data;
+        if ([...levels].some(level => line.includes(level))) {
+            const div = document.createElement("div");
+
+            if (line.includes("ERROR")) {
+                div.className = "line-error";
+            } else if (line.includes("DEBUG")) {
+                div.className = "line-debug";
+            } else {
+                div.className = "line-info";
+            }
+
+            div.textContent = line;
+            logDiv.appendChild(div);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    };
+</script>
+
+</body>
+</html>

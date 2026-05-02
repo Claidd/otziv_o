@@ -1,0 +1,80 @@
+<section th:fragment="bot_workers" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
+
+    <div class="company__tabs__content-lead">
+<!-- ==================== STYLE ======================== -->
+
+        
+
+
+        <div class="wrapper">
+            <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
+        <div class="mb-3 " th:if="${saveSuccess}">
+            <div class="alert alert-success">
+                Данные успешно изменены и сохранены.
+            </div>
+        </div>
+    
+            
+
+            <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+            <div class="container mt-5">
+                <!-- <h2 class="section-title">СПИСОК БОТОВ</h2> -->
+                <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Логин</th>
+                        <th scope="col">Пароль</th>
+                        <th scope="col">ФИО</th>
+                        <th scope="col">Город</th>
+                        <th scope="col">Публикаций</th>
+                        <th scope="col">Владелец</th>
+                        <th scope="col">Статус</th>
+                        <th scope="col">Активность</th>
+                        <th scope="col">Изменить</th>
+                        <th sec:authorize="hasAnyRole('ADMIN', 'OWNER')"  scope="col">Удалить</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="bot : ${all_bots}">
+                        <th scope="row" th:text="${bot.id}">ID</th>
+                        <th scope="row" th:text="${bot.login}">Логин</th>
+                        <th scope="row" th:text="${bot.password}">Пароль</th>
+                        <th scope="row" th:text="${bot.fio}">ФИО</th>
+                        <th scope="row" th:text="${bot.botCity.title}">Город</th>
+                        <th scope="row" th:text="${bot.counter}">Публикаций</th>
+                        <th scope="row" th:text="${bot.worker.user.fio}">Владелец</th>
+                        <th scope="row" th:text="${bot.status}">Статус</th>
+                        <th scope="row" th:text="${bot.active}">Активность</th>
+                        <td>
+                            <form th:method="get" th:action="'/bots/edit/' + ${bot.id}">
+                                <button type="submit" class="btn btn-outline-primary">Изменить</button>
+                            </form>
+                        </td>
+                        <td sec:authorize="hasAnyRole('ADMIN', 'OWNER')">
+                            <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
+                                <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                <button type="submit" class="btn btn-outline-danger">Удалить</button>
+                            </form>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+    
+    
+            <!-------------------------------------- ФОРМА ВЫВОДА ВСЕХ БОТОВ ------------------------------------------------------>
+
+    
+            <!-- ===================== MAIN END ======================== -->
+            <th:block th:insert="~{fragments/common :: js}"></th:block>
+            
+        </div> <!-- wrapper -->
+        
+    </div>    
+</section>

@@ -1,0 +1,88 @@
+<!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles}"></th:block>
+        <!-- ==================== TITLE ======================== -->
+        <!-- <th:block th:insert="~{fragments/common :: title(${route})}"></th:block> -->
+        <title>Выбор продукта</title>
+    </head>
+    <body>
+
+    <!-- ===================== CHOOSE START ========================== -->
+    <header th:replace="~{fragments/header :: header}"></header>
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__card">
+        <div class="container">
+            <h2 class="company__section-title">ВЫБЕРИТЕ ПРОДУКТ</h2>
+            <div class="company__tabs__lead">
+
+                <div class="company__tabs__content-lead">
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
+                    <div class="company__card__remember">
+                        <div class="company__card__remember__box-serch">
+                            <form class="company__card_remember-search2" th:method="get" th:action="@{/lead}">
+                             
+                                <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+
+                                <button type="submit" class="company__card_remember-search__btn">Найти</button>
+                            </form>
+
+                        </div>
+                    </div>
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
+
+
+
+                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                    <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
+
+
+                        <div th:each="product : ${products}" class="company__card__lead">
+                            <div class="company__card__content__lead">
+
+                                <!-- элементы карточки - начало -->
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.title}">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.price} + ' руб/шт'">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.productCategory.title}">Текущий статус Лида</a>
+                                </div>
+
+                            <form class="company__card__content__author" th:method="get" th:action="'/products/edit/' + ${product.id}">
+                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                            </form>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+                    <!-- СПИСОК КАРТОЧЕК 1 -->
+
+
+                </div> <!-- tabs__content -->
+            </div> <!-- tabs -->
+
+
+            <div  class="company__card__content__button">
+                <div class="company__card__content__button__btn">
+                    <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                    <!-- <label class="company__label" for="btn_save">Сохранить изменения, но пока, что не публиковать</label> -->
+                    <a id="btn_save" type="submit" class="company__card__text__review-button" th:href="@{/products/add}" th:text="'ДОБАВИТЬ ПРОДУКТ'">в архив</a>
+                </div>
+            </div>
+
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+        <!-- ====================== CHOOSE END =========================== -->
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        </th:block> <!-- wrapper -->
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+
+    </body>
+</html>

@@ -1,0 +1,133 @@
+{
+  "realm": "otziv",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "ADMIN",
+        "description": "Full administration access"
+      },
+      {
+        "name": "OWNER",
+        "description": "Business owner access"
+      },
+      {
+        "name": "MANAGER",
+        "description": "Manager access"
+      },
+      {
+        "name": "OPERATOR",
+        "description": "Operator access"
+      },
+      {
+        "name": "WORKER",
+        "description": "Worker access"
+      },
+      {
+        "name": "MARKETOLOG",
+        "description": "Marketing access"
+      },
+      {
+        "name": "CLIENT",
+        "description": "Client access"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "otziv-frontend",
+      "name": "Otziv Angular Frontend",
+      "description": "Angular single-page application",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://localhost/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4200",
+        "http://localhost",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4200/*##http://localhost/*##http://localhost:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "backend audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "otziv-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "otziv-backend",
+      "name": "Otziv Spring Backend",
+      "description": "Spring Boot resource server",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "change-me-local-secret"
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-otziv-backend",
+      "enabled": true,
+      "serviceAccountClientId": "otziv-backend",
+      "realmRoles": [
+        "ADMIN"
+      ],
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "query-users",
+          "view-realm"
+        ]
+      }
+    }
+  ]
+}

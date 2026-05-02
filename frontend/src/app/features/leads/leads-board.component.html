@@ -1,0 +1,451 @@
+<app-admin-layout title="Лид кабинет" active="leads" rightPanelMode="custom">
+  <section class="lead-workspace" [class.menu-open]="mobileMenuOpen()">
+    <button
+      type="button"
+      class="mobile-menu-toggle"
+      [class.active]="mobileMenuOpen()"
+      [attr.aria-expanded]="mobileMenuOpen()"
+      aria-controls="lead-menu-panel"
+      (click)="toggleMobileMenu()"
+    >
+      Меню
+      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
+    </button>
+
+    <div id="lead-menu-panel" class="lead-menu-panel" [class.open]="mobileMenuOpen()">
+      <div class="mobile-menu-heading">
+        <h1>Лид кабинет</h1>
+        <nav class="mobile-role-links" aria-label="Разделы">
+          @for (link of mobileNavLinks; track link.label) {
+            @if (link.routerLink) {
+              <a [routerLink]="link.routerLink">{{ link.label }}</a>
+            } @else {
+              <a [href]="link.href">{{ link.label }}</a>
+            }
+          }
+        </nav>
+      </div>
+
+      <header class="lead-toolbar">
+        <nav class="status-tabs" aria-label="Статусы лидов">
+          @for (bucket of buckets; track trackBucket($index, bucket)) {
+            <button
+              type="button"
+              [class.active]="activeBucket() === bucket.key"
+              (click)="setBucket(bucket.key)"
+            >
+              <span class="material-icons-sharp">{{ bucket.icon }}</span>
+              {{ bucket.label }}
+              <small>{{ bucketTotal(bucket.key) }}</small>
+            </button>
+          }
+        </nav>
+
+        <div class="quick-links">
+          <button type="button" (click)="openCreateModal()">Новый лид</button>
+          <a [href]="legacyCategoriesUrl">Категории</a>
+          <a [href]="legacyCompaniesUrl">Компании</a>
+        </div>
+      </header>
+
+      <section class="copy-search">
+        <div class="promo-strip" aria-label="Промо-тексты">
+          @for (item of promoItems(); track item.label) {
+            <button type="button" (click)="copyPromo(item)" [disabled]="!item.text">
+              <span class="material-icons-sharp">content_copy</span>
+              {{ copied() === item.label ? 'скопировано' : item.label }}
+            </button>
+          }
+        </div>
+
+        <div class="search-line" [class.has-clear]="keyword()">
+          <label>
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Найти"
+              [ngModel]="keyword()"
+              (ngModelChange)="keyword.set($event)"
+              (keyup.enter)="search()"
+            >
+          </label>
+
+          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+
+          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+
+          <button
+            type="button"
+            class="icon-button sort-toggle"
+            (click)="toggleSortDirection()"
+            [disabled]="loading()"
+            [title]="sortTitle()"
+            [attr.aria-label]="sortTitle()"
+          >
+            <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+          </button>
+
+          @if (keyword()) {
+            <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    <section class="cards-grid">
+      @for (lead of currentLeads(); track trackLead($index, lead)) {
+        <article class="lead-card">
+          <header>
+            <strong>{{ lead.lidStatus || '-' }}</strong>
+            <small>#{{ lead.id }}</small>
+          </header>
+
+          <div class="phone-row" [class.phone-row--offer]="lead.offer">
+            <a [href]="whatsappUrl(lead)" target="_blank" rel="noopener">
+              {{ lead.telephoneLead }}
+            </a>
+            <button type="button" (click)="copyPhone(lead)" title="Скопировать телефон">
+              {{ copied() === 'телефон' ? '✓' : 'T' }}
+            </button>
+          </div>
+
+          <div class="meta-row">
+            <span>{{ lead.createDate | date:'yyyy-MM-dd' }}</span>
+            <span>{{ lead.cityLead || 'Нет' }}</span>
+          </div>
+
+          <textarea
+            rows="2"
+            placeholder="Комментарий"
+            [ngModel]="commentFor(lead)"
+            (ngModelChange)="setComment(lead, $event)"
+          ></textarea>
+
+          <div class="card-actions">
+            @for (action of statusActions(lead); track action) {
+              <button
+                type="button"
+                [disabled]="isMutating(lead, action)"
+                (click)="runAction(lead, action)"
+                [title]="actionLabel(action)"
+              >
+                <span class="material-icons-sharp">{{ actionIcon(action) }}</span>
+                {{ actionLabel(action) }}
+              </button>
+            }
+
+            <a [href]="companyUrl(lead)">
+              <span class="material-icons-sharp">business_center</span>
+              работа
+            </a>
+          </div>
+
+          <footer>
+            <div class="people-row">
+              <span>{{ assigneeName(lead.operator) }}</span>
+              <button type="button" class="details-link" (click)="openEditModal(lead)">Подробнее</button>
+            </div>
+          </footer>
+        </article>
+      } @empty {
+        <div class="empty">
+          <span class="material-icons-sharp">inbox</span>
+          <h2>Нет лидов</h2>
+        </div>
+      }
+    </section>
+
+    <footer class="pager">
+      <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
+        <span class="material-icons-sharp">chevron_left</span>
+      </button>
+      <span>{{ currentPage().pageNumber + 1 }} / {{ currentPage().totalPages || 1 }}</span>
+      <button type="button" class="icon-button" (click)="nextPage()" [disabled]="currentPage().last || loading()" title="Следующая">
+        <span class="material-icons-sharp">chevron_right</span>
+      </button>
+    </footer>
+
+    <section class="mobile-lead-stats" aria-label="Статистика лидов">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <article class="stat-card" [class]="metric.tone">
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </article>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="lead-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <article class="stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+  </section>
+
+  @if (createDraft(); as draft) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeCreateModal()">
+      <section
+        class="lead-edit-modal lead-edit-modal--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lead-create-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Новый отклик</small>
+            <h2 id="lead-create-title">Новый лид</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeCreateModal()" [disabled]="createSaving()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (createError()) {
+          <p class="error compact">{{ createError() }}</p>
+        }
+
+        <form class="lead-edit-form" #createForm="ngForm" (ngSubmit)="saveNewLead()">
+          <div class="lead-edit-grid">
+            <label class="lead-edit-field">
+              <span>Телефон</span>
+              <input
+                name="createTelephoneLead"
+                type="text"
+                required
+                autocomplete="tel"
+                placeholder="Номер телефона"
+                [ngModel]="draft.telephoneLead"
+                (ngModelChange)="setCreateField('telephoneLead', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Город</span>
+              <input
+                name="createCityLead"
+                type="text"
+                required
+                placeholder="Город"
+                [ngModel]="draft.cityLead"
+                (ngModelChange)="setCreateField('cityLead', $event)"
+              >
+            </label>
+
+            @if (canChooseCreateManager()) {
+              <label class="lead-edit-field lead-edit-field--wide">
+                <span>Менеджер</span>
+                <select
+                  name="createManagerId"
+                  [ngModel]="draft.managerId"
+                  (ngModelChange)="setCreateField('managerId', $event)"
+                >
+                  @if (managerOptions().length === 0) {
+                    <option [ngValue]="null">Нет доступных менеджеров</option>
+                  } @else {
+                    @for (manager of managerOptions(); track trackOption($index, manager)) {
+                      <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                    }
+                  }
+                </select>
+              </label>
+            }
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий</span>
+              <textarea
+                name="createCommentsLead"
+                rows="4"
+                placeholder="Комментарий"
+                [ngModel]="draft.commentsLead"
+                (ngModelChange)="setCreateField('commentsLead', $event)"
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="lead-edit-actions">
+            <button type="button" class="secondary" (click)="closeCreateModal()" [disabled]="createSaving()">Отмена</button>
+            <button type="submit" [disabled]="createSaving() || createForm.invalid">
+              {{ createSaving() ? 'Создаю...' : 'Создать' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+
+  @if (editDraft(); as draft) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeEditModal()">
+      <section
+        class="lead-edit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lead-edit-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Лид #{{ editLead()?.id }}</small>
+            <h2 id="lead-edit-title">Редактирование лида</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeEditModal()" [disabled]="editSaving() || deleteSaving()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (editError()) {
+          <p class="error compact">{{ editError() }}</p>
+        }
+
+        <form class="lead-edit-form" #editForm="ngForm" (ngSubmit)="saveLeadEdit()">
+          <div class="lead-edit-grid">
+            <label class="lead-edit-field">
+              <span>Телефон</span>
+              <input
+                name="telephoneLead"
+                type="text"
+                required
+                [ngModel]="draft.telephoneLead"
+                (ngModelChange)="setEditField('telephoneLead', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Город</span>
+              <input
+                name="cityLead"
+                type="text"
+                required
+                [ngModel]="draft.cityLead"
+                (ngModelChange)="setEditField('cityLead', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий</span>
+              <textarea
+                name="commentsLead"
+                rows="3"
+                [ngModel]="draft.commentsLead"
+                (ngModelChange)="setEditField('commentsLead', $event)"
+              ></textarea>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Статус</span>
+              <select
+                name="lidStatus"
+                required
+                [ngModel]="draft.lidStatus"
+                (ngModelChange)="setEditField('lidStatus', $event)"
+              >
+                @for (status of statusOptions(); track status) {
+                  <option [ngValue]="status">{{ status }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Оператор</span>
+              <select
+                name="operatorId"
+                [ngModel]="draft.operatorId"
+                (ngModelChange)="setEditField('operatorId', $event)"
+              >
+                <option [ngValue]="null">Не выбран</option>
+                @for (operator of operatorOptions(); track trackOption($index, operator)) {
+                  <option [ngValue]="operator.id">{{ optionLabel(operator) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Маркетолог</span>
+              <select
+                name="marketologId"
+                [ngModel]="draft.marketologId"
+                (ngModelChange)="setEditField('marketologId', $event)"
+              >
+                <option [ngValue]="null">Не выбран</option>
+                @for (marketolog of marketologOptions(); track trackOption($index, marketolog)) {
+                  <option [ngValue]="marketolog.id">{{ optionLabel(marketolog) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Менеджер</span>
+              <select
+                name="managerId"
+                [ngModel]="draft.managerId"
+                (ngModelChange)="setEditField('managerId', $event)"
+              >
+                <option [ngValue]="null">Не выбран</option>
+                @for (manager of managerOptions(); track trackOption($index, manager)) {
+                  <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата создания</span>
+              <input type="text" [value]="editLead()?.createDate | date:'yyyy-MM-dd'" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата изменений</span>
+              <input type="text" [value]="editLead()?.updateStatus | date:'yyyy-MM-dd HH:mm'" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Следующая рассылка</span>
+              <input type="text" [value]="editLead()?.dateNewTry | date:'yyyy-MM-dd'" readonly>
+            </label>
+          </div>
+
+          <div class="lead-edit-actions lead-edit-actions--split">
+            <div>
+              @if (canDeleteLead()) {
+                <button
+                  type="button"
+                  class="danger"
+                  (click)="deleteCurrentLead()"
+                  [disabled]="editSaving() || deleteSaving()"
+                >
+                  {{ deleteSaving() ? 'Удаляю...' : 'Удалить' }}
+                </button>
+              }
+            </div>
+
+            <div class="lead-edit-actions-group">
+              <button type="button" class="secondary" (click)="closeEditModal()" [disabled]="editSaving() || deleteSaving()">Отмена</button>
+              <button type="submit" [disabled]="editSaving() || deleteSaving() || editForm.invalid">
+                {{ editSaving() ? 'Сохраняю...' : 'Сохранить' }}
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</app-admin-layout>

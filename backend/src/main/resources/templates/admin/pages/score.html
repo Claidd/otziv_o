@@ -1,0 +1,19 @@
+<th:block th:fragment="content(${route})" xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <!-- Основной контент - Начало -->
+    <main>
+        
+        <!-- Аналитика -->
+        <!-- <th:block th:insert="~{admin/fragments/analyse :: analyse}"></th:block> -->
+        <!-- Аналитика -->
+
+        <!-- Пользователи -->
+        <th:block th:insert="~{admin/fragments/personal :: score}"></th:block>
+        <!-- Пользователи конец -->
+
+
+    </main>
+    <!-- Основной контент - Конец -->
+    
+
+</th:block>

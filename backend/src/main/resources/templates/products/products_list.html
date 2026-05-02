@@ -1,0 +1,129 @@
+<!doctype html>
+    <html lang="en" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+    <head>
+        <!-- ==================== META ======================== -->
+        <th:block th:insert="~{fragments/common :: meta}"></th:block>
+        <!-- ==================== STYLE ======================== -->
+        <th:block th:insert="~{fragments/common :: styles_bootstrap}"></th:block>
+
+        <title>Выбор продукта O! Company!</title>
+    </head>
+    <body>
+
+    <!-- ===================== CHOOSE START ========================== -->
+    <header th:replace="~{fragments/header :: header}"></header>
+
+
+    <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - НАЧАЛО -->
+    <section class="company__lead__card">
+        <div class="container">
+            <h2 class="company__section-title">ВЫБЕРИТЕ ПРОДУКТ</h2>
+            <div class="company__tabs__lead">
+
+                <!-- КНОПКИ ВЫБОРА РАЗДЕЛА СТАТУСОВ - КОНЕЦ -->
+
+                <div class="company__tabs__content-lead">
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - НАЧАЛО -->
+                    <div class="company__card__remember">
+                        <div class="company__card__remember__box-serch">
+
+                            <form class="company__card_remember-search2" th:method="get" th:action="@{/lead}">
+                                <!-- The text field -->
+                                <input class="company__card_remember-search__text" type="text" value="" name="keyword" id="keyword">
+                                <!-- The button used to copy the text -->
+                                <button type="submit" class="company__card_remember-search__btn">Найти</button>
+                            </form>
+
+                        </div>
+                    </div>
+                    <!-- КНОПКИ КОПИРОВАНИЯ ТЕКСТА - КОНЕЦ -->
+
+
+
+                    <!-- СПИСОК КАРТОЧЕК 1 НОВЫЕ-->
+                    <div  class="company__tabs__content-item company__tabs__content-item--active" id="content-10">
+
+
+                        <div th:each="product : ${products}" class="company__card__lead">
+                            <div class="company__card__content__lead">
+
+                                <!-- элементы карточки - начало -->
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.title}">Текущий статус Лида</a>
+                                </div>
+                                <div class="company__card__content__product">
+                                    <a class="company__card__title__lead" th:text="${product.price} + ' руб/шт'">Текущий статус Лида</a>
+                                </div>
+
+                           
+                                <div >
+                                    <!-- <div class="card__title__lead" th:text="${product.title}">Номер Лида</div> -->
+                                    <form th:object="${newOrder}" th:method="post" th:action="@{'/ordersCompany/'+ ${companyID} + '/' + ${product.id}}">
+                                        
+                                        <input type="hidden" id="company" th:field="*{company.id}" class="form-control" placeholder="">
+                                        <input type="hidden" id="company2" th:field="*{company.categoryCompany.id}" class="form-control" placeholder="">
+                                        <input type="hidden" id="company3" th:field="*{company.subCategory.id}" class="form-control" placeholder="">
+                                        <input type="hidden" id="company4" th:field="*{manager.managerId}" class="form-control" placeholder="">
+                                        <input type="hidden" id="company5" th:field="*{status.title}" class="form-control" placeholder="">
+                                        <input type="hidden" id="company6" th:field="*{counter}" class="form-control" placeholder="">
+
+                                        <div class="mb-3 mt-3">
+                                            <label for="inputAmount" class="form-label">Укажите кол-во в месяц:</label> <br>
+                                            <select th:field="*{amount}" id="inputAmount" name="amount"  class="form-control form-select form-select-lg company__card__content__product">
+                                                <option th:each="amount : ${amounts}" name="amount" th:value="${amount.amount}" th:text="${amount.amount}"></option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3 mt-3">
+                                            <label for="inputWorker" class="form-label">Укажите специалиста:</label> <br>
+                                            <select th:field="*{worker.workerId}" id="inputWorker" name="worker"  class="form-control form-select form-select-lg company__card__content__product">
+                                                <option th:each="worker1 : ${newOrder.workers}" name="worker1" th:value="${worker1.workerId}" th:text="${worker1.user.fio}"></option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3 mt-3">
+                                            <label for="inputWorker" class="form-label">Укажите филиал:</label> <br>
+                                            <select th:field="*{filial.id}" id="inputWorker" name="worker"  class="form-control form-select form-select-lg company__card__content__product">  
+                                                <option th:each="filial : ${newOrder.company.filials}" name="filial" th:value="${filial.id}" th:text="${filial.city.title + ': ' + filial.title}"></option>
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group d-none">
+                                            <label for="inputFilialUrl">Название филиала</label>
+                                            <input type="text" id="inputFilialUrl" th:field="*{filial.url}" class="form-control">
+
+                                        </div>
+
+                                        <!-- <input type="hidden" name="amount" th:value="${amount}" /> -->
+                                        <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
+                                        <div class="company__card__content__phone">
+                                            <button type="submit" class="company__card__text__lead-button" th:text="ЗАКАЗАТЬ">в архив</button>
+                                        </div>
+                                  </form>
+                              </div>
+
+                              
+                            <form class="company__card__content__author" th:method="get" th:action="'company/edit/' + ${product.id}">
+                                <div class="company__card__link__lead" th:text="${product.title != null ? product.title : 'пусто'}">Имя Менеджера</div>
+                                <button type="submit" class="company__card__link__lead__more company__card__link__lead">Изменить</button>
+                            </form>
+                        </div> <!-- card -->
+                    </div> <!-- tabs__content-item -->
+                    <!-- СПИСОК КАРТОЧЕК 1 -->
+
+
+
+
+
+                </div> <!-- tabs__content -->
+            </div> <!-- tabs -->
+            <!--            <a href="#" class="showmore__link">Смотреть Еще</a>-->
+        </div> <!-- container -->
+    </section> <!-- section -->
+
+        <!-- ====================== CHOOSE END =========================== -->
+        <header th:replace="~{fragments/footer :: footer}"></header>
+        <th:block th:insert="~{fragments/common :: js}"></th:block>
+        </th:block> <!-- wrapper -->
+
+    </body>
+</html>

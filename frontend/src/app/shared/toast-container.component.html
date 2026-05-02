@@ -1,0 +1,22 @@
+<section class="toast-stack" aria-live="polite" aria-label="Уведомления">
+  @for (toast of toastService.toasts(); track toast.id) {
+    <article
+      class="toast"
+      [class.toast--success]="toast.type === 'success'"
+      [class.toast--error]="toast.type === 'error'"
+      [class.toast--info]="toast.type === 'info'"
+      [attr.role]="toast.type === 'error' ? 'alert' : 'status'"
+    >
+      <span class="toast-icon material-icons-sharp">{{ iconFor(toast.type) }}</span>
+      <div>
+        <strong>{{ toast.title }}</strong>
+        @if (toast.message) {
+          <p>{{ toast.message }}</p>
+        }
+      </div>
+      <button type="button" (click)="toastService.dismiss(toast.id)" title="Закрыть">
+        <span class="material-icons-sharp">close</span>
+      </button>
+    </article>
+  }
+</section>

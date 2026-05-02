@@ -1,0 +1,1281 @@
+@use './app/shared/admin-layout.component';
+
+@font-face {
+  font-family: 'laptev_brush';
+  src: url('/assets/fonts/laptev_brush.otf') format('opentype');
+  font-display: swap;
+}
+
+:root {
+  --otziv-font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  --otziv-card-title-font: 'laptev_brush', var(--otziv-font-family);
+  --otziv-primary: #6c9bcf;
+  --otziv-danger: #ff0060;
+  --otziv-success: #1b9c85;
+  --otziv-warning: #f7d060;
+  --otziv-white: #ffffff;
+  --otziv-info: #7d8da1;
+  --otziv-dark: #363949;
+  --otziv-light: rgba(132, 139, 200, 0.18);
+  --otziv-background: #f6f6f9;
+  --otziv-field-background: #ffffff;
+  --otziv-muted-surface: #f8fafc;
+  --otziv-shadow: 0 2rem 3rem var(--otziv-light);
+  --otziv-shadow-hover: none;
+  --otziv-card-radius: 2rem;
+  --otziv-small-radius: 0.4rem;
+  --otziv-card-padding: 1.8rem;
+}
+
+body.otziv-dark-theme {
+  --otziv-primary: #7aa7dc;
+  --otziv-danger: #ff5b8f;
+  --otziv-success: #4ac6b1;
+  --otziv-warning: #f8d975;
+  --otziv-white: #202528;
+  --otziv-info: #a3bdcc;
+  --otziv-dark: #edeffd;
+  --otziv-light: rgba(0, 0, 0, 0.4);
+  --otziv-background: #181a1e;
+  --otziv-field-background: #202528;
+  --otziv-muted-surface: #252b2f;
+  --otziv-shadow: 0 2rem 3rem rgba(0, 0, 0, 0.4);
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--otziv-dark);
+  background: var(--otziv-background);
+  font-family: var(--otziv-font-family);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.material-icons-sharp {
+  font-family: 'Material Icons Sharp';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.6rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+app-review-check app-admin-layout .admin-layout .page-heading {
+  display: none;
+}
+
+app-review-check .review-edit-hint,
+app-review-check .approve-publication-hint {
+  position: absolute;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(108, 155, 207, 0.28);
+  border-radius: 999px;
+  padding: 0.42rem 0.66rem;
+  color: var(--otziv-primary);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0.7rem 1.45rem rgba(132, 139, 200, 0.18);
+  font-family: var(--otziv-font-family);
+  font-size: 0.72rem;
+  line-height: 1.1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+app-review-check .review-edit-hint {
+  top: 1.45rem;
+  left: 1.25rem;
+  max-width: min(19rem, 84vw);
+  animation: review-check-edit-hint 11s ease forwards;
+}
+
+app-review-check .approve-publication-hint {
+  top: -2.25rem;
+  left: 50%;
+  color: var(--otziv-success);
+  border-color: rgba(27, 156, 133, 0.28);
+  transform: translateX(-50%);
+  animation: review-check-approve-hint 4.6s 7.4s ease forwards;
+}
+
+app-review-check .review-edit-hint .material-icons-sharp,
+app-review-check .approve-publication-hint .material-icons-sharp {
+  font-size: 1rem;
+}
+
+@keyframes review-check-edit-hint {
+  0%,
+  4%,
+  32%,
+  100% {
+    opacity: 0;
+    transform: translateY(-0.2rem);
+  }
+
+  8%,
+  18% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  13%,
+  25% {
+    opacity: 0.34;
+    transform: translateY(0.18rem);
+  }
+}
+
+@keyframes review-check-approve-hint {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -0.2rem);
+  }
+
+  18%,
+  56% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  36%,
+  74% {
+    opacity: 0.35;
+    transform: translate(-50%, 0.18rem);
+  }
+}
+
+.admin-layout .eyebrow {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.admin-layout .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+.admin-layout button:not(.login-pill):not(.theme-button),
+.admin-layout .button {
+  contain-intrinsic-block-size: auto 100px;
+  display: inline-flex;
+  min-height: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: var(--otziv-small-radius);
+  padding: 0 1.1rem;
+  color: white;
+  background: var(--otziv-primary);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.admin-layout button.secondary,
+.admin-layout .button.secondary {
+  color: var(--otziv-dark);
+  background: var(--otziv-light);
+}
+
+.admin-layout button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-layout label,
+.admin-layout .role-block {
+  min-width: 0;
+}
+
+.admin-layout label > span,
+.admin-layout .role-block > span {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--otziv-dark-variant, #677483);
+  font-weight: 800;
+}
+
+.admin-layout input[type='text'],
+.admin-layout input[type='email'],
+.admin-layout input[type='number'],
+.admin-layout input[type='password'] {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid rgba(103, 116, 131, 0.28);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.85rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+}
+
+.admin-layout input:focus {
+  outline: 2px solid rgba(108, 155, 207, 0.45);
+  outline-offset: 1px;
+}
+
+.admin-layout .role-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  max-height: 10.5rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.admin-layout .checkbox {
+  display: inline-flex;
+  min-height: 2.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.9rem;
+  background: var(--otziv-muted-surface);
+  cursor: pointer;
+}
+
+.admin-layout .checkbox input {
+  margin: 0;
+  accent-color: var(--otziv-primary);
+}
+
+.admin-layout .checkbox span {
+  margin: 0;
+  color: var(--otziv-dark);
+}
+
+.admin-layout .error {
+  border: 1px solid #f2b8b5;
+  border-radius: var(--otziv-small-radius);
+  padding: 0.9rem 1rem;
+  color: #7a271a;
+  background: #ffedea;
+}
+
+.admin-layout :where(
+  .sidebar-card,
+  .hero-card,
+  .metric-card,
+  .toolbar-card,
+  .panel,
+  .profile-card,
+  .notification,
+  .home-link,
+  .action-card
+) {
+  box-shadow: var(--otziv-shadow);
+  transition: box-shadow 0.65s ease;
+}
+
+.admin-layout :where(
+  .sidebar-card,
+  .hero-card,
+  .metric-card,
+  .toolbar-card,
+  .panel,
+  .profile-card,
+  .notification,
+  .home-link,
+  .action-card
+):hover {
+  box-shadow: var(--otziv-shadow-hover);
+}
+
+.admin-layout .admin-content :where(
+  .hero-card,
+  .metric-card,
+  .toolbar-card,
+  .panel,
+  .action-card
+):hover {
+  box-shadow: var(--otziv-shadow-hover);
+}
+
+.admin-layout pre {
+  overflow: auto;
+  margin: 0;
+  border-radius: var(--otziv-small-radius);
+  padding: 1rem;
+  background: #101820;
+  color: #e7f4f1;
+  font-family: Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.lead-stats {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.mobile-lead-stats {
+  display: none;
+}
+
+.lead-stats .stat-card,
+.mobile-lead-stats .stat-card {
+  display: flex;
+  min-height: 7.15rem;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1.35rem;
+  padding: 1.35rem 1.45rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.lead-stats .stat-card span,
+.mobile-lead-stats .stat-card span {
+  display: block;
+  margin-bottom: 0.7rem;
+  color: var(--otziv-info);
+  font-weight: 900;
+}
+
+.lead-stats .stat-card strong,
+.mobile-lead-stats .stat-card strong {
+  color: currentColor;
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+
+.lead-stats .stat-card i,
+.mobile-lead-stats .stat-card i {
+  display: grid;
+  width: 4.15rem;
+  height: 4.15rem;
+  place-items: center;
+  border: 0.55rem solid currentColor;
+  border-radius: 50%;
+  font-size: 1.3rem;
+}
+
+.lead-stats .stat-card {
+  min-height: 5.6rem;
+  border-radius: 1.05rem;
+  padding: 0.9rem 1.05rem;
+}
+
+.lead-stats .stat-card span {
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.lead-stats .stat-card strong {
+  font-size: 1.35rem;
+}
+
+.lead-stats .stat-card i {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-width: 0.42rem;
+  font-size: 1rem;
+}
+
+.lead-stats .stat-card.blue,
+.mobile-lead-stats .stat-card.blue {
+  color: var(--otziv-primary);
+}
+
+.lead-stats .stat-card.green,
+.mobile-lead-stats .stat-card.green {
+  color: var(--otziv-success);
+}
+
+.lead-stats .stat-card.teal,
+.mobile-lead-stats .stat-card.teal {
+  color: #2f9f95;
+}
+
+.lead-stats .stat-card.yellow,
+.mobile-lead-stats .stat-card.yellow {
+  color: var(--otziv-warning);
+}
+
+.lead-stats .stat-card.pink,
+.mobile-lead-stats .stat-card.pink {
+  color: var(--otziv-danger);
+}
+
+.lead-stats .stat-card.gray,
+.mobile-lead-stats .stat-card.gray {
+  color: var(--otziv-info);
+}
+
+app-leads-board .status-tabs {
+  border-radius: 0.55rem;
+  box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.14);
+}
+
+app-leads-board :where(.status-tabs, .lead-card),
+.lead-stats .stat-card {
+  transition: box-shadow 0.65s ease;
+}
+
+app-leads-board :where(.status-tabs, .lead-card):hover,
+app-leads-board .lead-card:hover,
+.lead-stats .stat-card:hover {
+  box-shadow: none;
+}
+
+app-leads-board .lead-workspace {
+  font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+app-leads-board app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
+  display: none;
+}
+
+app-leads-board .mobile-menu-toggle span {
+  font-size: 0.9rem;
+}
+
+app-leads-board .lead-menu-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+app-leads-board .mobile-menu-heading {
+  display: none;
+}
+
+app-leads-board .card-actions {
+  align-items: center;
+  justify-self: center;
+  width: 100%;
+}
+
+app-leads-board .lead-card .phone-row a {
+  text-decoration: none;
+  transition: background-color 0.75s ease, border-color 0.75s ease, color 0.75s ease;
+}
+
+app-leads-board .lead-card .phone-row a:hover {
+  border-color: transparent;
+  color: var(--otziv-dark);
+  background: #f7c88f;
+}
+
+app-leads-board .lead-card .card-actions button,
+app-leads-board .lead-card .card-actions a {
+  transition: background-color 0.75s ease, border-color 0.75s ease, color 0.75s ease;
+}
+
+app-leads-board .lead-card .card-actions button:not(:disabled):hover,
+app-leads-board .lead-card .card-actions a:hover {
+  border-color: transparent;
+  color: white;
+  background: #c45be7;
+}
+
+app-leads-board app-admin-layout .admin-layout .quick-links button {
+  min-height: 2.1rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.72rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-light);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+app-leads-board app-admin-layout .admin-layout .people-row button.details-link.details-link {
+  contain-intrinsic-block-size: none;
+  display: inline;
+  width: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--otziv-dark);
+  background: transparent;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+app-leads-board app-admin-layout .admin-layout .people-row button.details-link.details-link:hover {
+  color: var(--otziv-primary);
+  background: transparent;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(21, 24, 35, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
+  width: min(52rem, 100%);
+  max-height: min(92vh, 46rem);
+  overflow: auto;
+  border-radius: 1.15rem;
+  padding: 1.2rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1.4rem 4rem rgba(54, 57, 73, 0.24);
+  font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal--compact {
+  width: min(34rem, 100%);
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head,
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head {
+  margin-bottom: 1rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head small {
+  color: var(--otziv-info);
+  font-weight: 900;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-close {
+  width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-form {
+  display: grid;
+  gap: 1rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field--wide {
+  grid-column: 1 / -1;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field span {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input,
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field select,
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
+  width: 100%;
+  min-height: 2.25rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 0.7rem;
+  padding: 0 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
+  min-height: 5.2rem;
+  max-height: none;
+  padding: 0.65rem 0.75rem;
+  resize: vertical;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input[readonly] {
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+  justify-content: flex-end;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
+  justify-content: space-between;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger {
+  color: white;
+  background: var(--otziv-danger);
+}
+
+:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger:not(:disabled):hover {
+  background: #d90052;
+}
+
+app-manager-board .company-edit-modal {
+  width: min(58rem, 100%);
+}
+
+:is(app-manager-board, app-worker-board) .order-edit-modal {
+  width: min(52rem, 100%);
+}
+
+app-manager-board .company-edit-section {
+  border: 1px solid rgba(103, 116, 131, 0.16);
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-manager-board .company-edit-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+app-manager-board .company-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+app-manager-board .company-edit-row > span,
+app-manager-board .company-edit-row a {
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-manager-board .company-edit-row button.secondary,
+app-manager-board app-admin-layout .admin-layout .lead-edit-actions button.secondary {
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+}
+
+app-order-details app-admin-layout .admin-layout .lead-edit-actions button.secondary {
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+}
+
+app-worker-board app-admin-layout .admin-layout .lead-edit-actions button.secondary {
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+}
+
+:is(app-manager-board, app-worker-board) .lead-edit-field input[type='checkbox'] {
+  width: 2rem;
+  min-height: 2rem;
+}
+
+:is(app-order-details, app-worker-board) .review-edit-modal {
+  width: min(56rem, 100%);
+}
+
+:is(app-order-details, app-worker-board) .review-edit-check {
+  display: grid;
+  min-height: 2.25rem;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  align-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 0.7rem;
+  padding: 0.4rem 0.65rem;
+  background: var(--otziv-field-background);
+}
+
+:is(app-order-details, app-worker-board) .review-edit-check input {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0;
+  accent-color: var(--otziv-primary);
+}
+
+:is(app-order-details, app-worker-board) .review-edit-check span,
+:is(app-order-details, app-worker-board) .review-edit-photo span {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+:is(app-order-details, app-worker-board) .review-edit-photo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+:is(app-order-details, app-worker-board) .review-edit-photo a {
+  color: var(--otziv-primary);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+:is(app-order-details, app-worker-board) .review-edit-photo label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+:is(app-order-details, app-worker-board) .review-edit-photo input {
+  max-width: min(18rem, 100%);
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+}
+
+app-leads-board .pager {
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+app-leads-board .pager .icon-button {
+  min-height: 2.7rem;
+  width: 2.7rem;
+  color: white;
+  background: var(--otziv-primary);
+}
+
+@media (max-width: 1500px) {
+  app-leads-board .lead-workspace .cards-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  app-leads-board .lead-workspace .copy-search {
+    grid-template-columns: 1fr;
+  }
+
+  app-leads-board .lead-workspace .lead-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  app-leads-board .lead-workspace .status-tabs,
+  app-leads-board .lead-workspace .quick-links,
+  app-leads-board .lead-workspace .promo-strip,
+  app-leads-board .lead-workspace .search-line {
+    width: 100%;
+  }
+
+  app-leads-board .lead-workspace .cards-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  app-admin-layout .admin-layout.admin-layout {
+    display: block;
+    width: min(100% - 1rem, 46rem);
+    overflow-x: hidden;
+  }
+
+  app-admin-layout .admin-layout .admin-sidebar {
+    position: static;
+    height: auto;
+    padding-top: 0.65rem;
+  }
+
+  app-admin-layout .admin-layout .brand {
+    display: none;
+  }
+
+  app-admin-layout .admin-layout .sidebar-card {
+    min-height: 0;
+    flex-direction: row;
+    margin-top: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    border-radius: 0.8rem;
+  }
+
+  app-admin-layout .admin-layout .sidebar-card a {
+    min-width: 4.4rem;
+    min-height: 3.4rem;
+    grid-template-columns: 1fr;
+    justify-content: center;
+    padding: 0;
+  }
+
+  app-admin-layout .admin-layout .sidebar-card strong,
+  app-admin-layout .admin-layout .brand h2 {
+    display: none;
+  }
+
+  app-admin-layout .admin-layout .admin-content {
+    padding-top: 0.65rem;
+    overflow-x: hidden;
+  }
+
+  app-admin-layout .admin-layout .page-heading {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 0.45rem;
+    min-height: auto;
+    margin-bottom: 0.55rem;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .page-heading {
+    display: none;
+  }
+
+  app-manager-board app-admin-layout .admin-layout .page-heading {
+    display: none;
+  }
+
+  app-worker-board app-admin-layout .admin-layout .page-heading {
+    display: none;
+  }
+
+  app-order-details app-admin-layout .admin-layout .page-heading {
+    display: none;
+  }
+
+  app-review-check app-admin-layout .admin-layout .page-heading {
+    display: none;
+  }
+
+  app-admin-layout .admin-layout .page-heading h1 {
+    font-size: 1.55rem;
+  }
+
+  app-admin-layout .admin-layout .top-links {
+    justify-content: flex-start;
+    gap: 0.65rem;
+    padding: 0;
+  }
+
+  app-admin-layout .admin-layout .top-links a {
+    font-size: 0.72rem;
+  }
+
+  app-leads-board .lead-workspace {
+    display: block;
+    min-height: auto;
+    overflow: hidden;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
+    display: flex;
+    min-height: 2.15rem;
+    margin: 0 auto 0.85rem;
+    padding: 0 0.4rem;
+    color: var(--otziv-dark);
+    background: transparent;
+    font-size: 1.35rem;
+    box-shadow: none;
+  }
+
+  app-manager-board app-admin-layout .admin-layout .manager-workspace .mobile-menu-toggle.mobile-menu-toggle {
+    display: flex;
+    width: auto;
+    min-height: 2.15rem;
+    margin: 0 auto 0.85rem;
+    padding: 0 0.4rem;
+    color: var(--otziv-dark);
+    background: transparent;
+    font-size: 1.35rem;
+    box-shadow: none;
+  }
+
+  app-manager-board .mobile-menu-toggle span {
+    font-size: 0.9rem;
+  }
+
+  app-manager-board .manager-workspace .mobile-role-links {
+    display: none !important;
+  }
+
+  app-manager-board .manager-workspace .manager-toolbar,
+  app-manager-board .manager-workspace .copy-search,
+  app-manager-board .manager-workspace .manager-dropdowns,
+  app-manager-board .manager-workspace .quick-links,
+  app-manager-board .manager-workspace .promo-strip,
+  app-manager-board .manager-workspace .search-line {
+    width: 100%;
+    max-width: 100%;
+    justify-content: stretch;
+    justify-items: stretch;
+  }
+
+  app-manager-board .manager-workspace .copy-search {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  app-manager-board .manager-workspace .manager-dropdowns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem 0.65rem;
+  }
+
+  app-manager-board .manager-workspace .manager-dropdowns select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  app-manager-board .manager-workspace .quick-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  app-manager-board .manager-workspace .quick-links a,
+  app-manager-board .manager-workspace .promo-strip button {
+    min-width: 0;
+    overflow: hidden;
+    padding-right: 0.3rem;
+    padding-left: 0.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-manager-board .manager-workspace .promo-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  app-manager-board .manager-workspace .promo-strip button {
+    width: 100%;
+    padding-right: 0.16rem;
+    padding-left: 0.16rem;
+    font-size: clamp(0.64rem, 2.1vw, 0.72rem);
+  }
+
+  app-manager-board .manager-workspace .search-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem 2.2rem;
+    gap: 0.45rem;
+  }
+
+  app-manager-board .manager-workspace .search-line.has-clear {
+    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem 2.2rem 2.2rem;
+  }
+
+  app-manager-board .manager-workspace .search-line label {
+    min-width: 0;
+  }
+
+  app-leads-board .lead-workspace .lead-menu-panel {
+    display: none;
+    margin-bottom: 0.95rem;
+  }
+
+  app-leads-board .lead-workspace .lead-menu-panel.open {
+    display: grid;
+    gap: 0.7rem;
+    margin-bottom: 0.65rem;
+  }
+
+  app-leads-board .lead-workspace .mobile-menu-heading {
+    display: grid;
+    gap: 0.65rem;
+    justify-items: center;
+    padding-bottom: 0.15rem;
+  }
+
+  app-leads-board .lead-workspace .mobile-menu-heading h1 {
+    margin: 0;
+    font-size: 1.65rem;
+    line-height: 1;
+  }
+
+  app-leads-board .lead-workspace .mobile-role-links {
+    display: flex;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.65rem;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+    scrollbar-width: none;
+  }
+
+  app-leads-board .lead-workspace .mobile-role-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  app-leads-board .lead-workspace .mobile-role-links a {
+    flex: 0 0 auto;
+    color: var(--otziv-dark);
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  app-leads-board .lead-workspace .mobile-role-links a:hover {
+    color: var(--otziv-primary);
+  }
+
+  app-leads-board .lead-workspace .cards-grid {
+    display: flex;
+    grid-template-columns: none;
+    gap: 1.1rem;
+    margin-top: 0.65rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-padding: 0.25rem;
+    scroll-snap-type: x mandatory;
+    padding: 0.25rem 0.25rem 1rem;
+    scrollbar-width: thin;
+  }
+
+  app-leads-board .lead-workspace.menu-open .cards-grid {
+    margin-top: 0.3rem;
+    padding-bottom: 0.45rem;
+  }
+
+  app-leads-board .lead-workspace .copy-search {
+    gap: 0.75rem;
+  }
+
+  app-leads-board .lead-workspace .status-tabs,
+  app-leads-board .lead-workspace .quick-links,
+  app-leads-board .lead-workspace .promo-strip,
+  app-leads-board .lead-workspace .search-line {
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  app-leads-board .lead-workspace .quick-links {
+    justify-content: center;
+  }
+
+  app-leads-board .lead-workspace .search-line label {
+    min-width: 14rem;
+  }
+
+  app-leads-board .lead-workspace .lead-card {
+    flex: 0 0 min(21rem, calc(100vw - 4rem));
+    min-height: clamp(21.5rem, 48svh, 27rem);
+    scroll-snap-align: center;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button,
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .meta-row span {
+    min-height: 2.45rem;
+    font-size: 0.82rem;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
+  app-manager-board app-admin-layout .admin-layout .manager-workspace .manager-card .phone-row a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1.45rem, 5.8vw, 1.85rem);
+    line-height: 1;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button {
+    flex-basis: 2.65rem;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card textarea {
+    min-height: 3.75rem;
+    max-height: 3.75rem;
+    padding: 0.7rem 0.8rem;
+    font-size: 0.86rem;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions {
+    gap: 0.55rem;
+  }
+
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions button,
+  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions a {
+    min-height: 2.85rem;
+    padding: 0 0.45rem;
+    font-size: 0.82rem;
+    line-height: 1.05;
+  }
+
+  app-leads-board .lead-workspace.menu-open .lead-card {
+    min-height: clamp(18.5rem, 39svh, 20.5rem);
+  }
+
+  app-leads-board .lead-workspace .pager {
+    margin-top: 0.35rem;
+  }
+
+  app-leads-board .lead-workspace.menu-open .pager {
+    margin-top: 0.05rem;
+  }
+
+  app-leads-board .mobile-lead-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  app-leads-board .mobile-lead-stats .stat-card {
+    min-height: 5.9rem;
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+  }
+
+  app-leads-board .mobile-lead-stats .stat-card span {
+    margin-bottom: 0.45rem;
+    font-size: 0.74rem;
+  }
+
+  app-leads-board .mobile-lead-stats .stat-card strong {
+    font-size: 1.35rem;
+  }
+
+  app-leads-board .mobile-lead-stats .stat-card i {
+    width: 3rem;
+    height: 3rem;
+    border-width: 0.42rem;
+    font-size: 1rem;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+    align-items: end;
+    padding: 0.8rem;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
+    max-height: 92svh;
+    border-radius: 1rem;
+    padding: 1rem;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
+    grid-template-columns: 1fr;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div,
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div:first-child {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 390px) {
+  app-manager-board .manager-workspace .manager-dropdowns {
+    gap: 0.2rem 0.45rem;
+    padding-right: 0.35rem;
+    padding-left: 0.35rem;
+  }
+
+  app-manager-board .manager-workspace .quick-links {
+    gap: 0.32rem;
+  }
+
+  app-manager-board .manager-workspace .quick-links a {
+    padding-right: 0.18rem;
+    padding-left: 0.18rem;
+    font-size: 0.66rem;
+  }
+
+  app-manager-board .manager-workspace .promo-strip {
+    gap: 0.25rem;
+  }
+
+  app-manager-board .manager-workspace .promo-strip button {
+    padding-right: 0.1rem;
+    padding-left: 0.1rem;
+    font-size: 0.62rem;
+  }
+}
+
+@media (max-width: 540px) {
+  app-admin-layout .admin-layout {
+    width: min(100% - 0.75rem, 28rem);
+  }
+
+  app-leads-board .lead-workspace .cards-grid {
+    gap: 1rem;
+    margin-top: 0.55rem;
+  }
+
+  app-leads-board .lead-workspace .lead-card {
+    flex-basis: min(20.5rem, calc(100vw - 3.25rem));
+    min-height: clamp(22rem, 52svh, 27rem);
+  }
+
+  app-leads-board .lead-workspace.menu-open .lead-card {
+    min-height: clamp(18.25rem, 38svh, 20rem);
+  }
+
+  app-leads-board .lead-workspace .status-tabs button,
+  app-leads-board .lead-workspace .status-tabs a,
+  app-leads-board .lead-workspace .promo-strip button,
+  app-leads-board .lead-workspace .quick-links a {
+    flex: 0 0 auto;
+  }
+}
