@@ -1,5 +1,6 @@
 package com.hunt.otziv.z_zp.model;
 
+import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +17,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Table(name = "payment_check")
-public class PaymentCheck {
+public class PaymentCheck implements PaymentCheckStatView {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

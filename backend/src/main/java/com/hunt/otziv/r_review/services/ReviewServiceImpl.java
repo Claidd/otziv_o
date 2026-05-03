@@ -149,6 +149,32 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository.countReviewsForWorkerUserId(userId);
     }
 
+    @Override
+    public int countBoardReviewsToPublish(LocalDate localDate, Principal principal, String role) {
+        return countBoardReviews(ReviewBoardMode.PUBLISH, localDate, null, principal, role);
+    }
+
+    @Override
+    public int countBoardReviewsToVigul(LocalDate localDate, Principal principal, String role) {
+        return countBoardReviews(ReviewBoardMode.VIGUL, localDate, null, principal, role);
+    }
+
+    @Override
+    public int countBoardReviewsByOrderStatus(String status, Principal principal, String role) {
+        return countBoardReviews(ReviewBoardMode.ORDER_STATUS, null, status, principal, role);
+    }
+
+    @Override
+    public Map<String, Integer> countBoardReviewMetrics(
+            LocalDate publishDate,
+            LocalDate vigulDate,
+            String badStatus,
+            Principal principal,
+            String role
+    ) {
+        return countBoardReviewMetrics(reviewBoardScope(role), publishDate, vigulDate, badStatus, principal);
+    }
+
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(Collection<Long> workerIds, LocalDate localDate) {
         if (workerIds == null || workerIds.isEmpty()) {
             return Map.of();
@@ -546,6 +572,215 @@ public class ReviewServiceImpl implements ReviewService {
         idQuery.setMaxResults(pageable.getPageSize());
 
         return new PageImpl<>(idQuery.getResultList(), pageable, countQuery.getSingleResult());
+    }
+
+    private int countBoardReviews(
+            ReviewBoardMode mode,
+            LocalDate localDate,
+            String status,
+            Principal principal,
+            String role
+    ) {
+        if (mode == ReviewBoardMode.ORDER_STATUS && !hasText(status)) {
+            return 0;
+        }
+
+        ReviewBoardScope scope = reviewBoardScope(role);
+        Worker worker = null;
+        Manager manager = null;
+        Set<Worker> workers = null;
+
+        switch (scope) {
+            case WORKER -> {
+                User user = requireUser(principal);
+                worker = workerService.getWorkerByUserId(user.getId());
+                if (worker == null) {
+                    return 0;
+                }
+            }
+            case MANAGER -> {
+                User user = requireUser(principal);
+                manager = managerService.getManagerByUserId(user.getId());
+                if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+                    return 0;
+                }
+                workers = manager.getUser().getWorkers();
+            }
+            case OWNER -> {
+                User user = requireUser(principal);
+                List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+                if (managerList.isEmpty()) {
+                    return 0;
+                }
+                workers = workerService.getAllWorkersToManagerList(managerList);
+            }
+            case ADMIN -> {
+            }
+        }
+
+        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
+            return 0;
+        }
+
+        return toIntCount(countReviewIdsForBoard(mode, scope, localDate, status, worker, manager, workers));
+    }
+
+    private Map<String, Integer> countBoardReviewMetrics(
+            ReviewBoardScope scope,
+            LocalDate publishDate,
+            LocalDate vigulDate,
+            String badStatus,
+            Principal principal
+    ) {
+        Worker worker = null;
+        Manager manager = null;
+        Set<Worker> workers = null;
+
+        switch (scope) {
+            case WORKER -> {
+                User user = requireUser(principal);
+                worker = workerService.getWorkerByUserId(user.getId());
+                if (worker == null) {
+                    return Map.of();
+                }
+            }
+            case MANAGER -> {
+                User user = requireUser(principal);
+                manager = managerService.getManagerByUserId(user.getId());
+                if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+                    return Map.of();
+                }
+                workers = manager.getUser().getWorkers();
+            }
+            case OWNER -> {
+                User user = requireUser(principal);
+                List<Manager> managerList = user.getManagers() == null ? List.of() : user.getManagers().stream().toList();
+                if (managerList.isEmpty()) {
+                    return Map.of();
+                }
+                workers = workerService.getAllWorkersToManagerList(managerList);
+            }
+            case ADMIN -> {
+            }
+        }
+
+        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
+            return Map.of();
+        }
+
+        Map<String, Integer> result = new HashMap<>();
+        result.put("publish", toIntCount(countReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH, scope, publishDate, null, worker, manager, workers)));
+        result.put("nagul", toIntCount(countReviewIdsForBoard(
+                ReviewBoardMode.VIGUL, scope, vigulDate, null, worker, manager, workers)));
+        result.put("bad", toIntCount(countReviewIdsForBoard(
+                ReviewBoardMode.ORDER_STATUS, scope, null, badStatus, worker, manager, workers)));
+        return result;
+    }
+
+    private long countReviewIdsForBoard(
+            ReviewBoardMode mode,
+            ReviewBoardScope scope,
+            LocalDate localDate,
+            String status,
+            Worker worker,
+            Manager manager,
+            Set<Worker> workers
+    ) {
+        String joins = reviewCountJoins(mode, scope);
+
+        List<String> conditions = new ArrayList<>();
+        switch (mode) {
+            case PUBLISH -> {
+                conditions.add("r.publishedDate <= :localDate");
+                conditions.add("r.publish = false");
+            }
+            case ORDER_STATUS -> conditions.add("os.title = :status");
+            case VIGUL -> {
+                conditions.add("r.publishedDate <= :localDate");
+                conditions.add("r.publish = false");
+                conditions.add("r.vigul = false");
+                conditions.add("(b IS NULL OR b.counter <= 2)");
+            }
+        }
+
+        switch (scope) {
+            case WORKER -> conditions.add("r.worker = :worker");
+            case OWNER -> conditions.add("r.worker IN :workers");
+            case MANAGER -> {
+                conditions.add("r.worker IN :workers");
+                if (mode == ReviewBoardMode.VIGUL) {
+                    conditions.add("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)");
+                } else {
+                    conditions.add("o.manager = :manager");
+                }
+            }
+            case ADMIN -> {
+            }
+        }
+
+        TypedQuery<Long> query = entityManager.createQuery(
+                "SELECT COUNT(r.id) FROM Review r " + joins + " WHERE " + String.join(" AND ", conditions),
+                Long.class
+        );
+        bindReviewBoardCountParameters(query, mode, scope, localDate, status, worker, manager, workers);
+        return query.getSingleResult();
+    }
+
+    private String reviewCountJoins(ReviewBoardMode mode, ReviewBoardScope scope) {
+        return switch (mode) {
+            case PUBLISH -> scope == ReviewBoardScope.MANAGER
+                    ? " JOIN r.orderDetails d JOIN d.order o "
+                    : "";
+            case VIGUL -> scope == ReviewBoardScope.MANAGER
+                    ? " LEFT JOIN r.bot b LEFT JOIN r.orderDetails d LEFT JOIN d.order o "
+                    : " LEFT JOIN r.bot b ";
+            case ORDER_STATUS -> " JOIN r.orderDetails d JOIN d.order o JOIN o.status os ";
+        };
+    }
+
+    private void bindReviewBoardCountParameters(
+            TypedQuery<Long> query,
+            ReviewBoardMode mode,
+            ReviewBoardScope scope,
+            LocalDate localDate,
+            String status,
+            Worker worker,
+            Manager manager,
+            Set<Worker> workers
+    ) {
+        if (mode == ReviewBoardMode.PUBLISH || mode == ReviewBoardMode.VIGUL) {
+            query.setParameter("localDate", localDate);
+        }
+        if (mode == ReviewBoardMode.ORDER_STATUS) {
+            query.setParameter("status", status);
+        }
+        if (scope == ReviewBoardScope.WORKER) {
+            query.setParameter("worker", worker);
+        }
+        if (scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) {
+            query.setParameter("workers", workers);
+        }
+        if (scope == ReviewBoardScope.MANAGER) {
+            query.setParameter("manager", manager);
+        }
+    }
+
+    private ReviewBoardScope reviewBoardScope(String role) {
+        if ("ADMIN".equalsIgnoreCase(role)) {
+            return ReviewBoardScope.ADMIN;
+        }
+        if ("OWNER".equalsIgnoreCase(role)) {
+            return ReviewBoardScope.OWNER;
+        }
+        if ("MANAGER".equalsIgnoreCase(role)) {
+            return ReviewBoardScope.MANAGER;
+        }
+        return ReviewBoardScope.WORKER;
+    }
+
+    private int toIntCount(long count) {
+        return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
     }
 
     private String reviewKeywordPredicate(boolean hasKeywordLong, boolean hasKeywordUuid) {

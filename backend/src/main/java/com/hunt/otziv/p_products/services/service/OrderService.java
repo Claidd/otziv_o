@@ -49,6 +49,22 @@ public interface OrderService {
 
     int getAllOrderDTOByStatus(String status);
 
+    Map<String, Integer> countOrdersByStatus();
+
+    Map<String, Integer> countOrdersByStatusToManager(Manager manager);
+
+    Map<String, Integer> countOrdersByStatusToOwner(Set<Manager> managerList);
+
+    Map<String, Integer> countOrdersByStatusToWorker(Worker worker);
+
+    int countAllOrders();
+
+    int countAllOrdersToManager(Manager manager);
+
+    int countAllOrdersToOwner(Set<Manager> managerList);
+
+    int countOrdersByWorker(Worker worker);
+
     int getAllOrderDTOByStatusToManager(Manager manager, String status);
 
     int getAllOrderDTOByStatusToOwner(Set<Manager> managerList, String status);

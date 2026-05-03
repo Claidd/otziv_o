@@ -69,6 +69,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -1231,35 +1232,36 @@ public class ApiManagerBoardController {
 
     private List<ManagerMetricResponse> buildMetrics(Principal principal, Authentication authentication) {
         List<ManagerMetricResponse> metrics = new ArrayList<>();
+        Map<String, Integer> companyCounts = countCompanyMetrics(principal, authentication);
+        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
 
-        metrics.add(companyMetric(principal, authentication, "Новые", "Новая", "fiber_new", "yellow"));
-        metrics.add(companyMetric(principal, authentication, "В работе", "В работе", "badge", "green"));
-        metrics.add(companyMetric(principal, authentication, "Новый заказ", "Новый заказ", "business_center", "teal"));
-        metrics.add(companyMetric(principal, authentication, "К рассылке", "К рассылке", "campaign", "blue"));
-        metrics.add(companyMetric(principal, authentication, "Ожидание", "Ожидание", "hourglass_top", "pink"));
-        metrics.add(companyMetric(principal, authentication, "На стопе", "На стопе", "pause_circle", "gray"));
-        metrics.add(companyMetric(principal, authentication, "Бан", "Бан", "block", "gray"));
-        metrics.add(companyMetric(principal, authentication, "Всего", "Все", "dashboard", "blue"));
+        metrics.add(companyMetric(companyCounts, "Новые", "Новая", "fiber_new", "yellow"));
+        metrics.add(companyMetric(companyCounts, "В работе", "В работе", "badge", "green"));
+        metrics.add(companyMetric(companyCounts, "Новый заказ", "Новый заказ", "business_center", "teal"));
+        metrics.add(companyMetric(companyCounts, "К рассылке", "К рассылке", "campaign", "blue"));
+        metrics.add(companyMetric(companyCounts, "Ожидание", "Ожидание", "hourglass_top", "pink"));
+        metrics.add(companyMetric(companyCounts, "На стопе", "На стопе", "pause_circle", "gray"));
+        metrics.add(companyMetric(companyCounts, "Бан", "Бан", "block", "gray"));
+        metrics.add(companyMetric(companyCounts, "Всего", "Все", "dashboard", "blue"));
 
-        metrics.add(orderMetric(principal, authentication, "Новые", "Новый", "fiber_new", "yellow"));
-        metrics.add(orderMetric(principal, authentication, "В проверку", "В проверку", "fact_check", "blue"));
-        metrics.add(orderMetric(principal, authentication, "На проверке", "На проверке", "manage_search", "teal"));
-        metrics.add(orderMetric(principal, authentication, "Коррекция", "Коррекция", "build_circle", "pink"));
-        metrics.add(orderMetric(principal, authentication, "Публикация", "Публикация", "published_with_changes", "green"));
-        metrics.add(orderMetric(principal, authentication, "Опубликовано", "Опубликовано", "task_alt", "green"));
-        metrics.add(orderMetric(principal, authentication, "Выставлен счет", "Выставлен счет", "receipt_long", "blue"));
-        metrics.add(orderMetric(principal, authentication, "Напоминание", "Напоминание", "notifications_active", "pink"));
-        metrics.add(orderMetric(principal, authentication, "Не оплачено", "Не оплачено", "money_off", "gray"));
-        metrics.add(orderMetric(principal, authentication, "Архив", "Архив", "archive", "gray"));
-        metrics.add(orderMetric(principal, authentication, "Оплачено", "Оплачено", "payments", "teal"));
-        metrics.add(orderMetric(principal, authentication, "Всего", "Все", "dashboard", "blue"));
+        metrics.add(orderMetric(orderCounts, "Новые", "Новый", "fiber_new", "yellow"));
+        metrics.add(orderMetric(orderCounts, "В проверку", "В проверку", "fact_check", "blue"));
+        metrics.add(orderMetric(orderCounts, "На проверке", "На проверке", "manage_search", "teal"));
+        metrics.add(orderMetric(orderCounts, "Коррекция", "Коррекция", "build_circle", "pink"));
+        metrics.add(orderMetric(orderCounts, "Публикация", "Публикация", "published_with_changes", "green"));
+        metrics.add(orderMetric(orderCounts, "Опубликовано", "Опубликовано", "task_alt", "green"));
+        metrics.add(orderMetric(orderCounts, "Выставлен счет", "Выставлен счет", "receipt_long", "blue"));
+        metrics.add(orderMetric(orderCounts, "Напоминание", "Напоминание", "notifications_active", "pink"));
+        metrics.add(orderMetric(orderCounts, "Не оплачено", "Не оплачено", "money_off", "gray"));
+        metrics.add(orderMetric(orderCounts, "Архив", "Архив", "archive", "gray"));
+        metrics.add(orderMetric(orderCounts, "Оплачено", "Оплачено", "payments", "teal"));
+        metrics.add(orderMetric(orderCounts, "Всего", "Все", "dashboard", "blue"));
 
         return metrics;
     }
 
     private ManagerMetricResponse companyMetric(
-            Principal principal,
-            Authentication authentication,
+            Map<String, Integer> counts,
             String label,
             String status,
             String icon,
@@ -1267,7 +1269,7 @@ public class ApiManagerBoardController {
     ) {
         return new ManagerMetricResponse(
                 label,
-                countCompanies(principal, authentication, status),
+                countStatus(counts, status),
                 icon,
                 tone,
                 SECTION_COMPANIES,
@@ -1276,8 +1278,7 @@ public class ApiManagerBoardController {
     }
 
     private ManagerMetricResponse orderMetric(
-            Principal principal,
-            Authentication authentication,
+            Map<String, Integer> counts,
             String label,
             String status,
             String icon,
@@ -1285,7 +1286,7 @@ public class ApiManagerBoardController {
     ) {
         return new ManagerMetricResponse(
                 label,
-                countOrders(principal, authentication, status),
+                countStatus(counts, status),
                 icon,
                 tone,
                 SECTION_ORDERS,
@@ -1293,36 +1294,37 @@ public class ApiManagerBoardController {
         );
     }
 
-    private int countCompanies(Principal principal, Authentication authentication, String status) {
-        if ("Все".equals(status)) {
-            return toCount(loadCompanies(principal, authentication, "", status, 0, 1, "desc").getTotalElements());
-        }
-
+    private Map<String, Integer> countCompanyMetrics(Principal principal, Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
-            return companyService.getAllCompanyDTOByStatus(status);
+            return companyService.countCompaniesByStatus();
         }
-
         if (hasRole(authentication, "OWNER")) {
-            return companyService.getAllCompanyDTOByStatusToOwner(resolveOwnerManagers(principal), status);
+            return companyService.countCompaniesByStatusToOwner(resolveOwnerManagers(principal));
         }
-
-        return companyService.getAllCompanyDTOByStatusToManager(resolveManager(principal), status);
+        return companyService.countCompaniesByStatusToManager(resolveManager(principal));
     }
 
-    private int countOrders(Principal principal, Authentication authentication, String status) {
-        if ("Все".equals(status)) {
-            return toCount(loadOrders(principal, authentication, "", status, 0, 1, null, "desc").getTotalElements());
-        }
-
+    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
-            return orderService.getAllOrderDTOByStatus(status);
+            return orderService.countOrdersByStatus();
         }
-
         if (hasRole(authentication, "OWNER")) {
-            return orderService.getAllOrderDTOByStatusToOwner(resolveOwnerManagers(principal), status);
+            return orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
         }
+        return orderService.countOrdersByStatusToManager(resolveManager(principal));
+    }
 
-        return orderService.getAllOrderDTOByStatusToManager(resolveManager(principal), status);
+    private int countStatus(Map<String, Integer> counts, String status) {
+        if (counts == null || counts.isEmpty()) {
+            return 0;
+        }
+        if ("Все".equals(status)) {
+            long total = counts.values().stream()
+                    .mapToLong(Integer::longValue)
+                    .sum();
+            return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+        }
+        return counts.getOrDefault(status, 0);
     }
 
     private Manager resolveManager(Principal principal) {
@@ -1436,10 +1438,6 @@ public class ApiManagerBoardController {
 
     private String normalizeSortDirection(String sortDirection) {
         return "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
-    }
-
-    private int toCount(long value) {
-        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
     }
 
     private Page<CompanyListDTO> emptyCompanyPage(int pageNumber, int pageSize) {

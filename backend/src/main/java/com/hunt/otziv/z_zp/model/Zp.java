@@ -1,5 +1,6 @@
 package com.hunt.otziv.z_zp.model;
 
+import com.hunt.otziv.z_zp.dto.ZpStatView;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +17,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Table(name = "zp")
-public class Zp {
+public class Zp implements ZpStatView {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

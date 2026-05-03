@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -428,43 +429,63 @@ public class ApiWorkerBoardController {
 
     private List<WorkerMetricResponse> buildMetrics(Principal principal, Authentication authentication) {
         List<WorkerMetricResponse> metrics = new ArrayList<>();
-        metrics.add(orderMetric(principal, authentication, "Новые", SECTION_NEW, "fiber_new", "yellow"));
-        metrics.add(orderMetric(principal, authentication, "Коррекция", SECTION_CORRECT, "build_circle", "pink"));
-        metrics.add(reviewMetric(principal, authentication, "Выгул", SECTION_NAGUL, "directions_walk", "teal"));
-        metrics.add(reviewMetric(principal, authentication, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
-        metrics.add(reviewMetric(principal, authentication, "Плохие", SECTION_BAD, "money_off", "gray"));
-        metrics.add(orderMetric(principal, authentication, "Все", SECTION_ALL, "dashboard", "blue"));
+        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
+        Map<String, Integer> reviewCounts = reviewService.countBoardReviewMetrics(
+                LocalDate.now(),
+                LocalDate.now().plusDays(60),
+                ORDER_STATUS_UNPAID,
+                principal,
+                primaryBoardRole(authentication)
+        );
+
+        metrics.add(orderMetric(orderCounts, "Новые", SECTION_NEW, "fiber_new", "yellow"));
+        metrics.add(orderMetric(orderCounts, "Коррекция", SECTION_CORRECT, "build_circle", "pink"));
+        metrics.add(reviewMetric(reviewCounts, "Выгул", SECTION_NAGUL, "directions_walk", "teal"));
+        metrics.add(reviewMetric(reviewCounts, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
+        metrics.add(reviewMetric(reviewCounts, "Плохие", SECTION_BAD, "money_off", "gray"));
+        metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
         return metrics;
     }
 
     private WorkerMetricResponse orderMetric(
-            Principal principal,
-            Authentication authentication,
+            Map<String, Integer> counts,
             String label,
             String section,
             String icon,
             String tone
     ) {
         String status = SECTION_NEW.equals(section) ? "Новый" : SECTION_CORRECT.equals(section) ? "Коррекция" : "Все";
-        int value;
-        if ("Все".equals(status)) {
-            value = toCount(loadOrders(principal, authentication, section, "", 0, 1, "desc").getTotalElements());
-        } else if (hasRole(authentication, "ADMIN")) {
-            value = orderService.getAllOrderDTOByStatus(status);
-        } else if (hasRole(authentication, "OWNER")) {
-            value = orderService.getAllOrderDTOByStatusToOwner(resolveOwnerManagers(principal), status);
-        } else if (hasRole(authentication, "MANAGER")) {
-            value = orderService.getAllOrderDTOByStatusToManager(resolveManager(principal), status);
-        } else {
-            value = orderService.countOrdersByWorkerAndStatus(resolveWorker(principal), status);
-        }
+        return new WorkerMetricResponse(label, countStatus(counts, status), icon, tone, section);
+    }
 
-        return new WorkerMetricResponse(label, value, icon, tone, section);
+    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
+        if (hasRole(authentication, "ADMIN")) {
+            return orderService.countOrdersByStatus();
+        }
+        if (hasRole(authentication, "OWNER")) {
+            return orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            return orderService.countOrdersByStatusToManager(resolveManager(principal));
+        }
+        return orderService.countOrdersByStatusToWorker(resolveWorker(principal));
+    }
+
+    private int countStatus(Map<String, Integer> counts, String status) {
+        if (counts == null || counts.isEmpty()) {
+            return 0;
+        }
+        if ("Все".equals(status)) {
+            long total = counts.values().stream()
+                    .mapToLong(Integer::longValue)
+                    .sum();
+            return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+        }
+        return counts.getOrDefault(status, 0);
     }
 
     private WorkerMetricResponse reviewMetric(
-            Principal principal,
-            Authentication authentication,
+            Map<String, Integer> counts,
             String label,
             String section,
             String icon,
@@ -472,7 +493,7 @@ public class ApiWorkerBoardController {
     ) {
         return new WorkerMetricResponse(
                 label,
-                toCount(loadReviewPage(principal, authentication, section, 0, 1).getTotalElements()),
+                counts == null ? 0 : counts.getOrDefault(section, 0),
                 icon,
                 tone,
                 section
@@ -697,8 +718,17 @@ public class ApiWorkerBoardController {
                 .anyMatch(authority::equals);
     }
 
-    private int toCount(long value) {
-        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+    private String primaryBoardRole(Authentication authentication) {
+        if (hasRole(authentication, "ADMIN")) {
+            return "ADMIN";
+        }
+        if (hasRole(authentication, "OWNER")) {
+            return "OWNER";
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            return "MANAGER";
+        }
+        return "WORKER";
     }
 
     private String safe(String value) {

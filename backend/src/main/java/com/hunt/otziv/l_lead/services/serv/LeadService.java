@@ -38,14 +38,17 @@ public interface LeadService {
     // метод вывода всех лидов
     Page<LeadDTO> getAllLeads(String status, String keyword, Principal principal, int pageNumber, int pageSize);
     Page<LeadDTO> getAllLeads(String status, String keyword, Principal principal, int pageNumber, int pageSize, String sortDirection);
+    long countLeads(String status, String keyword, Principal principal);
     // метод вывода всех новых лидов по телефону
     Page<LeadDTO> getAllLeadsToOperator(Long telephoneId, String status, String keyword, Principal principal, int pageNumber, int pageSize);
     // метод смены статуса и выборки по дате. Проверка равна ли дата или больше
     Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize);
     Page<LeadDTO> getAllLeadsToDateReSend(String status, String keywords, Principal principal, int pageNumber, int pageSize, String sortDirection);
+    long countLeadsToDateReSend(String status, String keywords, Principal principal);
     // метод поиска одного лида по id и перевод его в дто
     Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize);
     Page<LeadDTO> getAllLeadsNoStatus(String keywords, Principal principal, int pageNumber, int pageSize, String sortDirection);
+    long countLeadsNoStatus(String keywords, Principal principal);
 
 
     //    =============================== СМЕНА СТАТУСОВ - НАЧАЛО =========================================
@@ -99,6 +102,7 @@ public interface LeadService {
 
     Page<LeadDTO> getAllLeadsToWork(String title, String keyword, Principal principal, int pageNumber, int pageSize);
     Page<LeadDTO> getAllLeadsToWork(String title, String keyword, Principal principal, int pageNumber, int pageSize, String sortDirection);
+    long countLeadsToWork(String title, String keyword, Principal principal);
 
     Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
 

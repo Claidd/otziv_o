@@ -7,6 +7,7 @@ import { appEnvironment } from '../../core/app-environment';
 import { AuthService } from '../../core/auth.service';
 import {
   LeadBoard,
+  LeadBucketKey,
   LeadCreateRequest,
   LeadEditOptions,
   LeadItem,
@@ -19,7 +20,6 @@ import {
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
 
-type LeadBucketKey = 'toWork' | 'newLeads' | 'send' | 'inWork' | 'all';
 type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
 
 type LeadBucket = {
@@ -158,7 +158,8 @@ export class LeadsBoardComponent {
       keyword: this.keyword(),
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
-      sortDirection: this.sortDirection()
+      sortDirection: this.sortDirection(),
+      section: this.activeBucket()
     }).subscribe({
       next: (board) => {
         this.board.set(board);

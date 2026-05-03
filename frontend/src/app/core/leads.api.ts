@@ -47,11 +47,14 @@ export interface LeadBoard {
   promoTexts: string[];
 }
 
+export type LeadBucketKey = 'toWork' | 'newLeads' | 'send' | 'archive' | 'inWork' | 'all';
+
 export interface LeadBoardQuery {
   keyword?: string;
   pageNumber?: number;
   pageSize?: number;
   sortDirection?: 'desc' | 'asc';
+  section?: LeadBucketKey;
 }
 
 export interface LeadPersonOption {
@@ -95,7 +98,8 @@ export class LeadsApi {
       .set('keyword', query.keyword?.trim() ?? '')
       .set('pageNumber', String(query.pageNumber ?? 0))
       .set('pageSize', String(query.pageSize ?? 10))
-      .set('sortDirection', query.sortDirection ?? 'desc');
+      .set('sortDirection', query.sortDirection ?? 'desc')
+      .set('section', query.section ?? 'inWork');
 
     return this.http.get<LeadBoard>(`${appEnvironment.apiBaseUrl}/api/leads/board`, { params });
   }

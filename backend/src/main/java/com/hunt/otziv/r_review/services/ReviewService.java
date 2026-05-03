@@ -158,5 +158,13 @@ public interface ReviewService {
 
     int countReviewsForWorkerUserId(Long userId);
 
+    int countBoardReviewsToPublish(LocalDate localDate, Principal principal, String role);
+
+    int countBoardReviewsToVigul(LocalDate localDate, Principal principal, String role);
+
+    int countBoardReviewsByOrderStatus(String status, Principal principal, String role);
+
+    Map<String, Integer> countBoardReviewMetrics(LocalDate publishDate, LocalDate vigulDate, String badStatus, Principal principal, String role);
+
     int findAllByReviewListStatus(String name);
 }

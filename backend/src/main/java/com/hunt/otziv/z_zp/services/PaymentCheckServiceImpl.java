@@ -7,6 +7,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
+import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,17 +39,38 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     }
 
     public List<PaymentCheck> findAllToDate(LocalDate localDate){ // Взять все чеки из БД
-        LocalDate localDate2 = localDate.minusYears(1);
-        return paymentCheckRepository.findAllToDate(localDate, localDate2);
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return paymentCheckRepository.findAllToDate(period.getFirst(), period.getSecond());
     } // Взять все чеки из БД
 
+    public List<PaymentCheckStatView> findStatRowsToDate(LocalDate localDate) {
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return paymentCheckRepository.findStatRowsToDate(period.getFirst(), period.getSecond()).stream()
+                .map(PaymentCheckStatView.class::cast)
+                .toList();
+    }
+
     public List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList){ // Взять все чеки из БД с определенных менеджеров
-        LocalDate localDate2 = localDate.minusYears(1);
         List<Long> managerListLong = managerList.stream().map(Manager::getUser).map(User::getId).toList();
+        if (managerListLong.isEmpty()) {
+            return List.of();
+        }
 //        System.out.println("Чеки для менеджеров - " + managerList);
 //        System.out.println(paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong));
-        return paymentCheckRepository.findAllToDateByManagers(localDate, localDate2, managerListLong);
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return paymentCheckRepository.findAllToDateByManagers(period.getFirst(), period.getSecond(), managerListLong);
     } // Взять все чеки из БД с определенных менеджеров
+
+    public List<PaymentCheckStatView> findStatRowsToDateByOwner(LocalDate localDate, Set<Manager> managerList) {
+        List<Long> managerListLong = managerList.stream().map(Manager::getUser).map(User::getId).toList();
+        if (managerListLong.isEmpty()) {
+            return List.of();
+        }
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return paymentCheckRepository.findStatRowsToDateByManagers(period.getFirst(), period.getSecond(), managerListLong).stream()
+                .map(PaymentCheckStatView.class::cast)
+                .toList();
+    }
 
     public List<PaymentCheck> findAllByOwner(Set<Manager> managerList) {
         List<Long> managerIds = managerList.stream().map(Manager::getUser).map(User::getId).toList();
@@ -180,4 +202,11 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         paymentCheck.setSum(checkDTO.getSum());
         return paymentCheck;
     } // Метод для преобразования из checkDTO в сущность Z
+
+    private Pair<LocalDate, LocalDate> currentAndPreviousYearPeriod(LocalDate localDate) {
+        LocalDate anchor = localDate == null ? LocalDate.now() : localDate;
+        LocalDate start = anchor.minusYears(1).withDayOfYear(1);
+        LocalDate endExclusive = anchor.plusDays(1);
+        return Pair.of(start, endExclusive);
+    }
 }

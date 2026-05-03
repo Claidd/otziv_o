@@ -6,6 +6,7 @@ import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
+import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +34,8 @@ public class ZpServiceImpl implements ZpService{
     public List<Zp> getAllWorkerZp(String login){
         LocalDate localDate = LocalDate.now();
         Long userId = userService.findByUserName(login).orElseThrow().getId();
-        return zpRepository.getAllWorkerZp(userId, localDate);
+        LocalDate start = localDate.withDayOfMonth(1);
+        return zpRepository.getAllWorkerZpInPeriod(userId, start, start.plusMonths(1));
     }
 
     public List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth){
@@ -46,13 +48,20 @@ public class ZpServiceImpl implements ZpService{
     }
 
     public List<Zp> findAllToDate(LocalDate localDate){ // Берем все ЗП для админа
-        LocalDate localDate2 = localDate.minusYears(1);
-        return zpRepository.findAllToDate(localDate, localDate2);
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return zpRepository.findAllToDate(period.getFirst(), period.getSecond());
     }  // Берем все ЗП для админа
 
+    public List<ZpStatView> findStatRowsToDate(LocalDate localDate) {
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return zpRepository.findStatRowsToDate(period.getFirst(), period.getSecond()).stream()
+                .map(ZpStatView.class::cast)
+                .toList();
+    }
+
     public List<Zp> findAllToDateByUser(LocalDate localDate, Long userId) { // Берем все ЗП для Работника
-        LocalDate localDate2 = localDate.minusYears(1);
-        return zpRepository.findAllToDateByUser(localDate, localDate2, userId);
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return zpRepository.findAllToDateByUser(period.getFirst(), period.getSecond(), userId);
     } // Берем все ЗП для Работника
 
     /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
@@ -138,9 +147,24 @@ public class ZpServiceImpl implements ZpService{
 
 
     public List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList) { // Берем все ЗП для всех менеджеров Владельца
-        LocalDate localDate2 = localDate.minusYears(1);
-        return zpRepository.findAllToDateByOwner(localDate, localDate2, getPeopleIdToZp(managerList));
+        Set<Long> peopleIds = getPeopleIdToZp(managerList);
+        if (peopleIds.isEmpty()) {
+            return List.of();
+        }
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return zpRepository.findAllToDateByOwner(period.getFirst(), period.getSecond(), peopleIds);
     } // Берем все ЗП для всех менеджеров Владельца
+
+    public List<ZpStatView> findStatRowsToDateByOwner(LocalDate localDate, Set<Manager> managerList) {
+        Set<Long> peopleIds = getPeopleIdToZp(managerList);
+        if (peopleIds.isEmpty()) {
+            return List.of();
+        }
+        Pair<LocalDate, LocalDate> period = currentAndPreviousYearPeriod(localDate);
+        return zpRepository.findStatRowsToDateByOwner(period.getFirst(), period.getSecond(), peopleIds).stream()
+                .map(ZpStatView.class::cast)
+                .toList();
+    }
 
     public List<Zp> findAllByOwner(Set<Manager> managerList) {
         Set<Long> peopleIds = getPeopleIdToZp(managerList);
@@ -160,6 +184,13 @@ public class ZpServiceImpl implements ZpService{
                 .flatMap(Set::stream)
                 .collect(Collectors.toSet());
     } // Составление списка ид всех менеджеров и их работников Владельца
+
+    private Pair<LocalDate, LocalDate> currentAndPreviousYearPeriod(LocalDate localDate) {
+        LocalDate anchor = localDate == null ? LocalDate.now() : localDate;
+        LocalDate start = anchor.minusYears(1).withDayOfYear(1);
+        LocalDate endExclusive = anchor.plusDays(1);
+        return Pair.of(start, endExclusive);
+    }
 
     public List<ZpDTO> getAllZpDTO(){
         return toDTOList(zpRepository.findAll());

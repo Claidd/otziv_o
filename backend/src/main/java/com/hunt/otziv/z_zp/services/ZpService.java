@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.z_zp.dto.ZpDTO;
+import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.Zp;
 import org.springframework.data.util.Pair;
 
@@ -23,9 +24,11 @@ public interface ZpService {
     List<Zp> getAllWorkerZp(String login);
     List<Zp> findAll();
     List<Zp> findAllToDate(LocalDate localDate);
+    List<ZpStatView> findStatRowsToDate(LocalDate localDate);
     List<Zp> getAllWorkerZpToDate(String login, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     List<Zp> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+    List<ZpStatView> findStatRowsToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
     List<Zp> findAllByOwner(Set<Manager> managerList);
 

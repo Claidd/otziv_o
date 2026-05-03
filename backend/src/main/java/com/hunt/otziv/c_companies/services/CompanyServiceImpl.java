@@ -554,6 +554,65 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     @Override
+    public Map<String, Integer> countCompaniesByStatus() {
+        return toStatusCountMap(companyRepository.countGroupedByStatus());
+    }
+
+    @Override
+    public Map<String, Integer> countCompaniesByStatusToManager(Manager manager) {
+        if (manager == null) {
+            return Map.of();
+        }
+        return toStatusCountMap(companyRepository.countGroupedByStatusAndManager(manager));
+    }
+
+    @Override
+    public Map<String, Integer> countCompaniesByStatusToOwner(Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Map.of();
+        }
+        return toStatusCountMap(companyRepository.countGroupedByStatusAndManagers(managerList));
+    }
+
+    private Map<String, Integer> toStatusCountMap(List<Object[]> rows) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        if (rows == null) {
+            return result;
+        }
+
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) {
+                continue;
+            }
+            String status = row[0] == null ? "" : row[0].toString();
+            long count = row[1] instanceof Number number ? number.longValue() : 0L;
+            result.put(status, count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count);
+        }
+        return result;
+    }
+
+    @Override
+    public int countAllCompanies() {
+        return companyRepository.countAllCompanies();
+    }
+
+    @Override
+    public int countAllCompaniesToManager(Manager manager) {
+        if (manager == null) {
+            return 0;
+        }
+        return companyRepository.countByManager(manager);
+    }
+
+    @Override
+    public int countAllCompaniesToOwner(Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return 0;
+        }
+        return companyRepository.countByManagers(managerList);
+    }
+
+    @Override
     public int getAllCompanyDTOByStatusToManager(Manager manager, String status) {
         return companyRepository.countByManagerAndStatusTitle(manager, status);
     }
@@ -624,18 +683,27 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     public CompanyListDTO convertCompanyListDTO(Company company) { // перевод компании в ДТО
-        if (company.getId() != null) {
+        if (company != null && company.getId() != null) {
+            Filial firstFilial = company.getFilial() == null
+                    ? null
+                    : company.getFilial().stream()
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+
             CompanyListDTO companyListDTO = new CompanyListDTO();
             companyListDTO.setId(company.getId());
             companyListDTO.setTitle(company.getTitle());
             companyListDTO.setTelephone(company.getTelephone());
             companyListDTO.setUrlChat(company.getUrlChat());
-            companyListDTO.setCountFilials(company.getFilial().size());
-            companyListDTO.setUrlFilial(company.getFilial().iterator().next().getUrl() != null ? company.getFilial().iterator().next().getUrl() : String.valueOf(new Filial(1, "нет филиала", "пусто")));
-            companyListDTO.setStatus(company.getStatus().getTitle());
-            companyListDTO.setManager(company.getManager().getUser().getFio());
+            companyListDTO.setCountFilials(company.getFilial() == null ? 0 : company.getFilial().size());
+            companyListDTO.setUrlFilial(firstFilial != null && firstFilial.getUrl() != null ? firstFilial.getUrl() : "пусто");
+            companyListDTO.setStatus(company.getStatus() != null ? company.getStatus().getTitle() : "");
+            companyListDTO.setManager(company.getManager() != null && company.getManager().getUser() != null
+                    ? company.getManager().getUser().getFio()
+                    : "");
             companyListDTO.setCommentsCompany(company.getCommentsCompany());
-            companyListDTO.setCity(company.getFilial().iterator().next().getCity().getTitle());
+            companyListDTO.setCity(firstFilial != null && firstFilial.getCity() != null ? firstFilial.getCity().getTitle() : "");
             companyListDTO.setDateNewTry(company.getDateNewTry());
             return companyListDTO;
         }

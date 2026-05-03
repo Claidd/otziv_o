@@ -15,6 +15,8 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.*;
+import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
+import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
@@ -85,10 +87,10 @@ public class PersonalServiceImpl implements PersonalService {
 //        System.out.println(managerList);
 
         //      СТАТИСТИКА берем все чеки и зп
-        List<PaymentCheck> pcs = getPaymentChecks(localDate, role, managerList);
-        List<Zp> zps = getZarplataChecks(localDate, role, managerList);
-        List<PaymentCheck> pcsHistory = getPaymentChecksHistory(role, managerList);
-        List<Zp> zpsHistory = getZarplataChecksHistory(role, managerList);
+        List<PaymentCheckStatView> pcs = getPaymentCheckStats(localDate, role, managerList);
+        List<ZpStatView> zps = getZarplataStats(localDate, role, managerList);
+        List<PaymentCheckStatView> pcsHistory = pcs;
+        List<ZpStatView> zpsHistory = zps;
 
 
         //      СТАТИСТИКА новых лидов и тех, что поступили в работу
@@ -110,27 +112,27 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate firstDayOf1YearAgo = localDate.minusYears(1).withDayOfYear(1);
 
         //        ОПЛАТЫ Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
-        List<PaymentCheck> Pay1Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(1))).toList();
-        List<PaymentCheck> Pay2Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(2))).toList();
-        List<PaymentCheck> Pay7Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(7)) || p.getCreated().isAfter(localDate.minusDays(7))).toList();
-        List<PaymentCheck> Pay14Day = pcs.stream().filter(p -> (p.getCreated().isEqual(localDate.minusDays(14)) || p.getCreated().isAfter(localDate.minusDays(14))) && p.getCreated().isBefore(localDate.minusDays(7))).toList();
-        List<PaymentCheck> Pay30Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfMonth) || p.getCreated().isAfter(firstDayOfMonth)) && (p.getCreated().isEqual(lastDayOfMonth) || p.getCreated().isBefore(lastDayOfMonth))).toList();
-        List<PaymentCheck> Pay60Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfMonthAgo) || p.getCreated().isAfter(firstDayOfMonthAgo)) && (p.getCreated().isEqual(lastDayOfMonthAgo) || p.getCreated().isBefore(lastDayOfMonthAgo))).toList();
-        List<PaymentCheck> Pay90Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOf3MonthAgo) || p.getCreated().isAfter(firstDayOf3MonthAgo)) && (p.getCreated().isEqual(lastDayOf3MonthAgo) || p.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
-        List<PaymentCheck> Pay365Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfYear) || p.getCreated().isAfter(firstDayOfYear)) && (p.getCreated().isEqual(localDate) || p.getCreated().isBefore(localDate))).toList();
-        List<PaymentCheck> Pay730Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOf1YearAgo) || p.getCreated().isAfter(firstDayOf1YearAgo)) && (p.getCreated().isEqual(localDate.minusYears(1)) || p.getCreated().isBefore(localDate.minusYears(1)))).toList();
+        List<PaymentCheckStatView> Pay1Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<PaymentCheckStatView> Pay2Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<PaymentCheckStatView> Pay7Day = pcs.stream().filter(p -> p.getCreated().isEqual(localDate.minusDays(7)) || p.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<PaymentCheckStatView> Pay14Day = pcs.stream().filter(p -> (p.getCreated().isEqual(localDate.minusDays(14)) || p.getCreated().isAfter(localDate.minusDays(14))) && p.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<PaymentCheckStatView> Pay30Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfMonth) || p.getCreated().isAfter(firstDayOfMonth)) && (p.getCreated().isEqual(lastDayOfMonth) || p.getCreated().isBefore(lastDayOfMonth))).toList();
+        List<PaymentCheckStatView> Pay60Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfMonthAgo) || p.getCreated().isAfter(firstDayOfMonthAgo)) && (p.getCreated().isEqual(lastDayOfMonthAgo) || p.getCreated().isBefore(lastDayOfMonthAgo))).toList();
+        List<PaymentCheckStatView> Pay90Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOf3MonthAgo) || p.getCreated().isAfter(firstDayOf3MonthAgo)) && (p.getCreated().isEqual(lastDayOf3MonthAgo) || p.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
+        List<PaymentCheckStatView> Pay365Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOfYear) || p.getCreated().isAfter(firstDayOfYear)) && (p.getCreated().isEqual(localDate) || p.getCreated().isBefore(localDate))).toList();
+        List<PaymentCheckStatView> Pay730Day = pcs.stream().filter(p -> (p.getCreated().isEqual(firstDayOf1YearAgo) || p.getCreated().isAfter(firstDayOf1YearAgo)) && (p.getCreated().isEqual(localDate.minusYears(1)) || p.getCreated().isBefore(localDate.minusYears(1)))).toList();
 
 
         //        ОПЛАТЫ Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
-        BigDecimal sum1Pay = Pay1Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum7Pay = Pay7Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum30Pay = Pay30Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum365Pay = Pay365Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum1Pay = Pay1Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7Pay = Pay7Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30Pay = Pay30Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365Pay = Pay365Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
 
-        BigDecimal sum2Pay = Pay2Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum14Pay = Pay14Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum60Pay = Pay60Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum730Pay = Pay730Day.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum2Pay = Pay2Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14Pay = Pay14Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60Pay = Pay60Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730Pay = Pay730Day.stream().map(PaymentCheckStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
 
 
         //        ОПЛАТЫ Сумма всех заказов за 30-60-90 дней
@@ -140,27 +142,27 @@ public class PersonalServiceImpl implements PersonalService {
 
 
         //        ЗП Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
-        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
-        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(2))).toList();
-        List<Zp> zpPay7Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(7)) || z.getCreated().isAfter(localDate.minusDays(7))).toList();
-        List<Zp> zpPay14Day = zps.stream().filter(z -> (z.getCreated().isEqual(localDate.minusDays(14)) || z.getCreated().isAfter(localDate.minusDays(14))) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
-        List<Zp> zpPay30Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonth) || z.getCreated().isAfter(firstDayOfMonth)) && (z.getCreated().isEqual(lastDayOfMonth) || z.getCreated().isBefore(lastDayOfMonth))).toList();
-        List<Zp> zpPay60Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonthAgo) || z.getCreated().isAfter(firstDayOfMonthAgo)) && (z.getCreated().isEqual(lastDayOfMonthAgo) || z.getCreated().isBefore(lastDayOfMonthAgo))).toList();
-        List<Zp> zpPay90Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf3MonthAgo) || z.getCreated().isAfter(firstDayOf3MonthAgo)) && (z.getCreated().isEqual(lastDayOf3MonthAgo) || z.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
-        List<Zp> zpPay365Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfYear) || z.getCreated().isAfter(firstDayOfYear)) && (z.getCreated().isEqual(localDate) || z.getCreated().isBefore(localDate))).toList();
-        List<Zp> zpPay730Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf1YearAgo) || z.getCreated().isAfter(firstDayOf1YearAgo)) && (z.getCreated().isEqual(localDate.minusYears(1)) || z.getCreated().isBefore(localDate.minusYears(1)))).toList();
+        List<ZpStatView> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<ZpStatView> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<ZpStatView> zpPay7Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(7)) || z.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<ZpStatView> zpPay14Day = zps.stream().filter(z -> (z.getCreated().isEqual(localDate.minusDays(14)) || z.getCreated().isAfter(localDate.minusDays(14))) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<ZpStatView> zpPay30Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonth) || z.getCreated().isAfter(firstDayOfMonth)) && (z.getCreated().isEqual(lastDayOfMonth) || z.getCreated().isBefore(lastDayOfMonth))).toList();
+        List<ZpStatView> zpPay60Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonthAgo) || z.getCreated().isAfter(firstDayOfMonthAgo)) && (z.getCreated().isEqual(lastDayOfMonthAgo) || z.getCreated().isBefore(lastDayOfMonthAgo))).toList();
+        List<ZpStatView> zpPay90Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf3MonthAgo) || z.getCreated().isAfter(firstDayOf3MonthAgo)) && (z.getCreated().isEqual(lastDayOf3MonthAgo) || z.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
+        List<ZpStatView> zpPay365Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfYear) || z.getCreated().isAfter(firstDayOfYear)) && (z.getCreated().isEqual(localDate) || z.getCreated().isBefore(localDate))).toList();
+        List<ZpStatView> zpPay730Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf1YearAgo) || z.getCreated().isAfter(firstDayOf1YearAgo)) && (z.getCreated().isEqual(localDate.minusYears(1)) || z.getCreated().isBefore(localDate.minusYears(1)))).toList();
 
 
 
         //        ЗП Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
-        BigDecimal sum1 = zpPay1Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum7 = zpPay7Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum30 = zpPay30Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum365 = zpPay365Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum2 = zpPay2Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum14 = zpPay14Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum60 = zpPay60Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum730 = zpPay730Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum1 = zpPay1Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7 = zpPay7Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zpPay30Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365 = zpPay365Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum2 = zpPay2Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14 = zpPay14Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60 = zpPay60Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730 = zpPay730Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         //        ЗП Сумма всех заказов за 30-60-90 дней
         BigDecimal sumCount1Month = BigDecimal.valueOf(zpPay30Day.size()); // 1 сумма
@@ -211,20 +213,12 @@ public class PersonalServiceImpl implements PersonalService {
 
 //=========================================== ВЗЯТИЕ СУММ ЗП И ЧЕКОВ ===================================================
 
-    private List<PaymentCheck> getPaymentChecks(LocalDate localDate, String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(role, () -> paymentCheckService.findAllToDate(localDate), owner -> paymentCheckService.findAllToDateByOwner(localDate, owner), managerList);
+    private List<PaymentCheckStatView> getPaymentCheckStats(LocalDate localDate, String role, Set<Manager> managerList) {
+        return checkRoleAndExecute(role, () -> paymentCheckService.findStatRowsToDate(localDate), owner -> paymentCheckService.findStatRowsToDateByOwner(localDate, owner), managerList);
     }
 
-    private List<Zp> getZarplataChecks(LocalDate localDate, String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(role, () -> zpService.findAllToDate(localDate), owner -> zpService.findAllToDateByOwner(localDate, owner), managerList);
-    }
-
-    private List<PaymentCheck> getPaymentChecksHistory(String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(role, paymentCheckService::findAll, paymentCheckService::findAllByOwner, managerList);
-    }
-
-    private List<Zp> getZarplataChecksHistory(String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(role, zpService::findAll, zpService::findAllByOwner, managerList);
+    private List<ZpStatView> getZarplataStats(LocalDate localDate, String role, Set<Manager> managerList) {
+        return checkRoleAndExecute(role, () -> zpService.findStatRowsToDate(localDate), owner -> zpService.findStatRowsToDateByOwner(localDate, owner), managerList);
     }
 
     private List<Long> getInWorkLeadList(String role, LocalDate localDate, Set<Manager> managerList) {
@@ -247,7 +241,7 @@ public class PersonalServiceImpl implements PersonalService {
 //======================================= ВЗЯТИЕ СУММ ЗП И ЧЕКОВ -  КОНЕЦ ==============================================
 
     //========================================= ПЕРЕВОД В МАПУ ЗП И ЧЕКОВ ==================================================
-    private Map<Integer, BigDecimal> calculateDailyZpSumForMonth(LocalDate targetMonthDate, List<Zp> zps) { //Создание мапы день-сумма зп
+    private Map<Integer, BigDecimal> calculateDailyZpSumForMonth(LocalDate targetMonthDate, List<? extends ZpStatView> zps) { //Создание мапы день-сумма зп
         Map<Integer, BigDecimal> dailyZpSumMap = initializeDailyZpSumMap(targetMonthDate);
         return updateDailyZpSumMap(dailyZpSumMap, zps, targetMonthDate.getMonth(), targetMonthDate.getYear());
     }
@@ -258,7 +252,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .collect(Collectors.toMap(i -> i, i -> BigDecimal.ZERO, (existing, replacement) -> existing, LinkedHashMap::new));
     }
 
-    private Map<Integer, BigDecimal> updateDailyZpSumMap(Map<Integer, BigDecimal> dailyZpSumMap, List<Zp> zps, Month targetMonth, int year) {
+    private Map<Integer, BigDecimal> updateDailyZpSumMap(Map<Integer, BigDecimal> dailyZpSumMap, List<? extends ZpStatView> zps, Month targetMonth, int year) {
         zps.stream()
                 .filter(zp -> zp.getCreated().getMonth() == targetMonth)
                 .filter(zp -> zp.getCreated().getYear() == year)
@@ -270,7 +264,7 @@ public class PersonalServiceImpl implements PersonalService {
     } //Создание мапы день-сумма зп
 
 
-    private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<PaymentCheck> pcs) {
+    private Map<Integer, BigDecimal> getDailySalarySumMap(LocalDate desiredDate, List<? extends PaymentCheckStatView> pcs) {
         if (pcs == null || pcs.isEmpty()) {
             // Возвращаем пустую карту, если список чеков пустой или null
             return IntStream.rangeClosed(1, desiredDate.lengthOfMonth())
@@ -315,7 +309,7 @@ public class PersonalServiceImpl implements PersonalService {
 
 
 
-    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMap(List<PaymentCheck> pcs) {
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMap(List<? extends PaymentCheckStatView> pcs) {
         Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlySalarySumMap = new HashMap<>();
 
         pcs.forEach(pc -> {
@@ -331,7 +325,7 @@ public class PersonalServiceImpl implements PersonalService {
         return yearlyMonthlySalarySumMap;
     }
 
-    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlyZpSumMap(List<Zp> zps) {
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlyZpSumMap(List<? extends ZpStatView> zps) {
         Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlyZpSumMap = new HashMap<>();
 
         zps.forEach(zp -> {
@@ -351,7 +345,7 @@ public class PersonalServiceImpl implements PersonalService {
 
 
 
-    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMapZp(List<Zp> pcs) {
+    private Map<Integer, Map<Integer, BigDecimal>> getYearlyMonthlySalarySumMapZp(List<? extends ZpStatView> pcs) {
         Map<Integer, Map<Integer, BigDecimal>> yearlyMonthlySalarySumMap = new HashMap<>();
 
         pcs.forEach(pc -> {

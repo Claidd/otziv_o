@@ -80,6 +80,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
     @Query("select l from Lead l where l.lidStatus = :status")
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
+    long countByLidStatus(String status);
 
 //    @Query("select l from Lead l where l.lidStatus = :status AND l.telephone.id = :telephoneId")
 //    Page<Lead> findAllByLidStatusByTelephoneId(Long telephoneId, String status, Pageable pageable);
@@ -131,34 +132,60 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status and l.manager = :manager")
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatusAndManager(String status, Manager manager, Pageable pageable);
+    long countByLidStatusAndManager(String status, Manager manager);
     @Query("select l from Lead l where  l.lidStatus = :status and l.marketolog = :marketolog")
     Page<Lead> findAllByLidStatusAndMarketolog(String status, Marketolog marketolog, Pageable pageable);
+    long countByLidStatusAndMarketolog(String status, Marketolog marketolog);
     Page<Lead> findAll(Pageable pageable);
     Page<Lead> findAllByManager(Manager manager, Pageable pageable);
+    long countByManager(Manager manager);
     Optional<Lead> findById(Long leadId);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword, Pageable pageable);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword);
     Page<Lead> findByTelephoneLeadContainingIgnoreCase(String keyword, Pageable pageable);
+    long countByTelephoneLeadContainingIgnoreCase(String keyword);
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
+    long countByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog, Pageable pageable);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog);
 
 
 
     @Query("SELECT l FROM Lead l WHERE l.manager IN :managers")
     Page<Lead> findAllByManagerToOwner(List<Manager> managers, Pageable pageable);
+    long countByManagerIn(Collection<Manager> managers);
 
 
 
     @Query("SELECT l FROM Lead l WHERE LOWER(l.telephoneLead) LIKE %:keyword% AND l.manager IN :managers")
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String keyword, List<Manager> managers, Pageable pageable);
+    long countByTelephoneLeadContainingIgnoreCaseAndManagerIn(String keyword, Collection<Manager> managers);
 
 
     @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) AND l.manager IN :managers")
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String status, String keyword, List<Manager> managers, Pageable pageable);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerIn(String status, String keyword, Collection<Manager> managers);
 
 
     @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
     Page<Lead> findAllByLidStatusAndManagerToOwner(String status, List<Manager> managers, Pageable pageable);
+    long countByLidStatusAndManagerIn(String status, Collection<Manager> managers);
+
+    Page<Lead> findByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry, Pageable pageable);
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
+            String status, String keyword, LocalDate dateNewTry, Pageable pageable);
+    Page<Lead> findByLidStatusAndManagerAndDateNewTryLessThanEqual(
+            String status, Manager manager, LocalDate dateNewTry, Pageable pageable);
+    Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
+            String status, String keyword, Manager manager, LocalDate dateNewTry, Pageable pageable);
+    long countByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
+            String status, String keyword, LocalDate dateNewTry);
+    long countByLidStatusAndManagerAndDateNewTryLessThanEqual(String status, Manager manager, LocalDate dateNewTry);
+    long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
+            String status, String keyword, Manager manager, LocalDate dateNewTry);
 
     List<Lead> findByUpdateStatusAfter(LocalDateTime since);
 

@@ -347,10 +347,16 @@ public class OrderServiceImpl implements OrderService {
             orderById.put(ids.get(i), i);
         }
 
-        List<OrderDTOList> orderListDTOs = orderRepository.findAll(ids).stream()
+        Map<Long, OrderDTOList> dtoById = new LinkedHashMap<>();
+        for (Object[] row : orderRepository.findOrderListRows(ids)) {
+            Long orderId = rowLong(row, 0);
+            if (orderId != null && !dtoById.containsKey(orderId)) {
+                dtoById.put(orderId, toDTOListOrders(row));
+            }
+        }
+
+        List<OrderDTOList> orderListDTOs = dtoById.values().stream()
                 .sorted(Comparator.comparingInt(order -> orderById.getOrDefault(order.getId(), Integer.MAX_VALUE)))
-                .map(this::toDTOListOrders)
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         return new PageImpl<>(orderListDTOs, orderIds.getPageable(), orderIds.getTotalElements());
@@ -920,6 +926,81 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public int getAllOrderDTOByStatus(String status) {
         return orderRepository.countByStatusTitle(status);
+    }
+
+    @Override
+    public Map<String, Integer> countOrdersByStatus() {
+        return toStatusCountMap(orderRepository.countGroupedByStatus());
+    }
+
+    @Override
+    public Map<String, Integer> countOrdersByStatusToManager(Manager manager) {
+        if (manager == null) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndManager(manager));
+    }
+
+    @Override
+    public Map<String, Integer> countOrdersByStatusToOwner(Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndManagers(managerList));
+    }
+
+    @Override
+    public Map<String, Integer> countOrdersByStatusToWorker(Worker worker) {
+        if (worker == null) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndWorker(worker));
+    }
+
+    private Map<String, Integer> toStatusCountMap(List<Object[]> rows) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        if (rows == null) {
+            return result;
+        }
+
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) {
+                continue;
+            }
+            String status = row[0] == null ? "" : row[0].toString();
+            long count = row[1] instanceof Number number ? number.longValue() : 0L;
+            result.put(status, count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count);
+        }
+        return result;
+    }
+
+    @Override
+    public int countAllOrders() {
+        return orderRepository.countAllOrders();
+    }
+
+    @Override
+    public int countAllOrdersToManager(Manager manager) {
+        if (manager == null) {
+            return 0;
+        }
+        return orderRepository.countByManager(manager);
+    }
+
+    @Override
+    public int countAllOrdersToOwner(Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return 0;
+        }
+        return orderRepository.countByManagers(managerList);
+    }
+
+    @Override
+    public int countOrdersByWorker(Worker worker) {
+        if (worker == null) {
+            return 0;
+        }
+        return orderRepository.countByWorker(worker);
     }
 
     @Override
@@ -1673,6 +1754,41 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
+    private OrderDTOList toDTOListOrders(Object[] row) {
+        if (row == null) {
+            return null;
+        }
+
+        LocalDate now = LocalDate.now();
+        LocalDate changedDate = rowLocalDate(row, 18);
+        long daysDifference = ChronoUnit.DAYS.between(changedDate != null ? changedDate : now, now);
+
+        return OrderDTOList.builder()
+                .id(rowLong(row, 0))
+                .companyId(rowLong(row, 1))
+                .orderDetailsId(rowUuid(row, 2))
+                .companyTitle(rowString(row, 3, "Без компании"))
+                .companyComments(rowString(row, 4, ""))
+                .filialTitle(rowString(row, 5, "Без филиала"))
+                .filialUrl(rowString(row, 6, ""))
+                .status(rowString(row, 7, ""))
+                .sum(rowBigDecimal(row, 8))
+                .companyUrlChat(rowString(row, 9, ""))
+                .companyTelephone(rowString(row, 10, ""))
+                .managerPayText(rowString(row, 11, ""))
+                .amount(rowInteger(row, 12))
+                .counter(rowInteger(row, 13))
+                .workerUserFio(rowString(row, 14, ""))
+                .categoryTitle(rowString(row, 15, "Не выбрано"))
+                .subCategoryTitle(rowString(row, 16, "Не выбрано"))
+                .created(rowLocalDate(row, 17))
+                .changed(changedDate)
+                .payDay(rowLocalDate(row, 19))
+                .dayToChangeStatusAgo(daysDifference)
+                .orderComments(rowString(row, 20, "нет заметок"))
+                .build();
+    }
+
     private List<OrderDTO> convertToOrderDTOList(List<Order> orders) {
         if (orders == null || orders.isEmpty()) {
             return Collections.emptyList();
@@ -2155,6 +2271,40 @@ public class OrderServiceImpl implements OrderService {
 
     private String safeString(String value) {
         return value == null ? "" : value;
+    }
+
+    private Long rowLong(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof Number number ? number.longValue() : null;
+    }
+
+    private Integer rowInteger(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private UUID rowUuid(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof UUID uuid ? uuid : null;
+    }
+
+    private BigDecimal rowBigDecimal(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof BigDecimal bigDecimal ? bigDecimal : null;
+    }
+
+    private LocalDate rowLocalDate(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof LocalDate localDate ? localDate : null;
+    }
+
+    private String rowString(Object[] row, int index, String fallback) {
+        Object value = rowValue(row, index);
+        return value == null ? fallback : safeString(value.toString());
+    }
+
+    private Object rowValue(Object[] row, int index) {
+        return row != null && index >= 0 && index < row.length ? row[index] : null;
     }
 
     private boolean hasText(String value) {

@@ -46,11 +46,19 @@ import org.springframework.web.server.ResponseStatusException;
 import java.security.Principal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/leads")
 public class ApiLeadBoardController {
+    private static final String SECTION_TO_WORK = "toWork";
+    private static final String SECTION_NEW = "newLeads";
+    private static final String SECTION_SEND = "send";
+    private static final String SECTION_ARCHIVE = "archive";
+    private static final String SECTION_IN_WORK = "inWork";
+    private static final String SECTION_ALL = "all";
 
     private final LeadService leadService;
     private final PromoTextService promoTextService;
@@ -67,6 +75,7 @@ public class ApiLeadBoardController {
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "desc") String sortDirection,
+            @RequestParam(required = false) String section,
             Principal principal
     ) {
         return performanceMetrics.recordEndpoint("leads.board", () -> {
@@ -74,55 +83,57 @@ public class ApiLeadBoardController {
             int normalizedSize = Math.max(1, Math.min(pageSize, 50));
             String normalizedKeyword = keyword == null ? "" : keyword.trim();
             String normalizedSortDirection = "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
+            String normalizedSection = normalizeSection(section);
+            boolean loadAllSections = normalizedSection.isEmpty();
 
             return new LeadBoardResponse(
-                    toPageResponse(leadService.getAllLeadsToWork(
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_TO_WORK, () -> leadService.getAllLeadsToWork(
                             LeadStatus.TO_WORK.title,
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
-                    toPageResponse(leadService.getAllLeads(
+                    ), () -> leadService.countLeadsToWork(LeadStatus.TO_WORK.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_NEW, () -> leadService.getAllLeads(
                             LeadStatus.NEW.title,
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
-                    toPageResponse(leadService.getAllLeadsToDateReSend(
+                    ), () -> leadService.countLeads(LeadStatus.NEW.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_SEND, () -> leadService.getAllLeadsToDateReSend(
                             LeadStatus.SEND.title,
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
-                    toPageResponse(leadService.getAllLeads(
+                    ), () -> leadService.countLeadsToDateReSend(LeadStatus.SEND.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_ARCHIVE, () -> leadService.getAllLeads(
                             LeadStatus.ARCHIVE.title,
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
-                    toPageResponse(leadService.getAllLeads(
+                    ), () -> leadService.countLeads(LeadStatus.ARCHIVE.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_IN_WORK, () -> leadService.getAllLeads(
                             LeadStatus.INWORK.title,
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
-                    toPageResponse(leadService.getAllLeadsNoStatus(
+                    ), () -> leadService.countLeads(LeadStatus.INWORK.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    pageOrCount(loadAllSections, normalizedSection, SECTION_ALL, () -> leadService.getAllLeadsNoStatus(
                             normalizedKeyword,
                             principal,
                             normalizedPage,
                             normalizedSize,
                             normalizedSortDirection
-                    )),
+                    ), () -> leadService.countLeadsNoStatus(normalizedKeyword, principal), normalizedPage, normalizedSize),
                     Arrays.stream(LeadStatus.values()).map(status -> status.title).toList(),
                     promoTextService.getAllPromoTexts()
             );
@@ -259,6 +270,49 @@ public class ApiLeadBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
     public void markNew(@PathVariable Long id) {
         leadService.changeStatusLeadOnNew(id);
+    }
+
+    private LeadPageResponse pageOrCount(
+            boolean loadAllSections,
+            String requestedSection,
+            String currentSection,
+            Supplier<Page<LeadDTO>> pageSupplier,
+            LongSupplier countSupplier,
+            int pageNumber,
+            int pageSize
+    ) {
+        if (loadAllSections || currentSection.equals(requestedSection)) {
+            return toPageResponse(pageSupplier.get());
+        }
+        return emptyPage(pageNumber, pageSize, countSupplier.getAsLong());
+    }
+
+    private LeadPageResponse emptyPage(int pageNumber, int pageSize, long totalElements) {
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / pageSize);
+        return new LeadPageResponse(
+                List.of(),
+                pageNumber,
+                pageSize,
+                totalElements,
+                totalPages,
+                pageNumber <= 0,
+                totalPages == 0 || pageNumber >= totalPages - 1
+        );
+    }
+
+    private String normalizeSection(String section) {
+        if (section == null || section.isBlank()) {
+            return "";
+        }
+        return switch (section.trim()) {
+            case SECTION_TO_WORK -> SECTION_TO_WORK;
+            case "new", SECTION_NEW -> SECTION_NEW;
+            case SECTION_SEND -> SECTION_SEND;
+            case SECTION_ARCHIVE -> SECTION_ARCHIVE;
+            case SECTION_IN_WORK -> SECTION_IN_WORK;
+            case SECTION_ALL -> SECTION_ALL;
+            default -> SECTION_IN_WORK;
+        };
     }
 
     private LeadPageResponse toPageResponse(Page<LeadDTO> page) {

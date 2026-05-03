@@ -164,6 +164,41 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Query("SELECT COUNT(c.id) FROM Company c WHERE c.status.title = :status")
     int countByStatusTitle(String status);
 
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(c.id)
+        FROM Company c
+        LEFT JOIN c.status s
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatus();
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(c.id)
+        FROM Company c
+        LEFT JOIN c.status s
+        WHERE c.manager = :manager
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatusAndManager(Manager manager);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(c.id)
+        FROM Company c
+        LEFT JOIN c.status s
+        WHERE c.manager IN :managers
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatusAndManagers(Set<Manager> managers);
+
+    @Query("SELECT COUNT(c.id) FROM Company c")
+    int countAllCompanies();
+
+    @Query("SELECT COUNT(c.id) FROM Company c WHERE c.manager = :manager")
+    int countByManager(Manager manager);
+
+    @Query("SELECT COUNT(c.id) FROM Company c WHERE c.manager IN :managers")
+    int countByManagers(Set<Manager> managers);
+
     @Query("SELECT COUNT(c.id) FROM Company c WHERE c.manager = :manager AND c.status.title = :status")
     int countByManagerAndStatusTitle(Manager manager, String status);
 

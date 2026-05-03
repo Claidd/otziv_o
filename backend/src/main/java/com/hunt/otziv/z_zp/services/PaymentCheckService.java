@@ -3,6 +3,7 @@ package com.hunt.otziv.z_zp.services;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.z_zp.dto.CheckDTO;
+import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import org.springframework.data.util.Pair;
 
@@ -19,8 +20,10 @@ public interface PaymentCheckService {
     List<PaymentCheck> findAll();
 
     List<PaymentCheck> findAllToDate(LocalDate localDate);
+    List<PaymentCheckStatView> findStatRowsToDate(LocalDate localDate);
 
     List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+    List<PaymentCheckStatView> findStatRowsToDateByOwner(LocalDate localDate, Set<Manager> managerList);
 
     List<PaymentCheck> findAllByOwner(Set<Manager> managerList);
 

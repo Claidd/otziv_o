@@ -3,7 +3,9 @@ package com.hunt.otziv.l_lead.services;
 import com.hunt.otziv.l_lead.model.PromoText;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.config.cache.CacheConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -21,6 +23,7 @@ public class PromoTextServiceImpl implements PromoTextService {
     }
 
     @Override
+    @Cacheable(CacheConfig.PROMO_TEXTS)
     public List<String> getAllPromoTexts() { // Взять все текста
         List<String> result = new ArrayList<>();
         List<PromoText> textBD =  promoTextRepository.findAll();

@@ -54,6 +54,18 @@ public interface CompanyService {
     CompanyDTO convertToDtoToManagerNotLead(Principal principal);
     int getAllCompanyDTOByStatus(String status);
 
+    Map<String, Integer> countCompaniesByStatus();
+
+    Map<String, Integer> countCompaniesByStatusToManager(Manager manager);
+
+    Map<String, Integer> countCompaniesByStatusToOwner(Set<Manager> managerList);
+
+    int countAllCompanies();
+
+    int countAllCompaniesToManager(Manager manager);
+
+    int countAllCompaniesToOwner(Set<Manager> managerList);
+
     int getAllCompanyDTOByStatusToManager(Manager manager, String status);
 
 

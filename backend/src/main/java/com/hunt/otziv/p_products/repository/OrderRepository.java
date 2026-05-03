@@ -44,6 +44,44 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Order> findAll(@Param("orderId") List<Long> orderId);
 
     @Query("""
+        SELECT
+            o.id,
+            c.id,
+            d.id,
+            c.title,
+            c.commentsCompany,
+            f.title,
+            f.url,
+            s.title,
+            o.sum,
+            c.urlChat,
+            c.telephone,
+            m.payText,
+            o.amount,
+            o.counter,
+            wu.fio,
+            cat.categoryTitle,
+            sub.subCategoryTitle,
+            o.created,
+            o.changed,
+            o.payDay,
+            o.zametka
+        FROM Order o
+        LEFT JOIN o.details d
+        LEFT JOIN o.status s
+        LEFT JOIN o.filial f
+        LEFT JOIN o.company c
+        LEFT JOIN c.categoryCompany cat
+        LEFT JOIN c.subCategory sub
+        LEFT JOIN o.worker w
+        LEFT JOIN w.user wu
+        LEFT JOIN o.manager m
+        WHERE o.id IN :orderId
+        ORDER BY o.changed DESC
+    """)
+    List<Object[]> findOrderListRows(@Param("orderId") List<Long> orderId);
+
+    @Query("""
         SELECT o.worker.id, COUNT(o.id)
         FROM Order o
         WHERE o.worker.id IN :workerIds
@@ -460,6 +498,53 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
 
     @Query("SELECT COUNT(o.id) FROM Order o WHERE o.status.title = :status")
     int countByStatusTitle(@Param("status") String status);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatus();
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.manager = :manager
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatusAndManager(@Param("manager") Manager manager);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.manager IN :managers
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatusAndManagers(@Param("managers") Set<Manager> managers);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.worker = :worker
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByStatusAndWorker(@Param("worker") Worker worker);
+
+    @Query("SELECT COUNT(o.id) FROM Order o")
+    int countAllOrders();
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager")
+    int countByManager(@Param("manager") Manager manager);
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager IN :managers")
+    int countByManagers(@Param("managers") Set<Manager> managers);
+
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker")
+    int countByWorker(@Param("worker") Worker worker);
 
     @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager AND o.status.title = :status")
     int countByManagerAndStatusTitle(@Param("manager") Manager manager,
