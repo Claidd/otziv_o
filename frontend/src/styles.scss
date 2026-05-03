@@ -431,73 +431,73 @@ app-review-check .approve-publication-hint .material-icons-sharp {
   color: var(--otziv-info);
 }
 
-app-leads-board .status-tabs {
+:is(app-leads-board, app-operator-board) .status-tabs {
   border-radius: 0.55rem;
   box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.14);
 }
 
-app-leads-board :where(.status-tabs, .lead-card),
+:is(app-leads-board, app-operator-board) :where(.status-tabs, .lead-card),
 .lead-stats .stat-card {
   transition: box-shadow 0.65s ease;
 }
 
-app-leads-board :where(.status-tabs, .lead-card):hover,
-app-leads-board .lead-card:hover,
+:is(app-leads-board, app-operator-board) :where(.status-tabs, .lead-card):hover,
+:is(app-leads-board, app-operator-board) .lead-card:hover,
 .lead-stats .stat-card:hover {
   box-shadow: none;
 }
 
-app-leads-board .lead-workspace {
+:is(app-leads-board, app-operator-board) .lead-workspace {
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
-app-leads-board app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
+:is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
   display: none;
 }
 
-app-leads-board .mobile-menu-toggle span {
+:is(app-leads-board, app-operator-board) .mobile-menu-toggle span {
   font-size: 0.9rem;
 }
 
-app-leads-board .lead-menu-panel {
+:is(app-leads-board, app-operator-board) .lead-menu-panel {
   display: grid;
   gap: 0.75rem;
 }
 
-app-leads-board .mobile-menu-heading {
+:is(app-leads-board, app-operator-board) .mobile-menu-heading {
   display: none;
 }
 
-app-leads-board .card-actions {
+:is(app-leads-board, app-operator-board) .card-actions {
   align-items: center;
   justify-self: center;
   width: 100%;
 }
 
-app-leads-board .lead-card .phone-row a {
+:is(app-leads-board, app-operator-board) .lead-card .phone-row a {
   text-decoration: none;
   transition: background-color 0.75s ease, border-color 0.75s ease, color 0.75s ease;
 }
 
-app-leads-board .lead-card .phone-row a:hover {
+:is(app-leads-board, app-operator-board) .lead-card .phone-row a:hover {
   border-color: transparent;
   color: var(--otziv-dark);
   background: #f7c88f;
 }
 
-app-leads-board .lead-card .card-actions button,
-app-leads-board .lead-card .card-actions a {
+:is(app-leads-board, app-operator-board) .lead-card .card-actions button,
+:is(app-leads-board, app-operator-board) .lead-card .card-actions a {
   transition: background-color 0.75s ease, border-color 0.75s ease, color 0.75s ease;
 }
 
-app-leads-board .lead-card .card-actions button:not(:disabled):hover,
-app-leads-board .lead-card .card-actions a:hover {
+:is(app-leads-board, app-operator-board) .lead-card .card-actions button:not(:disabled):hover,
+:is(app-leads-board, app-operator-board) .lead-card .card-actions a:hover {
   border-color: transparent;
   color: white;
   background: #c45be7;
 }
 
-app-leads-board app-admin-layout .admin-layout .quick-links button {
+:is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .quick-links button {
   min-height: 2.1rem;
   border: 1px solid rgba(103, 116, 131, 0.24);
   border-radius: var(--otziv-small-radius);
@@ -508,7 +508,7 @@ app-leads-board app-admin-layout .admin-layout .quick-links button {
   font-weight: 800;
 }
 
-app-leads-board app-admin-layout .admin-layout .people-row button.details-link.details-link {
+:is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .people-row button.details-link.details-link {
   contain-intrinsic-block-size: none;
   display: inline;
   width: auto;
@@ -525,12 +525,12 @@ app-leads-board app-admin-layout .admin-layout .people-row button.details-link.d
   box-shadow: none;
 }
 
-app-leads-board app-admin-layout .admin-layout .people-row button.details-link.details-link:hover {
+:is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .people-row button.details-link.details-link:hover {
   color: var(--otziv-primary);
   background: transparent;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
   position: fixed;
   z-index: 80;
   inset: 0;
@@ -541,7 +541,7 @@ app-leads-board app-admin-layout .admin-layout .people-row button.details-link.d
   backdrop-filter: blur(2px);
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
   width: min(52rem, 100%);
   max-height: min(92vh, 46rem);
   overflow: auto;
@@ -553,69 +553,69 @@ app-leads-board app-admin-layout .admin-layout .people-row button.details-link.d
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal--compact {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal--compact {
   width: min(34rem, 100%);
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head,
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head,
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head {
   margin-bottom: 1rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head small {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head small {
   color: var(--otziv-info);
   font-weight: 900;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head h2 {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head h2 {
   margin: 0.1rem 0 0;
   font-size: 1.45rem;
   line-height: 1;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-close {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-close {
   width: 2.25rem;
   min-height: 2.25rem;
   padding: 0;
   border-radius: 50%;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-form {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-form {
   display: grid;
   gap: 1rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field {
   display: grid;
   gap: 0.35rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field--wide {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field--wide {
   grid-column: 1 / -1;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field span {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field span {
   margin: 0;
   color: var(--otziv-info);
   font-size: 0.78rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input,
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field select,
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input,
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field select,
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
   width: 100%;
   min-height: 2.25rem;
   border: 1px solid rgba(103, 116, 131, 0.24);
@@ -626,38 +626,38 @@ app-leads-board app-admin-layout .admin-layout .people-row button.details-link.d
   font: inherit;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field textarea {
   min-height: 5.2rem;
   max-height: none;
   padding: 0.65rem 0.75rem;
   resize: vertical;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input[readonly] {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-field input[readonly] {
   color: var(--otziv-info);
   background: var(--otziv-muted-surface);
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
   justify-content: flex-end;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
   justify-content: space-between;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger {
   color: white;
   background: var(--otziv-danger);
 }
 
-:is(app-leads-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger:not(:disabled):hover {
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger:not(:disabled):hover {
   background: #d90052;
 }
 
@@ -1018,12 +1018,12 @@ app-worker-board .bot-line--empty span {
   font-family: var(--otziv-font-family);
 }
 
-app-leads-board .pager {
+:is(app-leads-board, app-operator-board) .pager {
   justify-content: center;
   margin-top: 0.35rem;
 }
 
-app-leads-board .pager .icon-button {
+:is(app-leads-board, app-operator-board) .pager .icon-button {
   min-height: 2.7rem;
   width: 2.7rem;
   color: white;
@@ -1031,29 +1031,29 @@ app-leads-board .pager .icon-button {
 }
 
 @media (max-width: 1500px) {
-  app-leads-board .lead-workspace .cards-grid {
+  :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1180px) {
-  app-leads-board .lead-workspace .copy-search {
+  :is(app-leads-board, app-operator-board) .lead-workspace .copy-search {
     grid-template-columns: 1fr;
   }
 
-  app-leads-board .lead-workspace .lead-toolbar {
+  :is(app-leads-board, app-operator-board) .lead-workspace .lead-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  app-leads-board .lead-workspace .status-tabs,
-  app-leads-board .lead-workspace .quick-links,
-  app-leads-board .lead-workspace .promo-strip,
-  app-leads-board .lead-workspace .search-line {
+  :is(app-leads-board, app-operator-board) .lead-workspace .status-tabs,
+  :is(app-leads-board, app-operator-board) .lead-workspace .quick-links,
+  :is(app-leads-board, app-operator-board) .lead-workspace .promo-strip,
+  :is(app-leads-board, app-operator-board) .lead-workspace .search-line {
     width: 100%;
   }
 
-  app-leads-board .lead-workspace .cards-grid {
+  :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -1132,7 +1132,7 @@ app-leads-board .pager .icon-button {
     margin-bottom: 0.55rem;
   }
 
-  app-leads-board app-admin-layout .admin-layout .page-heading {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .page-heading {
     display: none;
   }
 
@@ -1166,13 +1166,13 @@ app-leads-board .pager .icon-button {
     font-size: 0.72rem;
   }
 
-  app-leads-board .lead-workspace {
+  :is(app-leads-board, app-operator-board) .lead-workspace {
     display: block;
     min-height: auto;
     overflow: hidden;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .mobile-menu-toggle.mobile-menu-toggle {
     display: flex;
     min-height: 2.15rem;
     margin: 0 auto 0.85rem;
@@ -1273,31 +1273,31 @@ app-leads-board .pager .icon-button {
     min-width: 0;
   }
 
-  app-leads-board .lead-workspace .lead-menu-panel {
+  :is(app-leads-board, app-operator-board) .lead-workspace .lead-menu-panel {
     display: none;
     margin-bottom: 0.95rem;
   }
 
-  app-leads-board .lead-workspace .lead-menu-panel.open {
+  :is(app-leads-board, app-operator-board) .lead-workspace .lead-menu-panel.open {
     display: grid;
     gap: 0.7rem;
     margin-bottom: 0.65rem;
   }
 
-  app-leads-board .lead-workspace .mobile-menu-heading {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-menu-heading {
     display: grid;
     gap: 0.65rem;
     justify-items: center;
     padding-bottom: 0.15rem;
   }
 
-  app-leads-board .lead-workspace .mobile-menu-heading h1 {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-menu-heading h1 {
     margin: 0;
     font-size: 1.65rem;
     line-height: 1;
   }
 
-  app-leads-board .lead-workspace .mobile-role-links {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-role-links {
     display: flex;
     max-width: 100%;
     align-items: center;
@@ -1307,11 +1307,11 @@ app-leads-board .pager .icon-button {
     scrollbar-width: none;
   }
 
-  app-leads-board .lead-workspace .mobile-role-links::-webkit-scrollbar {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-role-links::-webkit-scrollbar {
     display: none;
   }
 
-  app-leads-board .lead-workspace .mobile-role-links a {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-role-links a {
     flex: 0 0 auto;
     color: var(--otziv-dark);
     font-size: 0.75rem;
@@ -1320,11 +1320,11 @@ app-leads-board .pager .icon-button {
     white-space: nowrap;
   }
 
-  app-leads-board .lead-workspace .mobile-role-links a:hover {
+  :is(app-leads-board, app-operator-board) .lead-workspace .mobile-role-links a:hover {
     color: var(--otziv-primary);
   }
 
-  app-leads-board .lead-workspace .cards-grid {
+  :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
     display: flex;
     grid-template-columns: none;
     gap: 1.1rem;
@@ -1337,46 +1337,46 @@ app-leads-board .pager .icon-button {
     scrollbar-width: thin;
   }
 
-  app-leads-board .lead-workspace.menu-open .cards-grid {
+  :is(app-leads-board, app-operator-board) .lead-workspace.menu-open .cards-grid {
     margin-top: 0.3rem;
     padding-bottom: 0.45rem;
   }
 
-  app-leads-board .lead-workspace .copy-search {
+  :is(app-leads-board, app-operator-board) .lead-workspace .copy-search {
     gap: 0.75rem;
   }
 
-  app-leads-board .lead-workspace .status-tabs,
-  app-leads-board .lead-workspace .quick-links,
-  app-leads-board .lead-workspace .promo-strip,
-  app-leads-board .lead-workspace .search-line {
+  :is(app-leads-board, app-operator-board) .lead-workspace .status-tabs,
+  :is(app-leads-board, app-operator-board) .lead-workspace .quick-links,
+  :is(app-leads-board, app-operator-board) .lead-workspace .promo-strip,
+  :is(app-leads-board, app-operator-board) .lead-workspace .search-line {
     overflow-x: auto;
     padding-bottom: 0.15rem;
     scrollbar-width: thin;
   }
 
-  app-leads-board .lead-workspace .quick-links {
+  :is(app-leads-board, app-operator-board) .lead-workspace .quick-links {
     justify-content: center;
   }
 
-  app-leads-board .lead-workspace .search-line label {
+  :is(app-leads-board, app-operator-board) .lead-workspace .search-line label {
     min-width: 14rem;
   }
 
-  app-leads-board .lead-workspace .lead-card {
+  :is(app-leads-board, app-operator-board) .lead-workspace .lead-card {
     flex: 0 0 min(21rem, calc(100vw - 4rem));
     min-height: clamp(21.5rem, 48svh, 27rem);
     scroll-snap-align: center;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button,
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .meta-row span {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button,
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .meta-row span {
     min-height: 2.45rem;
     font-size: 0.82rem;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row a,
   app-manager-board app-admin-layout .admin-layout .manager-workspace .manager-card .phone-row a {
     display: inline-flex;
     align-items: center;
@@ -1385,102 +1385,102 @@ app-leads-board .pager .icon-button {
     line-height: 1;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .phone-row button {
     flex-basis: 2.65rem;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card textarea {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card textarea {
     min-height: 3.75rem;
     max-height: 3.75rem;
     padding: 0.7rem 0.8rem;
     font-size: 0.86rem;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions {
     gap: 0.55rem;
   }
 
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions button,
-  app-leads-board app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions a {
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions button,
+  :is(app-leads-board, app-operator-board) app-admin-layout .admin-layout .lead-workspace .lead-card .card-actions a {
     min-height: 2.85rem;
     padding: 0 0.45rem;
     font-size: 0.82rem;
     line-height: 1.05;
   }
 
-  app-leads-board .lead-workspace.menu-open .lead-card {
+  :is(app-leads-board, app-operator-board) .lead-workspace.menu-open .lead-card {
     min-height: clamp(18.5rem, 39svh, 20.5rem);
   }
 
-  app-leads-board .lead-workspace .pager {
+  :is(app-leads-board, app-operator-board) .lead-workspace .pager {
     margin-top: 0.35rem;
   }
 
-  app-leads-board .lead-workspace.menu-open .pager {
+  :is(app-leads-board, app-operator-board) .lead-workspace.menu-open .pager {
     margin-top: 0.05rem;
   }
 
-  app-leads-board .mobile-lead-stats {
+  :is(app-leads-board, app-operator-board) .mobile-lead-stats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
     margin-top: 1rem;
   }
 
-  app-leads-board .mobile-lead-stats .stat-card {
+  :is(app-leads-board, app-operator-board) .mobile-lead-stats .stat-card {
     min-height: 5.9rem;
     border-radius: 1rem;
     padding: 0.9rem 1rem;
   }
 
-  app-leads-board .mobile-lead-stats .stat-card span {
+  :is(app-leads-board, app-operator-board) .mobile-lead-stats .stat-card span {
     margin-bottom: 0.45rem;
     font-size: 0.74rem;
   }
 
-  app-leads-board .mobile-lead-stats .stat-card strong {
+  :is(app-leads-board, app-operator-board) .mobile-lead-stats .stat-card strong {
     font-size: 1.35rem;
   }
 
-  app-leads-board .mobile-lead-stats .stat-card i {
+  :is(app-leads-board, app-operator-board) .mobile-lead-stats .stat-card i {
     width: 3rem;
     height: 3rem;
     border-width: 0.42rem;
     font-size: 1rem;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
     align-items: end;
     padding: 0.8rem;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal {
     max-height: 92svh;
     border-radius: 1rem;
     padding: 1rem;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-grid {
     grid-template-columns: 1fr;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split {
     grid-template-columns: 1fr;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div,
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div,
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions-group {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
   }
 
-  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div:first-child {
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div:first-child {
     grid-template-columns: 1fr;
   }
 
@@ -1519,24 +1519,25 @@ app-leads-board .pager .icon-button {
     width: min(100% - 0.75rem, 28rem);
   }
 
-  app-leads-board .lead-workspace .cards-grid {
+  :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
     gap: 1rem;
     margin-top: 0.55rem;
   }
 
-  app-leads-board .lead-workspace .lead-card {
+  :is(app-leads-board, app-operator-board) .lead-workspace .lead-card {
     flex-basis: min(20.5rem, calc(100vw - 3.25rem));
     min-height: clamp(22rem, 52svh, 27rem);
   }
 
-  app-leads-board .lead-workspace.menu-open .lead-card {
+  :is(app-leads-board, app-operator-board) .lead-workspace.menu-open .lead-card {
     min-height: clamp(18.25rem, 38svh, 20rem);
   }
 
-  app-leads-board .lead-workspace .status-tabs button,
-  app-leads-board .lead-workspace .status-tabs a,
-  app-leads-board .lead-workspace .promo-strip button,
-  app-leads-board .lead-workspace .quick-links a {
+  :is(app-leads-board, app-operator-board) .lead-workspace .status-tabs button,
+  :is(app-leads-board, app-operator-board) .lead-workspace .status-tabs a,
+  :is(app-leads-board, app-operator-board) .lead-workspace .promo-strip button,
+  :is(app-leads-board, app-operator-board) .lead-workspace .quick-links a {
     flex: 0 0 auto;
   }
 }
+

@@ -81,7 +81,7 @@ export class LeadsBoardComponent {
   readonly mobileNavLinks: MobileNavLink[] = [
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },
-    { label: 'Оператор', href: this.legacyUrl('/operators') },
+    { label: 'Оператор', routerLink: '/operator' },
     { label: 'Маркетолог', href: this.legacyUrl('/admin/analyse') },
     { label: 'Менеджер', href: this.legacyUrl('/admin/personal') },
     { label: 'Специалист', routerLink: '/worker' },

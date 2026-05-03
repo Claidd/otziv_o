@@ -111,8 +111,8 @@ export class HomeComponent {
       label: 'Оператор',
       description: 'Операторы и обработка заявок',
       icon: 'support_agent',
-      roles: ['ADMIN', 'OWNER', 'OPERATOR', 'MARKETOLOG'],
-      href: `${appEnvironment.legacyBaseUrl}/operators`
+      roles: ['ADMIN', 'OWNER', 'OPERATOR'],
+      routerLink: '/operator'
     },
     {
       label: 'Менеджер',

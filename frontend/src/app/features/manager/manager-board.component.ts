@@ -125,7 +125,7 @@ export class ManagerBoardComponent {
   readonly mobileNavLinks: MobileNavLink[] = [
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },
-    { label: 'Оператор', href: this.legacyUrl('/operators') },
+    { label: 'Оператор', routerLink: '/operator' },
     { label: 'Маркетолог', href: this.legacyUrl('/admin/analyse') },
     { label: 'Менеджер', routerLink: '/manager' },
     { label: 'Специалист', href: '/worker' },

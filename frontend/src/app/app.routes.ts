@@ -8,6 +8,7 @@ import { LegacyMigrationComponent } from './features/auth/legacy-migration.compo
 import { LeadsBoardComponent } from './features/leads/leads-board.component';
 import { ManagerBoardComponent } from './features/manager/manager-board.component';
 import { OrderDetailsComponent } from './features/manager/order-details.component';
+import { OperatorBoardComponent } from './features/operator/operator-board.component';
 import { ReviewCheckComponent } from './features/review-check/review-check.component';
 import { WorkerBoardComponent } from './features/worker/worker-board.component';
 import { AdminAnalyticsComponent } from './features/cabinet/admin-analytics.component';
@@ -34,6 +35,14 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']
+    }
+  },
+  {
+    path: 'operator',
+    component: OperatorBoardComponent,
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'OPERATOR']
     }
   },
   {

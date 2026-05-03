@@ -1,0 +1,258 @@
+<app-admin-layout title="Оператор" active="operator" rightPanelMode="custom">
+  <section class="lead-workspace" [class.menu-open]="mobileMenuOpen()">
+    <button
+      type="button"
+      class="mobile-menu-toggle"
+      [class.active]="mobileMenuOpen()"
+      [attr.aria-expanded]="mobileMenuOpen()"
+      aria-controls="lead-menu-panel"
+      (click)="toggleMobileMenu()"
+    >
+      Меню
+      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
+    </button>
+
+    <div id="lead-menu-panel" class="lead-menu-panel" [class.open]="mobileMenuOpen()">
+      <div class="mobile-menu-heading">
+        <h1>Оператор</h1>
+        <nav class="mobile-role-links" aria-label="Разделы">
+          @for (link of mobileNavLinks; track trackMobileLink($index, link)) {
+            @if (link.routerLink) {
+              <a [routerLink]="link.routerLink">{{ link.label }}</a>
+            } @else {
+              <a [href]="link.href">{{ link.label }}</a>
+            }
+          }
+        </nav>
+      </div>
+
+      <header class="lead-toolbar">
+        <nav class="status-tabs" aria-label="Состояние оператора">
+          @for (metric of metrics(); track trackMetric($index, metric)) {
+            <button
+              type="button"
+              [class.active]="metric.label === 'К выдаче'"
+              [title]="metric.label + ': ' + metric.value"
+              (click)="metric.label === 'Телефон' ? openBindModal() : null"
+            >
+              <span class="material-icons-sharp">{{ metric.icon }}</span>
+              {{ metric.label }}
+              <small>{{ metric.value }}</small>
+            </button>
+          }
+        </nav>
+
+        <div class="quick-links">
+          <button type="button" (click)="openBindModal()">
+            <span class="material-icons-sharp">settings_cell</span>
+            Телефон
+          </button>
+          <a [href]="legacyCategoriesUrl">Категории</a>
+          <a [href]="legacyCompaniesUrl">Компании</a>
+        </div>
+      </header>
+
+      <section class="copy-search">
+        <div class="promo-strip" aria-label="Тексты оператора">
+          @for (item of promoItems(); track trackPromo($index, item)) {
+            <button type="button" (click)="copyPromo(item)" [disabled]="!item.text">
+              <span class="material-icons-sharp">{{ item.icon }}</span>
+              {{ copied() === ('promo:' + item.label) ? 'скопировано' : item.label }}
+            </button>
+          }
+        </div>
+
+        <div class="search-line" [class.has-clear]="keyword()">
+          <label>
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Найти"
+              [ngModel]="keyword()"
+              (ngModelChange)="keyword.set($event)"
+              (keyup.enter)="search()"
+            >
+          </label>
+
+          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+
+          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+
+          @if (keyword()) {
+            <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    <section class="cards-grid">
+      @for (lead of currentLeads(); track trackLead($index, lead)) {
+        <article class="lead-card">
+          <header>
+            <strong>{{ lead.lidStatus || '-' }}</strong>
+            <small>#{{ lead.id }}</small>
+          </header>
+
+          <div class="phone-row" [class.phone-row--offer]="lead.offer">
+            <a [href]="whatsappUrl(lead)" target="_blank" rel="noopener">
+              {{ lead.telephoneLead }}
+            </a>
+            <button type="button" (click)="copyPhone(lead)" title="Скопировать телефон">
+              {{ copied() === ('phone:' + lead.id) ? '✓' : 'T' }}
+            </button>
+          </div>
+
+          <div class="meta-row">
+            <span>{{ lead.createDate | date:'yyyy-MM-dd' }}</span>
+            <span>{{ lead.cityLead || 'Нет' }}</span>
+          </div>
+
+          <textarea
+            rows="3"
+            placeholder="Комментарий"
+            [ngModel]="commentFor(lead)"
+            (ngModelChange)="setComment(lead, $event)"
+          ></textarea>
+
+          <div class="card-actions">
+            <button
+              type="button"
+              [disabled]="isMutating(lead, 'send')"
+              (click)="runAction(lead, 'send')"
+              title="отправил"
+            >
+              <span class="material-icons-sharp">{{ actionIcon('send') }}</span>
+              {{ actionLabel('send') }}
+            </button>
+
+            <button
+              type="button"
+              [disabled]="isMutating(lead, 'toWork')"
+              (click)="runAction(lead, 'toWork')"
+              title="передать"
+            >
+              <span class="material-icons-sharp">{{ actionIcon('toWork') }}</span>
+              {{ actionLabel('toWork') }}
+            </button>
+
+            <a [href]="companyUrl(lead)">
+              <span class="material-icons-sharp">business_center</span>
+              работа
+            </a>
+          </div>
+
+          <footer>
+            <div class="people-row">
+              <span>{{ assigneeName(lead.operator) }}</span>
+              <span>{{ lead.updateStatus | date:'dd.MM HH:mm' }}</span>
+            </div>
+          </footer>
+        </article>
+      } @empty {
+        <div class="empty">
+          <span class="material-icons-sharp">{{ board()?.requireDeviceId ? 'settings_cell' : 'inbox' }}</span>
+          <h2>{{ emptyMessage() }}</h2>
+          @if (board()?.requireDeviceId) {
+            <button type="button" (click)="openBindModal()">Указать ID телефона</button>
+          }
+        </div>
+      }
+    </section>
+
+    <footer class="pager">
+      <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
+        <span class="material-icons-sharp">chevron_left</span>
+      </button>
+      <span>{{ currentPage().pageNumber + 1 }} / {{ currentPage().totalPages || 1 }}</span>
+      <button type="button" class="icon-button" (click)="nextPage()" [disabled]="currentPage().last || loading()" title="Следующая">
+        <span class="material-icons-sharp">chevron_right</span>
+      </button>
+    </footer>
+
+    <section class="mobile-lead-stats" aria-label="Статистика оператора">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <article class="stat-card" [class]="metric.tone">
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </article>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="lead-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <article class="stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+  </section>
+
+  @if (bindModalOpen()) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeBindModal()">
+      <section
+        class="lead-edit-modal lead-edit-modal--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="operator-bind-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>device_token</small>
+            <h2 id="operator-bind-title">ID телефона</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeBindModal()" [disabled]="bindSaving()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (bindError()) {
+          <p class="error compact">{{ bindError() }}</p>
+        }
+
+        <form class="lead-edit-form" #bindForm="ngForm" (ngSubmit)="saveDeviceToken()">
+          <div class="lead-edit-grid">
+          <label class="lead-edit-field lead-edit-field--wide">
+            <span>ID телефона</span>
+            <input
+              name="telephoneId"
+              type="number"
+              min="1"
+              required
+              autocomplete="off"
+              [ngModel]="telephoneIdDraft()"
+              (ngModelChange)="setTelephoneIdDraft($event)"
+            >
+          </label>
+          </div>
+
+          <div class="lead-edit-actions">
+            <button type="button" class="secondary" (click)="closeBindModal()" [disabled]="bindSaving()">Отмена</button>
+            <button type="submit" [disabled]="bindSaving() || bindForm.invalid">
+              {{ bindSaving() ? 'Сохраняю...' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</app-admin-layout>

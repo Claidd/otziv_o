@@ -41,7 +41,7 @@ export class AdminLayoutComponent {
   readonly headerLinks: ShellLink[] = [
     { label: 'Главная', icon: 'home', active: 'dashboard', routerLink: '/', roles: [] },
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-    { label: 'Оператор', icon: 'support_agent', active: 'operator', href: `${appEnvironment.legacyBaseUrl}/operators`, roles: ['ADMIN', 'OWNER', 'OPERATOR', 'MARKETOLOG'] },
+    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     { label: 'Маркетолог', icon: 'campaign', active: 'marketolog', href: `${appEnvironment.legacyBaseUrl}/admin/analyse`, roles: ['ADMIN', 'OWNER', 'MARKETOLOG'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
@@ -51,6 +51,7 @@ export class AdminLayoutComponent {
   readonly sidebarLinks: ShellLink[] = [
     { label: 'Личный кабинет', icon: 'dashboard', active: 'dashboard', routerLink: '/', roles: [] },
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
+    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
     { label: 'Моя команда', icon: 'badge', active: 'team', routerLink: '/admin/team', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
