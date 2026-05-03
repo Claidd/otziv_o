@@ -48,7 +48,7 @@ export class UserInfoComponent {
     this.load();
   }
 
-  load(): void {
+  load(forceRefresh = false): void {
     if (!Number.isFinite(this.userId)) {
       this.error.set('Некорректный пользователь');
       return;
@@ -57,7 +57,7 @@ export class UserInfoComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.cabinetApi.getUserInfo(this.userId, this.selectedDate()).subscribe({
+    this.cabinetApi.getUserInfo(this.userId, this.selectedDate(), { forceRefresh }).subscribe({
       next: (response) => {
         this.payload.set(response);
         this.loading.set(false);
@@ -67,6 +67,15 @@ export class UserInfoComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  refresh(): void {
+    this.load(true);
+  }
+
+  selectDate(date: string): void {
+    this.selectedDate.set(date);
+    this.load(true);
   }
 
   imageUrl(stat?: UserStat | null): string {

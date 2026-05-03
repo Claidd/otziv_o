@@ -15,6 +15,7 @@ import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
+import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -57,6 +58,7 @@ public class ApiLeadBoardController {
     private final OperatorService operatorService;
     private final ManagerService managerService;
     private final MarketologService marketologService;
+    private final PerformanceMetrics performanceMetrics;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
@@ -67,62 +69,64 @@ public class ApiLeadBoardController {
             @RequestParam(defaultValue = "desc") String sortDirection,
             Principal principal
     ) {
-        int normalizedPage = Math.max(pageNumber, 0);
-        int normalizedSize = Math.max(1, Math.min(pageSize, 50));
-        String normalizedKeyword = keyword == null ? "" : keyword.trim();
-        String normalizedSortDirection = "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
+        return performanceMetrics.recordEndpoint("leads.board", () -> {
+            int normalizedPage = Math.max(pageNumber, 0);
+            int normalizedSize = Math.max(1, Math.min(pageSize, 50));
+            String normalizedKeyword = keyword == null ? "" : keyword.trim();
+            String normalizedSortDirection = "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
 
-        return new LeadBoardResponse(
-                toPageResponse(leadService.getAllLeadsToWork(
-                        LeadStatus.TO_WORK.title,
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                toPageResponse(leadService.getAllLeads(
-                        LeadStatus.NEW.title,
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                toPageResponse(leadService.getAllLeadsToDateReSend(
-                        LeadStatus.SEND.title,
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                toPageResponse(leadService.getAllLeads(
-                        LeadStatus.ARCHIVE.title,
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                toPageResponse(leadService.getAllLeads(
-                        LeadStatus.INWORK.title,
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                toPageResponse(leadService.getAllLeadsNoStatus(
-                        normalizedKeyword,
-                        principal,
-                        normalizedPage,
-                        normalizedSize,
-                        normalizedSortDirection
-                )),
-                Arrays.stream(LeadStatus.values()).map(status -> status.title).toList(),
-                promoTextService.getAllPromoTexts()
-        );
+            return new LeadBoardResponse(
+                    toPageResponse(leadService.getAllLeadsToWork(
+                            LeadStatus.TO_WORK.title,
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    toPageResponse(leadService.getAllLeads(
+                            LeadStatus.NEW.title,
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    toPageResponse(leadService.getAllLeadsToDateReSend(
+                            LeadStatus.SEND.title,
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    toPageResponse(leadService.getAllLeads(
+                            LeadStatus.ARCHIVE.title,
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    toPageResponse(leadService.getAllLeads(
+                            LeadStatus.INWORK.title,
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    toPageResponse(leadService.getAllLeadsNoStatus(
+                            normalizedKeyword,
+                            principal,
+                            normalizedPage,
+                            normalizedSize,
+                            normalizedSortDirection
+                    )),
+                    Arrays.stream(LeadStatus.values()).map(status -> status.title).toList(),
+                    promoTextService.getAllPromoTexts()
+            );
+        });
     }
 
     @PostMapping

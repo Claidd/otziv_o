@@ -255,11 +255,11 @@ export class HomeComponent {
     });
   }
 
-  loadCabinet(): void {
+  loadCabinet(forceRefresh = false): void {
     this.cabinetLoading.set(true);
     this.cabinetError.set(null);
 
-    this.cabinetApi.getProfile(this.cabinetDate()).subscribe({
+    this.cabinetApi.getProfile(this.cabinetDate(), { forceRefresh }).subscribe({
       next: (profile) => {
         this.cabinet.set(profile);
         this.cabinetLoading.set(false);
@@ -269,6 +269,15 @@ export class HomeComponent {
         this.cabinetLoading.set(false);
       }
     });
+  }
+
+  refreshCabinet(): void {
+    this.loadCabinet(true);
+  }
+
+  selectCabinetDate(date: string): void {
+    this.cabinetDate.set(date);
+    this.loadCabinet(true);
   }
 
   hasActionLink(action: DashboardAction): boolean {

@@ -1,7 +1,6 @@
-loki.write "local" {
-  endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
-  }
+logging {
+  level  = "info"
+  format = "logfmt"
 }
 
 discovery.docker "containers" {
@@ -19,6 +18,21 @@ discovery.relabel "containers" {
   }
 
   rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
     target_label = "job"
     replacement  = "docker"
   }
@@ -27,50 +41,61 @@ discovery.relabel "containers" {
     target_label = "host"
     replacement  = constants.hostname
   }
-
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "service"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_log_stream"]
-    target_label  = "stream"
-  }
 }
 
 loki.source.docker "containers" {
   host          = "unix:///var/run/docker.sock"
   targets       = discovery.docker.containers.targets
+  labels        = {collector = "alloy"}
   relabel_rules = discovery.relabel.containers.rules
   forward_to    = [loki.write.local.receiver]
 }
 
-otelcol.receiver.otlp "default" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
-  http {
-    endpoint = "0.0.0.0:4318"
-  }
-  output {
-    traces = [otelcol.exporter.otlp.tempo.input]
-    metrics = [otelcol.exporter.prometheus.default.input]
+loki.source.file "backend_logs" {
+  targets = [
+    {
+      __path__ = "/var/log/otziv-app/app.log",
+      collector = "alloy",
+      job       = "backend-file",
+      service   = "backend",
+      source    = "file",
+      log_file  = "app",
+    },
+    {
+      __path__ = "/var/log/otziv-app/error.log",
+      collector = "alloy",
+      job       = "backend-file",
+      service   = "backend",
+      source    = "file",
+      log_file  = "error",
+    },
+    {
+      __path__ = "/var/log/otziv-app/access.log",
+      collector = "alloy",
+      job       = "backend-file",
+      service   = "backend",
+      source    = "file",
+      log_file  = "access",
+    },
+    {
+      __path__ = "/var/log/otziv-app/debug.log",
+      collector = "alloy",
+      job       = "backend-file",
+      service   = "backend",
+      source    = "file",
+      log_file  = "debug",
+    },
+  ]
+  forward_to = [loki.write.local.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "10s"
   }
 }
 
-otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = "tempo:4317"
-    tls {
-      insecure = true
-    }
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
   }
 }
-
-otelcol.exporter.prometheus "default" {
-  forward_to = []
-}
-
-

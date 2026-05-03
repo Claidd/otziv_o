@@ -14,6 +14,7 @@ import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -98,6 +99,7 @@ public class ApiManagerBoardController {
     private final ReviewService reviewService;
     private final AutoTextService autoTextService;
     private final S3UploadService s3UploadService;
+    private final PerformanceMetrics performanceMetrics;
 
     private final List<String> companyStatuses = List.of(
             "Все",
@@ -138,30 +140,33 @@ public class ApiManagerBoardController {
             Principal principal,
             Authentication authentication
     ) {
-        String normalizedSection = normalizeSection(section);
-        String normalizedStatus = normalizeStatus(status);
-        String normalizedSortDirection = normalizeSortDirection(sortDirection);
-        int safePageNumber = Math.max(pageNumber, 0);
-        int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+        return performanceMetrics.recordEndpoint("manager.board", () -> {
+            String normalizedSection = normalizeSection(section);
+            String normalizedStatus = normalizeStatus(status);
+            String normalizedSortDirection = normalizeSortDirection(sortDirection);
+            int safePageNumber = Math.max(pageNumber, 0);
+            int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+            String trimmedKeyword = keyword == null ? "" : keyword.trim();
 
-        Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
-                ? loadCompanies(principal, authentication, keyword.trim(), normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection)
-                : emptyCompanyPage(safePageNumber, safePageSize);
+            Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
+                    ? loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection)
+                    : emptyCompanyPage(safePageNumber, safePageSize);
 
-        Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
-                ? loadOrders(principal, authentication, keyword.trim(), normalizedStatus, safePageNumber, safePageSize, companyId, normalizedSortDirection)
-                : emptyOrderPage(safePageNumber, safePageSize);
+            Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
+                    ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, normalizedSortDirection)
+                    : emptyOrderPage(safePageNumber, safePageSize);
 
-        return new ManagerBoardResponse(
-                normalizedSection,
-                normalizedStatus,
-                toPageResponse(companies),
-                toPageResponse(orders),
-                companyStatuses,
-                orderStatuses,
-                buildMetrics(principal, authentication),
-                promoTextService.getAllPromoTexts()
-        );
+            return new ManagerBoardResponse(
+                    normalizedSection,
+                    normalizedStatus,
+                    toPageResponse(companies),
+                    toPageResponse(orders),
+                    companyStatuses,
+                    orderStatuses,
+                    buildMetrics(principal, authentication),
+                    promoTextService.getAllPromoTexts()
+            );
+        });
     }
 
     @PostMapping("/companies/{companyId}/status")

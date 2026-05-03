@@ -35,11 +35,11 @@ export class ScoreComponent {
     this.load();
   }
 
-  load(): void {
+  load(forceRefresh = false): void {
     this.loading.set(true);
     this.error.set(null);
 
-    this.cabinetApi.getScore(this.selectedDate()).subscribe({
+    this.cabinetApi.getScore(this.selectedDate(), { forceRefresh }).subscribe({
       next: (response) => {
         this.score.set(response);
         this.loading.set(false);
@@ -49,6 +49,15 @@ export class ScoreComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  refresh(): void {
+    this.load(true);
+  }
+
+  selectDate(date: string): void {
+    this.selectedDate.set(date);
+    this.load(true);
   }
 
   users(section: ScoreSection): ScoreUser[] {

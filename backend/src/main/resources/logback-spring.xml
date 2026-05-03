@@ -2,7 +2,7 @@
 <configuration>
 
     <!-- Паттерн формата -->
-    <property name="LOG_PATH" value="/app/logs"/>
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="/app/logs"/>
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"/>
 
     <!-- Консоль -->
@@ -14,11 +14,11 @@
 
     <!-- Файл логов с ежедневной ротацией -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>/app/logs/app.log</file>
+        <file>${LOG_PATH}/app.log</file>
         <append>true</append>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- Имя файла для архива -->
-            <fileNamePattern>/app/logs/app.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_PATH}/app.%d{yyyy-MM-dd}.log</fileNamePattern>
             <!-- Хранить 7 дней -->
             <maxHistory>7</maxHistory>
             <!-- Максимальный размер архива (опц.) -->

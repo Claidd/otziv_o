@@ -36,11 +36,11 @@ export class TeamComponent {
     this.load();
   }
 
-  load(): void {
+  load(forceRefresh = false): void {
     this.loading.set(true);
     this.error.set(null);
 
-    this.cabinetApi.getTeam(this.selectedDate()).subscribe({
+    this.cabinetApi.getTeam(this.selectedDate(), { forceRefresh }).subscribe({
       next: (response) => {
         this.team.set(response);
         this.loading.set(false);
@@ -50,6 +50,15 @@ export class TeamComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  refresh(): void {
+    this.load(true);
+  }
+
+  selectDate(date: string): void {
+    this.selectedDate.set(date);
+    this.load(true);
   }
 
   members(section: TeamSection): TeamMember[] {

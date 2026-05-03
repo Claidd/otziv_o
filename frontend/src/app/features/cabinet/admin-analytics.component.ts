@@ -121,11 +121,11 @@ export class AdminAnalyticsComponent {
     this.load();
   }
 
-  load(): void {
+  load(forceRefresh = false): void {
     this.loading.set(true);
     this.error.set(null);
 
-    this.cabinetApi.getAnalytics(this.selectedDate()).subscribe({
+    this.cabinetApi.getAnalytics(this.selectedDate(), { forceRefresh }).subscribe({
       next: (response) => {
         this.analytics.set(response);
         this.loading.set(false);
@@ -135,6 +135,15 @@ export class AdminAnalyticsComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  refresh(): void {
+    this.load(true);
+  }
+
+  selectDate(date: string): void {
+    this.selectedDate.set(date);
+    this.load(true);
   }
 
   tone(percent: number): MetricTone {

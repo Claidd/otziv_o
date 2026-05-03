@@ -7,6 +7,7 @@ import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.model.Quadruple;
+import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -20,6 +21,7 @@ import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -75,6 +77,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     //    ========================================== PERSONAL STAT START ==================================================
     @Transactional
+    @Cacheable(cacheNames = CacheConfig.CABINET_STATS, key = "#p0.toString() + ':' + #p1.id + ':' + #p2", sync = true)
     public StatDTO getStats(LocalDate localDate, User user, String role) {
 //        User user = userService.findByUserName(principal.getName()).orElseThrow();
         User user1 = userService.findByUserName(user.getUsername()).orElseThrow();

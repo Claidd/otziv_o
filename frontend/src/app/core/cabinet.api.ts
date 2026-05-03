@@ -1,7 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { catchError, Observable, shareReplay, throwError } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { AuthService } from './auth.service';
 
 export interface UserLk {
   username: string;
@@ -151,38 +152,77 @@ export interface AnalyticsResponse {
   stats: StatDto;
 }
 
+export type CacheOptions = {
+  forceRefresh?: boolean;
+};
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  request$: Observable<T>;
+};
+
 @Injectable({ providedIn: 'root' })
 export class CabinetApi {
-  constructor(private readonly http: HttpClient) {}
+  private readonly profileCache = new Map<string, CacheEntry<CabinetProfile>>();
+  private readonly userInfoCache = new Map<string, CacheEntry<CabinetUserInfo>>();
+  private readonly teamCache = new Map<string, CacheEntry<TeamResponse>>();
+  private readonly scoreCache = new Map<string, CacheEntry<ScoreResponse>>();
+  private readonly analyticsCache = new Map<string, CacheEntry<AnalyticsResponse>>();
+  private readonly cabinetCacheTtlMs = 60_000;
 
-  getProfile(date?: string): Observable<CabinetProfile> {
-    return this.http.get<CabinetProfile>(`${appEnvironment.apiBaseUrl}/api/cabinet/profile`, {
-      params: this.paramsWithDate(date)
-    });
+  constructor(
+    private readonly http: HttpClient,
+    private readonly auth: AuthService
+  ) {}
+
+  getProfile(date?: string, options: CacheOptions = {}): Observable<CabinetProfile> {
+    const cacheKey = this.cacheKey('profile', date ?? 'current');
+
+    return this.cached(this.profileCache, cacheKey, options, () =>
+      this.http.get<CabinetProfile>(`${appEnvironment.apiBaseUrl}/api/cabinet/profile`, {
+        params: this.paramsWithDate(date, options)
+      })
+    );
   }
 
-  getUserInfo(userId: number, date?: string): Observable<CabinetUserInfo> {
-    return this.http.get<CabinetUserInfo>(`${appEnvironment.apiBaseUrl}/api/cabinet/user-info`, {
-      params: this.paramsWithDate(date).set('userId', userId)
-    });
+  getUserInfo(userId: number, date?: string, options: CacheOptions = {}): Observable<CabinetUserInfo> {
+    const cacheKey = this.cacheKey('user-info', String(userId), date ?? 'current');
+
+    return this.cached(this.userInfoCache, cacheKey, options, () =>
+      this.http.get<CabinetUserInfo>(`${appEnvironment.apiBaseUrl}/api/cabinet/user-info`, {
+        params: this.paramsWithDate(date, options).set('userId', userId)
+      })
+    );
   }
 
-  getTeam(date?: string): Observable<TeamResponse> {
-    return this.http.get<TeamResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/team`, {
-      params: this.paramsWithDate(date)
-    });
+  getTeam(date?: string, options: CacheOptions = {}): Observable<TeamResponse> {
+    const cacheKey = this.cacheKey('team', date ?? 'current');
+
+    return this.cached(this.teamCache, cacheKey, options, () =>
+      this.http.get<TeamResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/team`, {
+        params: this.paramsWithDate(date, options)
+      })
+    );
   }
 
-  getScore(date?: string): Observable<ScoreResponse> {
-    return this.http.get<ScoreResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/score`, {
-      params: this.paramsWithDate(date)
-    });
+  getScore(date?: string, options: CacheOptions = {}): Observable<ScoreResponse> {
+    const cacheKey = this.cacheKey('score', date ?? 'current');
+
+    return this.cached(this.scoreCache, cacheKey, options, () =>
+      this.http.get<ScoreResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/score`, {
+        params: this.paramsWithDate(date, options)
+      })
+    );
   }
 
-  getAnalytics(date?: string): Observable<AnalyticsResponse> {
-    return this.http.get<AnalyticsResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/analyse`, {
-      params: this.paramsWithDate(date)
-    });
+  getAnalytics(date?: string, options: CacheOptions = {}): Observable<AnalyticsResponse> {
+    const cacheKey = this.cacheKey('analytics', date ?? 'current');
+
+    return this.cached(this.analyticsCache, cacheKey, options, () =>
+      this.http.get<AnalyticsResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/analyse`, {
+        params: this.paramsWithDate(date, options)
+      })
+    );
   }
 
   imageUrl(imageId?: number | null): string {
@@ -190,7 +230,51 @@ export class CabinetApi {
     return `${appEnvironment.legacyBaseUrl}/images/${id}`;
   }
 
-  private paramsWithDate(date?: string): HttpParams {
-    return date ? new HttpParams().set('date', date) : new HttpParams();
+  private paramsWithDate(date?: string, options: CacheOptions = {}): HttpParams {
+    let params = date ? new HttpParams().set('date', date) : new HttpParams();
+
+    if (options.forceRefresh) {
+      params = params.set('refresh', 'true');
+    }
+
+    return params;
+  }
+
+  private cached<T>(
+    cache: Map<string, CacheEntry<T>>,
+    key: string,
+    options: CacheOptions,
+    requestFactory: () => Observable<T>
+  ): Observable<T> {
+    const now = Date.now();
+    const cached = cache.get(key);
+
+    if (!options.forceRefresh && cached && cached.expiresAt > now) {
+      return cached.request$;
+    }
+
+    const request$ = requestFactory().pipe(
+      catchError((error: unknown) => {
+        cache.delete(key);
+        return throwError(() => error);
+      }),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+
+    cache.set(key, {
+      expiresAt: now + this.cabinetCacheTtlMs,
+      request$
+    });
+
+    return request$;
+  }
+
+  private cacheKey(scope: string, ...parts: string[]): string {
+    const token = this.auth.tokenParsed();
+    const username = token?.['preferred_username'] ?? 'anonymous';
+    const realmAccess = token?.['realm_access'] as { roles?: string[] } | undefined;
+    const roles = realmAccess?.roles?.join(',') ?? 'no-roles';
+
+    return [scope, username, roles, ...parts].join(':');
   }
 }

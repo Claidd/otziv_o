@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -74,6 +75,7 @@ public class ApiWorkerBoardController {
     private final UserService userService;
     private final ManagerService managerService;
     private final WorkerService workerService;
+    private final PerformanceMetrics performanceMetrics;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -86,41 +88,43 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
-        String normalizedSection = normalizeSection(section);
-        String message = "";
-        boolean warning = false;
+        return performanceMetrics.recordEndpoint("worker.board", () -> {
+            String normalizedSection = normalizeSection(section);
+            String message = "";
+            boolean warning = false;
 
-        if (SECTION_PUBLISH.equals(normalizedSection) && hasRole(authentication, "WORKER") && reviewService.hasActiveNagulReviews(principal)) {
-            normalizedSection = SECTION_NAGUL;
-            message = "Есть не выгулянные аккаунты. Публикация запрещена";
-            warning = true;
-        }
+            if (SECTION_PUBLISH.equals(normalizedSection) && hasRole(authentication, "WORKER") && reviewService.hasActiveNagulReviews(principal)) {
+                normalizedSection = SECTION_NAGUL;
+                message = "Есть не выгулянные аккаунты. Публикация запрещена";
+                warning = true;
+            }
 
-        int safePageNumber = Math.max(pageNumber, 0);
-        int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
-        String normalizedSortDirection = normalizeSortDirection(sortDirection);
-        String trimmedKeyword = keyword == null ? "" : keyword.trim();
+            int safePageNumber = Math.max(pageNumber, 0);
+            int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+            String normalizedSortDirection = normalizeSortDirection(sortDirection);
+            String trimmedKeyword = keyword == null ? "" : keyword.trim();
 
-        Page<OrderDTOList> orders = isOrderSection(normalizedSection)
-                ? loadOrders(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
-                : emptyPage(safePageNumber, safePageSize);
+            Page<OrderDTOList> orders = isOrderSection(normalizedSection)
+                    ? loadOrders(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+                    : emptyPage(safePageNumber, safePageSize);
 
-        Page<ReviewDTOOne> reviews = isReviewSection(normalizedSection)
-                ? loadReviews(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
-                : emptyPage(safePageNumber, safePageSize);
+            Page<ReviewDTOOne> reviews = isReviewSection(normalizedSection)
+                    ? loadReviews(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+                    : emptyPage(safePageNumber, safePageSize);
 
-        return new WorkerBoardResponse(
-                normalizedSection,
-                title(normalizedSection),
-                toPageResponse(orders),
-                toReviewPageResponse(reviews),
-                List.of(),
-                buildMetrics(principal, authentication),
-                promoTextService.getAllPromoTexts(),
-                buildPermissions(authentication),
-                message,
-                warning
-        );
+            return new WorkerBoardResponse(
+                    normalizedSection,
+                    title(normalizedSection),
+                    toPageResponse(orders),
+                    toReviewPageResponse(reviews),
+                    List.of(),
+                    buildMetrics(principal, authentication),
+                    promoTextService.getAllPromoTexts(),
+                    buildPermissions(authentication),
+                    message,
+                    warning
+            );
+        });
     }
 
     @PostMapping("/orders/{orderId}/status")

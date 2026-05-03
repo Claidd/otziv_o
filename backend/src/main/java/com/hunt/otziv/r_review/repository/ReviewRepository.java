@@ -455,6 +455,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         LEFT JOIN r.worker w
         LEFT JOIN w.user u
         WHERE r.publish = false
+          AND r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2
           AND u.fio IS NOT NULL
         GROUP BY u.fio
 
@@ -470,6 +471,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         LEFT JOIN o.manager m
         LEFT JOIN m.user mu
         WHERE r.publish = false
+          AND r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2
           AND mu.fio IS NOT NULL
         GROUP BY mu.fio
     """)

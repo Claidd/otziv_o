@@ -9,6 +9,8 @@ import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.config.cache.CacheConfig;
+import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -17,6 +19,8 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @RestController
@@ -46,22 +51,34 @@ public class ApiCabinetController {
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
+    private final PerformanceMetrics performanceMetrics;
+    private final CacheManager cacheManager;
 
     @GetMapping("/profile")
     @PreAuthorize("isAuthenticated()")
     public CabinetProfileResponse profile(
             Principal principal,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        LocalDate selectedDate = selectedDate(date);
-        User user = currentUser(principal);
+        return performanceMetrics.recordEndpoint("cabinet.profile", () -> {
+            LocalDate selectedDate = selectedDate(date);
 
-        return new CabinetProfileResponse(
-                selectedDate,
-                personalService.getUserLK(principal),
-                personalService.getWorkerReviews(user, selectedDate)
-        );
+            return cached(
+                    CacheConfig.CABINET_PROFILE,
+                    cabinetKey("profile", principal.getName(), selectedDate),
+                    refresh,
+                    () -> {
+                        User user = currentUser(principal);
+                        return new CabinetProfileResponse(
+                                selectedDate,
+                                personalService.getUserLK(principal),
+                                personalService.getWorkerReviews(user, selectedDate)
+                        );
+                    }
+            );
+        });
     }
 
     @GetMapping("/user-info")
@@ -70,19 +87,30 @@ public class ApiCabinetController {
             Principal principal,
             @RequestParam("userId") Long userId,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        LocalDate selectedDate = selectedDate(date);
-        User user = userService.findByIdToUserInfo(userId);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
-        }
+        return performanceMetrics.recordEndpoint("cabinet.user_info", () -> {
+            LocalDate selectedDate = selectedDate(date);
 
-        return new CabinetUserInfoResponse(
-                selectedDate,
-                personalService.getUserLK(principal),
-                personalService.getWorkerReviews(user, selectedDate)
-        );
+            return cached(
+                    CacheConfig.CABINET_USER_INFO,
+                    cabinetKey("user-info", principal.getName(), userId, selectedDate),
+                    refresh,
+                    () -> {
+                        User user = userService.findByIdToUserInfo(userId);
+                        if (user == null) {
+                            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+                        }
+
+                        return new CabinetUserInfoResponse(
+                                selectedDate,
+                                personalService.getUserLK(principal),
+                                personalService.getWorkerReviews(user, selectedDate)
+                        );
+                    }
+            );
+        });
     }
 
     @GetMapping("/team")
@@ -91,65 +119,76 @@ public class ApiCabinetController {
             Principal principal,
             Authentication authentication,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        LocalDate selectedDate = selectedDate(date);
-        String role = primaryRole(authentication);
-        User user = currentUser(principal);
-        boolean canManageUsers = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+        return performanceMetrics.recordEndpoint("cabinet.team", () -> {
+            LocalDate selectedDate = selectedDate(date);
+            String role = primaryRole(authentication);
 
-        if ("ROLE_MANAGER".equals(role)) {
-            Manager manager = managerService.getManagerByUserId(user.getId());
-            return new TeamResponse(
-                    selectedDate,
-                    shortRole(role),
-                    canManageUsers,
-                    false,
-                    false,
-                    List.of(),
-                    personalService.getMarketologsToManager(manager),
-                    personalService.gerWorkersToManager(manager),
-                    personalService.gerOperatorsToManager(manager)
+            return cached(
+                    CacheConfig.CABINET_TEAM,
+                    cabinetKey("team", principal.getName(), role, selectedDate),
+                    refresh,
+                    () -> {
+                        User user = currentUser(principal);
+                        boolean canManageUsers = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+
+                        if ("ROLE_MANAGER".equals(role)) {
+                            Manager manager = managerService.getManagerByUserId(user.getId());
+                            return new TeamResponse(
+                                    selectedDate,
+                                    shortRole(role),
+                                    canManageUsers,
+                                    false,
+                                    false,
+                                    List.of(),
+                                    personalService.getMarketologsToManager(manager),
+                                    personalService.gerWorkersToManager(manager),
+                                    personalService.gerOperatorsToManager(manager)
+                            );
+                        }
+
+                        if ("ROLE_OWNER".equals(role)) {
+                            List<Manager> managers = user.getManagers().stream().toList();
+                            List<Manager> expandedManagers = personalService.findAllManagersWorkers(managers);
+                            List<Marketolog> marketologs = expandedManagers.stream()
+                                    .flatMap(manager -> manager.getUser().getMarketologs().stream())
+                                    .toList();
+                            List<Operator> operators = expandedManagers.stream()
+                                    .flatMap(manager -> manager.getUser().getOperators().stream())
+                                    .toList();
+                            List<Worker> workers = expandedManagers.stream()
+                                    .flatMap(manager -> manager.getUser().getWorkers().stream())
+                                    .toList();
+
+                            return new TeamResponse(
+                                    selectedDate,
+                                    shortRole(role),
+                                    true,
+                                    true,
+                                    true,
+                                    managersToOwner(managers, selectedDate),
+                                    marketologsToOwner(marketologs, selectedDate),
+                                    workersToOwner(workers, selectedDate),
+                                    operatorsToOwner(operators, selectedDate)
+                            );
+                        }
+
+                        return new TeamResponse(
+                                selectedDate,
+                                shortRole(role),
+                                canManageUsers,
+                                canManageUsers,
+                                true,
+                                personalService.getManagers(),
+                                personalService.getMarketologs(),
+                                personalService.gerWorkers(),
+                                personalService.gerOperators()
+                        );
+                    }
             );
-        }
-
-        if ("ROLE_OWNER".equals(role)) {
-            List<Manager> managers = user.getManagers().stream().toList();
-            List<Manager> expandedManagers = personalService.findAllManagersWorkers(managers);
-            List<Marketolog> marketologs = expandedManagers.stream()
-                    .flatMap(manager -> manager.getUser().getMarketologs().stream())
-                    .toList();
-            List<Operator> operators = expandedManagers.stream()
-                    .flatMap(manager -> manager.getUser().getOperators().stream())
-                    .toList();
-            List<Worker> workers = expandedManagers.stream()
-                    .flatMap(manager -> manager.getUser().getWorkers().stream())
-                    .toList();
-
-            return new TeamResponse(
-                    selectedDate,
-                    shortRole(role),
-                    true,
-                    true,
-                    true,
-                    managersToOwner(managers, selectedDate),
-                    marketologsToOwner(marketologs, selectedDate),
-                    workersToOwner(workers, selectedDate),
-                    operatorsToOwner(operators, selectedDate)
-            );
-        }
-
-        return new TeamResponse(
-                selectedDate,
-                shortRole(role),
-                canManageUsers,
-                canManageUsers,
-                true,
-                personalService.getManagers(),
-                personalService.getMarketologs(),
-                personalService.gerWorkers(),
-                personalService.gerOperators()
-        );
+        });
     }
 
     @GetMapping("/score")
@@ -158,31 +197,41 @@ public class ApiCabinetController {
             Principal principal,
             Authentication authentication,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        LocalDate selectedDate = selectedDate(date);
-        boolean financeVisible = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+        return performanceMetrics.recordEndpoint("cabinet.score", () -> {
+            LocalDate selectedDate = selectedDate(date);
+            boolean financeVisible = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
 
-        Map<String, List<ScoreUserResponse>> groupedUsers = personalService.getPersonalsAndCountToScore(selectedDate).stream()
-                .sorted(scoreComparator(financeVisible))
-                .map(user -> ScoreUserResponse.from(user, financeVisible))
-                .collect(Collectors.groupingBy(
-                        ScoreUserResponse::role,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
+            return cached(
+                    CacheConfig.CABINET_SCORE,
+                    cabinetKey("score", principal.getName(), financeVisible, selectedDate),
+                    refresh,
+                    () -> {
+                        Map<String, List<ScoreUserResponse>> groupedUsers = personalService.getPersonalsAndCountToScore(selectedDate).stream()
+                                .sorted(scoreComparator(financeVisible))
+                                .map(user -> ScoreUserResponse.from(user, financeVisible))
+                                .collect(Collectors.groupingBy(
+                                        ScoreUserResponse::role,
+                                        LinkedHashMap::new,
+                                        Collectors.toList()
+                                ));
 
-        return new ScoreResponse(
-                selectedDate,
-                personalService.getUserLK(principal),
-                financeVisible,
-                Map.of(
-                        "managers", groupedUsers.getOrDefault("ROLE_MANAGER", List.of()),
-                        "marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", List.of()),
-                        "workers", groupedUsers.getOrDefault("ROLE_WORKER", List.of()),
-                        "operators", groupedUsers.getOrDefault("ROLE_OPERATOR", List.of())
-                )
-        );
+                        return new ScoreResponse(
+                                selectedDate,
+                                personalService.getUserLK(principal),
+                                financeVisible,
+                                Map.of(
+                                        "managers", groupedUsers.getOrDefault("ROLE_MANAGER", List.of()),
+                                        "marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", List.of()),
+                                        "workers", groupedUsers.getOrDefault("ROLE_WORKER", List.of()),
+                                        "operators", groupedUsers.getOrDefault("ROLE_OPERATOR", List.of())
+                                )
+                        );
+                    }
+            );
+        });
     }
 
     @GetMapping("/analyse")
@@ -191,21 +240,65 @@ public class ApiCabinetController {
             Principal principal,
             Authentication authentication,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
-        LocalDate selectedDate = selectedDate(date);
-        User user = currentUser(principal);
-        String role = primaryRole(authentication);
+        return performanceMetrics.recordEndpoint("cabinet.analyse", () -> {
+            LocalDate selectedDate = selectedDate(date);
+            String role = primaryRole(authentication);
 
-        return new AnalyticsResponse(
-                selectedDate,
-                personalService.getUserLK(principal),
-                personalService.getStats(selectedDate, user, role)
-        );
+            return cached(
+                    CacheConfig.CABINET_ANALYTICS,
+                    cabinetKey("analytics", principal.getName(), role, selectedDate),
+                    refresh,
+                    () -> {
+                        User user = currentUser(principal);
+                        if (refresh) {
+                            evictCache(CacheConfig.CABINET_STATS, statsKey(selectedDate, user, role));
+                        }
+
+                        return new AnalyticsResponse(
+                                selectedDate,
+                                personalService.getUserLK(principal),
+                                personalService.getStats(selectedDate, user, role)
+                        );
+                    }
+            );
+        });
     }
 
     private LocalDate selectedDate(LocalDate date) {
         return date == null ? LocalDate.now() : date;
+    }
+
+    private <T> T cached(String cacheName, String key, boolean refresh, Supplier<T> valueLoader) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            return valueLoader.get();
+        }
+
+        if (refresh) {
+            cache.evict(key);
+        }
+
+        return cache.get(key, valueLoader::get);
+    }
+
+    private void evictCache(String cacheName, String key) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            cache.evict(key);
+        }
+    }
+
+    private String cabinetKey(Object... parts) {
+        return java.util.Arrays.stream(parts)
+                .map(String::valueOf)
+                .collect(Collectors.joining(":"));
+    }
+
+    private String statsKey(LocalDate selectedDate, User user, String role) {
+        return cabinetKey(selectedDate, user.getId(), role);
     }
 
     private User currentUser(Principal principal) {

@@ -7,9 +7,9 @@
 
     <div class="toolbar-actions">
       <label>
-        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); load()">
+        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectDate($event)">
       </label>
-      <button type="button" (click)="load()" [disabled]="loading()">
+      <button type="button" (click)="refresh()" [disabled]="loading()">
         <span class="material-icons-sharp">refresh</span>
         {{ loading() ? 'Обновляю' : 'Обновить' }}
       </button>

@@ -27,7 +27,7 @@
           Регистрация
         </a>
       } @else {
-        <button type="button" class="secondary refresh-button" (click)="loadCabinet()" [disabled]="cabinetLoading()">
+        <button type="button" class="secondary refresh-button" (click)="refreshCabinet()" [disabled]="cabinetLoading()">
           <span class="material-icons-sharp">refresh</span>
           {{ cabinetLoading() ? 'Обновляю' : 'Обновить кабинет' }}
         </button>
@@ -36,7 +36,7 @@
           {{ healthLoading() ? 'Проверяю' : 'Проверить backend' }}
         </button>
         <label class="date-control">
-          <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="cabinetDate.set($event); loadCabinet()">
+          <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="selectCabinetDate($event)">
         </label>
       }
     </div>
