@@ -189,7 +189,7 @@ export class WorkerBoardComponent {
         }
 
         if (board.message) {
-          const title = board.warning ? 'Публикация закрыта' : 'Специалист';
+          const title = board.warning ? 'Раздел закрыт - окончите Выгул!' : 'Специалист';
           board.warning ? this.toastService.error(title, board.message) : this.toastService.success(title, board.message);
         }
       },

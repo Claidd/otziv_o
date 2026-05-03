@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
 import { AuthService } from '../../core/auth.service';
+import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import {
   LeadBoard,
   LeadBucketKey,
@@ -18,6 +19,7 @@ import {
   LeadUpdateRequest
 } from '../../core/leads.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { ToastService } from '../../shared/toast.service';
 
 type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
@@ -46,9 +48,14 @@ type LeadMetric = {
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
 };
 
+type CompanyCreateContext = {
+  source: CompanyCreateSource;
+  leadId: number | null;
+};
+
 @Component({
   selector: 'app-leads-board',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, RouterLink],
   templateUrl: './leads-board.component.html',
   styleUrl: './leads-board.component.scss'
 })
@@ -89,7 +96,7 @@ export class LeadsBoardComponent {
   ];
 
   readonly board = signal<LeadBoard | null>(null);
-  readonly activeBucket = signal<LeadBucketKey>('inWork');
+  readonly activeBucket = signal<LeadBucketKey>('newLeads');
   readonly keyword = signal('');
   readonly pageNumber = signal(0);
   readonly pageSize = signal(10);
@@ -103,6 +110,7 @@ export class LeadsBoardComponent {
   readonly createDraft = signal<LeadCreateRequest | null>(null);
   readonly createSaving = signal(false);
   readonly createError = signal<string | null>(null);
+  readonly companyCreateContext = signal<CompanyCreateContext | null>(null);
   readonly editOptions = signal<LeadEditOptions | null>(null);
   readonly editLead = signal<LeadItem | null>(null);
   readonly editDraft = signal<LeadUpdateRequest | null>(null);
@@ -119,6 +127,10 @@ export class LeadsBoardComponent {
   readonly canDeleteLead = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly canCreateCompany = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   });
   readonly operatorOptions = computed(() => this.editOptions()?.operators ?? []);
   readonly managerOptions = computed(() => this.editOptions()?.managers ?? []);
@@ -248,8 +260,13 @@ export class LeadsBoardComponent {
     return `https://wa.me/${lead.telephoneLead}`;
   }
 
-  companyUrl(lead: LeadItem): string {
-    return this.legacyUrl(`/companies/new_company_to_manager/${lead.id}`);
+  canCreateCompanyFromLead(lead: LeadItem): boolean {
+    if (!this.canCreateCompany() || this.activeBucket() === 'inWork') {
+      return false;
+    }
+
+    const status = (lead.lidStatus ?? '').trim().toLocaleLowerCase('ru-RU');
+    return status !== 'в работе' && status !== 'в работа';
   }
 
   statusActions(lead: LeadItem): LeadMutation[] {
@@ -371,6 +388,34 @@ export class LeadsBoardComponent {
         this.toastService.error('Лид не создан', message);
       }
     });
+  }
+
+  openCompanyCreate(lead: LeadItem): void {
+    if (!this.canCreateCompanyFromLead(lead)) {
+      return;
+    }
+
+    this.companyCreateContext.set({ source: 'manager', leadId: lead.id });
+  }
+
+  openManualCompanyCreate(): void {
+    if (!this.canCreateCompany()) {
+      return;
+    }
+
+    this.companyCreateContext.set({ source: 'manual', leadId: null });
+  }
+
+  closeCompanyCreate(): void {
+    this.companyCreateContext.set(null);
+  }
+
+  handleCompanyCreated(result: CompanyCreateResult): void {
+    this.closeCompanyCreate();
+    this.activeBucket.set('inWork');
+    this.pageNumber.set(0);
+    this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
+    this.loadBoard();
   }
 
   openEditModal(lead: LeadItem): void {

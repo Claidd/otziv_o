@@ -530,4 +530,39 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
        where u.id = :userId
        """)
     int countReviewsForWorkerUserId(@Param("userId") Long userId);
+
+    @Query("SELECT COUNT(r.id) FROM Review r WHERE r.publish = false")
+    long countUnpublished();
+
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        WHERE r.publish = false
+          AND (
+            r.orderDetails IS NULL
+            OR r.orderDetails.order IS NULL
+            OR r.orderDetails.order.status IS NULL
+            OR r.orderDetails.order.status.title <> 'Архив'
+          )
+    """)
+    long countUnpublishedNotArchive();
+
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        WHERE r.publish = false
+          AND r.publishedDate <= :date
+    """)
+    long countDueToPublish(@Param("date") LocalDate date);
+
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        LEFT JOIN r.bot b
+        WHERE r.publish = false
+          AND r.vigul = false
+          AND r.publishedDate <= :date
+          AND (b IS NULL OR b.counter <= 2)
+    """)
+    long countDueToWalk(@Param("date") LocalDate date);
 }

@@ -277,3 +277,20 @@ textarea {
   font-weight: 800;
   text-decoration: none;
 }
+
+.lead-stats .lead-stats-action.lead-stats-action {
+  width: 100%;
+  min-height: 3.35rem;
+  justify-content: flex-start;
+  border: 1px solid rgba(108, 155, 207, 0.22);
+  border-radius: 0.9rem;
+  padding: 0 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
+}
+
+.lead-stats-action .material-icons-sharp {
+  color: var(--otziv-success);
+  font-size: 1.35rem;
+}

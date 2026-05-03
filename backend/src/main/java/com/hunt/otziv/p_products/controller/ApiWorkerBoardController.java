@@ -94,9 +94,16 @@ public class ApiWorkerBoardController {
             String message = "";
             boolean warning = false;
 
-            if (SECTION_PUBLISH.equals(normalizedSection) && hasRole(authentication, "WORKER") && reviewService.hasActiveNagulReviews(principal)) {
+            boolean workerMustFinishNagul = hasRole(authentication, "WORKER")
+                    && (SECTION_PUBLISH.equals(normalizedSection) || SECTION_ALL.equals(normalizedSection))
+                    && reviewService.hasActiveNagulReviews(principal);
+
+            if (workerMustFinishNagul) {
+                String requestedSection = normalizedSection;
                 normalizedSection = SECTION_NAGUL;
-                message = "Есть не выгулянные аккаунты. Публикация запрещена";
+                message = SECTION_ALL.equals(requestedSection)
+                        ? "Есть не выгулянные аккаунты. Раздел \"Все\" доступен после выгула всех отзывов"
+                        : "Есть не выгулянные аккаунты. Публикация запрещена";
                 warning = true;
             }
 

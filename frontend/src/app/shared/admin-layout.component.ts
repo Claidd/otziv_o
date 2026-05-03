@@ -13,6 +13,7 @@ type ShellLink = {
   roles: string[];
   routerLink?: string;
   href?: string;
+  openInNewTab?: boolean;
 };
 
 @Component({
@@ -57,10 +58,12 @@ export class AdminLayoutComponent {
     { label: 'Моя команда', icon: 'badge', active: 'team', routerLink: '/admin/team', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Рейтинг', icon: 'leaderboard', active: 'score', routerLink: '/admin/score', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'] },
     { label: 'Аналитика', icon: 'analytics', active: 'analytics', routerLink: '/admin/analyse', roles: ['ADMIN', 'OWNER'] },
+    { label: 'Города', icon: 'location_city', active: 'city-stats', routerLink: '/admin/cities', roles: ['ADMIN', 'OWNER'] },
+    { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER'] },
     { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
     { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },
     { label: 'Миграция', icon: 'sync', active: 'migration', routerLink: '/legacy-migration', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Метрики', icon: 'desktop_windows', active: 'metrics', href: appEnvironment.metricsBaseUrl, roles: ['ADMIN', 'OWNER'] },
+    { label: 'Метрики', icon: 'desktop_windows', active: 'metrics', href: appEnvironment.metricsBaseUrl, openInNewTab: true, roles: ['ADMIN', 'OWNER'] },
     { label: 'Назад', icon: 'logout', active: 'back', routerLink: '/', roles: [] }
   ];
 

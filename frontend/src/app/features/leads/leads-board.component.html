@@ -146,10 +146,16 @@
               </button>
             }
 
-            <a [href]="companyUrl(lead)">
-              <span class="material-icons-sharp">business_center</span>
-              работа
-            </a>
+            @if (canCreateCompanyFromLead(lead)) {
+              <button
+                type="button"
+                (click)="openCompanyCreate(lead)"
+                title="Создать компанию из лида"
+              >
+                <span class="material-icons-sharp">business_center</span>
+                работа
+              </button>
+            }
           </div>
 
           <footer>
@@ -191,6 +197,13 @@
   </section>
 
   <section admin-right-content class="lead-stats">
+    @if (canCreateCompany()) {
+      <button type="button" class="lead-stats-action" (click)="openManualCompanyCreate()">
+        <span class="material-icons-sharp">add_business</span>
+        Добавить компанию
+      </button>
+    }
+
     @for (metric of metrics(); track trackMetric($index, metric)) {
       <article class="stat-card" [class]="metric.tone">
         <div>
@@ -292,6 +305,15 @@
         </form>
       </section>
     </div>
+  }
+
+  @if (companyCreateContext(); as context) {
+    <app-company-create-modal
+      [source]="context.source"
+      [leadId]="context.leadId"
+      (closed)="closeCompanyCreate()"
+      (created)="handleCompanyCreated($event)"
+    />
   }
 
   @if (editDraft(); as draft) {

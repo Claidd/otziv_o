@@ -14,7 +14,12 @@
             <strong>{{ link.label }}</strong>
           </a>
         } @else {
-          <a [href]="link.href" [class.active]="isActive(link)">
+          <a
+            [href]="link.href"
+            [class.active]="isActive(link)"
+            [attr.target]="link.openInNewTab ? '_blank' : null"
+            [attr.rel]="link.openInNewTab ? 'noopener' : null"
+          >
             <span class="material-icons-sharp">{{ link.icon }}</span>
             <strong>{{ link.label }}</strong>
           </a>
@@ -33,7 +38,12 @@
             @if (link.routerLink) {
               <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">{{ link.label }}</a>
             } @else {
-              <a [href]="link.href" [class.active]="isActive(link)">{{ link.label }}</a>
+              <a
+                [href]="link.href"
+                [class.active]="isActive(link)"
+                [attr.target]="link.openInNewTab ? '_blank' : null"
+                [attr.rel]="link.openInNewTab ? 'noopener' : null"
+              >{{ link.label }}</a>
             }
           }
         </nav>
@@ -78,7 +88,7 @@
             <span class="avatar">{{ initials() }}</span>
           }
         </div>
-        <button type="button" class="login-pill logout" (click)="logout()">ЛОГАУТ</button>
+        <button type="button" class="login-pill logout" (click)="logout()">Выход</button>
       } @else {
         <button type="button" class="login-pill" (click)="login()">ЛОГИН</button>
       }

@@ -1,0 +1,439 @@
+<app-admin-layout title="Справочники" active="dictionaries" rightPanelMode="custom">
+  <section class="dictionary-workspace">
+    <header class="dictionary-toolbar">
+      <nav class="dictionary-tabs" aria-label="Справочники">
+        @for (tab of tabs; track trackTab($index, tab)) {
+          <button
+            type="button"
+            [class.active]="activeTab() === tab.key"
+            (click)="setTab(tab.key)"
+          >
+            <span class="material-icons-sharp">{{ tab.icon }}</span>
+            {{ tab.label }}
+            <small>{{ tabTotal(tab.key) }}</small>
+          </button>
+        }
+      </nav>
+
+      <div class="quick-links">
+        <button type="button" (click)="clearSelection()">
+          <span class="material-icons-sharp">add</span>
+          Новая запись
+        </button>
+        <button type="button" (click)="loadAll()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Загрузка' : 'Обновить' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="dictionary-search">
+      <label>
+        <span class="material-icons-sharp">search</span>
+        <input
+          type="text"
+          placeholder="Найти"
+          [value]="search()"
+          (input)="search.set($any($event.target).value)"
+          (keyup.enter)="searchActive()"
+        >
+      </label>
+
+      <button type="button" class="icon-button" (click)="searchActive()" [disabled]="loading()" title="Искать">
+        <span class="material-icons-sharp">manage_search</span>
+      </button>
+
+      <button type="button" class="icon-button" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
+        <span class="material-icons-sharp">filter_alt_off</span>
+      </button>
+    </section>
+
+    @if (error()) {
+      <p class="error compact">{{ error() }}</p>
+    }
+
+    @if (activeTab() === 'categories') {
+    <section class="dictionary-grid category-builder-grid">
+      <article class="dictionary-card category-panel">
+        <div class="editor-title">
+          <div>
+            <p class="eyebrow">ADD</p>
+            <h2>{{ categoryEditorTitle() }}</h2>
+          </div>
+          <span>Категории</span>
+        </div>
+
+        <form class="category-form" [formGroup]="categoryForm" (ngSubmit)="saveActive()">
+          <label>
+            <span>Название категории</span>
+            <input type="text" formControlName="title">
+          </label>
+          @if (categoryForm.invalid && categoryForm.touched) {
+            <p class="error compact">Название обязательно.</p>
+          }
+          <div class="actions">
+            @if (editingCategoryId() !== null) {
+              <button type="button" class="secondary" (click)="startNewCategory()" [disabled]="saving() || deleting()">Новая</button>
+              <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="deleting() || saving()">Удалить</button>
+            }
+            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+          </div>
+        </form>
+
+        <div class="table-head list-title">
+          <div>
+            <p class="eyebrow">LIST</p>
+            <h2>Категории</h2>
+          </div>
+          <span>{{ categories().length }}</span>
+        </div>
+
+        <div class="table-scroll category-list-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Категория</th>
+                <th>Подкатегории</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (category of categories(); track trackCategory($index, category)) {
+                <tr [class.selected]="activeCategoryId() === category.id" (click)="selectCategory(category)">
+                  <td>
+                    <strong>{{ category.title }}</strong>
+                    <span>ID {{ category.id }}</span>
+                  </td>
+                  <td>
+                    <span class="count-pill">{{ category.subCategoryCount }}</span>
+                  </td>
+                  <td class="row-tools">
+                    <button type="button" class="row-icon-button" (click)="editCategory($event, category)" title="Редактировать категорию">
+                      <span class="material-icons-sharp">edit</span>
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="no-results">Категорий нет.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="dictionary-card subcategory-panel">
+        @if (activeCategory(); as category) {
+          <div class="editor-title">
+            <div>
+              <p class="eyebrow">ADD</p>
+              <h2>{{ subCategoryEditorTitle() }}</h2>
+            </div>
+            <span>{{ category.title }}</span>
+          </div>
+
+          <form class="subcategory-form" [formGroup]="subCategoryForm" (ngSubmit)="saveSelectedSubCategory()">
+            <label>
+              <span>Название подкатегории</span>
+              <input type="text" formControlName="title">
+            </label>
+
+            <label>
+              <span>Категория</span>
+              <input type="text" [value]="category.title" readonly>
+            </label>
+
+            @if (subCategoryForm.invalid && subCategoryForm.touched) {
+              <p class="error compact">Название и категория обязательны.</p>
+            }
+            <div class="actions">
+              <button type="button" class="secondary" (click)="startNewSubCategory()" [disabled]="saving() || deleting()">Новая</button>
+              @if (editingSubCategoryId() !== null) {
+                <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="deleting() || saving()">Удалить</button>
+              }
+              <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+            </div>
+          </form>
+
+          <div class="table-head list-title">
+            <div>
+              <p class="eyebrow">LIST</p>
+              <h2>Подкатегории</h2>
+            </div>
+            <span>{{ selectedCategorySubCategories().length }}</span>
+          </div>
+
+          <div class="table-scroll category-list-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Подкатегория</th>
+                  <th>ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (subCategory of selectedCategorySubCategories(); track trackSubCategory($index, subCategory)) {
+                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="selectSubCategory(subCategory)">
+                    <td><strong>{{ subCategory.title }}</strong></td>
+                    <td>{{ subCategory.id }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="2" class="no-results">У категории пока нет подкатегорий.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty-picker">
+            <span class="material-icons-sharp">account_tree</span>
+            <h2>Выберите категорию</h2>
+            <p>Подкатегории появятся справа после выбора категории слева.</p>
+          </div>
+        }
+      </article>
+    </section>
+    } @else {
+    <section class="dictionary-grid">
+      <article class="dictionary-card table-card">
+        <div class="table-head">
+          <div>
+            <p class="eyebrow">LIST</p>
+            <h2>{{ activeLabel() }}</h2>
+          </div>
+          <span>{{ activeItemsTotal() }}</span>
+        </div>
+
+        <div class="table-scroll">
+          @switch (activeTab()) {
+            @case ('categories') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Категория</th>
+                    <th>Подкатегории</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (category of categories(); track trackCategory($index, category)) {
+                    <tr [class.selected]="selectedId() === category.id" (click)="selectCategory(category)">
+                      <td>
+                        <strong>{{ category.title }}</strong>
+                        <span>ID {{ category.id }}</span>
+                      </td>
+                      <td>
+                        <span class="count-pill">{{ category.subCategoryCount }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="2" class="no-results">Категорий нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @case ('subcategories') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Подкатегория</th>
+                    <th>Категория</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (subCategory of subCategories(); track trackSubCategory($index, subCategory)) {
+                    <tr [class.selected]="selectedId() === subCategory.id" (click)="selectSubCategory(subCategory)">
+                      <td>
+                        <strong>{{ subCategory.title }}</strong>
+                        <span>ID {{ subCategory.id }}</span>
+                      </td>
+                      <td>{{ categoryTitle(subCategory.category) }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="2" class="no-results">Подкатегорий нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @case ('cities') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Город</th>
+                    <th>ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (city of cities(); track trackCity($index, city)) {
+                    <tr [class.selected]="selectedId() === city.id" (click)="selectCity(city)">
+                      <td><strong>{{ city.title }}</strong></td>
+                      <td>{{ city.id }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="2" class="no-results">Городов нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @case ('products') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Продукт</th>
+                    <th>Цена</th>
+                    <th>Категория</th>
+                    <th>Фото</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (product of products(); track trackProduct($index, product)) {
+                    <tr [class.selected]="selectedId() === product.id" (click)="selectProduct(product)">
+                      <td>
+                        <strong>{{ product.title }}</strong>
+                        <span>ID {{ product.id }}</span>
+                      </td>
+                      <td>{{ product.price }}</td>
+                      <td>{{ categoryTitle(product.category) }}</td>
+                      <td>
+                        <span class="status-pill" [class.off]="!product.photo">{{ product.photo ? 'Да' : 'Нет' }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="4" class="no-results">Продуктов нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+          }
+        </div>
+      </article>
+
+      <article class="dictionary-card editor-card">
+        <div class="editor-title">
+          <div>
+            <p class="eyebrow">EDIT</p>
+            <h2>{{ selectedTitle() }}</h2>
+          </div>
+          <span>{{ activeLabel() }}</span>
+        </div>
+
+        @switch (activeTab()) {
+          @case ('categories') {
+            <form [formGroup]="categoryForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Название категории</span>
+                <input type="text" formControlName="title">
+              </label>
+              @if (categoryForm.invalid && categoryForm.touched) {
+                <p class="error compact">Название обязательно.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
+
+          @case ('subcategories') {
+            <form [formGroup]="subCategoryForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Название подкатегории</span>
+                <input type="text" formControlName="title">
+              </label>
+
+              <label>
+                <span>Категория</span>
+                <select formControlName="categoryId">
+                  @for (category of categories(); track trackCategory($index, category)) {
+                    <option [ngValue]="category.id">{{ category.title }}</option>
+                  }
+                </select>
+              </label>
+
+              @if (subCategoryForm.invalid && subCategoryForm.touched) {
+                <p class="error compact">Название и категория обязательны.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
+
+          @case ('cities') {
+            <form [formGroup]="cityForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Название города</span>
+                <input type="text" formControlName="title">
+              </label>
+              @if (cityForm.invalid && cityForm.touched) {
+                <p class="error compact">Название обязательно.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
+
+          @case ('products') {
+            <form [formGroup]="productForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Название продукта</span>
+                <input type="text" formControlName="title">
+              </label>
+
+              <label>
+                <span>Цена</span>
+                <input type="number" min="0" step="0.01" formControlName="price">
+              </label>
+
+              <label>
+                <span>Категория продукта</span>
+                <select formControlName="categoryId">
+                  @for (category of productCategories(); track trackOption($index, category)) {
+                    <option [ngValue]="category.id">{{ category.title }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="checkbox">
+                <input type="checkbox" formControlName="photo">
+                <span>Нужна фотография</span>
+              </label>
+
+              @if (productForm.invalid && productForm.touched) {
+                <p class="error compact">Название, цена и категория обязательны.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
+        }
+      </article>
+    </section>
+    }
+  </section>
+
+  <section admin-right-content class="dictionary-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <article class="stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+  </section>
+</app-admin-layout>

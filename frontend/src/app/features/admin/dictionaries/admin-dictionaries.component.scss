@@ -1,0 +1,456 @@
+:host {
+  display: block;
+}
+
+.dictionary-workspace {
+  display: grid;
+  gap: 0.85rem;
+  font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+.dictionary-toolbar,
+.dictionary-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.dictionary-tabs,
+.quick-links {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.dictionary-tabs {
+  overflow: hidden;
+  border-radius: 0.55rem;
+  background: var(--otziv-white);
+  box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.dictionary-tabs:hover,
+.dictionary-card:hover,
+.dictionary-stats .stat-card:hover {
+  box-shadow: none;
+}
+
+.dictionary-tabs button {
+  flex: 1 1 0;
+  min-width: 7.25rem;
+  min-height: 2.8rem;
+  padding: 0 0.65rem;
+  color: var(--otziv-dark);
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.dictionary-tabs button.active {
+  color: var(--otziv-primary);
+}
+
+.dictionary-tabs .material-icons-sharp,
+.quick-links .material-icons-sharp {
+  font-size: 1rem;
+}
+
+.dictionary-tabs small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+}
+
+.quick-links {
+  justify-content: flex-end;
+}
+
+.quick-links button,
+.dictionary-search input {
+  min-height: 2.2rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  color: var(--otziv-dark);
+  background: var(--otziv-light);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.quick-links button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.72rem;
+}
+
+.dictionary-search {
+  grid-template-columns: minmax(12rem, 1fr) 2.55rem 2.55rem;
+}
+
+.dictionary-search label {
+  position: relative;
+  display: block;
+}
+
+.dictionary-search label > span {
+  position: absolute;
+  top: 50%;
+  left: 0.85rem;
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 1rem;
+  transform: translateY(-50%);
+}
+
+.dictionary-search input {
+  width: 100%;
+  padding: 0 0.85rem 0 2.35rem;
+  background: var(--otziv-field-background);
+}
+
+.icon-button {
+  width: 2.55rem;
+  padding: 0;
+}
+
+.dictionary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.14fr) minmax(19rem, 0.86fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.category-builder-grid {
+  grid-template-columns: minmax(22rem, 0.96fr) minmax(22rem, 1.04fr);
+}
+
+.dictionary-card {
+  min-width: 0;
+  border-radius: 1.05rem;
+  padding: 1rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.table-card {
+  overflow: hidden;
+}
+
+.table-head,
+.editor-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.table-head h2,
+.editor-title h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.table-head > span,
+.editor-title > span {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.13);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.table-scroll {
+  max-height: calc(100vh - 13.5rem);
+  overflow: auto;
+}
+
+.category-list-scroll {
+  max-height: calc(100vh - 25.5rem);
+}
+
+.list-title {
+  margin-top: 1rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--otziv-light);
+  padding: 0.75rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+td {
+  font-size: 0.82rem;
+}
+
+td span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+}
+
+.row-tools {
+  width: 2.6rem;
+  text-align: right;
+}
+
+tr {
+  cursor: pointer;
+}
+
+tr.selected td {
+  background: rgba(108, 155, 207, 0.14);
+}
+
+.count-pill,
+.status-pill {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.14);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.status-pill {
+  width: fit-content;
+  margin: 0;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.13);
+}
+
+.status-pill.off {
+  color: var(--otziv-info);
+  background: var(--otziv-light);
+}
+
+.no-results {
+  color: var(--otziv-info);
+  text-align: center;
+}
+
+.editor-card form,
+.category-form,
+.subcategory-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.editor-card label,
+.category-form label,
+.subcategory-form label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.editor-card label > span,
+.category-form label > span,
+.subcategory-form label > span {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+.editor-card input[type='text'],
+.editor-card input[type='number'],
+.editor-card select,
+.category-form input[type='text'],
+.subcategory-form input[type='text'] {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 0.7rem;
+  padding: 0 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+}
+
+.subcategory-form input[readonly] {
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+}
+
+.editor-card .checkbox {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.7rem;
+  padding: 0 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+.editor-card .checkbox input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.actions .danger {
+  background: var(--otziv-danger);
+}
+
+.row-icon-button {
+  display: inline-grid;
+  width: 2rem;
+  min-height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 50%;
+  padding: 0;
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+}
+
+.row-icon-button .material-icons-sharp {
+  font-size: 1rem;
+}
+
+.empty-picker {
+  display: grid;
+  min-height: 21rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.5rem;
+  color: var(--otziv-info);
+  text-align: center;
+}
+
+.empty-picker .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 2.4rem;
+}
+
+.empty-picker h2,
+.empty-picker p {
+  margin: 0;
+}
+
+.empty-picker p {
+  max-width: 20rem;
+  font-size: 0.82rem;
+}
+
+.error.compact {
+  margin: 0;
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+  font-weight: 800;
+}
+
+.dictionary-stats {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.dictionary-stats .stat-card {
+  display: flex;
+  min-height: 5.6rem;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1.05rem;
+  padding: 1rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.dictionary-stats .stat-card span {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.dictionary-stats .stat-card strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.35rem;
+}
+
+.dictionary-stats .stat-card i {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-size: 1.35rem;
+}
+
+.dictionary-stats .stat-card.blue i {
+  background: var(--otziv-primary);
+}
+
+.dictionary-stats .stat-card.green i {
+  background: var(--otziv-success);
+}
+
+.dictionary-stats .stat-card.teal i {
+  background: #4db6ac;
+}
+
+.dictionary-stats .stat-card.yellow i {
+  color: var(--otziv-dark);
+  background: var(--otziv-warning);
+}
+
+@media (max-width: 1180px) {
+  .dictionary-toolbar,
+  .dictionary-grid,
+  .category-builder-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-links {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .dictionary-tabs {
+    overflow-x: auto;
+  }
+
+  .dictionary-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .dictionary-search {
+    grid-template-columns: minmax(0, 1fr) 2.55rem 2.55rem;
+  }
+}

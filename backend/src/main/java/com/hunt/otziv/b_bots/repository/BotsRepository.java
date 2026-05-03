@@ -53,4 +53,16 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
 
     List<Bot> findAll();
 
+    long countByActiveTrue();
+
+    long countByActiveFalse();
+
+    @Query("""
+        SELECT COUNT(b.id)
+        FROM Bot b
+        WHERE b.active = true
+          AND b.status.botStatusTitle = :status
+    """)
+    long countActiveByStatus(@Param("status") String status);
+
 }

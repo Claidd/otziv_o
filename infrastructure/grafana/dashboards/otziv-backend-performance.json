@@ -1,10 +1,19 @@
 {
   "uid": "otziv-backend-performance",
   "title": "Otziv Backend: производительность и логи",
-  "tags": ["otziv", "backend", "performance", "logs", "loki"],
+  "tags": [
+    "otziv",
+    "backend",
+    "performance",
+    "logs",
+    "loki",
+    "jvm",
+    "hikari",
+    "business"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 4,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -35,801 +44,2792 @@
           "text": "Все",
           "value": "$__all"
         }
+      },
+      {
+        "name": "http_uri",
+        "label": "HTTP URI",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(http_server_requests_seconds_count, uri)",
+        "query": {
+          "query": "label_values(http_server_requests_seconds_count, uri)",
+          "refId": "HttpUriVariable"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "Все",
+          "value": "$__all"
+        }
       }
     ]
   },
   "panels": [
     {
-      "id": 1,
-      "type": "stat",
-      "title": "Backend: состояние",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
+      "id": 60,
+      "type": "row",
+      "title": "Обзор backend",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
         {
-          "expr": "max(up{job=~\"app|app-local\"})",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
-            ]
+          "id": 1,
+          "type": "stat",
+          "title": "Backend: состояние",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "mappings": [
+          "targets": [
             {
-              "type": "value",
-              "options": {
-                "0": { "text": "СБОЙ", "color": "red" },
-                "1": { "text": "ОК", "color": "green" }
-              }
+              "expr": "max(up{job=~\"app|app-local\"})",
+              "refId": "A"
             }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
-      },
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 }
-    },
-    {
-      "id": 2,
-      "type": "stat",
-      "title": "Запросы в секунду",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval]))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "decimals": 2
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center"
-      },
-      "gridPos": { "x": 4, "y": 0, "w": 5, "h": 4 }
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Ошибки в секунду",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\",result=\"error\"}[$__rate_interval]))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "decimals": 3,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.1 }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center"
-      },
-      "gridPos": { "x": 9, "y": 0, "w": 5, "h": 4 }
-    },
-    {
-      "id": 4,
-      "type": "stat",
-      "title": "Максимум P95",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "max(histogram_quantile(0.95, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 3,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.25 },
-              { "color": "red", "value": 1 }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center"
-      },
-      "gridPos": { "x": 14, "y": 0, "w": 5, "h": 4 }
-    },
-    {
-      "id": 5,
-      "type": "stat",
-      "title": "Максимум P99",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "max(histogram_quantile(0.99, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 3,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 2 }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center"
-      },
-      "gridPos": { "x": 19, "y": 0, "w": 5, "h": 4 }
-    },
-    {
-      "id": 6,
-      "type": "timeseries",
-      "title": "P95 задержки по разделам",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)) and on(endpoint) sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint) > 0",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 3,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": ["lastNotNull", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "P99 задержки по разделам",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint))",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 3,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": ["lastNotNull", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Средняя задержка по разделам",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(otziv_endpoint_duration_seconds_sum{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint) / sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint)",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 3,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": ["lastNotNull", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 }
-    },
-    {
-      "id": 9,
-      "type": "timeseries",
-      "title": "Запросы в секунду по разделам и результату",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint, result)",
-          "legendFormat": "{{endpoint}} {{result}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "decimals": 2,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": false
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": ["lastNotNull", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 }
-    },
-    {
-      "id": 10,
-      "type": "bargauge",
-      "title": "Запросы за выбранный период",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint)",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "showUnfilled": true,
-        "minVizWidth": 8,
-        "minVizHeight": 16
-      },
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 }
-    },
-    {
-      "id": 11,
-      "type": "table",
-      "title": "Самые медленные разделы",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(increase(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__range])) by (le, endpoint)) and on(endpoint) sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint) > 0",
-          "format": "table",
-          "instant": true,
-          "refId": "P95"
-        },
-        {
-          "expr": "sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint)",
-          "format": "table",
-          "instant": true,
-          "refId": "RPS"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #P95"
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "СБОЙ",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "ОК",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
             },
-            "properties": [
-              { "id": "unit", "value": "s" },
-              { "id": "decimals", "value": 3 }
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 1,
+            "w": 4,
+            "h": 4
+          }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Запросы в секунду",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 1,
+            "w": 5,
+            "h": 4
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Ошибки в секунду",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\",result=\"error\"}[$__rate_interval]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "decimals": 3,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 0.01
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 9,
+            "y": 1,
+            "w": 5,
+            "h": 4
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Максимум P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "max(histogram_quantile(0.95, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 0.25
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 14,
+            "y": 1,
+            "w": 5,
+            "h": 4
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Максимум P99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "max(histogram_quantile(0.99, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 0.5
+                  },
+                  {
+                    "color": "red",
+                    "value": 2
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 19,
+            "y": 1,
+            "w": 5,
+            "h": 4
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 61,
+      "type": "row",
+      "title": "Производительность API: графики",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "P95 задержки по разделам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint)) and on(endpoint) sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint) > 0",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 2,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "P99 задержки по разделам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, endpoint))",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 2,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Средняя задержка по разделам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_endpoint_duration_seconds_sum{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint) / sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 10,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "Запросы в секунду по разделам и результату",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__rate_interval])) by (endpoint, result)",
+              "legendFormat": "{{endpoint}} {{result}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "decimals": 2,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 10,
+            "w": 12,
+            "h": 8
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 62,
+      "type": "row",
+      "title": "Производительность API: сводки и таблицы",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
+        {
+          "id": 10,
+          "type": "bargauge",
+          "title": "Запросы за выбранный период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint)",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 3,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 11,
+          "type": "table",
+          "title": "Самые медленные разделы",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(increase(otziv_endpoint_duration_seconds_bucket{endpoint=~\"$endpoint\"}[$__range])) by (le, endpoint)) and on(endpoint) sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint) > 0",
+              "format": "table",
+              "instant": true,
+              "refId": "P95"
+            },
+            {
+              "expr": "sum(increase(otziv_endpoint_duration_seconds_count{endpoint=~\"$endpoint\"}[$__range])) by (endpoint)",
+              "format": "table",
+              "instant": true,
+              "refId": "RPS"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Value #P95"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Value #RPS"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  }
+                ]
+              }
             ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #RPS"
-            },
-            "properties": [
-              { "id": "unit", "value": "short" },
-              { "id": "decimals", "value": 0 }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": ["sum"],
-          "countRows": false,
-          "fields": ""
-        }
-      },
-      "transformations": [
-        {
-          "id": "joinByField",
           "options": {
-            "byField": "endpoint",
-            "mode": "inner"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Time #P95": true,
-              "Time #RPS": true,
-              "Time 1": true,
-              "Time 2": true
-            },
-            "indexByName": {
-              "endpoint": 0,
-              "Value #P95": 1,
-              "Value #RPS": 2
-            },
-            "renameByName": {
-              "endpoint": "Раздел",
-              "Value #P95": "P95",
-              "Value #RPS": "Запросы"
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
             }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "field": "P95",
-                "desc": true
+          },
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {
+                "byField": "endpoint",
+                "mode": "inner"
               }
-            ]
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time #P95": true,
+                  "Time #RPS": true,
+                  "Time 1": true,
+                  "Time 2": true
+                },
+                "indexByName": {
+                  "endpoint": 0,
+                  "Value #P95": 1,
+                  "Value #RPS": 2
+                },
+                "renameByName": {
+                  "endpoint": "Раздел",
+                  "Value #P95": "P95",
+                  "Value #RPS": "Запросы"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "field": "P95",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 12,
+            "y": 3,
+            "w": 12,
+            "h": 8
           }
         }
       ],
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 2,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 16,
-      "type": "timeseries",
-      "title": "Cache hit/miss в секунду",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
+      "id": 63,
+      "type": "row",
+      "title": "Кэш",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
         {
-          "expr": "sum(rate(cache_gets_total{cache=~\"cabinet.*\", result=~\"hit|miss\"}[$__rate_interval])) by (cache, result)",
-          "legendFormat": "{{cache}} {{result}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "decimals": 3
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": ["lastNotNull", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 }
-    },
-    {
-      "id": 17,
-      "type": "bargauge",
-      "title": "Cache hit-rate за период",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "100 * sum(increase(cache_gets_total{cache=~\"cabinet.*\", result=\"hit\"}[$__range])) by (cache) / sum(increase(cache_gets_total{cache=~\"cabinet.*\"}[$__range])) by (cache)",
-          "legendFormat": "{{cache}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "green", "value": 80 }
-            ]
+          "id": 16,
+          "type": "timeseries",
+          "title": "Кэш: попадания/промахи в секунду",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(cache_gets_total{cache=~\"cabinet.*\", result=~\"hit|miss\"}[$__rate_interval])) by (cache, result)",
+              "legendFormat": "{{cache}} {{result}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "decimals": 3
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 12,
+            "h": 8
           }
         },
-        "overrides": []
-      },
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+        {
+          "id": 17,
+          "type": "bargauge",
+          "title": "Кэш: доля попаданий за период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "100 * sum(increase(cache_gets_total{cache=~\"cabinet.*\", result=\"hit\"}[$__range])) by (cache) / sum(increase(cache_gets_total{cache=~\"cabinet.*\"}[$__range])) by (cache)",
+              "legendFormat": "{{cache}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 4,
+            "w": 12,
+            "h": 8
+          }
         },
-        "showUnfilled": true,
-        "minVizWidth": 8,
-        "minVizHeight": 16
-      },
-      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 }
-    },
-    {
-      "id": 18,
-      "type": "bargauge",
-      "title": "Cache miss за период",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
         {
-          "expr": "round(sum(increase(cache_gets_total{cache=~\"cabinet.*\", result=\"miss\"}[$__range])) by (cache))",
-          "legendFormat": "{{cache}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0
+          "id": 18,
+          "type": "bargauge",
+          "title": "Кэш: промахи за период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "round(sum(increase(cache_gets_total{cache=~\"cabinet.*\", result=\"miss\"}[$__range])) by (cache))",
+              "legendFormat": "{{cache}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 12,
+            "w": 12,
+            "h": 8
+          }
         },
-        "overrides": []
-      },
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+        {
+          "id": 19,
+          "type": "bargauge",
+          "title": "Размер кэша",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "cache_size{cache=~\"cabinet.*\"}",
+              "legendFormat": "{{cache}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayMode": "gradient",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 12,
+            "w": 12,
+            "h": 8
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 64,
+      "type": "row",
+      "title": "Логи",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
+        {
+          "id": 12,
+          "type": "logs",
+          "title": "Логи backend",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"}",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 24,
+            "h": 8
+          }
         },
-        "showUnfilled": true,
-        "minVizWidth": 8,
-        "minVizHeight": 16
-      },
-      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 }
-    },
-    {
-      "id": 19,
-      "type": "bargauge",
-      "title": "Размер cache",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
         {
-          "expr": "cache_size{cache=~\"cabinet.*\"}",
-          "legendFormat": "{{cache}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0
+          "id": 13,
+          "type": "logs",
+          "title": "Медленные SQL",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"} |= \"SQL_SLOW\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 13,
+            "w": 12,
+            "h": 8
+          }
         },
-        "overrides": []
-      },
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
+        {
+          "id": 14,
+          "type": "logs",
+          "title": "Ошибки backend",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"} |= \"ERROR\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 13,
+            "w": 12,
+            "h": 8
+          }
         },
-        "showUnfilled": true,
-        "minVizWidth": 8,
-        "minVizHeight": 16
-      },
-      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 8 }
-    },
-    {
-      "id": 12,
-      "type": "logs",
-      "title": "Логи backend",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
         {
-          "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"}",
-          "queryType": "range",
-          "refId": "A"
+          "id": 15,
+          "type": "logs",
+          "title": "Логи Docker",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "expr": "{job=\"docker\"}",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": true,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 21,
+            "w": 24,
+            "h": 8
+          }
         }
       ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
-      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 13,
-      "type": "logs",
-      "title": "Медленные SQL",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
+      "id": 20,
+      "type": "row",
+      "title": "JVM / ресурсы",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
         {
-          "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"} |= \"SQL_SLOW\"",
-          "queryType": "range",
-          "refId": "A"
+          "id": 21,
+          "type": "stat",
+          "title": "Heap использовано %",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "100 * sum(jvm_memory_used_bytes{area=\"heap\"}) / sum(jvm_memory_max_bytes{area=\"heap\"})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 69,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 22,
+          "type": "stat",
+          "title": "CPU процесса",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "process_cpu_usage",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 2,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 0.7
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.9
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 69,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 23,
+          "type": "stat",
+          "title": "Живые потоки",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "jvm_threads_live_threads",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 69,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 24,
+          "type": "stat",
+          "title": "Загруженные классы",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "jvm_classes_loaded_classes",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 69,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 25,
+          "type": "timeseries",
+          "title": "Heap used / max",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})",
+              "refId": "A",
+              "legendFormat": "used"
+            },
+            {
+              "expr": "sum(jvm_memory_max_bytes{area=\"heap\"})",
+              "refId": "B",
+              "legendFormat": "max"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 73,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 26,
+          "type": "timeseries",
+          "title": "Средняя пауза GC",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(jvm_gc_pause_seconds_sum[$__rate_interval])) / sum(rate(jvm_gc_pause_seconds_count[$__rate_interval])) or vector(0)",
+              "refId": "A",
+              "legendFormat": "avg pause"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 73,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 27,
+          "type": "timeseries",
+          "title": "CPU процесса / системы",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "process_cpu_usage",
+              "refId": "A",
+              "legendFormat": "process"
+            },
+            {
+              "expr": "system_cpu_usage",
+              "refId": "B",
+              "legendFormat": "system"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 81,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 28,
+          "type": "timeseries",
+          "title": "JVM потоки",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "jvm_threads_live_threads",
+              "refId": "A",
+              "legendFormat": "live"
+            },
+            {
+              "expr": "jvm_threads_daemon_threads",
+              "refId": "B",
+              "legendFormat": "daemon"
+            },
+            {
+              "expr": "jvm_threads_peak_threads",
+              "refId": "C",
+              "legendFormat": "peak"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 81,
+            "w": 12,
+            "h": 8
+          }
         }
       ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
-      "gridPos": { "x": 0, "y": 52, "w": 12, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 14,
-      "type": "logs",
-      "title": "Ошибки backend",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
+      "id": 30,
+      "type": "row",
+      "title": "База данных / Hikari",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
         {
-          "expr": "{job=\"backend-file\", service=\"backend\", filename=\"/var/log/otziv-app/app.log\"} |= \"ERROR\"",
-          "queryType": "range",
-          "refId": "A"
+          "id": 31,
+          "type": "stat",
+          "title": "Hikari: ожидание соединений",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(hikaricp_connections_pending)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 70,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 32,
+          "type": "stat",
+          "title": "Hikari: активные соединения",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(hikaricp_connections_active)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 70,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 33,
+          "type": "stat",
+          "title": "Hikari: timeout за период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(hikaricp_connections_timeout_total[$__range])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 70,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 34,
+          "type": "stat",
+          "title": "Hikari: среднее получение",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(hikaricp_connections_acquire_seconds_sum[$__rate_interval])) / sum(rate(hikaricp_connections_acquire_seconds_count[$__rate_interval])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 70,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 35,
+          "type": "timeseries",
+          "title": "Hikari: соединения",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(hikaricp_connections_active) by (pool)",
+              "refId": "A",
+              "legendFormat": "active {{pool}}"
+            },
+            {
+              "expr": "sum(hikaricp_connections_idle) by (pool)",
+              "refId": "B",
+              "legendFormat": "idle {{pool}}"
+            },
+            {
+              "expr": "sum(hikaricp_connections_pending) by (pool)",
+              "refId": "C",
+              "legendFormat": "pending {{pool}}"
+            },
+            {
+              "expr": "sum(hikaricp_connections_max) by (pool)",
+              "refId": "D",
+              "legendFormat": "max {{pool}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 74,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 36,
+          "type": "timeseries",
+          "title": "Hikari: acquire / usage avg",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(hikaricp_connections_acquire_seconds_sum[$__rate_interval])) by (pool) / sum(rate(hikaricp_connections_acquire_seconds_count[$__rate_interval])) by (pool)",
+              "refId": "A",
+              "legendFormat": "acquire {{pool}}"
+            },
+            {
+              "expr": "sum(rate(hikaricp_connections_usage_seconds_sum[$__rate_interval])) by (pool) / sum(rate(hikaricp_connections_usage_seconds_count[$__rate_interval])) by (pool)",
+              "refId": "B",
+              "legendFormat": "usage {{pool}}"
+            },
+            {
+              "expr": "sum(rate(hikaricp_connections_creation_seconds_sum[$__rate_interval])) by (pool) / sum(rate(hikaricp_connections_creation_seconds_count[$__rate_interval])) by (pool)",
+              "refId": "C",
+              "legendFormat": "creation {{pool}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 74,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 37,
+          "type": "timeseries",
+          "title": "Hikari: timeouts/sec",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(hikaricp_connections_timeout_total[$__rate_interval])) by (pool)",
+              "refId": "A",
+              "legendFormat": "timeouts {{pool}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 82,
+            "w": 24,
+            "h": 8
+          }
         }
       ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
-      "gridPos": { "x": 12, "y": 52, "w": 12, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 15,
-      "type": "logs",
-      "title": "Docker logs",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
+      "id": 40,
+      "type": "row",
+      "title": "HTTP обзор",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
         {
-          "expr": "{job=\"docker\"}",
-          "queryType": "range",
-          "refId": "A"
+          "id": 41,
+          "type": "stat",
+          "title": "HTTP RPS",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__rate_interval]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 71,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 42,
+          "type": "stat",
+          "title": "HTTP 5xx в минуту",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "60 * sum(rate(http_server_requests_seconds_count{uri=~\"$http_uri\", status=~\"5..\"}[$__rate_interval]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 71,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 43,
+          "type": "stat",
+          "title": "HTTP средняя задержка",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_sum{uri=~\"$http_uri\"}[$__rate_interval])) / sum(rate(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__rate_interval])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 71,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 44,
+          "type": "stat",
+          "title": "HTTP запросы за период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__range]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 71,
+            "w": 6,
+            "h": 4
+          }
+        },
+        {
+          "id": 45,
+          "type": "timeseries",
+          "title": "HTTP RPS по URI/статусу",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__rate_interval])) by (method, uri, status)",
+              "refId": "A",
+              "legendFormat": "{{method}} {{uri}} {{status}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 75,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 46,
+          "type": "timeseries",
+          "title": "HTTP средняя задержка по URI",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_sum{uri=~\"$http_uri\"}[$__rate_interval])) by (uri) / sum(rate(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__rate_interval])) by (uri)",
+              "refId": "A",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 75,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 47,
+          "type": "timeseries",
+          "title": "HTTP P95 по URI",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~\"$http_uri\"}[$__rate_interval])) by (le, uri))",
+              "refId": "A",
+              "legendFormat": "{{uri}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 12,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 83,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 48,
+          "type": "bargauge",
+          "title": "HTTP ошибки по URI/статусу",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(http_server_requests_seconds_count{uri=~\"$http_uri\", status!~\"2..|3..\"}[$__range])) by (uri, status)",
+              "refId": "A",
+              "legendFormat": "{{uri}} {{status}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 83,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 49,
+          "type": "table",
+          "title": "Самые медленные HTTP URI за период",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "topk(10, sum(increase(http_server_requests_seconds_sum{uri=~\"$http_uri\"}[$__range])) by (uri) / sum(increase(http_server_requests_seconds_count{uri=~\"$http_uri\"}[$__range])) by (uri))",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
+            }
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 91,
+            "w": 24,
+            "h": 8
+          }
         }
       ],
-      "options": {
-        "showTime": true,
-        "showLabels": true,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
-      "gridPos": { "x": 0, "y": 60, "w": 24, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 50,
+      "type": "row",
+      "title": "Бизнес-метрики",
+      "collapsed": true,
+      "datasource": null,
+      "panels": [
+        {
+          "id": 51,
+          "type": "stat",
+          "title": "Всего по бизнес-метрикам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(otziv_business_leads{status=\"Все\"})",
+              "refId": "A",
+              "legendFormat": "Лиды"
+            },
+            {
+              "expr": "sum(otziv_business_orders{status=\"Все\"})",
+              "refId": "B",
+              "legendFormat": "Заказы"
+            },
+            {
+              "expr": "sum(otziv_business_reviews{state=\"all\"})",
+              "refId": "C",
+              "legendFormat": "Отзывы"
+            },
+            {
+              "expr": "sum(otziv_business_bots{state=\"all\"})",
+              "refId": "D",
+              "legendFormat": "Боты"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "center"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 72,
+            "w": 24,
+            "h": 4
+          }
+        },
+        {
+          "id": 52,
+          "type": "bargauge",
+          "title": "Лиды по статусам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(otziv_business_leads{status!=\"Все\"}) by (status)",
+              "refId": "A",
+              "legendFormat": "{{status}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 76,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 53,
+          "type": "bargauge",
+          "title": "Заказы по статусам",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(otziv_business_orders{status!=\"Все\"}) by (status)",
+              "refId": "A",
+              "legendFormat": "{{status}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 76,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 54,
+          "type": "bargauge",
+          "title": "Отзывы по состояниям",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(otziv_business_reviews) by (state)",
+              "refId": "A",
+              "legendFormat": "{{state}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 84,
+            "w": 12,
+            "h": 8
+          }
+        },
+        {
+          "id": 55,
+          "type": "bargauge",
+          "title": "Боты / аккаунты",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(otziv_business_bots) by (state)",
+              "refId": "A",
+              "legendFormat": "{{state}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "values": false,
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": ""
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "minVizWidth": 8,
+            "minVizHeight": 16
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 84,
+            "w": 12,
+            "h": 8
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 1
+      }
     }
   ]
 }

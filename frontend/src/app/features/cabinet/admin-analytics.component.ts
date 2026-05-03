@@ -46,12 +46,20 @@ type LineChart = {
   viewBox: string;
 };
 
+type ChartScale = {
+  max: number;
+  ticks: string[];
+  tickValues: number[];
+};
+
 const MONTH_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const YEAR_COLORS = ['#ea3362', '#4a9a86', '#f7a35c', '#6c9bcf', '#9a7bd9', '#1b9c85', '#b28405'];
 const LINE_VIEWBOX_WIDTH = 100;
 const LINE_VIEWBOX_HEIGHT = 100;
 const LINE_CHART_TOP = 7;
 const LINE_CHART_BOTTOM = 12;
+const BAR_CHART_INTERVALS = 4;
+const LINE_CHART_INTERVALS = 6;
 
 @Component({
   selector: 'app-admin-analytics',
@@ -199,7 +207,7 @@ export class AdminAnalyticsComponent {
         const monthlyData = this.monthlyDataForYear(parsed, year);
         return MONTH_LABELS.map((_, index) => this.numberValue(monthlyData[String(index + 1)]));
       });
-      const scale = this.buildScale(allValues);
+      const scale = this.buildScale(allValues, LINE_CHART_INTERVALS, true);
       const plotHeight = LINE_VIEWBOX_HEIGHT - LINE_CHART_TOP - LINE_CHART_BOTTOM;
       const yFor = (value: number) => LINE_CHART_TOP + plotHeight - (value / scale.max) * plotHeight;
       const xFor = (index: number) => ((index + 0.5) * LINE_VIEWBOX_WIDTH) / MONTH_LABELS.length;
@@ -228,7 +236,7 @@ export class AdminAnalyticsComponent {
         series,
         ticks: scale.ticks,
         months: MONTH_LABELS,
-        gridLines: [0, 1, 2, 3, 4].map((index) => LINE_CHART_TOP + (plotHeight / 4) * index),
+        gridLines: scale.tickValues.map((value) => yFor(value)),
         plotStart: 0,
         plotEnd: LINE_VIEWBOX_WIDTH,
         viewBox: `0 0 ${LINE_VIEWBOX_WIDTH} ${LINE_VIEWBOX_HEIGHT}`
@@ -271,7 +279,7 @@ export class AdminAnalyticsComponent {
   }
 
   private barChart(points: Array<Omit<ChartPoint, 'height'>>): BarChart {
-    const scale = this.buildScale(points.map((point) => point.value));
+    const scale = this.buildScale(points.map((point) => point.value), BAR_CHART_INTERVALS);
     return {
       points: points.map((point) => ({
         ...point,
@@ -293,26 +301,31 @@ export class AdminAnalyticsComponent {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
-  private buildScale(values: number[]): { max: number; ticks: string[] } {
+  private buildScale(values: number[], intervals: number, clampToData = false): ChartScale {
     const maxValue = Math.max(...values, 0);
     if (maxValue <= 0) {
       return {
         max: 1,
-        ticks: ['0', '0', '0', '0', '0']
+        ticks: Array.from({ length: intervals + 1 }, () => '0'),
+        tickValues: Array.from({ length: intervals + 1 }, () => 0)
       };
     }
 
-    const max = this.niceMax(maxValue);
+    const step = this.niceStep(maxValue / intervals);
+    const max = clampToData ? Math.ceil(maxValue / step) * step : step * intervals;
+    const tickCount = Math.round(max / step);
+    const tickValues = Array.from({ length: tickCount + 1 }, (_, index) => max - step * index);
+
     return {
       max,
-      ticks: [max, max * 0.75, max * 0.5, max * 0.25, 0].map((value) => this.formatAxisValue(value))
+      ticks: tickValues.map((value) => this.formatAxisValue(value)),
+      tickValues
     };
   }
 
-  private niceMax(value: number): number {
-    const rawStep = value / 4;
-    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
-    const normalized = rawStep / magnitude;
+  private niceStep(value: number): number {
+    const magnitude = 10 ** Math.floor(Math.log10(value));
+    const normalized = value / magnitude;
     let niceStep = 10;
 
     if (normalized <= 1) {
@@ -325,12 +338,12 @@ export class AdminAnalyticsComponent {
       niceStep = 5;
     }
 
-    return niceStep * magnitude * 4;
+    return niceStep * magnitude;
   }
 
   private formatAxisValue(value: number): string {
     if (Math.abs(value) >= 1000) {
-      return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value / 1000)}к`;
+      return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value / 1000)}к`;
     }
 
     return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);

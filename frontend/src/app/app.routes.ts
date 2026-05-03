@@ -106,6 +106,24 @@ export const routes: Routes = [
     component: ReviewCheckComponent
   },
   {
+    path: 'admin/cities',
+    loadComponent: () => import('./features/admin/cities/admin-cities.component')
+      .then((m) => m.AdminCitiesComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/dictionaries',
+    loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
+      .then((m) => m.AdminDictionariesComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/users',
     component: UsersAdminComponent,
     canActivate: [roleGuard],

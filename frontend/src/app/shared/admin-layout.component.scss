@@ -26,6 +26,14 @@ app-admin-layout {
   padding-top: 1.4rem;
 }
 
+.admin-sidebar {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: 1rem;
+  overflow: hidden;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -44,7 +52,8 @@ app-admin-layout {
 .brand h2 {
   margin: 0;
   overflow: hidden;
-  font-size: 1.05rem;
+  font-family: 'laptev_brush', var(--otziv-font-family);
+  font-size: 1.4rem;
   font-weight: 800;
   line-height: 1;
   text-overflow: ellipsis;
@@ -57,13 +66,38 @@ app-admin-layout {
 
 .sidebar-card {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-height: calc(100vh - 5.4rem);
+  min-height: 0;
+  max-height: calc(100vh - 5.9rem);
   margin-top: 1.5rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
   border-radius: 15px;
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 151, 191, 0.75) transparent;
+}
+
+.sidebar-card:hover,
+.sidebar-card:focus-within {
+  overflow-y: auto;
+}
+
+.sidebar-card::-webkit-scrollbar {
+  width: 0.45rem;
+}
+
+.sidebar-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-card::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(121, 151, 191, 0.75);
 }
 
 .sidebar-card a {
@@ -383,17 +417,15 @@ button.login-pill.logout {
   font-size: 1rem;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1500px) {
   .admin-layout {
-    grid-template-columns: 5.8rem minmax(0, 1fr);
+    grid-template-columns: 5.8rem minmax(0, 1fr) 18.5rem;
+    gap: 1rem;
+    width: min(100% - 2rem, 100%);
   }
 
   .admin-layout.sidebar-hidden {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .admin-right {
-    display: none;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
   }
 
   .brand h2,
@@ -417,6 +449,20 @@ button.login-pill.logout {
   }
 }
 
+@media (max-width: 1320px) {
+  .admin-layout {
+    grid-template-columns: 5.8rem minmax(0, 1fr);
+  }
+
+  .admin-layout.sidebar-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-right {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .admin-layout {
     display: block;
@@ -434,6 +480,8 @@ button.login-pill.logout {
   .admin-sidebar {
     position: static;
     height: auto;
+    padding-bottom: 0;
+    overflow: visible;
   }
 
   .brand {
@@ -441,9 +489,12 @@ button.login-pill.logout {
   }
 
   .sidebar-card {
+    max-height: none;
     min-height: 0;
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-gutter: auto;
   }
 
   .sidebar-card a {
