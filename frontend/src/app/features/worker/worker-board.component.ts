@@ -1,16 +1,13 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { appEnvironment } from '../../core/app-environment';
 import {
   ManagerApi,
   ManagerOption,
   OrderCardItem,
   OrderDetailsPayload,
   OrderEditPayload,
-  OrderReviewItem,
-  OrderUpdateRequest,
-  ReviewUpdateRequest
+  OrderUpdateRequest
 } from '../../core/manager.api';
 import {
   WorkerApi,
@@ -24,23 +21,59 @@ import {
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
-
-type SectionTab = {
-  key: WorkerSection;
-  label: string;
-  icon: string;
-};
-
-type StatusAction = {
-  label: string;
-  status: string;
-  icon: string;
-};
-
-type ReviewEditableField = 'text' | 'answer';
-type SideNoteField = 'order' | 'company';
-type ReviewEditItem = WorkerReviewItem | OrderReviewItem;
-type ReviewEditDraft = ReviewUpdateRequest;
+import {
+  DEFAULT_WORKER_PERMISSIONS,
+  EMPTY_WORKER_ORDER_PAGE,
+  EMPTY_WORKER_REVIEW_PAGE,
+  ReviewCopyKind,
+  ReviewEditDraft,
+  ReviewEditableField,
+  ReviewEditItem,
+  SectionTab,
+  SideNoteField,
+  StatusAction,
+  WORKER_ORDER_STATUS_ACTIONS,
+  WORKER_PAGE_SIZE_OPTIONS,
+  WORKER_SECTIONS,
+  trackWorkerAction,
+  trackWorkerBot,
+  trackWorkerMetric,
+  trackWorkerOption,
+  trackWorkerOrder,
+  trackWorkerReview,
+  trackWorkerSection,
+  workerAbsoluteAppUrl,
+  workerBotChangeMessage,
+  workerErrorMessage,
+  workerLegacyUrl,
+  workerReviewCopyLabel,
+  workerSectionLabel
+} from './worker-board.config';
+import {
+  workerEditableOrderNoteText,
+  workerHasMeaningfulNote,
+  workerHasReviewCompanyNote,
+  workerHasReviewNote,
+  workerHasReviewOrderNote,
+  workerHasReviewOwnNote,
+  workerOrderNoteMutationKey,
+  workerOrderNoteText,
+  workerPatchOrderNote,
+  workerPatchReviewField,
+  workerPatchReviewNote,
+  workerPatchReviewSideNote,
+  workerRemoveRecordKey,
+  workerReviewFieldKey,
+  workerReviewFieldSourceValue,
+  workerReviewNoteMutationKey,
+  workerReviewNoteTitle,
+  workerReviewTextNeedsToggle,
+  workerSaveReviewFieldMutationKey,
+  workerShouldShowExpander,
+  workerSideNoteKey,
+  workerSideNoteMutationKey,
+  workerSideNoteSourceValue
+} from './worker-board-note.helpers';
 
 @Component({
   selector: 'app-worker-board',
@@ -52,49 +85,12 @@ export class WorkerBoardComponent {
   private readonly workerApi = inject(WorkerApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
-  private readonly emptyOrderPage: WorkerPage<OrderCardItem> = {
-    content: [],
-    number: 0,
-    size: 10,
-    totalElements: 0,
-    totalPages: 0,
-    first: true,
-    last: true
-  };
-  private readonly emptyReviewPage: WorkerPage<WorkerReviewItem> = {
-    content: [],
-    number: 0,
-    size: 10,
-    totalElements: 0,
-    totalPages: 0,
-    first: true,
-    last: true
-  };
 
-  readonly sections: SectionTab[] = [
-    { key: 'new', label: 'Новые', icon: 'fiber_new' },
-    { key: 'correct', label: 'Коррекция', icon: 'build_circle' },
-    { key: 'nagul', label: 'Выгул', icon: 'directions_walk' },
-    { key: 'publish', label: 'Публикация', icon: 'published_with_changes' },
-    { key: 'bad', label: 'Плохие', icon: 'money_off' },
-    { key: 'all', label: 'Все', icon: 'dashboard' }
-  ];
-
-  readonly orderStatusActions: StatusAction[] = [
-    { label: 'на проверку', status: 'На проверке', icon: 'manage_search' },
-    { label: 'коррекция', status: 'Коррекция', icon: 'build_circle' },
-    { label: 'архив', status: 'Архив', icon: 'archive' },
-    { label: 'одобрено', status: 'Публикация', icon: 'task_alt' },
-    { label: 'опублик.', status: 'Опубликовано', icon: 'published_with_changes' },
-    { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
-    { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
-    { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
-    { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
-  ];
-
-  readonly pageSizeOptions = [5, 10, 15];
-  readonly addBotUrl = this.legacyUrl('/bots/bot_add');
-  readonly botListUrl = this.legacyUrl('/worker/bot_list');
+  readonly sections = WORKER_SECTIONS;
+  readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
+  readonly pageSizeOptions = WORKER_PAGE_SIZE_OPTIONS;
+  readonly addBotUrl = workerLegacyUrl('/bots/bot_add');
+  readonly botListUrl = workerLegacyUrl('/worker/bot_list');
 
   readonly board = signal<WorkerBoard | null>(null);
   readonly activeSection = signal<WorkerSection>('new');
@@ -141,24 +137,16 @@ export class WorkerBoardComponent {
   readonly currentBots = computed(() => this.board()?.bots ?? []);
   readonly currentPage = computed<WorkerPage<OrderCardItem | WorkerReviewItem>>(() => {
     if (this.isReviewSection(this.activeSection())) {
-      return this.board()?.reviews ?? this.emptyReviewPage;
+      return this.board()?.reviews ?? EMPTY_WORKER_REVIEW_PAGE;
     }
 
-    return this.board()?.orders ?? this.emptyOrderPage;
+    return this.board()?.orders ?? EMPTY_WORKER_ORDER_PAGE;
   });
-  readonly title = computed(() => `Специалист - ${this.board()?.title ?? this.sectionLabel(this.activeSection())}`);
+  readonly title = computed(() => `Специалист - ${this.board()?.title ?? workerSectionLabel(this.activeSection())}`);
   readonly metrics = computed(() => this.board()?.metrics ?? []);
   readonly productOptions = computed(() => this.reviewEditDetails()?.products ?? []);
   readonly reviewEditBusy = computed(() => this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading());
-  readonly permissions = computed(() => this.board()?.permissions ?? {
-    canManageOrderStatuses: false,
-    canSeePhoneAndPayment: false,
-    canManageBots: false,
-    canAddBot: false,
-    canSeeMoney: false,
-    canWorkReviews: false,
-    canEditNotes: false
-  });
+  readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
   constructor() {
     this.loadBoard();
   }
@@ -297,7 +285,7 @@ export class WorkerBoardComponent {
         this.mutationKey.set(null);
         this.toastService.success(
           'Аккаунт изменен',
-          this.botChangeMessage(oldBotId, response?.newBotId ?? null)
+          workerBotChangeMessage(oldBotId, response?.newBotId ?? null)
         );
         this.loadBoard();
       },
@@ -536,9 +524,9 @@ export class WorkerBoardComponent {
     this.managerApi.updateOrderReview(review.orderId, review.id, draft).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
-        this.clearReviewFieldDraft(review, 'text');
-        this.clearReviewFieldDraft(review, 'answer');
-        this.clearReviewNoteDraft(review.id);
+        this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, 'text')));
+        this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, 'answer')));
+        this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
         this.reviewEditSaving.set(false);
         this.editReview.set(null);
         this.reviewEditDraft.set(null);
@@ -677,11 +665,7 @@ export class WorkerBoardComponent {
 
     this.savedOrderNoteId.set(null);
     this.editingOrderNoteId.set(null);
-    this.orderNoteDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[order.id];
-      return next;
-    });
+    this.orderNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, order.id));
   }
 
   saveOrderNote(order: OrderCardItem): void {
@@ -695,15 +679,11 @@ export class WorkerBoardComponent {
     this.mutationKey.set(key);
     this.workerApi.updateOrderNote(order.id, value).subscribe({
       next: () => {
-        this.patchOrderNote(order.id, value);
+        this.setBoardPatch(workerPatchOrderNote(this.board(), order.id, value));
         this.mutationKey.set(null);
         this.editingOrderNoteId.set(null);
         this.savedOrderNoteId.set(order.id);
-        this.orderNoteDrafts.update((drafts) => {
-          const next = { ...drafts };
-          delete next[order.id];
-          return next;
-        });
+        this.orderNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, order.id));
         this.toastService.success('Заметка сохранена', order.companyTitle || `Заказ #${order.id}`);
         window.setTimeout(() => {
           if (this.savedOrderNoteId() === order.id) {
@@ -735,11 +715,11 @@ export class WorkerBoardComponent {
   }
 
   startReviewFieldEdit(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (!this.permissions().canWorkReviews || this.isMutating(this.saveReviewFieldMutationKey(review, field))) {
+    if (!this.permissions().canWorkReviews || this.isMutating(workerSaveReviewFieldMutationKey(review, field))) {
       return;
     }
 
-    const key = this.reviewFieldKey(review, field);
+    const key = workerReviewFieldKey(review, field);
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(key);
     this.reviewFieldDrafts.update((drafts) => {
@@ -749,24 +729,24 @@ export class WorkerBoardComponent {
 
       return {
         ...drafts,
-        [key]: this.reviewFieldSourceValue(review, field)
+        [key]: workerReviewFieldSourceValue(review, field)
       };
     });
   }
 
   setReviewFieldDraft(review: WorkerReviewItem, field: ReviewEditableField, value: string): void {
-    const key = this.reviewFieldKey(review, field);
+    const key = workerReviewFieldKey(review, field);
     this.reviewFieldDrafts.update((drafts) => ({ ...drafts, [key]: value }));
   }
 
   cancelReviewFieldEdit(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (this.isMutating(this.saveReviewFieldMutationKey(review, field))) {
+    if (this.isMutating(workerSaveReviewFieldMutationKey(review, field))) {
       return;
     }
 
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(null);
-    this.clearReviewFieldDraft(review, field);
+    this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, field)));
   }
 
   saveReviewField(review: WorkerReviewItem, field: ReviewEditableField): void {
@@ -780,8 +760,8 @@ export class WorkerBoardComponent {
       return;
     }
 
-    const key = this.saveReviewFieldMutationKey(review, field);
-    const fieldKey = this.reviewFieldKey(review, field);
+    const key = workerSaveReviewFieldMutationKey(review, field);
+    const fieldKey = workerReviewFieldKey(review, field);
     const request = field === 'text'
       ? this.workerApi.updateReviewText(review.id, review.orderId, value)
       : this.workerApi.updateReviewAnswer(review.id, review.orderId, value);
@@ -789,7 +769,7 @@ export class WorkerBoardComponent {
     this.mutationKey.set(key);
     request.subscribe({
       next: () => {
-        this.patchReviewField(review.id, field, value);
+        this.setBoardPatch(workerPatchReviewField(this.board(), review.id, field, value));
         this.mutationKey.set(null);
         this.savedReviewFieldKey.set(fieldKey);
         this.toastService.success(field === 'text' ? 'Текст сохранен' : 'Замечание сохранено', `Отзыв #${review.id} обновлен`);
@@ -803,7 +783,7 @@ export class WorkerBoardComponent {
             this.editingReviewFieldKey.set(null);
           }
 
-          this.clearReviewFieldDraft(review, field);
+          this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, fieldKey));
         }, 1000);
       },
       error: (err) => {
@@ -817,25 +797,24 @@ export class WorkerBoardComponent {
   }
 
   reviewFieldValue(review: WorkerReviewItem, field: ReviewEditableField): string {
-    const key = this.reviewFieldKey(review, field);
-    return this.reviewFieldDrafts()[key] ?? this.reviewFieldSourceValue(review, field);
+    const key = workerReviewFieldKey(review, field);
+    return this.reviewFieldDrafts()[key] ?? workerReviewFieldSourceValue(review, field);
   }
 
   isReviewFieldEditing(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.editingReviewFieldKey() === this.reviewFieldKey(review, field);
+    return this.editingReviewFieldKey() === workerReviewFieldKey(review, field);
   }
 
   isReviewFieldChanged(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.reviewFieldValue(review, field) !== this.reviewFieldSourceValue(review, field);
+    return this.reviewFieldValue(review, field) !== workerReviewFieldSourceValue(review, field);
   }
 
   isReviewFieldSaved(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.savedReviewFieldKey() === this.reviewFieldKey(review, field);
+    return this.savedReviewFieldKey() === workerReviewFieldKey(review, field);
   }
 
   shouldShowReviewTextToggle(review: WorkerReviewItem): boolean {
-    const value = this.reviewFieldSourceValue(review, 'text');
-    return value.length > 190 || value.split(/\r?\n/).length > 5;
+    return workerReviewTextNeedsToggle(review);
   }
 
   isReviewTextExpanded(review: WorkerReviewItem): boolean {
@@ -851,23 +830,23 @@ export class WorkerBoardComponent {
   }
 
   hasReviewNote(review: WorkerReviewItem): boolean {
-    return this.hasReviewOwnNote(review) || this.hasReviewOrderNote(review) || this.hasReviewCompanyNote(review);
+    return workerHasReviewNote(review);
   }
 
   hasReviewOwnNote(review: WorkerReviewItem): boolean {
-    return this.hasMeaningfulNote(review.comment);
+    return workerHasReviewOwnNote(review);
   }
 
   hasReviewOrderNote(review: WorkerReviewItem): boolean {
-    return this.hasMeaningfulNote(review.orderComments);
+    return workerHasReviewOrderNote(review);
   }
 
   hasReviewCompanyNote(review: WorkerReviewItem): boolean {
-    return this.hasMeaningfulNote(review.commentCompany);
+    return workerHasReviewCompanyNote(review);
   }
 
   startReviewNoteEdit(review: WorkerReviewItem): void {
-    if (!this.permissions().canWorkReviews || this.isMutating(`save-note-${review.id}`)) {
+    if (!this.permissions().canWorkReviews || this.isMutating(workerReviewNoteMutationKey(review))) {
       return;
     }
 
@@ -887,13 +866,13 @@ export class WorkerBoardComponent {
   }
 
   cancelReviewNoteEdit(review: WorkerReviewItem): void {
-    if (this.isMutating(`save-note-${review.id}`)) {
+    if (this.isMutating(workerReviewNoteMutationKey(review))) {
       return;
     }
 
     this.savedReviewNoteId.set(null);
     this.editingReviewNoteId.set(null);
-    this.clearReviewNoteDraft(review.id);
+    this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
   }
 
   saveReviewNote(review: WorkerReviewItem): void {
@@ -902,12 +881,12 @@ export class WorkerBoardComponent {
     }
 
     const value = this.reviewNoteValue(review);
-    const key = `save-note-${review.id}`;
+    const key = workerReviewNoteMutationKey(review);
     this.mutationKey.set(key);
 
     this.workerApi.updateReviewNote(review.id, review.orderId, value).subscribe({
       next: () => {
-        this.patchReviewNote(review.id, value);
+        this.setBoardPatch(workerPatchReviewNote(this.board(), review.id, value));
         this.mutationKey.set(null);
         this.savedReviewNoteId.set(review.id);
         this.toastService.success('Заметка сохранена', `Отзыв #${review.id} обновлен`);
@@ -921,7 +900,7 @@ export class WorkerBoardComponent {
             this.editingReviewNoteId.set(null);
           }
 
-          this.clearReviewNoteDraft(review.id);
+          this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
         }, 1000);
       },
       error: (err) => {
@@ -948,32 +927,32 @@ export class WorkerBoardComponent {
   }
 
   startSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
-    if (!this.permissions().canEditNotes || this.isMutating(this.sideNoteMutationKey(review, field))) {
+    if (!this.permissions().canEditNotes || this.isMutating(workerSideNoteMutationKey(review, field))) {
       return;
     }
 
-    const key = this.sideNoteKey(review, field);
+    const key = workerSideNoteKey(review, field);
     this.savedSideNoteKey.set(null);
     this.editingSideNoteKey.set(key);
     this.sideNoteDrafts.update((drafts) => ({
       ...drafts,
-      [key]: drafts[key] ?? this.sideNoteSourceValue(review, field)
+      [key]: drafts[key] ?? workerSideNoteSourceValue(review, field)
     }));
   }
 
   setSideNoteDraft(review: WorkerReviewItem, field: SideNoteField, value: string): void {
-    const key = this.sideNoteKey(review, field);
+    const key = workerSideNoteKey(review, field);
     this.sideNoteDrafts.update((drafts) => ({ ...drafts, [key]: value }));
   }
 
   cancelSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
-    if (this.isMutating(this.sideNoteMutationKey(review, field))) {
+    if (this.isMutating(workerSideNoteMutationKey(review, field))) {
       return;
     }
 
     this.savedSideNoteKey.set(null);
     this.editingSideNoteKey.set(null);
-    this.clearSideNoteDraft(review, field);
+    this.sideNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerSideNoteKey(review, field)));
   }
 
   saveSideNote(review: WorkerReviewItem, field: SideNoteField): void {
@@ -982,8 +961,8 @@ export class WorkerBoardComponent {
     }
 
     const value = this.sideNoteValue(review, field);
-    const key = this.sideNoteMutationKey(review, field);
-    const sideKey = this.sideNoteKey(review, field);
+    const key = workerSideNoteMutationKey(review, field);
+    const sideKey = workerSideNoteKey(review, field);
     const request = field === 'order'
       ? this.workerApi.updateOrderNote(review.orderId, value)
       : this.workerApi.updateOrderCompanyNote(review.orderId, value);
@@ -991,7 +970,7 @@ export class WorkerBoardComponent {
     this.mutationKey.set(key);
     request.subscribe({
       next: () => {
-        this.patchReviewSideNote(review, field, value);
+        this.setBoardPatch(workerPatchReviewSideNote(this.board(), review, field, value));
         this.mutationKey.set(null);
         this.savedSideNoteKey.set(sideKey);
         this.toastService.success(field === 'order' ? 'Заметка заказа сохранена' : 'Заметка компании сохранена');
@@ -1005,7 +984,7 @@ export class WorkerBoardComponent {
             this.editingSideNoteKey.set(null);
           }
 
-          this.clearSideNoteDraft(review, field);
+          this.sideNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, sideKey));
         }, 1000);
       },
       error: (err) => {
@@ -1016,37 +995,23 @@ export class WorkerBoardComponent {
   }
 
   sideNoteValue(review: WorkerReviewItem, field: SideNoteField): string {
-    return this.sideNoteDrafts()[this.sideNoteKey(review, field)] ?? this.sideNoteSourceValue(review, field);
+    return this.sideNoteDrafts()[workerSideNoteKey(review, field)] ?? workerSideNoteSourceValue(review, field);
   }
 
   isSideNoteEditing(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.editingSideNoteKey() === this.sideNoteKey(review, field);
+    return this.editingSideNoteKey() === workerSideNoteKey(review, field);
   }
 
   isSideNoteChanged(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.sideNoteValue(review, field) !== this.sideNoteSourceValue(review, field);
+    return this.sideNoteValue(review, field) !== workerSideNoteSourceValue(review, field);
   }
 
   isSideNoteSaved(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.savedSideNoteKey() === this.sideNoteKey(review, field);
+    return this.savedSideNoteKey() === workerSideNoteKey(review, field);
   }
 
   reviewNoteTitle(review: WorkerReviewItem): string {
-    const items: string[] = [];
-
-    if (this.hasReviewOwnNote(review)) {
-      items.push('Есть заметка отзыва');
-    }
-
-    if (this.hasReviewOrderNote(review)) {
-      items.push('Есть заметка заказа');
-    }
-
-    if (this.hasReviewCompanyNote(review)) {
-      items.push('Есть заметка компании');
-    }
-
-    return items.join('. ') || 'Заметка отзыва';
+    return workerReviewNoteTitle(review);
   }
 
   botLabel(review: WorkerReviewItem): string {
@@ -1063,14 +1028,6 @@ export class WorkerBoardComponent {
 
   hasUnavailableBot(review: WorkerReviewItem): boolean {
     return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
-  }
-
-  private botChangeMessage(oldBotId?: number | null, newBotId?: number | null): string {
-    return `Аккаунт изменен с ID ${this.botIdLabel(oldBotId)} на ID ${this.botIdLabel(newBotId)}`;
-  }
-
-  private botIdLabel(botId?: number | null): string {
-    return botId ? String(botId) : 'не назначен';
   }
 
   reviewDate(review: WorkerReviewItem): string {
@@ -1101,7 +1058,7 @@ export class WorkerBoardComponent {
 
   async copyOrderText(order: OrderCardItem, kind: 'check' | 'payment'): Promise<void> {
     if (kind === 'check') {
-      const url = order.orderDetailsId ? this.absoluteAppUrl(`/review/editReviews/${order.orderDetailsId}`) : '';
+      const url = order.orderDetailsId ? workerAbsoluteAppUrl(`/review/editReviews/${order.orderDetailsId}`) : '';
       await this.copyText(
         `${this.board()?.promoTexts?.[4] ?? ''} Ссылка на проверку отзывов: ${url}`.trim(),
         `check-${order.id}`,
@@ -1118,7 +1075,7 @@ export class WorkerBoardComponent {
     );
   }
 
-  async copyReviewValue(review: WorkerReviewItem, kind: 'url' | 'login' | 'password' | 'text' | 'answer' | 'vk'): Promise<void> {
+  async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
     const value = {
       url: review.filialUrl,
       login: review.botLogin,
@@ -1128,7 +1085,7 @@ export class WorkerBoardComponent {
       vk: 'https://vk.com/'
     }[kind] ?? '';
 
-    await this.copyText(value, `${kind}-${review.id}`, `${this.reviewCopyLabel(kind)} скопирован`);
+    await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`);
   }
 
   async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
@@ -1140,13 +1097,11 @@ export class WorkerBoardComponent {
   }
 
   orderNoteText(order: OrderCardItem): string {
-    const value = order.orderComments;
-    return this.hasMeaningfulNote(value) ? value!.trim() : 'нет заметок';
+    return workerOrderNoteText(order);
   }
 
   editableOrderNoteText(order: OrderCardItem): string {
-    const text = this.orderNoteText(order);
-    return this.hasMeaningfulNote(text) ? text : '';
+    return workerEditableOrderNoteText(order);
   }
 
   orderNoteDraft(order: OrderCardItem): string {
@@ -1180,11 +1135,11 @@ export class WorkerBoardComponent {
   }
 
   orderNoteMutationKey(order: OrderCardItem): string {
-    return `save-order-note-${order.id}`;
+    return workerOrderNoteMutationKey(order);
   }
 
   shouldShowExpander(text?: string | null): boolean {
-    return (text ?? '').trim().length > 88;
+    return workerShouldShowExpander(text);
   }
 
   isOrderSection(section = this.activeSection()): boolean {
@@ -1228,23 +1183,23 @@ export class WorkerBoardComponent {
   }
 
   orderDetailsUrl(order: OrderCardItem): string {
-    return this.legacyUrl(`/ordersDetails/${order.companyId}/${order.id}`);
+    return workerLegacyUrl(`/ordersDetails/${order.companyId}/${order.id}`);
   }
 
   orderEditUrl(order: OrderCardItem): string {
-    return this.legacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
+    return workerLegacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
   }
 
   reviewEditUrl(review: WorkerReviewItem): string {
-    return this.legacyUrl(`/review/editReview/${review.sourceReviewId ?? review.id}`);
+    return workerLegacyUrl(`/review/editReview/${review.sourceReviewId ?? review.id}`);
   }
 
   botEditUrl(bot: WorkerBotItem): string {
-    return this.legacyUrl(`/bots/edit/${bot.id}`);
+    return workerLegacyUrl(`/bots/edit/${bot.id}`);
   }
 
   botBrowserUrl(review: WorkerReviewItem): string {
-    return review.botId ? this.legacyUrl(`/bots/${review.botId}/browser`) : 'https://vk.com/';
+    return review.botId ? workerLegacyUrl(`/bots/${review.botId}/browser`) : 'https://vk.com/';
   }
 
   reviewPhotoUrl(review: WorkerReviewItem): string {
@@ -1260,31 +1215,31 @@ export class WorkerBoardComponent {
   }
 
   trackSection(_index: number, section: SectionTab): WorkerSection {
-    return section.key;
+    return trackWorkerSection(_index, section);
   }
 
   trackOrder(_index: number, order: OrderCardItem): number {
-    return order.id;
+    return trackWorkerOrder(_index, order);
   }
 
   trackReview(_index: number, review: WorkerReviewItem): number {
-    return review.id;
+    return trackWorkerReview(_index, review);
   }
 
   trackBot(_index: number, bot: WorkerBotItem): number {
-    return bot.id;
+    return trackWorkerBot(_index, bot);
   }
 
   trackMetric(_index: number, metric: WorkerMetric): string {
-    return metric.section;
+    return trackWorkerMetric(_index, metric);
   }
 
   trackAction(_index: number, action: StatusAction): string {
-    return action.status;
+    return trackWorkerAction(_index, action);
   }
 
   trackOption(_index: number, option: ManagerOption): number {
-    return option.id;
+    return trackWorkerOption(_index, option);
   }
 
   optionLabel(option: ManagerOption): string {
@@ -1322,136 +1277,13 @@ export class WorkerBoardComponent {
   }
 
   hasMeaningfulNote(value?: string | null): boolean {
-    const normalized = (value ?? '').trim().toLowerCase();
-    return Boolean(normalized) && normalized !== 'нет заметок';
+    return workerHasMeaningfulNote(value);
   }
 
-  private patchOrderNote(orderId: number, value: string): void {
-    const board = this.board();
-    if (!board) {
-      return;
+  private setBoardPatch(board: WorkerBoard | null): void {
+    if (board) {
+      this.board.set(board);
     }
-
-    const orders = {
-      ...board.orders,
-      content: board.orders.content.map((order) => {
-        if (order.id !== orderId) {
-          return order;
-        }
-
-        return { ...order, orderComments: value || 'нет заметок' };
-      })
-    };
-
-    this.board.set({ ...board, orders });
-  }
-
-  private reviewFieldKey(review: WorkerReviewItem, field: ReviewEditableField): string {
-    return `${review.id}-${field}`;
-  }
-
-  private saveReviewFieldMutationKey(review: WorkerReviewItem, field: ReviewEditableField): string {
-    return `save-${field}-${review.id}`;
-  }
-
-  private reviewFieldSourceValue(review: WorkerReviewItem, field: ReviewEditableField): string {
-    return field === 'text' ? review.text ?? '' : review.answer ?? '';
-  }
-
-  private clearReviewFieldDraft(review: WorkerReviewItem, field: ReviewEditableField): void {
-    const key = this.reviewFieldKey(review, field);
-    this.reviewFieldDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[key];
-      return next;
-    });
-  }
-
-  private clearReviewNoteDraft(reviewId: number): void {
-    this.reviewNoteDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[reviewId];
-      return next;
-    });
-  }
-
-  private patchReviewField(reviewId: number, field: ReviewEditableField, value: string): void {
-    const board = this.board();
-    if (!board) {
-      return;
-    }
-
-    const reviews = {
-      ...board.reviews,
-      content: board.reviews.content.map((review) => review.id === reviewId
-        ? { ...review, [field]: value }
-        : review
-      )
-    };
-
-    this.board.set({ ...board, reviews });
-  }
-
-  private patchReviewNote(reviewId: number, value: string): void {
-    const board = this.board();
-    if (!board) {
-      return;
-    }
-
-    const reviews = {
-      ...board.reviews,
-      content: board.reviews.content.map((review) => review.id === reviewId
-        ? { ...review, comment: value }
-        : review
-      )
-    };
-
-    this.board.set({ ...board, reviews });
-  }
-
-  private sideNoteKey(review: WorkerReviewItem, field: SideNoteField): string {
-    return `${field}-${review.id}`;
-  }
-
-  private sideNoteMutationKey(review: WorkerReviewItem, field: SideNoteField): string {
-    return `save-side-${field}-${review.id}`;
-  }
-
-  private sideNoteSourceValue(review: WorkerReviewItem, field: SideNoteField): string {
-    return field === 'order' ? review.orderComments ?? '' : review.commentCompany ?? '';
-  }
-
-  private clearSideNoteDraft(review: WorkerReviewItem, field: SideNoteField): void {
-    const key = this.sideNoteKey(review, field);
-    this.sideNoteDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[key];
-      return next;
-    });
-  }
-
-  private patchReviewSideNote(review: WorkerReviewItem, field: SideNoteField, value: string): void {
-    const board = this.board();
-    if (!board) {
-      return;
-    }
-
-    const reviews = {
-      ...board.reviews,
-      content: board.reviews.content.map((item) => {
-        if (field === 'order' && item.orderId === review.orderId) {
-          return { ...item, orderComments: value };
-        }
-
-        if (field === 'company' && item.companyId === review.companyId) {
-          return { ...item, commentCompany: value };
-        }
-
-        return item;
-      })
-    };
-
-    this.board.set({ ...board, reviews });
   }
 
   private markReviewPublished(review: WorkerReviewItem): void {
@@ -1509,21 +1341,6 @@ export class WorkerBoardComponent {
     });
   }
 
-  private sectionLabel(section: WorkerSection): string {
-    return this.sections.find((item) => item.key === section)?.label ?? 'Новые';
-  }
-
-  private reviewCopyLabel(kind: 'url' | 'login' | 'password' | 'text' | 'answer' | 'vk'): string {
-    return {
-      url: 'Ссылка',
-      login: 'Логин',
-      password: 'Пароль',
-      text: 'Текст',
-      answer: 'Ответ',
-      vk: 'VK'
-    }[kind];
-  }
-
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
     const value = text.trim();
 
@@ -1545,31 +1362,7 @@ export class WorkerBoardComponent {
     }
   }
 
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
-  }
-
-  private absoluteAppUrl(path: string): string {
-    return new URL(path, window.location.origin).toString();
-  }
-
   private errorMessage(err: unknown, fallback: string): string {
-    if (err && typeof err === 'object' && 'error' in err) {
-      const body = (err as { error?: { message?: string } | string }).error;
-
-      if (typeof body === 'string' && body.trim()) {
-        return body;
-      }
-
-      if (body && typeof body === 'object' && 'message' in body && body.message) {
-        return body.message;
-      }
-    }
-
-    if (err && typeof err === 'object' && 'message' in err) {
-      return String((err as { message?: string }).message ?? fallback);
-    }
-
-    return fallback;
+    return workerErrorMessage(err, fallback);
   }
 }

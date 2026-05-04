@@ -2,7 +2,6 @@ import { DecimalPipe } from '@angular/common';
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { appEnvironment } from '../../core/app-environment';
 import {
   CompanyOrderCreatePayload,
   CompanyOrderCreateRequest,
@@ -17,121 +16,113 @@ import {
   ManagerSection,
   OrderCardItem,
   OrderEditPayload,
-  OrderProductOption,
   OrderUpdateRequest
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
-
-type SectionTab = {
-  key: ManagerSection;
-  label: string;
-  icon: string;
-};
-
-type PromoItem = {
-  label: string;
-  text: string;
-};
-
-type StatusAction = {
-  label: string;
-  status: string;
-  icon: string;
-};
-
-type MobileNavLink = {
-  label: string;
-  routerLink?: string;
-  href?: string;
-};
-
-type SelectedCompany = {
-  id: number;
-  title: string;
-};
-
-type ManagerHistoryView = {
-  activeSection: ManagerSection;
-  companyStatus: string;
-  orderStatus: string;
-  keyword: string;
-  pageNumber: number;
-  pageSize: number;
-  sortDirection: 'desc' | 'asc';
-  selectedCompany: SelectedCompany | null;
-};
+import {
+  DEFAULT_MANAGER_COMPANY_STATUSES,
+  DEFAULT_MANAGER_ORDER_STATUSES,
+  EMPTY_MANAGER_COMPANY_PAGE,
+  EMPTY_MANAGER_ORDER_PAGE,
+  MANAGER_COMPANY_ACTIONS,
+  MANAGER_HISTORY_STATE_KEY,
+  MANAGER_MOBILE_NAV_LINKS,
+  MANAGER_ORDER_ACTIONS,
+  MANAGER_PAGE_SIZE_OPTIONS,
+  MANAGER_SECTIONS,
+  ManagerHistoryView,
+  MobileNavLink,
+  PromoItem,
+  SectionTab,
+  SelectedCompany,
+  StatusAction,
+  managerAbsoluteAppUrl,
+  managerBoardTitle,
+  managerCompanyChatUrl,
+  managerCompanyFilialUrl,
+  managerCompanyOrderUrl,
+  managerErrorMessage,
+  managerFilialEditUrl,
+  managerHasMeaningfulNote,
+  managerLayoutTitle,
+  managerLegacyUrl,
+  managerOptionLabel,
+  managerOrderActions,
+  managerOrderChatUrl,
+  managerOrderDetailsUrl,
+  managerOrderInfoUrl,
+  managerOrderReviewUrl,
+  managerPayableOrderSum,
+  managerProgress,
+  managerPromoItems,
+  managerReviewCheckPath,
+  managerShowBadReviewSummary,
+  managerStatusOptionLabel,
+  trackManagerAction,
+  trackManagerCompany,
+  trackManagerMetric,
+  trackManagerOption,
+  trackManagerOrder,
+  trackManagerProduct,
+  trackManagerSection,
+  trackManagerStatus
+} from './manager-board.config';
+import {
+  managerCompanyEditDraft,
+  managerCompanyFilialDeletedLabel,
+  managerCompanyFilialDeleteConfirm,
+  managerCompanyFilialDeleteKey,
+  managerCompanyWorkerDeleteConfirm,
+  managerCompanyWorkerDeleteKey
+} from './manager-board.company.helpers';
+import {
+  managerReadHistoryView,
+  managerReadQueryView,
+  managerWithHistoryState
+} from './manager-board.history';
+import {
+  managerCreateOrderDraft,
+  managerCreateOrderTotal,
+  managerCreateOrderValidationError,
+  managerOrderEditDraft,
+  managerSelectedCreateOrderProduct
+} from './manager-board.order.helpers';
+import type { ManagerCreateOrderDraftChange } from './manager-order-create-modal.component';
+import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.component';
 
 @Component({
   selector: 'app-manager-board',
-  imports: [AdminLayoutComponent, CompanyNoteTriggerComponent, DecimalPipe, FormsModule, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    CompanyNoteTriggerComponent,
+    DecimalPipe,
+    FormsModule,
+    ManagerOrderCreateModalComponent,
+    RouterLink
+  ],
   templateUrl: './manager-board.component.html',
   styleUrl: './manager-board.component.scss'
 })
 export class ManagerBoardComponent {
-  private readonly historyStateKey = 'otzivManagerView';
-  private readonly preferredCreateOrderProduct = 'отзыв2гис+';
+  private readonly historyStateKey = MANAGER_HISTORY_STATE_KEY;
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly emptyCompanyPage: ManagerPage<CompanyCardItem> = {
-    content: [],
-    number: 0,
-    size: 10,
-    totalElements: 0,
-    totalPages: 0,
-    first: true,
-    last: true
-  };
-  private readonly emptyOrderPage: ManagerPage<OrderCardItem> = {
-    content: [],
-    number: 0,
-    size: 10,
-    totalElements: 0,
-    totalPages: 0,
-    first: true,
-    last: true
-  };
+  private readonly emptyCompanyPage = EMPTY_MANAGER_COMPANY_PAGE;
+  private readonly emptyOrderPage = EMPTY_MANAGER_ORDER_PAGE;
 
-  readonly sections: SectionTab[] = [
-    { key: 'companies', label: 'Компании', icon: 'business' },
-    { key: 'orders', label: 'Заказы', icon: 'inventory_2' }
-  ];
-
-  readonly companyActions: StatusAction[] = [
-    { label: 'предложил', status: 'Ожидание', icon: 'outgoing_mail' },
-    { label: 'разослал', status: 'К рассылке', icon: 'campaign' },
-    { label: 'на стоп', status: 'На стопе', icon: 'pause_circle' },
-    { label: 'бан', status: 'Бан', icon: 'block' }
-  ];
-  readonly allOrderActions: StatusAction[] = [
-    { label: 'на проверку', status: 'На проверке', icon: 'manage_search' },
-    { label: 'коррекция', status: 'Коррекция', icon: 'build_circle' },
-    { label: 'одобрено', status: 'Публикация', icon: 'task_alt' },
-    { label: 'архив', status: 'Архив', icon: 'archive' },
-    { label: 'опублик.', status: 'Опубликовано', icon: 'published_with_changes' },
-    { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
-    { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
-    { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
-    { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
-  ];
-
-  readonly pageSizeOptions = [5, 10, 15];
-  readonly legacyLeadsUrl = this.legacyUrl('/lead');
-  readonly legacyNewCompanyUrl = this.legacyUrl('/companies/new_company');
-  readonly legacyCategoriesUrl = this.legacyUrl('/categories');
+  readonly sections = MANAGER_SECTIONS;
+  readonly companyActions = MANAGER_COMPANY_ACTIONS;
+  readonly allOrderActions = MANAGER_ORDER_ACTIONS;
+  readonly pageSizeOptions = MANAGER_PAGE_SIZE_OPTIONS;
+  readonly legacyLeadsUrl = managerLegacyUrl('/lead');
+  readonly legacyNewCompanyUrl = managerLegacyUrl('/companies/new_company');
+  readonly legacyCategoriesUrl = managerLegacyUrl('/categories');
   readonly legacyWorkersUrl = '/worker';
-  readonly mobileNavLinks: MobileNavLink[] = [
-    { label: 'Главная', routerLink: '/' },
-    { label: 'Лиды', routerLink: '/leads' },
-    { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Маркетолог', href: this.legacyUrl('/admin/analyse') },
-    { label: 'Менеджер', routerLink: '/manager' },
-    { label: 'Специалист', href: '/worker' },
-    { label: 'Личный кабинет', routerLink: '/' }
-  ];
+  readonly mobileNavLinks: MobileNavLink[] = MANAGER_MOBILE_NAV_LINKS;
 
   readonly board = signal<ManagerBoard | null>(null);
   readonly activeSection = signal<ManagerSection>('companies');
@@ -168,14 +159,10 @@ export class ManagerBoardComponent {
   readonly currentCompanies = computed(() => this.board()?.companies.content ?? []);
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
   readonly selectedCreateOrderProduct = computed(() => {
-    const payload = this.createOrderPayload();
-    const draft = this.createOrderDraft();
-    return payload?.products.find((product) => product.id === draft?.productId) ?? null;
+    return managerSelectedCreateOrderProduct(this.createOrderPayload(), this.createOrderDraft());
   });
   readonly createOrderTotal = computed(() => {
-    const product = this.selectedCreateOrderProduct();
-    const amount = this.createOrderDraft()?.amount ?? 0;
-    return (product?.price ?? 0) * amount;
+    return managerCreateOrderTotal(this.createOrderPayload(), this.createOrderDraft());
   });
   readonly currentPage = computed<ManagerPage<CompanyCardItem | OrderCardItem>>(() => {
     if (this.activeSection() === 'companies') {
@@ -188,23 +175,10 @@ export class ManagerBoardComponent {
     return this.activeSection() === 'companies' ? this.companyStatus() : this.orderStatus();
   });
   readonly companyStatusOptions = computed(() => {
-    return this.board()?.companyStatuses ?? ['Все', 'Новая', 'В работе', 'Новый заказ', 'К рассылке', 'Ожидание', 'На стопе', 'Бан'];
+    return this.board()?.companyStatuses ?? DEFAULT_MANAGER_COMPANY_STATUSES;
   });
   readonly orderStatusOptions = computed(() => {
-    return this.board()?.orderStatuses ?? [
-      'Все',
-      'Новый',
-      'В проверку',
-      'На проверке',
-      'Коррекция',
-      'Публикация',
-      'Опубликовано',
-      'Выставлен счет',
-      'Напоминание',
-      'Не оплачено',
-      'Архив',
-      'Оплачено'
-    ];
+    return this.board()?.orderStatuses ?? DEFAULT_MANAGER_ORDER_STATUSES;
   });
   readonly statusOptions = computed(() => {
     return this.activeSection() === 'companies' ? this.companyStatusOptions() : this.orderStatusOptions();
@@ -214,48 +188,21 @@ export class ManagerBoardComponent {
     : 'Сначала недавно измененные'
   );
   readonly title = computed(() => {
-    const selectedCompany = this.selectedCompany();
-    if (this.activeSection() === 'orders' && selectedCompany) {
-      return `Заказы - ${selectedCompany.title}`;
-    }
-
-    const section = this.activeSection() === 'companies' ? 'Компании' : 'Заказы';
-    const status = this.activeStatus();
-    return status === 'Все' ? section : status;
+    return managerBoardTitle(this.activeSection(), this.activeStatus(), this.selectedCompany());
   });
   readonly layoutTitle = computed(() => {
-    const selectedCompany = this.selectedCompany();
-    if (this.activeSection() === 'orders' && selectedCompany) {
-      return `Заказы - ${selectedCompany.title}`;
-    }
-
-    const section = this.activeSection() === 'companies' ? 'Компании' : 'Заказы';
-    return `${section} - ${this.activeStatus()}`;
+    return managerLayoutTitle(this.activeSection(), this.activeStatus(), this.selectedCompany());
   });
   readonly promoItems = computed<PromoItem[]>(() => {
-    const texts = this.board()?.promoTexts ?? [];
-
-    if (this.activeSection() === 'orders') {
-      return [
-        { label: 'пояснение', text: texts[10] ?? '' },
-        { label: 'напоминание', text: texts[5] ?? '' },
-        { label: 'угроза', text: texts[6] ?? '' }
-      ];
-    }
-
-    return [
-      { label: 'предложение', text: texts[0] ?? '' },
-      { label: 'пояснение', text: texts[10] ?? '' },
-      { label: 'рассылка', text: texts[9] ?? '' }
-    ];
+    return managerPromoItems(this.activeSection(), this.board()?.promoTexts ?? []);
   });
   readonly metrics = computed(() => {
     return (this.board()?.metrics ?? []).filter((metric) => metric.section === this.activeSection());
   });
 
   constructor() {
-    const queryView = this.readQueryView();
-    const restoredView = this.readHistoryView(window.history.state);
+    const queryView = managerReadQueryView(this.route.snapshot.queryParamMap);
+    const restoredView = managerReadHistoryView(window.history.state, this.historyStateKey);
     if (queryView) {
       this.applyHistoryView(queryView);
       this.replaceCurrentHistoryState();
@@ -270,7 +217,7 @@ export class ManagerBoardComponent {
 
   @HostListener('window:popstate', ['$event'])
   restoreHistoryState(event: PopStateEvent): void {
-    const view = this.readHistoryView(event.state);
+    const view = managerReadHistoryView(event.state, this.historyStateKey);
 
     if (!view) {
       return;
@@ -388,7 +335,7 @@ export class ManagerBoardComponent {
 
   statusOptionLabel(section: ManagerSection, status: string): string {
     const count = this.metricValue(section, status);
-    return count === null ? status : `${status}: ${count}`;
+    return managerStatusOptionLabel(status, count);
   }
 
   search(): void {
@@ -451,7 +398,7 @@ export class ManagerBoardComponent {
   async copyOrderText(order: OrderCardItem, kind: 'review' | 'payment'): Promise<void> {
     if (kind === 'review') {
       const url = order.orderDetailsId
-        ? this.absoluteAppUrl(this.reviewCheckPath(order.orderDetailsId))
+        ? managerAbsoluteAppUrl(managerReviewCheckPath(order.orderDetailsId))
         : '';
       await this.copyText(
         `Ссылка на проверку отзывов: ${url}`,
@@ -470,11 +417,11 @@ export class ManagerBoardComponent {
   }
 
   payableOrderSum(order: OrderCardItem): number {
-    return order.totalSumWithBadReviews ?? order.sum ?? 0;
+    return managerPayableOrderSum(order);
   }
 
   showBadReviewSummary(order: OrderCardItem): boolean {
-    return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
+    return managerShowBadReviewSummary(order);
   }
 
   openCompanyOrders(company: CompanyCardItem): void {
@@ -580,12 +527,12 @@ export class ManagerBoardComponent {
       return;
     }
 
-    const confirmed = window.confirm(`Убрать специалиста "${worker.label}" из компании?`);
+    const confirmed = window.confirm(managerCompanyWorkerDeleteConfirm(worker));
     if (!confirmed) {
       return;
     }
 
-    const key = `worker-${worker.id}`;
+    const key = managerCompanyWorkerDeleteKey(worker);
     this.editDeleteKey.set(key);
     this.editError.set(null);
 
@@ -612,12 +559,12 @@ export class ManagerBoardComponent {
       return;
     }
 
-    const confirmed = window.confirm(`Удалить филиал "${title || filialId}"?`);
+    const confirmed = window.confirm(managerCompanyFilialDeleteConfirm(filialId, title));
     if (!confirmed) {
       return;
     }
 
-    const key = `filial-${filialId}`;
+    const key = managerCompanyFilialDeleteKey(filialId);
     this.editDeleteKey.set(key);
     this.editError.set(null);
 
@@ -625,7 +572,7 @@ export class ManagerBoardComponent {
       next: (payload) => {
         this.editDeleteKey.set(null);
         this.applyCompanyEditPayload(payload);
-        this.toastService.success('Филиал удален', title || `#${filialId}`);
+        this.toastService.success('Филиал удален', managerCompanyFilialDeletedLabel(filialId, title));
         this.loadBoard();
       },
       error: (err) => {
@@ -668,8 +615,8 @@ export class ManagerBoardComponent {
     this.createOrderError.set(null);
   }
 
-  setCreateOrderField<K extends keyof CompanyOrderCreateRequest>(field: K, value: CompanyOrderCreateRequest[K]): void {
-    this.createOrderDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  handleCreateOrderDraftChange(change: ManagerCreateOrderDraftChange): void {
+    this.createOrderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
   }
 
   createCompanyOrder(): void {
@@ -680,8 +627,9 @@ export class ManagerBoardComponent {
       return;
     }
 
-    if (!draft.productId || !draft.amount || !draft.workerId || !draft.filialId) {
-      this.createOrderError.set('Выберите продукт, количество, специалиста и филиал');
+    const validationError = managerCreateOrderValidationError(draft);
+    if (validationError) {
+      this.createOrderError.set(validationError);
       return;
     }
 
@@ -866,47 +814,7 @@ export class ManagerBoardComponent {
   }
 
   orderActions(order: OrderCardItem): StatusAction[] {
-    if (this.selectedCompany()) {
-      return this.allOrderActions;
-    }
-
-    const status = order.status;
-    const actions: StatusAction[] = [];
-
-    if (status === 'В проверку' || status === 'Архив') {
-      actions.push({ label: 'на проверку', status: 'На проверке', icon: 'manage_search' });
-    }
-
-    if (status === 'На проверке') {
-      actions.push({ label: 'коррекция', status: 'Коррекция', icon: 'build_circle' });
-      actions.push({ label: 'архив', status: 'Архив', icon: 'archive' });
-    }
-
-    if (status === 'На проверке' || status === 'Коррекция' || status === 'Архив') {
-      actions.push({ label: 'одобрено', status: 'Публикация', icon: 'task_alt' });
-    }
-
-    if (status === 'Публикация') {
-      actions.push({ label: 'опублик.', status: 'Опубликовано', icon: 'published_with_changes' });
-    }
-
-    if (status === 'Опубликовано') {
-      actions.push({ label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' });
-    }
-
-    if (status === 'Выставлен счет') {
-      actions.push({ label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' });
-    }
-
-    if (status === 'Выставлен счет' || status === 'Напоминание') {
-      actions.push({ label: 'не опл.', status: 'Не оплачено', icon: 'money_off' });
-    }
-
-    if (status === 'Выставлен счет' || status === 'Напоминание' || status === 'Не оплачено') {
-      actions.push({ label: 'оплатили', status: 'Оплачено', icon: 'payments' });
-    }
-
-    return actions;
+    return managerOrderActions(order, Boolean(this.selectedCompany()));
   }
 
   isMutating(key: string): boolean {
@@ -914,79 +822,75 @@ export class ManagerBoardComponent {
   }
 
   companyChatUrl(company: CompanyCardItem): string {
-    return company.urlChat || `tel:${company.telephone ?? ''}`;
+    return managerCompanyChatUrl(company);
   }
 
   orderChatUrl(order: OrderCardItem): string {
-    return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+    return managerOrderChatUrl(order);
   }
 
   companyFilialUrl(company: CompanyCardItem): string {
-    return company.urlFilial || this.legacyUrl(`/companies/editCompany/${company.id}`);
+    return managerCompanyFilialUrl(company);
   }
 
   companyOrderUrl(company: CompanyCardItem): string {
-    return this.legacyUrl(`/ordersCompany/${company.id}`);
+    return managerCompanyOrderUrl(company);
   }
 
   filialEditUrl(filialId: number): string {
-    return this.legacyUrl(`/filial/edit/${filialId}`);
+    return managerFilialEditUrl(filialId);
   }
 
   orderDetailsUrl(order: OrderCardItem): string {
-    return this.legacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
+    return managerOrderDetailsUrl(order);
   }
 
   orderInfoUrl(order: OrderCardItem): string {
-    return this.legacyUrl(`/ordersDetails/${order.companyId}/${order.id}`);
+    return managerOrderInfoUrl(order);
   }
 
   orderReviewUrl(order: OrderCardItem): string {
-    return order.orderDetailsId ? this.reviewCheckPath(order.orderDetailsId) : '';
+    return managerOrderReviewUrl(order);
   }
 
   progress(order: OrderCardItem): number {
-    if (!order.amount || !order.counter) {
-      return 0;
-    }
-
-    return Math.max(0, Math.min(100, Math.round((order.counter / order.amount) * 100)));
+    return managerProgress(order);
   }
 
   optionLabel(option: ManagerOption): string {
-    return option.label || `ID ${option.id}`;
+    return managerOptionLabel(option);
   }
 
   trackSection(_index: number, section: SectionTab): ManagerSection {
-    return section.key;
+    return trackManagerSection(_index, section);
   }
 
   trackStatus(_index: number, status: string): string {
-    return status;
+    return trackManagerStatus(_index, status);
   }
 
   trackCompany(_index: number, company: CompanyCardItem): number {
-    return company.id;
+    return trackManagerCompany(_index, company);
   }
 
   trackOrder(_index: number, order: OrderCardItem): number {
-    return order.id;
+    return trackManagerOrder(_index, order);
   }
 
   trackMetric(_index: number, metric: ManagerMetric): string {
-    return `${metric.section}-${metric.status}`;
+    return trackManagerMetric(_index, metric);
   }
 
   trackAction(_index: number, action: StatusAction): string {
-    return action.status;
+    return trackManagerAction(_index, action);
   }
 
   trackOption(_index: number, option: ManagerOption): number {
-    return option.id;
+    return trackManagerOption(_index, option);
   }
 
   trackProduct(_index: number, product: { id: number }): number {
-    return product.id;
+    return trackManagerProduct(_index, product);
   }
 
   private metricValue(section: ManagerSection, status: string): number | null {
@@ -995,8 +899,7 @@ export class ManagerBoardComponent {
   }
 
   hasMeaningfulNote(value?: string | null): boolean {
-    const normalized = (value ?? '').trim().toLocaleLowerCase('ru-RU');
-    return Boolean(normalized) && normalized !== 'нет заметок';
+    return managerHasMeaningfulNote(value);
   }
 
   private captureHistoryView(): ManagerHistoryView {
@@ -1025,107 +928,13 @@ export class ManagerBoardComponent {
   }
 
   private replaceCurrentHistoryState(): void {
-    const state = this.withManagerHistoryState(this.captureHistoryView());
+    const state = managerWithHistoryState(window.history.state, this.captureHistoryView(), this.historyStateKey);
     window.history.replaceState(state, document.title, window.location.href);
   }
 
   private pushCurrentHistoryState(): void {
-    const state = this.withManagerHistoryState(this.captureHistoryView());
+    const state = managerWithHistoryState(window.history.state, this.captureHistoryView(), this.historyStateKey);
     window.history.pushState(state, document.title, window.location.href);
-  }
-
-  private withManagerHistoryState(view: ManagerHistoryView): Record<string, unknown> {
-    const existingState = window.history.state;
-    const baseState = existingState && typeof existingState === 'object' ? existingState : {};
-
-    return {
-      ...baseState,
-      [this.historyStateKey]: view
-    };
-  }
-
-  private readHistoryView(state: unknown): ManagerHistoryView | null {
-    if (!state || typeof state !== 'object' || !(this.historyStateKey in state)) {
-      return null;
-    }
-
-    const view = (state as Record<string, unknown>)[this.historyStateKey];
-    if (!view || typeof view !== 'object') {
-      return null;
-    }
-
-    const raw = view as Partial<ManagerHistoryView>;
-    const activeSection: ManagerSection = raw.activeSection === 'orders' ? 'orders' : 'companies';
-    const selectedCompany = this.normalizeSelectedCompany(raw.selectedCompany);
-
-    return {
-      activeSection,
-      companyStatus: typeof raw.companyStatus === 'string' ? raw.companyStatus : 'Все',
-      orderStatus: typeof raw.orderStatus === 'string' ? raw.orderStatus : 'Все',
-      keyword: typeof raw.keyword === 'string' ? raw.keyword : '',
-      pageNumber: typeof raw.pageNumber === 'number' ? Math.max(raw.pageNumber, 0) : 0,
-      pageSize: typeof raw.pageSize === 'number' ? raw.pageSize : 10,
-      sortDirection: raw.sortDirection === 'asc' ? 'asc' : 'desc',
-      selectedCompany: activeSection === 'orders' ? selectedCompany : null
-    };
-  }
-
-  private readQueryView(): ManagerHistoryView | null {
-    const params = this.route.snapshot.queryParamMap;
-    const section = params.get('section');
-    if (section !== 'orders' && section !== 'companies') {
-      return null;
-    }
-
-    if (section === 'companies') {
-      return {
-        activeSection: 'companies',
-        companyStatus: params.get('status')?.trim() || 'Все',
-        orderStatus: 'Все',
-        keyword: params.get('keyword')?.trim() || '',
-        pageNumber: Math.max(Number(params.get('pageNumber')) || 0, 0),
-        pageSize: Number(params.get('pageSize')) || 10,
-        sortDirection: params.get('sortDirection') === 'asc' ? 'asc' : 'desc',
-        selectedCompany: null
-      };
-    }
-
-    const companyId = Number(params.get('companyId'));
-    const selectedCompany = Number.isFinite(companyId) && companyId > 0
-      ? {
-          id: companyId,
-          title: params.get('companyTitle')?.trim() || `Компания #${companyId}`
-        }
-      : null;
-
-    return {
-      activeSection: 'orders',
-      companyStatus: 'Все',
-      orderStatus: params.get('status')?.trim() || 'Все',
-      keyword: params.get('keyword')?.trim() || '',
-      pageNumber: Math.max(Number(params.get('pageNumber')) || 0, 0),
-      pageSize: Number(params.get('pageSize')) || 10,
-      sortDirection: params.get('sortDirection') === 'asc' ? 'asc' : 'desc',
-      selectedCompany
-    };
-  }
-
-  private normalizeSelectedCompany(value: unknown): SelectedCompany | null {
-    if (!value || typeof value !== 'object') {
-      return null;
-    }
-
-    const selected = value as Partial<SelectedCompany>;
-    if (typeof selected.id !== 'number') {
-      return null;
-    }
-
-    return {
-      id: selected.id,
-      title: typeof selected.title === 'string' && selected.title.trim()
-        ? selected.title
-        : `Компания #${selected.id}`
-    };
   }
 
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
@@ -1149,79 +958,19 @@ export class ManagerBoardComponent {
     }
   }
 
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
-  }
-
-  private reviewCheckPath(orderDetailsId: string): string {
-    return `/review/editReviews/${orderDetailsId}`;
-  }
-
-  private absoluteAppUrl(path: string): string {
-    return new URL(path, window.location.origin).toString();
-  }
-
   private applyCompanyEditPayload(payload: CompanyEditPayload): void {
     this.editCompany.set(payload);
-    this.editDraft.set({
-      title: payload.title,
-      urlChat: payload.urlChat,
-      telephone: payload.telephone,
-      city: payload.city,
-      email: payload.email,
-      categoryId: payload.category?.id ?? null,
-      subCategoryId: payload.subCategory?.id ?? null,
-      statusId: payload.status?.id ?? null,
-      managerId: payload.manager?.id ?? null,
-      commentsCompany: payload.commentsCompany,
-      active: payload.active,
-      newWorkerId: null,
-      newFilialCityId: null,
-      newFilialTitle: '',
-      newFilialUrl: ''
-    });
+    this.editDraft.set(managerCompanyEditDraft(payload));
   }
 
   private applyOrderEditPayload(payload: OrderEditPayload): void {
     this.editOrder.set(payload);
-    this.orderDraft.set({
-      filialId: payload.filial?.id ?? null,
-      workerId: payload.worker?.id ?? null,
-      managerId: payload.manager?.id ?? null,
-      counter: payload.counter ?? 0,
-      orderComments: payload.orderComments,
-      commentsCompany: payload.commentsCompany,
-      complete: payload.complete
-    });
+    this.orderDraft.set(managerOrderEditDraft(payload));
   }
 
   private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
-    const defaultProductId = this.preferredOrderProduct(payload.products)?.id
-      ?? payload.defaultProductId
-      ?? payload.products[0]?.id
-      ?? null;
-    const defaultAmount = payload.amounts.includes(5)
-      ? 5
-      : payload.defaultAmount ?? payload.amounts[0] ?? 5;
-
     this.createOrderPayload.set(payload);
-    this.createOrderDraft.set({
-      productId: defaultProductId,
-      amount: defaultAmount,
-      workerId: payload.defaultWorkerId ?? payload.workers[0]?.id ?? null,
-      filialId: payload.defaultFilialId ?? payload.filials[0]?.id ?? null
-    });
-  }
-
-  private preferredOrderProduct(products: OrderProductOption[]): OrderProductOption | undefined {
-    return products.find((product) => this.normalizeProductLabel(product.label) === this.preferredCreateOrderProduct);
-  }
-
-  private normalizeProductLabel(label: string): string {
-    return label
-      .toLocaleLowerCase('ru-RU')
-      .replace(/ё/g, 'е')
-      .replace(/\s+/g, '');
+    this.createOrderDraft.set(managerCreateOrderDraft(payload));
   }
 
   private openCreatedCompanyOrders(companyId: number, companyTitle: string): void {
@@ -1240,22 +989,6 @@ export class ManagerBoardComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (err && typeof err === 'object' && 'error' in err) {
-      const body = (err as { error?: { message?: string } | string }).error;
-
-      if (typeof body === 'string' && body.trim()) {
-        return body;
-      }
-
-      if (body && typeof body === 'object' && 'message' in body && body.message) {
-        return body.message;
-      }
-    }
-
-    if (err && typeof err === 'object' && 'message' in err) {
-      return String((err as { message?: string }).message ?? fallback);
-    }
-
-    return fallback;
+    return managerErrorMessage(err, fallback);
   }
 }

@@ -5,6 +5,7 @@ import { AuthService } from '../../core/auth.service';
 import { CabinetApi, CabinetProfile } from '../../core/cabinet.api';
 import { CurrentUser, CurrentUserApi } from '../../core/current-user.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { CabinetNavigationComponent } from '../../shared/cabinet-navigation.component';
 import { SystemHealth, SystemHealthApi } from '../../core/system-health.api';
 import { appEnvironment } from '../../core/app-environment';
 import { ToastService } from '../../shared/toast.service';
@@ -84,7 +85,7 @@ const LINE_CHART_INTERVALS = 6;
 
 @Component({
   selector: 'app-home',
-  imports: [AdminLayoutComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, CabinetNavigationComponent, FormsModule, RouterLink],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
@@ -130,32 +131,11 @@ export class HomeComponent {
       routerLink: '/manager'
     },
     {
-      label: 'Моя команда',
-      description: 'Сотрудники и показатели',
-      icon: 'badge',
-      roles: ['ADMIN', 'OWNER', 'MANAGER'],
-      routerLink: '/admin/team'
-    },
-    {
       label: 'Специалист',
       description: 'Аккаунты, публикации и задачи',
       icon: 'engineering',
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'],
       routerLink: '/worker'
-    },
-    {
-      label: 'Рейтинг',
-      description: 'Рабочие счетчики команды',
-      icon: 'leaderboard',
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'],
-      routerLink: '/admin/score'
-    },
-    {
-      label: 'Аналитика',
-      description: 'Оборот, ЗП и графики',
-      icon: 'analytics',
-      roles: ['ADMIN', 'OWNER'],
-      routerLink: '/admin/analyse'
     },
     {
       label: 'Grafana',

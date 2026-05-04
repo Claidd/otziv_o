@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
 import { CabinetApi } from '../core/cabinet.api';
+import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -46,18 +47,16 @@ export class AdminLayoutComponent {
     { label: 'Маркетолог', icon: 'campaign', active: 'marketolog', href: `${appEnvironment.legacyBaseUrl}/admin/analyse`, roles: ['ADMIN', 'OWNER', 'MARKETOLOG'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Личный кабинет', icon: 'dashboard', active: 'dashboard', routerLink: '/', roles: [] }
+    CABINET_HOME_LINK
   ];
 
   readonly sidebarLinks: ShellLink[] = [
-    { label: 'Личный кабинет', icon: 'dashboard', active: 'dashboard', routerLink: '/', roles: [] },
+    CABINET_HOME_LINK,
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
     { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Моя команда', icon: 'badge', active: 'team', routerLink: '/admin/team', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Рейтинг', icon: 'leaderboard', active: 'score', routerLink: '/admin/score', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'] },
-    { label: 'Аналитика', icon: 'analytics', active: 'analytics', routerLink: '/admin/analyse', roles: ['ADMIN', 'OWNER'] },
+    ...CABINET_SECTION_LINKS,
     { label: 'Города', icon: 'location_city', active: 'city-stats', routerLink: '/admin/cities', roles: ['ADMIN', 'OWNER'] },
     { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER'] },
     { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
