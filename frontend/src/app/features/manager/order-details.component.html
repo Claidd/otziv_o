@@ -341,6 +341,37 @@
       </footer>
 
       <section class="mobile-order-details-side" aria-label="Сводка заказа">
+        @if ((details.badReviewSummary?.total || 0) > 0) {
+          <article class="bad-review-task-list">
+            <h2>Изменение оценок</h2>
+            @for (task of details.badReviewTasks || []; track task.id) {
+              <div
+                class="bad-review-task-row"
+                [class.bad-review-task-row--done]="task.statusCode === 'DONE'"
+                [class.bad-review-task-row--new]="task.statusCode === 'NEW'"
+                [class.bad-review-task-row--canceled]="task.statusCode === 'CANCELED'"
+              >
+                <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
+                <span>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }} · {{ badReviewTaskState(details, task) }}</span>
+                <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
+                <small>{{ badReviewTaskDateLabel(task) }}</small>
+                <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+                @if (canCancelBadReviewTask(details, task)) {
+                  <button
+                    type="button"
+                    (click)="cancelBadReviewTask(task)"
+                    [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                  >
+                    {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                  </button>
+                } @else {
+                  <em>{{ badReviewTaskState(details, task) }}</em>
+                }
+              </div>
+            }
+          </article>
+        }
+
         <article class="side-note-card">
           <h2>Заметка заказа</h2>
           <textarea
@@ -413,6 +444,22 @@
             </div>
             <i class="material-icons-sharp">fact_check</i>
           </article>
+          @if ((details.badReviewSummary?.total || 0) > 0) {
+            <article class="stat-card pink">
+              <div>
+                <span>Плохие</span>
+                <strong>{{ details.badReviewSummary?.done || 0 }}/{{ details.badReviewSummary?.total || 0 }}</strong>
+              </div>
+              <i class="material-icons-sharp">money_off</i>
+            </article>
+            <article class="stat-card yellow">
+              <div>
+                <span>Итого к оплате</span>
+                <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum || 0 | number:'1.0-0' }}</strong>
+              </div>
+              <i class="material-icons-sharp">receipt_long</i>
+            </article>
+          }
         </div>
       </section>
     }
@@ -420,6 +467,37 @@
 
   <section admin-right-content class="order-details-side">
     @if (details(); as details) {
+      @if ((details.badReviewSummary?.total || 0) > 0) {
+        <article class="bad-review-task-list">
+          <h2>Изменение оценок</h2>
+          @for (task of details.badReviewTasks || []; track task.id) {
+            <div
+              class="bad-review-task-row"
+              [class.bad-review-task-row--done]="task.statusCode === 'DONE'"
+              [class.bad-review-task-row--new]="task.statusCode === 'NEW'"
+              [class.bad-review-task-row--canceled]="task.statusCode === 'CANCELED'"
+            >
+              <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
+              <span>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }} · {{ badReviewTaskState(details, task) }}</span>
+              <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
+              <small>{{ badReviewTaskDateLabel(task) }}</small>
+              <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+              @if (canCancelBadReviewTask(details, task)) {
+                <button
+                  type="button"
+                  (click)="cancelBadReviewTask(task)"
+                  [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                >
+                  {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                </button>
+              } @else {
+                <em>{{ badReviewTaskState(details, task) }}</em>
+              }
+            </div>
+          }
+        </article>
+      }
+
       <article class="side-note-card">
         <h2>Заметка заказа</h2>
         <textarea
@@ -491,6 +569,22 @@
         </div>
         <i class="material-icons-sharp">fact_check</i>
       </article>
+      @if ((details.badReviewSummary?.total || 0) > 0) {
+        <article class="stat-card pink">
+          <div>
+            <span>Плохие</span>
+            <strong>{{ details.badReviewSummary?.done || 0 }}/{{ details.badReviewSummary?.total || 0 }}</strong>
+          </div>
+          <i class="material-icons-sharp">money_off</i>
+        </article>
+        <article class="stat-card yellow">
+          <div>
+            <span>Итого к оплате</span>
+            <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum || 0 | number:'1.0-0' }}</strong>
+          </div>
+          <i class="material-icons-sharp">receipt_long</i>
+        </article>
+      }
     }
   </section>
 

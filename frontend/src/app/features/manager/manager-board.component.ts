@@ -385,6 +385,11 @@ export class ManagerBoardComponent {
     this.loadBoard();
   }
 
+  statusOptionLabel(section: ManagerSection, status: string): string {
+    const count = this.metricValue(section, status);
+    return count === null ? status : `${status}: ${count}`;
+  }
+
   search(): void {
     this.pageNumber.set(0);
     this.replaceCurrentHistoryState();
@@ -455,12 +460,20 @@ export class ManagerBoardComponent {
       return;
     }
 
-    const sum = order.sum ?? 0;
+    const sum = this.payableOrderSum(order);
     await this.copyText(
       `${order.managerPayText ?? ''} К оплате: ${sum} руб. ${order.companyTitle} ${order.filialTitle ?? ''}`.trim(),
       `payment-${order.id}`,
       'Текст счета скопирован'
     );
+  }
+
+  payableOrderSum(order: OrderCardItem): number {
+    return order.totalSumWithBadReviews ?? order.sum ?? 0;
+  }
+
+  showBadReviewSummary(order: OrderCardItem): boolean {
+    return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
   }
 
   openCompanyOrders(company: CompanyCardItem): void {
@@ -939,6 +952,11 @@ export class ManagerBoardComponent {
     return product.id;
   }
 
+  private metricValue(section: ManagerSection, status: string): number | null {
+    const metric = this.board()?.metrics.find((item) => item.section === section && item.status === status);
+    return metric?.value ?? null;
+  }
+
   private captureHistoryView(): ManagerHistoryView {
     return {
       activeSection: this.activeSection(),
@@ -1012,8 +1030,22 @@ export class ManagerBoardComponent {
 
   private readQueryView(): ManagerHistoryView | null {
     const params = this.route.snapshot.queryParamMap;
-    if (params.get('section') !== 'orders') {
+    const section = params.get('section');
+    if (section !== 'orders' && section !== 'companies') {
       return null;
+    }
+
+    if (section === 'companies') {
+      return {
+        activeSection: 'companies',
+        companyStatus: params.get('status')?.trim() || 'Все',
+        orderStatus: 'Все',
+        keyword: params.get('keyword')?.trim() || '',
+        pageNumber: Math.max(Number(params.get('pageNumber')) || 0, 0),
+        pageSize: Number(params.get('pageSize')) || 10,
+        sortDirection: params.get('sortDirection') === 'asc' ? 'asc' : 'desc',
+        selectedCompany: null
+      };
     }
 
     const companyId = Number(params.get('companyId'));

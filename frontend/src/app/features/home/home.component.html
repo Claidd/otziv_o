@@ -1,32 +1,19 @@
 <app-admin-layout
-  title="Личный кабинет"
+  title="Компания О!"
   active="dashboard"
   [profileImageUrl]="profileImageUrl()"
   [profileImageAlt]="cabinet()?.workerZp?.fio || 'Фото профиля'"
 >
-  <section class="hero-card" [class.hero-card--authenticated]="auth.authenticated()">
-    <div class="hero-intro">
-      <h2>{{ auth.authenticated() ? (cabinet()?.workerZp?.fio || 'Личный кабинет') : 'Вход в рабочее пространство' }}</h2>
-      <p>
-        @if (auth.authenticated()) {
+  @if (auth.authenticated()) {
+    <section class="hero-card hero-card--authenticated">
+      <div class="hero-intro">
+        <h2>{{ cabinet()?.workerZp?.fio || 'Личный кабинет' }}</h2>
+        <p>
           {{ cabinet()?.user?.role || businessRoles()[0] || 'USER' }} · {{ cabinet()?.user?.username || auth.tokenParsed()?.['preferred_username'] || 'user' }}
-        } @else {
-          Войди через Keycloak справа сверху или создай новый клиентский аккаунт.
-        }
-      </p>
-    </div>
+        </p>
+      </div>
 
-    <div class="actions">
-      @if (!auth.authenticated()) {
-        <a class="button secondary" routerLink="/legacy-migration">
-          <span class="material-icons-sharp">sync</span>
-          Миграция
-        </a>
-        <a class="button" routerLink="/register-client">
-          <span class="material-icons-sharp">person_add</span>
-          Регистрация
-        </a>
-      } @else {
+      <div class="actions">
         <button type="button" class="secondary refresh-button" (click)="refreshCabinet()" [disabled]="cabinetLoading()">
           <span class="material-icons-sharp">refresh</span>
           {{ cabinetLoading() ? 'Обновляю' : 'Обновить кабинет' }}
@@ -38,9 +25,9 @@
         <label class="date-control">
           <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="selectCabinetDate($event)">
         </label>
-      }
-    </div>
-  </section>
+      </div>
+    </section>
+  }
 
   @if (auth.error()) {
     <p class="error">{{ auth.error() }}</p>
@@ -232,10 +219,8 @@
       </div>
     </section>
   } @else {
-    <section class="panel empty">
-      <span class="material-icons-sharp">login</span>
-      <h2>Вход через Keycloak</h2>
-      <p>После входа здесь появятся разделы, доступные по твоей роли.</p>
+    <section class="panel start-illustration-panel" aria-label="Рабочее пространство Компания О!">
+      <img src="/assets/images/TacoCloud.png" alt="Команда работает с отзывами и клиентскими задачами">
     </section>
   }
 </app-admin-layout>

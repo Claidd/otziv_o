@@ -1,0 +1,14 @@
+name: otziv-build
+
+services:
+  app:
+    image: ${APP_IMAGE:-claid38/otziv-app:latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+  nginx:
+    image: ${WEB_IMAGE:-claid38/otziv-web:latest}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile

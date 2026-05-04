@@ -62,6 +62,16 @@ export interface WorkerReviewItem {
   price?: number;
   url: string;
   urlPhoto: string;
+  badTask?: boolean;
+  badTaskId?: number | null;
+  sourceReviewId?: number | null;
+  originalRating?: number | null;
+  targetRating?: number | null;
+  badTaskStatus?: string;
+  badTaskPrice?: number;
+  badTaskScheduledDate?: string;
+  badTaskCompletedDate?: string;
+  badTaskComment?: string;
 }
 
 export interface WorkerMetric {
@@ -145,6 +155,18 @@ export class WorkerApi {
 
   publishReview(reviewId: number): Observable<void> {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/publish`, {});
+  }
+
+  completeBadReviewTask(taskId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/complete`, {});
+  }
+
+  changeBadReviewTaskBot(taskId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/change-bot`, {});
+  }
+
+  deactivateBadReviewTaskBot(taskId: number, botId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/bots/${botId}/deactivate`, {});
   }
 
   nagulReview(reviewId: number): Observable<WorkerActionResponse> {

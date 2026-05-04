@@ -34,9 +34,43 @@ export interface AdminProduct {
   category?: DictionaryOption | null;
 }
 
+export interface AdminBot {
+  id: number;
+  login: string;
+  password: string;
+  fio: string;
+  active: boolean;
+  counter: number;
+  status?: DictionaryOption | null;
+  worker?: DictionaryOption | null;
+  city?: DictionaryOption | null;
+}
+
 export interface ProductsResponse {
   products: AdminProduct[];
   categories: DictionaryOption[];
+}
+
+export interface BotsResponse {
+  bots: AdminBot[];
+  workers: DictionaryOption[];
+  statuses: DictionaryOption[];
+  cities: DictionaryOption[];
+}
+
+export interface BotImportResponse {
+  totalRows: number;
+  added: number;
+  skippedDuplicates: number;
+  skippedInvalid: number;
+  errors: string[];
+}
+
+export interface BotBrowserOpenResponse {
+  botId: number;
+  vncUrl: string;
+  userAgent?: string;
+  platform?: string;
 }
 
 export interface TitleRequest {
@@ -53,6 +87,17 @@ export interface ProductRequest {
   price: number;
   categoryId: number | null;
   photo: boolean;
+}
+
+export interface BotRequest {
+  login: string;
+  password: string;
+  fio: string;
+  workerId: number | null;
+  cityId: number | null;
+  statusId: number | null;
+  active: boolean;
+  counter: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -134,6 +179,48 @@ export class AdminDictionariesApi {
 
   deleteProduct(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/products/${id}`);
+  }
+
+  getBots(keyword = ''): Observable<BotsResponse> {
+    return this.http.get<BotsResponse>(`${this.baseUrl}/bots`, {
+      params: this.keywordParams(keyword)
+    });
+  }
+
+  getBot(id: number): Observable<AdminBot> {
+    return this.http.get<AdminBot>(`${this.baseUrl}/bots/${id}`);
+  }
+
+  createBot(request: BotRequest): Observable<AdminBot> {
+    return this.http.post<AdminBot>(`${this.baseUrl}/bots`, request);
+  }
+
+  updateBot(id: number, request: BotRequest): Observable<AdminBot> {
+    return this.http.put<AdminBot>(`${this.baseUrl}/bots/${id}`, request);
+  }
+
+  deleteBot(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/bots/${id}`);
+  }
+
+  importBots(file: File): Observable<BotImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<BotImportResponse>(`${this.baseUrl}/bots/import`, formData);
+  }
+
+  openBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {
+    return this.http.post<BotBrowserOpenResponse>(
+      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/open`,
+      {}
+    );
+  }
+
+  closeBotBrowser(botId: number): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/close`,
+      {}
+    );
   }
 
   private keywordParams(keyword: string): HttpParams {

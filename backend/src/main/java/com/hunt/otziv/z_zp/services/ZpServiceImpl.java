@@ -198,9 +198,16 @@ public class ZpServiceImpl implements ZpService{
 
     @Transactional
     public boolean save(Order order) { // Сохранить ЗП и Чек в БД
+        BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+        int amount = order != null ? order.getAmount() : 0;
+        return save(order, sum, amount);
+    }// Сохранить ЗП и Чек в БД
+
+    @Transactional
+    public boolean save(Order order, BigDecimal sum, int amount) { // Сохранить ЗП и Чек в БД
         try {
-            saveZpManager(order);
-            saveZpWorker(order);
+            saveZpManager(order, sum, amount);
+            saveZpWorker(order, sum, amount);
             return true;
         } catch (Exception e) {
             log.error("Ошибка при сохранении ЗП и Чека в БД", e);
@@ -222,14 +229,21 @@ public class ZpServiceImpl implements ZpService{
 
     @Transactional
     protected void saveZpManager(Order order){ // Сохранить ЗП Менеджера в БД
+        BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+        int amount = order != null ? order.getAmount() : 0;
+        saveZpManager(order, sum, amount);
+    } // Сохранить ЗП Менеджера в БД
+
+    @Transactional
+    protected void saveZpManager(Order order, BigDecimal sum, int amount){ // Сохранить ЗП Менеджера в БД
         try {
             Zp managerZp = new Zp();
             managerZp.setFio(order.getManager().getUser().getFio());
-            managerZp.setSum(order.getSum().multiply(order.getManager().getUser().getCoefficient()));
+            managerZp.setSum(sum.multiply(order.getManager().getUser().getCoefficient()));
             managerZp.setOrderId(order.getId());
             managerZp.setUserId(order.getManager().getUser().getId());
             managerZp.setProfessionId(order.getManager().getId());
-            managerZp.setAmount(order.getAmount());
+            managerZp.setAmount(amount);
             managerZp.setActive(true);
             zpRepository.save(managerZp);
         } catch (Exception e){
@@ -239,14 +253,21 @@ public class ZpServiceImpl implements ZpService{
     } // Сохранить ЗП Менеджера в БД
     @Transactional
     protected void saveZpWorker(Order order){ // Сохранить ЗП Работника в БД
+        BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+        int amount = order != null ? order.getAmount() : 0;
+        saveZpWorker(order, sum, amount);
+    } // Сохранить ЗП Работника в БД
+
+    @Transactional
+    protected void saveZpWorker(Order order, BigDecimal sum, int amount){ // Сохранить ЗП Работника в БД
         try {
             Zp workerZp = new Zp();
             workerZp.setFio(order.getWorker().getUser().getFio());
-            workerZp.setSum(order.getSum().multiply(order.getWorker().getUser().getCoefficient()));
+            workerZp.setSum(sum.multiply(order.getWorker().getUser().getCoefficient()));
             workerZp.setOrderId(order.getId());
             workerZp.setUserId(order.getWorker().getUser().getId());
             workerZp.setProfessionId(order.getWorker().getId());
-            workerZp.setAmount(order.getAmount());
+            workerZp.setAmount(amount);
             workerZp.setActive(true);
             zpRepository.save(workerZp);
         } catch (Exception e){

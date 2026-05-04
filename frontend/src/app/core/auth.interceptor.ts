@@ -5,7 +5,7 @@ import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
-  const shouldAttachToken = req.url.startsWith('/api') || req.url.startsWith('/actuator');
+  const shouldAttachToken = req.url.startsWith('/api');
 
   if (!shouldAttachToken) {
     return next(req);

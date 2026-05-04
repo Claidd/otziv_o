@@ -1,6 +1,6 @@
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { CabinetApi, CabinetProfile } from '../../core/cabinet.api';
 import { CurrentUser, CurrentUserApi } from '../../core/current-user.api';
@@ -206,8 +206,14 @@ export class HomeComponent {
     private readonly currentUserApi: CurrentUserApi,
     private readonly systemHealthApi: SystemHealthApi,
     private readonly cabinetApi: CabinetApi,
-    private readonly toastService: ToastService
+    private readonly toastService: ToastService,
+    private readonly router: Router
   ) {
+    if (this.shouldOpenAnalyticsHome()) {
+      void this.router.navigate(['/admin/analyse']);
+      return;
+    }
+
     if (this.auth.isAuthenticated()) {
       this.loadCurrentUser();
       this.loadCabinet();
@@ -311,6 +317,10 @@ export class HomeComponent {
     }
 
     this.toastService.info('Backend ответил', message);
+  }
+
+  private shouldOpenAnalyticsHome(): boolean {
+    return this.auth.isAuthenticated() && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   }
 
   dailyChartFrom(map?: string | null): BarChart {

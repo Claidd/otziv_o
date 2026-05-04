@@ -1,0 +1,170 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.bot-browser-page {
+  display: grid;
+  min-height: 100vh;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--otziv-dark);
+  background: #0b1220;
+  font-family: var(--otziv-font-family);
+}
+
+.browser-topbar {
+  display: flex;
+  min-height: 3.3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.9rem;
+  color: #e5e7eb;
+  background: #111827;
+}
+
+.browser-title,
+.browser-actions,
+.browser-actions button,
+.browser-title a {
+  display: inline-flex;
+  align-items: center;
+}
+
+.browser-title {
+  min-width: 0;
+  gap: 0.7rem;
+}
+
+.browser-title a {
+  width: 2.25rem;
+  min-height: 2.25rem;
+  justify-content: center;
+  border-radius: 50%;
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+.browser-title .material-icons-sharp {
+  font-size: 1.15rem;
+}
+
+.browser-title h1,
+.browser-title p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-title small {
+  color: #9ca3af;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.browser-title h1 {
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.browser-title p {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+}
+
+.browser-actions {
+  flex: 0 0 auto;
+  gap: 0.75rem;
+}
+
+.browser-actions > span {
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.browser-actions > span.error {
+  color: #fecdd3;
+}
+
+.browser-actions button {
+  min-height: 2.2rem;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.75rem;
+  color: white;
+  background: var(--otziv-danger);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.browser-actions .material-icons-sharp {
+  font-size: 1rem;
+}
+
+.browser-frame-wrap {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  background: #111;
+}
+
+.browser-frame-wrap iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 3.3rem);
+  border: 0;
+}
+
+.browser-loading,
+.browser-error {
+  position: absolute;
+  z-index: 2;
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.85rem;
+  color: #e5e7eb;
+  background: rgba(17, 24, 39, 0.88);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.browser-loading {
+  top: 0.85rem;
+  left: 0.85rem;
+}
+
+.browser-error {
+  top: 4.2rem;
+  left: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #fecdd3;
+}
+
+.browser-error .material-icons-sharp {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 720px) {
+  .browser-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .browser-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .browser-actions button {
+    min-width: 7rem;
+  }
+}

@@ -1,5 +1,11 @@
 package com.hunt.otziv.admin.controller;
 
+import com.hunt.otziv.admin.services.BotImportService;
+import com.hunt.otziv.admin.services.BotImportService.BotImportResult;
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.model.StatusBot;
+import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.b_bots.repository.StatusBotRepository;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.ProductCategory;
 import com.hunt.otziv.c_categories.model.SubCategory;
@@ -10,6 +16,9 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.WorkerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,8 +29,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -31,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 @RestController
@@ -44,6 +56,10 @@ public class ApiAdminDictionaryController {
     private final CityRepository cityRepository;
     private final ProductRepository productRepository;
     private final ProductCategoryRepository productCategoryRepository;
+    private final BotsRepository botsRepository;
+    private final StatusBotRepository statusBotRepository;
+    private final WorkerRepository workerRepository;
+    private final BotImportService botImportService;
 
     @GetMapping("/categories")
     public List<CategoryResponse> getCategories(String keyword) {
@@ -219,6 +235,77 @@ public class ApiAdminDictionaryController {
         productRepository.deleteById(id);
     }
 
+    @GetMapping("/bots")
+    public BotsResponse getBots(String keyword) {
+        List<BotResponse> bots = botsRepository.findAllWithAdminDetails().stream()
+                .filter(bot -> matchesBot(keyword, bot))
+                .sorted(Comparator.comparing(Bot::getFio, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toBotResponse)
+                .toList();
+
+        return new BotsResponse(bots, workerOptions(), botStatusOptions(), cityOptions());
+    }
+
+    @GetMapping("/bots/{id}")
+    public BotResponse getBot(@PathVariable Long id) {
+        return botsRepository.findByIdWithAdminDetails(id)
+                .map(this::toBotResponse)
+                .orElseThrow(() -> notFound("Аккаунт не найден"));
+    }
+
+    @PostMapping("/bots/import")
+    public BotImportResult importBots(@RequestParam("file") MultipartFile file) {
+        return botImportService.importBots(file);
+    }
+
+    @PostMapping("/bots")
+    @ResponseStatus(HttpStatus.CREATED)
+    public BotResponse createBot(@RequestBody BotRequest request) {
+        String login = requiredText(request.login(), "Логин обязателен");
+        assertLoginAvailable(login, null);
+
+        Bot bot = Bot.builder()
+                .login(login)
+                .password(requiredText(request.password(), "Пароль обязателен"))
+                .fio(requiredText(request.fio(), "ФИО обязательно"))
+                .worker(requiredWorker(request.workerId()))
+                .botCity(optionalCity(request.cityId()))
+                .status(requiredBotStatus(request.statusId()))
+                .counter(requiredCounter(request.counter()))
+                .active(request.active())
+                .build();
+
+        return toBotResponse(botsRepository.save(bot));
+    }
+
+    @PutMapping("/bots/{id}")
+    public BotResponse updateBot(@PathVariable Long id, @RequestBody BotRequest request) {
+        Bot bot = botsRepository.findByIdWithAdminDetails(id)
+                .orElseThrow(() -> notFound("Аккаунт не найден"));
+        String login = requiredText(request.login(), "Логин обязателен");
+        assertLoginAvailable(login, id);
+
+        bot.setLogin(login);
+        bot.setPassword(requiredText(request.password(), "Пароль обязателен"));
+        bot.setFio(requiredText(request.fio(), "ФИО обязательно"));
+        bot.setWorker(requiredWorker(request.workerId()));
+        bot.setBotCity(optionalCity(request.cityId()));
+        bot.setStatus(requiredBotStatus(request.statusId()));
+        bot.setCounter(requiredCounter(request.counter()));
+        bot.setActive(request.active());
+
+        return toBotResponse(botsRepository.save(bot));
+    }
+
+    @DeleteMapping("/bots/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteBot(@PathVariable Long id) {
+        if (!botsRepository.existsById(id)) {
+            throw notFound("Аккаунт не найден");
+        }
+        botsRepository.deleteById(id);
+    }
+
     private List<Category> uniqueCategories(List<Category> categories) {
         Map<Long, Category> unique = new LinkedHashMap<>();
         categories.forEach(category -> unique.putIfAbsent(category.getId(), category));
@@ -265,11 +352,111 @@ public class ApiAdminDictionaryController {
         );
     }
 
+    private BotResponse toBotResponse(Bot bot) {
+        return new BotResponse(
+                bot.getId(),
+                safe(bot.getLogin()),
+                safe(bot.getPassword()),
+                safe(bot.getFio()),
+                bot.isActive(),
+                bot.getCounter(),
+                toStatusOption(bot.getStatus()),
+                toWorkerOption(bot.getWorker()),
+                toCityOption(bot.getBotCity())
+        );
+    }
+
     private List<OptionResponse> productCategoryOptions() {
         return productCategoryRepository.findAll().stream()
                 .sorted(Comparator.comparing(ProductCategory::getTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(category -> new OptionResponse(category.getId(), safe(category.getTitle())))
                 .toList();
+    }
+
+    private List<OptionResponse> workerOptions() {
+        return workerRepository.findAllWithUserAndImage().stream()
+                .sorted(Comparator.comparing(this::workerTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toWorkerOption)
+                .toList();
+    }
+
+    private List<OptionResponse> botStatusOptions() {
+        return StreamSupport.stream(statusBotRepository.findAll().spliterator(), false)
+                .sorted(Comparator.comparing(StatusBot::getBotStatusTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toStatusOption)
+                .toList();
+    }
+
+    private List<OptionResponse> cityOptions() {
+        return cityRepository.findAll().stream()
+                .sorted(Comparator.comparing(City::getTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toCityOption)
+                .toList();
+    }
+
+    private OptionResponse toWorkerOption(Worker worker) {
+        if (worker == null) {
+            return null;
+        }
+        return new OptionResponse(worker.getId(), workerTitle(worker));
+    }
+
+    private OptionResponse toStatusOption(StatusBot status) {
+        if (status == null) {
+            return null;
+        }
+        return new OptionResponse(status.getId(), safe(status.getBotStatusTitle()));
+    }
+
+    private OptionResponse toCityOption(City city) {
+        if (city == null) {
+            return null;
+        }
+        return new OptionResponse(city.getId(), safe(city.getTitle()));
+    }
+
+    private Worker requiredWorker(Long workerId) {
+        return workerRepository.findById(requiredId(workerId, "Владелец обязателен"))
+                .orElseThrow(() -> notFound("Владелец не найден"));
+    }
+
+    private StatusBot requiredBotStatus(Long statusId) {
+        return statusBotRepository.findById(requiredId(statusId, "Статус обязателен"))
+                .orElseThrow(() -> notFound("Статус аккаунта не найден"));
+    }
+
+    private City optionalCity(Long cityId) {
+        if (cityId == null) {
+            return null;
+        }
+
+        City city = cityRepository.findById(cityId);
+        if (city == null) {
+            throw notFound("Город не найден");
+        }
+        return city;
+    }
+
+    private void assertLoginAvailable(String login, Long currentBotId) {
+        Optional<Bot> sameLoginBot = botsRepository.findByLogin(login);
+        if (sameLoginBot.isPresent() && !sameLoginBot.get().getId().equals(currentBotId)) {
+            throw badRequest("Аккаунт с таким логином уже существует");
+        }
+    }
+
+    private int requiredCounter(int value) {
+        if (value < 0) {
+            throw badRequest("Количество публикаций не может быть меньше нуля");
+        }
+        return value;
+    }
+
+    private String requiredText(String value, String message) {
+        String text = safe(value).trim();
+        if (text.isBlank()) {
+            throw badRequest(message);
+        }
+        return text;
     }
 
     private String requiredTitle(String value) {
@@ -292,6 +479,35 @@ public class ApiAdminDictionaryController {
             throw badRequest("Цена должна быть не меньше нуля");
         }
         return value;
+    }
+
+    private boolean matchesBot(String keyword, Bot bot) {
+        return matches(keyword, String.valueOf(bot.getId()))
+                || matches(keyword, bot.getLogin())
+                || matches(keyword, bot.getPassword())
+                || matches(keyword, bot.getFio())
+                || matches(keyword, workerTitle(bot.getWorker()))
+                || matches(keyword, bot.getStatus() != null ? bot.getStatus().getBotStatusTitle() : null)
+                || matches(keyword, bot.getBotCity() != null ? bot.getBotCity().getTitle() : null);
+    }
+
+    private String workerTitle(Worker worker) {
+        if (worker == null) {
+            return "";
+        }
+
+        User user = worker.getUser();
+        if (user == null) {
+            return "Worker #" + worker.getId();
+        }
+
+        String fio = safe(user.getFio()).trim();
+        if (!fio.isBlank()) {
+            return fio;
+        }
+
+        String username = safe(user.getUsername()).trim();
+        return username.isBlank() ? "Worker #" + worker.getId() : username;
     }
 
     private boolean matches(String keyword, String value) {
@@ -358,6 +574,39 @@ public class ApiAdminDictionaryController {
     public record ProductsResponse(
             List<ProductResponse> products,
             List<OptionResponse> categories
+    ) {
+    }
+
+    public record BotRequest(
+            String login,
+            String password,
+            String fio,
+            Long workerId,
+            Long cityId,
+            Long statusId,
+            boolean active,
+            int counter
+    ) {
+    }
+
+    public record BotResponse(
+            Long id,
+            String login,
+            String password,
+            String fio,
+            boolean active,
+            int counter,
+            OptionResponse status,
+            OptionResponse worker,
+            OptionResponse city
+    ) {
+    }
+
+    public record BotsResponse(
+            List<BotResponse> bots,
+            List<OptionResponse> workers,
+            List<OptionResponse> statuses,
+            List<OptionResponse> cities
     ) {
     }
 }

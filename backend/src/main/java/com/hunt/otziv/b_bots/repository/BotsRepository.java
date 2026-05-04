@@ -10,11 +10,36 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface BotsRepository extends CrudRepository<Bot, Long> {
 
     Optional<Bot> findByLogin(String username);
+
+    @Query("SELECT b.login FROM Bot b WHERE b.login IN :logins")
+    Set<String> findExistingLogins(@Param("logins") List<String> logins);
+
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+    """)
+    List<Bot> findAllWithAdminDetails();
+
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.id = :id
+    """)
+    Optional<Bot> findByIdWithAdminDetails(@Param("id") Long id);
 
     List<Bot> findAllByWorkerId(Long workerId);
 

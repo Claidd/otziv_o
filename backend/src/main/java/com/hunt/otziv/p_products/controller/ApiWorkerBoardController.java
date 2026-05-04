@@ -1,6 +1,9 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.bad_reviews.model.BadReviewTask;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.dto.BotDTO;
+import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
@@ -13,6 +16,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -77,6 +81,7 @@ public class ApiWorkerBoardController {
     private final ManagerService managerService;
     private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
+    private final BadReviewTaskService badReviewTaskService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -116,15 +121,15 @@ public class ApiWorkerBoardController {
                     ? loadOrders(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
                     : emptyPage(safePageNumber, safePageSize);
 
-            Page<ReviewDTOOne> reviews = isReviewSection(normalizedSection)
-                    ? loadReviews(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
-                    : emptyPage(safePageNumber, safePageSize);
+            PageResponse<WorkerReviewResponse> reviews = isReviewSection(normalizedSection)
+                    ? loadReviewResponses(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+                    : emptyReviewResponsePage(safePageNumber, safePageSize);
 
             return new WorkerBoardResponse(
                     normalizedSection,
                     title(normalizedSection),
                     toPageResponse(orders),
-                    toReviewPageResponse(reviews),
+                    reviews,
                     List.of(),
                     buildMetrics(principal, authentication),
                     promoTextService.getAllPromoTexts(),
@@ -224,6 +229,42 @@ public class ApiWorkerBoardController {
             throw exception;
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным", exception);
+        }
+    }
+
+    @PostMapping("/bad-review-tasks/{taskId}/complete")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void completeBadReviewTask(@PathVariable Long taskId) {
+        try {
+            badReviewTaskService.completeTask(taskId);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Плохая задача не выполнена", exception);
+        }
+    }
+
+    @PostMapping("/bad-review-tasks/{taskId}/change-bot")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void changeBadReviewTaskBot(@PathVariable Long taskId) {
+        try {
+            badReviewTaskService.changeTaskBot(taskId);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заменен", exception);
+        }
+    }
+
+    @PostMapping("/bad-review-tasks/{taskId}/bots/{botId}/deactivate")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void deactivateBadReviewTaskBot(
+            @PathVariable Long taskId,
+            @PathVariable Long botId
+    ) {
+        try {
+            badReviewTaskService.deactivateAndChangeTaskBot(taskId, botId);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заблокирован", exception);
         }
     }
 
@@ -335,7 +376,7 @@ public class ApiWorkerBoardController {
                 : orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, status, pageNumber, pageSize);
     }
 
-    private Page<ReviewDTOOne> loadReviews(
+    private PageResponse<WorkerReviewResponse> loadReviewResponses(
             Principal principal,
             Authentication authentication,
             String section,
@@ -344,7 +385,48 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
-        return loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, keyword);
+        if (SECTION_BAD.equals(section)) {
+            Page<BadReviewTask> tasks = loadBadReviewTasks(
+                    principal,
+                    authentication,
+                    keyword,
+                    pageNumber,
+                    pageSize,
+                    sortDirection
+            );
+            return toBadTaskPageResponse(tasks);
+        }
+
+        return toReviewPageResponse(loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, keyword));
+    }
+
+    private Page<BadReviewTask> loadBadReviewTasks(
+            Principal principal,
+            Authentication authentication,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
+        PageRequest pageable = PageRequest.of(
+                pageNumber,
+                pageSize,
+                "asc".equals(sortDirection)
+                        ? Sort.by("scheduledDate").ascending()
+                        : Sort.by("scheduledDate").descending()
+        );
+        LocalDate date = LocalDate.now();
+
+        if (hasRole(authentication, "ADMIN")) {
+            return badReviewTaskService.getDueTasksToAdmin(date, keyword, pageable);
+        }
+        if (hasRole(authentication, "OWNER")) {
+            return badReviewTaskService.getDueTasksToOwner(resolveOwnerManagers(principal), date, keyword, pageable);
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            return badReviewTaskService.getDueTasksToManager(resolveManager(principal), date, keyword, pageable);
+        }
+        return badReviewTaskService.getDueTasksToWorker(resolveWorker(principal), date, keyword, pageable);
     }
 
     private Page<ReviewDTOOne> loadReviewPage(
@@ -444,14 +526,29 @@ public class ApiWorkerBoardController {
                 principal,
                 primaryBoardRole(authentication)
         );
+        int badTaskCount = countBadReviewTasks(principal, authentication);
 
         metrics.add(orderMetric(orderCounts, "Новые", SECTION_NEW, "fiber_new", "yellow"));
         metrics.add(orderMetric(orderCounts, "Коррекция", SECTION_CORRECT, "build_circle", "pink"));
         metrics.add(reviewMetric(reviewCounts, "Выгул", SECTION_NAGUL, "directions_walk", "teal"));
         metrics.add(reviewMetric(reviewCounts, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
-        metrics.add(reviewMetric(reviewCounts, "Плохие", SECTION_BAD, "money_off", "gray"));
+        metrics.add(new WorkerMetricResponse("Плохие", badTaskCount, "money_off", "gray", SECTION_BAD));
         metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
         return metrics;
+    }
+
+    private int countBadReviewTasks(Principal principal, Authentication authentication) {
+        LocalDate date = LocalDate.now();
+        if (hasRole(authentication, "ADMIN")) {
+            return badReviewTaskService.countDueTasksToAdmin(date);
+        }
+        if (hasRole(authentication, "OWNER")) {
+            return badReviewTaskService.countDueTasksToOwner(resolveOwnerManagers(principal), date);
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            return badReviewTaskService.countDueTasksToManager(resolveManager(principal), date);
+        }
+        return badReviewTaskService.countDueTasksToWorker(resolveWorker(principal), date);
     }
 
     private WorkerMetricResponse orderMetric(
@@ -574,7 +671,77 @@ public class ApiWorkerBoardController {
                 safe(review.getComment()),
                 review.getPrice(),
                 safe(review.getUrl()),
-                !safe(review.getUrlPhoto()).isBlank() ? safe(review.getUrlPhoto()) : safe(review.getUrl())
+                !safe(review.getUrlPhoto()).isBlank() ? safe(review.getUrlPhoto()) : safe(review.getUrl()),
+                false,
+                null,
+                review.getId(),
+                null,
+                null,
+                "",
+                null,
+                "",
+                "",
+                null
+        );
+    }
+
+    private WorkerReviewResponse toBadTaskReviewResponse(BadReviewTask task) {
+        Review sourceReview = task.getSourceReview();
+        ReviewDTOOne review = reviewService.toReviewDTOOne(sourceReview);
+        Bot bot = task.getBot();
+        Long botId = bot != null ? bot.getId() : null;
+        String botFio = bot != null ? safe(bot.getFio()) : safe(review.getBotFio());
+        String botLogin = bot != null ? safe(bot.getLogin()) : safe(review.getBotLogin());
+        String botPassword = bot != null ? safe(bot.getPassword()) : safe(review.getBotPassword());
+        int botCounter = bot != null ? bot.getCounter() : review.getBotCounter();
+        String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
+                ? safe(task.getWorker().getUser().getFio())
+                : safe(review.getWorkerFio());
+
+        return new WorkerReviewResponse(
+                review.getId(),
+                review.getCompanyId(),
+                review.getOrderDetailsId(),
+                review.getOrderId(),
+                safe(review.getOrderStatus()),
+                safe(review.getText()),
+                safe(review.getAnswer()),
+                safe(review.getCategory()),
+                safe(review.getSubCategory()),
+                botId,
+                botFio,
+                botLogin,
+                botPassword,
+                botCounter,
+                safe(review.getCompanyTitle()),
+                safe(review.getCommentCompany()),
+                safe(review.getOrderComments()),
+                safe(review.getFilialCity()),
+                safe(review.getFilialTitle()),
+                safe(review.getFilialUrl()),
+                review.getProductId(),
+                safe(review.getProductTitle()),
+                review.isProductPhoto(),
+                workerFio,
+                dateValue(review.getCreated()),
+                dateValue(review.getChanged()),
+                dateValue(task.getScheduledDate()),
+                review.isPublish(),
+                review.isVigul(),
+                safe(review.getComment()),
+                task.getPrice(),
+                safe(review.getUrl()),
+                !safe(review.getUrlPhoto()).isBlank() ? safe(review.getUrlPhoto()) : safe(review.getUrl()),
+                true,
+                task.getId(),
+                review.getId(),
+                task.getOriginalRating(),
+                task.getTargetRating(),
+                task.getStatus() == null ? "" : task.getStatus().name(),
+                task.getPrice(),
+                dateValue(task.getScheduledDate()),
+                dateValue(task.getCompletedDate()),
+                safe(task.getComment())
         );
     }
 
@@ -798,6 +965,22 @@ public class ApiWorkerBoardController {
         );
     }
 
+    private PageResponse<WorkerReviewResponse> toBadTaskPageResponse(Page<BadReviewTask> page) {
+        return new PageResponse<>(
+                page.getContent().stream().map(this::toBadTaskReviewResponse).toList(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isFirst(),
+                page.isLast()
+        );
+    }
+
+    private PageResponse<WorkerReviewResponse> emptyReviewResponsePage(int pageNumber, int pageSize) {
+        return new PageResponse<>(List.of(), pageNumber, pageSize, 0, 0, true, true);
+    }
+
     public record WorkerBoardResponse(
             String section,
             String title,
@@ -889,7 +1072,17 @@ public class ApiWorkerBoardController {
             String comment,
             BigDecimal price,
             String url,
-            String urlPhoto
+            String urlPhoto,
+            boolean badTask,
+            Long badTaskId,
+            Long sourceReviewId,
+            Integer originalRating,
+            Integer targetRating,
+            String badTaskStatus,
+            BigDecimal badTaskPrice,
+            String badTaskScheduledDate,
+            String badTaskCompletedDate,
+            String badTaskComment
     ) {
     }
 

@@ -18,6 +18,7 @@
 		<java.version>22</java.version>
 		<maven.compiler.source>22</maven.compiler.source>
 		<maven.compiler.target>22</maven.compiler.target>
+		<apache.poi.version>5.2.3</apache.poi.version>
 	</properties>
 
 	<dependencies>
@@ -41,12 +42,12 @@
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
-            <version>5.2.3</version>
+            <version>${apache.poi.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
-            <version>5.4.0</version>
+            <version>${apache.poi.version}</version>
         </dependency>
 
 		<dependency>

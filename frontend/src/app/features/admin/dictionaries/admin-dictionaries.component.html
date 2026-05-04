@@ -304,6 +304,53 @@
                 </tbody>
               </table>
             }
+
+            @case ('accounts') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Аккаунт</th>
+                    <th>Владелец</th>
+                    <th>Город</th>
+                    <th>Статус</th>
+                    <th>Публикаций</th>
+                    <th>Активность</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (bot of bots(); track trackBot($index, bot)) {
+                    <tr [class.selected]="selectedId() === bot.id" (click)="selectBot(bot)">
+                      <td>
+                        <strong>{{ bot.fio }}</strong>
+                        <span>{{ bot.login }} · ID {{ bot.id }}</span>
+                      </td>
+                      <td>{{ categoryTitle(bot.worker) }}</td>
+                      <td>{{ categoryTitle(bot.city) }}</td>
+                      <td>{{ categoryTitle(bot.status) }}</td>
+                      <td>{{ bot.counter }}</td>
+                      <td>
+                        <span class="status-pill" [class.off]="!bot.active">{{ bot.active ? 'Активен' : 'Выключен' }}</span>
+                      </td>
+                      <td class="row-tools">
+                        <a
+                          class="row-icon-link"
+                          [href]="botBrowserUrl(bot)"
+                          target="_blank"
+                          rel="noopener"
+                          title="Открыть браузер аккаунта"
+                          (click)="$event.stopPropagation()"
+                        >
+                          <span class="material-icons-sharp">open_in_new</span>
+                        </a>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="7" class="no-results">Аккаунтов нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
           }
         </div>
       </article>
@@ -419,6 +466,72 @@
               </div>
             </form>
           }
+
+          @case ('accounts') {
+            <form [formGroup]="botForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Логин</span>
+                <input type="text" formControlName="login">
+              </label>
+
+              <label>
+                <span>Пароль</span>
+                <input type="text" formControlName="password">
+              </label>
+
+              <label>
+                <span>ФИО аккаунта</span>
+                <input type="text" formControlName="fio">
+              </label>
+
+              <label>
+                <span>Владелец</span>
+                <select formControlName="workerId">
+                  @for (worker of botWorkers(); track trackOption($index, worker)) {
+                    <option [ngValue]="worker.id">{{ worker.title }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Город</span>
+                <select formControlName="cityId">
+                  @for (city of botCities(); track trackOption($index, city)) {
+                    <option [ngValue]="city.id">{{ city.title }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Статус</span>
+                <select formControlName="statusId">
+                  @for (status of botStatuses(); track trackOption($index, status)) {
+                    <option [ngValue]="status.id">{{ status.title }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Публикаций</span>
+                <input type="number" min="0" step="1" formControlName="counter">
+              </label>
+
+              <label class="checkbox">
+                <input type="checkbox" formControlName="active">
+                <span>Аккаунт активен</span>
+              </label>
+
+              @if (botForm.invalid && botForm.touched) {
+                <p class="error compact">Логин, пароль, ФИО, владелец и статус обязательны.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
         }
       </article>
     </section>
@@ -435,5 +548,61 @@
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </article>
     }
+
+    @if (activeTab() === 'accounts') {
+      <button type="button" class="import-accounts-button" (click)="openBotImport()">
+        <span class="material-icons-sharp">upload_file</span>
+        Добавить аккаунты
+      </button>
+    }
   </section>
+
+  @if (importModalOpen()) {
+    <section class="import-backdrop" (click)="closeBotImport()">
+      <article class="import-modal" role="dialog" aria-modal="true" aria-label="Импорт аккаунтов" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <p class="eyebrow">IMPORT</p>
+            <h2>Добавить аккаунты</h2>
+          </div>
+          <button type="button" class="row-icon-button" (click)="closeBotImport()" [disabled]="importing()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <label class="file-picker" [class.has-file]="importFile()">
+          <input type="file" accept=".csv,.tsv,.xls,.xlsx" (change)="selectBotImportFile($event)">
+          <span class="material-icons-sharp">upload_file</span>
+          <strong>{{ importFile()?.name || 'Выбрать файл' }}</strong>
+          <small>CSV, XLS, XLSX</small>
+        </label>
+
+        @if (importError()) {
+          <p class="error compact">{{ importError() }}</p>
+        }
+
+        @if (importResult(); as result) {
+          <div class="import-result">
+            <span class="material-icons-sharp">task_alt</span>
+            <strong>{{ importResultMessage(result) }}</strong>
+            <small>Всего строк: {{ result.totalRows }}</small>
+            @if (result.errors.length) {
+              <ul>
+                @for (message of result.errors; track $index) {
+                  <li>{{ message }}</li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <div class="actions">
+          <button type="button" class="secondary" (click)="closeBotImport()" [disabled]="importing()">Закрыть</button>
+          <button type="button" (click)="uploadBotImport()" [disabled]="!importFile() || importing()">
+            {{ importing() ? 'Загружаю' : 'Загрузить' }}
+          </button>
+        </div>
+      </article>
+    </section>
+  }
 </app-admin-layout>

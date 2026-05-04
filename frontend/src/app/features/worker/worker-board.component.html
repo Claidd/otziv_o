@@ -92,6 +92,13 @@
               <span>{{ orderAmountLabel(order) }}</span>
             </div>
 
+            @if (showBadReviewSummary(order)) {
+              <div class="meta-row">
+                <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
+                <span>+{{ order.badReviewTasksSum || 0 }} руб.</span>
+              </div>
+            }
+
             @if (permissions().canSeePhoneAndPayment) {
               <div class="phone-row">
                 <a [href]="orderChatUrl(order)" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
@@ -235,12 +242,16 @@
           <article
             class="worker-card review-card"
             [class.published]="review.publish"
+            [class.bad-task]="isBadTask(review)"
             [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
           >
             <header>
               <a [href]="review.filialUrl || reviewEditUrl(review)" target="_blank" rel="noopener">{{ review.companyTitle || 'Компания' }}</a>
               <div class="review-id-line">
                 #{{ review.id }}
+                @if (isBadTask(review)) {
+                  <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{ ratingTaskLabel(review) }}</span>
+                }
                 @if (needsReviewPhoto(review)) {
                   @if (hasReviewPhoto(review)) {
                     <a
@@ -501,7 +512,7 @@
               (click)="markReviewDone(review)"
               [disabled]="isMutating('review-' + review.id + '-publish') || isMutating('review-' + review.id + '-nagul')"
             >
-              {{ activeSection() === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ' }}
+              {{ isBadTask(review) ? 'Сменил' : activeSection() === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ' }}
             </button>
 
             <footer>

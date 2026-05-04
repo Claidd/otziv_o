@@ -286,10 +286,14 @@ export class WorkerBoardComponent {
     const key = `review-${review.id}-change-bot`;
     this.mutationKey.set(key);
 
-    this.workerApi.changeReviewBot(review.id).subscribe({
+    const request = this.isBadTask(review) && review.badTaskId
+      ? this.workerApi.changeBadReviewTaskBot(review.badTaskId)
+      : this.workerApi.changeReviewBot(review.id);
+
+    request.subscribe({
       next: () => {
         this.mutationKey.set(null);
-        this.toastService.success('Бот заменен', `Отзыв #${review.id}`);
+        this.toastService.success('Бот заменен', this.reviewActionTitle(review));
         this.loadBoard();
       },
       error: (err) => {
@@ -312,10 +316,14 @@ export class WorkerBoardComponent {
     const key = `review-${review.id}-block-bot`;
     this.mutationKey.set(key);
 
-    this.workerApi.deactivateReviewBot(review.id, review.botId).subscribe({
+    const request = this.isBadTask(review) && review.badTaskId
+      ? this.workerApi.deactivateBadReviewTaskBot(review.badTaskId, review.botId)
+      : this.workerApi.deactivateReviewBot(review.id, review.botId);
+
+    request.subscribe({
       next: () => {
         this.mutationKey.set(null);
-        this.toastService.success('Бот заблокирован', `Отзыв #${review.id}`);
+        this.toastService.success('Бот заблокирован', this.reviewActionTitle(review));
         this.loadBoard();
       },
       error: (err) => {
@@ -326,6 +334,11 @@ export class WorkerBoardComponent {
   }
 
   markReviewDone(review: WorkerReviewItem): void {
+    if (this.isBadTask(review)) {
+      this.markBadReviewTaskDone(review);
+      return;
+    }
+
     if (this.activeSection() === 'nagul') {
       this.markReviewNagul(review);
       return;
@@ -1036,7 +1049,25 @@ export class WorkerBoardComponent {
   }
 
   reviewDate(review: WorkerReviewItem): string {
-    return review.publishedDate || review.created || '-';
+    return review.badTaskScheduledDate || review.publishedDate || review.created || '-';
+  }
+
+  isBadTask(review: WorkerReviewItem): boolean {
+    return !!review.badTask;
+  }
+
+  ratingTaskLabel(review: WorkerReviewItem): string {
+    if (!this.isBadTask(review)) {
+      return '';
+    }
+
+    return `${review.originalRating ?? 5} -> ${review.targetRating ?? 2}`;
+  }
+
+  reviewActionTitle(review: WorkerReviewItem): string {
+    return this.isBadTask(review) && review.badTaskId
+      ? `Плохая задача #${review.badTaskId}`
+      : `Отзыв #${review.id}`;
   }
 
   async copyPhone(phone?: string): Promise<void> {
@@ -1054,8 +1085,9 @@ export class WorkerBoardComponent {
       return;
     }
 
+    const sum = order.totalSumWithBadReviews ?? order.sum ?? 0;
     await this.copyText(
-      `${order.managerPayText ?? ''} К оплате: ${order.sum ?? 0} руб. ${order.companyTitle} ${order.filialTitle ?? ''}`.trim(),
+      `${order.managerPayText ?? ''} К оплате: ${sum} руб. ${order.companyTitle} ${order.filialTitle ?? ''}`.trim(),
       `payment-${order.id}`,
       'Текст счета скопирован'
     );
@@ -1148,10 +1180,14 @@ export class WorkerBoardComponent {
 
   orderAmountLabel(order: OrderCardItem): string {
     if (this.permissions().canSeeMoney) {
-      return `${order.sum ?? 0} руб.`;
+      return `${order.totalSumWithBadReviews ?? order.sum ?? 0} руб.`;
     }
 
     return `${order.amount ?? 0} шт.`;
+  }
+
+  showBadReviewSummary(order: OrderCardItem): boolean {
+    return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
   }
 
   progress(order: OrderCardItem): number {
@@ -1175,7 +1211,7 @@ export class WorkerBoardComponent {
   }
 
   reviewEditUrl(review: WorkerReviewItem): string {
-    return this.legacyUrl(`/review/editReview/${review.id}`);
+    return this.legacyUrl(`/review/editReview/${review.sourceReviewId ?? review.id}`);
   }
 
   botEditUrl(bot: WorkerBotItem): string {
@@ -1412,6 +1448,27 @@ export class WorkerBoardComponent {
       error: (err) => {
         this.mutationKey.set(null);
         this.toastService.error('Отзыв не опубликован', this.errorMessage(err, 'Не удалось отметить отзыв опубликованным'));
+      }
+    });
+  }
+
+  private markBadReviewTaskDone(review: WorkerReviewItem): void {
+    if (!review.badTaskId) {
+      return;
+    }
+
+    const key = `review-${review.id}-publish`;
+    this.mutationKey.set(key);
+
+    this.workerApi.completeBadReviewTask(review.badTaskId).subscribe({
+      next: () => {
+        this.mutationKey.set(null);
+        this.toastService.success('Оценка изменена', this.reviewActionTitle(review));
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.mutationKey.set(null);
+        this.toastService.error('Задача не выполнена', this.errorMessage(err, 'Не удалось отметить изменение оценки'));
       }
     });
   }

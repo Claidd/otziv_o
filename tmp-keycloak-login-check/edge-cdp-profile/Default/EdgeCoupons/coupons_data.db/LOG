@@ -1,0 +1,5 @@
+2026/05/03-21:51:42.266 d428 Creating DB D:\Java\otziv\tmp-keycloak-login-check\edge-cdp-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/05/03-21:51:42.282 d428 Reusing MANIFEST D:\Java\otziv\tmp-keycloak-login-check\edge-cdp-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/05/03-21:51:42.286 c8bc Level-0 table #5: started
+2026/05/03-21:51:42.291 c8bc Level-0 table #5: 682129 bytes OK
+2026/05/03-21:51:42.299 c8bc Delete type=0 #3

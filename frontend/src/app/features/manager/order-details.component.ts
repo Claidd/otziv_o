@@ -1,10 +1,11 @@
+import { DecimalPipe } from '@angular/common';
 import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
-import { ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
+import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
 
@@ -15,7 +16,7 @@ type ReviewEditDraft = ReviewUpdateRequest;
 
 @Component({
   selector: 'app-order-details',
-  imports: [AdminLayoutComponent, FormsModule],
+  imports: [AdminLayoutComponent, DecimalPipe, FormsModule],
   templateUrl: './order-details.component.html',
   styleUrl: './order-details.component.scss'
 })
@@ -523,6 +524,52 @@ export class OrderDetailsComponent {
       'Отзыв опубликован',
       `Отзыв #${review.id} учтен в заказе`
     );
+  }
+
+  cancelBadReviewTask(task: BadReviewTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !task.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Убрать плохую задачу #${task.id} из доплаты?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `bad-task-cancel-${task.id}`,
+      this.managerApi.cancelBadReviewTask(orderId, task.id),
+      'Задача убрана',
+      'Она останется в истории, но не попадет в счет'
+    );
+  }
+
+  canCancelBadReviewTask(details: OrderDetailsPayload, task: BadReviewTaskItem): boolean {
+    return details.status !== 'Оплачено' && task.statusCode !== 'CANCELED';
+  }
+
+  badReviewTaskState(details: OrderDetailsPayload, task: BadReviewTaskItem): string {
+    if (task.statusCode === 'CANCELED') {
+      return 'Убрана из счета';
+    }
+
+    if (details.status === 'Оплачено') {
+      return 'В истории оплаты';
+    }
+
+    return task.status || 'В работе';
+  }
+
+  badReviewTaskDateLabel(task: BadReviewTaskItem): string {
+    const dates = [];
+    if (task.scheduledDate) {
+      dates.push(`план: ${task.scheduledDate}`);
+    }
+    if (task.completedDate) {
+      dates.push(`сменил: ${task.completedDate}`);
+    }
+    return dates.join(' · ') || 'дата не указана';
   }
 
   openReviewEdit(review: OrderReviewItem): void {

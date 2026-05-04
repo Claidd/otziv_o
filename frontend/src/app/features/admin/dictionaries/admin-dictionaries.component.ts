@@ -2,11 +2,15 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, Observable } from 'rxjs';
 import {
+  AdminBot,
   AdminCategory,
   AdminCity,
   AdminDictionariesApi,
   AdminProduct,
   AdminSubCategory,
+  BotImportResponse,
+  BotRequest,
+  BotsResponse,
   DictionaryOption,
   ProductRequest,
   ProductsResponse,
@@ -16,7 +20,7 @@ import {
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { ToastService } from '../../../shared/toast.service';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'accounts';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -28,7 +32,7 @@ type DictionaryMetric = {
   label: string;
   value: number;
   icon: string;
-  tone: 'blue' | 'green' | 'teal' | 'yellow';
+  tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink';
 };
 
 @Component({
@@ -45,7 +49,8 @@ export class AdminDictionariesComponent {
   readonly tabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
     { key: 'cities', label: 'Города', icon: 'location_city' },
-    { key: 'products', label: 'Продукты', icon: 'inventory_2' }
+    { key: 'products', label: 'Продукты', icon: 'inventory_2' },
+    { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' }
   ];
 
   readonly activeTab = signal<DictionaryTabKey>('categories');
@@ -53,7 +58,12 @@ export class AdminDictionariesComponent {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
+  readonly importing = signal(false);
   readonly error = signal<string | null>(null);
+  readonly importError = signal<string | null>(null);
+  readonly importResult = signal<BotImportResponse | null>(null);
+  readonly importModalOpen = signal(false);
+  readonly importFile = signal<File | null>(null);
   readonly selectedId = signal<number | null>(null);
   readonly activeCategoryId = signal<number | null>(null);
   readonly editingCategoryId = signal<number | null>(null);
@@ -63,7 +73,11 @@ export class AdminDictionariesComponent {
   readonly subCategories = signal<AdminSubCategory[]>([]);
   readonly cities = signal<AdminCity[]>([]);
   readonly products = signal<AdminProduct[]>([]);
+  readonly bots = signal<AdminBot[]>([]);
   readonly productCategories = signal<DictionaryOption[]>([]);
+  readonly botWorkers = signal<DictionaryOption[]>([]);
+  readonly botStatuses = signal<DictionaryOption[]>([]);
+  readonly botCities = signal<DictionaryOption[]>([]);
 
   readonly categoryForm = this.fb.nonNullable.group({
     title: ['', Validators.required]
@@ -83,6 +97,17 @@ export class AdminDictionariesComponent {
     price: this.fb.nonNullable.control('0', Validators.required),
     categoryId: this.fb.control<number | null>(null, Validators.required),
     photo: this.fb.nonNullable.control(false)
+  });
+
+  readonly botForm = this.fb.group({
+    login: this.fb.nonNullable.control('', Validators.required),
+    password: this.fb.nonNullable.control('', Validators.required),
+    fio: this.fb.nonNullable.control('', Validators.required),
+    workerId: this.fb.control<number | null>(null, Validators.required),
+    cityId: this.fb.control<number | null>(null),
+    statusId: this.fb.control<number | null>(null, Validators.required),
+    counter: this.fb.nonNullable.control('0', Validators.required),
+    active: this.fb.nonNullable.control(true)
   });
 
   readonly activeLabel = computed(() => this.tabs.find((tab) => tab.key === this.activeTab())?.label ?? '');
@@ -114,13 +139,16 @@ export class AdminDictionariesComponent {
         return this.cities().length;
       case 'products':
         return this.products().length;
+      case 'accounts':
+        return this.bots().length;
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => [
     { label: 'Категории', value: this.categories().length, icon: 'category', tone: 'blue' },
     { label: 'Подкатегории', value: this.subCategories().length, icon: 'account_tree', tone: 'teal' },
     { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
-    { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' }
+    { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
+    { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' }
   ]);
 
   constructor() {
@@ -141,14 +169,16 @@ export class AdminDictionariesComponent {
       categories: this.dictionariesApi.getCategories(),
       subCategories: this.dictionariesApi.getSubCategories(),
       cities: this.dictionariesApi.getCities(),
-      products: this.dictionariesApi.getProducts()
+      products: this.dictionariesApi.getProducts(),
+      bots: this.dictionariesApi.getBots()
     }).subscribe({
-      next: ({ categories, subCategories, cities, products }) => {
+      next: ({ categories, subCategories, cities, products, bots }) => {
         this.categories.set(categories);
         this.subCategories.set(subCategories);
         this.cities.set(cities);
         this.products.set(products.products);
         this.productCategories.set(products.categories);
+        this.applyBotsResponse(bots);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -213,6 +243,21 @@ export class AdminDictionariesComponent {
     this.error.set(null);
   }
 
+  selectBot(bot: AdminBot): void {
+    this.selectedId.set(bot.id);
+    this.botForm.setValue({
+      login: bot.login,
+      password: bot.password,
+      fio: bot.fio,
+      workerId: bot.worker?.id ?? this.defaultBotWorkerId(),
+      cityId: bot.city?.id ?? this.defaultBotCityId(),
+      statusId: bot.status?.id ?? this.defaultBotStatusId(),
+      counter: String(bot.counter ?? 0),
+      active: bot.active
+    });
+    this.error.set(null);
+  }
+
   clearSelection(): void {
     this.selectedId.set(null);
     this.editingCategoryId.set(null);
@@ -227,6 +272,16 @@ export class AdminDictionariesComponent {
       price: '0',
       categoryId: this.defaultProductCategoryId(),
       photo: false
+    });
+    this.botForm.reset({
+      login: '',
+      password: '',
+      fio: '',
+      workerId: this.defaultBotWorkerId(),
+      cityId: this.defaultBotCityId(),
+      statusId: this.defaultBotStatusId(),
+      counter: '0',
+      active: true
     });
   }
 
@@ -330,6 +385,9 @@ export class AdminDictionariesComponent {
       case 'products':
         this.saveProduct();
         return;
+      case 'accounts':
+        this.saveBot();
+        return;
     }
   }
 
@@ -351,7 +409,8 @@ export class AdminDictionariesComponent {
       categories: () => this.dictionariesApi.deleteCategory(selectedId),
       subcategories: () => this.dictionariesApi.deleteSubCategory(selectedId),
       cities: () => this.dictionariesApi.deleteCity(selectedId),
-      products: () => this.dictionariesApi.deleteProduct(selectedId)
+      products: () => this.dictionariesApi.deleteProduct(selectedId),
+      accounts: () => this.dictionariesApi.deleteBot(selectedId)
     }[this.activeTab()]();
 
     request.subscribe({
@@ -375,7 +434,8 @@ export class AdminDictionariesComponent {
       categories: this.categories().length,
       subcategories: this.subCategories().length,
       cities: this.cities().length,
-      products: this.products().length
+      products: this.products().length,
+      accounts: this.bots().length
     }[tab];
   }
 
@@ -385,6 +445,68 @@ export class AdminDictionariesComponent {
 
   selectedTitle(): string {
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
+  }
+
+  botBrowserUrl(bot: AdminBot): string {
+    return `/admin/dictionaries/accounts/${bot.id}/browser`;
+  }
+
+  openBotImport(): void {
+    this.importModalOpen.set(true);
+    this.importFile.set(null);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  closeBotImport(): void {
+    if (this.importing()) {
+      return;
+    }
+
+    this.importModalOpen.set(false);
+    this.importFile.set(null);
+    this.importError.set(null);
+  }
+
+  selectBotImportFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.importFile.set(input.files?.[0] ?? null);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  uploadBotImport(): void {
+    const file = this.importFile();
+    if (!file || this.importing()) {
+      this.importError.set('Выберите CSV или Excel-файл.');
+      return;
+    }
+
+    this.importing.set(true);
+    this.importError.set(null);
+    this.importResult.set(null);
+
+    this.dictionariesApi.importBots(file).subscribe({
+      next: (result) => {
+        this.importing.set(false);
+        this.importResult.set(result);
+        this.importFile.set(null);
+        this.toastService.success('Импорт аккаунтов завершен', this.importResultMessage(result));
+        this.reloadAfterMutation();
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось импортировать аккаунты');
+        this.importError.set(message);
+        this.importing.set(false);
+        this.toastService.error('Аккаунты не импортированы', message);
+      }
+    });
+  }
+
+  importResultMessage(result: BotImportResponse): string {
+    const duplicateText = result.skippedDuplicates ? `, дублей пропущено: ${result.skippedDuplicates}` : '';
+    const invalidText = result.skippedInvalid ? `, строк с ошибками: ${result.skippedInvalid}` : '';
+    return `Добавлено: ${result.added}${duplicateText}${invalidText}`;
   }
 
   trackTab(_index: number, tab: DictionaryTab): DictionaryTabKey {
@@ -407,6 +529,10 @@ export class AdminDictionariesComponent {
     return product.id;
   }
 
+  trackBot(_index: number, bot: AdminBot): number {
+    return bot.id;
+  }
+
   trackOption(_index: number, option: DictionaryOption): number {
     return option.id;
   }
@@ -421,7 +547,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -435,10 +561,13 @@ export class AdminDictionariesComponent {
       case 'products':
         request = this.dictionariesApi.getProducts(keyword);
         break;
+      case 'accounts':
+        request = this.dictionariesApi.getBots(keyword);
+        break;
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -456,6 +585,10 @@ export class AdminDictionariesComponent {
             this.productCategories.set(payload.categories);
             break;
           }
+          case 'accounts':
+            this.applyBotsResponse(response as BotsResponse);
+            this.ensureDefaults();
+            break;
         }
 
         this.loading.set(false);
@@ -545,6 +678,31 @@ export class AdminDictionariesComponent {
     this.runSave(call, 'Продукт сохранен');
   }
 
+  private saveBot(): void {
+    if (this.botForm.invalid) {
+      this.botForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.botForm.getRawValue();
+    const request: BotRequest = {
+      login: raw.login.trim(),
+      password: raw.password.trim(),
+      fio: raw.fio.trim(),
+      workerId: raw.workerId,
+      cityId: raw.cityId,
+      statusId: raw.statusId,
+      counter: Number(raw.counter || 0),
+      active: raw.active
+    };
+    const selectedId = this.selectedId();
+    const call = selectedId == null
+      ? this.dictionariesApi.createBot(request)
+      : this.dictionariesApi.updateBot(selectedId, request);
+
+    this.runSave(call, 'Аккаунт сохранен');
+  }
+
   private runSave<T extends { id: number }>(
     request: Observable<T>,
     title: string,
@@ -599,6 +757,25 @@ export class AdminDictionariesComponent {
     return this.productCategories()[0]?.id ?? null;
   }
 
+  private defaultBotWorkerId(): number | null {
+    return this.botWorkers()[0]?.id ?? null;
+  }
+
+  private defaultBotStatusId(): number | null {
+    return this.botStatuses()[0]?.id ?? null;
+  }
+
+  private defaultBotCityId(): number | null {
+    return this.botCities()[0]?.id ?? null;
+  }
+
+  private applyBotsResponse(response: BotsResponse): void {
+    this.bots.set(response.bots);
+    this.botWorkers.set(response.workers);
+    this.botStatuses.set(response.statuses);
+    this.botCities.set(response.cities);
+  }
+
   private ensureDefaults(): void {
     const activeCategoryId = this.activeCategoryId();
     const hasActiveCategory = activeCategoryId != null
@@ -618,6 +795,18 @@ export class AdminDictionariesComponent {
 
     if (this.productForm.controls.categoryId.value == null) {
       this.productForm.controls.categoryId.setValue(this.defaultProductCategoryId());
+    }
+
+    if (this.botForm.controls.workerId.value == null) {
+      this.botForm.controls.workerId.setValue(this.defaultBotWorkerId());
+    }
+
+    if (this.botForm.controls.statusId.value == null) {
+      this.botForm.controls.statusId.setValue(this.defaultBotStatusId());
+    }
+
+    if (this.botForm.controls.cityId.value == null) {
+      this.botForm.controls.cityId.setValue(this.defaultBotCityId());
     }
   }
 

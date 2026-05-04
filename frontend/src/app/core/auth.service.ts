@@ -164,6 +164,7 @@ export class AuthService {
 
   private handleRefreshFailure(error?: unknown): void {
     this.stopRefreshLoop();
+    this.keycloak.clearToken();
     this.clearSession('expired');
     this.error.set(error ? this.getErrorMessage(error) : 'Session expired. Please sign in again.');
   }

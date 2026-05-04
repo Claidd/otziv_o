@@ -92,6 +92,58 @@
   font-weight: 900;
 }
 
+.bad-review-task-list {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.9rem;
+  padding: 0.8rem;
+  background: var(--otziv-white);
+}
+
+.bad-review-task-list h2 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 0.95rem;
+}
+
+.bad-review-task-row {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-left-width: 0.36rem;
+  border-radius: 0.72rem;
+  padding: 0.62rem 0.68rem;
+  font-family: var(--otziv-font-family);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.bad-review-task-row--new {
+  border-left-color: var(--otziv-warning);
+}
+
+.bad-review-task-row--done {
+  border-left-color: var(--otziv-success);
+}
+
+.bad-review-task-row--canceled {
+  border-left-color: var(--otziv-info);
+}
+
+.bad-review-task-row small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+}
+
+.bad-review-task-row button {
+  border: 0;
+  border-radius: 0.65rem;
+  color: white;
+  background: var(--otziv-danger);
+  font-weight: 900;
+}
+
 .review-carousel {
   position: relative;
 }

@@ -82,6 +82,8 @@ public interface ReviewService {
 
     List<ReviewDTOOne> getReviewsAllByOrderId(Long orderId);
 
+    ReviewDTOOne toReviewDTOOne(Review review);
+
     void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId);
 
     void deleteReviewsByOrderId(Long reviewId);

@@ -8,7 +8,12 @@
 
     <nav class="sidebar-card" aria-label="Site navigation">
       @for (link of visibleSidebarLinks(); track link.label) {
-        @if (link.routerLink) {
+        @if (link.active === 'logout') {
+          <a href="" (click)="$event.preventDefault(); logout()">
+            <span class="material-icons-sharp">{{ link.icon }}</span>
+            <strong>{{ link.label }}</strong>
+          </a>
+        } @else if (link.routerLink) {
           <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">
             <span class="material-icons-sharp">{{ link.icon }}</span>
             <strong>{{ link.label }}</strong>
@@ -28,6 +33,35 @@
     </nav>
   </aside>
   }
+
+  <div class="mobile-start-nav" aria-label="Theme and account controls">
+    <div class="mode-switch" aria-label="Theme mode">
+      <button
+        type="button"
+        class="theme-button"
+        aria-label="Светлая тема"
+        [class.active]="theme() === 'light'"
+        (click)="setTheme('light')"
+      >
+        <span class="material-icons-sharp">light_mode</span>
+      </button>
+      <button
+        type="button"
+        class="theme-button"
+        aria-label="Темная тема"
+        [class.active]="theme() === 'dark'"
+        (click)="setTheme('dark')"
+      >
+        <span class="material-icons-sharp">dark_mode</span>
+      </button>
+    </div>
+
+    @if (authenticated()) {
+      <button type="button" class="login-pill logout" (click)="logout()">Выход</button>
+    } @else {
+      <button type="button" class="login-pill" (click)="login()">Вход</button>
+    }
+  </div>
 
   <main class="admin-content">
     <header class="page-heading">
@@ -109,32 +143,66 @@
 
       <section class="reminders">
         <div class="reminders-head">
-          <h2>Напоминания</h2>
-          <span class="material-icons-sharp">notifications_none</span>
+          <h2>Услуги</h2>
+          <span class="material-icons-sharp">stars</span>
         </div>
+
+        <article class="notification">
+          <span class="notification-icon material-icons-sharp">rate_review</span>
+          <div>
+            <h3>Хорошие отзывы</h3>
+            <small>Репутация и доверие</small>
+          </div>
+          <span class="material-icons-sharp muted">more_vert</span>
+        </article>
+
+        <article class="notification blue">
+          <span class="notification-icon material-icons-sharp">business</span>
+          <div>
+            <h3>Карточки компаний</h3>
+            <small>Профили и площадки</small>
+          </div>
+          <span class="material-icons-sharp muted">more_vert</span>
+        </article>
 
         <article class="notification">
           <span class="notification-icon material-icons-sharp">verified_user</span>
           <div>
-            <h3>Keycloak</h3>
-            <small>Пользователи и роли</small>
+            <h3>Управление репутацией</h3>
+            <small>Контроль упоминаний</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
         <article class="notification danger">
-          <span class="notification-icon material-icons-sharp">analytics</span>
+          <span class="notification-icon material-icons-sharp">campaign</span>
           <div>
-            <h3>Prometheus</h3>
-            <small>Метрики backend</small>
+            <h3>Запуск рекламы</h3>
+            <small>Заявки и продвижение</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
-        <a class="home-link" routerLink="/">
-          <span class="material-icons-sharp">logout</span>
-          <strong>На главную</strong>
-        </a>
+        <article class="notification warning">
+          <span class="notification-icon material-icons-sharp">shield</span>
+          <div>
+            <h3>Удаление негатива</h3>
+            <small>Защита выдачи</small>
+          </div>
+          <span class="material-icons-sharp muted">more_vert</span>
+        </article>
+
+        @if (authenticated()) {
+          <a class="home-link logout-link" href="" (click)="$event.preventDefault(); logout()">
+            <span class="material-icons-sharp">logout</span>
+            <strong>Выход</strong>
+          </a>
+        } @else {
+          <a class="home-link" href="" (click)="$event.preventDefault(); login()">
+            <span class="material-icons-sharp">login</span>
+            <strong>Вход</strong>
+          </a>
+        }
       </section>
     }
   </section>

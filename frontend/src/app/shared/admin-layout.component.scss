@@ -1,17 +1,126 @@
 app-admin-layout {
   display: block;
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
   min-height: 100vh;
   color: var(--otziv-dark);
-  background: var(--otziv-background);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.78) 0, rgba(246, 246, 249, 0.38) 24%, transparent 48%),
+    radial-gradient(circle at 86% 14%, rgba(226, 229, 238, 0.5) 0, rgba(246, 246, 249, 0.24) 24%, transparent 48%),
+    radial-gradient(circle at 58% 82%, rgba(255, 255, 255, 0.58) 0, rgba(237, 239, 246, 0.34) 26%, transparent 52%),
+    linear-gradient(118deg, rgba(255, 255, 255, 0.74), transparent 42%, rgba(229, 232, 240, 0.48)),
+    var(--otziv-background);
+  background-position: 10% 16%, 90% 12%, 54% 86%, center, center;
+  background-size: 145% 145%, 140% 140%, 160% 160%, 220% 220%, auto;
+  animation: otziv-page-background 26s ease-in-out infinite alternate;
+}
+
+app-admin-layout::before {
+  content: '';
+  position: fixed;
+  inset: -18vmax;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.5), transparent 34%),
+    radial-gradient(circle at 76% 42%, rgba(220, 224, 234, 0.34), transparent 34%),
+    radial-gradient(circle at 48% 74%, rgba(246, 246, 249, 0.56), transparent 40%);
+  filter: blur(28px);
+  opacity: 0.7;
+  transform: translate3d(0, 0, 0) scale(1.02);
+  animation: otziv-ambient-background 32s ease-in-out infinite alternate;
+  will-change: background-position, transform;
+}
+
+body.otziv-dark-theme app-admin-layout::before {
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.055), transparent 36%),
+    radial-gradient(circle at 76% 42%, rgba(118, 126, 142, 0.14), transparent 34%),
+    radial-gradient(circle at 48% 74%, rgba(46, 50, 58, 0.34), transparent 40%);
+  opacity: 0.66;
+}
+
+body.otziv-dark-theme app-admin-layout {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.045) 0, rgba(38, 42, 49, 0.2) 26%, transparent 50%),
+    radial-gradient(circle at 86% 14%, rgba(104, 112, 128, 0.13) 0, rgba(38, 42, 49, 0.16) 24%, transparent 48%),
+    radial-gradient(circle at 58% 82%, rgba(255, 255, 255, 0.035) 0, rgba(34, 38, 44, 0.22) 28%, transparent 52%),
+    linear-gradient(118deg, rgba(255, 255, 255, 0.035), transparent 42%, rgba(112, 120, 136, 0.11)),
+    var(--otziv-background);
+  background-position: 10% 16%, 90% 12%, 54% 86%, center, center;
+  background-size: 145% 145%, 140% 140%, 160% 160%, 220% 220%, auto;
 }
 
 .admin-layout {
   display: grid;
+  position: relative;
+  z-index: 1;
   grid-template-columns: 12.2rem minmax(0, 1fr) 18.5rem;
   gap: 1.45rem;
   width: 96%;
   min-height: 100vh;
   margin: 0 auto;
+}
+
+@keyframes otziv-ambient-background {
+  0% {
+    background-position: 6% 12%, 88% 24%, center;
+    transform: translate3d(-0.4rem, -0.2rem, 0) scale(1.02);
+  }
+
+  23% {
+    background-position: 38% 18%, 64% 54%, center;
+    transform: translate3d(0.55rem, -0.35rem, 0) scale(1.035);
+  }
+
+  47% {
+    background-position: 72% 46%, 26% 76%, center;
+    transform: translate3d(0.15rem, 0.5rem, 0) scale(1.025);
+  }
+
+  71% {
+    background-position: 28% 82%, 78% 36%, center;
+    transform: translate3d(-0.55rem, 0.25rem, 0) scale(1.04);
+  }
+
+  100% {
+    background-position: 94% 64%, 18% 14%, center;
+    transform: translate3d(0.35rem, -0.45rem, 0) scale(1.03);
+  }
+}
+
+@keyframes otziv-page-background {
+  0% {
+    background-position: 10% 16%, 90% 12%, 54% 86%, 0% 50%, center;
+  }
+
+  19% {
+    background-position: 28% 24%, 72% 34%, 44% 70%, 22% 44%, center;
+  }
+
+  43% {
+    background-position: 62% 18%, 52% 72%, 78% 56%, 55% 64%, center;
+  }
+
+  68% {
+    background-position: 82% 58%, 24% 48%, 34% 88%, 84% 42%, center;
+  }
+
+  100% {
+    background-position: 18% 82%, 78% 22%, 68% 28%, 100% 50%, center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  app-admin-layout,
+  app-admin-layout::before {
+    animation: none;
+  }
+
+  app-admin-layout::before {
+    transform: none;
+  }
 }
 
 .admin-layout.sidebar-hidden {
@@ -211,6 +320,10 @@ app-admin-layout {
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
+.mobile-start-nav {
+  display: none;
+}
+
 .mode-switch {
   display: flex;
   flex: 0 0 auto;
@@ -375,8 +488,8 @@ button.login-pill.logout {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.7rem;
-  padding: 1rem 1.15rem;
+  margin-bottom: 0.58rem;
+  padding: 0.82rem 1rem;
   border-radius: 1.2rem;
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
@@ -394,6 +507,14 @@ button.login-pill.logout {
   background: var(--otziv-danger);
 }
 
+.notification.blue .notification-icon {
+  background: var(--otziv-primary);
+}
+
+.notification.warning .notification-icon {
+  background: var(--otziv-warning);
+}
+
 .muted {
   margin-left: auto;
   color: var(--otziv-info);
@@ -403,6 +524,11 @@ button.login-pill.logout {
   justify-content: center;
   border: 2px dashed var(--otziv-primary);
   color: var(--otziv-primary);
+}
+
+.home-link.logout-link {
+  border-color: var(--otziv-danger);
+  color: var(--otziv-danger);
 }
 
 .admin-right {
@@ -469,8 +595,17 @@ button.login-pill.logout {
     width: min(100% - 24px, 620px);
   }
 
+  .admin-layout.sidebar-hidden {
+    display: flex;
+    flex-direction: column;
+  }
+
   .admin-content {
     padding-top: 0.75rem;
+  }
+
+  .admin-layout.sidebar-hidden .admin-content {
+    order: 2;
   }
 
   .page-heading {
@@ -482,6 +617,54 @@ button.login-pill.logout {
     height: auto;
     padding-bottom: 0;
     overflow: visible;
+  }
+
+  .admin-layout.sidebar-hidden .admin-right {
+    display: block;
+    position: static;
+    order: 3;
+    height: auto;
+    padding: 0 0 1.25rem;
+  }
+
+  .admin-layout.sidebar-hidden .mobile-start-nav {
+    display: flex;
+    order: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 2.5rem;
+    margin: 0.35rem 0 0.25rem;
+    padding: 0 0.35rem;
+  }
+
+  .admin-layout.sidebar-hidden .admin-right .right-nav {
+    display: none;
+  }
+
+  .admin-layout.sidebar-hidden .mobile-start-nav .mode-switch {
+    margin-right: 0;
+  }
+
+  .admin-layout.sidebar-hidden .profile-card {
+    margin-top: 0.45rem;
+    padding: 0.85rem 1rem;
+    border-radius: 1.2rem;
+  }
+
+  .admin-layout.sidebar-hidden .notification,
+  .admin-layout.sidebar-hidden .home-link {
+    border-radius: 1rem;
+    padding: 0.72rem 0.85rem;
+  }
+
+  .admin-layout.sidebar-hidden .profile-card img {
+    width: 4.55rem;
+    height: 4.55rem;
+  }
+
+  .admin-layout.sidebar-hidden .reminders {
+    margin-top: 0.75rem;
   }
 
   .brand {

@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
 import { AuthService } from '../../core/auth.service';
@@ -63,6 +63,7 @@ export class LeadsBoardComponent {
   private readonly leadsApi = inject(LeadsApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
+  private readonly router = inject(Router);
   private readonly emptyPage: LeadPage = {
     content: [],
     pageNumber: 0,
@@ -412,10 +413,13 @@ export class LeadsBoardComponent {
 
   handleCompanyCreated(result: CompanyCreateResult): void {
     this.closeCompanyCreate();
-    this.activeBucket.set('inWork');
-    this.pageNumber.set(0);
     this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
-    this.loadBoard();
+    void this.router.navigate(['/manager'], {
+      queryParams: {
+        section: 'companies',
+        status: 'Новая'
+      }
+    });
   }
 
   openEditModal(lead: LeadItem): void {

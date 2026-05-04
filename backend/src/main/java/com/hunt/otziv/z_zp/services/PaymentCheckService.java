@@ -7,6 +7,7 @@ import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import org.springframework.data.util.Pair;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.Set;
 public interface PaymentCheckService {
 
     boolean save(Order order);
+    boolean save(Order order, BigDecimal sum);
     List<CheckDTO> getAllCheckDTO();
     List<PaymentCheck> findAll();
 

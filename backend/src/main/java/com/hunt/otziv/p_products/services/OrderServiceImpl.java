@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
@@ -91,6 +92,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderTransactionService orderTransactionService;
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final BotAssignmentService botAssignmentService;
+    private final BadReviewTaskService badReviewTaskService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -104,6 +106,7 @@ public class OrderServiceImpl implements OrderService {
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
+    public static final String STATUS_NOT_PAID = "Не оплачено";
     public static final String STATUS_ARCHIVE = "Архив";
 
     public static final String STATUS_COMPANY_IN_WORK = "В работе";
@@ -1039,6 +1042,7 @@ public class OrderServiceImpl implements OrderService {
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
                 case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
+                case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 default -> {
                     order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                     orderRepository.save(order);
@@ -1050,6 +1054,13 @@ public class OrderServiceImpl implements OrderService {
             log.error("При смене статуса произошли какие-то проблемы", e);
             throw e;
         }
+    }
+
+    private boolean handleNotPaidStatus(Order order) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_NOT_PAID));
+        orderRepository.save(order);
+        badReviewTaskService.createTasksForUnpaidOrder(order);
+        return true;
     }
 
     private boolean handleToPublicStatus(Order order) {

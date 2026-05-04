@@ -64,7 +64,7 @@ export class AdminLayoutComponent {
     { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },
     { label: 'Миграция', icon: 'sync', active: 'migration', routerLink: '/legacy-migration', roles: ['ADMIN', 'OWNER'] },
     { label: 'Метрики', icon: 'desktop_windows', active: 'metrics', href: appEnvironment.metricsBaseUrl, openInNewTab: true, roles: ['ADMIN', 'OWNER'] },
-    { label: 'Назад', icon: 'logout', active: 'back', routerLink: '/', roles: [] }
+    { label: 'Выход', icon: 'logout', active: 'logout', roles: [] }
   ];
 
   readonly visibleHeaderLinks = computed(() => {

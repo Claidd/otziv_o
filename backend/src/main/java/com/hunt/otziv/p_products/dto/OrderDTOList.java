@@ -37,6 +37,18 @@ public class OrderDTOList {
 
     private BigDecimal sum;
 
+    private BigDecimal totalSumWithBadReviews;
+
+    private BigDecimal badReviewTasksSum;
+
+    private Integer badReviewTasksTotal;
+
+    private Integer badReviewTasksPending;
+
+    private Integer badReviewTasksDone;
+
+    private Integer badReviewTasksCanceled;
+
     private String companyUrlChat;
 
     private String companyTelephone;

@@ -1,5 +1,9 @@
 package com.hunt.otziv.manager.controller;
 
+import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
+import com.hunt.otziv.bad_reviews.model.BadReviewTask;
+import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
@@ -101,6 +105,7 @@ public class ApiManagerBoardController {
     private final AutoTextService autoTextService;
     private final S3UploadService s3UploadService;
     private final PerformanceMetrics performanceMetrics;
+    private final BadReviewTaskService badReviewTaskService;
 
     private final List<String> companyStatuses = List.of(
             "Все",
@@ -156,6 +161,7 @@ public class ApiManagerBoardController {
             Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
                     ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, normalizedSortDirection)
                     : emptyOrderPage(safePageNumber, safePageSize);
+            badReviewTaskService.enrichOrderList(orders.getContent());
 
             return new ManagerBoardResponse(
                     normalizedSection,
@@ -620,6 +626,28 @@ public class ApiManagerBoardController {
         return buildOrderDetailsResponse(orderId, authentication);
     }
 
+    @PostMapping("/orders/{orderId}/bad-review-tasks/{taskId}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public OrderDetailsResponse cancelBadReviewTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        try {
+            boolean belongsToOrder = badReviewTaskService.getTasksByOrderId(orderId).stream()
+                    .anyMatch(task -> Objects.equals(task.getId(), taskId));
+            if (!belongsToOrder) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена в этом заказе");
+            }
+            badReviewTaskService.cancelTask(taskId);
+            return buildOrderDetailsResponse(orderId, authentication);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+    }
+
     private Page<CompanyListDTO> loadCompanies(
             Principal principal,
             Authentication authentication,
@@ -751,7 +779,10 @@ public class ApiManagerBoardController {
     private OrderDetailsResponse buildOrderDetailsResponse(Long orderId, Authentication authentication) {
         OrderDTO order = orderService.getOrderDTO(orderId);
         List<ReviewDTOOne> reviews = reviewService.getReviewsAllByOrderId(orderId);
+        BadReviewTaskSummary badReviewSummary = badReviewTaskService.getSummaryForOrder(orderId);
+        List<BadReviewTask> badReviewTasks = badReviewTaskService.getTasksByOrderId(orderId);
         ReviewDTOOne firstReview = reviews.isEmpty() ? null : reviews.get(0);
+        BigDecimal orderSum = order.getSum() == null ? BigDecimal.ZERO : order.getSum();
 
         Long companyId = order.getCompany() != null
                 ? order.getCompany().getId()
@@ -778,6 +809,8 @@ public class ApiManagerBoardController {
                 order.getAmount(),
                 order.getCounter(),
                 order.getSum(),
+                orderSum.add(badReviewSummary.doneSum()),
+                toBadReviewSummaryResponse(badReviewSummary, orderSum),
                 firstReview != null && !isBlank(firstReview.getOrderComments())
                         ? safe(firstReview.getOrderComments())
                         : safe(order.getOrderComments()),
@@ -787,6 +820,7 @@ public class ApiManagerBoardController {
                 dateValue(order.getCreated()),
                 dateValue(order.getChanged()),
                 reviews.stream().map(this::toReviewDetailsResponse).toList(),
+                badReviewTasks.stream().map(this::toBadReviewTaskResponse).toList(),
                 productOptions(),
                 hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER"),
                 hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
@@ -794,6 +828,45 @@ public class ApiManagerBoardController {
                 hasAnyRole(authentication, "ADMIN", "OWNER"),
                 hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
                 hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER")
+        );
+    }
+
+    private BadReviewSummaryResponse toBadReviewSummaryResponse(BadReviewTaskSummary summary, BigDecimal orderSum) {
+        BigDecimal baseSum = orderSum == null ? BigDecimal.ZERO : orderSum;
+        BadReviewTaskSummary safeSummary = summary == null ? BadReviewTaskSummary.empty() : summary;
+        return new BadReviewSummaryResponse(
+                safeSummary.total(),
+                safeSummary.pending(),
+                safeSummary.done(),
+                safeSummary.canceled(),
+                safeSummary.doneSum(),
+                safeSummary.pendingSum(),
+                baseSum.add(safeSummary.doneSum())
+        );
+    }
+
+    private BadReviewTaskDetailsResponse toBadReviewTaskResponse(BadReviewTask task) {
+        Review review = task.getSourceReview();
+        Long sourceReviewId = review != null ? review.getId() : null;
+        Long botId = task.getBot() != null ? task.getBot().getId() : null;
+        String botFio = task.getBot() != null ? safe(task.getBot().getFio()) : "";
+        String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
+                ? safe(task.getWorker().getUser().getFio())
+                : "";
+        return new BadReviewTaskDetailsResponse(
+                task.getId(),
+                sourceReviewId,
+                taskStatusLabel(task.getStatus()),
+                task.getStatus() == null ? "" : task.getStatus().name(),
+                task.getOriginalRating(),
+                task.getTargetRating(),
+                task.getPrice(),
+                dateValue(task.getScheduledDate()),
+                dateValue(task.getCompletedDate()),
+                workerFio,
+                botId,
+                botFio,
+                safe(task.getComment())
         );
     }
 
@@ -1226,6 +1299,16 @@ public class ApiManagerBoardController {
         return status == null ? "" : safe(status.getTitle());
     }
 
+    private String taskStatusLabel(BadReviewTaskStatus status) {
+        if (status == BadReviewTaskStatus.DONE) {
+            return "Выполнено";
+        }
+        if (status == BadReviewTaskStatus.CANCELED) {
+            return "Отменено";
+        }
+        return "В работе";
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -1588,11 +1671,14 @@ public class ApiManagerBoardController {
             Integer amount,
             Integer counter,
             BigDecimal sum,
+            BigDecimal totalSumWithBadReviews,
+            BadReviewSummaryResponse badReviewSummary,
             String orderComments,
             String companyComments,
             String created,
             String changed,
             List<ReviewDetailsResponse> reviews,
+            List<BadReviewTaskDetailsResponse> badReviewTasks,
             List<ProductOptionResponse> products,
             boolean canEditReviews,
             boolean canSendToCheck,
@@ -1600,6 +1686,34 @@ public class ApiManagerBoardController {
             boolean canEditReviewPublish,
             boolean canEditReviewVigul,
             boolean canDeleteReviews
+    ) {
+    }
+
+    public record BadReviewSummaryResponse(
+            int total,
+            int pending,
+            int done,
+            int canceled,
+            BigDecimal doneSum,
+            BigDecimal pendingSum,
+            BigDecimal totalSumWithBadReviews
+    ) {
+    }
+
+    public record BadReviewTaskDetailsResponse(
+            Long id,
+            Long sourceReviewId,
+            String status,
+            String statusCode,
+            Integer originalRating,
+            Integer targetRating,
+            BigDecimal price,
+            String scheduledDate,
+            String completedDate,
+            String workerFio,
+            Long botId,
+            String botFio,
+            String comment
     ) {
     }
 

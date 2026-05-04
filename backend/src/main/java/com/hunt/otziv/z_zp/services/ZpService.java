@@ -10,6 +10,7 @@ import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.Zp;
 import org.springframework.data.util.Pair;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.Set;
 public interface ZpService {
 
     boolean save(Order order);
+    boolean save(Order order, BigDecimal sum, int amount);
     List<ZpDTO> getAllZpDTO();
     boolean saveLeadZp(Lead lead);
     List<Zp> getAllWorkerZp(String login);

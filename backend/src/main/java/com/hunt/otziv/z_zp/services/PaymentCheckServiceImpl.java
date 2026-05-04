@@ -145,8 +145,14 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     @Transactional
     public boolean save(Order order){ // Сохранить Чек в БД
+        BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+        return save(order, sum);
+    } // Сохранить Чек в БД
+
+    @Transactional
+    public boolean save(Order order, BigDecimal sum){ // Сохранить Чек в БД
         try {
-            saveCheckCompany(order);
+            saveCheckCompany(order, sum);
             return true;
         }
         catch (Exception e){
@@ -156,12 +162,18 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
 
     @Transactional
     protected void saveCheckCompany(Order order){ // Сохранить Чек в БД
+        BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+        saveCheckCompany(order, sum);
+    } // Сохранить Чек в БД
+
+    @Transactional
+    protected void saveCheckCompany(Order order, BigDecimal sum){ // Сохранить Чек в БД
         log.info("Зашли в создание чека");
-        System.out.println(order.getSum());
+        System.out.println(sum);
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(order.getCompany().getTitle());
         paymentCheck.setCompanyId(order.getCompany().getId());
-        paymentCheck.setSum(order.getSum());
+        paymentCheck.setSum(sum);
         paymentCheck.setOrderId(order.getId());
         paymentCheck.setManagerId(order.getManager().getUser().getId());
         paymentCheck.setWorkerId(order.getManager().getUser().getId());

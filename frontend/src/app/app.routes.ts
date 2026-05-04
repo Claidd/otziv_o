@@ -115,6 +115,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/dictionaries/accounts/:botId/browser',
+    loadComponent: () => import('./features/admin/dictionaries/bot-browser.component')
+      .then((m) => m.BotBrowserComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/dictionaries',
     loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
       .then((m) => m.AdminDictionariesComponent),

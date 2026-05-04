@@ -29,6 +29,12 @@ backend/.idea
 .env
 .env.*
 !backend/.env.local.example
+!.env.prod.example
+!docker-compose.yaml
+!docker-compose.build.yaml
+!compose.prod.yaml
+!infrastructure/loki/*.yaml
+!infrastructure/grafana/provisioning/datasources/*.yaml
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
@@ -50,6 +56,7 @@ data/app-logs/
 data/nginx/logs/
 docker/sent-hashes/
 sent-hashes/
+.m2/
 
 # managed
 **.data.json

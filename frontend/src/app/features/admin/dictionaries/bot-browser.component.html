@@ -1,0 +1,44 @@
+<section class="bot-browser-page">
+  <header class="browser-topbar">
+    <div class="browser-title">
+      <a href="/admin/dictionaries" title="Вернуться к справочникам">
+        <span class="material-icons-sharp">arrow_back</span>
+      </a>
+      <div>
+        <small>Аккаунт #{{ bot()?.id || '' }}</small>
+        <h1>{{ bot()?.fio || 'Браузер аккаунта' }}</h1>
+        <p>{{ bot()?.login || 'Подготовка профиля' }}</p>
+      </div>
+    </div>
+
+    <div class="browser-actions">
+      <span [class.error]="error()">{{ status() }}</span>
+      <button type="button" (click)="closeSession()" title="Закрыть сессию">
+        <span class="material-icons-sharp">logout</span>
+        Закрыть
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="browser-error">
+      <span class="material-icons-sharp">error</span>
+      {{ error() }}
+    </div>
+  }
+
+  <main class="browser-frame-wrap">
+    @if (!frameLoaded() && !error()) {
+      <div class="browser-loading">Открываю VNC...</div>
+    }
+
+    @if (safeVncUrl(); as url) {
+      <iframe
+        [src]="url"
+        title="Браузер аккаунта"
+        scrolling="yes"
+        (load)="onFrameLoad()"
+      ></iframe>
+    }
+  </main>
+</section>

@@ -39,6 +39,12 @@ export interface OrderCardItem {
   filialUrl?: string;
   status: string;
   sum?: number;
+  totalSumWithBadReviews?: number;
+  badReviewTasksSum?: number;
+  badReviewTasksTotal?: number;
+  badReviewTasksPending?: number;
+  badReviewTasksDone?: number;
+  badReviewTasksCanceled?: number;
   companyUrlChat?: string;
   companyTelephone?: string;
   orderComments?: string;
@@ -244,6 +250,32 @@ export interface OrderReviewItem {
   urlPhoto: string;
 }
 
+export interface BadReviewSummary {
+  total: number;
+  pending: number;
+  done: number;
+  canceled: number;
+  doneSum?: number;
+  pendingSum?: number;
+  totalSumWithBadReviews?: number;
+}
+
+export interface BadReviewTaskItem {
+  id: number;
+  sourceReviewId?: number | null;
+  status: string;
+  statusCode: string;
+  originalRating?: number | null;
+  targetRating?: number | null;
+  price?: number;
+  scheduledDate?: string;
+  completedDate?: string;
+  workerFio?: string;
+  botId?: number | null;
+  botFio?: string;
+  comment?: string;
+}
+
 export interface OrderDetailsPayload {
   orderId: number;
   companyId?: number | null;
@@ -255,11 +287,14 @@ export interface OrderDetailsPayload {
   amount?: number;
   counter?: number;
   sum?: number;
+  totalSumWithBadReviews?: number;
+  badReviewSummary?: BadReviewSummary;
   orderComments: string;
   companyComments: string;
   created: string;
   changed: string;
   reviews: OrderReviewItem[];
+  badReviewTasks: BadReviewTaskItem[];
   products: ProductOption[];
   canEditReviews: boolean;
   canSendToCheck: boolean;
@@ -411,6 +446,13 @@ export class ManagerApi {
   publishOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/publish`,
+      {}
+    );
+  }
+
+  cancelBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/cancel`,
       {}
     );
   }

@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
@@ -17,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -31,6 +34,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final OrderRepository orderRepository;
     private final CompanyStatusService companyStatusService;
     private final OrderStatusService orderStatusService;
+    private final BadReviewTaskService badReviewTaskService;
 
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
@@ -42,7 +46,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             PaymentCheckService paymentCheckService,
             OrderRepository orderRepository,
             CompanyStatusService companyStatusService,
-            OrderStatusService orderStatusService
+            OrderStatusService orderStatusService,
+            BadReviewTaskService badReviewTaskService
     ) {
         this.creationService = creationService;
         this.companyService = companyService;
@@ -51,6 +56,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.orderRepository = orderRepository;
         this.companyStatusService = companyStatusService;
         this.orderStatusService = orderStatusService;
+        this.badReviewTaskService = badReviewTaskService;
     }
 
     @Override
@@ -59,20 +65,37 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         if (!order.isComplete() && Objects.equals(order.getAmount(), order.getCounter())) {
             log.info("Заказ не выполнен и счетчики совпадают");
 
-            if (zpService.save(order)) {
+            BadReviewTaskSummary badReviewSummary = badReviewTaskService.getSummaryForOrder(order.getId());
+            BigDecimal baseSum = safeMoney(order.getSum());
+            BigDecimal payableSum = baseSum.add(badReviewSummary.doneSum());
+            int payableAmount = order.getAmount() + badReviewSummary.done();
+            log.info(
+                    "Оплата заказа {}: основной заказ {} руб./{} шт., плохие выполнены {} на {} руб., ожидают отмены {}, итого {} руб./{} шт.",
+                    order.getId(),
+                    baseSum,
+                    order.getAmount(),
+                    badReviewSummary.done(),
+                    badReviewSummary.doneSum(),
+                    badReviewSummary.pending(),
+                    payableSum,
+                    payableAmount
+            );
+
+            if (zpService.save(order, payableSum, payableAmount)) {
                 log.info("Сохранили ЗП");
-                paymentCheckService.save(order);
+                paymentCheckService.save(order, payableSum);
                 log.info("Сохранили чек");
 
                 Company company = companyService.getCompaniesById(order.getCompany().getId());
-                company.setCounterPay(company.getCounterPay() + order.getAmount());
-                company.setSumTotal(company.getSumTotal().add(order.getSum()));
+                company.setCounterPay(company.getCounterPay() + payableAmount);
+                company.setSumTotal(safeMoney(company.getSumTotal()).add(payableSum));
 
                 order.setComplete(true);
                 order.setPayDay(LocalDate.now());
 
                 orderRepository.save(order);
                 companyService.save(checkStatusToCompany(company));
+                badReviewTaskService.cancelPendingTasksForOrder(order);
 
                 if (!creationService.createNewOrderWithReviews(
                         company.getId(),
@@ -88,6 +111,10 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PAYMENT));
         orderRepository.save(order);
         return true;
+    }
+
+    private BigDecimal safeMoney(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     @Transactional

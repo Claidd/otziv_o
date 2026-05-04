@@ -16,9 +16,10 @@
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/app.log</file>
         <append>true</append>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <!-- Имя файла для архива -->
-            <fileNamePattern>${LOG_PATH}/app.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_PATH}/app.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
             <!-- Хранить 7 дней -->
             <maxHistory>7</maxHistory>
             <!-- Максимальный размер архива (опц.) -->
@@ -37,20 +38,7 @@
         <appender-ref ref="DEBUG_FILE" />
     </root>
 
-    <appender name="ACCESS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_PATH}/access.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/access.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>7</maxHistory>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <logger name="ACCESS_LOGGER" level="INFO" additivity="false">
-        <appender-ref ref="ACCESS_FILE"/>
-    </logger>
+    <logger name="ACCESS_LOGGER" level="INFO" additivity="true"/>
 
     <!-- Только ошибки -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">

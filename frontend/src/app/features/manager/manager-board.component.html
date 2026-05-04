@@ -40,7 +40,7 @@
           >
             <option value="">Компании</option>
             @for (status of companyStatusOptions(); track trackStatus($index, status)) {
-              <option [value]="'companies:' + status">{{ status }}</option>
+              <option [value]="'companies:' + status">{{ statusOptionLabel('companies', status) }}</option>
             }
           </select>
 
@@ -51,7 +51,7 @@
           >
             <option value="">Заказы</option>
             @for (status of orderStatusOptions(); track trackStatus($index, status)) {
-              <option [value]="'orders:' + status">{{ status }}</option>
+              <option [value]="'orders:' + status">{{ statusOptionLabel('orders', status) }}</option>
             }
           </select>
 
@@ -218,8 +218,15 @@
 
             <div class="meta-row">
               <span>{{ order.status || '-' }}</span>
-              <span>{{ order.sum || 0 | number:'1.0-0' }} руб.</span>
+              <span>{{ payableOrderSum(order) | number:'1.0-0' }} руб.</span>
             </div>
+
+            @if (showBadReviewSummary(order)) {
+              <div class="meta-row">
+                <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
+                <span>+{{ order.badReviewTasksSum || 0 | number:'1.0-0' }} руб.</span>
+              </div>
+            }
 
             <div class="phone-row">
               <a [href]="orderChatUrl(order)" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
