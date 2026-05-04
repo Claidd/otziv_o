@@ -1,0 +1,76 @@
+<article class="manager-card company-card">
+  <header>
+    <a [href]="companyFilialUrl()" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
+    <div class="card-id-line">
+      <small>#{{ company.id }}</small>
+      @if (hasMeaningfulNote(company.commentsCompany)) {
+        <app-company-note-trigger
+          [note]="company.commentsCompany"
+          (saveNote)="noteSaved.emit($event)"
+        />
+      }
+    </div>
+  </header>
+
+  <div class="phone-row">
+    <a [href]="companyChatUrl()" target="_blank" rel="noopener">{{ company.telephone || '-' }}</a>
+    <button type="button" (click)="phoneCopied.emit(company.telephone)" title="Скопировать телефон">
+      {{ copied === 'телефон' ? '✓' : 'T' }}
+    </button>
+  </div>
+
+  <div class="meta-row">
+    <span>{{ company.status || '-' }}</span>
+    <button
+      type="button"
+      class="order-create-trigger"
+      (click)="orderCreateOpened.emit()"
+      [title]="'Создать заказ: ' + (company.title || 'компания')"
+    >
+      Заказ
+    </button>
+  </div>
+
+  <details class="comment-details">
+    <summary>
+      <span>{{ company.commentsCompany || 'Комментарий' }}</span>
+    </summary>
+  </details>
+
+  <details class="card-more">
+    <summary>Еще</summary>
+
+    <div class="card-actions">
+      @for (action of actions; track trackAction($index, action)) {
+        <button
+          type="button"
+          [disabled]="isMutating(action)"
+          (click)="statusUpdated.emit(action)"
+          [title]="action.status"
+        >
+          <span class="material-icons-sharp">{{ action.icon }}</span>
+          {{ action.label }}
+        </button>
+      }
+    </div>
+
+    <div class="meta-row">
+      <span>Филиалов:</span>
+      <span>{{ company.countFilials || 0 }}</span>
+    </div>
+  </details>
+
+  <a
+    href=""
+    class="details-button"
+    (click)="$event.preventDefault(); ordersOpened.emit()"
+    [title]="'Показать заказы: ' + (company.title || 'компания')"
+  >
+    Подробнее
+  </a>
+
+  <footer>
+    <span>{{ company.manager || '-' }}</span>
+    <a href="" (click)="$event.preventDefault(); editOpened.emit()">компания - {{ company.city || 'город' }}</a>
+  </footer>
+</article>

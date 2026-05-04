@@ -1,0 +1,88 @@
+<article class="manager-card order-card" [class.order-card--company-context]="selectedCompany">
+  <header>
+    <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
+      {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
+    </a>
+    <div class="card-id-line">
+      <small>#{{ order.id }}</small>
+      @if (hasMeaningfulNote(order.companyComments) || (selectedCompany && hasMeaningfulNote(order.orderComments))) {
+        <app-company-note-trigger
+          [note]="order.companyComments"
+          [orderNote]="selectedCompany ? order.orderComments : ''"
+          (saveNote)="companyNoteSaved.emit($event)"
+          (saveOrderNote)="orderNoteSaved.emit($event)"
+        />
+      }
+    </div>
+  </header>
+
+  <div class="meta-row">
+    <span>{{ order.status || '-' }}</span>
+    <span>{{ payableOrderSum() | number:'1.0-0' }} руб.</span>
+  </div>
+
+  @if (showBadReviewSummary()) {
+    <div class="meta-row">
+      <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
+      <span>+{{ order.badReviewTasksSum || 0 | number:'1.0-0' }} руб.</span>
+    </div>
+  }
+
+  <div class="phone-row">
+    <a [href]="orderChatUrl()" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
+    @if (!selectedCompany) {
+      <button type="button" (click)="phoneCopied.emit(order.companyTelephone)" title="Скопировать телефон">
+        {{ copied === 'телефон' ? '✓' : 'T' }}
+      </button>
+    }
+  </div>
+
+  <div class="card-actions order-links">
+    <button type="button" (click)="copyTextRequested.emit('review')">
+      текст
+    </button>
+    <a [href]="orderReviewUrl()" target="_blank" rel="noopener">
+      url
+    </a>
+    <button type="button" (click)="copyTextRequested.emit('payment')">
+      счет
+    </button>
+    <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
+      ссылка
+    </a>
+  </div>
+
+  <div class="progress">
+    <div class="progress-bar" [style.width.%]="progress()">
+      <span>{{ order.counter || 0 }}</span>
+    </div>
+  </div>
+
+  <div class="card-actions order-status-actions">
+    @for (action of actions; track trackAction($index, action)) {
+      <button
+        type="button"
+        [disabled]="isMutating(action)"
+        (click)="statusUpdated.emit(action)"
+        [title]="action.status"
+      >
+        {{ action.label }}
+      </button>
+    }
+    <span class="order-worker-chip" [title]="order.workerUserFio || 'Специалист не назначен'">
+      {{ order.workerUserFio || '-' }}
+    </span>
+  </div>
+
+  <div class="meta-row">
+    <span>{{ order.categoryTitle || 'Категория' }}</span>
+    <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+  </div>
+
+  <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
+
+  <footer>
+    <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
+    <a href="" (click)="$event.preventDefault(); editOpened.emit()">заказ</a>
+  </footer>
+</article>

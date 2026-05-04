@@ -1,0 +1,272 @@
+<div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
+  <section
+    class="lead-edit-modal company-edit-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="company-edit-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="lead-edit-head">
+      <div>
+        <small>Компания #{{ company?.id }}</small>
+        <h2 id="company-edit-title">Редактирование компании</h2>
+      </div>
+      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || !!deleteKey" title="Закрыть">
+        <span class="material-icons-sharp">close</span>
+      </button>
+    </header>
+
+    @if (error) {
+      <p class="error compact">{{ error }}</p>
+    }
+
+    @if (loading && !company) {
+      <p class="empty">Загружаю компанию...</p>
+    }
+
+    @if (company; as company) {
+      @if (draft; as draft) {
+        <form class="lead-edit-form" #companyEditForm="ngForm" (ngSubmit)="submitted.emit()">
+          <div class="lead-edit-grid">
+            <label class="lead-edit-field">
+              <span>Название</span>
+              <input
+                name="title"
+                type="text"
+                required
+                [ngModel]="draft.title"
+                (ngModelChange)="setField('title', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Телефон</span>
+              <input
+                name="telephone"
+                type="text"
+                required
+                [ngModel]="draft.telephone"
+                (ngModelChange)="setField('telephone', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Ссылка на чат</span>
+              <input
+                name="urlChat"
+                type="text"
+                required
+                [ngModel]="draft.urlChat"
+                (ngModelChange)="setField('urlChat', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Город компании</span>
+              <input
+                name="city"
+                type="text"
+                [ngModel]="draft.city"
+                (ngModelChange)="setField('city', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Email</span>
+              <input
+                name="email"
+                type="email"
+                [ngModel]="draft.email"
+                (ngModelChange)="setField('email', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Категория</span>
+              <select
+                name="categoryId"
+                [ngModel]="draft.categoryId"
+                (ngModelChange)="categoryChanged.emit($event)"
+              >
+                @for (category of company.categories; track trackOption($index, category)) {
+                  <option [ngValue]="category.id">{{ optionLabel(category) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Подкатегория</span>
+              <select
+                name="subCategoryId"
+                [ngModel]="draft.subCategoryId"
+                (ngModelChange)="setField('subCategoryId', $event)"
+              >
+                @for (subCategory of company.subCategories; track trackOption($index, subCategory)) {
+                  <option [ngValue]="subCategory.id">{{ optionLabel(subCategory) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Статус</span>
+              <select
+                name="statusId"
+                required
+                [ngModel]="draft.statusId"
+                (ngModelChange)="setField('statusId', $event)"
+              >
+                @for (status of company.statuses; track trackOption($index, status)) {
+                  <option [ngValue]="status.id">{{ optionLabel(status) }}</option>
+                }
+              </select>
+            </label>
+
+            @if (company.canChangeManager) {
+              <label class="lead-edit-field">
+                <span>Менеджер</span>
+                <select
+                  name="managerId"
+                  [ngModel]="draft.managerId"
+                  (ngModelChange)="setField('managerId', $event)"
+                >
+                  @for (manager of company.managers; track trackOption($index, manager)) {
+                    <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий</span>
+              <textarea
+                name="commentsCompany"
+                rows="3"
+                [ngModel]="draft.commentsCompany"
+                (ngModelChange)="setField('commentsCompany', $event)"
+              ></textarea>
+            </label>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+              <span>Специалисты компании</span>
+              <div class="company-edit-list">
+                @for (worker of company.currentWorkers; track trackOption($index, worker)) {
+                  <div class="company-edit-row">
+                    <span>{{ optionLabel(worker) }}</span>
+                    <button type="button" class="secondary worker-delete" (click)="workerDeleted.emit(worker)" [disabled]="!!deleteKey">
+                      {{ deleteKey === 'worker-' + worker.id ? 'Удаляю...' : 'Удалить' }}
+                    </button>
+                  </div>
+                } @empty {
+                  <small>Специалисты не назначены</small>
+                }
+              </div>
+            </section>
+
+            <label class="lead-edit-field">
+              <span>Добавить специалиста</span>
+              <select
+                name="newWorkerId"
+                [ngModel]="draft.newWorkerId"
+                (ngModelChange)="setField('newWorkerId', $event)"
+              >
+                <option [ngValue]="null">Не добавлять</option>
+                @for (worker of company.workers; track trackOption($index, worker)) {
+                  <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Активность</span>
+              <input
+                name="active"
+                type="checkbox"
+                [ngModel]="draft.active"
+                (ngModelChange)="setField('active', $event)"
+              >
+            </label>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+              <span>Филиалы</span>
+              <div class="company-edit-list">
+                @for (filial of company.filials; track filial.id) {
+                  <div class="company-edit-row">
+                    <a [href]="filialEditUrl(filial.id)" target="_blank" rel="noopener">
+                      {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
+                    </a>
+                    <button
+                      type="button"
+                      class="secondary filial-delete"
+                      (click)="filialDeleted.emit({ filialId: filial.id, title: filial.title })"
+                      [disabled]="!!deleteKey"
+                    >
+                      {{ deleteKey === 'filial-' + filial.id ? 'Удаляю...' : 'Удалить' }}
+                    </button>
+                  </div>
+                } @empty {
+                  <small>Филиалы не добавлены</small>
+                }
+              </div>
+            </section>
+
+            <label class="lead-edit-field">
+              <span>Город нового филиала</span>
+              <select
+                name="newFilialCityId"
+                [ngModel]="draft.newFilialCityId"
+                (ngModelChange)="setField('newFilialCityId', $event)"
+              >
+                <option [ngValue]="null">Не добавлять</option>
+                @for (city of company.cities; track trackOption($index, city)) {
+                  <option [ngValue]="city.id">{{ optionLabel(city) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Адрес нового филиала</span>
+              <input
+                name="newFilialTitle"
+                type="text"
+                [ngModel]="draft.newFilialTitle"
+                (ngModelChange)="setField('newFilialTitle', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Ссылка 2ГИС нового филиала</span>
+              <input
+                name="newFilialUrl"
+                type="text"
+                [ngModel]="draft.newFilialUrl"
+                (ngModelChange)="setField('newFilialUrl', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата создания</span>
+              <input type="text" [value]="company.createDate" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата изменений</span>
+              <input type="text" [value]="company.updateStatus" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Следующая рассылка</span>
+              <input type="text" [value]="company.dateNewTry" readonly>
+            </label>
+          </div>
+
+          <div class="lead-edit-actions">
+            <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || !!deleteKey">Отмена</button>
+            <button type="submit" [disabled]="saving || !!deleteKey || companyEditForm.invalid">
+              {{ saving ? 'Сохраняю...' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  </section>
+</div>

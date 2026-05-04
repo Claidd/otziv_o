@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -19,7 +18,6 @@ import {
   OrderUpdateRequest
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
-import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
 import {
   DEFAULT_MANAGER_COMPANY_STATUSES,
@@ -35,40 +33,26 @@ import {
   ManagerHistoryView,
   MobileNavLink,
   PromoItem,
-  SectionTab,
   SelectedCompany,
   StatusAction,
   managerAbsoluteAppUrl,
   managerBoardTitle,
-  managerCompanyChatUrl,
-  managerCompanyFilialUrl,
-  managerCompanyOrderUrl,
   managerErrorMessage,
-  managerFilialEditUrl,
-  managerHasMeaningfulNote,
   managerLayoutTitle,
   managerLegacyUrl,
-  managerOptionLabel,
   managerOrderActions,
-  managerOrderChatUrl,
-  managerOrderDetailsUrl,
-  managerOrderInfoUrl,
-  managerOrderReviewUrl,
   managerPayableOrderSum,
-  managerProgress,
   managerPromoItems,
   managerReviewCheckPath,
-  managerShowBadReviewSummary,
   managerStatusOptionLabel,
-  trackManagerAction,
   trackManagerCompany,
   trackManagerMetric,
-  trackManagerOption,
   trackManagerOrder,
-  trackManagerProduct,
-  trackManagerSection,
   trackManagerStatus
 } from './manager-board.config';
+import { ManagerCompanyCardComponent } from './manager-company-card.component';
+import type { ManagerCompanyEditDraftChange } from './manager-company-edit-modal.component';
+import { ManagerCompanyEditModalComponent } from './manager-company-edit-modal.component';
 import {
   managerCompanyEditDraft,
   managerCompanyFilialDeletedLabel,
@@ -89,6 +73,9 @@ import {
   managerOrderEditDraft,
   managerSelectedCreateOrderProduct
 } from './manager-board.order.helpers';
+import { ManagerOrderCardComponent } from './manager-order-card.component';
+import type { ManagerOrderEditDraftChange } from './manager-order-edit-modal.component';
+import { ManagerOrderEditModalComponent } from './manager-order-edit-modal.component';
 import type { ManagerCreateOrderDraftChange } from './manager-order-create-modal.component';
 import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.component';
 
@@ -96,9 +83,11 @@ import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.c
   selector: 'app-manager-board',
   imports: [
     AdminLayoutComponent,
-    CompanyNoteTriggerComponent,
-    DecimalPipe,
     FormsModule,
+    ManagerCompanyCardComponent,
+    ManagerCompanyEditModalComponent,
+    ManagerOrderCardComponent,
+    ManagerOrderEditModalComponent,
     ManagerOrderCreateModalComponent,
     RouterLink
   ],
@@ -420,10 +409,6 @@ export class ManagerBoardComponent {
     return managerPayableOrderSum(order);
   }
 
-  showBadReviewSummary(order: OrderCardItem): boolean {
-    return managerShowBadReviewSummary(order);
-  }
-
   openCompanyOrders(company: CompanyCardItem): void {
     this.replaceCurrentHistoryState();
     this.activeSection.set('orders');
@@ -468,7 +453,11 @@ export class ManagerBoardComponent {
     this.editError.set(null);
   }
 
-  setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
+  handleCompanyEditDraftChange(change: ManagerCompanyEditDraftChange): void {
+    this.setCompanyEditField(change.field, change.value);
+  }
+
+  private setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
     this.editDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
   }
 
@@ -681,8 +670,8 @@ export class ManagerBoardComponent {
     this.orderError.set(null);
   }
 
-  setOrderEditField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {
-    this.orderDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  handleOrderEditDraftChange(change: ManagerOrderEditDraftChange): void {
+    this.orderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
   }
 
   saveOrderEdit(): void {
@@ -817,54 +806,6 @@ export class ManagerBoardComponent {
     return managerOrderActions(order, Boolean(this.selectedCompany()));
   }
 
-  isMutating(key: string): boolean {
-    return this.mutationKey() === key;
-  }
-
-  companyChatUrl(company: CompanyCardItem): string {
-    return managerCompanyChatUrl(company);
-  }
-
-  orderChatUrl(order: OrderCardItem): string {
-    return managerOrderChatUrl(order);
-  }
-
-  companyFilialUrl(company: CompanyCardItem): string {
-    return managerCompanyFilialUrl(company);
-  }
-
-  companyOrderUrl(company: CompanyCardItem): string {
-    return managerCompanyOrderUrl(company);
-  }
-
-  filialEditUrl(filialId: number): string {
-    return managerFilialEditUrl(filialId);
-  }
-
-  orderDetailsUrl(order: OrderCardItem): string {
-    return managerOrderDetailsUrl(order);
-  }
-
-  orderInfoUrl(order: OrderCardItem): string {
-    return managerOrderInfoUrl(order);
-  }
-
-  orderReviewUrl(order: OrderCardItem): string {
-    return managerOrderReviewUrl(order);
-  }
-
-  progress(order: OrderCardItem): number {
-    return managerProgress(order);
-  }
-
-  optionLabel(option: ManagerOption): string {
-    return managerOptionLabel(option);
-  }
-
-  trackSection(_index: number, section: SectionTab): ManagerSection {
-    return trackManagerSection(_index, section);
-  }
-
   trackStatus(_index: number, status: string): string {
     return trackManagerStatus(_index, status);
   }
@@ -881,25 +822,9 @@ export class ManagerBoardComponent {
     return trackManagerMetric(_index, metric);
   }
 
-  trackAction(_index: number, action: StatusAction): string {
-    return trackManagerAction(_index, action);
-  }
-
-  trackOption(_index: number, option: ManagerOption): number {
-    return trackManagerOption(_index, option);
-  }
-
-  trackProduct(_index: number, product: { id: number }): number {
-    return trackManagerProduct(_index, product);
-  }
-
   private metricValue(section: ManagerSection, status: string): number | null {
     const metric = this.board()?.metrics.find((item) => item.section === section && item.status === status);
     return metric?.value ?? null;
-  }
-
-  hasMeaningfulNote(value?: string | null): boolean {
-    return managerHasMeaningfulNote(value);
   }
 
   private captureHistoryView(): ManagerHistoryView {
