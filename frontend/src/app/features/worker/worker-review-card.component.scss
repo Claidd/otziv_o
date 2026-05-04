@@ -1,0 +1,403 @@
+:host {
+  display: contents;
+}
+
+.worker-card {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 25.2rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.9rem;
+  padding: 0.66rem;
+  background: var(--otziv-white);
+  box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.worker-card:hover {
+  box-shadow: none;
+}
+
+.worker-card header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 0.45rem;
+}
+
+.worker-card header a {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-family: var(--otziv-card-title-font);
+  font-size: 1.06rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-card footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.worker-card footer span,
+.worker-card footer a {
+  color: var(--otziv-info);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.review-actions button,
+.review-actions a,
+.publish-button {
+  display: inline-flex;
+  min-height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.72rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background .55s ease, border-color .55s ease, color .55s ease, box-shadow .65s ease;
+}
+
+.review-actions button:not(:disabled):hover,
+.review-actions a:hover {
+  border-color: transparent;
+  color: white;
+  background: #c461dc;
+}
+
+.review-card {
+  grid-template-rows: auto auto auto 2.2rem auto 2.2rem auto;
+  min-height: 0;
+}
+
+.review-id-line {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.bad-task-badge {
+  color: var(--otziv-danger);
+}
+
+.review-photo-link {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: white;
+  background: var(--otziv-success);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.review-photo-link--missing {
+  background: var(--otziv-danger);
+  cursor: default;
+}
+
+.review-photo-link .material-icons-sharp {
+  font-size: 0.76rem;
+}
+
+.review-note-trigger {
+  position: relative;
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #f4c542;
+  color: #4d3900;
+  cursor: pointer;
+}
+
+.review-note-trigger > .material-icons-sharp {
+  font-size: 0.86rem;
+}
+
+.review-note-popover {
+  position: absolute;
+  top: 1.25rem;
+  right: 0;
+  z-index: 4;
+  display: none;
+  width: min(17rem, 78vw);
+  max-height: 21rem;
+  overflow: auto;
+  gap: 0.45rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.75rem;
+  padding: 0.55rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.24);
+}
+
+.review-note-trigger:hover .review-note-popover,
+.review-note-trigger:focus-within .review-note-popover {
+  display: grid;
+}
+
+.review-note-section {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.review-note-section > span:first-child {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.review-note-popover textarea {
+  width: 100%;
+  min-height: 5.2rem;
+  resize: vertical;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.55rem;
+  outline: 0;
+  padding: 0.55rem;
+  background: var(--otziv-field-background);
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.review-field-editor {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.review-text-box {
+  position: relative;
+  display: block;
+  min-width: 0;
+  line-height: 0;
+}
+
+.review-field-editor textarea {
+  display: block;
+  width: 100%;
+  height: 9rem;
+  min-height: 0;
+  resize: none;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.8rem;
+  outline: 0;
+  padding: 0.72rem;
+  background: var(--otziv-field-background);
+  color: var(--otziv-dark);
+  font: 700 0.82rem/1.35 var(--otziv-font-family);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.review-field-editor textarea:focus,
+.review-field-editor.editing textarea {
+  border-color: #f4c542;
+  box-shadow: 0 0 0 0.16rem rgba(244, 197, 66, 0.22);
+  cursor: text;
+}
+
+.review-field-editor--text textarea {
+  padding-bottom: 1.95rem;
+  overflow: hidden;
+}
+
+.review-field-editor--text.expanded textarea {
+  height: auto;
+  min-height: 14rem;
+  overflow: hidden;
+  field-sizing: content;
+}
+
+.review-text-toggle {
+  position: absolute;
+  right: 0.72rem;
+  bottom: 0.72rem;
+  z-index: 1;
+  padding-left: 0.25rem;
+  background: var(--otziv-field-background);
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.review-field-editor--answer textarea {
+  height: 3.5rem;
+  font-weight: 400;
+  text-align: center;
+  overflow: auto;
+}
+
+.review-field-edit-actions {
+  display: flex;
+  min-height: 1.85rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.field-save-actions,
+.note-edit-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.review-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.review-actions button,
+.review-actions a {
+  min-width: 0;
+  min-height: 2.05rem;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 0 0.25rem;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publish-button {
+  width: 100%;
+  border-color: transparent;
+  border-radius: 1rem;
+  color: white;
+  background: var(--otziv-success);
+  text-transform: uppercase;
+}
+
+.publish-button:disabled {
+  color: var(--otziv-info);
+  background: var(--otziv-light);
+  opacity: 1;
+}
+
+.review-field-edit-actions button,
+.note-edit-actions button {
+  display: grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  place-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.5rem;
+  background: var(--otziv-white);
+  color: var(--otziv-dark);
+  font-family: var(--otziv-font-family);
+  font-size: 0.8rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.review-field-edit-actions button:not(:disabled):hover,
+.note-edit-actions button:not(:disabled):hover {
+  border-color: transparent;
+  color: white;
+  background: #c461dc;
+}
+
+.review-field-edit-actions .save,
+.note-edit-actions .save {
+  color: var(--otziv-success);
+}
+
+.review-field-edit-actions .cancel,
+.note-edit-actions .cancel {
+  color: var(--otziv-danger);
+}
+
+.review-field-edit-actions button:disabled,
+.note-edit-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.review-field-edit-actions .material-icons-sharp,
+.note-edit-actions .material-icons-sharp {
+  font-family: 'Material Icons Sharp';
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.bot-line {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  min-height: 2.2rem;
+  align-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.8rem;
+  padding: 0 0.75rem;
+  background: var(--otziv-field-background);
+}
+
+.bot-line span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.92rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .worker-card {
+    flex: 0 0 min(21rem, calc(100vw - 4rem));
+    min-height: 0;
+    scroll-snap-align: center;
+  }
+
+  .review-actions button,
+  .review-actions a {
+    min-height: 2.55rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .worker-card {
+    flex-basis: min(20.5rem, calc(100vw - 3.25rem));
+  }
+}

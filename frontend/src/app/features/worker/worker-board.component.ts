@@ -1,6 +1,5 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import {
   ManagerApi,
   ManagerOption,
@@ -19,7 +18,6 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
-import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
 import {
   DEFAULT_WORKER_PERMISSIONS,
@@ -51,13 +49,7 @@ import {
 } from './worker-board.config';
 import {
   workerEditableOrderNoteText,
-  workerHasMeaningfulNote,
-  workerHasReviewCompanyNote,
-  workerHasReviewNote,
-  workerHasReviewOrderNote,
-  workerHasReviewOwnNote,
   workerOrderNoteMutationKey,
-  workerOrderNoteText,
   workerPatchOrderNote,
   workerPatchReviewField,
   workerPatchReviewNote,
@@ -66,18 +58,17 @@ import {
   workerReviewFieldKey,
   workerReviewFieldSourceValue,
   workerReviewNoteMutationKey,
-  workerReviewNoteTitle,
-  workerReviewTextNeedsToggle,
   workerSaveReviewFieldMutationKey,
-  workerShouldShowExpander,
   workerSideNoteKey,
   workerSideNoteMutationKey,
   workerSideNoteSourceValue
 } from './worker-board-note.helpers';
+import { WorkerOrderCardComponent } from './worker-order-card.component';
+import { WorkerReviewCardComponent } from './worker-review-card.component';
 
 @Component({
   selector: 'app-worker-board',
-  imports: [AdminLayoutComponent, CompanyNoteTriggerComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, FormsModule, WorkerOrderCardComponent, WorkerReviewCardComponent],
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
 })
@@ -801,48 +792,8 @@ export class WorkerBoardComponent {
     return this.reviewFieldDrafts()[key] ?? workerReviewFieldSourceValue(review, field);
   }
 
-  isReviewFieldEditing(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.editingReviewFieldKey() === workerReviewFieldKey(review, field);
-  }
-
-  isReviewFieldChanged(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.reviewFieldValue(review, field) !== workerReviewFieldSourceValue(review, field);
-  }
-
-  isReviewFieldSaved(review: WorkerReviewItem, field: ReviewEditableField): boolean {
-    return this.savedReviewFieldKey() === workerReviewFieldKey(review, field);
-  }
-
-  shouldShowReviewTextToggle(review: WorkerReviewItem): boolean {
-    return workerReviewTextNeedsToggle(review);
-  }
-
-  isReviewTextExpanded(review: WorkerReviewItem): boolean {
-    return Boolean(this.expandedReviewTextIds()[review.id]);
-  }
-
-  isReviewTextOpen(review: WorkerReviewItem): boolean {
-    return this.isReviewTextExpanded(review) || this.isReviewFieldEditing(review, 'text');
-  }
-
   toggleReviewText(review: WorkerReviewItem): void {
     this.expandedReviewTextIds.update((items) => ({ ...items, [review.id]: !items[review.id] }));
-  }
-
-  hasReviewNote(review: WorkerReviewItem): boolean {
-    return workerHasReviewNote(review);
-  }
-
-  hasReviewOwnNote(review: WorkerReviewItem): boolean {
-    return workerHasReviewOwnNote(review);
-  }
-
-  hasReviewOrderNote(review: WorkerReviewItem): boolean {
-    return workerHasReviewOrderNote(review);
-  }
-
-  hasReviewCompanyNote(review: WorkerReviewItem): boolean {
-    return workerHasReviewCompanyNote(review);
   }
 
   startReviewNoteEdit(review: WorkerReviewItem): void {
@@ -912,18 +863,6 @@ export class WorkerBoardComponent {
 
   reviewNoteValue(review: WorkerReviewItem): string {
     return this.reviewNoteDrafts()[review.id] ?? review.comment ?? '';
-  }
-
-  isReviewNoteEditing(review: WorkerReviewItem): boolean {
-    return this.editingReviewNoteId() === review.id;
-  }
-
-  isReviewNoteChanged(review: WorkerReviewItem): boolean {
-    return this.reviewNoteValue(review) !== (review.comment ?? '');
-  }
-
-  isReviewNoteSaved(review: WorkerReviewItem): boolean {
-    return this.savedReviewNoteId() === review.id;
   }
 
   startSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
@@ -998,52 +937,8 @@ export class WorkerBoardComponent {
     return this.sideNoteDrafts()[workerSideNoteKey(review, field)] ?? workerSideNoteSourceValue(review, field);
   }
 
-  isSideNoteEditing(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.editingSideNoteKey() === workerSideNoteKey(review, field);
-  }
-
-  isSideNoteChanged(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.sideNoteValue(review, field) !== workerSideNoteSourceValue(review, field);
-  }
-
-  isSideNoteSaved(review: WorkerReviewItem, field: SideNoteField): boolean {
-    return this.savedSideNoteKey() === workerSideNoteKey(review, field);
-  }
-
-  reviewNoteTitle(review: WorkerReviewItem): string {
-    return workerReviewNoteTitle(review);
-  }
-
-  botLabel(review: WorkerReviewItem): string {
-    if (this.hasUnavailableBot(review)) {
-      return 'нет доступных аккаунтов';
-    }
-
-    if (review.botFio) {
-      return `${review.botFio} ${review.botCounter || ''}`.trim();
-    }
-
-    return review.productTitle || 'Аккаунт';
-  }
-
-  hasUnavailableBot(review: WorkerReviewItem): boolean {
-    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
-  }
-
-  reviewDate(review: WorkerReviewItem): string {
-    return review.badTaskScheduledDate || review.publishedDate || review.created || '-';
-  }
-
   isBadTask(review: WorkerReviewItem): boolean {
     return !!review.badTask;
-  }
-
-  ratingTaskLabel(review: WorkerReviewItem): string {
-    if (!this.isBadTask(review)) {
-      return '';
-    }
-
-    return `${review.originalRating ?? 5} -> ${review.targetRating ?? 2}`;
   }
 
   reviewActionTitle(review: WorkerReviewItem): string {
@@ -1096,10 +991,6 @@ export class WorkerBoardComponent {
     return this.mutationKey() === key;
   }
 
-  orderNoteText(order: OrderCardItem): string {
-    return workerOrderNoteText(order);
-  }
-
   editableOrderNoteText(order: OrderCardItem): string {
     return workerEditableOrderNoteText(order);
   }
@@ -1138,10 +1029,6 @@ export class WorkerBoardComponent {
     return workerOrderNoteMutationKey(order);
   }
 
-  shouldShowExpander(text?: string | null): boolean {
-    return workerShouldShowExpander(text);
-  }
-
   isOrderSection(section = this.activeSection()): boolean {
     return section === 'new' || section === 'correct' || section === 'all';
   }
@@ -1158,34 +1045,6 @@ export class WorkerBoardComponent {
     return this.permissions().canWorkReviews;
   }
 
-  orderAmountLabel(order: OrderCardItem): string {
-    if (this.permissions().canSeeMoney) {
-      return `${order.totalSumWithBadReviews ?? order.sum ?? 0} руб.`;
-    }
-
-    return `${order.amount ?? 0} шт.`;
-  }
-
-  showBadReviewSummary(order: OrderCardItem): boolean {
-    return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
-  }
-
-  progress(order: OrderCardItem): number {
-    if (!order.amount || !order.counter) {
-      return 0;
-    }
-
-    return Math.max(0, Math.min(100, Math.round((order.counter / order.amount) * 100)));
-  }
-
-  orderChatUrl(order: OrderCardItem): string {
-    return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
-  }
-
-  orderDetailsUrl(order: OrderCardItem): string {
-    return workerLegacyUrl(`/ordersDetails/${order.companyId}/${order.id}`);
-  }
-
   orderEditUrl(order: OrderCardItem): string {
     return workerLegacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
   }
@@ -1196,22 +1055,6 @@ export class WorkerBoardComponent {
 
   botEditUrl(bot: WorkerBotItem): string {
     return workerLegacyUrl(`/bots/edit/${bot.id}`);
-  }
-
-  botBrowserUrl(review: WorkerReviewItem): string {
-    return review.botId ? workerLegacyUrl(`/bots/${review.botId}/browser`) : 'https://vk.com/';
-  }
-
-  reviewPhotoUrl(review: WorkerReviewItem): string {
-    return review.urlPhoto || review.url || '';
-  }
-
-  hasReviewPhoto(review: WorkerReviewItem): boolean {
-    return Boolean(this.needsReviewPhoto(review) && this.reviewPhotoUrl(review));
-  }
-
-  needsReviewPhoto(review: WorkerReviewItem): boolean {
-    return Boolean(review.productPhoto);
   }
 
   trackSection(_index: number, section: SectionTab): WorkerSection {
@@ -1274,10 +1117,6 @@ export class WorkerBoardComponent {
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
     };
-  }
-
-  hasMeaningfulNote(value?: string | null): boolean {
-    return workerHasMeaningfulNote(value);
   }
 
   private setBoardPatch(board: WorkerBoard | null): void {

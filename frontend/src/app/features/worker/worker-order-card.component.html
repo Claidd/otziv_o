@@ -1,0 +1,156 @@
+<article class="worker-card order-card">
+  <header>
+    <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
+      {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
+    </a>
+    <div class="review-id-line">
+      #{{ order.id }}
+      @if (hasMeaningfulNote(order.companyComments)) {
+        <app-company-note-trigger
+          [note]="order.companyComments"
+          (saveNote)="companyNoteSaved.emit($event)"
+        />
+      }
+    </div>
+  </header>
+
+  <div class="meta-row">
+    <span>{{ order.status || '-' }}</span>
+    <span>{{ orderAmountLabel() }}</span>
+  </div>
+
+  @if (showBadReviewSummary()) {
+    <div class="meta-row">
+      <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
+      <span>+{{ order.badReviewTasksSum || 0 }} руб.</span>
+    </div>
+  }
+
+  @if (permissions.canSeePhoneAndPayment) {
+    <div class="phone-row">
+      <a [href]="orderChatUrl()" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
+      <button type="button" (click)="phoneCopied.emit(order.companyTelephone)" title="Скопировать телефон">
+        {{ copied === 'телефон' ? '✓' : 'T' }}
+      </button>
+    </div>
+
+    <div class="card-actions order-links">
+      <button type="button" (click)="copyTextRequested.emit('check')">текст</button>
+      <a [href]="order.orderDetailsId ? '/review/editReviews/' + order.orderDetailsId : orderDetailsUrl()" target="_blank" rel="noopener">url</a>
+      <button type="button" (click)="copyTextRequested.emit('payment')">счет</button>
+      <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">ссылка</a>
+    </div>
+  }
+
+  <div class="progress">
+    <div class="progress-bar" [style.width.%]="progress()">
+      <span>{{ order.counter || 0 }}</span>
+    </div>
+  </div>
+
+  @if (permissions.canManageOrderStatuses) {
+    <div class="card-actions order-status-actions">
+      @for (action of actions; track trackAction($index, action)) {
+        <button
+          type="button"
+          [disabled]="isMutating('order-' + order.id + '-' + action.status)"
+          (click)="statusUpdated.emit(action)"
+          [title]="action.status"
+        >
+          {{ action.label }}
+        </button>
+      }
+
+      <span class="worker-chip worker-chip--action" [title]="order.workerUserFio || 'Специалист не назначен'">
+        {{ order.workerUserFio || '-' }}
+      </span>
+    </div>
+  }
+
+  <div class="meta-row">
+    <span>{{ order.categoryTitle || 'Категория' }}</span>
+    <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+  </div>
+
+  <div
+    class="order-note-editor"
+    [class.editing]="noteEditing"
+    [class.expanded]="noteExpanded"
+    [class.saved]="noteSaved"
+  >
+    @if (noteEditing) {
+      <textarea
+        [name]="'order-note-' + order.id"
+        [ngModel]="noteDraft"
+        (ngModelChange)="noteDraftChanged.emit($event)"
+        [readonly]="isMutating(orderNoteMutationKey())"
+        aria-label="Заметка заказа"
+        placeholder="нет заметок"
+      ></textarea>
+
+      <div class="note-edit-actions">
+        <button
+          type="button"
+          class="cancel"
+          (click)="noteEditCanceled.emit()"
+          [disabled]="isMutating(orderNoteMutationKey())"
+          title="Отменить"
+        >
+          X
+        </button>
+        <button
+          type="button"
+          class="save"
+          (click)="noteSaveRequested.emit()"
+          [disabled]="isMutating(orderNoteMutationKey()) || !noteChanged"
+          title="Сохранить заметку"
+        >
+          <span class="material-icons-sharp">{{ noteSaved ? 'check' : 'save' }}</span>
+        </button>
+      </div>
+    } @else {
+      <div
+        class="order-note-view"
+        [class.can-edit]="permissions.canEditNotes"
+        (click)="noteEditStarted.emit()"
+        (keydown.enter)="noteEditStarted.emit()"
+        (keydown.space)="$event.preventDefault(); noteEditStarted.emit()"
+        [attr.role]="permissions.canEditNotes ? 'button' : null"
+        [attr.tabindex]="permissions.canEditNotes ? 0 : null"
+        [title]="permissions.canEditNotes ? 'Нажмите, чтобы редактировать заметку' : 'Редактирование заметок недоступно'"
+      >
+        <span class="order-note-text">{{ orderNoteText() }}</span>
+
+        @if (shouldShowExpander(orderNoteText())) {
+          <span
+            class="note-expand-toggle"
+            role="button"
+            tabindex="0"
+            (click)="noteToggled.emit($event)"
+            (keydown.enter)="noteToggled.emit($event)"
+            (keydown.space)="$event.preventDefault(); noteToggled.emit($event)"
+          >
+            {{ noteExpanded ? 'свернуть' : 'развернуть' }}
+          </span>
+        }
+      </div>
+    }
+  </div>
+
+  @if (!permissions.canManageOrderStatuses) {
+    <span class="worker-chip" [title]="order.workerUserFio || 'Специалист не назначен'">
+      {{ order.workerUserFio || '-' }}
+    </span>
+  }
+
+  <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
+
+  <footer>
+    <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
+    @if (canOpenInlineEdit()) {
+      <a href="" (click)="$event.preventDefault(); editOpened.emit()">заказ</a>
+    } @else {
+      <a [href]="orderEditUrl()">заказ</a>
+    }
+  </footer>
+</article>
