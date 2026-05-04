@@ -1,41 +1,37 @@
 package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
-import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
-import com.hunt.otziv.config.email.EmailService;
-import com.hunt.otziv.exceptions.BotTemplateNameException;
-import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.r_review.bot.ReviewBotChangeService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
+import com.hunt.otziv.r_review.edit.ReviewEditService;
 import com.hunt.otziv.r_review.mapper.ReviewDtoMapper;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchive;
+import com.hunt.otziv.r_review.board.ReviewBoardMode;
+import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
+import com.hunt.otziv.r_review.board.ReviewBoardScope;
+import com.hunt.otziv.r_review.nagul.ReviewNagulService;
 import com.hunt.otziv.r_review.repository.ReviewArchiveRepository;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -43,17 +39,16 @@ import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.security.Principal;
-import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+
+import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
 
 
 @Service
@@ -70,43 +65,13 @@ public class ReviewServiceImpl implements ReviewService {
     private final WorkerService workerService;
     private final ManagerService managerService;
     private final UserService userService;
-    private final EmailService emailService;
     private final ProductService productService;
     private final FilialService filialService;
-    private final BotAssignmentService botAssignmentService;
     private final ReviewDtoMapper reviewDtoMapper;
-
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    private static final Long STUB_BOT_ID = 1L;
-    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
-    private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
-            "Впишите Имя Фамилию",
-            "Впиши Имя Фамилию",
-            "Впишите Фамилию Имя"
-    );
-
-    @Value("${app.nagul.cooldown}")
-    private int NAGUL_COOLDOWN_MINUTES;
-
-    private static final List<String> FORBIDDEN_PATTERNS = Arrays.asList(
-            "имя", "фамилия", "фамилию", "впиши", "отчество", "fio", "name", "surname",
-            "введите", "заполните", "укажите", "вставьте", "шаблон", "template", "пример"
-    );
-
-    private enum ReviewBoardMode {
-        PUBLISH,
-        ORDER_STATUS,
-        VIGUL
-    }
-
-    private enum ReviewBoardScope {
-        ADMIN,
-        WORKER,
-        MANAGER,
-        OWNER
-    }
+    private final ReviewBoardQueryService reviewBoardQueryService;
+    private final ReviewNagulService reviewNagulService;
+    private final ReviewBotChangeService reviewBotChangeService;
+    private final ReviewEditService reviewEditService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -164,7 +129,7 @@ public class ReviewServiceImpl implements ReviewService {
             Principal principal,
             String role
     ) {
-        return countBoardReviewMetrics(reviewBoardScope(role), publishDate, vigulDate, badStatus, principal);
+        return countBoardReviewMetrics(ReviewBoardScope.fromRole(role), publishDate, vigulDate, badStatus, principal);
     }
 
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(Collection<Long> workerIds, LocalDate localDate) {
@@ -204,7 +169,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublish(localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -220,7 +185,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublish(worker, localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -236,7 +201,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublish(
                 manager.getUser().getWorkers(), manager, localDate, pageable);
         return getReviewDTOPage(reviewIds);
@@ -256,7 +221,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublish(workerList, localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -268,7 +233,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public Page<ReviewDTOOne> getAllReviewDTOByOrderStatusToAdmin(String status, int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByOrderStatus(status, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -286,7 +251,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndOrderStatus(worker, status, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -304,7 +269,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndOrderStatus(
                 manager.getUser().getWorkers(), manager, status, pageable);
         return getReviewDTOPage(reviewIds);
@@ -324,7 +289,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndOrderStatus(workerList, status, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -334,7 +299,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (!hasText(keyword)) {
             return getAllReviewDTOAndDateToAdmin(localDate, pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.ADMIN,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.ADMIN,
                 localDate, null, null, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -348,7 +313,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (worker == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
                 localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -362,7 +327,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.MANAGER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.MANAGER,
                 localDate, null, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -377,7 +342,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
         Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.OWNER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.OWNER,
                 localDate, null, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -386,7 +351,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (!hasText(keyword)) {
             return getAllReviewDTOByOrderStatusToAdmin(status, pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.ADMIN,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.ADMIN,
                 null, status, null, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -400,7 +365,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (worker == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.WORKER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.WORKER,
                 null, status, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -414,7 +379,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.MANAGER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.MANAGER,
                 null, status, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -429,7 +394,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
         Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.OWNER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.OWNER,
                 null, status, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -466,106 +431,6 @@ public class ReviewServiceImpl implements ReviewService {
         return new PageImpl<>(reviewDTOOnes, reviewIds.getPageable(), reviewIds.getTotalElements());
     }
 
-    private Pageable reviewPageable(int pageNumber, int pageSize, String sortDirection) {
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortDirection)
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-        Sort sort = Sort.by(direction, "publishedDate").and(Sort.by(direction, "id"));
-        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
-    }
-
-    private Page<Long> findReviewIdsForBoard(
-            ReviewBoardMode mode,
-            ReviewBoardScope scope,
-            LocalDate localDate,
-            String status,
-            Worker worker,
-            Manager manager,
-            Set<Worker> workers,
-            String keyword,
-            int pageNumber,
-            int pageSize,
-            String sortDirection
-    ) {
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
-        if ((scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) && (workers == null || workers.isEmpty())) {
-            return new PageImpl<>(Collections.emptyList(), pageable, 0);
-        }
-
-        String joins = """
-                LEFT JOIN r.bot b
-                LEFT JOIN r.filial f
-                LEFT JOIN f.city city
-                LEFT JOIN r.worker rw
-                LEFT JOIN rw.user wu
-                LEFT JOIN r.product rp
-                LEFT JOIN r.category cat
-                LEFT JOIN r.subCategory sub
-                LEFT JOIN r.orderDetails d
-                LEFT JOIN d.product dp
-                LEFT JOIN d.order o
-                LEFT JOIN o.company c
-                LEFT JOIN o.status os
-                LEFT JOIN o.manager om
-                LEFT JOIN om.user mu
-                """;
-
-        List<String> conditions = new ArrayList<>();
-        switch (mode) {
-            case PUBLISH -> {
-                conditions.add("r.publishedDate <= :localDate");
-                conditions.add("r.publish = false");
-            }
-            case ORDER_STATUS -> conditions.add("os.title = :status");
-            case VIGUL -> {
-                conditions.add("r.publishedDate <= :localDate");
-                conditions.add("r.publish = false");
-                conditions.add("r.vigul = false");
-                conditions.add("(b IS NULL OR b.counter <= 2)");
-            }
-        }
-
-        switch (scope) {
-            case WORKER -> conditions.add("r.worker = :worker");
-            case OWNER -> conditions.add("r.worker IN :workers");
-            case MANAGER -> {
-                conditions.add("r.worker IN :workers");
-                if (mode == ReviewBoardMode.VIGUL) {
-                    conditions.add("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)");
-                } else {
-                    conditions.add("o.manager = :manager");
-                }
-            }
-            case ADMIN -> {
-            }
-        }
-
-        Long keywordLong = parseKeywordLong(keyword);
-        UUID keywordUuid = parseKeywordUuid(keyword);
-        conditions.add(reviewKeywordPredicate(keywordLong != null, keywordUuid != null));
-
-        String where = " WHERE " + String.join(" AND ", conditions);
-        String direction = "desc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
-        String orderBy = " ORDER BY r.publishedDate " + direction + ", r.id " + direction;
-
-        TypedQuery<Long> idQuery = entityManager.createQuery(
-                "SELECT DISTINCT r.id FROM Review r " + joins + where + orderBy,
-                Long.class
-        );
-        TypedQuery<Long> countQuery = entityManager.createQuery(
-                "SELECT COUNT(DISTINCT r.id) FROM Review r " + joins + where,
-                Long.class
-        );
-
-        bindReviewBoardParameters(idQuery, mode, scope, localDate, status, worker, manager, workers, keyword, keywordLong, keywordUuid);
-        bindReviewBoardParameters(countQuery, mode, scope, localDate, status, worker, manager, workers, keyword, keywordLong, keywordUuid);
-
-        idQuery.setFirstResult((int) pageable.getOffset());
-        idQuery.setMaxResults(pageable.getPageSize());
-
-        return new PageImpl<>(idQuery.getResultList(), pageable, countQuery.getSingleResult());
-    }
-
     private int countBoardReviews(
             ReviewBoardMode mode,
             LocalDate localDate,
@@ -577,7 +442,7 @@ public class ReviewServiceImpl implements ReviewService {
             return 0;
         }
 
-        ReviewBoardScope scope = reviewBoardScope(role);
+        ReviewBoardScope scope = ReviewBoardScope.fromRole(role);
         Worker worker = null;
         Manager manager = null;
         Set<Worker> workers = null;
@@ -614,7 +479,7 @@ public class ReviewServiceImpl implements ReviewService {
             return 0;
         }
 
-        return toIntCount(countReviewIdsForBoard(mode, scope, localDate, status, worker, manager, workers));
+        return toIntCount(reviewBoardQueryService.countReviewIdsForBoard(mode, scope, localDate, status, worker, manager, workers));
     }
 
     private Map<String, Integer> countBoardReviewMetrics(
@@ -661,218 +526,17 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Map<String, Integer> result = new HashMap<>();
-        result.put("publish", toIntCount(countReviewIdsForBoard(
+        result.put("publish", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
                 ReviewBoardMode.PUBLISH, scope, publishDate, null, worker, manager, workers)));
-        result.put("nagul", toIntCount(countReviewIdsForBoard(
+        result.put("nagul", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
                 ReviewBoardMode.VIGUL, scope, vigulDate, null, worker, manager, workers)));
-        result.put("bad", toIntCount(countReviewIdsForBoard(
+        result.put("bad", toIntCount(reviewBoardQueryService.countReviewIdsForBoard(
                 ReviewBoardMode.ORDER_STATUS, scope, null, badStatus, worker, manager, workers)));
         return result;
     }
 
-    private long countReviewIdsForBoard(
-            ReviewBoardMode mode,
-            ReviewBoardScope scope,
-            LocalDate localDate,
-            String status,
-            Worker worker,
-            Manager manager,
-            Set<Worker> workers
-    ) {
-        String joins = reviewCountJoins(mode, scope);
-
-        List<String> conditions = new ArrayList<>();
-        switch (mode) {
-            case PUBLISH -> {
-                conditions.add("r.publishedDate <= :localDate");
-                conditions.add("r.publish = false");
-            }
-            case ORDER_STATUS -> conditions.add("os.title = :status");
-            case VIGUL -> {
-                conditions.add("r.publishedDate <= :localDate");
-                conditions.add("r.publish = false");
-                conditions.add("r.vigul = false");
-                conditions.add("(b IS NULL OR b.counter <= 2)");
-            }
-        }
-
-        switch (scope) {
-            case WORKER -> conditions.add("r.worker = :worker");
-            case OWNER -> conditions.add("r.worker IN :workers");
-            case MANAGER -> {
-                conditions.add("r.worker IN :workers");
-                if (mode == ReviewBoardMode.VIGUL) {
-                    conditions.add("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)");
-                } else {
-                    conditions.add("o.manager = :manager");
-                }
-            }
-            case ADMIN -> {
-            }
-        }
-
-        TypedQuery<Long> query = entityManager.createQuery(
-                "SELECT COUNT(r.id) FROM Review r " + joins + " WHERE " + String.join(" AND ", conditions),
-                Long.class
-        );
-        bindReviewBoardCountParameters(query, mode, scope, localDate, status, worker, manager, workers);
-        return query.getSingleResult();
-    }
-
-    private String reviewCountJoins(ReviewBoardMode mode, ReviewBoardScope scope) {
-        return switch (mode) {
-            case PUBLISH -> scope == ReviewBoardScope.MANAGER
-                    ? " JOIN r.orderDetails d JOIN d.order o "
-                    : "";
-            case VIGUL -> scope == ReviewBoardScope.MANAGER
-                    ? " LEFT JOIN r.bot b LEFT JOIN r.orderDetails d LEFT JOIN d.order o "
-                    : " LEFT JOIN r.bot b ";
-            case ORDER_STATUS -> " JOIN r.orderDetails d JOIN d.order o JOIN o.status os ";
-        };
-    }
-
-    private void bindReviewBoardCountParameters(
-            TypedQuery<Long> query,
-            ReviewBoardMode mode,
-            ReviewBoardScope scope,
-            LocalDate localDate,
-            String status,
-            Worker worker,
-            Manager manager,
-            Set<Worker> workers
-    ) {
-        if (mode == ReviewBoardMode.PUBLISH || mode == ReviewBoardMode.VIGUL) {
-            query.setParameter("localDate", localDate);
-        }
-        if (mode == ReviewBoardMode.ORDER_STATUS) {
-            query.setParameter("status", status);
-        }
-        if (scope == ReviewBoardScope.WORKER) {
-            query.setParameter("worker", worker);
-        }
-        if (scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) {
-            query.setParameter("workers", workers);
-        }
-        if (scope == ReviewBoardScope.MANAGER) {
-            query.setParameter("manager", manager);
-        }
-    }
-
-    private ReviewBoardScope reviewBoardScope(String role) {
-        if ("ADMIN".equalsIgnoreCase(role)) {
-            return ReviewBoardScope.ADMIN;
-        }
-        if ("OWNER".equalsIgnoreCase(role)) {
-            return ReviewBoardScope.OWNER;
-        }
-        if ("MANAGER".equalsIgnoreCase(role)) {
-            return ReviewBoardScope.MANAGER;
-        }
-        return ReviewBoardScope.WORKER;
-    }
-
     private int toIntCount(long count) {
         return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
-    }
-
-    private String reviewKeywordPredicate(boolean hasKeywordLong, boolean hasKeywordUuid) {
-        List<String> parts = new ArrayList<>(List.of(
-                "LOWER(COALESCE(r.text, '')) LIKE :keyword",
-                "LOWER(COALESCE(r.answer, '')) LIKE :keyword",
-                "LOWER(COALESCE(c.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(c.commentsCompany, '')) LIKE :keyword",
-                "LOWER(COALESCE(o.zametka, '')) LIKE :keyword",
-                "LOWER(COALESCE(os.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(city.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(f.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(b.fio, '')) LIKE :keyword",
-                "LOWER(COALESCE(wu.fio, '')) LIKE :keyword",
-                "LOWER(COALESCE(mu.fio, '')) LIKE :keyword",
-                "LOWER(COALESCE(rp.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(dp.title, '')) LIKE :keyword",
-                "LOWER(COALESCE(cat.categoryTitle, '')) LIKE :keyword",
-                "LOWER(COALESCE(sub.subCategoryTitle, '')) LIKE :keyword",
-                "LOWER(COALESCE(d.comment, '')) LIKE :keyword"
-        ));
-
-        if (hasKeywordLong) {
-            parts.add("r.id = :keywordLong");
-            parts.add("o.id = :keywordLong");
-            parts.add("c.id = :keywordLong");
-        }
-        if (hasKeywordUuid) {
-            parts.add("d.id = :keywordUuid");
-        }
-
-        return "(" + String.join(" OR ", parts) + ")";
-    }
-
-    private void bindReviewBoardParameters(
-            TypedQuery<Long> query,
-            ReviewBoardMode mode,
-            ReviewBoardScope scope,
-            LocalDate localDate,
-            String status,
-            Worker worker,
-            Manager manager,
-            Set<Worker> workers,
-            String keyword,
-            Long keywordLong,
-            UUID keywordUuid
-    ) {
-        if (mode == ReviewBoardMode.PUBLISH || mode == ReviewBoardMode.VIGUL) {
-            query.setParameter("localDate", localDate);
-        }
-        if (mode == ReviewBoardMode.ORDER_STATUS) {
-            query.setParameter("status", status);
-        }
-        if (scope == ReviewBoardScope.WORKER) {
-            query.setParameter("worker", worker);
-        }
-        if (scope == ReviewBoardScope.OWNER || scope == ReviewBoardScope.MANAGER) {
-            query.setParameter("workers", workers);
-        }
-        if (scope == ReviewBoardScope.MANAGER) {
-            query.setParameter("manager", manager);
-        }
-
-        query.setParameter("keyword", "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%");
-        if (keywordLong != null) {
-            query.setParameter("keywordLong", keywordLong);
-        }
-        if (keywordUuid != null) {
-            query.setParameter("keywordUuid", keywordUuid);
-        }
-    }
-
-    private Long parseKeywordLong(String keyword) {
-        if (!hasText(keyword)) {
-            return null;
-        }
-        String trimmed = keyword.trim();
-        if (!trimmed.matches("\\d+")) {
-            return null;
-        }
-        try {
-            return Long.parseLong(trimmed);
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private UUID parseKeywordUuid(String keyword) {
-        if (!hasText(keyword)) {
-            return null;
-        }
-        try {
-            return UUID.fromString(keyword.trim());
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
     }
 
     @Transactional
@@ -939,22 +603,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public boolean hasActiveNagulReviews(Principal principal) {
-        if (principal == null) {
-            return false;
-        }
-
-        User user = userService.findByUserName(principal.getName()).orElse(null);
-        if (user == null) {
-            return false;
-        }
-
-        Worker worker = workerService.getWorkerByUserId(user.getId());
-        if (worker == null) {
-            return false;
-        }
-
-        LocalDate today = LocalDate.now();
-        return reviewRepository.existsActiveNagulReviews(worker, today.plusDays(60));
+        return reviewNagulService.hasActiveNagulReviews(principal);
     }
 
     @Override
@@ -1371,375 +1020,16 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public void changeBot(Long reviewId) {
-        try {
-            log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
-            Review review = getReviewToChangeBot(reviewId);
-
-            if (review.getBot() == null) {
-                log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
-            } else if (Objects.equals(review.getBot().getId(), STUB_BOT_ID)) {
-                log.warn("2. Для отзыва ID {} установлен бот-заглушка (нет доступных ботов)", reviewId);
-            } else {
-                log.info("2. Установлен новый рандомный бот для отзыва ID {}", reviewId);
-            }
-
-            reviewRepository.save(review);
-            log.info("3. Сохранили отзыв в БД");
-
-        } catch (Exception e) {
-            log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
-            throw new RuntimeException("Не удалось заменить бота: " + e.getMessage(), e);
-        }
+        reviewBotChangeService.changeBot(reviewId);
     }
 
     @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
-        try {
-            Review review = reviewRepository.findById(reviewId).orElse(null);
-            if (review == null) {
-                throw new RuntimeException("Отзыв не найден");
-            }
-
-            boolean wasVigul = review.isVigul();
-
-            Bot currentBot = review.getBot();
-            Long currentBotId = currentBot != null ? currentBot.getId() : null;
-
-            if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
-                botId = currentBotId;
-                log.info("Используем ID реального бота отзыва: {}", botId);
-            }
-
-            try {
-                if (review.getFilial() != null && review.getFilial().getCity() != null) {
-                    List<Bot> cityBots = botService.getFindAllByFilialCityId(review.getFilial().getCity().getId());
-                    int botCount = cityBots != null ? cityBots.size() : 0;
-                    if (botCount < 50) {
-                        String textMail = "Город: " + review.getFilial().getCity().getTitle() + ". Остаток у города: " + botCount;
-                        emailService.sendSimpleEmail("o-company-server@mail.ru", "Мало аккаунтов у города", "Необходимо добавить аккаунты для: " + textMail);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Сообщение о деактивации бота не отправилось", e);
-            }
-
-            if (botId != null && !Objects.equals(botId, STUB_BOT_ID) && botId > 0) {
-                botActiveToFalse(botId);
-            }
-
-            Set<Long> excludedBotIds = botId != null && botId > 0 ? Set.of(botId) : Set.of();
-            assignBotUsingSharedRules(review, excludedBotIds);
-
-            log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
-            reviewRepository.save(review);
-
-        } catch (Exception e) {
-            log.error("Что-то пошло не так и бот не деактивирован", e);
-            throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage(), e);
-        }
-    }
-
-    private Review getReviewToChangeBot(Long reviewId) {
-        Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
-        if (reviewOptional.isEmpty()) {
-            throw new RuntimeException("Отзыв не найден");
-        }
-
-        Review review = reviewOptional.get();
-        boolean wasVigul = review.isVigul();
-
-        assignBotUsingSharedRules(review, Set.of());
-
-        log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
-        return review;
-    }
-
-    private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
-        Bot selectedBot = botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
-        review.setBot(selectedBot);
-
-        if (selectedBot == null || STUB_BOT_ID.equals(selectedBot.getId())) {
-            if (review.isVigul()) {
-                review.setVigul(false);
-            }
-            return;
-        }
-
-        updateVigulBasedOnBotCounter(review);
-    }
-
-    private Bot createStubBot() {
-        try {
-            Bot stubBot = botService.findBotById(STUB_BOT_ID);
-            if (stubBot != null) {
-                return stubBot;
-            }
-
-            Bot temp = new Bot();
-            temp.setId(STUB_BOT_ID);
-            temp.setFio("Нет доступных аккаунтов");
-            temp.setLogin("stub_account");
-            temp.setPassword("");
-            temp.setCounter(0);
-            temp.setActive(false);
-
-            StatusBot stubStatus = new StatusBot();
-            stubStatus.setBotStatusTitle("Заглушка");
-            temp.setStatus(stubStatus);
-
-            return temp;
-
-        } catch (Exception e) {
-            log.error("Ошибка при получении бота-заглушки", e);
-
-            Bot temp = new Bot();
-            temp.setId(STUB_BOT_ID);
-            temp.setFio("Нет доступных аккаунтов");
-            temp.setLogin("stub_account");
-            temp.setPassword("");
-            temp.setCounter(0);
-            temp.setActive(false);
-            return temp;
-        }
-    }
-
-    private boolean botActiveToFalse(Long botId) {
-        try {
-            if (botId == null || botId <= 0 || STUB_BOT_ID.equals(botId)) {
-                return false;
-            }
-
-            Bot bot = botService.findBotById(botId);
-            if (bot == null) {
-                return false;
-            }
-
-            bot.setActive(false);
-            botService.save(bot);
-            return true;
-
-        } catch (Exception e) {
-            log.error("3. Ошибка при деактивации бота {}: ", botId, e);
-            return false;
-        }
+        reviewBotChangeService.deActivateAndChangeBot(reviewId, botId);
     }
 
     public List<Bot> findAllBotsMinusFilial(Review review) {
-        if (review == null) {
-            return Collections.emptyList();
-        }
-
-        Filial filial = review.getFilial();
-        if (filial == null) {
-            return Collections.emptyList();
-        }
-
-        City city = filial.getCity();
-        if (city == null || city.getId() == null) {
-            return Collections.emptyList();
-        }
-
-        List<Bot> allBots;
-        try {
-            allBots = botService.getFindAllByFilialCityId(city.getId());
-        } catch (Exception e) {
-            log.error("Ошибка при получении ботов по ID города: {}", city.getId(), e);
-            return Collections.emptyList();
-        }
-
-        if (allBots == null || allBots.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        Set<Long> usedBotIdsInThisFilial = getUsedBotIdsInFilial(filial, review.getId());
-        Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
-
-        boolean vigul = review.isVigul();
-
-        List<Bot> idealBots = allBots.stream()
-                .filter(Objects::nonNull)
-                .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-                .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
-                .filter(bot -> {
-                    if (bot.getStatus() == null) {
-                        return false;
-                    }
-                    String statusTitle = bot.getStatus().getBotStatusTitle();
-                    return statusTitle != null && "Новый".equals(statusTitle.trim());
-                })
-                .collect(Collectors.toList());
-
-        if (!idealBots.isEmpty()) {
-            List<Bot> filteredBots = applyVigulFilters(idealBots, vigul);
-            if (!filteredBots.isEmpty()) {
-                return filteredBots;
-            }
-        }
-
-        List<Bot> fallbackBots = allBots.stream()
-                .filter(Objects::nonNull)
-                .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
-                .filter(bot -> {
-                    if (bot.getStatus() == null) {
-                        return false;
-                    }
-                    String statusTitle = bot.getStatus().getBotStatusTitle();
-                    return statusTitle != null && "Новый".equals(statusTitle.trim());
-                })
-                .collect(Collectors.toList());
-
-        if (!fallbackBots.isEmpty()) {
-            List<Bot> filteredBots = applyVigulFilters(fallbackBots, vigul);
-            if (!filteredBots.isEmpty()) {
-                return filteredBots;
-            }
-        }
-
-        return Collections.emptyList();
-    }
-
-    private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
-
-            if (allReviewsInFilial != null) {
-                for (Review existingReview : allReviewsInFilial) {
-                    if (existingReview != null
-                            && existingReview.getId() != null
-                            && !existingReview.getId().equals(currentReviewId)
-                            && existingReview.getBot() != null
-                            && existingReview.getBot().getId() != null) {
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
-        }
-
-        return usedBotIds;
-    }
-
-    private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            City currentCity = currentFilial.getCity();
-            if (currentCity == null || currentCity.getId() == null) {
-                return usedBotIds;
-            }
-
-            List<Filial> filialsInSameCity = filialService.findByCityId(currentCity.getId());
-            if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
-                return usedBotIds;
-            }
-
-            List<Long> otherFilialIdsInCity = filialsInSameCity.stream()
-                    .filter(filial -> filial != null && filial.getId() != null)
-                    .filter(filial -> !filial.getId().equals(currentFilial.getId()))
-                    .map(Filial::getId)
-                    .collect(Collectors.toList());
-
-            if (otherFilialIdsInCity.isEmpty()) {
-                return usedBotIds;
-            }
-
-            List<Review> activeReviewsInSameCity = reviewRepository
-                    .findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
-
-            if (activeReviewsInSameCity != null) {
-                for (Review existingReview : activeReviewsInSameCity) {
-                    if (existingReview != null
-                            && existingReview.getId() != null
-                            && !existingReview.getId().equals(currentReviewId)
-                            && existingReview.getBot() != null
-                            && existingReview.getBot().getId() != null) {
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Ошибка при получении глобально использованных ботов", e);
-        }
-
-        return usedBotIds;
-    }
-
-    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul) {
-        if (!vigul) {
-            List<Bot> strictFiltered = baseBots.stream()
-                    .filter(this::isTemplateBotName)
-                    .collect(Collectors.toList());
-
-            if (!strictFiltered.isEmpty()) {
-                return strictFiltered;
-            }
-
-            return baseBots;
-
-        } else {
-            List<Bot> strictFiltered = baseBots.stream()
-                    .filter(bot -> safeBotCounter(bot) >= 3)
-                    .collect(Collectors.toList());
-
-            if (!strictFiltered.isEmpty()) {
-                return strictFiltered;
-            }
-
-            List<Bot> fallbackFiltered = baseBots.stream()
-                    .filter(bot -> {
-                        int counter = safeBotCounter(bot);
-                        return counter >= 0 && counter <= 2;
-                    })
-                    .collect(Collectors.toList());
-
-            if (!fallbackFiltered.isEmpty()) {
-                return fallbackFiltered;
-            }
-
-            return baseBots;
-        }
-    }
-
-    private boolean isBotOverloaded(Bot bot) {
-        if (bot == null || bot.getId() == null) {
-            return false;
-        }
-
-        try {
-            List<Review> botActiveReviews = reviewRepository.findByBotAndPublishFalse(bot);
-            int maxActiveReviewsPerBot = 3;
-            return botActiveReviews != null && botActiveReviews.size() >= maxActiveReviewsPerBot;
-        } catch (Exception e) {
-            log.error("Ошибка при проверке загруженности бота ID {}", bot.getId(), e);
-            return false;
-        }
-    }
-
-    private void updateVigulBasedOnBotCounter(Review review) {
-        if (review == null || review.getBot() == null) {
-            return;
-        }
-
-        Bot bot = review.getBot();
-
-        if (STUB_BOT_ID.equals(bot.getId())) {
-            return;
-        }
-
-        int botCounter = safeBotCounter(bot);
-        boolean currentVigul = review.isVigul();
-
-        if (currentVigul && botCounter < MAX_ACTIVE_REVIEWS_PER_BOT) {
-            review.setVigul(false);
-        } else if (!currentVigul && botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
-            review.setVigul(true);
-        }
+        return reviewBotChangeService.findAllBotsMinusFilial(review);
     }
 
     @Override
@@ -1768,73 +1058,18 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    @Transactional
     public boolean updateReviewText(Long orderId, Long reviewId, String text) {
-        Review review = findReviewForOrder(orderId, reviewId);
-        if (review == null) {
-            return false;
-        }
-
-        review.setText(text);
-        reviewRepository.save(review);
-        return true;
+        return reviewEditService.updateReviewText(orderId, reviewId, text);
     }
 
     @Override
-    @Transactional
     public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer) {
-        Review review = findReviewForOrder(orderId, reviewId);
-        if (review == null) {
-            return false;
-        }
-
-        review.setAnswer(answer);
-        reviewRepository.save(review);
-        return true;
+        return reviewEditService.updateReviewAnswer(orderId, reviewId, answer);
     }
 
     @Override
-    @Transactional
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
-        Review review = findReviewForOrder(orderId, reviewId);
-        if (review == null || review.getOrderDetails() == null) {
-            return false;
-        }
-
-        OrderDetails orderDetails = review.getOrderDetails();
-        orderDetails.setComment(comment);
-        orderDetailsService.save(orderDetails);
-        return true;
-    }
-
-    private Review findReviewForOrder(Long orderId, Long reviewId) {
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        if (review == null || review.getOrderDetails() == null || review.getOrderDetails().getOrder() == null) {
-            return null;
-        }
-
-        Long reviewOrderId = review.getOrderDetails().getOrder().getId();
-        if (!Objects.equals(orderId, reviewOrderId)) {
-            return null;
-        }
-
-        return review;
-    }
-
-    private Bot claimReserveBot(Review review, Set<Long> excludedBotIds) {
-        if (review == null || review.getFilial() == null || review.getFilial().getCity() == null) {
-            return null;
-        }
-
-        Optional<Bot> reserveBot = botService.claimReserveBotForCity(review.getFilial().getCity(), excludedBotIds);
-        reserveBot.ifPresent(bot -> log.warn(
-                "Для отзыва ID {} назначен резервный бот ID {} ({}) и закреплен за городом {}",
-                review.getId(),
-                bot.getId(),
-                bot.getFio(),
-                review.getFilial().getCity().getTitle()
-        ));
-        return reserveBot.orElse(null);
+        return reviewEditService.updateReviewNote(orderId, reviewId, comment);
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize) {
@@ -1842,7 +1077,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublishToVigul(localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -1858,7 +1093,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublishToVigul(
                 manager.getUser().getWorkers(), manager, localDate, pageable);
         return getReviewDTOPage(reviewIds);
@@ -1878,7 +1113,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublishToVigul(workerList, localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -1896,7 +1131,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublishToVigul(worker, localDate, pageable);
         return getReviewDTOPage(reviewIds);
     }
@@ -1906,7 +1141,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (!hasText(keyword)) {
             return getAllReviewDTOAndDateToAdminToVigul(localDate, pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.ADMIN,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.ADMIN,
                 localDate, null, null, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -1920,7 +1155,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (manager == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.MANAGER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.MANAGER,
                 localDate, null, null, manager, manager.getUser().getWorkers(), keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -1935,7 +1170,7 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
         Set<Worker> workers = workerService.getAllWorkersToManagerList(managerList);
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.OWNER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.OWNER,
                 localDate, null, null, null, workers, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -1949,7 +1184,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (worker == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
-        return getReviewDTOPage(findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
                 localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
     }
 
@@ -1994,142 +1229,12 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public void changeNagulReview(Long reviewId) {
-        Review review = reviewRepository.findById(reviewId).orElse(null);
-        if (review == null) {
-            return;
-        }
-        review.setVigul(true);
-        reviewRepository.save(review);
+        reviewNagulService.changeNagulReview(reviewId);
     }
 
     @Override
-    @Transactional
     public void performNagulWithExceptions(Long reviewId, String username) {
-        User currentUser = userService.findByUserName(username)
-                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
-
-        List<String> roles = currentUser.getRoles().stream()
-                .map(Role::getName)
-                .collect(Collectors.toList());
-
-        boolean isWorker = roles.contains("ROLE_WORKER");
-        Worker worker = null;
-
-        if (isWorker) {
-            worker = workerService.getWorkerByUserId(currentUser.getId());
-
-            if (worker == null) {
-                throw new RuntimeException("Ошибка: не найдена информация о работнике");
-            }
-
-            validateNagulCooldown(worker);
-        }
-
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
-
-        validateBotName(review);
-
-        review.setVigul(true);
-
-        if (isWorker && worker != null) {
-            worker.setLastNagulTime(LocalDateTime.now());
-            workerService.save(worker);
-        }
-
-        reviewRepository.save(review);
-    }
-
-    private void validateNagulCooldown(Worker worker) {
-        if (worker.getLastNagulTime() != null) {
-            LocalDateTime now = LocalDateTime.now();
-            Duration duration = Duration.between(worker.getLastNagulTime(), now);
-
-            if (duration.toMinutes() < NAGUL_COOLDOWN_MINUTES) {
-                long secondsLeft = NAGUL_COOLDOWN_MINUTES * 60L - duration.getSeconds();
-                long minutesLeft = secondsLeft / 60;
-                long remainingSeconds = secondsLeft % 60;
-
-                throw new NagulTooFastException(minutesLeft, remainingSeconds);
-            }
-        }
-    }
-
-    private void validateBotName(Review review) {
-        if (review.getBot() == null || review.getBot().getFio() == null) {
-            return;
-        }
-
-        String botFio = review.getBot().getFio().trim();
-        String botFioLower = botFio.toLowerCase();
-
-        if (botFio.isEmpty()) {
-            throw new BotTemplateNameException("Имя бота не может быть пустым");
-        }
-
-        if (botFio.matches(".*\\d.*")) {
-            throw new BotTemplateNameException("Аккаунт не выгулян: имя содержит цифры");
-        }
-
-        List<String> forbiddenFullNames = Arrays.asList(
-                "имя фамилию",
-                "имя фамилия",
-                "впиши имя фамилию",
-                "впиши имя фамилия",
-                "фамилия имя",
-                "фамилию имя"
-        );
-
-        if (forbiddenFullNames.contains(botFioLower)) {
-            throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
-        }
-
-        String[] parts = botFio.split("\\s+");
-
-        if (parts.length < 2 || parts.length > 3) {
-            throw new BotTemplateNameException("Аккаунт не выгулян: имя должно быть в формате 'Имя Фамилия' или 'Имя Фамилия И.О.'");
-        }
-
-        for (int i = 0; i < 2; i++) {
-            String word = parts[i];
-            String wordLower = word.toLowerCase();
-
-            for (String pattern : FORBIDDEN_PATTERNS) {
-                if (wordLower.equals(pattern.toLowerCase())) {
-                    throw new BotTemplateNameException("Аккаунт не выгулян: используется шаблонное имя");
-                }
-            }
-
-            if (!word.matches("^[А-ЯA-Z][а-яa-z]+$")) {
-                throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат имени или фамилии");
-            }
-
-            if (word.length() < 2) {
-                throw new BotTemplateNameException("Аккаунт не выгулян: имя или фамилия слишком короткие");
-            }
-        }
-
-        if (parts.length == 3) {
-            String initials = parts[2];
-            if (!initials.matches("^[А-ЯA-Z](\\.?[А-ЯA-Z])?\\.?$")) {
-                throw new BotTemplateNameException("Аккаунт не выгулян: неверный формат инициалов. Допустимые форматы: С.И., СИ, С., С, С.И, СИ.");
-            }
-
-            if (initials.contains("..")) {
-                throw new BotTemplateNameException("Аккаунт не выгулян: некорректные инициалы (две точки подряд)");
-            }
-
-            String lettersOnly = initials.replace(".", "");
-            for (char c : lettersOnly.toCharArray()) {
-                if (!Character.isUpperCase(c)) {
-                    throw new BotTemplateNameException("Аккаунт не выгулян: инициалы должны быть заглавными буквами");
-                }
-            }
-        }
-
-        if (parts[0].equalsIgnoreCase(parts[1])) {
-            throw new BotTemplateNameException("Аккаунт не выгулян: имя и фамилия не могут быть одинаковыми");
-        }
+        reviewNagulService.performNagulWithExceptions(reviewId, username);
     }
 
     public int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate) {
@@ -2190,7 +1295,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private Page<ReviewDTOOne> emptyReviewPage(int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewPageable(pageNumber, pageSize, sortDirection);
+        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
         return new PageImpl<>(Collections.emptyList(), pageable, 0);
     }
 
@@ -2203,10 +1308,6 @@ public class ReviewServiceImpl implements ReviewService {
 
     private int safeBotCounter(Bot bot) {
         return bot != null ? bot.getCounter() : 0;
-    }
-
-    private boolean isTemplateBotName(Bot bot) {
-        return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
     }
 
     private String extractComment(OrderDetails orderDetails) {
