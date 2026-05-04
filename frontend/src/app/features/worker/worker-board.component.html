@@ -215,370 +215,40 @@
   </section>
 
   @if (orderLoading() || editOrder()) {
-    <div class="lead-edit-backdrop" role="presentation" (click)="closeOrderEdit()">
-      <section
-        class="lead-edit-modal order-edit-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="order-edit-title"
-        (click)="$event.stopPropagation()"
-      >
-        <header class="lead-edit-head">
-          <div>
-            <small>Заказ #{{ editOrder()?.id }}</small>
-            <h2 id="order-edit-title">Редактирование заказа</h2>
-          </div>
-          <button type="button" class="lead-edit-close" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()" title="Закрыть">
-            <span class="material-icons-sharp">close</span>
-          </button>
-        </header>
-
-        @if (orderError()) {
-          <p class="error compact">{{ orderError() }}</p>
-        }
-
-        @if (orderLoading() && !editOrder()) {
-          <p class="empty">Загружаю заказ...</p>
-        }
-
-        @if (editOrder(); as order) {
-          @if (orderDraft(); as draft) {
-            <form class="lead-edit-form" #orderEditForm="ngForm" (ngSubmit)="saveOrderEdit()">
-              <div class="lead-edit-grid">
-                <label class="lead-edit-field">
-                  <span>Компания</span>
-                  <input type="text" [value]="order.companyTitle" readonly>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Статус</span>
-                  <input type="text" [value]="order.status" readonly>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Филиал</span>
-                  <select
-                    name="orderFilialId"
-                    [ngModel]="draft.filialId"
-                    (ngModelChange)="setOrderEditField('filialId', $event)"
-                  >
-                    @for (filial of order.filials; track trackOption($index, filial)) {
-                      <option [ngValue]="filial.id">{{ optionLabel(filial) }}</option>
-                    }
-                  </select>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Специалист</span>
-                  <select
-                    name="orderWorkerId"
-                    [ngModel]="draft.workerId"
-                    (ngModelChange)="setOrderEditField('workerId', $event)"
-                  >
-                    @for (worker of order.workers; track trackOption($index, worker)) {
-                      <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
-                    }
-                  </select>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Менеджер</span>
-                  <select
-                    name="orderManagerId"
-                    [ngModel]="draft.managerId"
-                    (ngModelChange)="setOrderEditField('managerId', $event)"
-                  >
-                    @for (manager of order.managers; track trackOption($index, manager)) {
-                      <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
-                    }
-                  </select>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Опубликовано</span>
-                  <input
-                    name="orderCounter"
-                    type="number"
-                    min="0"
-                    [ngModel]="draft.counter"
-                    (ngModelChange)="setOrderEditField('counter', +$event)"
-                  >
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Кол-во отзывов</span>
-                  <input type="text" [value]="order.amount ?? 0" readonly>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Сумма</span>
-                  <input type="text" [value]="(order.sum ?? 0) + ' руб.'" readonly>
-                </label>
-
-                <label class="lead-edit-field lead-edit-field--wide">
-                  <span>Комментарий заказа</span>
-                  <textarea
-                    name="orderComments"
-                    rows="3"
-                    [ngModel]="draft.orderComments"
-                    (ngModelChange)="setOrderEditField('orderComments', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field lead-edit-field--wide">
-                  <span>Комментарий компании</span>
-                  <textarea
-                    name="orderCompanyComments"
-                    rows="3"
-                    [ngModel]="draft.commentsCompany"
-                    (ngModelChange)="setOrderEditField('commentsCompany', $event)"
-                  ></textarea>
-                </label>
-
-                @if (order.canComplete) {
-                  <label class="lead-edit-field">
-                    <span>Отметка о выполнении</span>
-                    <input
-                      name="orderComplete"
-                      type="checkbox"
-                      [ngModel]="draft.complete"
-                      (ngModelChange)="setOrderEditField('complete', $event)"
-                    >
-                  </label>
-                }
-
-                <label class="lead-edit-field">
-                  <span>Дата создания</span>
-                  <input type="text" [value]="order.created" readonly>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Дата изменений</span>
-                  <input type="text" [value]="order.changed" readonly>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Дата оплаты</span>
-                  <input type="text" [value]="order.payDay || '-'" readonly>
-                </label>
-              </div>
-
-              <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
-                @if (order.canDelete) {
-                  <button type="button" class="danger" (click)="deleteOrderEdit()" [disabled]="orderSaving() || orderDeleting()">
-                    {{ orderDeleting() ? 'Удаляю...' : 'Удалить' }}
-                  </button>
-                }
-
-                <div class="lead-edit-actions-group">
-                  <button type="button" class="secondary" (click)="closeOrderEdit()" [disabled]="orderSaving() || orderDeleting()">Отмена</button>
-                  <button type="submit" [disabled]="orderSaving() || orderDeleting() || orderEditForm.invalid">
-                    {{ orderSaving() ? 'Сохраняю...' : 'Сохранить' }}
-                  </button>
-                </div>
-              </div>
-            </form>
-          }
-        }
-      </section>
-    </div>
+    <app-worker-order-edit-modal
+      [loading]="orderLoading()"
+      [order]="editOrder()"
+      [draft]="orderDraft()"
+      [saving]="orderSaving()"
+      [deleting]="orderDeleting()"
+      [error]="orderError()"
+      (closed)="closeOrderEdit()"
+      (submitted)="saveOrderEdit()"
+      (deleted)="deleteOrderEdit()"
+      (draftChange)="handleOrderEditDraftChange($event)"
+    />
   }
 
   @if (reviewEditLoading() || editReview()) {
-    <div class="lead-edit-backdrop" role="presentation" (click)="closeReviewEdit()">
-      <section
-        class="lead-edit-modal review-edit-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-edit-title"
-        (click)="$event.stopPropagation()"
-      >
-        <header class="lead-edit-head">
-          <div>
-            <small>Отзыв #{{ editReview()?.id }}</small>
-            <h2 id="review-edit-title">Редактирование отзыва</h2>
-          </div>
-          <button type="button" class="lead-edit-close" (click)="closeReviewEdit()" [disabled]="reviewEditBusy()" title="Закрыть">
-            <span class="material-icons-sharp">close</span>
-          </button>
-        </header>
-
-        @if (reviewEditError()) {
-          <p class="error compact">{{ reviewEditError() }}</p>
-        }
-
-        @if (reviewEditLoading() && !editReview()) {
-          <p class="empty">Загружаю отзыв...</p>
-        }
-
-        @if (editReview(); as review) {
-          @if (reviewEditDraft(); as draft) {
-            <form class="lead-edit-form" #reviewEditForm="ngForm" (ngSubmit)="saveReviewEdit()">
-              <div class="lead-edit-grid">
-                <label class="lead-edit-field lead-edit-field--wide">
-                  <span>Текст</span>
-                  <textarea
-                    name="reviewText"
-                    rows="7"
-                    required
-                    [ngModel]="draft.text"
-                    (ngModelChange)="setReviewEditField('text', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field lead-edit-field--wide">
-                  <span>Ответ на отзыв</span>
-                  <textarea
-                    name="reviewAnswer"
-                    rows="4"
-                    [ngModel]="draft.answer"
-                    (ngModelChange)="setReviewEditField('answer', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field lead-edit-field--wide">
-                  <span>Комментарий</span>
-                  <textarea
-                    name="reviewComment"
-                    rows="3"
-                    [ngModel]="draft.comment"
-                    (ngModelChange)="setReviewEditField('comment', $event)"
-                  ></textarea>
-                </label>
-
-                @if (canEditReviewDates()) {
-                  <label class="lead-edit-field">
-                    <span>Дата создания</span>
-                    <input
-                      name="reviewCreated"
-                      type="date"
-                      [ngModel]="draft.created"
-                      (ngModelChange)="setReviewEditField('created', $event || null)"
-                    >
-                  </label>
-
-                  <label class="lead-edit-field">
-                    <span>Дата изменений</span>
-                    <input
-                      name="reviewChanged"
-                      type="date"
-                      [ngModel]="draft.changed"
-                      (ngModelChange)="setReviewEditField('changed', $event || null)"
-                    >
-                  </label>
-                }
-
-                <label class="lead-edit-field">
-                  <span>Дата публикации</span>
-                  <input
-                    name="reviewPublishedDate"
-                    type="date"
-                    [ngModel]="draft.publishedDate"
-                    (ngModelChange)="setReviewEditField('publishedDate', $event || null)"
-                  >
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Продукт</span>
-                  <select
-                    name="reviewProduct"
-                    [ngModel]="draft.productId"
-                    (ngModelChange)="setReviewEditField('productId', $event)"
-                  >
-                    <option [ngValue]="null">-- Выберите продукт --</option>
-                    @for (product of productOptions(); track product.id) {
-                      <option [ngValue]="product.id">{{ product.label }}</option>
-                    }
-                  </select>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Имя бота</span>
-                  <input
-                    name="reviewBotName"
-                    type="text"
-                    [ngModel]="draft.botName"
-                    (ngModelChange)="setReviewEditField('botName', $event)"
-                  >
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Пароль бота</span>
-                  <input
-                    name="reviewBotPassword"
-                    type="text"
-                    [ngModel]="draft.botPassword"
-                    (ngModelChange)="setReviewEditField('botPassword', $event)"
-                  >
-                </label>
-
-                @if (canEditReviewPublish()) {
-                  <label class="review-edit-check">
-                    <input
-                      name="reviewPublish"
-                      type="checkbox"
-                      [ngModel]="draft.publish"
-                      (ngModelChange)="setReviewEditField('publish', $event)"
-                    >
-                    <span>Активность</span>
-                  </label>
-                }
-
-                @if (canEditReviewVigul()) {
-                  <label class="review-edit-check">
-                    <input
-                      name="reviewVigul"
-                      type="checkbox"
-                      [ngModel]="draft.vigul"
-                      (ngModelChange)="setReviewEditField('vigul', $event)"
-                    >
-                    <span>Выгул</span>
-                  </label>
-                }
-
-                @if (productNeedsPhoto(draft.productId) || draft.url.trim()) {
-                  <label class="lead-edit-field lead-edit-field--wide">
-                    <span>URL для фото</span>
-                    <textarea
-                      name="reviewPhotoUrl"
-                      rows="2"
-                      [ngModel]="draft.url"
-                      (ngModelChange)="setReviewEditField('url', $event)"
-                    ></textarea>
-                  </label>
-
-                  <div class="review-edit-photo lead-edit-field--wide">
-                    @if (draft.url.trim()) {
-                      <a [href]="draft.url" target="_blank" rel="noopener">Открыть фото</a>
-                    }
-                    @if (productNeedsPhoto(draft.productId)) {
-                      <label>
-                        <span>{{ reviewEditUploading() ? 'Загружаю...' : 'Загрузить фото' }}</span>
-                        <input type="file" accept="image/*" (change)="uploadReviewPhoto($event)" [disabled]="reviewEditBusy()">
-                      </label>
-                    }
-                  </div>
-                }
-              </div>
-
-              <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDeleteReviews()">
-                @if (canDeleteReviews()) {
-                  <button type="button" class="danger" (click)="deleteReviewEdit()" [disabled]="reviewEditBusy()">
-                    {{ reviewEditDeleting() ? 'Удаляю...' : 'Удалить' }}
-                  </button>
-                }
-
-                <div class="lead-edit-actions-group">
-                  <button type="button" class="secondary" (click)="closeReviewEdit()" [disabled]="reviewEditBusy()">Отмена</button>
-                  <button type="submit" [disabled]="reviewEditBusy() || reviewEditForm.invalid">
-                    {{ reviewEditSaving() ? 'Сохраняю...' : 'Сохранить' }}
-                  </button>
-                </div>
-              </div>
-            </form>
-          }
-        }
-      </section>
-    </div>
+    <app-worker-review-edit-modal
+      [loading]="reviewEditLoading()"
+      [review]="editReview()"
+      [draft]="reviewEditDraft()"
+      [saving]="reviewEditSaving()"
+      [deleting]="reviewEditDeleting()"
+      [uploading]="reviewEditUploading()"
+      [busy]="reviewEditBusy()"
+      [error]="reviewEditError()"
+      [productOptions]="productOptions()"
+      [canEditDates]="!!reviewEditDetails()?.canEditReviewDates"
+      [canEditPublish]="!!reviewEditDetails()?.canEditReviewPublish"
+      [canEditVigul]="!!reviewEditDetails()?.canEditReviewVigul"
+      [canDelete]="!!reviewEditDetails()?.canDeleteReviews"
+      (closed)="closeReviewEdit()"
+      (submitted)="saveReviewEdit()"
+      (deleted)="deleteReviewEdit()"
+      (photoSelected)="uploadReviewPhoto($event)"
+      (draftChange)="handleReviewEditDraftChange($event)"
+    />
   }
 </app-admin-layout>

@@ -1,0 +1,167 @@
+<div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
+  <section
+    class="lead-edit-modal order-edit-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="order-edit-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="lead-edit-head">
+      <div>
+        <small>Заказ #{{ order?.id }}</small>
+        <h2 id="order-edit-title">Редактирование заказа</h2>
+      </div>
+      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || deleting" title="Закрыть">
+        <span class="material-icons-sharp">close</span>
+      </button>
+    </header>
+
+    @if (error) {
+      <p class="error compact">{{ error }}</p>
+    }
+
+    @if (loading && !order) {
+      <p class="empty">Загружаю заказ...</p>
+    }
+
+    @if (order; as order) {
+      @if (draft; as draft) {
+        <form class="lead-edit-form" #orderEditForm="ngForm" (ngSubmit)="submitted.emit()">
+          <div class="lead-edit-grid">
+            <label class="lead-edit-field">
+              <span>Компания</span>
+              <input type="text" [value]="order.companyTitle" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Статус</span>
+              <input type="text" [value]="order.status" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Филиал</span>
+              <select
+                name="orderFilialId"
+                [ngModel]="draft.filialId"
+                (ngModelChange)="setField('filialId', $event)"
+              >
+                @for (filial of order.filials; track trackOption($index, filial)) {
+                  <option [ngValue]="filial.id">{{ optionLabel(filial) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Специалист</span>
+              <select
+                name="orderWorkerId"
+                [ngModel]="draft.workerId"
+                (ngModelChange)="setField('workerId', $event)"
+              >
+                @for (worker of order.workers; track trackOption($index, worker)) {
+                  <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Менеджер</span>
+              <select
+                name="orderManagerId"
+                [ngModel]="draft.managerId"
+                (ngModelChange)="setField('managerId', $event)"
+              >
+                @for (manager of order.managers; track trackOption($index, manager)) {
+                  <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Опубликовано</span>
+              <input
+                name="orderCounter"
+                type="number"
+                min="0"
+                [ngModel]="draft.counter"
+                (ngModelChange)="setField('counter', +$event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Кол-во отзывов</span>
+              <input type="text" [value]="order.amount ?? 0" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Сумма</span>
+              <input type="text" [value]="(order.sum ?? 0) + ' руб.'" readonly>
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий заказа</span>
+              <textarea
+                name="orderComments"
+                rows="3"
+                [ngModel]="draft.orderComments"
+                (ngModelChange)="setField('orderComments', $event)"
+              ></textarea>
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий компании</span>
+              <textarea
+                name="orderCompanyComments"
+                rows="3"
+                [ngModel]="draft.commentsCompany"
+                (ngModelChange)="setField('commentsCompany', $event)"
+              ></textarea>
+            </label>
+
+            @if (order.canComplete) {
+              <label class="lead-edit-field">
+                <span>Отметка о выполнении</span>
+                <input
+                  name="orderComplete"
+                  type="checkbox"
+                  [ngModel]="draft.complete"
+                  (ngModelChange)="setField('complete', $event)"
+                >
+              </label>
+            }
+
+            <label class="lead-edit-field">
+              <span>Дата создания</span>
+              <input type="text" [value]="order.created" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата изменений</span>
+              <input type="text" [value]="order.changed" readonly>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Дата оплаты</span>
+              <input type="text" [value]="order.payDay || '-'" readonly>
+            </label>
+          </div>
+
+          <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
+            @if (order.canDelete) {
+              <button type="button" class="danger" (click)="deleted.emit()" [disabled]="saving || deleting">
+                {{ deleting ? 'Удаляю...' : 'Удалить' }}
+              </button>
+            }
+
+            <div class="lead-edit-actions-group">
+              <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || deleting">Отмена</button>
+              <button type="submit" [disabled]="saving || deleting || orderEditForm.invalid">
+                {{ saving ? 'Сохраняю...' : 'Сохранить' }}
+              </button>
+            </div>
+          </div>
+        </form>
+      }
+    }
+  </section>
+</div>

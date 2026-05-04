@@ -2,7 +2,6 @@ import { Component, HostListener, computed, inject, signal } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import {
   ManagerApi,
-  ManagerOption,
   OrderCardItem,
   OrderDetailsPayload,
   OrderEditPayload,
@@ -36,7 +35,6 @@ import {
   trackWorkerAction,
   trackWorkerBot,
   trackWorkerMetric,
-  trackWorkerOption,
   trackWorkerOrder,
   trackWorkerReview,
   trackWorkerSection,
@@ -63,12 +61,23 @@ import {
   workerSideNoteMutationKey,
   workerSideNoteSourceValue
 } from './worker-board-note.helpers';
+import type { WorkerOrderEditDraftChange } from './worker-order-edit-modal.component';
+import { WorkerOrderEditModalComponent } from './worker-order-edit-modal.component';
 import { WorkerOrderCardComponent } from './worker-order-card.component';
+import type { WorkerReviewEditDraftChange } from './worker-review-edit-modal.component';
+import { WorkerReviewEditModalComponent } from './worker-review-edit-modal.component';
 import { WorkerReviewCardComponent } from './worker-review-card.component';
 
 @Component({
   selector: 'app-worker-board',
-  imports: [AdminLayoutComponent, FormsModule, WorkerOrderCardComponent, WorkerReviewCardComponent],
+  imports: [
+    AdminLayoutComponent,
+    FormsModule,
+    WorkerOrderCardComponent,
+    WorkerOrderEditModalComponent,
+    WorkerReviewCardComponent,
+    WorkerReviewEditModalComponent
+  ],
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
 })
@@ -387,8 +396,8 @@ export class WorkerBoardComponent {
     this.orderError.set(null);
   }
 
-  setOrderEditField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {
-    this.orderDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  handleOrderEditDraftChange(change: WorkerOrderEditDraftChange): void {
+    this.orderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
   }
 
   saveOrderEdit(): void {
@@ -492,8 +501,8 @@ export class WorkerBoardComponent {
     this.reviewEditError.set(null);
   }
 
-  setReviewEditField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
-    this.reviewEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  handleReviewEditDraftChange(change: WorkerReviewEditDraftChange): void {
+    this.reviewEditDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
   }
 
   saveReviewEdit(): void {
@@ -566,12 +575,10 @@ export class WorkerBoardComponent {
     });
   }
 
-  uploadReviewPhoto(event: Event): void {
+  uploadReviewPhoto(file: File): void {
     const review = this.editReview();
-    const input = event.target as HTMLInputElement | null;
-    const file = input?.files?.[0];
 
-    if (!review || !file) {
+    if (!review) {
       return;
     }
 
@@ -592,10 +599,6 @@ export class WorkerBoardComponent {
           } : this.toReviewEditDraft(updatedReview));
         }
 
-        if (input) {
-          input.value = '';
-        }
-
         this.toastService.success('Фото загружено', `Отзыв #${review.id} обновлен`);
         this.loadBoard();
       },
@@ -603,36 +606,9 @@ export class WorkerBoardComponent {
         const message = this.errorMessage(err, 'Не удалось загрузить фото');
         this.reviewEditError.set(message);
         this.reviewEditUploading.set(false);
-        if (input) {
-          input.value = '';
-        }
         this.toastService.error('Фото не загружено', message);
       }
     });
-  }
-
-  canEditReviewDates(): boolean {
-    return !!this.reviewEditDetails()?.canEditReviewDates;
-  }
-
-  canEditReviewPublish(): boolean {
-    return !!this.reviewEditDetails()?.canEditReviewPublish;
-  }
-
-  canEditReviewVigul(): boolean {
-    return !!this.reviewEditDetails()?.canEditReviewVigul;
-  }
-
-  canDeleteReviews(): boolean {
-    return !!this.reviewEditDetails()?.canDeleteReviews;
-  }
-
-  productNeedsPhoto(productId: number | null): boolean {
-    if (productId == null) {
-      return false;
-    }
-
-    return !!this.productOptions().find((product) => product.id === productId)?.photo;
   }
 
   startOrderNoteEdit(order: OrderCardItem): void {
@@ -1079,14 +1055,6 @@ export class WorkerBoardComponent {
 
   trackAction(_index: number, action: StatusAction): string {
     return trackWorkerAction(_index, action);
-  }
-
-  trackOption(_index: number, option: ManagerOption): number {
-    return trackWorkerOption(_index, option);
-  }
-
-  optionLabel(option: ManagerOption): string {
-    return option.label || `ID ${option.id}`;
   }
 
   private applyOrderEditPayload(payload: OrderEditPayload): void {

@@ -1,0 +1,195 @@
+<div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
+  <section
+    class="lead-edit-modal review-edit-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="review-edit-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="lead-edit-head">
+      <div>
+        <small>Отзыв #{{ review?.id }}</small>
+        <h2 id="review-edit-title">Редактирование отзыва</h2>
+      </div>
+      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="busy" title="Закрыть">
+        <span class="material-icons-sharp">close</span>
+      </button>
+    </header>
+
+    @if (error) {
+      <p class="error compact">{{ error }}</p>
+    }
+
+    @if (loading && !review) {
+      <p class="empty">Загружаю отзыв...</p>
+    }
+
+    @if (review; as review) {
+      @if (draft; as draft) {
+        <form class="lead-edit-form" #reviewEditForm="ngForm" (ngSubmit)="submitted.emit()">
+          <div class="lead-edit-grid">
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Текст</span>
+              <textarea
+                name="reviewText"
+                rows="7"
+                required
+                [ngModel]="draft.text"
+                (ngModelChange)="setField('text', $event)"
+              ></textarea>
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Ответ на отзыв</span>
+              <textarea
+                name="reviewAnswer"
+                rows="4"
+                [ngModel]="draft.answer"
+                (ngModelChange)="setField('answer', $event)"
+              ></textarea>
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий</span>
+              <textarea
+                name="reviewComment"
+                rows="3"
+                [ngModel]="draft.comment"
+                (ngModelChange)="setField('comment', $event)"
+              ></textarea>
+            </label>
+
+            @if (canEditDates) {
+              <label class="lead-edit-field">
+                <span>Дата создания</span>
+                <input
+                  name="reviewCreated"
+                  type="date"
+                  [ngModel]="draft.created"
+                  (ngModelChange)="setField('created', $event || null)"
+                >
+              </label>
+
+              <label class="lead-edit-field">
+                <span>Дата изменений</span>
+                <input
+                  name="reviewChanged"
+                  type="date"
+                  [ngModel]="draft.changed"
+                  (ngModelChange)="setField('changed', $event || null)"
+                >
+              </label>
+            }
+
+            <label class="lead-edit-field">
+              <span>Дата публикации</span>
+              <input
+                name="reviewPublishedDate"
+                type="date"
+                [ngModel]="draft.publishedDate"
+                (ngModelChange)="setField('publishedDate', $event || null)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Продукт</span>
+              <select
+                name="reviewProduct"
+                [ngModel]="draft.productId"
+                (ngModelChange)="setField('productId', $event)"
+              >
+                <option [ngValue]="null">-- Выберите продукт --</option>
+                @for (product of productOptions; track trackOption($index, product)) {
+                  <option [ngValue]="product.id">{{ product.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Имя бота</span>
+              <input
+                name="reviewBotName"
+                type="text"
+                [ngModel]="draft.botName"
+                (ngModelChange)="setField('botName', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Пароль бота</span>
+              <input
+                name="reviewBotPassword"
+                type="text"
+                [ngModel]="draft.botPassword"
+                (ngModelChange)="setField('botPassword', $event)"
+              >
+            </label>
+
+            @if (canEditPublish) {
+              <label class="review-edit-check">
+                <input
+                  name="reviewPublish"
+                  type="checkbox"
+                  [ngModel]="draft.publish"
+                  (ngModelChange)="setField('publish', $event)"
+                >
+                <span>Активность</span>
+              </label>
+            }
+
+            @if (canEditVigul) {
+              <label class="review-edit-check">
+                <input
+                  name="reviewVigul"
+                  type="checkbox"
+                  [ngModel]="draft.vigul"
+                  (ngModelChange)="setField('vigul', $event)"
+                >
+                <span>Выгул</span>
+              </label>
+            }
+
+            @if (productNeedsPhoto(draft.productId) || draft.url.trim()) {
+              <label class="lead-edit-field lead-edit-field--wide">
+                <span>URL для фото</span>
+                <textarea
+                  name="reviewPhotoUrl"
+                  rows="2"
+                  [ngModel]="draft.url"
+                  (ngModelChange)="setField('url', $event)"
+                ></textarea>
+              </label>
+
+              <div class="review-edit-photo lead-edit-field--wide">
+                @if (draft.url.trim()) {
+                  <a [href]="draft.url" target="_blank" rel="noopener">Открыть фото</a>
+                }
+                @if (productNeedsPhoto(draft.productId)) {
+                  <label>
+                    <span>{{ uploading ? 'Загружаю...' : 'Загрузить фото' }}</span>
+                    <input type="file" accept="image/*" (change)="uploadPhoto($event)" [disabled]="busy">
+                  </label>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDelete">
+            @if (canDelete) {
+              <button type="button" class="danger" (click)="deleted.emit()" [disabled]="busy">
+                {{ deleting ? 'Удаляю...' : 'Удалить' }}
+              </button>
+            }
+
+            <div class="lead-edit-actions-group">
+              <button type="button" class="secondary" (click)="closed.emit()" [disabled]="busy">Отмена</button>
+              <button type="submit" [disabled]="busy || reviewEditForm.invalid">
+                {{ saving ? 'Сохраняю...' : 'Сохранить' }}
+              </button>
+            </div>
+          </div>
+        </form>
+      }
+    }
+  </section>
+</div>
