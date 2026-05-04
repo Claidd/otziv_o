@@ -12,6 +12,7 @@ import {
   LeadCreateRequest,
   LeadEditOptions,
   LeadItem,
+  LeadImportResponse,
   LeadPage,
   LeadPerson,
   LeadPersonOption,
@@ -118,6 +119,11 @@ export class LeadsBoardComponent {
   readonly editSaving = signal(false);
   readonly deleteSaving = signal(false);
   readonly editError = signal<string | null>(null);
+  readonly importModalOpen = signal(false);
+  readonly importFile = signal<File | null>(null);
+  readonly importResult = signal<LeadImportResponse | null>(null);
+  readonly importError = signal<string | null>(null);
+  readonly importing = signal(false);
 
   readonly currentPage = computed(() => this.pageFor(this.activeBucket()));
   readonly currentLeads = computed(() => this.currentPage().content);
@@ -132,6 +138,10 @@ export class LeadsBoardComponent {
   readonly canCreateCompany = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  });
+  readonly canImportLeads = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   });
   readonly operatorOptions = computed(() => this.editOptions()?.operators ?? []);
   readonly managerOptions = computed(() => this.editOptions()?.managers ?? []);
@@ -405,6 +415,68 @@ export class LeadsBoardComponent {
     }
 
     this.companyCreateContext.set({ source: 'manual', leadId: null });
+  }
+
+  openLeadImport(): void {
+    if (!this.canImportLeads()) {
+      return;
+    }
+
+    this.importModalOpen.set(true);
+    this.importFile.set(null);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  closeLeadImport(): void {
+    if (this.importing()) {
+      return;
+    }
+
+    this.importModalOpen.set(false);
+    this.importFile.set(null);
+    this.importError.set(null);
+  }
+
+  selectLeadImportFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.importFile.set(input.files?.[0] ?? null);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  uploadLeadImport(): void {
+    const file = this.importFile();
+    if (!file || this.importing()) {
+      this.importError.set('Выберите CSV или Excel-файл.');
+      return;
+    }
+
+    this.importing.set(true);
+    this.importError.set(null);
+    this.importResult.set(null);
+
+    this.leadsApi.importLeads(file).subscribe({
+      next: (result) => {
+        this.importing.set(false);
+        this.importResult.set(result);
+        this.importFile.set(null);
+        this.toastService.success('Импорт лидов завершен', this.importResultMessage(result));
+        this.loadBoard();
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось импортировать лиды');
+        this.importError.set(message);
+        this.importing.set(false);
+        this.toastService.error('Лиды не импортированы', message);
+      }
+    });
+  }
+
+  importResultMessage(result: LeadImportResponse): string {
+    const duplicateText = result.skippedDuplicates ? `, дублей пропущено: ${result.skippedDuplicates}` : '';
+    const invalidText = result.skippedInvalid ? `, строк с ошибками: ${result.skippedInvalid}` : '';
+    return `Добавлено: ${result.added}${duplicateText}${invalidText}`;
   }
 
   closeCompanyCreate(): void {

@@ -84,7 +84,15 @@
               <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">
                 {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
               </a>
-              <small>#{{ order.id }}</small>
+              <div class="review-id-line">
+                #{{ order.id }}
+                @if (hasMeaningfulNote(order.companyComments)) {
+                  <app-company-note-trigger
+                    [note]="order.companyComments"
+                    (saveNote)="saveOrderCompanyNote(order, $event)"
+                  />
+                }
+              </div>
             </header>
 
             <div class="meta-row">

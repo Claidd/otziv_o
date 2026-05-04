@@ -262,6 +262,26 @@ public class ApiManagerBoardController {
         return buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
     }
 
+    @PutMapping("/companies/{companyId}/note")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public void updateCompanyNote(
+            @PathVariable Long companyId,
+            @RequestBody CompanyNoteUpdateRequest request
+    ) {
+        if (request == null || request.companyComments() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
+        }
+
+        Company company = companyService.getCompaniesById(companyId);
+        if (company == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания не найдена");
+        }
+
+        company.setCommentsCompany(request.companyComments());
+        companyService.save(company);
+    }
+
     @DeleteMapping("/companies/{companyId}/workers/{workerId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public CompanyEditResponse deleteCompanyWorker(

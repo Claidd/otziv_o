@@ -53,6 +53,11 @@ export interface UpdateKeycloakUserRequest {
   roles: string[];
 }
 
+export interface ChangeKeycloakPasswordRequest {
+  password: string;
+  temporary: boolean;
+}
+
 export interface AssignmentOption {
   id: number;
   userId: number;
@@ -102,6 +107,13 @@ export class AdminUsersApi {
   updateUser(id: number, request: UpdateKeycloakUserRequest): Observable<AdminUser> {
     return this.http.put<AdminUser>(
       `${appEnvironment.apiBaseUrl}/api/admin/users/${id}`,
+      request
+    );
+  }
+
+  changePassword(id: number, request: ChangeKeycloakPasswordRequest): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/password`,
       request
     );
   }

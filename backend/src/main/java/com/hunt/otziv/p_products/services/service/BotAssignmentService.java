@@ -7,6 +7,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.r_review.model.Review;
 
+import java.util.Collection;
 import java.util.List;
 
 
@@ -21,6 +22,11 @@ public interface BotAssignmentService {
      * Назначение ботов существующим отзывам с null ботом
      */
     boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial);
+
+    /**
+     * Выбор одного бота по тем же правилам, что и при создании заказа
+     */
+    Bot assignBotForReviewChange(Review review, Collection<Long> excludedBotIds);
 
     /**
      * Получение доступных ботов по правилам

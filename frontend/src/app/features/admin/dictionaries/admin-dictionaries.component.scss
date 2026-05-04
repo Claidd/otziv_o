@@ -436,24 +436,26 @@ tr.selected td {
   background: var(--otziv-danger);
 }
 
-.import-accounts-button {
+.dictionary-stats .import-accounts-button.import-accounts-button {
   display: inline-flex;
   width: 100%;
-  min-height: 3rem;
+  min-height: 3.35rem;
   align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  border-radius: var(--otziv-small-radius);
-  padding: 0 0.9rem;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
-  box-shadow: 0 0.85rem 1.6rem rgba(108, 155, 207, 0.24);
+  justify-content: flex-start;
+  gap: 0.45rem;
+  border: 1px solid rgba(108, 155, 207, 0.22);
+  border-radius: 0.9rem;
+  padding: 0 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.import-accounts-button .material-icons-sharp {
-  font-size: 1.1rem;
+.dictionary-stats .import-accounts-button .material-icons-sharp {
+  color: var(--otziv-success);
+  font-size: 1.35rem;
 }
 
 .import-backdrop {

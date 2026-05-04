@@ -213,7 +213,63 @@
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </article>
     }
+
+    @if (canImportLeads()) {
+      <button type="button" class="lead-import-button" (click)="openLeadImport()">
+        <span class="material-icons-sharp">upload_file</span>
+        Добавить лиды
+      </button>
+    }
   </section>
+
+  @if (importModalOpen()) {
+    <section class="import-backdrop" (click)="closeLeadImport()">
+      <article class="import-modal" role="dialog" aria-modal="true" aria-label="Импорт лидов" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <p class="eyebrow">IMPORT</p>
+            <h2>Добавить лиды</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeLeadImport()" [disabled]="importing()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <label class="file-picker" [class.has-file]="importFile()">
+          <input type="file" accept=".csv,.tsv,.xls,.xlsx" (change)="selectLeadImportFile($event)">
+          <span class="material-icons-sharp">upload_file</span>
+          <strong>{{ importFile()?.name || 'Выбрать файл' }}</strong>
+          <small>CSV, XLS, XLSX</small>
+        </label>
+
+        @if (importError()) {
+          <p class="error compact">{{ importError() }}</p>
+        }
+
+        @if (importResult(); as result) {
+          <div class="import-result">
+            <span class="material-icons-sharp">task_alt</span>
+            <strong>{{ importResultMessage(result) }}</strong>
+            <small>Всего строк: {{ result.totalRows }}</small>
+            @if (result.errors.length) {
+              <ul>
+                @for (message of result.errors; track $index) {
+                  <li>{{ message }}</li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        <div class="lead-edit-actions">
+          <button type="button" class="secondary" (click)="closeLeadImport()" [disabled]="importing()">Закрыть</button>
+          <button type="button" (click)="uploadLeadImport()" [disabled]="!importFile() || importing()">
+            {{ importing() ? 'Загружаю' : 'Загрузить' }}
+          </button>
+        </div>
+      </article>
+    </section>
+  }
 
   @if (createDraft(); as draft) {
     <div class="lead-edit-backdrop" role="presentation" (click)="closeCreateModal()">

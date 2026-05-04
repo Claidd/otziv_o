@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.services;
 import com.hunt.otziv.u_users.dto.AdminUserResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionsResponse;
+import com.hunt.otziv.u_users.dto.ChangeKeycloakPasswordRequest;
 import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
@@ -166,6 +167,25 @@ public class KeycloakUserProvisioningService {
         userRepository.flush();
 
         return toAdminResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public void changePassword(Long userId, ChangeKeycloakPasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+
+        if (!hasText(user.getKeycloakId())) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "User is not linked to Keycloak yet. Run legacy migration first."
+            );
+        }
+
+        keycloakAdminClient.resetPassword(
+                user.getKeycloakId(),
+                request.getPassword(),
+                request.isTemporary()
+        );
     }
 
     @Transactional

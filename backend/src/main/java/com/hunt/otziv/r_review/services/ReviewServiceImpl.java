@@ -25,6 +25,7 @@ import com.hunt.otziv.p_products.dto.ProductDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -56,7 +57,6 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.security.Principal;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -83,6 +83,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final EmailService emailService;
     private final ProductService productService;
     private final FilialService filialService;
+    private final BotAssignmentService botAssignmentService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -1435,27 +1436,8 @@ public class ReviewServiceImpl implements ReviewService {
                 botActiveToFalse(botId);
             }
 
-            List<Bot> availableBots = findAllBotsMinusFilial(review);
-
-            if (availableBots.isEmpty()) {
-                Bot reserveBot = claimReserveBot(review, Set.of());
-                if (reserveBot != null) {
-                    review.setBot(reserveBot);
-                    updateVigulBasedOnBotCounter(review);
-                } else {
-                    Bot stubBot = createStubBot();
-                    review.setBot(stubBot);
-
-                    if (review.isVigul()) {
-                        review.setVigul(false);
-                    }
-                }
-            } else {
-                var random = new SecureRandom();
-                Bot selectedBot = availableBots.get(random.nextInt(availableBots.size()));
-                review.setBot(selectedBot);
-                updateVigulBasedOnBotCounter(review);
-            }
+            Set<Long> excludedBotIds = botId != null && botId > 0 ? Set.of(botId) : Set.of();
+            assignBotUsingSharedRules(review, excludedBotIds);
 
             log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
             reviewRepository.save(review);
@@ -1475,30 +1457,24 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = reviewOptional.get();
         boolean wasVigul = review.isVigul();
 
-        List<Bot> bots = findAllBotsMinusFilial(review);
-
-        if (bots.isEmpty()) {
-            Bot reserveBot = claimReserveBot(review, Set.of());
-            if (reserveBot != null) {
-                review.setBot(reserveBot);
-                updateVigulBasedOnBotCounter(review);
-            } else {
-                Bot stubBot = createStubBot();
-                review.setBot(stubBot);
-
-                if (review.isVigul()) {
-                    review.setVigul(false);
-                }
-            }
-        } else {
-            var random = new SecureRandom();
-            Bot selectedBot = bots.get(random.nextInt(bots.size()));
-            review.setBot(selectedBot);
-            updateVigulBasedOnBotCounter(review);
-        }
+        assignBotUsingSharedRules(review, Set.of());
 
         log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
         return review;
+    }
+
+    private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
+        Bot selectedBot = botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
+        review.setBot(selectedBot);
+
+        if (selectedBot == null || STUB_BOT_ID.equals(selectedBot.getId())) {
+            if (review.isVigul()) {
+                review.setVigul(false);
+            }
+            return;
+        }
+
+        updateVigulBasedOnBotCounter(review);
     }
 
     private Bot createStubBot() {

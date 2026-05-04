@@ -78,6 +78,9 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     boolean existsByTelephoneLeadIn(Collection<String> telephoneLeads);
     Optional<Lead> findFirstByTelephoneLeadInAndIdNot(Collection<String> telephoneLeads, Long id);
 
+    @Query("select l.telephoneLead from Lead l where l.telephoneLead in :telephoneLeads")
+    List<String> findExistingTelephoneLeads(@Param("telephoneLeads") Collection<String> telephoneLeads);
+
     @Query("select l from Lead l where l.lidStatus = :status")
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
     long countByLidStatus(String status);

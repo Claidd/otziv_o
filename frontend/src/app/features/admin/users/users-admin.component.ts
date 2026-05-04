@@ -5,6 +5,7 @@ import {
   AdminUser,
   AdminUsersApi,
   AssignmentOptions,
+  ChangeKeycloakPasswordRequest,
   UpdateKeycloakUserRequest,
   UpdateUserAssignmentsRequest,
   UserAssignments
@@ -55,10 +56,13 @@ export class UsersAdminComponent {
   readonly saving = signal(false);
   readonly assignmentsLoading = signal(false);
   readonly assignmentsSaving = signal(false);
+  readonly passwordSaving = signal(false);
   readonly error = signal<string | null>(null);
   readonly assignmentsError = signal<string | null>(null);
+  readonly passwordError = signal<string | null>(null);
   readonly savedUser = signal<AdminUser | null>(null);
   readonly savedAssignments = signal<UserAssignments | null>(null);
+  readonly savedPasswordFor = signal<string | null>(null);
   readonly assignmentOptions = signal<AssignmentOptions>({
     managers: [],
     workers: [],
@@ -114,6 +118,10 @@ export class UsersAdminComponent {
     roles: this.fb.nonNullable.control<string[]>([], [Validators.required])
   });
 
+  readonly passwordForm = this.fb.nonNullable.group({
+    password: ['', [Validators.required, Validators.minLength(6)]]
+  });
+
   readonly assignmentForm = this.fb.nonNullable.group({
     managerIds: this.fb.nonNullable.control<number[]>([]),
     workerIds: this.fb.nonNullable.control<number[]>([]),
@@ -157,9 +165,12 @@ export class UsersAdminComponent {
     this.selectedUser.set(user);
     this.savedUser.set(null);
     this.savedAssignments.set(null);
+    this.savedPasswordFor.set(null);
     this.error.set(null);
     this.assignmentsError.set(null);
+    this.passwordError.set(null);
     this.patchForm(user);
+    this.passwordForm.reset({ password: '' });
     this.loadAssignments(user.id);
   }
 
@@ -220,6 +231,43 @@ export class UsersAdminComponent {
         this.error.set(message);
         this.saving.set(false);
         this.toastService.error('Пользователь не сохранен', message);
+      }
+    });
+  }
+
+  changePassword(): void {
+    const user = this.selectedUser();
+    if (!user) {
+      return;
+    }
+
+    this.passwordError.set(null);
+    this.savedPasswordFor.set(null);
+
+    if (this.passwordForm.invalid) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.passwordForm.getRawValue();
+    const request: ChangeKeycloakPasswordRequest = {
+      password: raw.password,
+      temporary: false
+    };
+
+    this.passwordSaving.set(true);
+    this.adminUsersApi.changePassword(user.id, request).subscribe({
+      next: () => {
+        this.savedPasswordFor.set(user.username);
+        this.passwordForm.reset({ password: '' });
+        this.passwordSaving.set(false);
+        this.toastService.success('Пароль изменен', user.username);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось изменить пароль');
+        this.passwordError.set(message);
+        this.passwordSaving.set(false);
+        this.toastService.error('Пароль не изменен', message);
       }
     });
   }

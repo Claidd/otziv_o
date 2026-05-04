@@ -47,6 +47,7 @@ public class Telephone {
 
     // Список токенов устройства, привязанных к телефону
     @OneToMany(mappedBy = "telephone", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private Set<DeviceToken> deviceTokens = new HashSet<>();
 
 

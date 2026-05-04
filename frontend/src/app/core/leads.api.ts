@@ -89,6 +89,14 @@ export interface LeadUpdateRequest {
   marketologId?: number | null;
 }
 
+export interface LeadImportResponse {
+  totalRows: number;
+  added: number;
+  skippedDuplicates: number;
+  skippedInvalid: number;
+  errors: string[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class LeadsApi {
   constructor(private readonly http: HttpClient) {}
@@ -118,6 +126,12 @@ export class LeadsApi {
 
   deleteLead(id: number): Observable<void> {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/leads/${id}`);
+  }
+
+  importLeads(file: File): Observable<LeadImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<LeadImportResponse>(`${appEnvironment.apiBaseUrl}/api/leads/file-import`, formData);
   }
 
   markSend(id: number): Observable<void> {

@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.controller;
 
 import com.hunt.otziv.u_users.dto.AdminUserResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionsResponse;
+import com.hunt.otziv.u_users.dto.ChangeKeycloakPasswordRequest;
 import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
@@ -56,6 +57,16 @@ public class ApiAdminUserController {
             @Valid @RequestBody UpdateKeycloakUserRequest request
     ) {
         return userProvisioningService.updateUser(id, request);
+    }
+
+    @PutMapping("/{id}/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public void changePassword(
+            @PathVariable Long id,
+            @Valid @RequestBody ChangeKeycloakPasswordRequest request
+    ) {
+        userProvisioningService.changePassword(id, request);
     }
 
     @GetMapping("/{id}/assignments")

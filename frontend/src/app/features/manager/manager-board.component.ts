@@ -21,6 +21,7 @@ import {
   OrderUpdateRequest
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
 
 type SectionTab = {
@@ -64,7 +65,7 @@ type ManagerHistoryView = {
 
 @Component({
   selector: 'app-manager-board',
-  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, CompanyNoteTriggerComponent, DecimalPipe, FormsModule, RouterLink],
   templateUrl: './manager-board.component.html',
   styleUrl: './manager-board.component.scss'
 })
@@ -828,6 +829,42 @@ export class ManagerBoardComponent {
     });
   }
 
+  saveCompanyCardNote(company: CompanyCardItem, value: string): void {
+    this.managerApi.updateCompanyNote(company.id, value).subscribe({
+      next: () => {
+        this.toastService.success('Заметка компании сохранена', company.title || `Компания #${company.id}`);
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
+      }
+    });
+  }
+
+  saveOrderCompanyNote(order: OrderCardItem, value: string): void {
+    this.managerApi.updateOrderCompanyNote(order.id, value).subscribe({
+      next: () => {
+        this.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
+      }
+    });
+  }
+
+  saveOrderCardNote(order: OrderCardItem, value: string): void {
+    this.managerApi.updateOrderNote(order.id, value).subscribe({
+      next: () => {
+        this.toastService.success('Заметка заказа сохранена', order.companyTitle || `Заказ #${order.id}`);
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку заказа'));
+      }
+    });
+  }
+
   orderActions(order: OrderCardItem): StatusAction[] {
     if (this.selectedCompany()) {
       return this.allOrderActions;
@@ -955,6 +992,11 @@ export class ManagerBoardComponent {
   private metricValue(section: ManagerSection, status: string): number | null {
     const metric = this.board()?.metrics.find((item) => item.section === section && item.status === status);
     return metric?.value ?? null;
+  }
+
+  hasMeaningfulNote(value?: string | null): boolean {
+    const normalized = (value ?? '').trim().toLocaleLowerCase('ru-RU');
+    return Boolean(normalized) && normalized !== 'нет заметок';
   }
 
   private captureHistoryView(): ManagerHistoryView {

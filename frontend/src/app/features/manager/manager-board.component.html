@@ -133,7 +133,15 @@
           <article class="manager-card company-card">
             <header>
               <a [href]="companyFilialUrl(company)" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
-              <small>#{{ company.id }}</small>
+              <div class="card-id-line">
+                <small>#{{ company.id }}</small>
+                @if (hasMeaningfulNote(company.commentsCompany)) {
+                  <app-company-note-trigger
+                    [note]="company.commentsCompany"
+                    (saveNote)="saveCompanyCardNote(company, $event)"
+                  />
+                }
+              </div>
             </header>
 
             <div class="phone-row">
@@ -213,7 +221,17 @@
               <a [href]="order.filialUrl || orderDetailsUrl(order)" target="_blank" rel="noopener">
                 {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
               </a>
-              <small>#{{ order.id }}</small>
+              <div class="card-id-line">
+                <small>#{{ order.id }}</small>
+                @if (hasMeaningfulNote(order.companyComments) || (selectedCompany() && hasMeaningfulNote(order.orderComments))) {
+                  <app-company-note-trigger
+                    [note]="order.companyComments"
+                    [orderNote]="selectedCompany() ? order.orderComments : ''"
+                    (saveNote)="saveOrderCompanyNote(order, $event)"
+                    (saveOrderNote)="saveOrderCardNote(order, $event)"
+                  />
+                }
+              </div>
             </header>
 
             <div class="meta-row">

@@ -201,10 +201,12 @@ public class ApiWorkerBoardController {
     }
 
     @PostMapping("/reviews/{reviewId}/change-bot")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void changeReviewBot(@PathVariable Long reviewId) {
+    public BotChangeResponse changeReviewBot(@PathVariable Long reviewId) {
+        Long oldBotId = botId(reviewService.getReviewById(reviewId));
         reviewService.changeBot(reviewId);
+        Long newBotId = botId(reviewService.getReviewById(reviewId));
+        return new BotChangeResponse(oldBotId, newBotId);
     }
 
     @PostMapping("/reviews/{reviewId}/bots/{botId}/deactivate")
@@ -244,11 +246,11 @@ public class ApiWorkerBoardController {
     }
 
     @PostMapping("/bad-review-tasks/{taskId}/change-bot")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void changeBadReviewTaskBot(@PathVariable Long taskId) {
+    public BotChangeResponse changeBadReviewTaskBot(@PathVariable Long taskId) {
         try {
-            badReviewTaskService.changeTaskBot(taskId);
+            BadReviewTask task = badReviewTaskService.changeTaskBot(taskId);
+            return new BotChangeResponse(null, botId(task));
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заменен", exception);
         }
@@ -981,6 +983,16 @@ public class ApiWorkerBoardController {
         return new PageResponse<>(List.of(), pageNumber, pageSize, 0, 0, true, true);
     }
 
+    private Long botId(Review review) {
+        Bot bot = review != null ? review.getBot() : null;
+        return bot != null ? bot.getId() : null;
+    }
+
+    private Long botId(BadReviewTask task) {
+        Bot bot = task != null ? task.getBot() : null;
+        return bot != null ? bot.getId() : null;
+    }
+
     public record WorkerBoardResponse(
             String section,
             String title,
@@ -1105,5 +1117,8 @@ public class ApiWorkerBoardController {
     }
 
     public record WorkerActionResponse(boolean success, String message) {
+    }
+
+    public record BotChangeResponse(Long oldBotId, Long newBotId) {
     }
 }

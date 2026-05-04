@@ -110,6 +110,11 @@ export interface WorkerActionResponse {
   message: string;
 }
 
+export interface BotChangeResponse {
+  oldBotId?: number | null;
+  newBotId?: number | null;
+}
+
 export interface WorkerBoardQuery {
   section: WorkerSection;
   keyword?: string;
@@ -145,8 +150,8 @@ export class WorkerApi {
     return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/orders/${orderId}/company-note`, { companyComments });
   }
 
-  changeReviewBot(reviewId: number): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, {});
+  changeReviewBot(reviewId: number): Observable<BotChangeResponse> {
+    return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, {});
   }
 
   deactivateReviewBot(reviewId: number, botId: number): Observable<void> {
@@ -161,8 +166,8 @@ export class WorkerApi {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/complete`, {});
   }
 
-  changeBadReviewTaskBot(taskId: number): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/change-bot`, {});
+  changeBadReviewTaskBot(taskId: number): Observable<BotChangeResponse> {
+    return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/change-bot`, {});
   }
 
   deactivateBadReviewTaskBot(taskId: number, botId: number): Observable<void> {

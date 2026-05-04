@@ -25,9 +25,10 @@ public class DeviceToken {
     private Telephone telephone;
 
     @Column(name = "created_at", nullable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "active", nullable = false)
+    @Builder.Default
     private boolean active = true;
 }
-

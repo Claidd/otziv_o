@@ -178,6 +178,25 @@ public class KeycloakAdminClient {
         }
     }
 
+    public void resetPassword(String keycloakUserId, String password, boolean temporary) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", PASSWORD_CREDENTIAL_TYPE);
+        payload.put("value", password);
+        payload.put("temporary", temporary);
+
+        try {
+            restClient.put()
+                    .uri(adminUri("users", keycloakUserId, "reset-password"))
+                    .headers(this::setBearerAuth)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            throw keycloakException("Failed to reset Keycloak user password", e);
+        }
+    }
+
     public void deleteUser(String keycloakUserId) {
         if (keycloakUserId == null || keycloakUserId.isBlank()) {
             return;

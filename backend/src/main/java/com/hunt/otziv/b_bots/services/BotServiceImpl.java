@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 public class BotServiceImpl implements BotService {
     private static final String READY_STATUS = "Новый";
     private static final List<Long> RESERVE_BOT_CITY_IDS = List.of(0L, 325L);
+    private static final Set<Long> RESERVE_BOT_TARGET_CITY_DENYLIST = Set.of(320L, 326L);
     private static final List<String> RESERVE_BOT_NAMES = List.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -207,6 +208,12 @@ public class BotServiceImpl implements BotService {
     public Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds) {
         if (targetCity == null || targetCity.getId() == null) {
             log.warn("Не удалось закрепить резервного бота: целевой город не указан");
+            return Optional.empty();
+        }
+
+        if (RESERVE_BOT_TARGET_CITY_DENYLIST.contains(targetCity.getId())) {
+            log.warn("Резервный бот не назначен: город {} ({}) находится в списке исключений",
+                    targetCity.getTitle(), targetCity.getId());
             return Optional.empty();
         }
 

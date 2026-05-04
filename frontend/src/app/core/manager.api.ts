@@ -370,6 +370,13 @@ export class ManagerApi {
     return this.http.put<CompanyEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}`, request);
   }
 
+  updateCompanyNote(companyId: number, companyComments: string): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/note`,
+      { companyComments }
+    );
+  }
+
   deleteCompanyWorker(companyId: number, workerId: number): Observable<CompanyEditPayload> {
     return this.http.delete<CompanyEditPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/workers/${workerId}`

@@ -12,6 +12,8 @@ import com.hunt.otziv.l_lead.dto.api.LeadStatusChangeRequest;
 import com.hunt.otziv.l_lead.dto.api.LeadUpdateRequest;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.l_lead.services.LeadImportService;
+import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportResult;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
@@ -41,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
@@ -66,6 +69,7 @@ public class ApiLeadBoardController {
     private final OperatorService operatorService;
     private final ManagerService managerService;
     private final MarketologService marketologService;
+    private final LeadImportService leadImportService;
     private final PerformanceMetrics performanceMetrics;
 
     @GetMapping("/board")
@@ -197,6 +201,12 @@ public class ApiLeadBoardController {
                         .toList(),
                 Arrays.stream(LeadStatus.values()).map(status -> status.title).toList()
         );
+    }
+
+    @PostMapping("/file-import")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public LeadImportResult importLeads(@RequestParam("file") MultipartFile file) {
+        return leadImportService.importLeads(file);
     }
 
     @PutMapping("/{id}")

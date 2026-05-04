@@ -490,12 +490,29 @@ export class OrderDetailsComponent {
   }
 
   changeBot(review: OrderReviewItem): void {
-    this.runReviewMutation(
-      `bot-${review.id}`,
-      this.managerApi.changeOrderReviewBot(review.orderId, review.id),
-      'Аккаунт заменен',
-      review.companyTitle || `Отзыв #${review.id}`
-    );
+    const key = `bot-${review.id}`;
+    const oldBotId = review.botId ?? null;
+
+    this.mutationKey.set(key);
+    this.error.set(null);
+
+    this.managerApi.changeOrderReviewBot(review.orderId, review.id).subscribe({
+      next: (details) => {
+        const updatedReview = details.reviews.find((item) => item.id === review.id);
+        this.details.set(details);
+        this.mutationKey.set(null);
+        this.toastService.success(
+          'Аккаунт изменен',
+          this.botChangeMessage(oldBotId, updatedReview?.botId ?? null)
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось заменить аккаунт');
+        this.mutationKey.set(null);
+        this.error.set(message);
+        this.toastService.error('Аккаунт не изменен', message);
+      }
+    });
   }
 
   deactivateBot(review: OrderReviewItem): void {
@@ -789,6 +806,14 @@ export class OrderDetailsComponent {
 
   hasUnavailableBot(review: OrderReviewItem): boolean {
     return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
+  }
+
+  private botChangeMessage(oldBotId?: number | null, newBotId?: number | null): string {
+    return `Аккаунт изменен с ID ${this.botIdLabel(oldBotId)} на ID ${this.botIdLabel(newBotId)}`;
+  }
+
+  private botIdLabel(botId?: number | null): string {
+    return botId ? String(botId) : 'не назначен';
   }
 
   trackReview(_index: number, review: OrderReviewItem): number {

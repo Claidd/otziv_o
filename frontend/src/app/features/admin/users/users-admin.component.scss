@@ -271,6 +271,7 @@ tr.unlinked td {
 
 .editor-card,
 .assignments,
+.password-reset,
 .editor-grid {
   display: grid;
   gap: 0.75rem;
@@ -287,6 +288,18 @@ tr.unlinked td {
 .assignments {
   border-top: 1px solid var(--otziv-light);
   padding-top: 0.9rem;
+}
+
+.password-reset {
+  border-top: 1px solid var(--otziv-light);
+  padding-top: 0.9rem;
+}
+
+.password-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
 }
 
 .success {
@@ -369,6 +382,7 @@ tr.unlinked td {
   }
 
   .editor-grid,
+  .password-row,
   .mobile-user-stats {
     grid-template-columns: 1fr;
   }

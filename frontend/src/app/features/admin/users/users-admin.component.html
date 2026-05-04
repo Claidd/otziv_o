@@ -110,7 +110,7 @@
         </div>
       </article>
 
-      <form class="users-card editor-card" [formGroup]="form" (ngSubmit)="save()">
+      <section class="users-card editor-card" [formGroup]="form">
         @if (selectedUser()) {
           <div class="editor-title">
             <div>
@@ -170,7 +170,7 @@
           }
 
           <div class="actions">
-            <button type="submit" [disabled]="saving() || !selectedUser()?.keycloakLinked">
+            <button type="button" (click)="save()" [disabled]="saving() || !selectedUser()?.keycloakLinked">
               <span class="material-icons-sharp">save</span>
               {{ saving() ? 'Сохраняю' : 'Сохранить' }}
             </button>
@@ -179,6 +179,40 @@
           @if (savedUser()) {
             <p class="success compact">Профиль {{ savedUser()?.username }} сохранен.</p>
           }
+
+          <section class="password-reset" [formGroup]="passwordForm">
+            <div class="editor-title">
+              <div>
+                <p class="eyebrow">PASSWORD</p>
+                <h2>Пароль для входа</h2>
+              </div>
+              <span>Постоянный</span>
+            </div>
+
+            <div class="password-row">
+              <label>
+                <span>Новый пароль</span>
+                <input type="text" formControlName="password" autocomplete="new-password">
+              </label>
+
+              <button type="button" (click)="changePassword()" [disabled]="passwordSaving() || !selectedUser()?.keycloakLinked">
+                <span class="material-icons-sharp">key</span>
+                {{ passwordSaving() ? 'Меняю' : 'Сменить пароль' }}
+              </button>
+            </div>
+
+            @if (passwordForm.invalid && passwordForm.touched) {
+              <p class="error compact">Пароль должен быть не короче 6 символов.</p>
+            }
+
+            @if (passwordError()) {
+              <p class="error compact">{{ passwordError() }}</p>
+            }
+
+            @if (savedPasswordFor()) {
+              <p class="success compact">Пароль для {{ savedPasswordFor() }} изменен.</p>
+            }
+          </section>
 
           <section class="assignments" [formGroup]="assignmentForm">
             <div class="editor-title">
@@ -275,7 +309,7 @@
             <p>Здесь будут профиль, роли и связи внутри команды.</p>
           </div>
         }
-      </form>
+      </section>
     </section>
 
     <section class="mobile-lead-stats mobile-user-stats" aria-label="Статистика пользователей">

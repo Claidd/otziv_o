@@ -22,6 +22,7 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { ToastService } from '../../shared/toast.service';
 
 type SectionTab = {
@@ -43,7 +44,7 @@ type ReviewEditDraft = ReviewUpdateRequest;
 
 @Component({
   selector: 'app-worker-board',
-  imports: [AdminLayoutComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, CompanyNoteTriggerComponent, FormsModule, RouterLink],
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
 })
@@ -284,6 +285,7 @@ export class WorkerBoardComponent {
 
   changeReviewBot(review: WorkerReviewItem): void {
     const key = `review-${review.id}-change-bot`;
+    const oldBotId = review.botId ?? null;
     this.mutationKey.set(key);
 
     const request = this.isBadTask(review) && review.badTaskId
@@ -291,9 +293,12 @@ export class WorkerBoardComponent {
       : this.workerApi.changeReviewBot(review.id);
 
     request.subscribe({
-      next: () => {
+      next: (response) => {
         this.mutationKey.set(null);
-        this.toastService.success('Бот заменен', this.reviewActionTitle(review));
+        this.toastService.success(
+          'Аккаунт изменен',
+          this.botChangeMessage(oldBotId, response?.newBotId ?? null)
+        );
         this.loadBoard();
       },
       error: (err) => {
@@ -685,16 +690,12 @@ export class WorkerBoardComponent {
     }
 
     const value = this.orderNoteDraft(order);
-    const field = this.orderNoteField(order);
     const key = this.orderNoteMutationKey(order);
-    const request = field === 'company'
-      ? this.workerApi.updateOrderCompanyNote(order.id, value)
-      : this.workerApi.updateOrderNote(order.id, value);
 
     this.mutationKey.set(key);
-    request.subscribe({
+    this.workerApi.updateOrderNote(order.id, value).subscribe({
       next: () => {
-        this.patchOrderNote(order.id, field, value);
+        this.patchOrderNote(order.id, value);
         this.mutationKey.set(null);
         this.editingOrderNoteId.set(null);
         this.savedOrderNoteId.set(order.id);
@@ -713,6 +714,22 @@ export class WorkerBoardComponent {
       error: (err) => {
         this.mutationKey.set(null);
         this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку'));
+      }
+    });
+  }
+
+  saveOrderCompanyNote(order: OrderCardItem, value: string): void {
+    if (!this.permissions().canEditNotes) {
+      return;
+    }
+
+    this.workerApi.updateOrderCompanyNote(order.id, value).subscribe({
+      next: () => {
+        this.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
       }
     });
   }
@@ -1048,6 +1065,14 @@ export class WorkerBoardComponent {
     return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
   }
 
+  private botChangeMessage(oldBotId?: number | null, newBotId?: number | null): string {
+    return `Аккаунт изменен с ID ${this.botIdLabel(oldBotId)} на ID ${this.botIdLabel(newBotId)}`;
+  }
+
+  private botIdLabel(botId?: number | null): string {
+    return botId ? String(botId) : 'не назначен';
+  }
+
   reviewDate(review: WorkerReviewItem): string {
     return review.badTaskScheduledDate || review.publishedDate || review.created || '-';
   }
@@ -1115,7 +1140,7 @@ export class WorkerBoardComponent {
   }
 
   orderNoteText(order: OrderCardItem): string {
-    const value = this.orderNoteField(order) === 'company' ? order.companyComments : order.orderComments;
+    const value = order.orderComments;
     return this.hasMeaningfulNote(value) ? value!.trim() : 'нет заметок';
   }
 
@@ -1296,16 +1321,12 @@ export class WorkerBoardComponent {
     };
   }
 
-  private orderNoteField(order: OrderCardItem): 'company' | 'order' {
-    return this.hasMeaningfulNote(order.companyComments) ? 'company' : 'order';
-  }
-
-  private hasMeaningfulNote(value?: string | null): boolean {
+  hasMeaningfulNote(value?: string | null): boolean {
     const normalized = (value ?? '').trim().toLowerCase();
     return Boolean(normalized) && normalized !== 'нет заметок';
   }
 
-  private patchOrderNote(orderId: number, field: 'company' | 'order', value: string): void {
+  private patchOrderNote(orderId: number, value: string): void {
     const board = this.board();
     if (!board) {
       return;
@@ -1318,9 +1339,7 @@ export class WorkerBoardComponent {
           return order;
         }
 
-        return field === 'company'
-          ? { ...order, companyComments: value }
-          : { ...order, orderComments: value || 'нет заметок' };
+        return { ...order, orderComments: value || 'нет заметок' };
       })
     };
 

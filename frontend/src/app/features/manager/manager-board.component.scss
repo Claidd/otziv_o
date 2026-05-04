@@ -193,6 +193,7 @@ select {
 }
 
 .manager-card {
+  position: relative;
   display: grid;
   align-content: space-between;
   gap: 0.5rem;
@@ -272,6 +273,21 @@ select {
   color: var(--otziv-info);
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.card-id-line {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  color: var(--otziv-info);
+}
+
+.order-card .card-id-line {
+  position: absolute;
+  top: 0.66rem;
+  right: 0.66rem;
 }
 
 .phone-row a,

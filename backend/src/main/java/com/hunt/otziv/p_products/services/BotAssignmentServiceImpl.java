@@ -13,7 +13,6 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
-import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,6 @@ import java.util.stream.Collectors;
 public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     private final BotService botService;
-    private final ReviewService reviewService;
     private final FilialService filialService;
     private final ReviewRepository reviewRepository;
 
@@ -130,7 +128,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             }
 
             // 5. Сохраняем обновленные отзывы
-            reviewService.saveAll(reviewsWithoutBots);
+            reviewRepository.saveAll(reviewsWithoutBots);
 
             // 6. Проверяем, есть ли боты-заглушки
             long stubBotCount = reviewsWithoutBots.stream()
@@ -156,6 +154,35 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     }
 
     @Override
+    @Transactional
+    public Bot assignBotForReviewChange(Review review, Collection<Long> excludedBotIds) {
+        if (review == null) {
+            throw new IllegalArgumentException("Отзыв не может быть null");
+        }
+
+        Filial filial = review.getFilial();
+        if (filial == null) {
+            throw new IllegalArgumentException("Филиал отзыва не может быть null");
+        }
+
+        Set<Long> usedBotIdsForThisChange = excludedBotIds == null
+                ? new HashSet<>()
+                : excludedBotIds.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<Bot> availableBots = getAvailableBotsByRules(filial, review.isVigul(), 1);
+        Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsForThisChange, 0, filial);
+
+        log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
+                assignedBot != null ? assignedBot.getId() : null,
+                assignedBot != null ? assignedBot.getFio() : null,
+                review.getId());
+
+        return assignedBot;
+    }
+
+    @Override
     public List<Bot> getAvailableBotsByRules(Filial filial, boolean vigul, int neededForOrder) {
         log.info("Получение доступных ботов для филиала ID {}, vigul={}, требуется={}",
                 filial.getId(), vigul, neededForOrder);
@@ -164,9 +191,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Bot> allCityBots = botService.getFindAllByFilialCityId(filial.getCity().getId());
         log.info("Всего ботов в городе {}: {}", filial.getCity().getTitle(), allCityBots.size());
 
-        // 2. Получаем ID ботов, использованных в этом филиале
-        Set<Long> usedBotIdsInFilial = getUsedBotIdsInFilial(filial);
-        log.info("Ботов уже использованных в филиале {}: {}", filial.getId(), usedBotIdsInFilial.size());
+        // 2. Получаем ID ботов, уже использованных в этой компании
+        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
+        log.info("Ботов уже использованных в компании филиала {}: {}", filial.getId(), usedBotIdsInCompany.size());
 
         // 3. Получаем ID ботов, занятых в активных отзывах других филиалов
         Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial);
@@ -177,7 +204,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Bot> idealBots = allCityBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInFilial.contains(bot.getId()))
+                .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
                 .filter(bot -> {
                     if (bot.getStatus() == null) return false;
@@ -186,7 +213,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 })
                 .collect(Collectors.toList());
 
-        log.info("Идеальных ботов (не в этом филиале, не заняты в других): {}", idealBots.size());
+        log.info("Идеальных ботов (не в этой компании, не заняты в других): {}", idealBots.size());
 
         // 5. Применяем фильтры vigul к идеальным ботам
         List<Bot> filteredIdealBots = applyVigulFilters(idealBots, vigul, neededForOrder);
@@ -199,7 +226,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             List<Bot> fallbackBots = allCityBots.stream()
                     .filter(Objects::nonNull)
                     .filter(bot -> bot.getId() != null)
-                    .filter(bot -> !usedBotIdsInFilial.contains(bot.getId()))
+                    .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
                     .filter(bot -> {
                         if (bot.getStatus() == null) return false;
                         String statusTitle = bot.getStatus().getBotStatusTitle();
@@ -208,7 +235,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     .filter(bot -> !availableBots.contains(bot))
                     .collect(Collectors.toList());
 
-            log.info("Запасных ботов (не в этом филиале, но могут быть заняты в других): {}",
+            log.info("Запасных ботов (не в этой компании, но могут быть заняты в других): {}",
                     fallbackBots.size());
 
             int remainingNeeded = neededForOrder - availableBots.size();
@@ -342,7 +369,30 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 .build();
     }
 
-    private Set<Long> getUsedBotIdsInFilial(Filial filial) {
+    private Set<Long> getUsedBotIdsInCompany(Filial filial) {
+        Set<Long> usedBotIds = new HashSet<>();
+
+        try {
+            if (filial.getCompany() == null || filial.getCompany().getId() == null) {
+                log.warn("У филиала ID {} не указана компания, используем проверку только по филиалу", filial.getId());
+                return getUsedBotIdsInFilialFallback(filial);
+            }
+
+            Set<Long> companyBotIds = reviewRepository.findUsedBotIdsByCompanyId(filial.getCompany().getId());
+            if (companyBotIds != null) {
+                usedBotIds.addAll(companyBotIds);
+            }
+            log.debug("Найдено использованных ботов в компании {}: {}",
+                    filial.getCompany().getId(), usedBotIds.size());
+
+        } catch (Exception e) {
+            log.error("Ошибка при получении использованных ботов для компании филиала {}", filial.getId(), e);
+        }
+
+        return usedBotIds;
+    }
+
+    private Set<Long> getUsedBotIdsInFilialFallback(Filial filial) {
         Set<Long> usedBotIds = new HashSet<>();
 
         try {
@@ -359,11 +409,8 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     }
                 }
             }
-            log.debug("Найдено отзывов в филиале {}: {}",
-                    filial.getId(), allReviewsInFilial != null ? allReviewsInFilial.size() : 0);
-
         } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
+            log.error("Ошибка при резервной проверке использованных ботов для филиала {}", filial.getId(), e);
         }
 
         return usedBotIds;

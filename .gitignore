@@ -57,6 +57,7 @@ data/nginx/logs/
 docker/sent-hashes/
 sent-hashes/
 .m2/
+tmp-keycloak-login-check/
 
 # managed
 **.data.json

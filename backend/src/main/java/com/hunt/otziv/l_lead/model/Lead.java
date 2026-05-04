@@ -93,9 +93,15 @@ public class Lead {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        createDate = now.toLocalDate();
-        updateStatus = now;
-        dateNewTry = now.toLocalDate();
+        if (createDate == null) {
+            createDate = now.toLocalDate();
+        }
+        if (updateStatus == null) {
+            updateStatus = now;
+        }
+        if (dateNewTry == null) {
+            dateNewTry = now.toLocalDate();
+        }
     }
 
     @PreUpdate

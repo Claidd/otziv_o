@@ -1,37 +1,26 @@
 import { Routes } from '@angular/router';
-import { HomeComponent } from './features/home/home.component';
-import { UserCreateComponent } from './features/admin/users/user-create.component';
-import { UsersAdminComponent } from './features/admin/users/users-admin.component';
 import { roleGuard } from './core/role.guard';
-import { RegisterClientComponent } from './features/auth/register-client.component';
-import { LegacyMigrationComponent } from './features/auth/legacy-migration.component';
-import { LeadsBoardComponent } from './features/leads/leads-board.component';
-import { ManagerBoardComponent } from './features/manager/manager-board.component';
-import { OrderDetailsComponent } from './features/manager/order-details.component';
-import { OperatorBoardComponent } from './features/operator/operator-board.component';
-import { ReviewCheckComponent } from './features/review-check/review-check.component';
-import { WorkerBoardComponent } from './features/worker/worker-board.component';
-import { AdminAnalyticsComponent } from './features/cabinet/admin-analytics.component';
-import { ScoreComponent } from './features/cabinet/score.component';
-import { TeamComponent } from './features/cabinet/team.component';
-import { UserInfoComponent } from './features/cabinet/user-info.component';
 
 export const routes: Routes = [
   {
     path: '',
-    component: HomeComponent
+    loadComponent: () => import('./features/home/home.component')
+      .then((m) => m.HomeComponent)
   },
   {
     path: 'register-client',
-    component: RegisterClientComponent
+    loadComponent: () => import('./features/auth/register-client.component')
+      .then((m) => m.RegisterClientComponent)
   },
   {
     path: 'legacy-migration',
-    component: LegacyMigrationComponent
+    loadComponent: () => import('./features/auth/legacy-migration.component')
+      .then((m) => m.LegacyMigrationComponent)
   },
   {
     path: 'leads',
-    component: LeadsBoardComponent,
+    loadComponent: () => import('./features/leads/leads-board.component')
+      .then((m) => m.LeadsBoardComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']
@@ -39,7 +28,8 @@ export const routes: Routes = [
   },
   {
     path: 'operator',
-    component: OperatorBoardComponent,
+    loadComponent: () => import('./features/operator/operator-board.component')
+      .then((m) => m.OperatorBoardComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'OPERATOR']
@@ -47,7 +37,8 @@ export const routes: Routes = [
   },
   {
     path: 'manager',
-    component: ManagerBoardComponent,
+    loadComponent: () => import('./features/manager/manager-board.component')
+      .then((m) => m.ManagerBoardComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER']
@@ -55,7 +46,8 @@ export const routes: Routes = [
   },
   {
     path: 'manager/orders/:companyId/:orderId',
-    component: OrderDetailsComponent,
+    loadComponent: () => import('./features/manager/order-details.component')
+      .then((m) => m.OrderDetailsComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
@@ -63,7 +55,8 @@ export const routes: Routes = [
   },
   {
     path: 'worker',
-    component: WorkerBoardComponent,
+    loadComponent: () => import('./features/worker/worker-board.component')
+      .then((m) => m.WorkerBoardComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
@@ -71,7 +64,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/team',
-    component: TeamComponent,
+    loadComponent: () => import('./features/cabinet/team.component')
+      .then((m) => m.TeamComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER']
@@ -79,7 +73,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/score',
-    component: ScoreComponent,
+    loadComponent: () => import('./features/cabinet/score.component')
+      .then((m) => m.ScoreComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
@@ -87,7 +82,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/analyse',
-    component: AdminAnalyticsComponent,
+    loadComponent: () => import('./features/cabinet/admin-analytics.component')
+      .then((m) => m.AdminAnalyticsComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
@@ -95,7 +91,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/user-info/:userId',
-    component: UserInfoComponent,
+    loadComponent: () => import('./features/cabinet/user-info.component')
+      .then((m) => m.UserInfoComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
@@ -103,7 +100,8 @@ export const routes: Routes = [
   },
   {
     path: 'review/editReviews/:orderDetailId',
-    component: ReviewCheckComponent
+    loadComponent: () => import('./features/review-check/review-check.component')
+      .then((m) => m.ReviewCheckComponent)
   },
   {
     path: 'admin/cities',
@@ -134,7 +132,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/users',
-    component: UsersAdminComponent,
+    loadComponent: () => import('./features/admin/users/users-admin.component')
+      .then((m) => m.UsersAdminComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
@@ -142,7 +141,8 @@ export const routes: Routes = [
   },
   {
     path: 'admin/users/new',
-    component: UserCreateComponent,
+    loadComponent: () => import('./features/admin/users/user-create.component')
+      .then((m) => m.UserCreateComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
