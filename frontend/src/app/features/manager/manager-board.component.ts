@@ -2,8 +2,6 @@ import { Component, HostListener, computed, inject, signal } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
-  CompanyEditPayload,
-  CompanyUpdateRequest,
   CompanyCardItem,
   ManagerApi,
   ManagerBoard,
@@ -49,14 +47,7 @@ import {
 import { ManagerCompanyCardComponent } from './manager-company-card.component';
 import type { ManagerCompanyEditDraftChange } from './manager-company-edit-modal.component';
 import { ManagerCompanyEditModalComponent } from './manager-company-edit-modal.component';
-import {
-  managerCompanyEditDraft,
-  managerCompanyFilialDeletedLabel,
-  managerCompanyFilialDeleteConfirm,
-  managerCompanyFilialDeleteKey,
-  managerCompanyWorkerDeleteConfirm,
-  managerCompanyWorkerDeleteKey
-} from './manager-board.company.helpers';
+import { ManagerBoardCompanyFacade } from './manager-board-company.facade';
 import {
   managerReadHistoryView,
   managerReadQueryView,
@@ -117,13 +108,13 @@ export class ManagerBoardComponent {
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
   readonly selectedCompany = signal<SelectedCompany | null>(null);
-  readonly editCompany = signal<CompanyEditPayload | null>(null);
-  readonly editDraft = signal<CompanyUpdateRequest | null>(null);
-  readonly editLoading = signal(false);
-  readonly editSaving = signal(false);
-  readonly editError = signal<string | null>(null);
-  readonly editDeleteKey = signal<string | null>(null);
 
+  private readonly companyFacade = new ManagerBoardCompanyFacade({
+    managerApi: this.managerApi,
+    toastService: this.toastService,
+    loadBoard: () => this.loadBoard(),
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
+  });
   private readonly orderFacade = new ManagerBoardOrderFacade({
     managerApi: this.managerApi,
     toastService: this.toastService,
@@ -131,6 +122,12 @@ export class ManagerBoardComponent {
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
     openCreatedCompanyOrders: (result) => this.openCreatedCompanyOrders(result.companyId, result.companyTitle)
   });
+  readonly editCompany = this.companyFacade.editCompany;
+  readonly editDraft = this.companyFacade.editDraft;
+  readonly editLoading = this.companyFacade.editLoading;
+  readonly editSaving = this.companyFacade.editSaving;
+  readonly editError = this.companyFacade.editError;
+  readonly editDeleteKey = this.companyFacade.editDeleteKey;
   readonly editOrder = this.orderFacade.editOrder;
   readonly orderDraft = this.orderFacade.orderDraft;
   readonly orderLoading = this.orderFacade.orderLoading;
@@ -419,152 +416,31 @@ export class ManagerBoardComponent {
   }
 
   openCompanyEdit(company: CompanyCardItem): void {
-    this.editLoading.set(true);
-    this.editError.set(null);
-    this.editDeleteKey.set(null);
-
-    this.managerApi.getCompanyEdit(company.id).subscribe({
-      next: (payload) => {
-        this.applyCompanyEditPayload(payload);
-        this.editLoading.set(false);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось открыть редактирование компании');
-        this.editLoading.set(false);
-        this.editError.set(message);
-        this.toastService.error('Компания не открыта', message);
-      }
-    });
+    this.companyFacade.openCompanyEdit(company);
   }
 
   closeCompanyEdit(): void {
-    if (this.editLoading() || this.editSaving() || this.editDeleteKey()) {
-      return;
-    }
-
-    this.editCompany.set(null);
-    this.editDraft.set(null);
-    this.editError.set(null);
+    this.companyFacade.closeCompanyEdit();
   }
 
   handleCompanyEditDraftChange(change: ManagerCompanyEditDraftChange): void {
-    this.setCompanyEditField(change.field, change.value);
-  }
-
-  private setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
-    this.editDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+    this.companyFacade.handleCompanyEditDraftChange(change);
   }
 
   changeCompanyCategory(categoryId: number | null): void {
-    this.setCompanyEditField('categoryId', categoryId);
-    this.setCompanyEditField('subCategoryId', null);
-
-    if (!categoryId) {
-      return;
-    }
-
-    this.managerApi.getCompanySubcategories(categoryId).subscribe({
-      next: (subCategories) => {
-        this.editCompany.update((company) => company ? { ...company, subCategories } : company);
-        this.editDraft.update((draft) => draft ? { ...draft, subCategoryId: subCategories[0]?.id ?? null } : draft);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось загрузить подкатегории');
-        this.editError.set(message);
-        this.toastService.error('Подкатегории не загружены', message);
-      }
-    });
+    this.companyFacade.changeCompanyCategory(categoryId);
   }
 
   saveCompanyEdit(): void {
-    const company = this.editCompany();
-    const draft = this.editDraft();
-
-    if (!company || !draft) {
-      return;
-    }
-
-    this.editSaving.set(true);
-    this.editError.set(null);
-
-    this.managerApi.updateCompany(company.id, draft).subscribe({
-      next: () => {
-        this.editSaving.set(false);
-        this.closeCompanyEdit();
-        this.toastService.success('Компания сохранена', `Изменения по компании #${company.id} применены`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить компанию');
-        this.editError.set(message);
-        this.editSaving.set(false);
-        this.toastService.error('Компания не сохранена', message);
-      }
-    });
+    this.companyFacade.saveCompanyEdit();
   }
 
   deleteCompanyWorker(worker: ManagerOption): void {
-    const company = this.editCompany();
-
-    if (!company || this.editDeleteKey()) {
-      return;
-    }
-
-    const confirmed = window.confirm(managerCompanyWorkerDeleteConfirm(worker));
-    if (!confirmed) {
-      return;
-    }
-
-    const key = managerCompanyWorkerDeleteKey(worker);
-    this.editDeleteKey.set(key);
-    this.editError.set(null);
-
-    this.managerApi.deleteCompanyWorker(company.id, worker.id).subscribe({
-      next: (payload) => {
-        this.editDeleteKey.set(null);
-        this.applyCompanyEditPayload(payload);
-        this.toastService.success('Специалист удален', worker.label);
-        this.loadBoard();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось удалить специалиста');
-        this.editDeleteKey.set(null);
-        this.editError.set(message);
-        this.toastService.error('Специалист не удален', message);
-      }
-    });
+    this.companyFacade.deleteCompanyWorker(worker);
   }
 
   deleteCompanyFilial(filialId: number, title: string): void {
-    const company = this.editCompany();
-
-    if (!company || this.editDeleteKey()) {
-      return;
-    }
-
-    const confirmed = window.confirm(managerCompanyFilialDeleteConfirm(filialId, title));
-    if (!confirmed) {
-      return;
-    }
-
-    const key = managerCompanyFilialDeleteKey(filialId);
-    this.editDeleteKey.set(key);
-    this.editError.set(null);
-
-    this.managerApi.deleteCompanyFilial(company.id, filialId).subscribe({
-      next: (payload) => {
-        this.editDeleteKey.set(null);
-        this.applyCompanyEditPayload(payload);
-        this.toastService.success('Филиал удален', managerCompanyFilialDeletedLabel(filialId, title));
-        this.loadBoard();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось удалить филиал');
-        this.editDeleteKey.set(null);
-        this.editError.set(message);
-        this.toastService.error('Филиал не удален', message);
-      }
-    });
+    this.companyFacade.deleteCompanyFilial(filialId, title);
   }
 
   openCompanyOrderCreate(company: CompanyCardItem): void {
@@ -752,11 +628,6 @@ export class ManagerBoardComponent {
     } catch {
       this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
     }
-  }
-
-  private applyCompanyEditPayload(payload: CompanyEditPayload): void {
-    this.editCompany.set(payload);
-    this.editDraft.set(managerCompanyEditDraft(payload));
   }
 
   private openCreatedCompanyOrders(companyId: number, companyTitle: string): void {
