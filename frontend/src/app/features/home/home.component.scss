@@ -4,8 +4,7 @@
 
 .hero-card,
 .metric-card,
-.panel,
-.chart-card {
+.panel {
   border-radius: var(--otziv-card-radius);
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
@@ -30,7 +29,6 @@ dl {
 }
 
 .hero-card p:not(.eyebrow),
-.chart-head small,
 .panel p,
 dt,
 small {
@@ -119,190 +117,6 @@ small {
 
 .hero-card--authenticated .date-control {
   order: 3;
-}
-
-.chart-card {
-  display: grid;
-  grid-template-rows: auto 1.15rem minmax(0, 1fr);
-  gap: 0.65rem;
-  padding: 1rem 1.1rem 1.15rem;
-}
-
-.chart-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.bar-chart {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  height: 15.3rem;
-  align-items: stretch;
-  gap: 0.1rem;
-  border: 1px solid rgba(103, 116, 131, 0.14);
-  border-radius: 1rem;
-  overflow: hidden;
-  padding: 0.9rem 0.5rem 0.6rem 3.35rem;
-  background: linear-gradient(180deg, transparent 0, transparent 24%, rgba(103, 116, 131, 0.08) 25%, transparent 26%, transparent 49%, rgba(103, 116, 131, 0.08) 50%, transparent 51%, transparent 74%, rgba(103, 116, 131, 0.08) 75%, transparent 76%);
-}
-
-.bar-chart-frame,
-.line-chart-frame {
-  display: block;
-  position: relative;
-}
-
-.y-axis {
-  display: flex;
-  position: absolute;
-  z-index: 2;
-  left: 0.65rem;
-  width: 2.35rem;
-  pointer-events: none;
-  height: 15.3rem;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0.15rem 0 2rem;
-  color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 900;
-  line-height: 1;
-  text-align: right;
-}
-
-.bar-item {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) 1.2rem;
-  align-items: end;
-  min-width: 0;
-  gap: 0.35rem;
-}
-
-.bar {
-  display: block;
-  width: 100%;
-  min-height: 0;
-  border-radius: 999px 999px 0 0;
-  background: var(--otziv-primary);
-}
-
-.bar-label {
-  overflow: visible;
-  color: var(--otziv-info);
-  font-size: 0.54rem;
-  font-weight: 900;
-  line-height: 1;
-  text-align: center;
-  text-overflow: clip;
-  white-space: nowrap;
-}
-
-.bar-chart.salary .bar {
-  background: #9a7bd9;
-}
-
-.daily-legend,
-.line-legend {
-  display: flex;
-  align-items: center;
-  min-height: 1.35rem;
-  color: var(--otziv-info);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.daily-legend {
-  justify-content: flex-start;
-  padding-left: 3.35rem;
-}
-
-.line-legend {
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem 1rem;
-}
-
-.daily-legend span,
-.line-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.daily-legend i,
-.line-legend i {
-  display: inline-block;
-  width: 0.9rem;
-  height: 0.9rem;
-  border-radius: 50%;
-}
-
-.line-chart-frame .y-axis {
-  height: 14rem;
-  left: 0.65rem;
-  padding: 1.25rem 0 1.65rem;
-}
-
-.line-chart-scroll {
-  padding-left: 3.35rem;
-  min-width: 0;
-  overflow-x: hidden;
-  border: 1px solid rgba(103, 116, 131, 0.14);
-  border-radius: 1rem;
-  background: var(--otziv-white);
-}
-
-.line-chart-plot {
-  position: relative;
-  width: 100%;
-  height: 14rem;
-}
-
-.line-chart {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-}
-
-.grid-line {
-  stroke: rgba(103, 116, 131, 0.16);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.year-line {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.4;
-  vector-effect: non-scaling-stroke;
-}
-
-.chart-dot {
-  position: absolute;
-  z-index: 2;
-  width: 0.55rem;
-  height: 0.55rem;
-  border: 2px solid var(--otziv-white);
-  border-radius: 50%;
-  box-shadow: 0 0.16rem 0.35rem rgba(54, 57, 73, 0.14);
-  transform: translate(-50%, -50%);
-}
-
-.x-axis.line {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 0.2rem;
-  padding: 0 0.4rem 0.75rem;
-  color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 900;
-  line-height: 1;
-  text-align: center;
 }
 
 .panel {
@@ -487,100 +301,6 @@ dd {
     object-position: center 55%;
   }
 
-  .chart-card {
-    gap: 0.8rem;
-    border-radius: 1.35rem;
-    padding: 0.9rem 0.75rem;
-  }
-
-  .chart-head {
-    align-items: flex-start;
-  }
-
-  .chart-head h2 {
-    font-size: 1rem;
-  }
-
-  .bar-chart-frame,
-  .line-chart-frame {
-    display: block;
-  }
-
-  .y-axis {
-    left: 0.45rem;
-    width: 2.35rem;
-    font-size: 0.62rem;
-  }
-
-  .bar-chart {
-    grid-auto-columns: minmax(0, 1fr);
-    gap: 0.12rem;
-    overflow-x: hidden;
-    padding: 0.8rem 0.45rem 0.55rem 3rem;
-  }
-
-  .bar-label {
-    overflow: visible;
-    font-size: 0.5rem;
-    text-overflow: clip;
-  }
-
-  .line-legend {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 0.38rem;
-    overflow-x: auto;
-    font-size: 0.58rem;
-    scrollbar-width: none;
-  }
-
-  .daily-legend {
-    padding-left: 3.27rem;
-    font-size: 0.58rem;
-  }
-
-  .line-legend::-webkit-scrollbar {
-    display: none;
-  }
-
-  .daily-legend span,
-  .line-legend span {
-    flex: 0 0 auto;
-    gap: 0.2rem;
-    white-space: nowrap;
-  }
-
-  .daily-legend i,
-  .line-legend i {
-    width: 0.62rem;
-    height: 0.62rem;
-  }
-
-  .line-chart-plot,
-  .line-chart-frame .y-axis {
-    height: 14rem;
-  }
-
-  .line-chart-frame .y-axis {
-    left: 0.45rem;
-    padding: 1rem 0 1.15rem;
-  }
-
-  .line-chart-plot,
-  .line-chart-scroll .x-axis.line {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .line-chart-scroll {
-    padding-left: 3rem;
-  }
-
-  .x-axis.line {
-    gap: 0;
-    padding: 0 0.15rem 0.65rem;
-    font-size: 0.56rem;
-  }
 }
 
 @media (min-width: 1321px) and (max-height: 820px) {
@@ -602,29 +322,4 @@ dd {
     height: 13.5rem;
   }
 
-  .chart-card {
-    padding: 0.75rem 0.45rem;
-  }
-
-  .bar-chart-frame,
-  .line-chart-frame {
-    display: block;
-  }
-
-  .y-axis {
-    left: 0.3rem;
-    width: 2.15rem;
-  }
-
-  .bar-chart {
-    padding-left: 2.6rem;
-  }
-
-  .line-chart-scroll {
-    padding-left: 2.6rem;
-  }
-
-  .daily-legend {
-    padding-left: 2.57rem;
-  }
 }

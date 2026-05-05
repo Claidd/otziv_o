@@ -1,0 +1,228 @@
+:host {
+  display: block;
+}
+
+.chart-card {
+  display: grid;
+  gap: 1rem;
+  border-radius: var(--otziv-card-radius);
+  padding: 1.2rem;
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.chart-card--compact {
+  gap: 0.65rem;
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+.chart-head small {
+  color: var(--otziv-info);
+}
+
+.daily-legend {
+  display: flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding-left: 3.35rem;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.daily-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.daily-legend i {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+}
+
+.bar-chart-frame {
+  display: block;
+  position: relative;
+}
+
+.y-axis {
+  display: flex;
+  position: absolute;
+  z-index: 2;
+  left: 0.65rem;
+  width: 2.8rem;
+  pointer-events: none;
+  height: 16.5rem;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.15rem 0 2rem;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+}
+
+.bar-chart {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(1.2rem, 1fr);
+  height: 16.5rem;
+  align-items: stretch;
+  gap: 0.28rem;
+  overflow-x: auto;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 1rem;
+  padding: 1rem 1rem 0.75rem 3.85rem;
+  background: linear-gradient(180deg, transparent 0, transparent 24%, rgba(103, 116, 131, 0.08) 25%, transparent 26%, transparent 49%, rgba(103, 116, 131, 0.08) 50%, transparent 51%, transparent 74%, rgba(103, 116, 131, 0.08) 75%, transparent 76%);
+}
+
+.chart-card--compact .y-axis {
+  width: 2.35rem;
+  height: 15.3rem;
+}
+
+.chart-card--compact .bar-chart {
+  grid-auto-columns: minmax(0, 1fr);
+  height: 15.3rem;
+  gap: 0.1rem;
+  overflow: hidden;
+  padding: 0.9rem 0.5rem 0.6rem 3.35rem;
+}
+
+.bar-item {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 1.2rem;
+  align-items: end;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border-radius: 999px 999px 0 0;
+  background: var(--otziv-primary);
+}
+
+.bar-chart.salary .bar {
+  background: #9a7bd9;
+}
+
+.bar-label {
+  overflow: hidden;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-card--compact .bar-label {
+  overflow: visible;
+  font-size: 0.54rem;
+  text-overflow: clip;
+}
+
+@media (max-width: 960px) {
+  .bar-chart,
+  .y-axis {
+    height: 13.5rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .chart-card,
+  .chart-card--compact {
+    gap: 0.8rem;
+    border-radius: 1.35rem;
+    padding: 0.9rem 0.75rem;
+  }
+
+  .chart-head {
+    align-items: flex-start;
+  }
+
+  .chart-head h2,
+  .chart-head h3 {
+    font-size: 1rem;
+  }
+
+  .y-axis,
+  .chart-card--compact .y-axis {
+    left: 0.45rem;
+    width: 2.35rem;
+    font-size: 0.62rem;
+  }
+
+  .bar-chart,
+  .chart-card--compact .bar-chart {
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 0.12rem;
+    overflow-x: hidden;
+    padding: 0.8rem 0.45rem 0.55rem 3rem;
+  }
+
+  .bar-label,
+  .chart-card--compact .bar-label {
+    overflow: visible;
+    font-size: 0.5rem;
+    text-overflow: clip;
+  }
+
+  .daily-legend {
+    padding-left: 3.27rem;
+    font-size: 0.58rem;
+  }
+
+  .daily-legend span {
+    flex: 0 0 auto;
+    gap: 0.2rem;
+    white-space: nowrap;
+  }
+
+  .daily-legend i {
+    width: 0.62rem;
+    height: 0.62rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .chart-card,
+  .chart-card--compact {
+    padding: 0.75rem 0.45rem;
+  }
+
+  .y-axis,
+  .chart-card--compact .y-axis {
+    left: 0.3rem;
+    width: 2.15rem;
+  }
+
+  .bar-chart,
+  .chart-card--compact .bar-chart {
+    padding-left: 2.6rem;
+  }
+
+  .daily-legend {
+    padding-left: 2.57rem;
+  }
+}

@@ -41,28 +41,11 @@
         }
       </div>
 
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Оборот по дням</h3>
-          <small>{{ analytics()?.date }}</small>
-        </div>
-        @let orderPayDaily = dailyBarChartFrom(stats()?.orderPayMap);
-        <div class="bar-chart-frame">
-          <div class="y-axis">
-            @for (tick of orderPayDaily.ticks; track $index) {
-              <span>{{ tick }}</span>
-            }
-          </div>
-          <div class="bar-chart daily">
-            @for (point of orderPayDaily.points; track point.label) {
-              <div class="bar-item" [title]="point.label + ': ' + moneyLabel(point.value)">
-                <span class="bar" [style.height.%]="point.height"></span>
-                <span class="bar-label">{{ point.label }}</span>
-              </div>
-            }
-          </div>
-        </div>
-      </article>
+      <app-cabinet-bar-chart
+        heading="Оборот по дням"
+        [subtitle]="analytics()?.date || ''"
+        [chart]="dailyBarChartFrom(stats()?.orderPayMap)"
+      />
 
       <div class="metric-grid">
         @for (metric of payOrderMetrics(); track metricId($index, metric)) {
@@ -78,53 +61,12 @@
         }
       </div>
 
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Оборот по месяцам</h3>
-          <small>все годы</small>
-        </div>
-        @let orderPayYearly = yearlyLineChartFrom(stats()?.orderPayMapMonth);
-        <div class="line-legend">
-          @for (series of orderPayYearly.series; track series.label) {
-            <span><i [style.background]="series.color"></i>{{ series.label }}</span>
-          }
-        </div>
-        <div class="line-chart-frame">
-          <div class="y-axis line">
-            @for (tick of orderPayYearly.ticks; track $index) {
-              <span>{{ tick }}</span>
-            }
-          </div>
-          <div class="line-chart-scroll">
-            <div class="line-chart-plot">
-              <svg class="line-chart" [attr.viewBox]="orderPayYearly.viewBox" preserveAspectRatio="none" role="img" aria-label="Оборот по месяцам">
-                @for (lineY of orderPayYearly.gridLines; track lineY) {
-                  <line class="grid-line" [attr.x1]="orderPayYearly.plotStart" [attr.x2]="orderPayYearly.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
-                }
-                @for (series of orderPayYearly.series; track series.label) {
-                  <polyline class="year-line" [attr.points]="series.points" [attr.stroke]="series.color"></polyline>
-                }
-              </svg>
-              @for (series of orderPayYearly.series; track series.label) {
-                @for (point of series.pointsData; track point.label) {
-                  <span
-                    class="chart-dot"
-                    [style.left.%]="point.x"
-                    [style.top.%]="point.y"
-                    [style.background]="series.color"
-                    [title]="series.label + ' · ' + point.label + ': ' + moneyLabel(point.value)"
-                  ></span>
-                }
-              }
-            </div>
-            <div class="x-axis line">
-              @for (month of orderPayYearly.months; track month) {
-                <span>{{ month }}</span>
-              }
-            </div>
-          </div>
-        </div>
-      </article>
+      <app-cabinet-line-chart
+        heading="Оборот по месяцам"
+        subtitle="все годы"
+        ariaLabel="Оборот по месяцам"
+        [chart]="yearlyLineChartFrom(stats()?.orderPayMapMonth)"
+      />
     </section>
 
     <section class="analytics-section">
@@ -147,28 +89,12 @@
         }
       </div>
 
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Зарплаты по дням</h3>
-          <small>{{ analytics()?.date }}</small>
-        </div>
-        @let salaryDaily = dailyBarChartFrom(stats()?.zpPayMap);
-        <div class="bar-chart-frame">
-          <div class="y-axis">
-            @for (tick of salaryDaily.ticks; track $index) {
-              <span>{{ tick }}</span>
-            }
-          </div>
-          <div class="bar-chart daily salary">
-            @for (point of salaryDaily.points; track point.label) {
-              <div class="bar-item" [title]="point.label + ': ' + moneyLabel(point.value)">
-                <span class="bar" [style.height.%]="point.height"></span>
-                <span class="bar-label">{{ point.label }}</span>
-              </div>
-            }
-          </div>
-        </div>
-      </article>
+      <app-cabinet-bar-chart
+        heading="Зарплаты по дням"
+        [subtitle]="analytics()?.date || ''"
+        [chart]="dailyBarChartFrom(stats()?.zpPayMap)"
+        [salary]="true"
+      />
 
       <div class="metric-grid">
         @for (metric of salaryOrderMetrics(); track metricId($index, metric)) {
@@ -184,53 +110,12 @@
         }
       </div>
 
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Зарплаты по месяцам</h3>
-          <small>все годы</small>
-        </div>
-        @let salaryYearly = yearlyLineChartFrom(stats()?.zpPayMapMonth);
-        <div class="line-legend">
-          @for (series of salaryYearly.series; track series.label) {
-            <span><i [style.background]="series.color"></i>{{ series.label }}</span>
-          }
-        </div>
-        <div class="line-chart-frame">
-          <div class="y-axis line">
-            @for (tick of salaryYearly.ticks; track $index) {
-              <span>{{ tick }}</span>
-            }
-          </div>
-          <div class="line-chart-scroll">
-            <div class="line-chart-plot">
-              <svg class="line-chart" [attr.viewBox]="salaryYearly.viewBox" preserveAspectRatio="none" role="img" aria-label="Зарплаты по месяцам">
-                @for (lineY of salaryYearly.gridLines; track lineY) {
-                  <line class="grid-line" [attr.x1]="salaryYearly.plotStart" [attr.x2]="salaryYearly.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
-                }
-                @for (series of salaryYearly.series; track series.label) {
-                  <polyline class="year-line" [attr.points]="series.points" [attr.stroke]="series.color"></polyline>
-                }
-              </svg>
-              @for (series of salaryYearly.series; track series.label) {
-                @for (point of series.pointsData; track point.label) {
-                  <span
-                    class="chart-dot"
-                    [style.left.%]="point.x"
-                    [style.top.%]="point.y"
-                    [style.background]="series.color"
-                    [title]="series.label + ' · ' + point.label + ': ' + moneyLabel(point.value)"
-                  ></span>
-                }
-              }
-            </div>
-            <div class="x-axis line">
-              @for (month of salaryYearly.months; track month) {
-                <span>{{ month }}</span>
-              }
-            </div>
-          </div>
-        </div>
-      </article>
+      <app-cabinet-line-chart
+        heading="Зарплаты по месяцам"
+        subtitle="все годы"
+        ariaLabel="Зарплаты по месяцам"
+        [chart]="yearlyLineChartFrom(stats()?.zpPayMapMonth)"
+      />
     </section>
   } @else if (loading()) {
     <section class="empty-state">

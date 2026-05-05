@@ -9,12 +9,14 @@ import { CabinetNavigationComponent } from '../../shared/cabinet-navigation.comp
 import { SystemHealth, SystemHealthApi } from '../../core/system-health.api';
 import { appEnvironment } from '../../core/app-environment';
 import { ToastService } from '../../shared/toast.service';
+import { CabinetBarChartComponent } from '../cabinet/cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
   cabinetYearlyLineChartFrom,
   type CabinetBarChart,
   type CabinetLineChart
 } from '../cabinet/cabinet-chart.helpers';
+import { CabinetLineChartComponent } from '../cabinet/cabinet-line-chart.component';
 
 type DashboardAction = {
   label: string;
@@ -42,7 +44,14 @@ const MONTH_NAMES = [
 
 @Component({
   selector: 'app-home',
-  imports: [AdminLayoutComponent, CabinetNavigationComponent, FormsModule, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    CabinetNavigationComponent,
+    FormsModule,
+    RouterLink,
+    CabinetBarChartComponent,
+    CabinetLineChartComponent
+  ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
@@ -266,10 +275,6 @@ export class HomeComponent {
 
   yearlyLineChartFrom(map?: string | null): CabinetLineChart {
     return cabinetYearlyLineChartFrom(map, { fallbackYear: new Date(this.cabinetDate()).getFullYear() });
-  }
-
-  moneyLabel(value: number): string {
-    return this.money(value);
   }
 
   selectedMonthLabel(): string {

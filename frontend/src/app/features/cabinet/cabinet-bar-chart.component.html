@@ -1,0 +1,32 @@
+<article class="chart-card" [class.chart-card--compact]="compact">
+  <div class="chart-head">
+    @if (headingLevel === 2) {
+      <h2>{{ heading }}</h2>
+    } @else {
+      <h3>{{ heading }}</h3>
+    }
+    <small>{{ subtitle }}</small>
+  </div>
+
+  @if (legendLabel) {
+    <div class="daily-legend">
+      <span><i [style.background]="legendColor"></i>{{ legendLabel }}</span>
+    </div>
+  }
+
+  <div class="bar-chart-frame">
+    <div class="y-axis">
+      @for (tick of chart.ticks; track $index) {
+        <span>{{ tick }}</span>
+      }
+    </div>
+    <div class="bar-chart daily" [class.salary]="salary">
+      @for (point of chart.points; track point.label) {
+        <div class="bar-item" [title]="point.label + ': ' + moneyLabel(point.value)">
+          <span class="bar" [style.height.%]="point.height"></span>
+          <span class="bar-label">{{ point.label }}</span>
+        </div>
+      }
+    </div>
+  </div>
+</article>

@@ -1,0 +1,260 @@
+:host {
+  display: block;
+}
+
+.chart-card {
+  display: grid;
+  gap: 1rem;
+  border-radius: var(--otziv-card-radius);
+  padding: 1.2rem;
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.chart-card--compact {
+  gap: 0.65rem;
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+.chart-head small,
+.line-legend,
+.y-axis,
+.x-axis.line {
+  color: var(--otziv-info);
+}
+
+.line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  min-height: 1.35rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.line-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.line-legend i {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+}
+
+.line-chart-frame {
+  display: block;
+  position: relative;
+}
+
+.y-axis {
+  display: flex;
+  position: absolute;
+  z-index: 2;
+  left: 0.65rem;
+  width: 2.8rem;
+  pointer-events: none;
+  height: 18rem;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.25rem 0 1.65rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+}
+
+.line-chart-scroll {
+  padding-left: 3.85rem;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 1rem;
+  background: var(--otziv-muted-surface);
+}
+
+.line-chart-plot {
+  position: relative;
+  width: 100%;
+  height: 18rem;
+}
+
+.chart-card--compact .y-axis,
+.chart-card--compact .line-chart-plot {
+  height: 14rem;
+}
+
+.chart-card--compact .y-axis {
+  width: 2.35rem;
+}
+
+.chart-card--compact .line-chart-scroll {
+  padding-left: 3.35rem;
+  overflow-x: hidden;
+  background: var(--otziv-white);
+}
+
+.line-chart {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+.grid-line {
+  stroke: rgba(103, 116, 131, 0.16);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.year-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-dot {
+  position: absolute;
+  z-index: 2;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 2px solid var(--otziv-white);
+  border-radius: 50%;
+  box-shadow: 0 0.16rem 0.35rem rgba(54, 57, 73, 0.14);
+  transform: translate(-50%, -50%);
+}
+
+.x-axis.line {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.2rem;
+  padding: 0 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .y-axis,
+  .line-chart-plot {
+    height: 15rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .chart-card,
+  .chart-card--compact {
+    gap: 0.8rem;
+    border-radius: 1.35rem;
+    padding: 0.9rem 0.75rem;
+  }
+
+  .chart-head {
+    align-items: flex-start;
+  }
+
+  .chart-head h2,
+  .chart-head h3 {
+    font-size: 1rem;
+  }
+
+  .y-axis,
+  .chart-card--compact .y-axis {
+    left: 0.45rem;
+    width: 2.35rem;
+    height: 14rem;
+    padding: 1rem 0 1.15rem;
+    font-size: 0.62rem;
+  }
+
+  .line-legend {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.38rem;
+    overflow-x: auto;
+    font-size: 0.58rem;
+    scrollbar-width: none;
+  }
+
+  .line-legend::-webkit-scrollbar {
+    display: none;
+  }
+
+  .line-legend span {
+    flex: 0 0 auto;
+    gap: 0.2rem;
+    white-space: nowrap;
+  }
+
+  .line-legend i {
+    width: 0.62rem;
+    height: 0.62rem;
+  }
+
+  .line-chart-scroll,
+  .chart-card--compact .line-chart-scroll {
+    padding-left: 3rem;
+    overflow-x: hidden;
+  }
+
+  .line-chart-plot,
+  .line-chart-scroll .x-axis.line,
+  .chart-card--compact .line-chart-plot,
+  .chart-card--compact .line-chart-scroll .x-axis.line {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .line-chart-plot,
+  .chart-card--compact .line-chart-plot {
+    height: 14rem;
+  }
+
+  .x-axis.line {
+    gap: 0;
+    padding: 0 0.15rem 0.65rem;
+    font-size: 0.56rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .chart-card,
+  .chart-card--compact {
+    padding: 0.75rem 0.45rem;
+  }
+
+  .y-axis,
+  .chart-card--compact .y-axis {
+    left: 0.3rem;
+    width: 2.15rem;
+  }
+
+  .line-chart-scroll,
+  .chart-card--compact .line-chart-scroll {
+    padding-left: 2.6rem;
+  }
+
+  .line-chart-plot,
+  .line-chart-scroll .x-axis.line {
+    width: 100%;
+  }
+}

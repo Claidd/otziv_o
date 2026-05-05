@@ -1,0 +1,52 @@
+<article class="chart-card" [class.chart-card--compact]="compact">
+  <div class="chart-head">
+    @if (headingLevel === 2) {
+      <h2>{{ heading }}</h2>
+    } @else {
+      <h3>{{ heading }}</h3>
+    }
+    <small>{{ subtitle }}</small>
+  </div>
+
+  <div class="line-legend">
+    @for (series of chart.series; track series.label) {
+      <span><i [style.background]="series.color"></i>{{ series.label }}</span>
+    }
+  </div>
+
+  <div class="line-chart-frame">
+    <div class="y-axis line">
+      @for (tick of chart.ticks; track $index) {
+        <span>{{ tick }}</span>
+      }
+    </div>
+    <div class="line-chart-scroll">
+      <div class="line-chart-plot">
+        <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" [attr.aria-label]="ariaLabel || heading">
+          @for (lineY of chart.gridLines; track lineY) {
+            <line class="grid-line" [attr.x1]="chart.plotStart" [attr.x2]="chart.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
+          }
+          @for (series of chart.series; track series.label) {
+            <polyline class="year-line" [attr.points]="series.points" [attr.stroke]="series.color"></polyline>
+          }
+        </svg>
+        @for (series of chart.series; track series.label) {
+          @for (point of series.pointsData; track point.label) {
+            <span
+              class="chart-dot"
+              [style.left.%]="point.x"
+              [style.top.%]="point.y"
+              [style.background]="series.color"
+              [title]="series.label + ' · ' + point.label + ': ' + moneyLabel(point.value)"
+            ></span>
+          }
+        }
+      </div>
+      <div class="x-axis line">
+        @for (month of chart.months; track month) {
+          <span>{{ month }}</span>
+        }
+      </div>
+    </div>
+  </div>
+</article>

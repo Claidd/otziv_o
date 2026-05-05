@@ -2,12 +2,14 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { AnalyticsResponse, CabinetApi, StatDto } from '../../core/cabinet.api';
+import { CabinetBarChartComponent } from './cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
   cabinetYearlyLineChartFrom,
   type CabinetBarChart,
   type CabinetLineChart
 } from './cabinet-chart.helpers';
+import { CabinetLineChartComponent } from './cabinet-line-chart.component';
 
 type MetricTone = 'green' | 'blue' | 'yellow' | 'red';
 
@@ -19,7 +21,7 @@ type Metric = {
 
 @Component({
   selector: 'app-admin-analytics',
-  imports: [AdminLayoutComponent, FormsModule],
+  imports: [AdminLayoutComponent, FormsModule, CabinetBarChartComponent, CabinetLineChartComponent],
   templateUrl: './admin-analytics.component.html',
   styleUrl: './admin-analytics.component.scss'
 })
@@ -140,10 +142,6 @@ export class AdminAnalyticsComponent {
 
   stats(): StatDto | null {
     return this.analytics()?.stats ?? null;
-  }
-
-  moneyLabel(value: number): string {
-    return this.formatMoney(value);
   }
 
   private moneyMetric(label: string, value: number, percent: number): Metric {
