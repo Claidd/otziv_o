@@ -2,8 +2,6 @@ import { Component, HostListener, computed, inject, signal } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
-  CompanyOrderCreatePayload,
-  CompanyOrderCreateRequest,
   CompanyEditPayload,
   CompanyUpdateRequest,
   CompanyCardItem,
@@ -13,9 +11,7 @@ import {
   ManagerOption,
   ManagerPage,
   ManagerSection,
-  OrderCardItem,
-  OrderEditPayload,
-  OrderUpdateRequest
+  OrderCardItem
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
@@ -66,13 +62,7 @@ import {
   managerReadQueryView,
   managerWithHistoryState
 } from './manager-board.history';
-import {
-  managerCreateOrderDraft,
-  managerCreateOrderTotal,
-  managerCreateOrderValidationError,
-  managerOrderEditDraft,
-  managerSelectedCreateOrderProduct
-} from './manager-board.order.helpers';
+import { ManagerBoardOrderFacade } from './manager-board-order.facade';
 import { ManagerOrderCardComponent } from './manager-order-card.component';
 import type { ManagerOrderEditDraftChange } from './manager-order-edit-modal.component';
 import { ManagerOrderEditModalComponent } from './manager-order-edit-modal.component';
@@ -133,26 +123,30 @@ export class ManagerBoardComponent {
   readonly editSaving = signal(false);
   readonly editError = signal<string | null>(null);
   readonly editDeleteKey = signal<string | null>(null);
-  readonly editOrder = signal<OrderEditPayload | null>(null);
-  readonly orderDraft = signal<OrderUpdateRequest | null>(null);
-  readonly orderLoading = signal(false);
-  readonly orderSaving = signal(false);
-  readonly orderError = signal<string | null>(null);
-  readonly orderDeleting = signal(false);
-  readonly createOrderPayload = signal<CompanyOrderCreatePayload | null>(null);
-  readonly createOrderDraft = signal<CompanyOrderCreateRequest | null>(null);
-  readonly createOrderLoading = signal(false);
-  readonly createOrderSaving = signal(false);
-  readonly createOrderError = signal<string | null>(null);
+
+  private readonly orderFacade = new ManagerBoardOrderFacade({
+    managerApi: this.managerApi,
+    toastService: this.toastService,
+    loadBoard: () => this.loadBoard(),
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback),
+    openCreatedCompanyOrders: (result) => this.openCreatedCompanyOrders(result.companyId, result.companyTitle)
+  });
+  readonly editOrder = this.orderFacade.editOrder;
+  readonly orderDraft = this.orderFacade.orderDraft;
+  readonly orderLoading = this.orderFacade.orderLoading;
+  readonly orderSaving = this.orderFacade.orderSaving;
+  readonly orderError = this.orderFacade.orderError;
+  readonly orderDeleting = this.orderFacade.orderDeleting;
+  readonly createOrderPayload = this.orderFacade.createOrderPayload;
+  readonly createOrderDraft = this.orderFacade.createOrderDraft;
+  readonly createOrderLoading = this.orderFacade.createOrderLoading;
+  readonly createOrderSaving = this.orderFacade.createOrderSaving;
+  readonly createOrderError = this.orderFacade.createOrderError;
+  readonly selectedCreateOrderProduct = this.orderFacade.selectedCreateOrderProduct;
+  readonly createOrderTotal = this.orderFacade.createOrderTotal;
 
   readonly currentCompanies = computed(() => this.board()?.companies.content ?? []);
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
-  readonly selectedCreateOrderProduct = computed(() => {
-    return managerSelectedCreateOrderProduct(this.createOrderPayload(), this.createOrderDraft());
-  });
-  readonly createOrderTotal = computed(() => {
-    return managerCreateOrderTotal(this.createOrderPayload(), this.createOrderDraft());
-  });
   readonly currentPage = computed<ManagerPage<CompanyCardItem | OrderCardItem>>(() => {
     if (this.activeSection() === 'companies') {
       return this.board()?.companies ?? this.emptyCompanyPage;
@@ -574,162 +568,39 @@ export class ManagerBoardComponent {
   }
 
   openCompanyOrderCreate(company: CompanyCardItem): void {
-    this.createOrderLoading.set(true);
-    this.createOrderSaving.set(false);
-    this.createOrderError.set(null);
-    this.createOrderPayload.set(null);
-    this.createOrderDraft.set(null);
-
-    this.managerApi.getCompanyOrderCreate(company.id).subscribe({
-      next: (payload) => {
-        this.applyCompanyOrderCreatePayload(payload);
-        this.createOrderLoading.set(false);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось открыть создание заказа');
-        this.createOrderLoading.set(false);
-        this.createOrderError.set(message);
-        this.toastService.error('Заказ не открыт', message);
-      }
-    });
+    this.orderFacade.openCompanyOrderCreate(company);
   }
 
   closeCompanyOrderCreate(): void {
-    if (this.createOrderLoading() || this.createOrderSaving()) {
-      return;
-    }
-
-    this.createOrderPayload.set(null);
-    this.createOrderDraft.set(null);
-    this.createOrderError.set(null);
+    this.orderFacade.closeCompanyOrderCreate();
   }
 
   handleCreateOrderDraftChange(change: ManagerCreateOrderDraftChange): void {
-    this.createOrderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+    this.orderFacade.handleCreateOrderDraftChange(change);
   }
 
   createCompanyOrder(): void {
-    const payload = this.createOrderPayload();
-    const draft = this.createOrderDraft();
-
-    if (!payload || !draft) {
-      return;
-    }
-
-    const validationError = managerCreateOrderValidationError(draft);
-    if (validationError) {
-      this.createOrderError.set(validationError);
-      return;
-    }
-
-    this.createOrderSaving.set(true);
-    this.createOrderError.set(null);
-
-    this.managerApi.createCompanyOrder(payload.companyId, draft).subscribe({
-      next: (result) => {
-        this.createOrderSaving.set(false);
-        this.closeCompanyOrderCreate();
-        this.toastService.success('Заказ создан', `${result.companyTitle}: ${result.productTitle} x ${result.amount}`);
-        this.openCreatedCompanyOrders(result.companyId, result.companyTitle);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось создать заказ');
-        this.createOrderSaving.set(false);
-        this.createOrderError.set(message);
-        this.toastService.error('Заказ не создан', message);
-      }
-    });
+    this.orderFacade.createCompanyOrder();
   }
 
   openOrderEdit(order: OrderCardItem): void {
-    this.orderLoading.set(true);
-    this.orderError.set(null);
-    this.orderDeleting.set(false);
-
-    this.managerApi.getOrderEdit(order.id).subscribe({
-      next: (payload) => {
-        this.applyOrderEditPayload(payload);
-        this.orderLoading.set(false);
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось открыть редактирование заказа');
-        this.orderLoading.set(false);
-        this.orderError.set(message);
-        this.toastService.error('Заказ не открыт', message);
-      }
-    });
+    this.orderFacade.openOrderEdit(order);
   }
 
   closeOrderEdit(): void {
-    if (this.orderLoading() || this.orderSaving() || this.orderDeleting()) {
-      return;
-    }
-
-    this.editOrder.set(null);
-    this.orderDraft.set(null);
-    this.orderError.set(null);
+    this.orderFacade.closeOrderEdit();
   }
 
   handleOrderEditDraftChange(change: ManagerOrderEditDraftChange): void {
-    this.orderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+    this.orderFacade.handleOrderEditDraftChange(change);
   }
 
   saveOrderEdit(): void {
-    const order = this.editOrder();
-    const draft = this.orderDraft();
-
-    if (!order || !draft) {
-      return;
-    }
-
-    this.orderSaving.set(true);
-    this.orderError.set(null);
-
-    this.managerApi.updateOrder(order.id, draft).subscribe({
-      next: () => {
-        this.orderSaving.set(false);
-        this.closeOrderEdit();
-        this.toastService.success('Заказ сохранен', `Изменения по заказу #${order.id} применены`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось сохранить заказ');
-        this.orderError.set(message);
-        this.orderSaving.set(false);
-        this.toastService.error('Заказ не сохранен', message);
-      }
-    });
+    this.orderFacade.saveOrderEdit();
   }
 
   deleteOrderEdit(): void {
-    const order = this.editOrder();
-
-    if (!order || this.orderDeleting()) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Удалить заказ #${order.id}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    this.orderDeleting.set(true);
-    this.orderError.set(null);
-
-    this.managerApi.deleteOrder(order.id).subscribe({
-      next: () => {
-        this.orderDeleting.set(false);
-        this.closeOrderEdit();
-        this.toastService.success('Заказ удален', `Заказ #${order.id} удален`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось удалить заказ');
-        this.orderDeleting.set(false);
-        this.orderError.set(message);
-        this.toastService.error('Заказ не удален', message);
-      }
-    });
+    this.orderFacade.deleteOrderEdit();
   }
 
   updateCompanyStatus(company: CompanyCardItem, action: StatusAction): void {
@@ -886,16 +757,6 @@ export class ManagerBoardComponent {
   private applyCompanyEditPayload(payload: CompanyEditPayload): void {
     this.editCompany.set(payload);
     this.editDraft.set(managerCompanyEditDraft(payload));
-  }
-
-  private applyOrderEditPayload(payload: OrderEditPayload): void {
-    this.editOrder.set(payload);
-    this.orderDraft.set(managerOrderEditDraft(payload));
-  }
-
-  private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
-    this.createOrderPayload.set(payload);
-    this.createOrderDraft.set(managerCreateOrderDraft(payload));
   }
 
   private openCreatedCompanyOrders(companyId: number, companyTitle: string): void {
