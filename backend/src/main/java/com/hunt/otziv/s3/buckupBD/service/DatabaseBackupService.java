@@ -68,22 +68,31 @@ public class DatabaseBackupService {
     private void dumpViaTcp(Path outSql) throws Exception {
         var mysql = backupProps.getMysql();
 
-        String host = "mysql";
-        String port = "3306";
+        String host = firstNonBlank(mysql.getHost(), mysql.getContainer(), "mysql");
+        int port = mysql.getPort() > 0 ? mysql.getPort() : 3306;
+        String dumpBinary = firstNonBlank(mysql.getDumpBinary(), "mysqldump");
+        String db = requireNonBlank(mysql.getDb(), "backup.mysql.db");
+        String user = requireNonBlank(mysql.getUser(), "backup.mysql.user");
+        String password = Objects.requireNonNull(mysql.getPassword(), "backup.mysql.password is required");
 
-
-        // ВАЖНО: без quote вокруг пароля в MYSQL_PWD, иначе может стать частью значения с кавычками
-        String cmd = "MYSQL_PWD=" + escapeEnv(mysql.getPassword())
-                + " mysqldump -h " + host + " -P " + port
-                + " -u" + mysql.getUser()
-                + " --single-transaction --routines --triggers --no-tablespaces --set-gtid-purged=OFF "
-                + mysql.getDb();
-
-//        System.out.println(cmd);
+        List<String> command = new ArrayList<>();
+        command.add(dumpBinary);
+        command.add("-h");
+        command.add(host);
+        command.add("-P");
+        command.add(String.valueOf(port));
+        command.add("-u" + user);
+        command.add("--single-transaction");
+        command.add("--routines");
+        command.add("--triggers");
+        command.add("--no-tablespaces");
+        command.add("--set-gtid-purged=OFF");
+        command.add(db);
 
         log.info("▶ Running dump via TCP: {}", outSql);
 
-        ProcessBuilder pb = new ProcessBuilder("sh", "-lc", cmd);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.environment().put("MYSQL_PWD", password);
         Process p = pb.start();
 
         // stderr отдельно
@@ -116,13 +125,21 @@ public class DatabaseBackupService {
         }
     }
 
-    private static String escapeEnv(String s) {
-        // для безопасной подстановки в sh: экранируем пробелы/кавычки/доллары
-        // (минимально необходимое)
-        return "'" + s.replace("'", "'\"'\"'") + "'";
+    private static String requireNonBlank(String value, String propertyName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(propertyName + " is required");
+        }
+        return value;
     }
 
-
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        throw new IllegalArgumentException("At least one value must be non-blank");
+    }
 
     private void gzip(Path in, Path out) throws IOException {
         log.info("▶ Gzip: {} -> {}", in.getFileName(), out.getFileName());
@@ -226,8 +243,5 @@ public class DatabaseBackupService {
         } catch (Exception ignored) {}
     }
 
-    private static String quote(String s) {
-        return "'" + s.replace("'", "'\"'\"'") + "'";
-    }
 }
 
