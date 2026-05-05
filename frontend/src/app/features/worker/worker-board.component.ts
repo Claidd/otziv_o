@@ -45,22 +45,7 @@ import {
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
-import {
-  workerEditableOrderNoteText,
-  workerOrderNoteMutationKey,
-  workerPatchOrderNote,
-  workerPatchReviewField,
-  workerPatchReviewNote,
-  workerPatchReviewSideNote,
-  workerRemoveRecordKey,
-  workerReviewFieldKey,
-  workerReviewFieldSourceValue,
-  workerReviewNoteMutationKey,
-  workerSaveReviewFieldMutationKey,
-  workerSideNoteKey,
-  workerSideNoteMutationKey,
-  workerSideNoteSourceValue
-} from './worker-board-note.helpers';
+import { WorkerBoardNoteFacade } from './worker-board-note.facade';
 import type { WorkerOrderEditDraftChange } from './worker-order-edit-modal.component';
 import { WorkerOrderEditModalComponent } from './worker-order-edit-modal.component';
 import { WorkerOrderCardComponent } from './worker-order-card.component';
@@ -103,20 +88,6 @@ export class WorkerBoardComponent {
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
-  readonly editingOrderNoteId = signal<number | null>(null);
-  readonly savedOrderNoteId = signal<number | null>(null);
-  readonly expandedOrderNoteIds = signal<Record<number, boolean>>({});
-  readonly orderNoteDrafts = signal<Record<number, string>>({});
-  readonly editingReviewFieldKey = signal<string | null>(null);
-  readonly reviewFieldDrafts = signal<Record<string, string>>({});
-  readonly savedReviewFieldKey = signal<string | null>(null);
-  readonly expandedReviewTextIds = signal<Record<number, boolean>>({});
-  readonly editingReviewNoteId = signal<number | null>(null);
-  readonly reviewNoteDrafts = signal<Record<number, string>>({});
-  readonly savedReviewNoteId = signal<number | null>(null);
-  readonly editingSideNoteKey = signal<string | null>(null);
-  readonly sideNoteDrafts = signal<Record<string, string>>({});
-  readonly savedSideNoteKey = signal<string | null>(null);
   readonly editOrder = signal<OrderEditPayload | null>(null);
   readonly orderDraft = signal<OrderUpdateRequest | null>(null);
   readonly orderLoading = signal(false);
@@ -147,6 +118,31 @@ export class WorkerBoardComponent {
   readonly productOptions = computed(() => this.reviewEditDetails()?.products ?? []);
   readonly reviewEditBusy = computed(() => this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading());
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
+  private readonly noteFacade = new WorkerBoardNoteFacade({
+    workerApi: this.workerApi,
+    toastService: this.toastService,
+    board: this.board,
+    permissions: this.permissions,
+    mutationKey: this.mutationKey,
+    setBoardPatch: (board) => this.setBoardPatch(board),
+    loadBoard: () => this.loadBoard(),
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
+  });
+  readonly editingOrderNoteId = this.noteFacade.editingOrderNoteId;
+  readonly savedOrderNoteId = this.noteFacade.savedOrderNoteId;
+  readonly expandedOrderNoteIds = this.noteFacade.expandedOrderNoteIds;
+  readonly orderNoteDrafts = this.noteFacade.orderNoteDrafts;
+  readonly editingReviewFieldKey = this.noteFacade.editingReviewFieldKey;
+  readonly reviewFieldDrafts = this.noteFacade.reviewFieldDrafts;
+  readonly savedReviewFieldKey = this.noteFacade.savedReviewFieldKey;
+  readonly expandedReviewTextIds = this.noteFacade.expandedReviewTextIds;
+  readonly editingReviewNoteId = this.noteFacade.editingReviewNoteId;
+  readonly reviewNoteDrafts = this.noteFacade.reviewNoteDrafts;
+  readonly savedReviewNoteId = this.noteFacade.savedReviewNoteId;
+  readonly editingSideNoteKey = this.noteFacade.editingSideNoteKey;
+  readonly sideNoteDrafts = this.noteFacade.sideNoteDrafts;
+  readonly savedSideNoteKey = this.noteFacade.savedSideNoteKey;
+
   constructor() {
     this.loadBoard();
   }
@@ -524,9 +520,7 @@ export class WorkerBoardComponent {
     this.managerApi.updateOrderReview(review.orderId, review.id, draft).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
-        this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, 'text')));
-        this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, 'answer')));
-        this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
+        this.noteFacade.clearReviewEditDrafts(review.id);
         this.reviewEditSaving.set(false);
         this.editReview.set(null);
         this.reviewEditDraft.set(null);
@@ -612,305 +606,83 @@ export class WorkerBoardComponent {
   }
 
   startOrderNoteEdit(order: OrderCardItem): void {
-    if (!this.permissions().canEditNotes || this.isMutating(this.orderNoteMutationKey(order))) {
-      return;
-    }
-
-    this.savedOrderNoteId.set(null);
-    this.editingOrderNoteId.set(order.id);
-    this.expandedOrderNoteIds.update((expanded) => ({ ...expanded, [order.id]: true }));
-    this.orderNoteDrafts.update((drafts) => ({
-      ...drafts,
-      [order.id]: this.editableOrderNoteText(order)
-    }));
+    this.noteFacade.startOrderNoteEdit(order);
   }
 
   cancelOrderNoteEdit(order: OrderCardItem): void {
-    if (this.isMutating(this.orderNoteMutationKey(order))) {
-      return;
-    }
-
-    this.savedOrderNoteId.set(null);
-    this.editingOrderNoteId.set(null);
-    this.orderNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, order.id));
+    this.noteFacade.cancelOrderNoteEdit(order);
   }
 
   saveOrderNote(order: OrderCardItem): void {
-    if (!this.permissions().canEditNotes) {
-      return;
-    }
-
-    const value = this.orderNoteDraft(order);
-    const key = this.orderNoteMutationKey(order);
-
-    this.mutationKey.set(key);
-    this.workerApi.updateOrderNote(order.id, value).subscribe({
-      next: () => {
-        this.setBoardPatch(workerPatchOrderNote(this.board(), order.id, value));
-        this.mutationKey.set(null);
-        this.editingOrderNoteId.set(null);
-        this.savedOrderNoteId.set(order.id);
-        this.orderNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, order.id));
-        this.toastService.success('Заметка сохранена', order.companyTitle || `Заказ #${order.id}`);
-        window.setTimeout(() => {
-          if (this.savedOrderNoteId() === order.id) {
-            this.savedOrderNoteId.set(null);
-          }
-        }, 1400);
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку'));
-      }
-    });
+    this.noteFacade.saveOrderNote(order);
   }
 
   saveOrderCompanyNote(order: OrderCardItem, value: string): void {
-    if (!this.permissions().canEditNotes) {
-      return;
-    }
-
-    this.workerApi.updateOrderCompanyNote(order.id, value).subscribe({
-      next: () => {
-        this.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
-      }
-    });
+    this.noteFacade.saveOrderCompanyNote(order, value);
   }
 
   startReviewFieldEdit(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (!this.permissions().canWorkReviews || this.isMutating(workerSaveReviewFieldMutationKey(review, field))) {
-      return;
-    }
-
-    const key = workerReviewFieldKey(review, field);
-    this.savedReviewFieldKey.set(null);
-    this.editingReviewFieldKey.set(key);
-    this.reviewFieldDrafts.update((drafts) => {
-      if (key in drafts) {
-        return drafts;
-      }
-
-      return {
-        ...drafts,
-        [key]: workerReviewFieldSourceValue(review, field)
-      };
-    });
+    this.noteFacade.startReviewFieldEdit(review, field);
   }
 
   setReviewFieldDraft(review: WorkerReviewItem, field: ReviewEditableField, value: string): void {
-    const key = workerReviewFieldKey(review, field);
-    this.reviewFieldDrafts.update((drafts) => ({ ...drafts, [key]: value }));
+    this.noteFacade.setReviewFieldDraft(review, field, value);
   }
 
   cancelReviewFieldEdit(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (this.isMutating(workerSaveReviewFieldMutationKey(review, field))) {
-      return;
-    }
-
-    this.savedReviewFieldKey.set(null);
-    this.editingReviewFieldKey.set(null);
-    this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerReviewFieldKey(review, field)));
+    this.noteFacade.cancelReviewFieldEdit(review, field);
   }
 
   saveReviewField(review: WorkerReviewItem, field: ReviewEditableField): void {
-    if (!this.permissions().canWorkReviews) {
-      return;
-    }
-
-    const value = this.reviewFieldValue(review, field);
-    if (field === 'text' && !value.trim()) {
-      this.toastService.error('Текст не сохранен', 'Поле отзыва не должно быть пустым');
-      return;
-    }
-
-    const key = workerSaveReviewFieldMutationKey(review, field);
-    const fieldKey = workerReviewFieldKey(review, field);
-    const request = field === 'text'
-      ? this.workerApi.updateReviewText(review.id, review.orderId, value)
-      : this.workerApi.updateReviewAnswer(review.id, review.orderId, value);
-
-    this.mutationKey.set(key);
-    request.subscribe({
-      next: () => {
-        this.setBoardPatch(workerPatchReviewField(this.board(), review.id, field, value));
-        this.mutationKey.set(null);
-        this.savedReviewFieldKey.set(fieldKey);
-        this.toastService.success(field === 'text' ? 'Текст сохранен' : 'Замечание сохранено', `Отзыв #${review.id} обновлен`);
-
-        window.setTimeout(() => {
-          if (this.savedReviewFieldKey() === fieldKey) {
-            this.savedReviewFieldKey.set(null);
-          }
-
-          if (this.editingReviewFieldKey() === fieldKey) {
-            this.editingReviewFieldKey.set(null);
-          }
-
-          this.reviewFieldDrafts.update((drafts) => workerRemoveRecordKey(drafts, fieldKey));
-        }, 1000);
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error(
-          field === 'text' ? 'Текст не сохранен' : 'Замечание не сохранено',
-          this.errorMessage(err, field === 'text' ? 'Не удалось сохранить текст отзыва' : 'Не удалось сохранить замечание')
-        );
-      }
-    });
+    this.noteFacade.saveReviewField(review, field);
   }
 
   reviewFieldValue(review: WorkerReviewItem, field: ReviewEditableField): string {
-    const key = workerReviewFieldKey(review, field);
-    return this.reviewFieldDrafts()[key] ?? workerReviewFieldSourceValue(review, field);
+    return this.noteFacade.reviewFieldValue(review, field);
   }
 
   toggleReviewText(review: WorkerReviewItem): void {
-    this.expandedReviewTextIds.update((items) => ({ ...items, [review.id]: !items[review.id] }));
+    this.noteFacade.toggleReviewText(review);
   }
 
   startReviewNoteEdit(review: WorkerReviewItem): void {
-    if (!this.permissions().canWorkReviews || this.isMutating(workerReviewNoteMutationKey(review))) {
-      return;
-    }
-
-    this.savedReviewNoteId.set(null);
-    this.editingReviewNoteId.set(review.id);
-    this.reviewNoteDrafts.update((drafts) => {
-      if (review.id in drafts) {
-        return drafts;
-      }
-
-      return { ...drafts, [review.id]: review.comment ?? '' };
-    });
+    this.noteFacade.startReviewNoteEdit(review);
   }
 
   setReviewNoteDraft(reviewId: number, value: string): void {
-    this.reviewNoteDrafts.update((drafts) => ({ ...drafts, [reviewId]: value }));
+    this.noteFacade.setReviewNoteDraft(reviewId, value);
   }
 
   cancelReviewNoteEdit(review: WorkerReviewItem): void {
-    if (this.isMutating(workerReviewNoteMutationKey(review))) {
-      return;
-    }
-
-    this.savedReviewNoteId.set(null);
-    this.editingReviewNoteId.set(null);
-    this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
+    this.noteFacade.cancelReviewNoteEdit(review);
   }
 
   saveReviewNote(review: WorkerReviewItem): void {
-    if (!this.permissions().canWorkReviews) {
-      return;
-    }
-
-    const value = this.reviewNoteValue(review);
-    const key = workerReviewNoteMutationKey(review);
-    this.mutationKey.set(key);
-
-    this.workerApi.updateReviewNote(review.id, review.orderId, value).subscribe({
-      next: () => {
-        this.setBoardPatch(workerPatchReviewNote(this.board(), review.id, value));
-        this.mutationKey.set(null);
-        this.savedReviewNoteId.set(review.id);
-        this.toastService.success('Заметка сохранена', `Отзыв #${review.id} обновлен`);
-
-        window.setTimeout(() => {
-          if (this.savedReviewNoteId() === review.id) {
-            this.savedReviewNoteId.set(null);
-          }
-
-          if (this.editingReviewNoteId() === review.id) {
-            this.editingReviewNoteId.set(null);
-          }
-
-          this.reviewNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.id));
-        }, 1000);
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку отзыва'));
-      }
-    });
+    this.noteFacade.saveReviewNote(review);
   }
 
   reviewNoteValue(review: WorkerReviewItem): string {
-    return this.reviewNoteDrafts()[review.id] ?? review.comment ?? '';
+    return this.noteFacade.reviewNoteValue(review);
   }
 
   startSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
-    if (!this.permissions().canEditNotes || this.isMutating(workerSideNoteMutationKey(review, field))) {
-      return;
-    }
-
-    const key = workerSideNoteKey(review, field);
-    this.savedSideNoteKey.set(null);
-    this.editingSideNoteKey.set(key);
-    this.sideNoteDrafts.update((drafts) => ({
-      ...drafts,
-      [key]: drafts[key] ?? workerSideNoteSourceValue(review, field)
-    }));
+    this.noteFacade.startSideNoteEdit(review, field);
   }
 
   setSideNoteDraft(review: WorkerReviewItem, field: SideNoteField, value: string): void {
-    const key = workerSideNoteKey(review, field);
-    this.sideNoteDrafts.update((drafts) => ({ ...drafts, [key]: value }));
+    this.noteFacade.setSideNoteDraft(review, field, value);
   }
 
   cancelSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
-    if (this.isMutating(workerSideNoteMutationKey(review, field))) {
-      return;
-    }
-
-    this.savedSideNoteKey.set(null);
-    this.editingSideNoteKey.set(null);
-    this.sideNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, workerSideNoteKey(review, field)));
+    this.noteFacade.cancelSideNoteEdit(review, field);
   }
 
   saveSideNote(review: WorkerReviewItem, field: SideNoteField): void {
-    if (!this.permissions().canEditNotes) {
-      return;
-    }
-
-    const value = this.sideNoteValue(review, field);
-    const key = workerSideNoteMutationKey(review, field);
-    const sideKey = workerSideNoteKey(review, field);
-    const request = field === 'order'
-      ? this.workerApi.updateOrderNote(review.orderId, value)
-      : this.workerApi.updateOrderCompanyNote(review.orderId, value);
-
-    this.mutationKey.set(key);
-    request.subscribe({
-      next: () => {
-        this.setBoardPatch(workerPatchReviewSideNote(this.board(), review, field, value));
-        this.mutationKey.set(null);
-        this.savedSideNoteKey.set(sideKey);
-        this.toastService.success(field === 'order' ? 'Заметка заказа сохранена' : 'Заметка компании сохранена');
-
-        window.setTimeout(() => {
-          if (this.savedSideNoteKey() === sideKey) {
-            this.savedSideNoteKey.set(null);
-          }
-
-          if (this.editingSideNoteKey() === sideKey) {
-            this.editingSideNoteKey.set(null);
-          }
-
-          this.sideNoteDrafts.update((drafts) => workerRemoveRecordKey(drafts, sideKey));
-        }, 1000);
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку'));
-      }
-    });
+    this.noteFacade.saveSideNote(review, field);
   }
 
   sideNoteValue(review: WorkerReviewItem, field: SideNoteField): string {
-    return this.sideNoteDrafts()[workerSideNoteKey(review, field)] ?? workerSideNoteSourceValue(review, field);
+    return this.noteFacade.sideNoteValue(review, field);
   }
 
   isBadTask(review: WorkerReviewItem): boolean {
@@ -968,41 +740,39 @@ export class WorkerBoardComponent {
   }
 
   editableOrderNoteText(order: OrderCardItem): string {
-    return workerEditableOrderNoteText(order);
+    return this.noteFacade.editableOrderNoteText(order);
   }
 
   orderNoteDraft(order: OrderCardItem): string {
-    return this.orderNoteDrafts()[order.id] ?? this.editableOrderNoteText(order);
+    return this.noteFacade.orderNoteDraft(order);
   }
 
   setOrderNoteDraft(order: OrderCardItem, value: string): void {
-    this.orderNoteDrafts.update((drafts) => ({ ...drafts, [order.id]: value }));
+    this.noteFacade.setOrderNoteDraft(order, value);
   }
 
   isOrderNoteEditing(order: OrderCardItem): boolean {
-    return this.editingOrderNoteId() === order.id;
+    return this.noteFacade.isOrderNoteEditing(order);
   }
 
   isOrderNoteSaved(order: OrderCardItem): boolean {
-    return this.savedOrderNoteId() === order.id;
+    return this.noteFacade.isOrderNoteSaved(order);
   }
 
   isOrderNoteChanged(order: OrderCardItem): boolean {
-    return this.orderNoteDraft(order) !== this.editableOrderNoteText(order);
+    return this.noteFacade.isOrderNoteChanged(order);
   }
 
   isOrderNoteExpanded(order: OrderCardItem): boolean {
-    return Boolean(this.expandedOrderNoteIds()[order.id]) || this.isOrderNoteEditing(order);
+    return this.noteFacade.isOrderNoteExpanded(order);
   }
 
   toggleOrderNote(event: Event, order: OrderCardItem): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.expandedOrderNoteIds.update((expanded) => ({ ...expanded, [order.id]: !expanded[order.id] }));
+    this.noteFacade.toggleOrderNote(event, order);
   }
 
   orderNoteMutationKey(order: OrderCardItem): string {
-    return workerOrderNoteMutationKey(order);
+    return this.noteFacade.orderNoteMutationKey(order);
   }
 
   isOrderSection(section = this.activeSection()): boolean {
