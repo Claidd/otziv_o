@@ -31,12 +31,12 @@ import {
   trackWorkerReview,
   trackWorkerSection,
   workerAbsoluteAppUrl,
-  workerBotChangeMessage,
   workerErrorMessage,
   workerLegacyUrl,
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
+import { WorkerBoardActionFacade } from './worker-board-action.facade';
 import { WorkerBoardEditFacade } from './worker-board-edit.facade';
 import { WorkerBoardNoteFacade } from './worker-board-note.facade';
 import type { WorkerOrderEditDraftChange } from './worker-order-edit-modal.component';
@@ -115,6 +115,14 @@ export class WorkerBoardComponent {
     canOpenReviewEditModal: () => this.canOpenReviewEditModal(),
     orderEditUrl: (order) => this.orderEditUrl(order),
     reviewEditUrl: (review) => this.reviewEditUrl(review)
+  });
+  private readonly actionFacade = new WorkerBoardActionFacade({
+    workerApi: this.workerApi,
+    toastService: this.toastService,
+    activeSection: this.activeSection,
+    mutationKey: this.mutationKey,
+    loadBoard: () => this.loadBoard(),
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   readonly editOrder = this.editFacade.editOrder;
   readonly orderDraft = this.editFacade.orderDraft;
@@ -255,111 +263,23 @@ export class WorkerBoardComponent {
   }
 
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
-    const key = `order-${order.id}-${action.status}`;
-    this.mutationKey.set(key);
-
-    this.workerApi.updateOrderStatus(order.id, action.status).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Статус изменен', `${order.companyTitle}: ${action.status}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Статус не изменен', this.errorMessage(err, 'Не удалось изменить статус заказа'));
-      }
-    });
+    this.actionFacade.updateOrderStatus(order, action);
   }
 
   changeReviewBot(review: WorkerReviewItem): void {
-    const key = `review-${review.id}-change-bot`;
-    const oldBotId = review.botId ?? null;
-    this.mutationKey.set(key);
-
-    const request = this.isBadTask(review) && review.badTaskId
-      ? this.workerApi.changeBadReviewTaskBot(review.badTaskId)
-      : this.workerApi.changeReviewBot(review.id);
-
-    request.subscribe({
-      next: (response) => {
-        this.mutationKey.set(null);
-        this.toastService.success(
-          'Аккаунт изменен',
-          workerBotChangeMessage(oldBotId, response?.newBotId ?? null)
-        );
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Бот не заменен', this.errorMessage(err, 'Не удалось заменить бота'));
-      }
-    });
+    this.actionFacade.changeReviewBot(review);
   }
 
   deactivateReviewBot(review: WorkerReviewItem): void {
-    if (!review.botId) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Заблокировать бота "${review.botFio || review.botId}" и заменить в отзыве?`);
-    if (!confirmed) {
-      return;
-    }
-
-    const key = `review-${review.id}-block-bot`;
-    this.mutationKey.set(key);
-
-    const request = this.isBadTask(review) && review.badTaskId
-      ? this.workerApi.deactivateBadReviewTaskBot(review.badTaskId, review.botId)
-      : this.workerApi.deactivateReviewBot(review.id, review.botId);
-
-    request.subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Бот заблокирован', this.reviewActionTitle(review));
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Бот не заблокирован', this.errorMessage(err, 'Не удалось заблокировать бота'));
-      }
-    });
+    this.actionFacade.deactivateReviewBot(review);
   }
 
   markReviewDone(review: WorkerReviewItem): void {
-    if (this.isBadTask(review)) {
-      this.markBadReviewTaskDone(review);
-      return;
-    }
-
-    if (this.activeSection() === 'nagul') {
-      this.markReviewNagul(review);
-      return;
-    }
-
-    this.markReviewPublished(review);
+    this.actionFacade.markReviewDone(review);
   }
 
   deleteBot(bot: WorkerBotItem): void {
-    const confirmed = window.confirm(`Удалить аккаунт "${bot.fio || bot.login}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    const key = `bot-${bot.id}-delete`;
-    this.mutationKey.set(key);
-
-    this.workerApi.deleteBot(bot.id).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Аккаунт удален', bot.fio || `#${bot.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Аккаунт не удален', this.errorMessage(err, 'Не удалось удалить аккаунт'));
-      }
-    });
+    this.actionFacade.deleteBot(bot);
   }
 
   openOrderEdit(order: OrderCardItem): void {
@@ -487,13 +407,11 @@ export class WorkerBoardComponent {
   }
 
   isBadTask(review: WorkerReviewItem): boolean {
-    return !!review.badTask;
+    return this.actionFacade.isBadTask(review);
   }
 
   reviewActionTitle(review: WorkerReviewItem): string {
-    return this.isBadTask(review) && review.badTaskId
-      ? `Плохая задача #${review.badTaskId}`
-      : `Отзыв #${review.id}`;
+    return this.actionFacade.reviewActionTitle(review);
   }
 
   async copyPhone(phone?: string): Promise<void> {
@@ -632,61 +550,6 @@ export class WorkerBoardComponent {
     if (board) {
       this.board.set(board);
     }
-  }
-
-  private markReviewPublished(review: WorkerReviewItem): void {
-    const key = `review-${review.id}-publish`;
-    this.mutationKey.set(key);
-
-    this.workerApi.publishReview(review.id).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Отзыв опубликован', `Отзыв #${review.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Отзыв не опубликован', this.errorMessage(err, 'Не удалось отметить отзыв опубликованным'));
-      }
-    });
-  }
-
-  private markBadReviewTaskDone(review: WorkerReviewItem): void {
-    if (!review.badTaskId) {
-      return;
-    }
-
-    const key = `review-${review.id}-publish`;
-    this.mutationKey.set(key);
-
-    this.workerApi.completeBadReviewTask(review.badTaskId).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Оценка изменена', this.reviewActionTitle(review));
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Задача не выполнена', this.errorMessage(err, 'Не удалось отметить изменение оценки'));
-      }
-    });
-  }
-
-  private markReviewNagul(review: WorkerReviewItem): void {
-    const key = `review-${review.id}-nagul`;
-    this.mutationKey.set(key);
-
-    this.workerApi.nagulReview(review.id).subscribe({
-      next: (response) => {
-        this.mutationKey.set(null);
-        this.toastService.success('Выгул выполнен', response.message || `Отзыв #${review.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Выгул не выполнен', this.errorMessage(err, 'Не удалось отметить выгул'));
-      }
-    });
   }
 
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
