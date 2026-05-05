@@ -44,6 +44,7 @@ import {
   trackManagerOrder,
   trackManagerStatus
 } from './manager-board.config';
+import { ManagerBoardActionFacade } from './manager-board-action.facade';
 import { ManagerCompanyCardComponent } from './manager-company-card.component';
 import type { ManagerCompanyEditDraftChange } from './manager-company-edit-modal.component';
 import { ManagerCompanyEditModalComponent } from './manager-company-edit-modal.component';
@@ -121,6 +122,13 @@ export class ManagerBoardComponent {
     loadBoard: () => this.loadBoard(),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
     openCreatedCompanyOrders: (result) => this.openCreatedCompanyOrders(result.companyId, result.companyTitle)
+  });
+  private readonly actionFacade = new ManagerBoardActionFacade({
+    managerApi: this.managerApi,
+    toastService: this.toastService,
+    mutationKey: this.mutationKey,
+    loadBoard: () => this.loadBoard(),
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   readonly editCompany = this.companyFacade.editCompany;
   readonly editDraft = this.companyFacade.editDraft;
@@ -480,73 +488,23 @@ export class ManagerBoardComponent {
   }
 
   updateCompanyStatus(company: CompanyCardItem, action: StatusAction): void {
-    const key = `company-${company.id}-${action.status}`;
-    this.mutationKey.set(key);
-
-    this.managerApi.updateCompanyStatus(company.id, action.status).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Статус изменен', `${company.title}: ${action.status}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Статус не изменен', this.errorMessage(err, 'Не удалось изменить статус компании'));
-      }
-    });
+    this.actionFacade.updateCompanyStatus(company, action);
   }
 
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
-    const key = `order-${order.id}-${action.status}`;
-    this.mutationKey.set(key);
-
-    this.managerApi.updateOrderStatus(order.id, action.status).subscribe({
-      next: () => {
-        this.mutationKey.set(null);
-        this.toastService.success('Статус изменен', `${order.companyTitle}: ${action.status}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.mutationKey.set(null);
-        this.toastService.error('Статус не изменен', this.errorMessage(err, 'Не удалось изменить статус заказа'));
-      }
-    });
+    this.actionFacade.updateOrderStatus(order, action);
   }
 
   saveCompanyCardNote(company: CompanyCardItem, value: string): void {
-    this.managerApi.updateCompanyNote(company.id, value).subscribe({
-      next: () => {
-        this.toastService.success('Заметка компании сохранена', company.title || `Компания #${company.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
-      }
-    });
+    this.actionFacade.saveCompanyCardNote(company, value);
   }
 
   saveOrderCompanyNote(order: OrderCardItem, value: string): void {
-    this.managerApi.updateOrderCompanyNote(order.id, value).subscribe({
-      next: () => {
-        this.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку компании'));
-      }
-    });
+    this.actionFacade.saveOrderCompanyNote(order, value);
   }
 
   saveOrderCardNote(order: OrderCardItem, value: string): void {
-    this.managerApi.updateOrderNote(order.id, value).subscribe({
-      next: () => {
-        this.toastService.success('Заметка заказа сохранена', order.companyTitle || `Заказ #${order.id}`);
-        this.loadBoard();
-      },
-      error: (err) => {
-        this.toastService.error('Заметка не сохранена', this.errorMessage(err, 'Не удалось сохранить заметку заказа'));
-      }
-    });
+    this.actionFacade.saveOrderCardNote(order, value);
   }
 
   orderActions(order: OrderCardItem): StatusAction[] {
