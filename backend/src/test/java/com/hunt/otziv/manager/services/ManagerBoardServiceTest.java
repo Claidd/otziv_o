@@ -6,7 +6,10 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
+import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -23,10 +26,16 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +49,9 @@ class ManagerBoardServiceTest {
     private OrderService orderService;
 
     @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
     private PromoTextService promoTextService;
 
     @Mock
@@ -50,6 +62,9 @@ class ManagerBoardServiceTest {
 
     @Mock
     private BadReviewTaskService badReviewTaskService;
+
+    @Mock
+    private UserMetricSnapshotService metricSnapshotService;
 
     @Spy
     private ManagerPermissionService managerPermissionService = new ManagerPermissionService();
@@ -73,6 +88,8 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 2, "В работе", 3));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 4, "Оплачено", 1));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
                 .thenReturn(List.of("promo"));
 
@@ -115,6 +132,8 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 1));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 2));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_COMPANIES))
                 .thenReturn(List.of());
 
@@ -136,6 +155,34 @@ class ManagerBoardServiceTest {
         assertEquals(11, response.companies().totalElements());
         assertEquals(List.of(), response.orders().content());
         verify(badReviewTaskService).enrichOrderList(List.of());
+    }
+
+    @Test
+    void getOverdueOrdersReturnsStatusSummaryForAdmin() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        LocalDate today = LocalDate.now();
+        LocalDate cutoff = today.minusDays(5);
+        LocalDate oldChanged = today.minusDays(7);
+
+        when(orderRepository.summarizeOverdueOrders(eq(cutoff), anySet()))
+                .thenReturn(List.of(
+                        new Object[]{"На проверке", 3L, oldChanged},
+                        new Object[]{"Коррекция", 1L, cutoff}
+                ));
+
+        ManagerOverdueOrdersResponse response = service.getOverdueOrders(principal, admin);
+
+        assertEquals(4, response.thresholdDays());
+        assertEquals(4, response.total());
+        assertEquals(2, response.statuses().size());
+        assertEquals("На проверке", response.statuses().get(0).status());
+        assertEquals(3, response.statuses().get(0).count());
+        assertEquals(7, response.statuses().get(0).maxDays());
+        verify(orderRepository).summarizeOverdueOrders(
+                eq(cutoff),
+                argThat(statuses -> statuses.containsAll(Set.of("Оплачено", "Архив", "Публикация")))
+        );
     }
 
     private Authentication authentication(String authority) {

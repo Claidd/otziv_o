@@ -11,6 +11,7 @@ import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
@@ -24,6 +25,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -85,6 +87,7 @@ public class ApiWorkerBoardController {
     private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
     private final BadReviewTaskService badReviewTaskService;
+    private final UserMetricSnapshotService metricSnapshotService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -142,9 +145,11 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void updateOrderStatus(
             @PathVariable Long orderId,
-            @RequestBody StatusChangeRequest request
+            @RequestBody StatusChangeRequest request,
+            HttpServletRequest servletRequest
     ) throws Exception {
         String status = requireStatus(request);
+        servletRequest.setAttribute("status", status);
         Order order = orderService.getOrder(orderId);
 
         if ("Опубликовано".equals(status) || "Оплачено".equals(status)) {
@@ -559,7 +564,25 @@ public class ApiWorkerBoardController {
         metrics.add(reviewMetric(reviewCounts, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
         metrics.add(new WorkerMetricResponse("Плохие", badTaskCount, "money_off", "gray", SECTION_BAD));
         metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
-        return metrics;
+
+        Map<String, Integer> deltas = metricSnapshotService.deltas(
+                principal,
+                UserMetricSnapshotService.PAGE_WORKER,
+                metrics.stream()
+                        .map(metric -> new UserMetricSnapshotService.MetricValue(
+                                metric.section(),
+                                metric.section(),
+                                metric.value()
+                        ))
+                        .toList()
+        );
+
+        return metrics.stream()
+                .map(metric -> metric.withDelta(deltas.getOrDefault(
+                        UserMetricSnapshotService.key(metric.section(), metric.section()),
+                        0
+                )))
+                .toList();
     }
 
     private int countBadReviewTasks(Principal principal, Authentication authentication) {
@@ -1120,8 +1143,29 @@ public class ApiWorkerBoardController {
             int value,
             String icon,
             String tone,
-            String section
+            String section,
+            int delta
     ) {
+        public WorkerMetricResponse(
+                String label,
+                int value,
+                String icon,
+                String tone,
+                String section
+        ) {
+            this(label, value, icon, tone, section, 0);
+        }
+
+        public WorkerMetricResponse withDelta(int delta) {
+            return new WorkerMetricResponse(
+                    label,
+                    value,
+                    icon,
+                    tone,
+                    section,
+                    Math.max(0, delta)
+            );
+        }
     }
 
     public record WorkerPermissionsResponse(

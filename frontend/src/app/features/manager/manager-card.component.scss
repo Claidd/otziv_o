@@ -127,6 +127,32 @@
   font-weight: 800;
 }
 
+.manager-card footer .unchanged-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+}
+
+.manager-card footer .unchanged-age--alert {
+  color: var(--otziv-danger);
+}
+
+.manager-card footer .unchanged-age i {
+  display: inline-grid;
+  flex: 0 0 0.92rem;
+  width: 0.92rem;
+  height: 0.92rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--otziv-danger);
+  font-family: var(--otziv-font-family);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .card-id-line {
   position: relative;
   display: inline-flex;

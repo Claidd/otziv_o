@@ -1,6 +1,7 @@
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ManagerApi, OrderCardItem } from '../../core/manager.api';
+import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import {
   WorkerApi,
   WorkerBoard,
@@ -67,6 +68,7 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
 export class WorkerBoardComponent implements OnDestroy {
   private readonly workerApi = inject(WorkerApi);
   private readonly managerApi = inject(ManagerApi);
+  private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
 
   readonly sections = WORKER_SECTIONS;
@@ -216,10 +218,11 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   setSection(section: WorkerSection): void {
+    const metric = this.findMetric(section);
     this.activeSection.set(section);
     this.pageNumber.set(0);
     this.mobileMenuOpen.set(false);
-    this.loadBoard();
+    this.loadBoardAfterMetricSeen(metric);
   }
 
   handleSectionMenu(section: WorkerSection | ''): void {
@@ -563,6 +566,40 @@ export class WorkerBoardComponent implements OnDestroy {
 
   trackAction(_index: number, action: StatusAction): string {
     return trackWorkerAction(_index, action);
+  }
+
+  private findMetric(section: WorkerSection): WorkerMetric | undefined {
+    return this.board()?.metrics.find((item) => item.section === section);
+  }
+
+  private loadBoardAfterMetricSeen(metric?: WorkerMetric): void {
+    if (!metric) {
+      this.loadBoard();
+      return;
+    }
+
+    this.metricSnapshotApi.markSeen({
+      page: 'worker',
+      section: metric.section,
+      status: metric.section,
+      value: metric.value
+    }).subscribe({
+      next: () => {
+        this.clearMetricDelta(metric);
+        this.loadBoard();
+      },
+      error: () => this.loadBoard()
+    });
+  }
+
+  private clearMetricDelta(metric: WorkerMetric): void {
+    this.patchBoard((board) => ({
+      ...board,
+      metrics: board.metrics.map((item) => item.section === metric.section
+        ? { ...item, delta: 0 }
+        : item
+      )
+    }));
   }
 
   private setBoardPatch(board: WorkerBoard | null): void {

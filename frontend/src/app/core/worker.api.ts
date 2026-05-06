@@ -77,6 +77,7 @@ export interface WorkerReviewItem {
 export interface WorkerMetric {
   label: string;
   value: number;
+  delta?: number;
   icon: string;
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
   section: WorkerSection;

@@ -45,6 +45,7 @@ export class PersonalRemindersService implements OnDestroy {
     ? null
     : window.setInterval(() => this.now.set(Date.now()), 15_000);
   private loaded = false;
+  private lastDueToastKey = '';
 
   readonly authenticated = this.auth.authenticated;
   readonly now = signal(Date.now());
@@ -143,6 +144,15 @@ export class PersonalRemindersService implements OnDestroy {
         this.reminders.update((reminders) => reminders.filter((reminder) => reminder.id !== id));
       })
     );
+  }
+
+  claimDueToast(key: string): boolean {
+    if (this.lastDueToastKey === key) {
+      return false;
+    }
+
+    this.lastDueToastKey = key;
+    return true;
   }
 
   minutesUntil(remindAt: string | null): number {

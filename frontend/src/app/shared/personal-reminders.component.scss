@@ -90,9 +90,18 @@
   border-radius: 0;
 }
 
-.reminder-alert__item > div,
+.reminder-alert__body,
 .personal-reminder__body {
   min-width: 0;
+  border: 0;
+  border-radius: 0.45rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.reminder-alert__body:focus-visible,
+.personal-reminder__body:focus-visible {
+  box-shadow: 0 0 0 0.18rem rgba(115, 146, 190, 0.24);
 }
 
 .reminder-alert__item h3,
@@ -118,6 +127,17 @@
   line-height: 1.22;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.reminder-alert__item:hover p,
+.personal-reminder:hover p,
+.reminder-alert__item.expanded p,
+.personal-reminder.expanded p,
+.reminder-alert__body:focus-visible p,
+.personal-reminder__body:focus-visible p {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: initial;
 }
 
 .reminder-alert__more {

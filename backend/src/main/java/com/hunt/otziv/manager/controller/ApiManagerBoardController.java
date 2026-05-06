@@ -2,6 +2,7 @@ package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.services.ManagerBoardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,6 +43,18 @@ public class ApiManagerBoardController {
                 pageSize,
                 sortDirection,
                 companyId,
+                principal,
+                authentication
+        ));
+    }
+
+    @GetMapping("/overdue-orders")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerOverdueOrdersResponse getOverdueOrders(
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint("manager.overdue-orders", () -> managerBoardService.getOverdueOrders(
                 principal,
                 authentication
         ));

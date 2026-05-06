@@ -27,6 +27,7 @@ import com.hunt.otziv.p_products.services.service.OrderCreationService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -64,9 +65,11 @@ public class ApiManagerCompanyController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public void updateCompanyStatus(
             @PathVariable Long companyId,
-            @RequestBody StatusChangeRequest request
+            @RequestBody StatusChangeRequest request,
+            HttpServletRequest servletRequest
     ) {
         String status = requireStatus(request);
+        servletRequest.setAttribute("status", status);
         boolean updated = companyService.changeStatusForCompany(companyId, status);
 
         if (!updated) {

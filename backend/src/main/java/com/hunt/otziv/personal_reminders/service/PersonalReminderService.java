@@ -65,9 +65,10 @@ public class PersonalReminderService {
     public PersonalReminderResponse complete(Principal principal, Long reminderId) {
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
-        reminder.setCompletedAt(Instant.now());
+        PersonalReminderResponse response = PersonalReminderResponse.from(reminder);
+        reminderRepository.delete(reminder);
 
-        return PersonalReminderResponse.from(reminderRepository.save(reminder));
+        return response;
     }
 
     @Transactional

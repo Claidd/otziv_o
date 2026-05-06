@@ -6,8 +6,12 @@ import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
 import com.hunt.otziv.manager.dto.api.ManagerMetricResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.manager.dto.api.PageResponse;
+import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -24,7 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,14 +45,22 @@ public class ManagerBoardService {
     private static final String SECTION_COMPANIES = "companies";
     private static final String SECTION_ORDERS = "orders";
     private static final int MAX_PAGE_SIZE = 50;
+    private static final int OVERDUE_NOTIFICATION_DAYS = 4;
+    private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
+            "Оплачено",
+            "Архив",
+            "Публикация"
+    );
 
     private final CompanyService companyService;
     private final OrderService orderService;
+    private final OrderRepository orderRepository;
     private final PromoTextService promoTextService;
     private final UserService userService;
     private final ManagerService managerService;
     private final BadReviewTaskService badReviewTaskService;
     private final ManagerPermissionService managerPermissionService;
+    private final UserMetricSnapshotService metricSnapshotService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -85,6 +101,41 @@ public class ManagerBoardService {
                         resolvePromoManagerId(principal, authentication),
                         promoSectionCode(normalizedSection)
                 )
+        );
+    }
+
+    public ManagerOverdueOrdersResponse getOverdueOrders(
+            Principal principal,
+            Authentication authentication
+    ) {
+        LocalDate today = LocalDate.now();
+        LocalDate cutoff = today.minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
+
+        List<Object[]> summaryRows;
+
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            summaryRows = orderRepository.summarizeOverdueOrders(cutoff, OVERDUE_IGNORED_STATUSES);
+        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            Set<Manager> managers = resolveOwnerManagers(principal);
+            if (managers.isEmpty()) {
+                summaryRows = Collections.emptyList();
+            } else {
+                summaryRows = orderRepository.summarizeOverdueOrdersByManagers(managers, cutoff, OVERDUE_IGNORED_STATUSES);
+            }
+        } else {
+            Manager manager = resolveManager(principal);
+            summaryRows = orderRepository.summarizeOverdueOrdersByManager(manager, cutoff, OVERDUE_IGNORED_STATUSES);
+        }
+
+        List<ManagerOverdueStatusResponse> statuses = toOverdueStatuses(summaryRows, today);
+        long total = statuses.stream()
+                .mapToLong(ManagerOverdueStatusResponse::count)
+                .sum();
+
+        return new ManagerOverdueOrdersResponse(
+                OVERDUE_NOTIFICATION_DAYS,
+                total,
+                statuses
         );
     }
 
@@ -172,7 +223,24 @@ public class ManagerBoardService {
         metrics.add(orderMetric(orderCounts, "Оплачено", "Оплачено", "payments", "teal"));
         metrics.add(orderMetric(orderCounts, "Всего", "Все", "dashboard", "blue"));
 
-        return metrics;
+        Map<String, Integer> deltas = metricSnapshotService.deltas(
+                principal,
+                UserMetricSnapshotService.PAGE_MANAGER,
+                metrics.stream()
+                        .map(metric -> new UserMetricSnapshotService.MetricValue(
+                                metric.section(),
+                                metric.status(),
+                                metric.value()
+                        ))
+                        .toList()
+        );
+
+        return metrics.stream()
+                .map(metric -> metric.withDelta(deltas.getOrDefault(
+                        UserMetricSnapshotService.key(metric.section(), metric.status()),
+                        0
+                )))
+                .toList();
     }
 
     private ManagerMetricResponse companyMetric(
@@ -303,5 +371,53 @@ public class ManagerBoardService {
                 page.isFirst(),
                 page.isLast()
         );
+    }
+
+    private List<ManagerOverdueStatusResponse> toOverdueStatuses(List<Object[]> rows, LocalDate today) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+
+        return rows.stream()
+                .map(row -> new ManagerOverdueStatusResponse(
+                        rowString(row, 0, "Без статуса"),
+                        rowLong(row, 1),
+                        daysSince(rowDate(row, 2), today)
+                ))
+                .filter(status -> status.count() > 0)
+                .sorted(Comparator.comparingLong(ManagerOverdueStatusResponse::maxDays).reversed())
+                .toList();
+    }
+
+    private long daysSince(LocalDate date, LocalDate today) {
+        if (date == null) {
+            return 0;
+        }
+
+        return ChronoUnit.DAYS.between(date, today);
+    }
+
+    private long rowLong(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof Number number ? number.longValue() : 0;
+    }
+
+    private LocalDate rowDate(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof LocalDate localDate ? localDate : null;
+    }
+
+    private String rowString(Object[] row, int index, String fallback) {
+        Object value = rowValue(row, index);
+        if (value == null) {
+            return fallback;
+        }
+
+        String text = value.toString();
+        return text.isBlank() ? fallback : text;
+    }
+
+    private Object rowValue(Object[] row, int index) {
+        return row != null && index >= 0 && index < row.length ? row[index] : null;
     }
 }

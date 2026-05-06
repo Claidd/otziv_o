@@ -121,6 +121,7 @@ public class RestApiAuditActionResolver {
     private Optional<String> value(String name, HttpServletRequest request) {
         return pathVariable(name, request)
                 .or(() -> requestParam(request, name))
+                .or(() -> requestAttribute(name, request))
                 .or(() -> bodyValue(name, request));
     }
 
@@ -138,6 +139,16 @@ public class RestApiAuditActionResolver {
     private Optional<String> requestParam(HttpServletRequest request, String name) {
         String value = request.getParameter(name);
         return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
+    }
+
+    private Optional<String> requestAttribute(String name, HttpServletRequest request) {
+        Object value = request.getAttribute(name);
+        if (value == null) {
+            return Optional.empty();
+        }
+
+        String text = value.toString();
+        return text.isBlank() ? Optional.empty() : Optional.of(text.trim());
     }
 
     private Optional<String> bodyValue(String name, HttpServletRequest request) {

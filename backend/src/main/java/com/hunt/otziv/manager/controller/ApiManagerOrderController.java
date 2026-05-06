@@ -14,6 +14,7 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -48,9 +49,11 @@ public class ApiManagerOrderController {
     public void updateOrderStatus(
             @PathVariable Long orderId,
             @RequestBody StatusChangeRequest request,
+            HttpServletRequest servletRequest,
             Authentication authentication
     ) throws Exception {
         String status = requireStatus(request);
+        servletRequest.setAttribute("status", status);
         if (managerPermissionService.hasOnlyWorkerRole(authentication) && !"В проверку".equals(status)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Специалист может отправить заказ только на проверку");
         }

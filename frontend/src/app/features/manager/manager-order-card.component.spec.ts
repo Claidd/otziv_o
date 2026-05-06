@@ -131,6 +131,18 @@ describe('ManagerOrderCardComponent', () => {
     expect(element.querySelector('footer a')?.textContent?.trim()).toBe('Worker');
   });
 
+  it('marks orders without changes for two or more days', () => {
+    const render = (days: number): HTMLElement => {
+      const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+      fixture.componentInstance.order = order({ dayToChangeStatusAgo: days });
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    };
+
+    expect(render(1).querySelector('.unchanged-age--alert')).toBeNull();
+    expect(render(2).querySelector('.unchanged-age--alert')?.textContent).toContain('!');
+  });
+
   it('adds soft status tones to order cards without overriding client waiting', () => {
     const render = (overrides: Partial<OrderCardItem>): HTMLElement => {
       const fixture = TestBed.createComponent(ManagerOrderCardComponent);

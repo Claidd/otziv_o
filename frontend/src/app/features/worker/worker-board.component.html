@@ -191,7 +191,12 @@
         >
           <div>
             <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
+            <strong>
+              {{ metric.value }}
+              @if ((metric.delta ?? 0) > 0) {
+                <em class="stat-delta">+{{ metric.delta }}</em>
+              }
+            </strong>
           </div>
           <i class="material-icons-sharp">{{ metric.icon }}</i>
         </button>
@@ -218,7 +223,12 @@
       >
         <div>
           <span>{{ metric.label }}</span>
-          <strong>{{ metric.value }}</strong>
+          <strong>
+            {{ metric.value }}
+            @if ((metric.delta ?? 0) > 0) {
+              <em class="stat-delta">+{{ metric.delta }}</em>
+            }
+          </strong>
         </div>
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </button>

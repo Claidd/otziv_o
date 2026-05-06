@@ -67,6 +67,7 @@ export interface OrderCardItem {
 export interface ManagerMetric {
   label: string;
   value: number;
+  delta?: number;
   icon: string;
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
   section: ManagerSection;
@@ -82,6 +83,18 @@ export interface ManagerBoard {
   orderStatuses: string[];
   metrics: ManagerMetric[];
   promoTexts: string[];
+}
+
+export interface ManagerOverdueStatus {
+  status: string;
+  count: number;
+  maxDays: number;
+}
+
+export interface ManagerOverdueOrders {
+  thresholdDays: number;
+  total: number;
+  statuses: ManagerOverdueStatus[];
 }
 
 export interface ManagerOption {
@@ -355,6 +368,10 @@ export class ManagerApi {
     }
 
     return this.http.get<ManagerBoard>(`${appEnvironment.apiBaseUrl}/api/manager/board`, { params });
+  }
+
+  getOverdueOrders(): Observable<ManagerOverdueOrders> {
+    return this.http.get<ManagerOverdueOrders>(`${appEnvironment.apiBaseUrl}/api/manager/overdue-orders`);
   }
 
   getCompanyEdit(companyId: number): Observable<CompanyEditPayload> {

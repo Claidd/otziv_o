@@ -130,6 +130,14 @@ export class ManagerOrderCardComponent {
     return this.mutationKey === this.clientWaitingMutationKey();
   }
 
+  isUnchangedAlert(): boolean {
+    return this.unchangedDays() >= 2;
+  }
+
+  unchangedDays(): number {
+    return Math.max(0, this.order.dayToChangeStatusAgo ?? 0);
+  }
+
   isWaitTone(): boolean {
     return this.statusTone() === 'wait';
   }

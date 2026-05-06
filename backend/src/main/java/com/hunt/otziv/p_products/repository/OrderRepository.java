@@ -528,6 +528,49 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Object[]> countGroupedByActionableStatus();
 
     @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND COALESCE(s.title, '') NOT IN :excludedStatuses
+        GROUP BY s.title
+    """)
+    List<Object[]> summarizeOverdueOrders(@Param("cutoff") LocalDate cutoff,
+                                          @Param("excludedStatuses") Set<String> excludedStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.manager = :manager
+          AND COALESCE(s.title, '') NOT IN :excludedStatuses
+        GROUP BY s.title
+    """)
+    List<Object[]> summarizeOverdueOrdersByManager(@Param("manager") Manager manager,
+                                                   @Param("cutoff") LocalDate cutoff,
+                                                   @Param("excludedStatuses") Set<String> excludedStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.manager IN :managers
+          AND COALESCE(s.title, '') NOT IN :excludedStatuses
+        GROUP BY s.title
+    """)
+    List<Object[]> summarizeOverdueOrdersByManagers(@Param("managers") Set<Manager> managers,
+                                                    @Param("cutoff") LocalDate cutoff,
+                                                    @Param("excludedStatuses") Set<String> excludedStatuses);
+
+    @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s

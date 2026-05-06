@@ -296,6 +296,130 @@ select {
   color: var(--otziv-info);
 }
 
+.overdue-reminder-modal {
+  display: grid;
+  gap: 1rem;
+}
+
+.overdue-reminder-head {
+  margin-bottom: 0;
+}
+
+.overdue-reminder-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+  border: 1px solid rgba(255, 0, 96, 0.14);
+  border-radius: 0.8rem;
+  padding: 0.9rem;
+  color: var(--otziv-danger);
+  background: var(--otziv-tone-bad-surface);
+}
+
+.overdue-reminder-summary > .material-icons-sharp {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--otziv-danger);
+  font-size: 1.25rem;
+}
+
+.overdue-reminder-summary strong {
+  display: block;
+  color: currentColor;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.overdue-reminder-summary p,
+.overdue-reminder-summary small,
+.overdue-reminder-note {
+  margin: 0;
+  color: var(--otziv-info);
+  font-weight: 800;
+}
+
+.overdue-reminder-summary p {
+  margin-top: 0.25rem;
+  color: var(--otziv-dark);
+}
+
+.overdue-reminder-statuses {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.overdue-reminder-statuses button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: 2.7rem;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 0.75rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  text-align: left;
+}
+
+.overdue-reminder-statuses button:hover {
+  border-color: rgba(255, 0, 96, 0.22);
+  color: var(--otziv-dark);
+  background: var(--otziv-tone-bad-surface);
+}
+
+.overdue-reminder-statuses span,
+.overdue-reminder-statuses small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overdue-reminder-statuses strong {
+  color: var(--otziv-danger);
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.overdue-reminder-statuses small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.overdue-reminder-note {
+  border-top: 1px solid rgba(103, 116, 131, 0.12);
+  padding-top: 0.85rem;
+  line-height: 1.25;
+}
+
+.overdue-reminder-dismiss {
+  min-height: 2.65rem;
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0 1rem;
+  color: white;
+  background: var(--otziv-danger);
+  box-shadow: 0 0.85rem 1.6rem rgba(255, 0, 96, 0.18);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 900;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.overdue-reminder-dismiss:not(:disabled):hover {
+  background: var(--otziv-danger);
+  box-shadow: none;
+  transform: translateY(1px);
+}
+
 @media (max-width: 1500px) {
   .manager-cards {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -491,6 +615,14 @@ select {
   .mobile-personal-reminders {
     display: block;
     margin-top: 1rem;
+  }
+
+  .overdue-reminder-statuses button {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .overdue-reminder-statuses small {
+    grid-column: 1 / -1;
   }
 }
 

@@ -10,8 +10,17 @@
 
     <div class="reminder-alert__list">
       @for (reminder of alertReminders(); track reminder.id) {
-        <article class="reminder-alert__item">
-          <div>
+        <article class="reminder-alert__item" [class.expanded]="isExpanded(reminder)">
+          <div
+            class="reminder-alert__body"
+            role="button"
+            tabindex="0"
+            [attr.aria-expanded]="isExpanded(reminder)"
+            [title]="fullNoteTitle(reminder)"
+            (click)="toggleExpanded(reminder)"
+            (keydown.enter)="toggleExpanded(reminder)"
+            (keydown.space)="toggleExpanded(reminder); $event.preventDefault()"
+          >
             <h3>{{ reminder.title }}</h3>
             <p>{{ noteText(reminder) }}</p>
             <small>{{ reminderTimeLabel(reminder) }}</small>
@@ -116,9 +125,18 @@
 
     <div class="personal-reminders__list" [class.scrollable]="isScrollable()">
       @for (reminder of reminders(); track reminder.id) {
-        <article class="personal-reminder" [class.due]="isDue(reminder)">
+        <article class="personal-reminder" [class.due]="isDue(reminder)" [class.expanded]="isExpanded(reminder)">
           <span class="personal-reminder__icon material-icons-sharp">{{ reminderIcon(reminder) }}</span>
-          <div class="personal-reminder__body">
+          <div
+            class="personal-reminder__body"
+            role="button"
+            tabindex="0"
+            [attr.aria-expanded]="isExpanded(reminder)"
+            [title]="fullNoteTitle(reminder)"
+            (click)="toggleExpanded(reminder)"
+            (keydown.enter)="toggleExpanded(reminder)"
+            (keydown.space)="toggleExpanded(reminder); $event.preventDefault()"
+          >
             <h3>{{ reminder.title }}</h3>
             <p>{{ noteText(reminder) }}</p>
             <small>{{ reminderTimeLabel(reminder) }}</small>

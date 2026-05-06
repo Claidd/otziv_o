@@ -63,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth", "/api/auth/**").permitAll()
                         .requestMatchers("/api/me").authenticated()
                         .requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated()
+                        .requestMatchers("/api/metric-snapshots", "/api/metric-snapshots/**").authenticated()
                         .requestMatchers("/api/cabinet/profile").authenticated()
                         .requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER")

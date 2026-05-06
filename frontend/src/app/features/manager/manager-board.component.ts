@@ -1,12 +1,16 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
+import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import {
   CompanyCardItem,
   ManagerApi,
   ManagerBoard,
   ManagerMetric,
+  ManagerOverdueOrders,
+  ManagerOverdueStatus,
   ManagerOption,
   ManagerPage,
   ManagerSection,
@@ -94,11 +98,14 @@ type CompanyCreateContext = {
 export class ManagerBoardComponent {
   private readonly historyStateKey = MANAGER_HISTORY_STATE_KEY;
   private readonly managerApi = inject(ManagerApi);
+  private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly auth = inject(AuthService);
   private readonly emptyCompanyPage = EMPTY_MANAGER_COMPANY_PAGE;
   private readonly emptyOrderPage = EMPTY_MANAGER_ORDER_PAGE;
+  private readonly overdueAlertStorageKeyPrefix = 'otziv-manager-overdue-alert:v2';
 
   readonly sections = MANAGER_SECTIONS;
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
@@ -122,6 +129,8 @@ export class ManagerBoardComponent {
   readonly mobileMenuOpen = signal(false);
   readonly selectedCompany = signal<SelectedCompany | null>(null);
   readonly companyCreateContext = signal<CompanyCreateContext | null>(null);
+  readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
+  readonly overdueModalOpen = signal(false);
 
   private readonly companyFacade = new ManagerBoardCompanyFacade({
     managerApi: this.managerApi,
@@ -217,6 +226,7 @@ export class ManagerBoardComponent {
     }
 
     this.loadBoard();
+    this.loadDailyOverdueReminder();
   }
 
   @HostListener('window:popstate', ['$event'])
@@ -263,11 +273,12 @@ export class ManagerBoardComponent {
     this.selectedCompany.set(null);
     this.pageNumber.set(0);
     this.pushCurrentHistoryState();
-    this.loadBoard();
+    this.loadBoardAfterMetricSeen(this.findMetric(section, section === 'companies' ? this.companyStatus() : this.orderStatus()));
   }
 
   setStatus(status: string): void {
     this.replaceCurrentHistoryState();
+    const section = this.activeSection();
     if (this.activeSection() === 'companies') {
       this.companyStatus.set(status);
     } else {
@@ -277,7 +288,7 @@ export class ManagerBoardComponent {
     this.selectedCompany.set(null);
     this.pageNumber.set(0);
     this.pushCurrentHistoryState();
-    this.loadBoard();
+    this.loadBoardAfterMetricSeen(this.findMetric(section, status));
   }
 
   handleTopMenu(value: string): void {
@@ -311,7 +322,7 @@ export class ManagerBoardComponent {
       this.pageNumber.set(0);
       this.mobileMenuOpen.set(false);
       this.pushCurrentHistoryState();
-      this.loadBoard();
+      this.loadBoardAfterMetricSeen(this.findMetric('companies', status));
       return;
     }
 
@@ -323,7 +334,7 @@ export class ManagerBoardComponent {
       this.pageNumber.set(0);
       this.mobileMenuOpen.set(false);
       this.pushCurrentHistoryState();
-      this.loadBoard();
+      this.loadBoardAfterMetricSeen(this.findMetric('orders', status));
     }
   }
 
@@ -340,7 +351,7 @@ export class ManagerBoardComponent {
 
     this.pageNumber.set(0);
     this.pushCurrentHistoryState();
-    this.loadBoard();
+    this.loadBoardAfterMetricSeen(metric);
   }
 
   statusOptionLabel(section: ManagerSection, status: string): string {
@@ -544,6 +555,23 @@ export class ManagerBoardComponent {
     this.actionFacade.toggleOrderClientWaiting(order);
   }
 
+  closeOverdueModal(): void {
+    this.overdueModalOpen.set(false);
+  }
+
+  openOverdueStatus(status: string): void {
+    this.closeOverdueModal();
+    this.replaceCurrentHistoryState();
+    this.activeSection.set('orders');
+    this.orderStatus.set(status || 'Все');
+    this.selectedCompany.set(null);
+    this.keyword.set('');
+    this.pageNumber.set(0);
+    this.mobileMenuOpen.set(false);
+    this.pushCurrentHistoryState();
+    this.loadBoardAfterMetricSeen(this.findMetric('orders', this.orderStatus()));
+  }
+
   saveCompanyCardNote(company: CompanyCardItem, value: string): void {
     this.actionFacade.saveCompanyCardNote(company, value);
   }
@@ -576,9 +604,51 @@ export class ManagerBoardComponent {
     return trackManagerMetric(_index, metric);
   }
 
+  trackOverdueStatus(_index: number, status: ManagerOverdueStatus): string {
+    return status.status;
+  }
+
+  overdueMaxDays(summary: ManagerOverdueOrders): number {
+    return summary.statuses.reduce((max, status) => Math.max(max, status.maxDays), 0);
+  }
+
   private metricValue(section: ManagerSection, status: string): number | null {
     const metric = this.board()?.metrics.find((item) => item.section === section && item.status === status);
     return metric?.value ?? null;
+  }
+
+  private findMetric(section: ManagerSection, status: string): ManagerMetric | undefined {
+    return this.board()?.metrics.find((item) => item.section === section && item.status === status);
+  }
+
+  private loadBoardAfterMetricSeen(metric?: ManagerMetric): void {
+    if (!metric) {
+      this.loadBoard();
+      return;
+    }
+
+    this.metricSnapshotApi.markSeen({
+      page: 'manager',
+      section: metric.section,
+      status: metric.status,
+      value: metric.value
+    }).subscribe({
+      next: () => {
+        this.clearMetricDelta(metric);
+        this.loadBoard();
+      },
+      error: () => this.loadBoard()
+    });
+  }
+
+  private clearMetricDelta(metric: ManagerMetric): void {
+    this.patchBoard((board) => ({
+      ...board,
+      metrics: board.metrics.map((item) => item.section === metric.section && item.status === metric.status
+        ? { ...item, delta: 0 }
+        : item
+      )
+    }));
   }
 
   private captureHistoryView(): ManagerHistoryView {
@@ -666,5 +736,61 @@ export class ManagerBoardComponent {
 
   private errorMessage(err: unknown, fallback: string): string {
     return managerErrorMessage(err, fallback);
+  }
+
+  private loadDailyOverdueReminder(): void {
+    const today = this.localDateKey();
+    const storageKey = this.overdueAlertStorageKey();
+
+    if (this.readStoredDate(storageKey) === today) {
+      return;
+    }
+
+    this.managerApi.getOverdueOrders().subscribe({
+      next: (summary) => {
+        this.writeStoredDate(storageKey, today);
+        const normalizedSummary = {
+          ...summary,
+          statuses: summary.statuses ?? []
+        };
+
+        if (normalizedSummary.total > 0) {
+          this.overdueOrders.set(normalizedSummary);
+          this.overdueModalOpen.set(true);
+        }
+      },
+      error: () => {
+        // The reminder is helpful, but the board itself should not fail because of it.
+      }
+    });
+  }
+
+  private overdueAlertStorageKey(): string {
+    const token = this.auth.tokenParsed() as { preferred_username?: string; sub?: string } | undefined;
+    const userKey = token?.preferred_username || token?.sub || 'user';
+    return `${this.overdueAlertStorageKeyPrefix}:${userKey}`;
+  }
+
+  private localDateKey(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private readStoredDate(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStoredDate(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage can be blocked in private mode; the reminder will simply try again later.
+    }
   }
 }

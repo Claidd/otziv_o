@@ -28,12 +28,12 @@ type PersonalReminderDraft = {
 export class PersonalRemindersComponent implements OnInit {
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly toastService = inject(ToastService);
-  private lastToastKey = '';
 
   readonly view = signal<PersonalReminderView>('full');
   readonly initialized = signal(false);
   readonly formOpen = signal(false);
   readonly editingId = signal<number | null>(null);
+  readonly expandedReminderId = signal<number | null>(null);
   readonly saving = signal(false);
   readonly draft = signal<PersonalReminderDraft>(this.emptyDraft());
 
@@ -81,11 +81,10 @@ export class PersonalRemindersComponent implements OnInit {
       }
 
       const key = `${window.location.pathname}:${due.map((reminder) => `${reminder.id}-${reminder.updatedAt}`).join('|')}`;
-      if (this.lastToastKey === key) {
+      if (!this.remindersService.claimDueToast(key)) {
         return;
       }
 
-      this.lastToastKey = key;
       this.toastService.info('Есть неоконченное дело', due[0].title);
     });
   }
@@ -102,6 +101,7 @@ export class PersonalRemindersComponent implements OnInit {
   }
 
   startEdit(reminder: PersonalReminder): void {
+    this.expandedReminderId.set(null);
     this.editingId.set(reminder.id);
     this.draft.set(this.draftFromReminder(reminder));
     this.formOpen.set(true);
@@ -176,6 +176,18 @@ export class PersonalRemindersComponent implements OnInit {
 
   noteText(reminder: PersonalReminder): string {
     return reminder.text || 'Без текста';
+  }
+
+  fullNoteTitle(reminder: PersonalReminder): string {
+    return `${reminder.title}\n${this.noteText(reminder)}`;
+  }
+
+  toggleExpanded(reminder: PersonalReminder): void {
+    this.expandedReminderId.update((id) => (id === reminder.id ? null : reminder.id));
+  }
+
+  isExpanded(reminder: PersonalReminder): boolean {
+    return this.expandedReminderId() === reminder.id;
   }
 
   reminderTimeLabel(reminder: PersonalReminder): string {

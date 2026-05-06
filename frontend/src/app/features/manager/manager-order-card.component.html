@@ -122,7 +122,16 @@
   <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
 
   <footer>
-    <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
+    <span
+      class="unchanged-age"
+      [class.unchanged-age--alert]="isUnchangedAlert()"
+      [title]="isUnchangedAlert() ? 'Заказ давно без изменений' : 'Без изменений'"
+    >
+      @if (isUnchangedAlert()) {
+        <i aria-hidden="true">!</i>
+      }
+      Без изменений: {{ unchangedDays() }} дн.
+    </span>
     <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="order.workerUserFio || 'Специалист не назначен'">
       {{ workerLabel() }}
     </a>
