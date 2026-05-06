@@ -11,6 +11,8 @@ import {
 } from '../../core/review-check.api';
 import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCheckDraftReview = {
@@ -30,7 +32,7 @@ type SideNoteField = 'order' | 'company';
 
 @Component({
   selector: 'app-review-check',
-  imports: [AdminLayoutComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './review-check.component.html',
   styleUrl: './review-check.component.scss'
 })
@@ -765,25 +767,6 @@ export class ReviewCheckComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null && 'error' in err) {
-      const errorBody = (err as { error?: { message?: string; error?: string } | string }).error;
-      if (typeof errorBody === 'string' && errorBody.trim()) {
-        return errorBody;
-      }
-
-      if (typeof errorBody === 'object' && errorBody?.message) {
-        return errorBody.message;
-      }
-
-      if (typeof errorBody === 'object' && errorBody?.error) {
-        return errorBody.error;
-      }
-    }
-
-    if (err instanceof Error && err.message) {
-      return err.message;
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

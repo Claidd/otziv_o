@@ -5,10 +5,13 @@ import { AuthService } from '../../core/auth.service';
 import { CabinetApi, CabinetProfile } from '../../core/cabinet.api';
 import { CurrentUser, CurrentUserApi } from '../../core/current-user.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorDetail } from '../../shared/api-error-message';
 import { CabinetNavigationComponent } from '../../shared/cabinet-navigation.component';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { SystemHealth, SystemHealthApi } from '../../core/system-health.api';
 import { appEnvironment } from '../../core/app-environment';
 import { ToastService } from '../../shared/toast.service';
+import { normalizeRole, roleLabel } from '../../shared/role-labels';
 import { CabinetBarChartComponent } from '../cabinet/cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
@@ -25,6 +28,13 @@ type DashboardAction = {
   roles: string[];
   routerLink?: string;
   href?: string;
+};
+
+type DashboardWarning = {
+  title: string;
+  message: string;
+  detail: string;
+  icon: string;
 };
 
 const MONTH_NAMES = [
@@ -48,6 +58,7 @@ const MONTH_NAMES = [
     AdminLayoutComponent,
     CabinetNavigationComponent,
     FormsModule,
+    LoadErrorCardComponent,
     RouterLink,
     CabinetBarChartComponent,
     CabinetLineChartComponent
@@ -56,6 +67,7 @@ const MONTH_NAMES = [
   styleUrl: './home.component.scss'
 })
 export class HomeComponent {
+  readonly roleLabel = roleLabel;
   readonly me = signal<CurrentUser | null>(null);
   readonly health = signal<SystemHealth | null>(null);
   readonly cabinet = signal<CabinetProfile | null>(null);
@@ -63,9 +75,9 @@ export class HomeComponent {
   readonly loading = signal(false);
   readonly healthLoading = signal(false);
   readonly cabinetLoading = signal(false);
-  readonly error = signal<string | null>(null);
-  readonly healthError = signal<string | null>(null);
-  readonly cabinetError = signal<string | null>(null);
+  readonly error = signal<DashboardWarning | null>(null);
+  readonly healthError = signal<DashboardWarning | null>(null);
+  readonly cabinetError = signal<DashboardWarning | null>(null);
 
   readonly actions: DashboardAction[] = [
     {
@@ -121,6 +133,10 @@ export class HomeComponent {
     return this.realmRoles().filter((role) => !ignored.has(role));
   });
 
+  readonly isClientUser = computed(() => {
+    return this.currentRoles().some((role) => normalizeRole(role) === 'CLIENT');
+  });
+
   readonly visibleActions = computed(() => {
     if (!this.auth.authenticated()) {
       return [];
@@ -129,6 +145,21 @@ export class HomeComponent {
     const roles = new Set(this.realmRoles());
     const canSeeAll = roles.has('ADMIN') || roles.has('OWNER');
     return this.actions.filter((action) => canSeeAll || action.roles.some((role) => roles.has(role)));
+  });
+  readonly warnings = computed<DashboardWarning[]>(() => {
+    const authError = this.auth.error();
+
+    return [
+      authError ? {
+        title: 'Вход не завершился',
+        message: 'Не удалось подтвердить сессию. Часть данных может быть недоступна.',
+        detail: this.readableErrorDetail(authError),
+        icon: 'lock'
+      } : null,
+      this.error(),
+      this.healthError(),
+      this.cabinetError()
+    ].filter((warning): warning is DashboardWarning => warning !== null);
   });
 
   readonly cabinetMetrics = computed(() => {
@@ -162,7 +193,9 @@ export class HomeComponent {
 
     if (this.auth.isAuthenticated()) {
       this.loadCurrentUser();
-      this.loadCabinet();
+      if (!this.isClientUser()) {
+        this.loadCabinet();
+      }
     }
 
     this.loadHealth();
@@ -183,10 +216,18 @@ export class HomeComponent {
     this.currentUserApi.getMe().subscribe({
       next: (user) => {
         this.me.set(user);
+        if (this.isClientUser()) {
+          this.clearCabinetForClient();
+        }
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.message ?? 'Request failed');
+        this.error.set(this.requestWarning(
+          'Профиль не загрузился',
+          'Не удалось получить данные текущего пользователя. На странице пока показана информация из активной сессии.',
+          err,
+          'account_circle'
+        ));
         this.loading.set(false);
       }
     });
@@ -205,17 +246,28 @@ export class HomeComponent {
         }
       },
       error: (err) => {
-        const message = err?.message ?? 'Health check failed';
-        this.healthError.set(message);
+        const warning = this.requestWarning(
+          'Сервер требует внимания',
+          'Проверка состояния не прошла. Некоторые разделы могут открываться с ошибками.',
+          err,
+          'monitor_heart'
+        );
+
+        this.healthError.set(warning);
         this.healthLoading.set(false);
         if (showToast) {
-          this.toastService.error('Backend недоступен', message);
+          this.toastService.error(warning.title, warning.detail);
         }
       }
     });
   }
 
   loadCabinet(forceRefresh = false): void {
+    if (this.isClientUser()) {
+      this.clearCabinetForClient();
+      return;
+    }
+
     this.cabinetLoading.set(true);
     this.cabinetError.set(null);
 
@@ -225,7 +277,12 @@ export class HomeComponent {
         this.cabinetLoading.set(false);
       },
       error: (err) => {
-        this.cabinetError.set(err?.error?.message ?? err?.message ?? 'Cabinet request failed');
+        this.cabinetError.set(this.requestWarning(
+          'Личный кабинет не загрузился',
+          'Зарплата, графики и профиль временно недоступны для выбранной даты.',
+          err,
+          'dashboard'
+        ));
         this.cabinetLoading.set(false);
       }
     });
@@ -249,20 +306,39 @@ export class HomeComponent {
   }
 
   profileImageUrl(): string | null {
+    if (this.isClientUser()) {
+      return null;
+    }
+
     const imageId = this.cabinet()?.workerZp?.imageId || this.cabinet()?.user?.image;
     return imageId ? this.imageUrl(imageId) : null;
   }
 
+  private currentRoles(): string[] {
+    return [
+      ...this.realmRoles(),
+      ...(this.me()?.realmRoles ?? []),
+      ...(this.me()?.authorities ?? []),
+      this.cabinet()?.user?.role ?? ''
+    ];
+  }
+
+  private clearCabinetForClient(): void {
+    this.cabinet.set(null);
+    this.cabinetLoading.set(false);
+    this.cabinetError.set(null);
+  }
+
   private showHealthToast(health: SystemHealth): void {
     const status = health.status || 'UNKNOWN';
-    const message = `Actuator health: ${status}`;
+    const message = `Состояние сервера: ${status}`;
 
     if (status.toUpperCase() === 'UP') {
-      this.toastService.success('Backend работает', message);
+      this.toastService.success('Сервер работает', message);
       return;
     }
 
-    this.toastService.info('Backend ответил', message);
+    this.toastService.info('Сервер ответил с предупреждением', message);
   }
 
   private shouldOpenAnalyticsHome(): boolean {
@@ -308,5 +384,18 @@ export class HomeComponent {
 
   private todayIso(): string {
     return new Date().toISOString().slice(0, 10);
+  }
+
+  private requestWarning(title: string, message: string, err: unknown, icon: string): DashboardWarning {
+    return {
+      title,
+      message,
+      detail: this.readableErrorDetail(err),
+      icon
+    };
+  }
+
+  private readableErrorDetail(err: unknown): string {
+    return apiErrorDetail(err, 'Попробуйте обновить страницу. Если ошибка повторится, проверьте серверную часть.');
   }
 }

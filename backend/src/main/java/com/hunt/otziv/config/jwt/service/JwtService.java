@@ -1,29 +1,17 @@
 package com.hunt.otziv.config.jwt.service;
 
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.DigestUtils;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.Key;
 import java.time.Instant;
 import java.util.Date;
 
@@ -38,23 +26,21 @@ public class JwtService {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(300); // 5 минут
 
-        Key key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-
         return Jwts.builder()
                 .setSubject("lead-transfer")
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
                 .claim("checksum", checksum)
-                .signWith(key, SignatureAlgorithm.HS256)
+                .signWith(signingKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public String extractChecksum(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(secret.getBytes(StandardCharsets.UTF_8))
+        Claims claims = Jwts.parser()
+                .verifyWith(signingKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
 
         return claims.get("checksum", String.class);
     }
@@ -83,14 +69,16 @@ public class JwtService {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(300); // 5 минут
 
-        Key key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-
         return Jwts.builder()
                 .setSubject("lead-sync")
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
-                .signWith(key, SignatureAlgorithm.HS256)
+                .signWith(signingKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    private SecretKey signingKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 }
 

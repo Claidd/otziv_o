@@ -7,7 +7,7 @@ function company(overrides: Partial<CompanyCardItem> = {}): CompanyCardItem {
   return {
     id: 10,
     title: 'Company',
-    telephone: '+7999',
+    telephone: '+79086431055',
     urlChat: 'https://chat',
     countFilials: 2,
     status: 'В работе',
@@ -35,7 +35,7 @@ describe('ManagerCompanyCardComponent', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company');
-    expect(element.textContent).toContain('+7999');
+    expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Филиалов:');
     expect(element.querySelector<HTMLButtonElement>('.card-actions button')?.disabled).toBe(true);
   });
@@ -75,7 +75,7 @@ describe('ManagerCompanyCardComponent', () => {
     element.querySelector<HTMLAnchorElement>('.details-button')?.click();
     element.querySelector<HTMLAnchorElement>('footer a')?.click();
 
-    expect(copiedPhone).toBe('+7999');
+    expect(copiedPhone).toBe('79086431055');
     expect(orderOpened).toBe(true);
     expect(status).toBe('Ожидание');
     expect(ordersOpened).toBe(true);

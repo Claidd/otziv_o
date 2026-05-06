@@ -57,14 +57,14 @@
 
           <select [ngModel]="''" (ngModelChange)="handleTopMenu($event)" aria-label="Прочее">
             <option value="">Прочее</option>
-            <option [value]="'href:' + legacyCategoriesUrl">Категории</option>
+            <option value="route:/admin/dictionaries">Категории</option>
             <option [value]="'href:' + legacyWorkersUrl">Специалисты</option>
           </select>
         </nav>
 
         <div class="quick-links">
-          <a [href]="legacyNewCompanyUrl">Новая компания</a>
-          <a [href]="legacyCategoriesUrl">Категории</a>
+          <button type="button" (click)="openManualCompanyCreate()">Новая компания</button>
+          <a routerLink="/admin/dictionaries">Категории</a>
           <a [href]="legacyWorkersUrl">Специалисты</a>
         </div>
       </header>
@@ -122,7 +122,13 @@
     </div>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card
+        [title]="activeSection() === 'companies' ? 'Компании не загрузились' : 'Заказы не загрузились'"
+        [message]="error()!"
+        actionLabel="Повторить"
+        [loading]="loading()"
+        (retry)="loadBoard()"
+      />
     }
 
     <h2 class="workspace-title">{{ title() }}</h2>
@@ -224,6 +230,15 @@
     />
   }
 
+  @if (companyCreateContext(); as context) {
+    <app-company-create-modal
+      [source]="context.source"
+      [leadId]="context.leadId"
+      (closed)="closeCompanyCreate()"
+      (created)="handleCompanyCreated($event)"
+    />
+  }
+
   @if (orderLoading() || editOrder()) {
     <app-manager-order-edit-modal
       [loading]="orderLoading()"
@@ -252,6 +267,7 @@
       (categoryChanged)="changeCompanyCategory($event)"
       (workerDeleted)="deleteCompanyWorker($event)"
       (filialDeleted)="deleteCompanyFilial($event.filialId, $event.title)"
+      (filialUpdated)="updateCompanyFilial($event)"
       (draftChange)="handleCompanyEditDraftChange($event)"
     />
   }

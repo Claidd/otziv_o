@@ -4,6 +4,7 @@ import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
 import { CabinetApi } from '../core/cabinet.api';
 import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
+import { normalizeRole, roleLabel } from './role-labels';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -43,22 +44,21 @@ export class AdminLayoutComponent {
   readonly headerLinks: ShellLink[] = [
     { label: 'Главная', icon: 'home', active: 'dashboard', routerLink: '/', roles: [] },
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
-    { label: 'Маркетолог', icon: 'campaign', active: 'marketolog', href: `${appEnvironment.legacyBaseUrl}/admin/analyse`, roles: ['ADMIN', 'OWNER', 'MARKETOLOG'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
+    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     CABINET_HOME_LINK
   ];
 
   readonly sidebarLinks: ShellLink[] = [
     CABINET_HOME_LINK,
     { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     { label: 'Менеджер', icon: 'groups', active: 'manager', routerLink: '/manager', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
+    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
     ...CABINET_SECTION_LINKS,
     { label: 'Города', icon: 'location_city', active: 'city-stats', routerLink: '/admin/cities', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER'] },
+    { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
     { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },
     { label: 'Миграция', icon: 'sync', active: 'migration', routerLink: '/legacy-migration', roles: ['ADMIN', 'OWNER'] },
@@ -71,7 +71,7 @@ export class AdminLayoutComponent {
       return [];
     }
 
-    return this.headerLinks.filter((link) => this.canSee(link.roles));
+    return this.headerLinks.filter((link) => this.canSee(link));
   });
 
   readonly visibleSidebarLinks = computed(() => {
@@ -79,7 +79,7 @@ export class AdminLayoutComponent {
       return [];
     }
 
-    return this.sidebarLinks.filter((link) => this.canSee(link.roles));
+    return this.sidebarLinks.filter((link) => this.canSee(link));
   });
 
   readonly username = computed(() => {
@@ -91,7 +91,7 @@ export class AdminLayoutComponent {
 
   readonly primaryRole = computed(() => {
     const ignoredRoles = new Set(['default-roles-otziv', 'offline_access', 'uma_authorization']);
-    return this.realmRoles().find((role) => !ignoredRoles.has(role)) ?? 'USER';
+    return roleLabel(this.realmRoles().find((role) => !ignoredRoles.has(role)) ?? 'USER');
   });
 
   readonly initials = computed(() => {
@@ -103,6 +103,12 @@ export class AdminLayoutComponent {
     this.applyTheme(this.theme());
     effect(() => {
       if (!this.authenticated()) {
+        this.loadedHeaderProfileFor = null;
+        this.headerProfileFallbackUrl.set(null);
+        return;
+      }
+
+      if (this.isClientUser()) {
         this.loadedHeaderProfileFor = null;
         this.headerProfileFallbackUrl.set(null);
         return;
@@ -150,7 +156,12 @@ export class AdminLayoutComponent {
     localStorage.setItem(this.themeStorageKey, theme);
   }
 
-  private canSee(requiredRoles: string[]): boolean {
+  private canSee(link: ShellLink): boolean {
+    if (this.isClientUser() && link.label === CABINET_HOME_LINK.label) {
+      return false;
+    }
+
+    const requiredRoles = link.roles;
     if (requiredRoles.length === 0) {
       return true;
     }
@@ -167,6 +178,10 @@ export class AdminLayoutComponent {
   private hasAdminAnalyticsHome(): boolean {
     const roles = new Set(this.realmRoles());
     return roles.has('ADMIN') || roles.has('OWNER');
+  }
+
+  private isClientUser(): boolean {
+    return this.realmRoles().some((role) => normalizeRole(role) === 'CLIENT');
   }
 
   private loadHeaderProfile(username: string): void {

@@ -5,170 +5,173 @@
   [profileImageAlt]="cabinet()?.workerZp?.fio || 'Фото профиля'"
 >
   @if (auth.authenticated()) {
-    <section class="hero-card hero-card--authenticated">
-      <div class="hero-intro">
-        <h2>{{ cabinet()?.workerZp?.fio || 'Личный кабинет' }}</h2>
-        <p>
-          {{ cabinet()?.user?.role || businessRoles()[0] || 'USER' }} · {{ cabinet()?.user?.username || auth.tokenParsed()?.['preferred_username'] || 'user' }}
-        </p>
-      </div>
+    @if (isClientUser()) {
+      <section class="panel client-placeholder" aria-label="Клиентский раздел">
+        <div class="client-placeholder__content">
+          <span class="client-placeholder__icon material-icons-sharp" aria-hidden="true">waving_hand</span>
+          <p class="eyebrow">Клиентский раздел</p>
+          <h2>Рады Вас видеть</h2>
+          <p>Раздел для клиентов скоро будет доступен.</p>
+        </div>
+      </section>
+    } @else {
+      <section class="hero-card hero-card--authenticated">
+        <div class="hero-intro">
+          <h2>{{ cabinet()?.workerZp?.fio || 'Личный кабинет' }}</h2>
+          <p>
+            {{ roleLabel(cabinet()?.user?.role || businessRoles()[0] || 'USER') }} · {{ cabinet()?.user?.username || auth.tokenParsed()?.['preferred_username'] || 'user' }}
+          </p>
+        </div>
 
-      <div class="actions">
-        <button type="button" class="secondary refresh-button" (click)="refreshCabinet()" [disabled]="cabinetLoading()">
-          <span class="material-icons-sharp">refresh</span>
-          {{ cabinetLoading() ? 'Обновляю' : 'Обновить кабинет' }}
-        </button>
-        <button type="button" class="secondary health-button" (click)="loadHealth(true)" [disabled]="healthLoading()">
-          <span class="material-icons-sharp">monitor_heart</span>
-          {{ healthLoading() ? 'Проверяю' : 'Проверить backend' }}
-        </button>
-        <label class="date-control">
-          <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="selectCabinetDate($event)">
-        </label>
-      </div>
-    </section>
-  }
+        <div class="actions">
+          <button type="button" class="secondary refresh-button" (click)="refreshCabinet()" [disabled]="cabinetLoading()">
+            <span class="material-icons-sharp">refresh</span>
+            {{ cabinetLoading() ? 'Обновляю' : 'Обновить кабинет' }}
+          </button>
+          <button type="button" class="secondary health-button" (click)="loadHealth(true)" [disabled]="healthLoading()">
+            <span class="material-icons-sharp">monitor_heart</span>
+            {{ healthLoading() ? 'Проверяю' : 'Проверить сервер' }}
+          </button>
+          <label class="date-control">
+            <input type="date" aria-label="Дата" [ngModel]="cabinetDate()" (ngModelChange)="selectCabinetDate($event)">
+          </label>
+        </div>
+      </section>
 
-  @if (auth.error()) {
-    <p class="error">{{ auth.error() }}</p>
-  }
+      @if (warnings().length > 0) {
+        <section class="dashboard-warnings" aria-label="Предупреждения">
+          @for (warning of warnings(); track warning.title) {
+            <app-load-error-card [title]="warning.title" [message]="warning.detail" [icon]="warning.icon" />
+          }
+        </section>
+      }
 
-  @if (error()) {
-    <p class="error">{{ error() }}</p>
-  }
+      @if (cabinet()) {
+        <section class="cabinet-metrics">
+          @for (metric of cabinetMetrics(); track metric.label) {
+            <article class="metric-card" [class]="tone(metric.percent)">
+              <div>
+                <h3>{{ metric.label }}</h3>
+                <h1>{{ metric.value }}</h1>
+              </div>
+              <span>{{ metric.percent }}%</span>
+            </article>
+          }
+        </section>
 
-  @if (healthError()) {
-    <p class="error">{{ healthError() }}</p>
-  }
+        <section class="chart-grid">
+          <app-cabinet-bar-chart
+            heading="Зарплаты по дням"
+            [headingLevel]="2"
+            [subtitle]="cabinet()?.date || ''"
+            [legendLabel]="selectedMonthLabel()"
+            [legendColor]="'#9a7bd9'"
+            [chart]="dailyChartFrom(cabinet()?.workerZp?.zpPayMap)"
+            [compact]="true"
+            [salary]="true"
+          />
 
-  @if (cabinetError()) {
-    <p class="error">{{ cabinetError() }}</p>
-  }
+          <app-cabinet-line-chart
+            heading="Зарплаты по месяцам"
+            [headingLevel]="2"
+            subtitle="все годы"
+            ariaLabel="Зарплаты по месяцам"
+            [chart]="yearlyLineChartFrom(cabinet()?.workerZp?.zpPayMapMonth)"
+            [compact]="true"
+          />
+        </section>
+      } @else if (cabinetLoading()) {
+        <section class="panel empty">
+          <span class="material-icons-sharp">hourglass_top</span>
+          <h2>Загружаю личный кабинет</h2>
+        </section>
+      }
 
-  @if (auth.authenticated()) {
-    @if (cabinet()) {
-      <section class="cabinet-metrics">
-        @for (metric of cabinetMetrics(); track metric.label) {
-          <article class="metric-card" [class]="tone(metric.percent)">
+      <app-cabinet-navigation [roles]="realmRoles()" active="dashboard" />
+
+      <section class="dashboard-grid">
+        <article class="panel profile-panel">
+          <div class="panel-title">
+            <span class="material-icons-sharp">account_circle</span>
             <div>
-              <h3>{{ metric.label }}</h3>
-              <h1>{{ metric.value }}</h1>
+              <p class="eyebrow">SESSION</p>
+              <h2>{{ me()?.preferredUsername || auth.tokenParsed()?.['preferred_username'] || 'Пользователь' }}</h2>
             </div>
-            <span>{{ metric.percent }}%</span>
-          </article>
-        }
+          </div>
+
+          <dl>
+            <div>
+              <dt>Email</dt>
+              <dd>{{ me()?.email || '-' }}</dd>
+            </div>
+            <div>
+              <dt>Backend</dt>
+              <dd>{{ health()?.status || (healthLoading() ? '...' : '-') }}</dd>
+            </div>
+            <div>
+              <dt>Токен до</dt>
+              <dd>{{ auth.expiresAt()?.toLocaleTimeString() || '-' }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="panel roles-panel">
+          <div class="panel-title">
+            <span class="material-icons-sharp">admin_panel_settings</span>
+            <div>
+              <p class="eyebrow">ACCESS</p>
+              <h2>Роли</h2>
+            </div>
+          </div>
+
+          <div class="chip-list">
+            @for (role of businessRoles(); track role) {
+              <span>{{ roleLabel(role) }}</span>
+            } @empty {
+              <span>Нет бизнес-ролей</span>
+            }
+          </div>
+        </article>
       </section>
 
-      <section class="chart-grid">
-        <app-cabinet-bar-chart
-          heading="Зарплаты по дням"
-          [headingLevel]="2"
-          [subtitle]="cabinet()?.date || ''"
-          [legendLabel]="selectedMonthLabel()"
-          [legendColor]="'#9a7bd9'"
-          [chart]="dailyChartFrom(cabinet()?.workerZp?.zpPayMap)"
-          [compact]="true"
-          [salary]="true"
-        />
+      <section class="panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">apps</span>
+          <div>
+            <p class="eyebrow">SECTIONS</p>
+            <h2>Быстрые действия</h2>
+          </div>
+        </div>
 
-        <app-cabinet-line-chart
-          heading="Зарплаты по месяцам"
-          [headingLevel]="2"
-          subtitle="все годы"
-          ariaLabel="Зарплаты по месяцам"
-          [chart]="yearlyLineChartFrom(cabinet()?.workerZp?.zpPayMapMonth)"
-          [compact]="true"
-        />
-      </section>
-    } @else if (cabinetLoading()) {
-      <section class="panel empty">
-        <span class="material-icons-sharp">hourglass_top</span>
-        <h2>Загружаю личный кабинет</h2>
+        <div class="action-grid">
+          @for (action of visibleActions(); track action.label) {
+            @if (action.routerLink) {
+              <a class="action-card" [routerLink]="action.routerLink">
+                <span class="material-icons-sharp">{{ action.icon }}</span>
+                <strong>{{ action.label }}</strong>
+                <small>{{ action.description }}</small>
+              </a>
+            } @else {
+              <a class="action-card" [href]="action.href">
+                <span class="material-icons-sharp">{{ action.icon }}</span>
+                <strong>{{ action.label }}</strong>
+                <small>{{ action.description }}</small>
+              </a>
+            }
+          } @empty {
+            <div class="empty-inline">
+              <span class="material-icons-sharp">lock</span>
+              <p>Для твоей роли пока нет быстрых действий.</p>
+            </div>
+          }
+        </div>
       </section>
     }
-
-    <app-cabinet-navigation [roles]="realmRoles()" active="dashboard" />
-
-    <section class="dashboard-grid">
-      <article class="panel profile-panel">
-        <div class="panel-title">
-          <span class="material-icons-sharp">account_circle</span>
-          <div>
-            <p class="eyebrow">SESSION</p>
-            <h2>{{ me()?.preferredUsername || auth.tokenParsed()?.['preferred_username'] || 'Пользователь' }}</h2>
-          </div>
-        </div>
-
-        <dl>
-          <div>
-            <dt>Email</dt>
-            <dd>{{ me()?.email || '-' }}</dd>
-          </div>
-          <div>
-            <dt>Backend</dt>
-            <dd>{{ health()?.status || (healthLoading() ? '...' : '-') }}</dd>
-          </div>
-          <div>
-            <dt>Токен до</dt>
-            <dd>{{ auth.expiresAt()?.toLocaleTimeString() || '-' }}</dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="panel roles-panel">
-        <div class="panel-title">
-          <span class="material-icons-sharp">admin_panel_settings</span>
-          <div>
-            <p class="eyebrow">ACCESS</p>
-            <h2>Роли</h2>
-          </div>
-        </div>
-
-        <div class="chip-list">
-          @for (role of businessRoles(); track role) {
-            <span>{{ role }}</span>
-          } @empty {
-            <span>Нет бизнес-ролей</span>
-          }
-        </div>
-      </article>
-    </section>
-
-    <section class="panel">
-      <div class="panel-title">
-        <span class="material-icons-sharp">apps</span>
-        <div>
-          <p class="eyebrow">SECTIONS</p>
-          <h2>Быстрые действия</h2>
-        </div>
-      </div>
-
-      <div class="action-grid">
-        @for (action of visibleActions(); track action.label) {
-          @if (action.routerLink) {
-            <a class="action-card" [routerLink]="action.routerLink">
-              <span class="material-icons-sharp">{{ action.icon }}</span>
-              <strong>{{ action.label }}</strong>
-              <small>{{ action.description }}</small>
-            </a>
-          } @else {
-            <a class="action-card" [href]="action.href">
-              <span class="material-icons-sharp">{{ action.icon }}</span>
-              <strong>{{ action.label }}</strong>
-              <small>{{ action.description }}</small>
-            </a>
-          }
-        } @empty {
-          <div class="empty-inline">
-            <span class="material-icons-sharp">lock</span>
-            <p>Для твоей роли пока нет быстрых действий.</p>
-          </div>
-        }
-      </div>
-    </section>
   } @else {
     <section class="panel start-illustration-panel" aria-label="Рабочее пространство Компания О!">
+      <span class="start-illustration-heading start-illustration-heading--top">Работа</span>
       <img src="/assets/images/TacoCloud.png" alt="Команда работает с отзывами и клиентскими задачами">
+      <span class="start-illustration-heading start-illustration-heading--bottom">с отзывами</span>
     </section>
   }
 </app-admin-layout>

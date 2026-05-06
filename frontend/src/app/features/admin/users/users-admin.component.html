@@ -32,11 +32,11 @@
           type="text"
           placeholder="Найти пользователя"
           [value]="userSearch()"
-          (input)="userSearch.set($any($event.target).value)"
+          (input)="updateUserSearch($any($event.target).value)"
         >
       </label>
 
-      <select [value]="roleFilter()" (change)="roleFilter.set($any($event.target).value)" aria-label="Фильтр по роли">
+      <select [value]="roleFilter()" (change)="setRoleFilter($any($event.target).value)" aria-label="Фильтр по роли">
         <option value="all">Все роли</option>
         @for (role of availableRoles; track trackRole($index, role)) {
           <option [value]="role">{{ roleLabel(role) }}</option>
@@ -49,7 +49,7 @@
     </section>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Пользователи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadUsers()" />
     }
 
     <section class="users-grid">
@@ -74,7 +74,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (user of filteredUsers(); track trackUser($index, user)) {
+              @for (user of paginatedUsers(); track trackUser($index, user)) {
                 <tr
                   [class.selected]="selectedUser()?.id === user.id"
                   [class.unlinked]="!user.keycloakLinked"
@@ -108,6 +108,62 @@
             </tbody>
           </table>
         </div>
+
+        @if (filteredUsers().length > 0) {
+          <footer class="table-pagination">
+            <label class="page-size">
+              <span>На странице</span>
+              <select
+                [value]="pageSize()"
+                (change)="changePageSize($any($event.target).value)"
+                aria-label="Количество пользователей на странице"
+              >
+                @for (size of pageSizeOptions; track size) {
+                  <option [value]="size">{{ size }}</option>
+                }
+              </select>
+            </label>
+
+            <span class="pagination-summary">
+              {{ pageStart() }}-{{ pageEnd() }} из {{ filteredUsers().length }}
+            </span>
+
+            <nav class="pagination-controls" aria-label="Пагинация пользователей">
+              <button
+                type="button"
+                class="icon-button"
+                (click)="previousPage()"
+                [disabled]="currentPageIndex() === 0"
+                title="Предыдущая страница"
+              >
+                <span class="material-icons-sharp">chevron_left</span>
+              </button>
+
+              <div class="page-numbers">
+                @for (page of visiblePageNumbers(); track page) {
+                  <button
+                    type="button"
+                    [class.active]="currentPageIndex() === page"
+                    [attr.aria-current]="currentPageIndex() === page ? 'page' : null"
+                    (click)="goToPage(page)"
+                  >
+                    {{ page + 1 }}
+                  </button>
+                }
+              </div>
+
+              <button
+                type="button"
+                class="icon-button"
+                (click)="nextPage()"
+                [disabled]="currentPageIndex() >= totalPages() - 1"
+                title="Следующая страница"
+              >
+                <span class="material-icons-sharp">chevron_right</span>
+              </button>
+            </nav>
+          </footer>
+        }
       </article>
 
       <section class="users-card editor-card" [formGroup]="form">
@@ -121,6 +177,52 @@
               {{ selectedUser()?.keycloakLinked ? 'Keycloak' : 'Миграция' }}
             </span>
           </div>
+
+          <section class="profile-photo-editor">
+            <div class="profile-photo-preview">
+              @if (selectedProfilePhotoUrl(); as photoUrl) {
+                <img [src]="photoUrl" [alt]="selectedUser()?.fio || selectedUser()?.username || 'Фото профиля'">
+              } @else {
+                <span class="material-icons-sharp">person</span>
+              }
+            </div>
+
+            <div class="profile-photo-controls">
+              <div>
+                <span>Фото профиля</span>
+                <small>{{ profilePhotoFile()?.name || 'JPG, PNG, WebP' }}</small>
+              </div>
+
+              <input
+                #profilePhotoInput
+                type="file"
+                accept="image/*"
+                (change)="onProfilePhotoSelected($event)"
+              >
+
+              <div class="photo-actions">
+                <button type="button" class="secondary" (click)="profilePhotoInput.click()" [disabled]="photoUploading()">
+                  <span class="material-icons-sharp">photo_camera</span>
+                  Выбрать
+                </button>
+
+                @if (profilePhotoFile()) {
+                  <button type="button" (click)="uploadProfilePhoto(profilePhotoInput)" [disabled]="photoUploading()">
+                    <span class="material-icons-sharp">compress</span>
+                    {{ photoUploading() ? 'Сохраняю' : 'Сохранить фото' }}
+                  </button>
+                }
+              </div>
+
+              @if (photoError()) {
+                <p class="error compact">{{ photoError() }}</p>
+              }
+
+              @if (savedPhotoFor()) {
+                <p class="success compact">Фото {{ savedPhotoFor() }} обновлено.</p>
+              }
+            </div>
+          </section>
 
           <div class="editor-grid">
             <label>
@@ -145,9 +247,17 @@
           </div>
 
           <label class="checkbox wide">
-            <input type="checkbox" formControlName="enabled">
+            <input
+              type="checkbox"
+              formControlName="enabled"
+              [attr.disabled]="isAdminUser(selectedUser()) ? '' : null"
+            >
             <span>Включен</span>
           </label>
+
+          @if (isAdminUser(selectedUser())) {
+            <p class="hint compact">Админа нельзя отключить, удалить или лишить роли администратора.</p>
+          }
 
           <section class="role-block">
             <span>Роли</span>
@@ -157,6 +267,7 @@
                   <input
                     type="checkbox"
                     [checked]="isRoleSelected(role)"
+                    [attr.disabled]="isAdminRoleLocked(role) ? '' : null"
                     (change)="toggleRole(role, $any($event.target).checked)"
                   >
                   <span>{{ roleLabel(role) }}</span>
@@ -169,7 +280,16 @@
             <p class="error compact">Проверь email и выбери хотя бы одну роль.</p>
           }
 
-          <div class="actions">
+          <div class="actions editor-actions">
+            <button
+              type="button"
+              class="danger-button user-delete-button"
+              (click)="deleteSelectedUser()"
+              [disabled]="deleteSaving() || isAdminUser(selectedUser())"
+            >
+              <span class="material-icons-sharp">delete</span>
+              {{ deleteSaving() ? 'Удаляю' : 'Удалить' }}
+            </button>
             <button type="button" (click)="save()" [disabled]="saving() || !selectedUser()?.keycloakLinked">
               <span class="material-icons-sharp">save</span>
               {{ saving() ? 'Сохраняю' : 'Сохранить' }}
@@ -178,6 +298,10 @@
 
           @if (savedUser()) {
             <p class="success compact">Профиль {{ savedUser()?.username }} сохранен.</p>
+          }
+
+          @if (deleteError()) {
+            <p class="error compact">{{ deleteError() }}</p>
           }
 
           <section class="password-reset" [formGroup]="passwordForm">

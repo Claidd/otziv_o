@@ -110,7 +110,7 @@ public class VpsSyncService {
 
         } catch (RestClientResponseException e) {
             // отдаём наверх, чтобы sendLeadAsync положил запись в очередь
-            throw new IllegalStateException("VPS error: " + e.getRawStatusCode()
+            throw new IllegalStateException("VPS error: " + e.getStatusCode().value()
                     + " body=" + e.getResponseBodyAsString(), e);
         }
     }

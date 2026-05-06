@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class ZpServiceImpl implements ZpService{
+    private static final BigDecimal LEAD_BONUS = new BigDecimal("1000.00");
 
     private final ZpRepository zpRepository;
     private final UserService userService;
@@ -277,13 +278,20 @@ public class ZpServiceImpl implements ZpService{
     } // Сохранить ЗП Работника в БД
     @Transactional
     protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
+        if (lead == null || lead.getMarketolog() == null || lead.getMarketolog().getUser() == null) {
+            log.debug("ЗП маркетолога за лид не начислена: у лида не указан маркетолог");
+            return;
+        }
+
         try {
+            Marketolog marketolog = lead.getMarketolog();
+            User user = marketolog.getUser();
             Zp marketologZp = new Zp();
-            marketologZp.setFio(lead.getMarketolog().getUser().getFio());
-            marketologZp.setSum(new BigDecimal("1000.00").multiply(lead.getMarketolog().getUser().getCoefficient()));
-            marketologZp.setUserId(lead.getMarketolog().getUser().getId());
+            marketologZp.setFio(user.getFio());
+            marketologZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
+            marketologZp.setUserId(user.getId());
             marketologZp.setOrderId(0L);
-            marketologZp.setProfessionId(lead.getMarketolog().getId());
+            marketologZp.setProfessionId(marketolog.getId());
             marketologZp.setAmount(1);
             marketologZp.setActive(true);
             zpRepository.save(marketologZp);
@@ -295,12 +303,19 @@ public class ZpServiceImpl implements ZpService{
 
     @Transactional
     protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
+        if (lead == null || lead.getOperator() == null || lead.getOperator().getUser() == null) {
+            log.debug("ЗП оператора за лид не начислена: у лида не указан оператор");
+            return;
+        }
+
         try {
+            Operator operator = lead.getOperator();
+            User user = operator.getUser();
             Zp operatorZp = new Zp();
-            operatorZp.setFio(lead.getOperator().getUser().getFio());
-            operatorZp.setSum(new BigDecimal("1000.00").multiply(lead.getOperator().getUser().getCoefficient()));
-            operatorZp.setUserId(lead.getOperator().getUser().getId());
-            operatorZp.setProfessionId(lead.getOperator().getId());
+            operatorZp.setFio(user.getFio());
+            operatorZp.setSum(LEAD_BONUS.multiply(user.getCoefficient()));
+            operatorZp.setUserId(user.getId());
+            operatorZp.setProfessionId(operator.getId());
             operatorZp.setOrderId(0L);
             operatorZp.setAmount(1);
             operatorZp.setActive(true);

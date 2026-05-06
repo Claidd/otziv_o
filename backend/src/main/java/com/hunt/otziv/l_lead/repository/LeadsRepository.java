@@ -99,34 +99,80 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l from Lead l where l.lidStatus = :status AND l.manager = :manager")
     List<Lead> findAllByLidListStatus(String status, Manager manager);
 
-    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.marketolog = :marketolog")
-    Long findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate localDate);
+    @Query("""
+        SELECT COUNT(l)
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.lidStatus = :status
+          AND l.marketolog = :marketolog
+    """)
+    Long findAllByLidListStatusToMarketolog(String status, Marketolog marketolog, LocalDate dateFrom, LocalDate dateTo);
 
-    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.marketolog = :marketolog")
-    Long findAllByLidListToMarketolog(Marketolog marketolog, LocalDate localDate);
+    @Query("""
+        SELECT COUNT(l)
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.marketolog = :marketolog
+    """)
+    Long findAllByLidListToMarketolog(Marketolog marketolog, LocalDate dateFrom, LocalDate dateTo);
 
-    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.operator = :operator")
-    Long findAllByLidListStatusToOperator(String status, Operator operator, LocalDate localDate);
+    @Query("""
+        SELECT COUNT(l)
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.lidStatus = :status
+          AND l.operator = :operator
+    """)
+    Long findAllByLidListStatusToOperator(String status, Operator operator, LocalDate dateFrom, LocalDate dateTo);
 
-    @Query("select COUNT(l) from Lead l where YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.operator = :operator")
-    Long findAllByLidListToOperator(Operator operator, LocalDate localDate);
+    @Query("""
+        SELECT COUNT(l)
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.operator = :operator
+    """)
+    Long findAllByLidListToOperator(Operator operator, LocalDate dateFrom, LocalDate dateTo);
 
-    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
-    List<Long> findIdListByDate(LocalDate localDate);
+    @Query("""
+        SELECT l.id
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+    """)
+    List<Long> findIdListByDate(LocalDate dateFrom, LocalDate dateTo);
 
-    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status")
-    List<Long> findIdListByDate(LocalDate localDate, String status);
+    @Query("""
+        SELECT l.id
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.lidStatus = :status
+    """)
+    List<Long> findIdListByDate(LocalDate dateFrom, LocalDate dateTo, String status);
 
-    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.manager IN :managerList")
-    List<Long> findIdListByDateToOwner(LocalDate localDate, Set<Manager> managerList);
+    @Query("""
+        SELECT l.id
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.manager IN :managerList
+    """)
+    List<Long> findIdListByDateToOwner(LocalDate dateFrom, LocalDate dateTo, Set<Manager> managerList);
 
-    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate) AND l.lidStatus = :status AND l.manager IN :managerList")
-    List<Long> findIdListByDateToOwner(LocalDate localDate, String status, Set<Manager> managerList);
+    @Query("""
+        SELECT l.id
+        FROM Lead l
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
+          AND l.lidStatus = :status
+          AND l.manager IN :managerList
+    """)
+    List<Long> findIdListByDateToOwner(LocalDate dateFrom, LocalDate dateTo, String status, Set<Manager> managerList);
 
-
-
-    @Query("SELECT l.id FROM Lead l WHERE YEAR(l.createDate) = YEAR(:localDate) AND MONTH(l.createDate) = MONTH(:localDate)")
-    List<Long> findIdListByDateNoStatus(LocalDate localDate);
 
     @Query("SELECT l FROM Lead l  WHERE l.id IN (:leadId)")
     List<Lead> findAllByDate(List<Long> leadId);
@@ -149,6 +195,8 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     long countByTelephoneLeadContainingIgnoreCase(String keyword);
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager);
+    Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog, Pageable pageable);
+    long countByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager);
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog, Pageable pageable);
@@ -206,10 +254,11 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     LEFT JOIN o.user u 
     LEFT JOIN l.marketolog m 
     LEFT JOIN m.user m_user 
-    WHERE l.createDate BETWEEN :firstDayOfMonth AND :lastDayOfMonth 
+        WHERE l.createDate >= :dateFrom
+          AND l.createDate < :dateTo
     GROUP BY u.fio, m_user.fio
 """)
-    List<Object[]> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+    List<Object[]> getAllLeadsToMonth(String statusInWork, LocalDate dateFrom, LocalDate dateTo);
 
     @Query("""
     SELECT 
@@ -218,9 +267,11 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     FROM Lead l 
     LEFT JOIN l.manager m 
     LEFT JOIN m.user m_user 
+    WHERE l.createDate >= :dateFrom
+      AND l.createDate < :dateTo
     GROUP BY m_user.fio
 """)
-    List<Object[]> getAllLeadsToMonthToManager(String status);
+    List<Object[]> getAllLeadsToMonthToManager(String status, LocalDate dateFrom, LocalDate dateTo);
 
 //    @Query("""
 //    SELECT l FROM Lead l

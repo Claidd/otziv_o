@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { apiErrorMessage } from '../shared/api-error-message';
 import { appEnvironment } from './app-environment';
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'refreshing' | 'expired' | 'error';
@@ -166,7 +167,7 @@ export class AuthService {
     this.stopRefreshLoop();
     this.keycloak.clearToken();
     this.clearSession('expired');
-    this.error.set(error ? this.getErrorMessage(error) : 'Session expired. Please sign in again.');
+    this.error.set(error ? this.getErrorMessage(error) : 'Сессия закончилась. Войдите снова.');
   }
 
   private clearSession(status: AuthStatus): void {
@@ -197,14 +198,6 @@ export class AuthService {
   }
 
   private getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    if (typeof error === 'string') {
-      return error;
-    }
-
-    return 'Authentication error';
+    return apiErrorMessage(error, 'Ошибка авторизации');
   }
 }

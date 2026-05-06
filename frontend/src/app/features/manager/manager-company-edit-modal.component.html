@@ -194,15 +194,80 @@
                     <a [href]="filialEditUrl(filial.id)" target="_blank" rel="noopener">
                       {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
                     </a>
-                    <button
-                      type="button"
-                      class="secondary filial-delete"
-                      (click)="filialDeleted.emit({ filialId: filial.id, title: filial.title })"
-                      [disabled]="!!deleteKey"
-                    >
-                      {{ deleteKey === 'filial-' + filial.id ? 'Удаляю...' : 'Удалить' }}
-                    </button>
+                    <div class="company-edit-row-actions">
+                      <button
+                        type="button"
+                        class="secondary filial-edit"
+                        (click)="startFilialEdit(filial)"
+                        [disabled]="!!deleteKey || saving"
+                      >
+                        {{ deleteKey === filialEditKey(filial.id) ? 'Сохраняю...' : 'Редактировать' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary filial-delete"
+                        (click)="filialDeleted.emit({ filialId: filial.id, title: filial.title })"
+                        [disabled]="!!deleteKey || saving"
+                      >
+                        {{ deleteKey === 'filial-' + filial.id ? 'Удаляю...' : 'Удалить' }}
+                      </button>
+                    </div>
                   </div>
+                  @if (isFilialEditing(filial.id)) {
+                    <div class="company-filial-edit">
+                      <label class="lead-edit-field">
+                        <span>Город филиала</span>
+                        <select
+                          [ngModel]="filialDraft?.cityId"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setFilialDraftField('cityId', $event)"
+                        >
+                          <option [ngValue]="null">Выберите город</option>
+                          @for (city of company.cities; track trackOption($index, city)) {
+                            <option [ngValue]="city.id">{{ optionLabel(city) }}</option>
+                          }
+                        </select>
+                      </label>
+
+                      <label class="lead-edit-field">
+                        <span>Адрес филиала</span>
+                        <input
+                          type="text"
+                          [ngModel]="filialDraft?.title"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setFilialDraftField('title', $event)"
+                        >
+                      </label>
+
+                      <label class="lead-edit-field lead-edit-field--wide">
+                        <span>Ссылка 2ГИС филиала</span>
+                        <input
+                          type="text"
+                          [ngModel]="filialDraft?.url"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setFilialDraftField('url', $event)"
+                        >
+                      </label>
+
+                      <div class="company-filial-edit-actions">
+                        <button
+                          type="button"
+                          class="secondary"
+                          (click)="cancelFilialEdit()"
+                          [disabled]="deleteKey === filialEditKey(filial.id)"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="button"
+                          (click)="submitFilialEdit()"
+                          [disabled]="!canSaveFilialEdit()"
+                        >
+                          Сохранить филиал
+                        </button>
+                      </div>
+                    </div>
+                  }
                 } @empty {
                   <small>Филиалы не добавлены</small>
                 }

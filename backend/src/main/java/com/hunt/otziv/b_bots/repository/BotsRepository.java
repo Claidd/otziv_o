@@ -15,6 +15,22 @@ import java.util.Set;
 @Repository
 public interface BotsRepository extends CrudRepository<Bot, Long> {
 
+    interface AdminBotRow {
+        Long getId();
+        String getLogin();
+        String getPassword();
+        String getFio();
+        Boolean getActive();
+        Integer getCounter();
+        Long getStatusId();
+        String getStatusTitle();
+        Long getWorkerId();
+        String getWorkerFio();
+        String getWorkerUsername();
+        Long getCityId();
+        String getCityTitle();
+    }
+
     Optional<Bot> findByLogin(String username);
 
     @Query("SELECT b.login FROM Bot b WHERE b.login IN :logins")
@@ -41,20 +57,88 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     """)
     Optional<Bot> findByIdWithAdminDetails(@Param("id") Long id);
 
-    List<Bot> findAllByWorkerId(Long workerId);
+    @Query("""
+        SELECT b.id AS id,
+               b.login AS login,
+               b.password AS password,
+               b.fio AS fio,
+               b.active AS active,
+               b.counter AS counter,
+               s.id AS statusId,
+               s.botStatusTitle AS statusTitle,
+               w.id AS workerId,
+               u.fio AS workerFio,
+               u.username AS workerUsername,
+               bc.id AS cityId,
+               bc.title AS cityTitle
+        FROM Bot b
+        LEFT JOIN b.status s
+        LEFT JOIN b.worker w
+        LEFT JOIN w.user u
+        LEFT JOIN b.botCity bc
+    """)
+    List<AdminBotRow> findAllAdminRows();
 
-    List<Bot> findAllByWorker(Worker worker);
-    @Query("SELECT b FROM Bot b WHERE b.worker.id = :workerId AND b.active = true")
-    List<Bot> findAllByWorkerIdAndActiveIsTrue(Long workerId);
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.worker.id = :workerId
+    """)
+    List<Bot> findAllByWorkerId(@Param("workerId") Long workerId);
 
-    @Query("SELECT b FROM Bot b WHERE b.worker = :worker AND b.active = true")
-    List<Bot> findAllByWorkerAndActiveIsTrue(Worker worker);
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.worker = :worker
+    """)
+    List<Bot> findAllByWorker(@Param("worker") Worker worker);
+
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.worker.id = :workerId
+          AND b.active = true
+    """)
+    List<Bot> findAllByWorkerIdAndActiveIsTrue(@Param("workerId") Long workerId);
+
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.worker = :worker
+          AND b.active = true
+    """)
+    List<Bot> findAllByWorkerAndActiveIsTrue(@Param("worker") Worker worker);
 
     @Query("SELECT b FROM Bot b WHERE b.worker = :worker ORDER BY b.id DESC")
     Optional<Bot> findFirstByWorkerOrderByIdDesc(Worker worker);
 
-    @Query("SELECT b FROM Bot b WHERE b.botCity.id = :cityId AND b.active = true")
-    List<Bot> findAllByFilialCityId(Long cityId);
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.botCity.id = :cityId
+          AND b.active = true
+    """)
+    List<Bot> findAllByFilialCityId(@Param("cityId") Long cityId);
 
     @Query("""
         SELECT b

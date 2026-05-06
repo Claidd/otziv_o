@@ -6,6 +6,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,7 +15,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -55,8 +56,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    @NotNull HttpServletResponse response,
-                                    @NotNull FilterChain filterChain)
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
             throws ServletException, IOException {
 
         String uri = request.getRequestURI();
@@ -89,8 +90,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
 //    @Override
 //    protected void doFilterInternal(HttpServletRequest request,
-//                                    @NotNull HttpServletResponse response,
-//                                    @NotNull FilterChain filterChain)
+//                                    HttpServletResponse response,
+//                                    FilterChain filterChain)
 //            throws ServletException, IOException {
 //
 //        String uri = request.getRequestURI();
@@ -160,14 +161,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private Claims parseTokenOrThrow(String token) {
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(secret.getBytes(StandardCharsets.UTF_8))
+            return Jwts.parser()
+                    .verifyWith(signingKey())
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
         } catch (JwtException e) {
             throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Invalid token");
         }
+    }
+
+    private SecretKey signingKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     @RequiredArgsConstructor

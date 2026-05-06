@@ -79,12 +79,11 @@ public class LeadServiceImpl implements LeadService {
                 String.format("Пользоваттель '%s' не найден", username)
         ));
         String normalizedPhone = changeNumberPhone(leadDTO.getTelephoneLead());
-        Operator operator = firstNonNull(operatorService.getOperatorByUserId(user.getId()), firstOrNull(user.getOperators()));
-        Marketolog marketolog = firstNonNull(marketologService.getMarketologByUserId(user.getId()), firstOrNull(user.getMarketologs()));
-        Manager manager = firstNonNull(
-                leadDTO.getManager(),
-                firstNonNull(managerService.getManagerByUserId(user.getId()), firstOrNull(user.getManagers()))
-        );
+        Operator operator = operatorService.getOperatorByUserId(user.getId());
+        Marketolog marketolog = marketologService.getMarketologByUserId(user.getId());
+        Manager manager = leadDTO.getManager() != null
+                ? leadDTO.getManager()
+                : managerService.getManagerByUserId(user.getId());
 
         Lead lead = Lead.builder()
                 .telephoneLead(normalizedPhone)
@@ -101,14 +100,6 @@ public class LeadServiceImpl implements LeadService {
 //        zpService.saveLeadZp(lead1);
         return lead1;
     } // Создание нового пользователя "Клиент" - конец
-
-    private <T> T firstNonNull(T primary, T fallback) {
-        return primary != null ? primary : fallback;
-    }
-
-    private <T> T firstOrNull(Collection<T> collection) {
-        return collection == null || collection.isEmpty() ? null : collection.iterator().next();
-    }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - КОНЕЦ =========================================
 
@@ -250,7 +241,11 @@ public class LeadServiceImpl implements LeadService {
     public Page<LeadDTO> getAllLeads(String status, String keywords, Principal principal, int pageNumber, int pageSize, String sortDirection) { // Взять всех лидов
         log.debug("Берем лиды со статусом {}", status);
         String userRole = getRole(principal);
+        keywords = normalizeKeyword(keywords);
         Pageable pageable = leadPageable(pageNumber, pageSize, sortDirection);
+        if (!keywords.isEmpty()) {
+            return toDtoPage(findLeadsByKeyword(keywords, principal, pageable), pageable);
+        }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
         if ("ROLE_ADMIN".equals(userRole)){
@@ -311,6 +306,9 @@ public class LeadServiceImpl implements LeadService {
     public long countLeads(String status, String keywords, Principal principal) {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
+        if (!keyword.isEmpty()) {
+            return countLeadsByKeyword(keyword, principal);
+        }
         if ("ROLE_ADMIN".equals(userRole)) {
             return keyword.isEmpty()
                     ? leadsRepository.countByLidStatus(status)
@@ -350,7 +348,11 @@ public class LeadServiceImpl implements LeadService {
     public Page<LeadDTO> getAllLeadsToWork(String status, String keywords, Principal principal, int pageNumber, int pageSize, String sortDirection) { // Взять всех лидов
         log.debug("Берем лиды в работу");
         String userRole = getRole(principal);
+        keywords = normalizeKeyword(keywords);
         Pageable pageable = leadPageable(pageNumber, pageSize, sortDirection);
+        if (!keywords.isEmpty()) {
+            return toDtoPage(findLeadsByKeyword(keywords, principal, pageable), pageable);
+        }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
         if ("ROLE_ADMIN".equals(userRole)){
@@ -414,6 +416,9 @@ public class LeadServiceImpl implements LeadService {
     public long countLeadsToWork(String status, String keywords, Principal principal) {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
+        if (!keyword.isEmpty()) {
+            return countLeadsByKeyword(keyword, principal);
+        }
         if ("ROLE_ADMIN".equals(userRole)) {
             return keyword.isEmpty()
                     ? leadsRepository.countByLidStatus(status)
@@ -500,6 +505,9 @@ public class LeadServiceImpl implements LeadService {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by(dateDirectionForDaysAgo(sortDirection), "dateNewTry"));
+        if (!keyword.isEmpty()) {
+            return toDtoPage(findLeadsByKeyword(keyword, principal, pageable), pageable);
+        }
         LocalDate today = LocalDate.now();
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
@@ -552,6 +560,9 @@ public class LeadServiceImpl implements LeadService {
     public long countLeadsToDateReSend(String status, String keywords, Principal principal) {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
+        if (!keyword.isEmpty()) {
+            return countLeadsByKeyword(keyword, principal);
+        }
         LocalDate today = LocalDate.now();
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             return keyword.isEmpty()
@@ -650,6 +661,54 @@ public class LeadServiceImpl implements LeadService {
                     : leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManager(keyword, manager);
         }
         return 0;
+    }
+
+    private Page<Lead> findLeadsByKeyword(String keyword, Principal principal, Pageable pageable) {
+        String userRole = getRole(principal);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            return leadsRepository.findByTelephoneLeadContainingIgnoreCase(keyword, pageable);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = currentOwnerManagers(principal);
+            return managerList.isEmpty()
+                    ? Page.empty(pageable)
+                    : leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keyword, managerList, pageable);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keyword, currentManager(principal), pageable);
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            return leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndMarketolog(keyword, currentMarketolog(principal), pageable);
+        }
+        return Page.empty(pageable);
+    }
+
+    private long countLeadsByKeyword(String keyword, Principal principal) {
+        String userRole = getRole(principal);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            return leadsRepository.countByTelephoneLeadContainingIgnoreCase(keyword);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = currentOwnerManagers(principal);
+            return managerList.isEmpty()
+                    ? 0
+                    : leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManagerIn(keyword, managerList);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManager(keyword, currentManager(principal));
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            return leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndMarketolog(keyword, currentMarketolog(principal));
+        }
+        return 0;
+    }
+
+    private Page<LeadDTO> toDtoPage(Page<Lead> leadsPage, Pageable pageable) {
+        List<LeadDTO> leadDTOs = leadsPage.getContent()
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
     }
 
     private Pageable leadPageable(int pageNumber, int pageSize, String sortDirection) {
@@ -947,23 +1006,23 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public Long findAllByLidListNew(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
+        return leadsRepository.findAllByLidListToMarketolog(marketolog, monthStart(localDate), nextMonthStart(localDate));
     }
 
     @Override
     public Long findAllByLidListStatusInWork(Marketolog marketolog) {
         LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
+        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, monthStart(localDate), nextMonthStart(localDate));
     }
 
     @Override
     public Long findAllByLidListNewToDate(Marketolog marketolog, LocalDate localDate) {
-        return leadsRepository.findAllByLidListToMarketolog(marketolog, localDate);
+        return leadsRepository.findAllByLidListToMarketolog(marketolog, monthStart(localDate), nextMonthStart(localDate));
     }
 
     @Override
     public Long findAllByLidListStatusInWorkToDate(Marketolog marketolog, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, localDate);
+        return leadsRepository.findAllByLidListStatusToMarketolog("В работе", marketolog, monthStart(localDate), nextMonthStart(localDate));
     }
 
 
@@ -971,25 +1030,25 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public Long findAllByLidListNew(Operator operator) {
         LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListToOperator(operator, localDate);
+        return leadsRepository.findAllByLidListToOperator(operator, monthStart(localDate), nextMonthStart(localDate));
     }
 
     @Override
     public Long findAllByLidListStatusInWork(Operator operator) {
         LocalDate localDate = LocalDate.now();
-        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
+        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, monthStart(localDate), nextMonthStart(localDate));
     }
 
     @Override
     public Long findAllByLidListNewToDate(Operator operator, LocalDate localDate) {
-        return leadsRepository.findAllByLidListToOperator(operator, localDate);
+        return leadsRepository.findAllByLidListToOperator(operator, monthStart(localDate), nextMonthStart(localDate));
     }
 
 
 
     @Override
     public Long findAllByLidListStatusInWorkToDate(Operator operator, LocalDate localDate) {
-        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, localDate);
+        return leadsRepository.findAllByLidListStatusToOperator("В работе", operator, monthStart(localDate), nextMonthStart(localDate));
     }
 
 //    =============================== СМЕНА СТАТУСОВ - КОНЕЦ =========================================
@@ -1061,45 +1120,53 @@ public class LeadServiceImpl implements LeadService {
         return LeadPhoneNormalizer.normalize(phone);
     } // Вспомогательный метод для корректировки номера телефона
 
+    private LocalDate monthStart(LocalDate localDate) {
+        return localDate.withDayOfMonth(1);
+    }
+
+    private LocalDate nextMonthStart(LocalDate localDate) {
+        return monthStart(localDate).plusMonths(1);
+    }
+
     public List<Long> getAllLeadsByDate(LocalDate localDate){
-        return leadsRepository.findIdListByDate(localDate);
+        return leadsRepository.findIdListByDate(monthStart(localDate), nextMonthStart(localDate));
     }
 
     public List<Long> getAllLeadsByDateToOwner(LocalDate localDate, Set<Manager> managerList){
-        return leadsRepository.findIdListByDateToOwner(localDate, managerList);
+        return leadsRepository.findIdListByDateToOwner(monthStart(localDate), nextMonthStart(localDate), managerList);
     }
 
 
 
     public List<Long> getAllLeadsByDateAndStatus(LocalDate localDate, String status){
-        return leadsRepository.findIdListByDate(localDate, status);
+        return leadsRepository.findIdListByDate(monthStart(localDate), nextMonthStart(localDate), status);
     }
 
     public List<Long> getAllLeadsByDateAndStatusToOwner(LocalDate localDate, String status, Set<Manager> managerList){
-        return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
+        return leadsRepository.findIdListByDateToOwner(monthStart(localDate), nextMonthStart(localDate), status, managerList);
     }
 
     public List<Long> getAllLeadsByDate2Month(LocalDate localDate){
         LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(localDate1);
+        return leadsRepository.findIdListByDate(monthStart(localDate1), nextMonthStart(localDate1));
     }
 
     public List<Long> getAllLeadsByDateAndStatus2Month(LocalDate localDate, String status){
         LocalDate localDate1 = localDate.minusMonths(1);
-        return leadsRepository.findIdListByDate(localDate1, status);
+        return leadsRepository.findIdListByDate(monthStart(localDate1), nextMonthStart(localDate1), status);
     }
 
 
     @Override
     public List<Long> getAllLeadsByDateAndStatusToOwnerForTelegram(LocalDate localDate, String status, Set<Manager> managerList) {
-        return leadsRepository.findIdListByDateToOwner(localDate, status, managerList);
+        return leadsRepository.findIdListByDateToOwner(monthStart(localDate), nextMonthStart(localDate), status, managerList);
     }
 
 
     @Override
     public Map<String, Pair<Long, Long>> getAllLeadsToMonth(String statusInWork, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         // Получаем результат из базы данных (например, используя @Query)
-        List<Object[]> results = leadsRepository.getAllLeadsToMonth(statusInWork, firstDayOfMonth, lastDayOfMonth);
+        List<Object[]> results = leadsRepository.getAllLeadsToMonth(statusInWork, firstDayOfMonth, lastDayOfMonth.plusDays(1));
 
         Map<String, Pair<Long, Long>> resultMap = new HashMap<>();
 
@@ -1125,7 +1192,7 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public Map<String, Long> getAllLeadsToMonthToManager(String status, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
         // Получаем результат из базы данных (например, используя @Query)
-        List<Object[]> results = leadsRepository.getAllLeadsToMonthToManager(status);
+        List<Object[]> results = leadsRepository.getAllLeadsToMonthToManager(status, firstDayOfMonth, lastDayOfMonth.plusDays(1));
 
         Map<String, Long> resultMap = new HashMap<>();
 

@@ -120,6 +120,34 @@ export function workerPatchOrderNote(board: WorkerBoard | null, orderId: number,
   return { ...board, orders };
 }
 
+export function workerPatchOrderCompanyNote(
+  board: WorkerBoard | null,
+  order: OrderCardItem,
+  value: string
+): WorkerBoard | null {
+  if (!board) {
+    return board;
+  }
+
+  const orders = {
+    ...board.orders,
+    content: board.orders.content.map((item) => item.companyId === order.companyId
+      ? { ...item, companyComments: value }
+      : item
+    )
+  };
+
+  const reviews = {
+    ...board.reviews,
+    content: board.reviews.content.map((review) => review.companyId === order.companyId
+      ? { ...review, commentCompany: value }
+      : review
+    )
+  };
+
+  return { ...board, orders, reviews };
+}
+
 export function workerPatchReviewField(
   board: WorkerBoard | null,
   reviewId: number,

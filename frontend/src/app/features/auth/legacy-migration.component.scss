@@ -21,16 +21,60 @@
   grid-column: 1 / -1;
 }
 
-.result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.migration-success {
+  display: grid;
+  justify-items: center;
   gap: 1rem;
-  margin-bottom: 1rem;
+  min-height: 22rem;
+  align-content: center;
+  text-align: center;
 }
 
-.result-header h2 {
+.migration-success h2,
+.migration-success p {
   margin: 0;
+}
+
+.migration-success p {
+  max-width: 34rem;
+  color: var(--otziv-info);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.success-icon {
+  display: grid;
+  width: 4.8rem;
+  height: 4.8rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--otziv-success);
+  font-size: 2.7rem;
+  box-shadow: 0 1rem 2rem rgba(65, 184, 131, 0.22);
+}
+
+.login-button {
+  display: inline-flex;
+  min-width: min(24rem, 100%);
+  min-height: 4rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border: 0;
+  border-radius: 1rem;
+  padding: 0 2rem;
+  color: white;
+  background: var(--otziv-primary);
+  font-family: inherit;
+  font-size: 1.2rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 1rem 2rem rgba(108, 155, 207, 0.24);
+}
+
+.login-button:hover {
+  box-shadow: none;
 }
 
 @media (max-width: 760px) {
@@ -38,9 +82,12 @@
     grid-template-columns: 1fr;
   }
 
-  .actions,
-  .result-header {
+  .actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .login-button {
+    width: 100%;
   }
 }

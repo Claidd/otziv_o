@@ -10,5 +10,7 @@ public interface ReviewCityService {
 
     Map<String, Object> getCitiesStatistics();
 
+    Map<String, Object> getCitiesStatistics(List<CityWithUnpublishedReviewsDTO> cities);
+
     List<CityWithUnpublishedReviewsDTO> getAllCitiesWithUnpublishedReviewsNoPagination(String search, String sort, String direction);
 }

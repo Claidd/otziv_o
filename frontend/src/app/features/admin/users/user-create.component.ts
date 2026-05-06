@@ -7,11 +7,13 @@ import {
   CreateKeycloakUserRequest
 } from '../../../core/admin-users.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
 @Component({
   selector: 'app-user-create',
-  imports: [AdminLayoutComponent, ReactiveFormsModule, RouterLink],
+  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
   templateUrl: './user-create.component.html',
   styleUrl: './user-create.component.scss'
 })
@@ -126,32 +128,6 @@ export class UserCreateComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown };
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { message?: unknown; detail?: unknown; title?: unknown };
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.message === 'string') {
-        return response.message;
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

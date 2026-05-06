@@ -4,6 +4,7 @@ import type {
   CompanyOrderCreatePayload,
   CompanyOrderCreateRequest,
   CompanyOrderCreateResult,
+  ManagerBoard,
   ManagerApi,
   OrderCardItem,
   OrderEditPayload,
@@ -35,6 +36,7 @@ export type ManagerBoardOrderFacadeDeps = {
   managerApi: ManagerBoardOrderApi;
   toastService: ManagerBoardOrderToast;
   loadBoard: () => void;
+  patchBoard?: (updater: (board: ManagerBoard) => ManagerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
   openCreatedCompanyOrders: (result: CompanyOrderCreateResult) => void;
 };
@@ -174,7 +176,8 @@ export class ManagerBoardOrderFacade {
     this.orderError.set(null);
 
     this.deps.managerApi.updateOrder(order.id, draft).subscribe({
-      next: () => {
+      next: (payload) => {
+        this.applyOrderCardPatch(payload);
         this.orderSaving.set(false);
         this.closeOrderEdit();
         this.deps.toastService.success('Заказ сохранен', `Изменения по заказу #${order.id} применены`);
@@ -228,5 +231,30 @@ export class ManagerBoardOrderFacade {
   private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
     this.createOrderPayload.set(payload);
     this.createOrderDraft.set(managerCreateOrderDraft(payload));
+  }
+
+  private applyOrderCardPatch(payload: OrderEditPayload): void {
+    this.deps.patchBoard?.((board) => ({
+      ...board,
+      orders: {
+        ...board.orders,
+        content: board.orders.content.map((order) => order.id === payload.id
+          ? {
+              ...order,
+              filialTitle: payload.filial?.label ?? order.filialTitle,
+              status: payload.status,
+              sum: payload.sum,
+              amount: payload.amount,
+              counter: payload.counter,
+              orderComments: payload.orderComments,
+              companyComments: payload.commentsCompany,
+              workerUserFio: payload.worker?.label ?? order.workerUserFio,
+              changed: payload.changed,
+              payDay: payload.payDay
+            }
+          : order
+        )
+      }
+    }));
   }
 }

@@ -18,6 +18,7 @@ public record AdminUserResponse(
         String fio,
         String phoneNumber,
         BigDecimal coefficient,
+        Long imageId,
         boolean active,
         LocalDate createTime,
         LocalDateTime lastLoginAt,

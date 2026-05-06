@@ -6,6 +6,7 @@ import type { ToastService } from '../../shared/toast.service';
 import type { ReviewEditableField, SideNoteField } from './worker-board.config';
 import {
   workerEditableOrderNoteText,
+  workerPatchOrderCompanyNote,
   workerOrderNoteMutationKey,
   workerPatchOrderNote,
   workerPatchReviewField,
@@ -122,6 +123,7 @@ export class WorkerBoardNoteFacade {
 
     this.deps.workerApi.updateOrderCompanyNote(order.id, value).subscribe({
       next: () => {
+        this.deps.setBoardPatch(workerPatchOrderCompanyNote(this.deps.board(), order, value));
         this.deps.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
         this.deps.loadBoard();
       },

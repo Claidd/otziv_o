@@ -213,6 +213,22 @@ public class KeycloakAdminClient {
         }
     }
 
+    public void deleteUserStrict(String keycloakUserId) {
+        if (keycloakUserId == null || keycloakUserId.isBlank()) {
+            return;
+        }
+
+        try {
+            restClient.delete()
+                    .uri(adminUri("users", keycloakUserId))
+                    .headers(this::setBearerAuth)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            throw keycloakException("Failed to delete Keycloak user", e);
+        }
+    }
+
     private KeycloakRoleRepresentation getRealmRole(String roleName) {
         try {
             return restClient.get()
@@ -261,7 +277,7 @@ public class KeycloakAdminClient {
 
     private URI adminUri(String... pathSegments) {
         UriComponentsBuilder builder = UriComponentsBuilder
-                .fromHttpUrl(properties.getServerUrl())
+                .fromUriString(properties.getServerUrl())
                 .pathSegment("admin", "realms", properties.getRealm());
 
         for (String pathSegment : pathSegments) {
@@ -273,7 +289,7 @@ public class KeycloakAdminClient {
 
     private URI realmUri(String... pathSegments) {
         UriComponentsBuilder builder = UriComponentsBuilder
-                .fromHttpUrl(properties.getServerUrl())
+                .fromUriString(properties.getServerUrl())
                 .pathSegment("realms", properties.getRealm());
 
         for (String pathSegment : pathSegments) {

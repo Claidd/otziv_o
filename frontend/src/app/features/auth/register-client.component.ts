@@ -1,14 +1,15 @@
-import { JsonPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthLifecycleApi, ProvisionedUserResponse, RegisterClientRequest } from '../../core/auth-lifecycle.api';
 import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 @Component({
   selector: 'app-register-client',
-  imports: [AdminLayoutComponent, JsonPipe, ReactiveFormsModule, RouterLink],
+  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
   templateUrl: './register-client.component.html',
   styleUrl: './register-client.component.scss'
 })
@@ -41,7 +42,7 @@ export class RegisterClientComponent {
 
     const raw = this.form.getRawValue();
     if (raw.password !== raw.matchingPassword) {
-      this.error.set('Passwords do not match');
+      this.error.set('Пароли не совпадают');
       return;
     }
 
@@ -69,7 +70,7 @@ export class RegisterClientComponent {
         });
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Registration failed');
+        this.error.set(apiErrorMessage(err, 'Не удалось зарегистрировать пользователя'));
         this.saving.set(false);
       }
     });

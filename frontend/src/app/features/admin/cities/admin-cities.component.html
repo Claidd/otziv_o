@@ -102,7 +102,7 @@
     </section>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Города не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
     }
 
     <section class="cities-table-container">

@@ -82,7 +82,9 @@ class ReviewBoardQueryServiceTest {
         Worker worker = new Worker();
 
         when(entityManager.createQuery(
-                argThat((String query) -> query != null && query.startsWith("SELECT DISTINCT r.id")),
+                argThat((String query) -> query != null
+                        && query.startsWith("SELECT r.id")
+                        && query.contains("GROUP BY r.id, r.publishedDate")),
                 eq(Long.class)
         )).thenReturn(idQuery);
         when(entityManager.createQuery(

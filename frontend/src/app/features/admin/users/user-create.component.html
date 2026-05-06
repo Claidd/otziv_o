@@ -80,7 +80,7 @@
     }
 
     @if (error()) {
-      <p class="error">{{ error() }}</p>
+      <app-load-error-card title="Пользователь не создан" [message]="error()!" />
     }
 
     <div class="actions">

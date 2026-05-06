@@ -9,6 +9,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Data
@@ -35,4 +36,16 @@ public class Worker {
     @Column(name = "last_nagul_time")
     private LocalDateTime lastNagulTime;
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Worker worker = (Worker) obj;
+        return Objects.equals(id, worker.id);
+    }
 }

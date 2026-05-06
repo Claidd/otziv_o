@@ -10,6 +10,8 @@ import {
 } from '../../../core/admin-city-stats.api';
 import { appEnvironment } from '../../../core/app-environment';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
 type SortOption = {
@@ -27,7 +29,7 @@ type StatCard = {
 
 @Component({
   selector: 'app-admin-cities',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule],
+  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent],
   templateUrl: './admin-cities.component.html',
   styleUrl: './admin-cities.component.scss'
 })
@@ -277,32 +279,6 @@ export class AdminCitiesComponent implements OnDestroy {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown; status?: unknown };
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown; title?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.message === 'string') {
-        return response.message;
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

@@ -30,7 +30,8 @@ public class TelephoneServiceImpl implements TelephoneService {
     }
 
     public TelephoneDTO getTelephoneDTOById(Long telephoneId){
-        return toDTO(Objects.requireNonNull(telephoneRepository.findById(telephoneId).orElse(null)));
+        return toDTO(telephoneRepository.findByIdWithOperator(telephoneId)
+                .orElseThrow(() -> new EntityNotFoundException("Телефон не найден")));
     }
 
     @Override
@@ -120,7 +121,10 @@ public class TelephoneServiceImpl implements TelephoneService {
             changed = true;
         }
 
-        if (dto.getOperator() != null && (
+        if (dto.getOperator() == null && existing.getTelephoneOperator() != null) {
+            existing.setTelephoneOperator(null);
+            changed = true;
+        } else if (dto.getOperator() != null && dto.getOperator().getId() != null && (
                 existing.getTelephoneOperator() == null ||
                         !Objects.equals(existing.getTelephoneOperator().getId(), dto.getOperator().getId()))) {
             Operator operator = operatorRepository.findById(dto.getOperator().getId())
@@ -138,7 +142,7 @@ public class TelephoneServiceImpl implements TelephoneService {
 
     @Override
     public List<TelephoneDTO> getAllTelephones() {
-        List<Telephone> telephones = (List<Telephone>) telephoneRepository.findAll();
+        List<Telephone> telephones = telephoneRepository.findAllWithOperator();
         return telephones.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -194,7 +198,7 @@ public class TelephoneServiceImpl implements TelephoneService {
                 .amountAllowed(dto.getAmountAllowed())
                 .amountSent(dto.getAmountSent())
                 .blockTime(dto.getBlockTime())
-                .timer(LocalDateTime.now())
+                .timer(dto.getTimer() != null ? dto.getTimer() : LocalDateTime.now())
                 .googleLogin(dto.getGoogleLogin())
                 .googlePassword(dto.getGooglePassword())
                 .avitoPassword(dto.getAvitoPassword())

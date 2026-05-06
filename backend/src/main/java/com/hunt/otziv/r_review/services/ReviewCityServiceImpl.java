@@ -22,13 +22,17 @@ public class ReviewCityServiceImpl implements ReviewCityService {
     @Override
     public List<CityWithUnpublishedReviewsDTO> getCitiesWithUnpublishedReviews() {
         log.info("Получение городов с неопубликованными отзывами");
-        return reviewRepository.findCitiesWithUnpublishedReviewCount();
+        return toDtos(reviewRepository.findCitiesWithUnpublishedReviewCount());
     }
 
     // Метод для получения общей статистики
+    @Override
     public Map<String, Object> getCitiesStatistics() {
-        List<CityWithUnpublishedReviewsDTO> cities = getCitiesWithUnpublishedReviews();
+        return getCitiesStatistics(getCitiesWithUnpublishedReviews());
+    }
 
+    @Override
+    public Map<String, Object> getCitiesStatistics(List<CityWithUnpublishedReviewsDTO> cities) {
         long totalCities = cities.size();
         long totalUnpublished = cities.stream()
                 .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
@@ -158,9 +162,9 @@ public class ReviewCityServiceImpl implements ReviewCityService {
         // Получаем данные в зависимости от поиска
         List<CityWithUnpublishedReviewsDTO> cities;
         if (search != null && !search.trim().isEmpty()) {
-            cities = reviewRepository.findAllWithStatsBySearch(search.trim());
+            cities = toDtos(reviewRepository.findAllWithStatsBySearch(search.trim()));
         } else {
-            cities = reviewRepository.findAllWithStats();
+            cities = toDtos(reviewRepository.findAllWithStats());
         }
 
         // Применяем сортировку
@@ -197,6 +201,18 @@ public class ReviewCityServiceImpl implements ReviewCityService {
             default:
                 return Comparator.comparing(CityWithUnpublishedReviewsDTO::getCityTitle);
         }
+    }
+
+    private List<CityWithUnpublishedReviewsDTO> toDtos(List<ReviewRepository.CityStatsRow> rows) {
+        return rows.stream()
+                .map(row -> new CityWithUnpublishedReviewsDTO(
+                        row.getCityId(),
+                        row.getCityTitle(),
+                        row.getUnpublishedCount(),
+                        row.getUnpublishedNotArchiveCount(),
+                        row.getActiveBotsCount()
+                ))
+                .toList();
     }
 
 }

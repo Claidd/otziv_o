@@ -1,0 +1,228 @@
+<app-admin-layout title="Телефоны" active="operator" rightPanelMode="custom">
+  <section class="phones-workspace">
+    <header class="phones-toolbar">
+      <div class="phones-title">
+        <p class="eyebrow">Оператор</p>
+        <h2>Список телефонов</h2>
+      </div>
+
+      <div class="quick-links">
+        <a routerLink="/operator">
+          <span class="material-icons-sharp">keyboard_backspace</span>
+          Оператор
+        </a>
+        <button type="button" (click)="startNewPhone()">
+          <span class="material-icons-sharp">add</span>
+          Добавить телефон
+        </button>
+        <button type="button" (click)="loadPhones()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Загрузка' : 'Обновить' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="phones-search">
+      <label>
+        <span class="material-icons-sharp">search</span>
+        <input
+          type="text"
+          placeholder="Найти телефон, ФИО, логин, оператора"
+          [value]="search()"
+          (input)="search.set($any($event.target).value)"
+          (keyup.enter)="searchPhones()"
+        >
+      </label>
+
+      <button type="button" class="icon-button" (click)="searchPhones()" [disabled]="loading()" title="Искать">
+        <span class="material-icons-sharp">manage_search</span>
+      </button>
+
+      <button type="button" class="icon-button" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
+        <span class="material-icons-sharp">filter_alt_off</span>
+      </button>
+    </section>
+
+    @if (error()) {
+      <app-load-error-card title="Телефоны не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadPhones()" />
+    }
+
+    <section class="phones-grid">
+      <article class="phones-card table-card">
+        <div class="table-head">
+          <div>
+            <p class="eyebrow">Список</p>
+            <h2>Все телефоны</h2>
+          </div>
+          <span>{{ phones().length }}</span>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Номер</th>
+                <th>ФИО</th>
+                <th>Разрешено</th>
+                <th>Отправлено</th>
+                <th>Блок</th>
+                <th>Таймер</th>
+                <th>Оператор</th>
+                <th>Активен</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (phone of phones(); track trackPhone($index, phone)) {
+                <tr [class.selected]="selectedPhone()?.id === phone.id" (click)="selectPhone(phone)">
+                  <td>{{ phone.id }}</td>
+                  <td>
+                    <strong>{{ phone.number }}</strong>
+                    <span>{{ phone.mailLogin || phone.googleLogin || '-' }}</span>
+                  </td>
+                  <td>{{ phone.fio || '-' }}</td>
+                  <td>{{ phone.amountAllowed }}</td>
+                  <td>{{ phone.amountSent }}</td>
+                  <td>{{ phone.blockTime }} мин</td>
+                  <td>
+                    <strong>{{ phone.timer | date:'dd.MM.yyyy HH:mm' }}</strong>
+                    <span class="status-pill" [class.off]="!isTimerReady(phone)">{{ timerState(phone) }}</span>
+                  </td>
+                  <td>{{ operatorName(phone.operator) }}</td>
+                  <td>
+                    <span class="status-pill" [class.off]="!phone.active">{{ phone.active ? 'Да' : 'Нет' }}</span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="9" class="no-results">Телефонов нет.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="phones-card editor-card">
+        <div class="editor-title">
+          <div>
+            <p class="eyebrow">Редактирование</p>
+            <h2>{{ selectedPhone() ? ('Телефон #' + selectedPhone()!.id) : 'Новый телефон' }}</h2>
+          </div>
+          <span>{{ selectedPhone()?.number || '+7' }}</span>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="savePhone()">
+          <div class="form-grid">
+            <label>
+              <span>Номер телефона</span>
+              <input type="text" formControlName="number" autocomplete="off">
+            </label>
+
+            <label>
+              <span>ФИО</span>
+              <input type="text" formControlName="fio" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Дата рождения</span>
+              <input type="date" formControlName="birthday">
+            </label>
+
+            <label>
+              <span>Оператор</span>
+              <select formControlName="operatorId">
+                <option [ngValue]="null">Не выбран</option>
+                @for (operator of operators(); track trackOperator($index, operator)) {
+                  <option [ngValue]="operator.id">{{ operator.title }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Разрешено отправлять</span>
+              <input type="number" min="0" step="1" formControlName="amountAllowed">
+            </label>
+
+            <label>
+              <span>Отправлено</span>
+              <input type="number" min="0" step="1" formControlName="amountSent">
+            </label>
+
+            <label>
+              <span>Блокировка, мин</span>
+              <input type="number" min="0" step="1" formControlName="blockTime">
+            </label>
+
+            <label>
+              <span>Таймер блокировки</span>
+              <input type="datetime-local" formControlName="timer">
+            </label>
+
+            <label>
+              <span>Google логин</span>
+              <input type="text" formControlName="googleLogin" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Google пароль</span>
+              <input type="text" formControlName="googlePassword" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Avito пароль</span>
+              <input type="text" formControlName="avitoPassword" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Mail логин</span>
+              <input type="text" formControlName="mailLogin" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Mail пароль</span>
+              <input type="text" formControlName="mailPassword" autocomplete="off">
+            </label>
+
+            <label>
+              <span>Дата создания</span>
+              <input type="date" formControlName="createDate">
+            </label>
+
+            <label class="wide">
+              <span>Фото Instagram</span>
+              <input type="text" formControlName="fotoInstagram" autocomplete="off">
+            </label>
+
+            <label class="checkbox wide">
+              <input type="checkbox" formControlName="active">
+              <span>Телефон активен</span>
+            </label>
+          </div>
+
+          @if (form.invalid && form.touched) {
+            <p class="error compact">Номер и числовые поля обязательны.</p>
+          }
+
+          <div class="actions">
+            @if (selectedPhone()) {
+              <button type="button" class="danger" (click)="deleteSelectedPhone()" [disabled]="deleting() || saving()">Удалить</button>
+            }
+            <button type="button" class="secondary" (click)="startNewPhone()" [disabled]="saving() || deleting()">Новый</button>
+            <button type="submit" [disabled]="saving() || deleting()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+          </div>
+        </form>
+      </article>
+    </section>
+  </section>
+
+  <section admin-right-content class="phone-stats">
+    @for (metric of metrics(); track trackMetric($index, metric)) {
+      <article class="stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+  </section>
+</app-admin-layout>

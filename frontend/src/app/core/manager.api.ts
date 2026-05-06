@@ -108,6 +108,12 @@ export interface CompanyFilialEditItem {
   city: string;
 }
 
+export interface CompanyFilialUpdateRequest {
+  title: string;
+  url: string;
+  cityId: number | null;
+}
+
 export interface CompanyEditPayload {
   id: number;
   title: string;
@@ -386,6 +392,17 @@ export class ManagerApi {
   deleteCompanyFilial(companyId: number, filialId: number): Observable<CompanyEditPayload> {
     return this.http.delete<CompanyEditPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/filials/${filialId}`
+    );
+  }
+
+  updateCompanyFilial(
+    companyId: number,
+    filialId: number,
+    request: CompanyFilialUpdateRequest
+  ): Observable<CompanyEditPayload> {
+    return this.http.put<CompanyEditPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/filials/${filialId}`,
+      request
     );
   }
 

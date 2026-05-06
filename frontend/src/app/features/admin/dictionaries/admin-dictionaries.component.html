@@ -2,7 +2,7 @@
   <section class="dictionary-workspace">
     <header class="dictionary-toolbar">
       <nav class="dictionary-tabs" aria-label="Справочники">
-        @for (tab of tabs; track trackTab($index, tab)) {
+        @for (tab of tabs(); track trackTab($index, tab)) {
           <button
             type="button"
             [class.active]="activeTab() === tab.key"
@@ -49,7 +49,7 @@
     </section>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Справочники не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadAll()" />
     }
 
     @if (activeTab() === 'categories') {
@@ -57,7 +57,7 @@
       <article class="dictionary-card category-panel">
         <div class="editor-title">
           <div>
-            <p class="eyebrow">ADD</p>
+            <p class="eyebrow">Добавление</p>
             <h2>{{ categoryEditorTitle() }}</h2>
           </div>
           <span>Категории</span>
@@ -82,7 +82,7 @@
 
         <div class="table-head list-title">
           <div>
-            <p class="eyebrow">LIST</p>
+            <p class="eyebrow">Список</p>
             <h2>Категории</h2>
           </div>
           <span>{{ categories().length }}</span>
@@ -125,7 +125,7 @@
         @if (activeCategory(); as category) {
           <div class="editor-title">
             <div>
-              <p class="eyebrow">ADD</p>
+              <p class="eyebrow">Добавление</p>
               <h2>{{ subCategoryEditorTitle() }}</h2>
             </div>
             <span>{{ category.title }}</span>
@@ -156,7 +156,7 @@
 
           <div class="table-head list-title">
             <div>
-              <p class="eyebrow">LIST</p>
+              <p class="eyebrow">Список</p>
               <h2>Подкатегории</h2>
             </div>
             <span>{{ selectedCategorySubCategories().length }}</span>
@@ -196,7 +196,7 @@
       <article class="dictionary-card table-card">
         <div class="table-head">
           <div>
-            <p class="eyebrow">LIST</p>
+            <p class="eyebrow">Список</p>
             <h2>{{ activeLabel() }}</h2>
           </div>
           <span>{{ activeItemsTotal() }}</span>
@@ -358,7 +358,7 @@
       <article class="dictionary-card editor-card">
         <div class="editor-title">
           <div>
-            <p class="eyebrow">EDIT</p>
+            <p class="eyebrow">Редактирование</p>
             <h2>{{ selectedTitle() }}</h2>
           </div>
           <span>{{ activeLabel() }}</span>
@@ -562,7 +562,7 @@
       <article class="import-modal" role="dialog" aria-modal="true" aria-label="Импорт аккаунтов" (click)="$event.stopPropagation()">
         <header>
           <div>
-            <p class="eyebrow">IMPORT</p>
+            <p class="eyebrow">Импорт</p>
             <h2>Добавить аккаунты</h2>
           </div>
           <button type="button" class="row-icon-button" (click)="closeBotImport()" [disabled]="importing()" title="Закрыть">

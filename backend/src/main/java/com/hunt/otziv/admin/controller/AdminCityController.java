@@ -90,7 +90,7 @@ public class AdminCityController {
         List<CityWithUnpublishedReviewsDTO> pageContent = filteredCities.subList(start, end);
 
         // Получаем статистику
-        Map<String, Object> statistics = reviewCityService.getCitiesStatistics();
+        Map<String, Object> statistics = reviewCityService.getCitiesStatistics(filteredCities);
 
         // Вычисляем общее количество страниц
         int totalPages = (int) Math.ceil((double) totalCities / size);

@@ -1,6 +1,7 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import {
   CompanyCardItem,
   ManagerApi,
@@ -12,6 +13,9 @@ import {
   OrderCardItem
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
 import {
   DEFAULT_MANAGER_COMPANY_STATUSES,
@@ -33,7 +37,6 @@ import {
   managerBoardTitle,
   managerErrorMessage,
   managerLayoutTitle,
-  managerLegacyUrl,
   managerOrderActions,
   managerPayableOrderSum,
   managerPromoItems,
@@ -46,7 +49,10 @@ import {
 } from './manager-board.config';
 import { ManagerBoardActionFacade } from './manager-board-action.facade';
 import { ManagerCompanyCardComponent } from './manager-company-card.component';
-import type { ManagerCompanyEditDraftChange } from './manager-company-edit-modal.component';
+import type {
+  ManagerCompanyEditDraftChange,
+  ManagerCompanyFilialUpdateRequest
+} from './manager-company-edit-modal.component';
 import { ManagerCompanyEditModalComponent } from './manager-company-edit-modal.component';
 import { ManagerBoardCompanyFacade } from './manager-board-company.facade';
 import {
@@ -61,11 +67,18 @@ import { ManagerOrderEditModalComponent } from './manager-order-edit-modal.compo
 import type { ManagerCreateOrderDraftChange } from './manager-order-create-modal.component';
 import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.component';
 
+type CompanyCreateContext = {
+  source: CompanyCreateSource;
+  leadId: number | null;
+};
+
 @Component({
   selector: 'app-manager-board',
   imports: [
     AdminLayoutComponent,
+    CompanyCreateModalComponent,
     FormsModule,
+    LoadErrorCardComponent,
     ManagerCompanyCardComponent,
     ManagerCompanyEditModalComponent,
     ManagerOrderCardComponent,
@@ -89,9 +102,6 @@ export class ManagerBoardComponent {
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
   readonly allOrderActions = MANAGER_ORDER_ACTIONS;
   readonly pageSizeOptions = MANAGER_PAGE_SIZE_OPTIONS;
-  readonly legacyLeadsUrl = managerLegacyUrl('/lead');
-  readonly legacyNewCompanyUrl = managerLegacyUrl('/companies/new_company');
-  readonly legacyCategoriesUrl = managerLegacyUrl('/categories');
   readonly legacyWorkersUrl = '/worker';
   readonly mobileNavLinks: MobileNavLink[] = MANAGER_MOBILE_NAV_LINKS;
 
@@ -109,17 +119,20 @@ export class ManagerBoardComponent {
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
   readonly selectedCompany = signal<SelectedCompany | null>(null);
+  readonly companyCreateContext = signal<CompanyCreateContext | null>(null);
 
   private readonly companyFacade = new ManagerBoardCompanyFacade({
     managerApi: this.managerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
+    patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   private readonly orderFacade = new ManagerBoardOrderFacade({
     managerApi: this.managerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
+    patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
     openCreatedCompanyOrders: (result) => this.openCreatedCompanyOrders(result.companyId, result.companyTitle)
   });
@@ -128,6 +141,7 @@ export class ManagerBoardComponent {
     toastService: this.toastService,
     mutationKey: this.mutationKey,
     loadBoard: () => this.loadBoard(),
+    patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   readonly editCompany = this.companyFacade.editCompany;
@@ -279,6 +293,12 @@ export class ManagerBoardComponent {
       return;
     }
 
+    if (value.startsWith('route:')) {
+      this.mobileMenuOpen.set(false);
+      void this.router.navigateByUrl(value.slice(6));
+      return;
+    }
+
     const [section, status = 'Все'] = value.split(':');
 
     if (section === 'companies') {
@@ -380,7 +400,7 @@ export class ManagerBoardComponent {
   }
 
   async copyPhone(phone?: string): Promise<void> {
-    await this.copyText(phone ?? '', 'телефон', 'Телефон скопирован');
+    await this.copyText(phoneDigits(phone), 'телефон', 'Телефон скопирован');
   }
 
   async copyOrderText(order: OrderCardItem, kind: 'review' | 'payment'): Promise<void> {
@@ -427,6 +447,28 @@ export class ManagerBoardComponent {
     this.companyFacade.openCompanyEdit(company);
   }
 
+  openManualCompanyCreate(): void {
+    this.companyCreateContext.set({ source: 'manual', leadId: null });
+  }
+
+  closeCompanyCreate(): void {
+    this.companyCreateContext.set(null);
+  }
+
+  handleCompanyCreated(result: CompanyCreateResult): void {
+    this.closeCompanyCreate();
+    this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
+    this.replaceCurrentHistoryState();
+    this.activeSection.set('companies');
+    this.companyStatus.set('Новая');
+    this.selectedCompany.set(null);
+    this.keyword.set('');
+    this.pageNumber.set(0);
+    this.mobileMenuOpen.set(false);
+    this.pushCurrentHistoryState();
+    this.loadBoard();
+  }
+
   closeCompanyEdit(): void {
     this.companyFacade.closeCompanyEdit();
   }
@@ -449,6 +491,10 @@ export class ManagerBoardComponent {
 
   deleteCompanyFilial(filialId: number, title: string): void {
     this.companyFacade.deleteCompanyFilial(filialId, title);
+  }
+
+  updateCompanyFilial(request: ManagerCompanyFilialUpdateRequest): void {
+    this.companyFacade.updateCompanyFilial(request);
   }
 
   openCompanyOrderCreate(company: CompanyCardItem): void {
@@ -601,6 +647,10 @@ export class ManagerBoardComponent {
     this.mobileMenuOpen.set(false);
     this.pushCurrentHistoryState();
     this.loadBoard();
+  }
+
+  private patchBoard(updater: (board: ManagerBoard) => ManagerBoard): void {
+    this.board.update((board) => board ? updater(board) : board);
   }
 
   private errorMessage(err: unknown, fallback: string): string {

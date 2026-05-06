@@ -17,7 +17,10 @@ import {
   SubCategoryRequest,
   TitleRequest
 } from '../../../core/admin-dictionaries.api';
+import { AuthService } from '../../../core/auth.service';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
 type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'accounts';
@@ -37,20 +40,24 @@ type DictionaryMetric = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, ReactiveFormsModule],
+  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule],
   templateUrl: './admin-dictionaries.component.html',
   styleUrl: './admin-dictionaries.component.scss'
 })
 export class AdminDictionariesComponent {
   private readonly fb = inject(FormBuilder);
   private readonly dictionariesApi = inject(AdminDictionariesApi);
+  private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
 
-  readonly tabs: DictionaryTab[] = [
+  private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
     { key: 'cities', label: 'Города', icon: 'location_city' },
     { key: 'products', label: 'Продукты', icon: 'inventory_2' },
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' }
+  ];
+  private readonly managerTabs: DictionaryTab[] = [
+    { key: 'categories', label: 'Категории', icon: 'category' }
   ];
 
   readonly activeTab = signal<DictionaryTabKey>('categories');
@@ -78,6 +85,11 @@ export class AdminDictionariesComponent {
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
   readonly botCities = signal<DictionaryOption[]>([]);
+  readonly canManageAllDictionaries = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly tabs = computed<DictionaryTab[]>(() => this.canManageAllDictionaries() ? this.allTabs : this.managerTabs);
 
   readonly categoryForm = this.fb.nonNullable.group({
     title: ['', Validators.required]
@@ -110,7 +122,7 @@ export class AdminDictionariesComponent {
     active: this.fb.nonNullable.control(true)
   });
 
-  readonly activeLabel = computed(() => this.tabs.find((tab) => tab.key === this.activeTab())?.label ?? '');
+  readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
   readonly activeCategory = computed(() => {
     const id = this.activeCategoryId();
     return this.categories().find((category) => category.id === id) ?? null;
@@ -143,19 +155,33 @@ export class AdminDictionariesComponent {
         return this.bots().length;
     }
   });
-  readonly metrics = computed<DictionaryMetric[]>(() => [
-    { label: 'Категории', value: this.categories().length, icon: 'category', tone: 'blue' },
-    { label: 'Подкатегории', value: this.subCategories().length, icon: 'account_tree', tone: 'teal' },
-    { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
-    { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
-    { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' }
-  ]);
+  readonly metrics = computed<DictionaryMetric[]>(() => {
+    const categoryMetrics: DictionaryMetric[] = [
+      { label: 'Категории', value: this.categories().length, icon: 'category', tone: 'blue' },
+      { label: 'Подкатегории', value: this.subCategories().length, icon: 'account_tree', tone: 'teal' }
+    ];
+
+    if (!this.canManageAllDictionaries()) {
+      return categoryMetrics;
+    }
+
+    return [
+      ...categoryMetrics,
+      { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
+      { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
+      { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' }
+    ];
+  });
 
   constructor() {
     this.loadAll();
   }
 
   setTab(tab: DictionaryTabKey): void {
+    if (!this.tabs().some((item) => item.key === tab)) {
+      return;
+    }
+
     this.activeTab.set(tab);
     this.search.set('');
     this.clearSelection();
@@ -165,29 +191,44 @@ export class AdminDictionariesComponent {
     this.loading.set(true);
     this.error.set(null);
 
+    if (this.canManageAllDictionaries()) {
+      forkJoin({
+        categories: this.dictionariesApi.getCategories(),
+        subCategories: this.dictionariesApi.getSubCategories(),
+        cities: this.dictionariesApi.getCities(),
+        products: this.dictionariesApi.getProducts(),
+        bots: this.dictionariesApi.getBots()
+      }).subscribe({
+        next: ({ categories, subCategories, cities, products, bots }) => {
+          this.categories.set(categories);
+          this.subCategories.set(subCategories);
+          this.cities.set(cities);
+          this.products.set(products.products);
+          this.productCategories.set(products.categories);
+          this.applyBotsResponse(bots);
+          this.loading.set(false);
+          this.ensureDefaults();
+        },
+        error: (err) => this.handleLoadAllError(err)
+      });
+      return;
+    }
+
     forkJoin({
-      categories: this.dictionariesApi.getCategories(),
-      subCategories: this.dictionariesApi.getSubCategories(),
-      cities: this.dictionariesApi.getCities(),
-      products: this.dictionariesApi.getProducts(),
-      bots: this.dictionariesApi.getBots()
+        categories: this.dictionariesApi.getCategories(),
+        subCategories: this.dictionariesApi.getSubCategories()
     }).subscribe({
-      next: ({ categories, subCategories, cities, products, bots }) => {
+      next: ({ categories, subCategories }) => {
         this.categories.set(categories);
         this.subCategories.set(subCategories);
-        this.cities.set(cities);
-        this.products.set(products.products);
-        this.productCategories.set(products.categories);
-        this.applyBotsResponse(bots);
+        this.cities.set([]);
+        this.products.set([]);
+        this.productCategories.set([]);
+        this.bots.set([]);
         this.loading.set(false);
         this.ensureDefaults();
       },
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось загрузить справочники');
-        this.error.set(message);
-        this.loading.set(false);
-        this.toastService.error('Справочники не загрузились', message);
-      }
+      error: (err) => this.handleLoadAllError(err)
     });
   }
 
@@ -776,6 +817,13 @@ export class AdminDictionariesComponent {
     this.botCities.set(response.cities);
   }
 
+  private handleLoadAllError(err: unknown): void {
+    const message = this.errorMessage(err, 'Не удалось загрузить справочники');
+    this.error.set(message);
+    this.loading.set(false);
+    this.toastService.error('Справочники не загрузились', message);
+  }
+
   private ensureDefaults(): void {
     const activeCategoryId = this.activeCategoryId();
     const hasActiveCategory = activeCategoryId != null
@@ -811,32 +859,6 @@ export class AdminDictionariesComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown; status?: unknown };
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown; title?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.message === 'string') {
-        return response.message;
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

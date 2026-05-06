@@ -1,12 +1,14 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
 import { LeadItem, LeadPage, LeadPerson } from '../../core/leads.api';
 import { OperatorApi, OperatorBoard } from '../../core/operator.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
 
 type OperatorAction = 'send' | 'toWork';
@@ -32,13 +34,14 @@ type MobileNavLink = {
 
 @Component({
   selector: 'app-operator-board',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './operator-board.component.html',
   styleUrl: '../leads/leads-board.component.scss'
 })
 export class OperatorBoardComponent {
   private readonly operatorApi = inject(OperatorApi);
   private readonly toastService = inject(ToastService);
+  private readonly router = inject(Router);
   private readonly emptyPage: LeadPage = {
     content: [],
     pageNumber: 0,
@@ -50,13 +53,11 @@ export class OperatorBoardComponent {
   };
 
   readonly pageSizeOptions = [1, 5, 10];
-  readonly legacyCategoriesUrl = this.legacyUrl('/categories');
-  readonly legacyCompaniesUrl = this.legacyUrl('/companies/company');
+  readonly phonesRoute = '/operator/phones';
   readonly mobileNavLinks: MobileNavLink[] = [
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },
     { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Маркетолог', href: this.legacyUrl('/admin/analyse') },
     { label: 'Менеджер', routerLink: '/manager' },
     { label: 'Специалист', routerLink: '/worker' },
     { label: 'Личный кабинет', routerLink: '/' }
@@ -207,6 +208,13 @@ export class OperatorBoardComponent {
     this.bindModalOpen.set(true);
   }
 
+  handleMetricClick(metric: OperatorMetric): void {
+    if (metric.label === 'Телефон' || metric.label === 'Таймер') {
+      this.openPhones();
+      return;
+    }
+  }
+
   closeBindModal(): void {
     if (this.bindSaving()) {
       return;
@@ -341,6 +349,13 @@ export class OperatorBoardComponent {
     }
   }
 
+  private openPhones(): void {
+    const telephoneId = this.board()?.telephoneId;
+    void this.router.navigate([this.phonesRoute], {
+      queryParams: telephoneId ? { phoneId: telephoneId } : undefined
+    });
+  }
+
   private timerState(): string {
     const board = this.board();
 
@@ -396,36 +411,6 @@ export class OperatorBoardComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown; status?: unknown };
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown; title?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.message === 'string') {
-        return response.message;
-      }
-
-      if (typeof response.status === 'number' && response.status === 400) {
-        return 'Проверьте ID телефона';
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

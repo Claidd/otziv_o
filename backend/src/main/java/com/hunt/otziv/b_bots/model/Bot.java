@@ -7,9 +7,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
+import lombok.ToString;
 
 @Entity
 @Data
@@ -47,16 +47,22 @@ public class Bot {
     //    указатель статуса бота: заблокирован или готов к работе
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bot_status")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private StatusBot status;
 
     //    каждый бот имеет Работника, который его добавлял
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bot_worker")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Worker worker;
 
     //    за каждым ботом закреплен город
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bot_city_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private City botCity;
 
 }

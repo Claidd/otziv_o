@@ -1,0 +1,351 @@
+:host {
+  display: block;
+}
+
+.phones-workspace {
+  display: grid;
+  gap: 0.85rem;
+  font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+.phones-toolbar,
+.phones-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.phones-title h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.35rem;
+}
+
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.quick-links a,
+.quick-links button,
+.phones-search input,
+.icon-button {
+  min-height: 2.2rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  color: var(--otziv-dark);
+  background: var(--otziv-light);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.quick-links a,
+.quick-links button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.72rem;
+  text-decoration: none;
+}
+
+.quick-links .material-icons-sharp {
+  font-size: 1rem;
+}
+
+.phones-search {
+  grid-template-columns: minmax(12rem, 1fr) 2.55rem 2.55rem;
+}
+
+.phones-search label {
+  position: relative;
+  display: block;
+}
+
+.phones-search label > span {
+  position: absolute;
+  top: 50%;
+  left: 0.85rem;
+  color: var(--otziv-info);
+  font-size: 1rem;
+  transform: translateY(-50%);
+}
+
+.phones-search input {
+  width: 100%;
+  padding: 0 0.85rem 0 2.35rem;
+  background: var(--otziv-field-background);
+}
+
+.icon-button {
+  width: 2.55rem;
+  padding: 0;
+}
+
+.phones-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(22rem, 0.82fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.phones-card {
+  min-width: 0;
+  border-radius: 1.05rem;
+  padding: 1rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.phones-card:hover,
+.phone-stats .stat-card:hover {
+  box-shadow: none;
+}
+
+.table-card {
+  overflow: hidden;
+}
+
+.table-head,
+.editor-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.table-head h2,
+.editor-title h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.table-head > span,
+.editor-title > span {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.13);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.table-scroll {
+  max-height: calc(100vh - 13.5rem);
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  min-width: 58rem;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--otziv-light);
+  padding: 0.72rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+td {
+  font-size: 0.82rem;
+}
+
+td span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+}
+
+tr {
+  cursor: pointer;
+}
+
+tr.selected td {
+  background: rgba(108, 155, 207, 0.14);
+}
+
+.status-pill {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 1.45rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.13);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.status-pill.off {
+  color: var(--otziv-info);
+  background: var(--otziv-light);
+}
+
+.no-results {
+  color: var(--otziv-info);
+  text-align: center;
+}
+
+.editor-card form,
+.form-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.form-grid label > span {
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+.form-grid input[type='text'],
+.form-grid input[type='number'],
+.form-grid input[type='date'],
+.form-grid input[type='datetime-local'],
+.form-grid select {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 0.7rem;
+  padding: 0 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.form-grid .checkbox {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.7rem;
+  padding: 0 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+.form-grid .checkbox input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.actions .danger {
+  background: var(--otziv-danger);
+}
+
+.error.compact {
+  margin: 0;
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+  font-weight: 800;
+}
+
+.phone-stats {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.phone-stats .stat-card {
+  display: flex;
+  min-height: 5.6rem;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1.05rem;
+  padding: 1rem;
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+  transition: box-shadow 0.65s ease;
+}
+
+.phone-stats .stat-card.green {
+  color: var(--otziv-success);
+}
+
+.phone-stats .stat-card.yellow {
+  color: var(--otziv-warning);
+}
+
+.phone-stats .stat-card.pink {
+  color: var(--otziv-danger);
+}
+
+.phone-stats .stat-card span {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.phone-stats .stat-card strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.35rem;
+}
+
+.phone-stats .stat-card i {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 0.35rem solid currentColor;
+  border-radius: 50%;
+  font-size: 1rem;
+}
+
+@media (max-width: 1180px) {
+  .phones-toolbar,
+  .phones-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-links {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .phones-search,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

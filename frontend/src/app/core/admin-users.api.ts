@@ -38,6 +38,7 @@ export interface AdminUser {
   fio?: string;
   phoneNumber?: string;
   coefficient?: number;
+  imageId?: number | null;
   active: boolean;
   createTime?: string;
   lastLoginAt?: string;
@@ -108,6 +109,20 @@ export class AdminUsersApi {
     return this.http.put<AdminUser>(
       `${appEnvironment.apiBaseUrl}/api/admin/users/${id}`,
       request
+    );
+  }
+
+  deleteUser(id: number): Observable<void> {
+    return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/admin/users/${id}`);
+  }
+
+  updateUserPhoto(id: number, photo: File): Observable<AdminUser> {
+    const formData = new FormData();
+    formData.append('photo', photo);
+
+    return this.http.post<AdminUser>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/photo`,
+      formData
     );
   }
 

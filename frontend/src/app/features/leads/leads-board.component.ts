@@ -3,7 +3,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
-import { appEnvironment } from '../../core/app-environment';
 import { AuthService } from '../../core/auth.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import {
@@ -20,7 +19,9 @@ import {
   LeadUpdateRequest
 } from '../../core/leads.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
 
 type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
@@ -56,7 +57,7 @@ type CompanyCreateContext = {
 
 @Component({
   selector: 'app-leads-board',
-  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './leads-board.component.html',
   styleUrl: './leads-board.component.scss'
 })
@@ -84,15 +85,11 @@ export class LeadsBoardComponent {
   ];
 
   readonly pageSizeOptions = [5, 10, 15];
-  readonly legacyLeadsUrl = this.legacyUrl('/lead');
-  readonly legacyCategoriesUrl = this.legacyUrl('/categories');
-  readonly legacyCompaniesUrl = this.legacyUrl('/companies/company');
   readonly mobileNavLinks: MobileNavLink[] = [
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },
     { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Маркетолог', href: this.legacyUrl('/admin/analyse') },
-    { label: 'Менеджер', href: this.legacyUrl('/admin/personal') },
+    { label: 'Менеджер', routerLink: '/manager' },
     { label: 'Специалист', routerLink: '/worker' },
     { label: 'Личный кабинет', routerLink: '/' }
   ];
@@ -139,10 +136,22 @@ export class LeadsBoardComponent {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   });
+  readonly canTransferLead = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MARKETOLOG']);
+  });
   readonly canImportLeads = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   });
+  readonly canSeeAllBucket = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly visibleBuckets = computed(() => this.canSeeAllBucket()
+    ? this.buckets
+    : this.buckets.filter((bucket) => bucket.key !== 'all')
+  );
   readonly operatorOptions = computed(() => this.editOptions()?.operators ?? []);
   readonly managerOptions = computed(() => this.editOptions()?.managers ?? []);
   readonly marketologOptions = computed(() => this.editOptions()?.marketologs ?? []);
@@ -159,14 +168,19 @@ export class LeadsBoardComponent {
   readonly metrics = computed<LeadMetric[]>(() => {
     const board = this.board();
 
-    return [
+    const metrics: LeadMetric[] = [
       { label: 'Новые', value: board?.newLeads.totalElements ?? 0, icon: 'fiber_new', tone: 'yellow' },
       { label: 'В работу', value: board?.toWork.totalElements ?? 0, icon: 'badge', tone: 'green' },
       { label: 'В работе', value: board?.inWork.totalElements ?? 0, icon: 'work_history', tone: 'teal' },
       { label: 'Напомнить', value: board?.send.totalElements ?? 0, icon: 'notifications_active', tone: 'pink' },
       { label: 'Архив', value: board?.archive?.totalElements ?? 0, icon: 'archive', tone: 'gray' },
-      { label: 'Всего', value: board?.all.totalElements ?? 0, icon: 'dashboard', tone: 'blue' },
     ];
+
+    if (this.canSeeAllBucket()) {
+      metrics.push({ label: 'Всего', value: board?.all.totalElements ?? 0, icon: 'dashboard', tone: 'blue' });
+    }
+
+    return metrics;
   });
 
   constructor() {
@@ -284,7 +298,9 @@ export class LeadsBoardComponent {
     if (lead.lidStatus === 'Новый') {
       return ['send'];
     }
-    return ['toWork', 'resend', 'archive'];
+    return this.canTransferLead()
+      ? ['toWork', 'resend', 'archive']
+      : ['resend', 'archive'];
   }
 
   actionLabel(action: LeadMutation): string {
@@ -539,8 +555,9 @@ export class LeadsBoardComponent {
     this.editError.set(null);
 
     this.leadsApi.updateLead(lead.id, draft).subscribe({
-      next: () => {
+      next: (updatedLead) => {
         this.editSaving.set(false);
+        this.applyUpdatedLead(updatedLead);
         this.closeEditModal();
         this.toastService.success('Лид сохранен', `Изменения по лиду #${lead.id} применены`);
         this.loadBoard();
@@ -654,10 +671,6 @@ export class LeadsBoardComponent {
     this.setCreateField('managerId', managerId);
   }
 
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
-  }
-
   private mergeCommentDrafts(board: LeadBoard): void {
     const leads = [
       ...board.toWork.content,
@@ -677,6 +690,38 @@ export class LeadsBoardComponent {
       });
       return next;
     });
+  }
+
+  private applyUpdatedLead(updatedLead: LeadItem): void {
+    this.editLead.set(updatedLead);
+    this.commentDrafts.update((drafts) => ({
+      ...drafts,
+      [updatedLead.id]: updatedLead.commentsLead ?? ''
+    }));
+
+    this.board.update((board) => board ? {
+      ...board,
+      toWork: this.replaceLeadInPage(board.toWork, updatedLead),
+      newLeads: this.replaceLeadInPage(board.newLeads, updatedLead),
+      send: this.replaceLeadInPage(board.send, updatedLead),
+      archive: board.archive ? this.replaceLeadInPage(board.archive, updatedLead) : board.archive,
+      inWork: this.replaceLeadInPage(board.inWork, updatedLead),
+      all: this.replaceLeadInPage(board.all, updatedLead)
+    } : board);
+  }
+
+  private replaceLeadInPage(page: LeadPage, updatedLead: LeadItem): LeadPage {
+    let changed = false;
+    const content = page.content.map((lead) => {
+      if (lead.id !== updatedLead.id) {
+        return lead;
+      }
+
+      changed = true;
+      return updatedLead;
+    });
+
+    return changed ? { ...page, content } : page;
   }
 
   private async copyText(value: string, label: string): Promise<void> {
@@ -704,46 +749,6 @@ export class LeadsBoardComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown; status?: unknown };
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown; title?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.message === 'string') {
-        if (typeof response.status === 'number' && response.status === 405) {
-          return 'Сервер не принял запрос. Обновите backend и страницу, затем попробуйте снова.';
-        }
-
-        return response.message;
-      }
-
-      if (typeof response.status === 'number') {
-        if (response.status === 409) {
-          return 'Такой номер телефона уже есть в базе';
-        }
-
-        if (response.status === 405) {
-          return 'Сервер не принял запрос. Обновите backend и страницу, затем попробуйте снова.';
-        }
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

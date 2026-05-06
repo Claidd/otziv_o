@@ -3,6 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { CabinetApi, ScoreResponse, ScoreUser } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorDetail } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 type ScoreGroupKey = 'managers' | 'workers' | 'operators' | 'marketologs';
 
@@ -14,7 +16,7 @@ type ScoreSection = {
 
 @Component({
   selector: 'app-score',
-  imports: [AdminLayoutComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './score.component.html',
   styleUrl: './score.component.scss'
 })
@@ -45,7 +47,7 @@ export class ScoreComponent {
         this.loading.set(false);
       },
       error: (error) => {
-        this.error.set(error?.error?.message ?? error?.message ?? 'Не удалось загрузить рейтинг');
+        this.error.set(apiErrorDetail(error, 'Обновите данные через пару минут или обратитесь к администратору.'));
         this.loading.set(false);
       }
     });

@@ -36,6 +36,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'operator/phones',
+    loadComponent: () => import('./features/operator/operator-phones.component')
+      .then((m) => m.OperatorPhonesComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'manager',
     loadComponent: () => import('./features/manager/manager-board.component')
       .then((m) => m.ManagerBoardComponent),
@@ -127,7 +136,7 @@ export const routes: Routes = [
       .then((m) => m.AdminDictionariesComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER']
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
     }
   },
   {

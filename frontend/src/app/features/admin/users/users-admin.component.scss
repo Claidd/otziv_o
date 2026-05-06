@@ -269,6 +269,95 @@ tr.unlinked td {
   background: rgba(247, 208, 96, 0.2);
 }
 
+.table-pagination {
+  display: grid;
+  grid-template-columns: auto minmax(6rem, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+  border-top: 1px solid var(--otziv-light);
+  margin-top: 0.25rem;
+  padding-top: 0.85rem;
+}
+
+.page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.page-size span,
+.pagination-summary {
+  white-space: nowrap;
+}
+
+.page-size select {
+  min-height: 2rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.45rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.pagination-summary {
+  justify-self: center;
+  color: var(--otziv-info);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.pagination-controls,
+.page-numbers {
+  display: flex;
+  align-items: center;
+}
+
+.pagination-controls {
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.page-numbers {
+  gap: 0.3rem;
+}
+
+.pagination-controls .icon-button,
+.page-numbers button {
+  display: inline-flex;
+  width: 2.1rem;
+  height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: var(--otziv-small-radius);
+  padding: 0;
+  color: var(--otziv-info);
+  background: var(--otziv-light);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.page-numbers button.active {
+  border-color: rgba(108, 155, 207, 0.45);
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.14);
+}
+
+.pagination-controls .icon-button:disabled,
+.page-numbers button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.pagination-controls .material-icons-sharp {
+  font-size: 1rem;
+}
+
 .editor-card,
 .assignments,
 .password-reset,
@@ -279,6 +368,90 @@ tr.unlinked td {
 
 .editor-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-photo-editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  border-bottom: 1px solid var(--otziv-light);
+  padding-bottom: 0.9rem;
+}
+
+.profile-photo-preview {
+  display: grid;
+  width: 5.2rem;
+  height: 5.2rem;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid rgba(108, 155, 207, 0.35);
+  border-radius: 50%;
+  color: var(--otziv-primary);
+  background: var(--otziv-field-background);
+}
+
+.profile-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-photo-preview .material-icons-sharp {
+  font-size: 2.4rem;
+}
+
+.profile-photo-controls {
+  display: grid;
+  min-width: 0;
+  gap: 0.55rem;
+}
+
+.profile-photo-controls > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.profile-photo-controls span {
+  color: var(--otziv-dark);
+  font-weight: 900;
+}
+
+.profile-photo-controls small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-photo-controls input[type='file'] {
+  display: none;
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.user-delete-button {
+  min-height: 1.95rem !important;
+  padding: 0 0.65rem !important;
+  font-size: 0.7rem !important;
+}
+
+.user-delete-button .material-icons-sharp {
+  font-size: 1rem;
 }
 
 .checkbox.wide {
@@ -309,6 +482,23 @@ tr.unlinked td {
   color: #14532d;
   background: #dcfce7;
   font-weight: 800;
+}
+
+.hint {
+  border: 1px solid rgba(108, 155, 207, 0.22);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.65rem 0.8rem;
+  color: var(--otziv-info);
+  background: rgba(108, 155, 207, 0.08);
+  font-weight: 800;
+}
+
+.danger-button {
+  background: var(--otziv-danger) !important;
+}
+
+.danger-button:disabled {
+  opacity: 0.55;
 }
 
 .compact,
@@ -382,8 +572,30 @@ tr.unlinked td {
   }
 
   .editor-grid,
+  .profile-photo-editor,
   .password-row,
+  .table-pagination,
   .mobile-user-stats {
     grid-template-columns: 1fr;
+  }
+
+  .page-size {
+    justify-content: space-between;
+  }
+
+  .pagination-summary {
+    justify-self: start;
+  }
+
+  .pagination-controls {
+    justify-content: space-between;
+  }
+
+  .page-numbers {
+    flex-wrap: wrap;
+  }
+
+  .profile-photo-preview {
+    justify-self: center;
   }
 }

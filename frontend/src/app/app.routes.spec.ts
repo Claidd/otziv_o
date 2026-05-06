@@ -11,6 +11,7 @@ describe('routes', () => {
       'legacy-migration',
       'leads',
       'operator',
+      'operator/phones',
       'manager',
       'manager/orders/:companyId/:orderId',
       'worker',
@@ -18,6 +19,7 @@ describe('routes', () => {
       'admin/score',
       'admin/analyse',
       'admin/user-info/:userId',
+      'admin/dictionaries',
       'review/editReviews/:orderDetailId'
     ].forEach((path) => {
       expect(typeof route(path)?.loadComponent).toBe('function');
@@ -36,9 +38,11 @@ describe('routes', () => {
     const protectedRoutes = [
       ['leads', ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']],
       ['operator', ['ADMIN', 'OWNER', 'OPERATOR']],
+      ['operator/phones', ['ADMIN', 'OWNER']],
       ['manager', ['ADMIN', 'OWNER', 'MANAGER']],
       ['worker', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
-      ['admin/analyse', ['ADMIN', 'OWNER']]
+      ['admin/analyse', ['ADMIN', 'OWNER']],
+      ['admin/dictionaries', ['ADMIN', 'OWNER', 'MANAGER']]
     ];
 
     protectedRoutes.forEach(([path, roles]) => {

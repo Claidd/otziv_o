@@ -8,7 +8,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Data
@@ -25,11 +27,15 @@ public class ReviewArchive {
     private String text;
     @Column(name = "review_archive_answer")
     private String answer;
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_archive_category")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Category category;
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_archive_subcategory")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private SubCategory subCategory;
 
 }

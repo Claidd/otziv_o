@@ -3,6 +3,7 @@ import type { OrderCardItem } from '../../core/manager.api';
 import type {
   WorkerApi,
   WorkerBotItem,
+  WorkerBoard,
   WorkerReviewItem,
   WorkerSection
 } from '../../core/worker.api';
@@ -31,6 +32,7 @@ export type WorkerBoardActionFacadeDeps = {
   activeSection: Signal<WorkerSection>;
   mutationKey: WritableSignal<string | null>;
   loadBoard: () => void;
+  patchBoard?: (updater: (board: WorkerBoard) => WorkerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
 };
 
@@ -43,6 +45,7 @@ export class WorkerBoardActionFacade {
 
     this.deps.workerApi.updateOrderStatus(order.id, action.status).subscribe({
       next: () => {
+        this.patchOrder(order.id, { status: action.status });
         this.deps.mutationKey.set(null);
         this.deps.toastService.success('Статус изменен', `${order.companyTitle}: ${action.status}`);
         this.deps.loadBoard();
@@ -208,5 +211,18 @@ export class WorkerBoardActionFacade {
         this.deps.toastService.error('Выгул не выполнен', this.deps.errorMessage(err, 'Не удалось отметить выгул'));
       }
     });
+  }
+
+  private patchOrder(orderId: number, patch: Partial<OrderCardItem>): void {
+    this.deps.patchBoard?.((board) => ({
+      ...board,
+      orders: {
+        ...board.orders,
+        content: board.orders.content.map((order) => order.id === orderId
+          ? { ...order, ...patch }
+          : order
+        )
+      }
+    }));
   }
 }

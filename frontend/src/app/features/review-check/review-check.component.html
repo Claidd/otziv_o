@@ -14,11 +14,7 @@
     }
 
     @if (error()) {
-      <div class="empty-state error-state">
-        <span class="material-icons-sharp">error</span>
-        <p>{{ error() }}</p>
-        <button type="button" class="secondary ghost" (click)="loadReviewCheck()">Повторить</button>
-      </div>
+      <app-load-error-card title="Проверка отзывов не загрузилась" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadReviewCheck()" />
     }
 
     @if (details(); as details) {

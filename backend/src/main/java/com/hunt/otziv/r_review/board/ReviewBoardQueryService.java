@@ -113,7 +113,7 @@ public class ReviewBoardQueryService {
         String orderBy = " ORDER BY r.publishedDate " + direction + ", r.id " + direction;
 
         TypedQuery<Long> idQuery = entityManager.createQuery(
-                "SELECT DISTINCT r.id FROM Review r " + joins + where + orderBy,
+                "SELECT r.id FROM Review r " + joins + where + " GROUP BY r.id, r.publishedDate" + orderBy,
                 Long.class
         );
         TypedQuery<Long> countQuery = entityManager.createQuery(

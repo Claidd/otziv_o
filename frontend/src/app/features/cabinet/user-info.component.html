@@ -17,7 +17,7 @@
   </section>
 
   @if (error()) {
-    <p class="load-error">{{ error() }}</p>
+    <app-load-error-card title="Профиль не загрузился" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="refresh()" />
   }
 
   @if (payload()) {

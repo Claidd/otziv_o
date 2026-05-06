@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
-FROM maven:3.9.8-eclipse-temurin-22-alpine AS build
+FROM maven:3.9.15-eclipse-temurin-26-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp clean package -DskipTests
 
-FROM eclipse-temurin:22-jre-jammy
+FROM eclipse-temurin:26-jre-jammy
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client \
     && rm -rf /var/lib/apt/lists/*

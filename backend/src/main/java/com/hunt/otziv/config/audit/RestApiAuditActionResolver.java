@@ -232,6 +232,7 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/admin/users/assignment-options", "загрузка вариантов назначений пользователей");
         put(actions, "POST", "/api/admin/users", "создание пользователя \"{username}\"");
         put(actions, "PUT", "/api/admin/users/{id}", "редактирование пользователя {id}");
+        put(actions, "DELETE", "/api/admin/users/{id}", "удаление пользователя {id}");
         put(actions, "GET", "/api/admin/users/{id}/assignments", "загрузка назначений пользователя {id}");
         put(actions, "PUT", "/api/admin/users/{id}/assignments", "редактирование назначений пользователя {id}");
 

@@ -134,9 +134,9 @@ public class BotServiceImpl implements BotService {
     // Найти бота по id
     @Override
     public BotDTO findById(Long id) { // Найти бота по id
-        Bot bot = botsRepository.findById(id).orElse(null);
+        Bot bot = botsRepository.findByIdWithAdminDetails(id).orElse(null);
         if(bot == null){
-            throw new UsernameNotFoundException("User not found with name: " + bot.getLogin());
+            throw new UsernameNotFoundException("Bot not found with id: " + id);
         }
         return toDto(bot);
     } // Найти бота по id
@@ -145,7 +145,6 @@ public class BotServiceImpl implements BotService {
     public BotDTO findByWorker(Principal principal) { // Найти бота по Работнику
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
         log.info("вошли в поиск бота по работнику");
-        System.out.println(botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null));
         if (worker != null){
             log.info("работник не нулл");
             Bot bot = botsRepository.findFirstByWorkerOrderByIdDesc(worker).orElse(null);
@@ -163,7 +162,7 @@ public class BotServiceImpl implements BotService {
     @Override
     public Bot findBotById(Long id) { // Найти бота по id
         /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
-        Bot saveBot = botsRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
+        Bot saveBot = botsRepository.findByIdWithAdminDetails(id).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель с ID '%s' не найден", id)
         ));
         return saveBot;
@@ -172,7 +171,7 @@ public class BotServiceImpl implements BotService {
     @Override
     public List<BotDTO> getAllBots() { // Найти всех ботов
         log.info("Берем все юзеров");
-        return botsRepository.findAll().stream()
+        return botsRepository.findAllWithAdminDetails().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     } // Найти всех ботов
@@ -256,7 +255,7 @@ public class BotServiceImpl implements BotService {
                 .fio(bot.getFio())
                 .active(bot.isActive())
                 .counter(bot.getCounter())
-                .status(bot.getStatus().getBotStatusTitle())
+                .status(bot.getStatus() != null ? bot.getStatus().getBotStatusTitle() : null)
                 .worker(bot.getWorker() != null ? bot.getWorker() : null)
                 .botCity(bot.getBotCity())
                 .build();

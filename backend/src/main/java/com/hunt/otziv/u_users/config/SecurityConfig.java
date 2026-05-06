@@ -11,11 +11,9 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,7 +35,6 @@ import java.util.Set;
 @EnableWebSecurity
 @Configuration
 @EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
-@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     private final UserServiceImpl userService;
@@ -58,6 +55,7 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/css/**", "/font/**", "/images/**", "/js/**", "/webjars/**", "/static/**").permitAll()
                         .requestMatchers("/auth", "/login", "/register").permitAll()
                         .requestMatchers("/kvesty", "/lasertag", "/nerf", "/api/index", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
@@ -67,12 +65,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                         .requestMatchers("/api/cabinet/score").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers("/api/operator/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR")
                         .requestMatchers("/api/companies/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/leads/board").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
                         .requestMatchers(HttpMethod.GET, "/api/leads/edit-options").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
-                        .requestMatchers(HttpMethod.POST, "/api/leads").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG")
+                        .requestMatchers(HttpMethod.POST, "/api/leads").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR", "MARKETOLOG")
                         .requestMatchers(HttpMethod.PUT, "/api/leads/*").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/api/leads/*").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers(HttpMethod.POST, "/api/leads/*/status/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
@@ -153,17 +152,11 @@ public class SecurityConfig {
 
 
 
-//    настройка доступа к внутренним файлам
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer(){
-        return (web -> web.ignoring().requestMatchers("/css/**","/font/**","/images/**", "/js/**", "/webjars/**", "/static/**"));
-    }
 //    3
     @Bean
     public DaoAuthenticationProvider daoAuthenticationProvider(){
-        DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider();
+        DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider(userService);
         daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
-        daoAuthenticationProvider.setUserDetailsService(userService);
         return daoAuthenticationProvider;
     }
 

@@ -12,14 +12,17 @@ import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.UpdateUserAssignmentsRequest;
 import com.hunt.otziv.u_users.dto.UserAssignmentsResponse;
 import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
+import com.hunt.otziv.u_users.services.service.ImageService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
@@ -28,8 +31,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,6 +42,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -55,8 +61,11 @@ public class KeycloakUserProvisioningService {
     private static final BigDecimal DEFAULT_COEFFICIENT = new BigDecimal("0.05");
     private static final String KEYCLOAK_AUTH_PROVIDER = "KEYCLOAK";
     private static final String CLIENT_ROLE = "CLIENT";
+    private static final String ADMIN_ROLE = "ROLE_ADMIN";
+    private static final String ADMIN_KEYCLOAK_ROLE = "ADMIN";
 
     private final UserRepository userRepository;
+    private final ImageRepository imageRepository;
     private final RoleRepository roleRepository;
     private final KeycloakAdminClient keycloakAdminClient;
     private final PasswordEncoder passwordEncoder;
@@ -64,6 +73,7 @@ public class KeycloakUserProvisioningService {
     private final ManagerService managerService;
     private final WorkerService workerService;
     private final MarketologService marketologService;
+    private final ImageService imageService;
 
     @Transactional
     public CreatedKeycloakUserResponse createUser(CreateKeycloakUserRequest request) {
@@ -148,6 +158,16 @@ public class KeycloakUserProvisioningService {
         Set<String> newKeycloakRoles = normalizeKeycloakRoles(request.getRoles());
         List<Role> newLocalRoles = findLocalRoles(newKeycloakRoles);
 
+        if (hasLocalRole(user, ADMIN_ROLE)) {
+            if (!request.isEnabled()) {
+                throw new ResponseStatusException(FORBIDDEN, "Admin users cannot be disabled.");
+            }
+
+            if (!newKeycloakRoles.contains(ADMIN_KEYCLOAK_ROLE)) {
+                throw new ResponseStatusException(FORBIDDEN, "Admin role cannot be removed from an admin user.");
+            }
+        }
+
         keycloakAdminClient.updateUser(user.getKeycloakId(), user.getUsername(), request);
         replaceKeycloakRealmRoles(user.getKeycloakId(), oldKeycloakRoles, newKeycloakRoles);
 
@@ -165,6 +185,48 @@ public class KeycloakUserProvisioningService {
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
         userRepository.flush();
+
+        return toAdminResponse(user);
+    }
+
+    @Transactional
+    public void deleteUser(Long userId) {
+        User user = findUserWithAssignments(userId);
+
+        if (hasLocalRole(user, ADMIN_ROLE)) {
+            throw new ResponseStatusException(FORBIDDEN, "Admin users cannot be deleted.");
+        }
+
+        String keycloakId = user.getKeycloakId();
+
+        deleteRoleAssignments(user);
+        userRepository.delete(user);
+        userRepository.flush();
+
+        keycloakAdminClient.deleteUserStrict(keycloakId);
+    }
+
+    @Transactional
+    public AdminUserResponse updateUserPhoto(Long userId, MultipartFile photo) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+
+        if (photo == null || photo.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Profile photo is required");
+        }
+
+        if (!isSupportedProfileImage(photo)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only jpg, jpeg, png and webp images are supported");
+        }
+
+        Image oldImage = user.getImage();
+        Image newImage = imageService.saveCompressedProfileImage(photo);
+        user.setImage(newImage);
+        userRepository.flush();
+
+        if (oldImage != null) {
+            imageRepository.delete(oldImage);
+        }
 
         return toAdminResponse(user);
     }
@@ -368,6 +430,13 @@ public class KeycloakUserProvisioningService {
                 .filter(role -> !oldLocalRoleNames.contains(role.getName()))
                 .toList();
         createRoleAssignments(user, rolesToCreate);
+    }
+
+    private void deleteRoleAssignments(User user) {
+        managerService.deleteManager(user);
+        workerService.deleteWorker(user);
+        operatorService.deleteOperator(user);
+        marketologService.deleteMarketolog(user);
     }
 
     private void replaceLocalRoles(User user, Collection<Role> newRoles) {
@@ -613,6 +682,7 @@ public class KeycloakUserProvisioningService {
                 .fio(user.getFio())
                 .phoneNumber(user.getPhoneNumber())
                 .coefficient(user.getCoefficient())
+                .imageId(user.getImage() == null ? null : user.getImage().getId())
                 .active(user.isActive())
                 .createTime(user.getCreateTime())
                 .lastLoginAt(user.getLastLoginAt())
@@ -686,6 +756,19 @@ public class KeycloakUserProvisioningService {
         }
 
         return value.trim();
+    }
+
+    private boolean isSupportedProfileImage(MultipartFile file) {
+        String fileName = file.getOriginalFilename();
+        if (!hasText(fileName)) {
+            return false;
+        }
+
+        String normalized = fileName.toLowerCase(Locale.ROOT);
+        return normalized.endsWith(".jpg")
+                || normalized.endsWith(".jpeg")
+                || normalized.endsWith(".png")
+                || normalized.endsWith(".webp");
     }
 
     private boolean hasText(String value) {

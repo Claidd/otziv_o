@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ManagerApi, OrderCardItem } from '../../core/manager.api';
 import {
@@ -11,6 +11,8 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
 import {
   DEFAULT_WORKER_PERMISSIONS,
@@ -51,6 +53,7 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
   imports: [
     AdminLayoutComponent,
     FormsModule,
+    LoadErrorCardComponent,
     WorkerOrderCardComponent,
     WorkerOrderEditModalComponent,
     WorkerReviewCardComponent,
@@ -59,7 +62,7 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
 })
-export class WorkerBoardComponent {
+export class WorkerBoardComponent implements OnDestroy {
   private readonly workerApi = inject(WorkerApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
@@ -81,6 +84,8 @@ export class WorkerBoardComponent {
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
+  readonly boardNoticeVisible = signal(false);
+  private boardNoticeTimer: number | null = null;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
   readonly currentReviews = computed(() => this.board()?.reviews.content ?? []);
@@ -109,6 +114,8 @@ export class WorkerBoardComponent {
     managerApi: this.managerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
+    board: this.board,
+    setBoardPatch: (board) => this.setBoardPatch(board),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
     clearReviewEditDrafts: (reviewId) => this.noteFacade.clearReviewEditDrafts(reviewId),
     canOpenOrderEditModal: () => this.canOpenOrderEditModal(),
@@ -122,6 +129,7 @@ export class WorkerBoardComponent {
     activeSection: this.activeSection,
     mutationKey: this.mutationKey,
     loadBoard: () => this.loadBoard(),
+    patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback)
   });
   readonly editOrder = this.editFacade.editOrder;
@@ -159,6 +167,10 @@ export class WorkerBoardComponent {
     this.loadBoard();
   }
 
+  ngOnDestroy(): void {
+    this.clearBoardNoticeTimer();
+  }
+
   @HostListener('window:keydown.escape')
   closeModalsFromKeyboard(): void {
     this.closeOrderEdit();
@@ -168,6 +180,7 @@ export class WorkerBoardComponent {
   loadBoard(): void {
     this.loading.set(true);
     this.error.set(null);
+    this.hideBoardNotice();
 
     this.workerApi.getBoard({
       section: this.activeSection(),
@@ -186,6 +199,7 @@ export class WorkerBoardComponent {
         }
 
         if (board.message) {
+          this.showBoardNotice();
           const title = board.warning ? 'Раздел закрыт - окончите Выгул!' : 'Специалист';
           board.warning ? this.toastService.error(title, board.message) : this.toastService.success(title, board.message);
         }
@@ -415,7 +429,7 @@ export class WorkerBoardComponent {
   }
 
   async copyPhone(phone?: string): Promise<void> {
-    await this.copyText(phone ?? '', 'телефон', 'Телефон скопирован');
+    await this.copyText(phoneDigits(phone), 'телефон', 'Телефон скопирован');
   }
 
   async copyOrderText(order: OrderCardItem, kind: 'check' | 'payment'): Promise<void> {
@@ -552,6 +566,10 @@ export class WorkerBoardComponent {
     }
   }
 
+  private patchBoard(updater: (board: WorkerBoard) => WorkerBoard): void {
+    this.board.update((board) => board ? updater(board) : board);
+  }
+
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
     const value = text.trim();
 
@@ -575,5 +593,28 @@ export class WorkerBoardComponent {
 
   private errorMessage(err: unknown, fallback: string): string {
     return workerErrorMessage(err, fallback);
+  }
+
+  private showBoardNotice(): void {
+    this.clearBoardNoticeTimer();
+    this.boardNoticeVisible.set(true);
+    this.boardNoticeTimer = window.setTimeout(() => {
+      this.boardNoticeVisible.set(false);
+      this.boardNoticeTimer = null;
+    }, 3000);
+  }
+
+  private hideBoardNotice(): void {
+    this.clearBoardNoticeTimer();
+    this.boardNoticeVisible.set(false);
+  }
+
+  private clearBoardNoticeTimer(): void {
+    if (this.boardNoticeTimer === null) {
+      return;
+    }
+
+    window.clearTimeout(this.boardNoticeTimer);
+    this.boardNoticeTimer = null;
   }
 }

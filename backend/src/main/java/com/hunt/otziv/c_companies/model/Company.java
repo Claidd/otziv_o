@@ -120,17 +120,14 @@ public class Company {
     private String commentsCompany;
 
     //    время создания пользователя
-    @Temporal(TemporalType.DATE)
     @Column(name = "create_date", nullable = false)
     private LocalDate createDate;
 
     //    дата и время обновления статуса
-    @Temporal(TemporalType.DATE)
     @Column(name = "update_status")
     private LocalDate updateStatus;
 
     //    дата и время нового отправления предложения
-    @Temporal(TemporalType.DATE)
     @Column(name = "date_new_try")
     private LocalDate dateNewTry;
 

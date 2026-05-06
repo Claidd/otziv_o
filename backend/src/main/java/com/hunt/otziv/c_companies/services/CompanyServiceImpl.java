@@ -421,7 +421,7 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
         companyDTO.setCity(leadDTO.getCityLead());
         companyDTO.setUser(convertToUserDtoToManager(principal));
-        companyDTO.setOperator(leadDTO.getOperator().getUser().getFio());
+        companyDTO.setOperator(leadOperatorName(leadDTO));
         companyDTO.setManager(convertToManagerDto(leadDTO.getManager()));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
@@ -499,7 +499,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setTelephone(leadDTO.getTelephoneLead());
             companyDTO.setCity(leadDTO.getCityLead());
             companyDTO.setUser(convertToUserDto(manager.getUser()));
-            companyDTO.setOperator(leadDTO.getOperator().getUser().getFio());
+            companyDTO.setOperator(leadOperatorName(leadDTO));
             companyDTO.setManager(convertToManagerDto(manager));
             companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
             companyDTO.setFilial(new FilialDTO());
@@ -541,6 +541,12 @@ public class CompanyServiceImpl implements CompanyService{
                 manager.getUser().getFio(), selectedWorker.getUser().getFio());
 
         return companyDTO;
+    }
+
+    private String leadOperatorName(LeadDTO leadDTO) {
+        return leadDTO != null && leadDTO.getOperator() != null && leadDTO.getOperator().getUser() != null
+                ? leadDTO.getOperator().getUser().getFio()
+                : null;
     }
 
 

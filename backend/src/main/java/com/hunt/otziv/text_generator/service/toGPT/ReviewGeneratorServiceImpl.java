@@ -3,12 +3,10 @@ package com.hunt.otziv.text_generator.service.toGPT;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
-import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
-import com.theokanning.openai.OpenAiHttpException;
-import com.theokanning.openai.completion.chat.ChatCompletionRequest;
-import com.theokanning.openai.completion.chat.ChatCompletionResult;
-import com.theokanning.openai.completion.chat.ChatMessage;
-import com.theokanning.openai.service.OpenAiService;
+import com.openai.client.OpenAIClient;
+import com.openai.errors.OpenAIServiceException;
+import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,24 +18,31 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
-    private final OpenAiService openAiService;
+    private final OpenAIClient openAIClient;
+
+    private String createChatCompletion(String model, String systemMessage, String userMessage, double temperature, long maxTokens) {
+        ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                .model(model)
+                .addSystemMessage(systemMessage)
+                .addUserMessage(userMessage)
+                .temperature(temperature)
+                .maxCompletionTokens(maxTokens)
+                .build();
+
+        ChatCompletion result = openAIClient.chat().completions().create(params);
+        return result.choices().getFirst().message().content().orElse("").trim();
+    }
 
 
     public String safeGenerateSingleReview(PromptDTO promptDTO) {
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-//                .model("gpt-3.5-turbo")
-                .model("gpt-4o")
-                .messages(List.of(
-                        new ChatMessage("system", "Ты человек пишуший отзыв о компании в которой был. " +promptDTO.getSystem()),
-                        new ChatMessage("user", promptDTO.getPrompt() )
-                ))
-                .temperature(promptDTO.getTemperature())
-                .maxTokens(400)
-                .build();
-
         try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            String content = result.getChoices().getFirst().getMessage().getContent().trim();
+            String content = createChatCompletion(
+                    "gpt-4o",
+                    "Ты человек пишуший отзыв о компании в которой был. " + promptDTO.getSystem(),
+                    promptDTO.getPrompt(),
+                    promptDTO.getTemperature(),
+                    400
+            );
             log.info("✅ Получен отзыв ({} токенов)", content.length());
             return content;
         } catch (Exception e) {
@@ -47,20 +52,14 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
     }
 
     public String minusSlova(String text) {
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-//                .model("gpt-3.5-turbo")
-                .model("gpt-4o")
-                .messages(List.of(
-                        new ChatMessage("system", "Ты - Редактор текстов отзывов, который делает тексты более человечными. "),
-                        new ChatMessage("user","Перепиши текст отзыва в более обычном разговорном стиле, без клише, восторгов и ярких эмоций. Но смайлы, если есть, можешь оставлять. Вот текст: " + text + "Убери  слова и словосочетания такие как - в восторге, превзошло все ожидания, это то, что нам нужно, невероятно, были отзывчивы, атмосферу, были в восторге, просто супер, на высшем уровне, был безупречным, настоящая находка, сразу понял/поняла это то что нужно, был приятно удивлен ")
-                ))
-                .temperature(0.8)
-                .maxTokens(400)
-                .build();
-
         try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            String content = result.getChoices().getFirst().getMessage().getContent().trim();
+            String content = createChatCompletion(
+                    "gpt-4o",
+                    "Ты - Редактор текстов отзывов, который делает тексты более человечными. ",
+                    "Перепиши текст отзыва в более обычном разговорном стиле, без клише, восторгов и ярких эмоций. Но смайлы, если есть, можешь оставлять. Вот текст: " + text + "Убери  слова и словосочетания такие как - в восторге, превзошло все ожидания, это то, что нам нужно, невероятно, были отзывчивы, атмосферу, были в восторге, просто супер, на высшем уровне, был безупречным, настоящая находка, сразу понял/поняла это то что нужно, был приятно удивлен ",
+                    0.8,
+                    400
+            );
             log.info("✅ Получен отзыв ({} токенов)", content.length());
             return content;
         } catch (Exception e) {
@@ -72,17 +71,13 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
 
     public String safeAnalyzeSiteTextNoShablon(String siteRaw) {
         try {
-            ChatCompletionRequest request = ChatCompletionRequest.builder()
-                    .model("gpt-3.5-turbo")
-                    .messages(List.of(
-                            new ChatMessage("system", "Ты помощник, который структурирует текст сайта для генерации отзывов."),
-                            new ChatMessage("user", "Изучи, проанализируй информацию и сделай краткую выжимку самой важной информации. Вот текст:\n" +
-                                    siteRaw )
-                    ))
-                    .build();
-
-            return openAiService.createChatCompletion(request)
-                    .getChoices().getFirst().getMessage().getContent();
+            return createChatCompletion(
+                    "gpt-3.5-turbo",
+                    "Ты помощник, который структурирует текст сайта для генерации отзывов.",
+                    "Изучи, проанализируй информацию и сделай краткую выжимку самой важной информации. Вот текст:\n" + siteRaw,
+                    1.0,
+                    400
+            );
 
         } catch (Exception e) {
             log.error("⚠️ Ошибка при анализе текста сайта: {}", e.getMessage());
@@ -126,19 +121,14 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
             userPrompt.append("Отзыв ").append(i + 1).append(": ").append(rawReviews.get(i)).append("\n\n");
         }
 
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-                .model("gpt-4o")
-                .messages(List.of(
-                        new ChatMessage("system", "Ты редактор пользовательских отзывов."),
-                        new ChatMessage("user", userPrompt.toString())
-                ))
-                .temperature(0.9)
-                .maxTokens(400)
-                .build();
-
         try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            String jsonContent = result.getChoices().getFirst().getMessage().getContent().trim();
+            String jsonContent = createChatCompletion(
+                    "gpt-4o",
+                    "Ты редактор пользовательских отзывов.",
+                    userPrompt.toString(),
+                    0.9,
+                    400
+            );
 
 // Убираем markdown-форматирование
             jsonContent = jsonContent.replaceAll("(?s)^```(?:json)?|```$", "").trim();
@@ -197,20 +187,9 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
 //        Объём: 2–3 абзаца. Следуй инструкции по написанию %s
 //        """, category, tone, site, promtText);
 
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-                .model("gpt-4o") // или "gpt-3.5-turbo"
-                .messages(List.of(
-                        new ChatMessage("system", "Ты — профессиональный копирайтер."),
-                        new ChatMessage("user", prompt)
-                ))
-                .temperature(0.8)
-                .maxTokens(300)
-                .build();
-
         try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            return result.getChoices().getFirst().getMessage().getContent();
-        } catch (OpenAiHttpException e) {
+            return createChatCompletion("gpt-4o", "Ты — профессиональный копирайтер.", prompt, 0.8, 300);
+        } catch (OpenAIServiceException e) {
             log.error("Ошибка OpenAI: {}", e.getMessage());
             return "⚠️ Ошибка при генерации отзыва: лимит API исчерпан или временно недоступен.";
         } catch (Exception e) {
@@ -240,20 +219,8 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
 Разделяй отзывы пустой строкой.
 """, count, category, tone, site);
 
-        ChatCompletionRequest request = ChatCompletionRequest.builder()
-//                .model("gpt-4o")
-                .model("gpt-3.5-turbo")
-                .messages(List.of(
-                        new ChatMessage("system", "Ты — профессиональный копирайтер."),
-                        new ChatMessage("user", prompt)
-                ))
-                .temperature(0.9)
-                .maxTokens(300 * count) // запас на все отзывы
-                .build();
-
         try {
-            ChatCompletionResult result = openAiService.createChatCompletion(request);
-            String rawText = result.getChoices().getFirst().getMessage().getContent();
+            String rawText = createChatCompletion("gpt-3.5-turbo", "Ты — профессиональный копирайтер.", prompt, 0.9, 300L * count);
 
             // Разделяем по пустым строкам
             return Arrays.stream(rawText.split("\n\\s*\n"))
@@ -261,7 +228,7 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
                     .filter(s -> !s.isBlank())
                     .toList();
 
-        } catch (OpenAiHttpException e) {
+        } catch (OpenAIServiceException e) {
             log.error("Ошибка OpenAI: {}", e.getMessage());
             return List.of("⚠️ Ошибка при генерации отзыва.");
         } catch (Exception e) {
@@ -274,37 +241,28 @@ public class ReviewGeneratorServiceImpl implements ReviewGeneratorService {
 
     public String safeAnalyzeSiteText(String siteRaw) {
         try {
-            ChatCompletionRequest request = ChatCompletionRequest.builder()
-                    .model("gpt-3.5-turbo")
-                    .messages(List.of(
-                            new ChatMessage("system", "Ты помощник, который структурирует текст сайта для генерации отзывов."),
-                            new ChatMessage("user", "На основе следующего текста выдели и кратко ответь по шаблону на вопросы:\n" +
-                                    siteRaw +
-                                    "\n\nШаблон:\n" +
-                                    "1. Название и адрес филиалов:\n" +
-                                    "2. Основная сфера деятельности:\n" +
-                                    "3. Как давно вы работают:\n" +
-                                    "4. Что именно вы предлагают:\n" +
-                                    "5. Как выглядит вход:\n" +
-                                    "6. Интерьер:\n" +
-                                    "7. Парковка и удобства:\n" +
-                                    "8. Укажи название каждого товара/услуги и их Цену:\n" +
-//                                    "9. Хиты продаж:\n" +
-                                    "10. Уникальные предложения:\n" +
-                                    "11. Имена и должности ключевых сотрудников:\n" +
-                                    "12. Опыт, специализация:\n" +
-//                                    "13. Акции и скидки:\n" +
-//                                    "14. Фразы для отзыва:\n" +
-//                                    "15. Цитаты клиентов:\n" +
-//                                    "16. Как происходит заказ:\n" +
-//                                    "17. Гарантии и возвраты:\n" +
-                                    "18. Срок выполнения:\n" +
-                                    "19. Прочая информация:")
-                    ))
-                    .build();
-
-            return openAiService.createChatCompletion(request)
-                    .getChoices().get(0).getMessage().getContent();
+            return createChatCompletion(
+                    "gpt-3.5-turbo",
+                    "Ты помощник, который структурирует текст сайта для генерации отзывов.",
+                    "На основе следующего текста выдели и кратко ответь по шаблону на вопросы:\n" +
+                            siteRaw +
+                            "\n\nШаблон:\n" +
+                            "1. Название и адрес филиалов:\n" +
+                            "2. Основная сфера деятельности:\n" +
+                            "3. Как давно вы работают:\n" +
+                            "4. Что именно вы предлагают:\n" +
+                            "5. Как выглядит вход:\n" +
+                            "6. Интерьер:\n" +
+                            "7. Парковка и удобства:\n" +
+                            "8. Укажи название каждого товара/услуги и их Цену:\n" +
+                            "10. Уникальные предложения:\n" +
+                            "11. Имена и должности ключевых сотрудников:\n" +
+                            "12. Опыт, специализация:\n" +
+                            "18. Срок выполнения:\n" +
+                            "19. Прочая информация:",
+                    1.0,
+                    700
+            );
 
         } catch (Exception e) {
             log.error("⚠️ Ошибка при анализе текста сайта: {}", e.getMessage());

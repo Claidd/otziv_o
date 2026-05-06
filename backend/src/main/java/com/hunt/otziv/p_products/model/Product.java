@@ -27,8 +27,9 @@ public class Product {
     @Column(name = "product_photo")
     private Boolean photo;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_category")
-    @ToString.Include
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private ProductCategory productCategory;
 }

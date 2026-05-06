@@ -13,8 +13,8 @@
   </header>
 
   <div class="phone-row">
-    <a [href]="companyChatUrl()" target="_blank" rel="noopener">{{ company.telephone || '-' }}</a>
-    <button type="button" (click)="phoneCopied.emit(company.telephone)" title="Скопировать телефон">
+    <a [href]="companyChatUrl()" target="_blank" rel="noopener">{{ companyPhoneLabel() }}</a>
+    <button type="button" (click)="phoneCopied.emit(companyPhoneForCopy())" title="Скопировать телефон">
       {{ copied === 'телефон' ? '✓' : 'T' }}
     </button>
   </div>

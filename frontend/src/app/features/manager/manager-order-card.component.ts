@@ -3,6 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { OrderCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
+import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
   SelectedCompany,
   StatusAction,
@@ -16,6 +17,8 @@ import {
   trackManagerAction
 } from './manager-board.config';
 
+type CategoryPopover = 'category' | 'subcategory';
+
 @Component({
   selector: 'app-manager-order-card',
   imports: [CompanyNoteTriggerComponent, DecimalPipe, RouterLink],
@@ -28,6 +31,7 @@ export class ManagerOrderCardComponent {
   @Input() actions: StatusAction[] = [];
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
+  activeCategoryPopover: CategoryPopover | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
   @Output() readonly orderNoteSaved = new EventEmitter<string>();
@@ -46,6 +50,38 @@ export class ManagerOrderCardComponent {
 
   orderReviewUrl(): string {
     return managerOrderReviewUrl(this.order);
+  }
+
+  orderPhoneLabel(): string {
+    return formatPhoneForDisplay(this.order.companyTelephone);
+  }
+
+  orderPhoneForCopy(): string {
+    return phoneDigits(this.order.companyTelephone);
+  }
+
+  categoryLabel(): string {
+    return this.order.categoryTitle || 'Категория';
+  }
+
+  subCategoryLabel(): string {
+    return this.order.subCategoryTitle || 'Подкатегория';
+  }
+
+  toggleCategoryPopover(field: CategoryPopover): void {
+    this.activeCategoryPopover = this.activeCategoryPopover === field ? null : field;
+  }
+
+  categoryPopoverText(): string | null {
+    if (this.activeCategoryPopover === 'category') {
+      return this.categoryLabel();
+    }
+
+    if (this.activeCategoryPopover === 'subcategory') {
+      return this.subCategoryLabel();
+    }
+
+    return null;
   }
 
   payableOrderSum(): number {

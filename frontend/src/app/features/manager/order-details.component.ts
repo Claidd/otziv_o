@@ -7,6 +7,8 @@ import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
 import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
@@ -16,7 +18,7 @@ type ReviewEditDraft = ReviewUpdateRequest;
 
 @Component({
   selector: 'app-order-details',
-  imports: [AdminLayoutComponent, DecimalPipe, FormsModule],
+  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent],
   templateUrl: './order-details.component.html',
   styleUrl: './order-details.component.scss'
 })
@@ -949,22 +951,6 @@ export class OrderDetailsComponent {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (err && typeof err === 'object' && 'error' in err) {
-      const body = (err as { error?: { message?: string } | string }).error;
-
-      if (typeof body === 'string' && body.trim()) {
-        return body;
-      }
-
-      if (body && typeof body === 'object' && 'message' in body && body.message) {
-        return body.message;
-      }
-    }
-
-    if (err && typeof err === 'object' && 'message' in err) {
-      return String((err as { message?: string }).message ?? fallback);
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

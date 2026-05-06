@@ -48,7 +48,7 @@ import java.util.stream.StreamSupport;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin")
-@PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+@PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
 public class ApiAdminDictionaryController {
 
     private final CategoryRepository categoryRepository;
@@ -144,6 +144,7 @@ public class ApiAdminDictionaryController {
     }
 
     @GetMapping("/cities")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public List<CityResponse> getCities(String keyword) {
         return cityRepository.findAll().stream()
                 .filter(city -> matches(keyword, city.getTitle()))
@@ -154,6 +155,7 @@ public class ApiAdminDictionaryController {
 
     @PostMapping("/cities")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public CityResponse createCity(@RequestBody TitleRequest request) {
         City city = City.builder()
                 .title(requiredTitle(request.title()))
@@ -162,6 +164,7 @@ public class ApiAdminDictionaryController {
     }
 
     @PutMapping("/cities/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public CityResponse updateCity(@PathVariable Long id, @RequestBody TitleRequest request) {
         City city = cityRepository.findById(id);
         if (city == null) {
@@ -173,6 +176,7 @@ public class ApiAdminDictionaryController {
 
     @DeleteMapping("/cities/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteCity(@PathVariable Long id) {
         City city = cityRepository.findById(id);
         if (city == null) {
@@ -182,6 +186,7 @@ public class ApiAdminDictionaryController {
     }
 
     @GetMapping("/products")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ProductsResponse getProducts(String keyword) {
         List<ProductResponse> products = StreamSupport.stream(productRepository.findAll().spliterator(), false)
                 .filter(product -> matches(keyword, product.getTitle())
@@ -195,6 +200,7 @@ public class ApiAdminDictionaryController {
 
     @PostMapping("/products")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ProductResponse createProduct(@RequestBody ProductRequest request) {
         ProductCategory category = productCategoryRepository
                 .findById(requiredId(request.categoryId(), "Категория продукта обязательна"))
@@ -211,6 +217,7 @@ public class ApiAdminDictionaryController {
     }
 
     @PutMapping("/products/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ProductResponse updateProduct(@PathVariable Long id, @RequestBody ProductRequest request) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> notFound("Продукт не найден"));
@@ -228,6 +235,7 @@ public class ApiAdminDictionaryController {
 
     @DeleteMapping("/products/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteProduct(@PathVariable Long id) {
         if (!productRepository.existsById(id)) {
             throw notFound("Продукт не найден");
@@ -236,10 +244,11 @@ public class ApiAdminDictionaryController {
     }
 
     @GetMapping("/bots")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public BotsResponse getBots(String keyword) {
-        List<BotResponse> bots = botsRepository.findAllWithAdminDetails().stream()
+        List<BotResponse> bots = botsRepository.findAllAdminRows().stream()
                 .filter(bot -> matchesBot(keyword, bot))
-                .sorted(Comparator.comparing(Bot::getFio, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .sorted(Comparator.comparing(BotsRepository.AdminBotRow::getFio, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(this::toBotResponse)
                 .toList();
 
@@ -247,6 +256,7 @@ public class ApiAdminDictionaryController {
     }
 
     @GetMapping("/bots/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public BotResponse getBot(@PathVariable Long id) {
         return botsRepository.findByIdWithAdminDetails(id)
                 .map(this::toBotResponse)
@@ -254,12 +264,14 @@ public class ApiAdminDictionaryController {
     }
 
     @PostMapping("/bots/import")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public BotImportResult importBots(@RequestParam("file") MultipartFile file) {
         return botImportService.importBots(file);
     }
 
     @PostMapping("/bots")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public BotResponse createBot(@RequestBody BotRequest request) {
         String login = requiredText(request.login(), "Логин обязателен");
         assertLoginAvailable(login, null);
@@ -279,6 +291,7 @@ public class ApiAdminDictionaryController {
     }
 
     @PutMapping("/bots/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public BotResponse updateBot(@PathVariable Long id, @RequestBody BotRequest request) {
         Bot bot = botsRepository.findByIdWithAdminDetails(id)
                 .orElseThrow(() -> notFound("Аккаунт не найден"));
@@ -299,6 +312,7 @@ public class ApiAdminDictionaryController {
 
     @DeleteMapping("/bots/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteBot(@PathVariable Long id) {
         if (!botsRepository.existsById(id)) {
             throw notFound("Аккаунт не найден");
@@ -366,6 +380,23 @@ public class ApiAdminDictionaryController {
         );
     }
 
+    private BotResponse toBotResponse(BotsRepository.AdminBotRow bot) {
+        return new BotResponse(
+                bot.getId(),
+                safe(bot.getLogin()),
+                safe(bot.getPassword()),
+                safe(bot.getFio()),
+                Boolean.TRUE.equals(bot.getActive()),
+                bot.getCounter() == null ? 0 : bot.getCounter(),
+                bot.getStatusId() == null ? null : new OptionResponse(bot.getStatusId(), safe(bot.getStatusTitle())),
+                bot.getWorkerId() == null ? null : new OptionResponse(
+                        bot.getWorkerId(),
+                        workerTitle(bot.getWorkerId(), bot.getWorkerFio(), bot.getWorkerUsername())
+                ),
+                bot.getCityId() == null ? null : new OptionResponse(bot.getCityId(), safe(bot.getCityTitle()))
+        );
+    }
+
     private List<OptionResponse> productCategoryOptions() {
         return productCategoryRepository.findAll().stream()
                 .sorted(Comparator.comparing(ProductCategory::getTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
@@ -374,9 +405,9 @@ public class ApiAdminDictionaryController {
     }
 
     private List<OptionResponse> workerOptions() {
-        return workerRepository.findAllWithUserAndImage().stream()
+        return workerRepository.findWorkerOptions().stream()
                 .sorted(Comparator.comparing(this::workerTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
-                .map(this::toWorkerOption)
+                .map(worker -> new OptionResponse(worker.getId(), workerTitle(worker)))
                 .toList();
     }
 
@@ -481,14 +512,14 @@ public class ApiAdminDictionaryController {
         return value;
     }
 
-    private boolean matchesBot(String keyword, Bot bot) {
+    private boolean matchesBot(String keyword, BotsRepository.AdminBotRow bot) {
         return matches(keyword, String.valueOf(bot.getId()))
                 || matches(keyword, bot.getLogin())
                 || matches(keyword, bot.getPassword())
                 || matches(keyword, bot.getFio())
-                || matches(keyword, workerTitle(bot.getWorker()))
-                || matches(keyword, bot.getStatus() != null ? bot.getStatus().getBotStatusTitle() : null)
-                || matches(keyword, bot.getBotCity() != null ? bot.getBotCity().getTitle() : null);
+                || matches(keyword, workerTitle(bot.getWorkerId(), bot.getWorkerFio(), bot.getWorkerUsername()))
+                || matches(keyword, bot.getStatusTitle())
+                || matches(keyword, bot.getCityTitle());
     }
 
     private String workerTitle(Worker worker) {
@@ -508,6 +539,23 @@ public class ApiAdminDictionaryController {
 
         String username = safe(user.getUsername()).trim();
         return username.isBlank() ? "Worker #" + worker.getId() : username;
+    }
+
+    private String workerTitle(WorkerRepository.WorkerOptionRow worker) {
+        if (worker == null) {
+            return "";
+        }
+        return workerTitle(worker.getId(), worker.getFio(), worker.getUsername());
+    }
+
+    private String workerTitle(Long workerId, String fioValue, String usernameValue) {
+        String fio = safe(fioValue).trim();
+        if (!fio.isBlank()) {
+            return fio;
+        }
+
+        String username = safe(usernameValue).trim();
+        return username.isBlank() ? "Worker #" + workerId : username;
     }
 
     private boolean matches(String keyword, String value) {

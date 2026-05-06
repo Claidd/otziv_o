@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import type { OrderCardItem } from '../../core/manager.api';
 import type { WorkerPermissions, WorkerSection } from '../../core/worker.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
+import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
   DEFAULT_WORKER_PERMISSIONS,
   StatusAction,
@@ -16,6 +17,8 @@ import {
   workerOrderNoteText,
   workerShouldShowExpander
 } from './worker-board-note.helpers';
+
+type CategoryPopover = 'category' | 'subcategory';
 
 @Component({
   selector: 'app-worker-order-card',
@@ -36,6 +39,7 @@ export class WorkerOrderCardComponent {
   @Input() noteChanged = false;
   @Input() noteExpanded = false;
   @Input() canOpenEditModal = true;
+  activeCategoryPopover: CategoryPopover | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
   @Output() readonly phoneCopied = new EventEmitter<string | undefined>();
@@ -66,6 +70,38 @@ export class WorkerOrderCardComponent {
 
   orderChatUrl(): string {
     return this.order.companyUrlChat || `tel:${this.order.companyTelephone ?? ''}`;
+  }
+
+  orderPhoneLabel(): string {
+    return formatPhoneForDisplay(this.order.companyTelephone);
+  }
+
+  orderPhoneForCopy(): string {
+    return phoneDigits(this.order.companyTelephone);
+  }
+
+  categoryLabel(): string {
+    return this.order.categoryTitle || 'Категория';
+  }
+
+  subCategoryLabel(): string {
+    return this.order.subCategoryTitle || 'Подкатегория';
+  }
+
+  toggleCategoryPopover(field: CategoryPopover): void {
+    this.activeCategoryPopover = this.activeCategoryPopover === field ? null : field;
+  }
+
+  categoryPopoverText(): string | null {
+    if (this.activeCategoryPopover === 'category') {
+      return this.categoryLabel();
+    }
+
+    if (this.activeCategoryPopover === 'subcategory') {
+      return this.subCategoryLabel();
+    }
+
+    return null;
   }
 
   orderDetailsUrl(): string {

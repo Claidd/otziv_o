@@ -1,62 +1,64 @@
 <app-admin-layout title="Регистрация" active="register">
-  <form class="panel form-grid" [formGroup]="form" (ngSubmit)="submit()">
-    <label>
-      <span>Логин</span>
-      <input type="text" formControlName="username" autocomplete="username">
-    </label>
+  @if (!createdUser()) {
+    <form class="panel form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label>
+        <span>Логин</span>
+        <input type="text" formControlName="username" autocomplete="username">
+      </label>
 
-    <label>
-      <span>Email</span>
-      <input type="email" formControlName="email" autocomplete="email">
-    </label>
+      <label>
+        <span>Email</span>
+        <input type="email" formControlName="email" autocomplete="email">
+      </label>
 
-    <label>
-      <span>ФИО</span>
-      <input type="text" formControlName="fio" autocomplete="name">
-    </label>
+      <label>
+        <span>ФИО</span>
+        <input type="text" formControlName="fio" autocomplete="name">
+      </label>
 
-    <label>
-      <span>Телефон</span>
-      <input type="text" formControlName="phoneNumber" autocomplete="tel">
-    </label>
+      <label>
+        <span>Телефон</span>
+        <input type="text" formControlName="phoneNumber" autocomplete="tel">
+      </label>
 
-    <label>
-      <span>Пароль</span>
-      <input type="password" formControlName="password" autocomplete="new-password">
-    </label>
+      <label>
+        <span>Пароль</span>
+        <input type="password" formControlName="password" autocomplete="new-password">
+      </label>
 
-    <label>
-      <span>Повтор пароля</span>
-      <input type="password" formControlName="matchingPassword" autocomplete="new-password">
-    </label>
+      <label>
+        <span>Повтор пароля</span>
+        <input type="password" formControlName="matchingPassword" autocomplete="new-password">
+      </label>
 
-    @if (form.invalid && form.touched) {
-      <p class="error">Проверь логин, email и пароль.</p>
-    }
+      @if (form.invalid && form.touched) {
+        <p class="error">Проверь логин, email и пароль.</p>
+      }
 
-    @if (error()) {
-      <p class="error">{{ error() }}</p>
-    }
+      @if (error()) {
+        <app-load-error-card title="Регистрация не выполнена" [message]="error()!" />
+      }
 
-    <div class="actions">
-      <a class="button secondary" routerLink="/">
-        <span class="material-icons-sharp">arrow_back</span>
-        Назад
-      </a>
-      <button type="submit" [disabled]="saving()">
-        <span class="material-icons-sharp">person_add</span>
-        {{ saving() ? 'Регистрирую' : 'Зарегистрироваться' }}
-      </button>
-    </div>
-  </form>
-
-  @if (createdUser()) {
-    <section class="panel">
-      <div class="result-header">
-        <h2>Пользователь создан</h2>
-        <button type="button" (click)="login()">Логин</button>
+      <div class="actions">
+        <a class="button secondary" routerLink="/">
+          <span class="material-icons-sharp">arrow_back</span>
+          Назад
+        </a>
+        <button type="submit" [disabled]="saving()">
+          <span class="material-icons-sharp">person_add</span>
+          {{ saving() ? 'Регистрирую' : 'Зарегистрироваться' }}
+        </button>
       </div>
-      <pre>{{ createdUser() | json }}</pre>
+    </form>
+  } @else {
+    <section class="panel registration-success">
+      <span class="success-icon material-icons-sharp">task_alt</span>
+      <h2>Регистрация прошла успешно</h2>
+      <p>Теперь можно войти в систему через новый вход.</p>
+      <button type="button" class="login-button" (click)="login()">
+        <span class="material-icons-sharp">login</span>
+        Войти
+      </button>
     </section>
   }
 </app-admin-layout>

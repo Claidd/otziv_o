@@ -16,7 +16,22 @@ import java.util.Set;
 @Repository
 public interface WorkerRepository extends CrudRepository<Worker, Long> {
 
+    interface WorkerOptionRow {
+        Long getId();
+        String getFio();
+        String getUsername();
+    }
+
     Optional<Worker> findById(Long id);
+
+    @Query("""
+            SELECT w.id AS id,
+                   u.fio AS fio,
+                   u.username AS username
+            FROM Worker w
+            JOIN w.user u
+            """)
+    List<WorkerOptionRow> findWorkerOptions();
 
     @Query("""
             SELECT w

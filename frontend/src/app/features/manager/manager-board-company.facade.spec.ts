@@ -3,6 +3,7 @@ import type {
   CompanyCardItem,
   CompanyEditPayload,
   CompanyFilialEditItem,
+  CompanyFilialUpdateRequest,
   CompanyUpdateRequest,
   ManagerOption
 } from '../../core/manager.api';
@@ -16,7 +17,8 @@ function filial(id: number, title = `Filial ${id}`): CompanyFilialEditItem {
   return {
     id,
     title,
-    url: '',
+    url: `https://filial-${id}.example.test`,
+    cityId: 31,
     city: 'City'
   };
 }
@@ -65,10 +67,12 @@ function createFacade(config: {
   payload?: CompanyEditPayload;
   workerDeletePayload?: CompanyEditPayload;
   filialDeletePayload?: CompanyEditPayload;
+  filialUpdatePayload?: CompanyEditPayload;
 } = {}) {
   const calls: string[] = [];
   const toastMessages: string[] = [];
   let lastUpdateRequest: CompanyUpdateRequest | null = null;
+  let lastFilialUpdateRequest: CompanyFilialUpdateRequest | null = null;
   const sourcePayload = config.payload ?? companyPayload();
   const deps: ManagerBoardCompanyFacadeDeps = {
     managerApi: {
@@ -92,6 +96,13 @@ function createFacade(config: {
       deleteCompanyFilial: (companyId: number, filialId: number) => {
         calls.push(`delete-filial:${companyId}:${filialId}`);
         return of(config.filialDeletePayload ?? companyPayload({ filials: [] }));
+      },
+      updateCompanyFilial: (companyId: number, filialId: number, request: CompanyFilialUpdateRequest) => {
+        calls.push(`update-filial:${companyId}:${filialId}`);
+        lastFilialUpdateRequest = request;
+        return of(config.filialUpdatePayload ?? companyPayload({
+          filials: [filial(filialId, request.title)]
+        }));
       }
     },
     toastService: {
@@ -116,6 +127,9 @@ function createFacade(config: {
     toastMessages,
     get lastUpdateRequest() {
       return lastUpdateRequest;
+    },
+    get lastFilialUpdateRequest() {
+      return lastFilialUpdateRequest;
     }
   };
 }
@@ -208,5 +222,27 @@ describe('ManagerBoardCompanyFacade', () => {
     expect(state.facade.editCompany()?.filials).toEqual([]);
     expect(state.calls).toContain('load-board');
     expect(state.toastMessages).toContain('success:Филиал удален:Filial 21');
+  });
+
+  it('updates company filial and applies returned payload', () => {
+    const state = createFacade();
+
+    state.facade.openCompanyEdit(companyCard());
+    state.facade.updateCompanyFilial({
+      filialId: 21,
+      title: 'Updated filial',
+      url: 'https://updated.example.test',
+      cityId: 31
+    });
+
+    expect(state.calls).toContain('update-filial:10:21');
+    expect(state.lastFilialUpdateRequest).toEqual({
+      title: 'Updated filial',
+      url: 'https://updated.example.test',
+      cityId: 31
+    });
+    expect(state.facade.editCompany()?.filials[0]?.title).toBe('Updated filial');
+    expect(state.calls).toContain('load-board');
+    expect(state.toastMessages).toContain('success:Филиал сохранен:Updated filial');
   });
 });

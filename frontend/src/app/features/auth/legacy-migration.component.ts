@@ -1,14 +1,15 @@
-import { JsonPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthLifecycleApi, LegacyUserMigrationRequest, ProvisionedUserResponse } from '../../core/auth-lifecycle.api';
 import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorMessage } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 @Component({
   selector: 'app-legacy-migration',
-  imports: [AdminLayoutComponent, JsonPipe, ReactiveFormsModule, RouterLink],
+  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
   templateUrl: './legacy-migration.component.html',
   styleUrl: './legacy-migration.component.scss'
 })
@@ -52,7 +53,7 @@ export class LegacyMigrationComponent {
         });
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Migration failed');
+        this.error.set(apiErrorMessage(err, 'Не удалось перенести пользователя'));
         this.saving.set(false);
       }
     });

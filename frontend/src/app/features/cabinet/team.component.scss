@@ -191,15 +191,6 @@ dd {
   font-size: 2.6rem;
 }
 
-.load-error {
-  margin: 1rem 0 0;
-  border-radius: var(--otziv-small-radius);
-  padding: 0.8rem 1rem;
-  color: var(--otziv-danger);
-  background: rgba(255, 0, 96, 0.1);
-  font-weight: 800;
-}
-
 .empty-state {
   display: grid;
   min-height: 13rem;

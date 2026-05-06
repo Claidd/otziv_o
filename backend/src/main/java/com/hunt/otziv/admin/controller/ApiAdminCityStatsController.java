@@ -58,8 +58,9 @@ public class ApiAdminCityStatsController {
 
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(1, Math.min(size, 100));
+        List<CityWithUnpublishedReviewsDTO> allCities = reviewCityService.getCitiesWithUnpublishedReviews();
         List<CityWithUnpublishedReviewsDTO> filteredCities = filterAndSort(
-                reviewCityService.getCitiesWithUnpublishedReviews(),
+                allCities,
                 search,
                 sort,
                 direction
@@ -70,7 +71,7 @@ public class ApiAdminCityStatsController {
         int start = Math.min(safePage * safeSize, totalCities);
         int end = Math.min(start + safeSize, totalCities);
 
-        Map<String, Object> statistics = reviewCityService.getCitiesStatistics();
+        Map<String, Object> statistics = reviewCityService.getCitiesStatistics(filteredCities);
 
         return new CityStatsBoardResponse(
                 filteredCities.subList(start, end).stream().map(this::toCityResponse).toList(),

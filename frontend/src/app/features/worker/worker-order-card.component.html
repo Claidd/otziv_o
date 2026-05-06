@@ -1,4 +1,7 @@
-<article class="worker-card order-card">
+<article
+  class="worker-card order-card"
+  [class.order-card--compact]="!permissions.canSeePhoneAndPayment && !permissions.canManageOrderStatuses"
+>
   <header>
     <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
       {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
@@ -28,8 +31,8 @@
 
   @if (permissions.canSeePhoneAndPayment) {
     <div class="phone-row">
-      <a [href]="orderChatUrl()" target="_blank" rel="noopener">{{ order.companyTelephone || '-' }}</a>
-      <button type="button" (click)="phoneCopied.emit(order.companyTelephone)" title="Скопировать телефон">
+      <a [href]="orderChatUrl()" target="_blank" rel="noopener">{{ orderPhoneLabel() }}</a>
+      <button type="button" (click)="phoneCopied.emit(orderPhoneForCopy())" title="Скопировать телефон">
         {{ copied === 'телефон' ? '✓' : 'T' }}
       </button>
     </div>
@@ -67,9 +70,30 @@
     </div>
   }
 
-  <div class="meta-row">
-    <span>{{ order.categoryTitle || 'Категория' }}</span>
-    <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+  <div class="meta-row category-row">
+    <button
+      type="button"
+      class="category-chip"
+      [class.active]="activeCategoryPopover === 'category'"
+      [title]="categoryLabel()"
+      [attr.aria-label]="'Категория: ' + categoryLabel()"
+      (click)="toggleCategoryPopover('category')"
+    >
+      <span class="category-chip__label">{{ categoryLabel() }}</span>
+    </button>
+    <button
+      type="button"
+      class="category-chip"
+      [class.active]="activeCategoryPopover === 'subcategory'"
+      [title]="subCategoryLabel()"
+      [attr.aria-label]="'Подкатегория: ' + subCategoryLabel()"
+      (click)="toggleCategoryPopover('subcategory')"
+    >
+      <span class="category-chip__label">{{ subCategoryLabel() }}</span>
+    </button>
+    @if (categoryPopoverText(); as text) {
+      <div class="category-popover">{{ text }}</div>
+    }
   </div>
 
   <div

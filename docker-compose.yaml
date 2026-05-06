@@ -62,6 +62,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     restart: unless-stopped
+    mem_limit: 1g
     command: start --import-realm
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}

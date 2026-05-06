@@ -279,6 +279,12 @@ app-review-check .approve-publication-hint .material-icons-sharp {
   padding: 0.9rem 1rem;
   color: #7a271a;
   background: #ffedea;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.admin-layout :where(.load-error, .error.compact, .notice, .dashboard-warning p, .dashboard-warning small) {
+  overflow-wrap: anywhere;
 }
 
 .admin-layout :where(
@@ -915,6 +921,13 @@ app-manager-board .company-edit-row {
   gap: 0.6rem;
 }
 
+app-manager-board .company-edit-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 app-manager-board .company-edit-row > span,
 app-manager-board .company-edit-row a {
   overflow: hidden;
@@ -925,9 +938,48 @@ app-manager-board .company-edit-row a {
 }
 
 app-manager-board .company-edit-row button.secondary,
+app-manager-board .company-filial-edit-actions button.secondary,
 app-manager-board app-admin-layout .admin-layout .lead-edit-actions button.secondary {
   color: var(--otziv-primary);
   background: var(--otziv-light);
+}
+
+app-manager-board .company-filial-edit {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.8fr) minmax(12rem, 1fr);
+  gap: 0.65rem;
+  border: 1px solid rgba(108, 155, 207, 0.22);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: var(--otziv-white);
+}
+
+app-manager-board .company-filial-edit .lead-edit-field--wide,
+app-manager-board .company-filial-edit-actions {
+  grid-column: 1 / -1;
+}
+
+app-manager-board .company-filial-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+@media (max-width: 620px) {
+  app-manager-board .company-edit-row,
+  app-manager-board .company-filial-edit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  app-manager-board .company-edit-row-actions,
+  app-manager-board .company-filial-edit-actions {
+    justify-content: stretch;
+  }
+
+  app-manager-board .company-edit-row-actions button,
+  app-manager-board .company-filial-edit-actions button {
+    flex: 1 1 auto;
+  }
 }
 
 app-order-details app-admin-layout .admin-layout .lead-edit-actions button.secondary {
@@ -1083,8 +1135,17 @@ app-worker-board .bot-line--empty span {
 
   app-admin-layout .admin-layout.admin-layout {
     display: block;
-    width: min(100% - 1rem, 46rem);
+    width: min(calc(100% - 1rem), 46rem);
     overflow-x: hidden;
+  }
+
+  app-admin-layout .admin-layout.admin-layout.sidebar-hidden {
+    display: flex;
+    flex-direction: column;
+    width: calc(100vw - 1rem);
+    max-width: 46rem;
+    margin-right: auto;
+    margin-left: auto;
   }
 
   app-admin-layout .admin-layout .admin-sidebar {
@@ -1237,6 +1298,7 @@ app-worker-board .bot-line--empty span {
   }
 
   app-manager-board .manager-workspace .quick-links a,
+  app-manager-board .manager-workspace .quick-links button,
   app-manager-board .manager-workspace .promo-strip button {
     min-width: 0;
     overflow: hidden;
@@ -1497,7 +1559,8 @@ app-worker-board .bot-line--empty span {
     gap: 0.32rem;
   }
 
-  app-manager-board .manager-workspace .quick-links a {
+  app-manager-board .manager-workspace .quick-links a,
+  app-manager-board .manager-workspace .quick-links button {
     padding-right: 0.18rem;
     padding-left: 0.18rem;
     font-size: 0.66rem;

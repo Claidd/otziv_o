@@ -80,6 +80,7 @@ public class ApiLeadBoardController {
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "desc") String sortDirection,
             @RequestParam(required = false) String section,
+            Authentication authentication,
             Principal principal
     ) {
         return performanceMetrics.recordEndpoint("leads.board", () -> {
@@ -88,6 +89,10 @@ public class ApiLeadBoardController {
             String normalizedKeyword = keyword == null ? "" : keyword.trim();
             String normalizedSortDirection = "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
             String normalizedSection = normalizeSection(section);
+            boolean canViewAllSection = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+            if (SECTION_ALL.equals(normalizedSection) && !canViewAllSection) {
+                normalizedSection = SECTION_IN_WORK;
+            }
             boolean loadAllSections = normalizedSection.isEmpty();
 
             return new LeadBoardResponse(
@@ -131,13 +136,15 @@ public class ApiLeadBoardController {
                             normalizedSize,
                             normalizedSortDirection
                     ), () -> leadService.countLeads(LeadStatus.INWORK.title, normalizedKeyword, principal), normalizedPage, normalizedSize),
-                    pageOrCount(loadAllSections, normalizedSection, SECTION_ALL, () -> leadService.getAllLeadsNoStatus(
-                            normalizedKeyword,
-                            principal,
-                            normalizedPage,
-                            normalizedSize,
-                            normalizedSortDirection
-                    ), () -> leadService.countLeadsNoStatus(normalizedKeyword, principal), normalizedPage, normalizedSize),
+                    canViewAllSection
+                            ? pageOrCount(loadAllSections, normalizedSection, SECTION_ALL, () -> leadService.getAllLeadsNoStatus(
+                                    normalizedKeyword,
+                                    principal,
+                                    normalizedPage,
+                                    normalizedSize,
+                                    normalizedSortDirection
+                            ), () -> leadService.countLeadsNoStatus(normalizedKeyword, principal), normalizedPage, normalizedSize)
+                            : emptyPage(normalizedPage, normalizedSize, 0),
                     Arrays.stream(LeadStatus.values()).map(status -> status.title).toList(),
                     promoTextService.getAllPromoTexts()
             );
@@ -145,7 +152,7 @@ public class ApiLeadBoardController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR', 'MARKETOLOG')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'MARKETOLOG')")
     public LeadResponse createLead(
             @Valid @RequestBody LeadCreateRequest request,
             Principal principal,

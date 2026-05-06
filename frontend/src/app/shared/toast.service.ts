@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { sanitizeErrorText } from './api-error-message';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -21,7 +22,11 @@ export class ToastService {
   }
 
   error(title: string, message?: string): number {
-    return this.show({ type: 'error', title, message }, 5600);
+    return this.show({
+      type: 'error',
+      title: sanitizeErrorText(title, 'Действие не выполнено') ?? 'Действие не выполнено',
+      message: sanitizeErrorText(message)
+    }, 5600);
   }
 
   info(title: string, message?: string): number {

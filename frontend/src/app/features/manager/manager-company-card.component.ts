@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { CompanyCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
+import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
   StatusAction,
   managerCompanyChatUrl,
@@ -34,6 +35,14 @@ export class ManagerCompanyCardComponent {
 
   companyFilialUrl(): string {
     return managerCompanyFilialUrl(this.company);
+  }
+
+  companyPhoneLabel(): string {
+    return formatPhoneForDisplay(this.company.telephone);
+  }
+
+  companyPhoneForCopy(): string {
+    return phoneDigits(this.company.telephone);
   }
 
   hasMeaningfulNote(value?: string | null): boolean {

@@ -1,4 +1,5 @@
 import { appEnvironment } from '../../core/app-environment';
+import { apiErrorMessage } from '../../shared/api-error-message';
 import type {
   CompanyCardItem,
   ManagerMetric,
@@ -126,7 +127,6 @@ export const MANAGER_MOBILE_NAV_LINKS: MobileNavLink[] = [
   { label: 'Главная', routerLink: '/' },
   { label: 'Лиды', routerLink: '/leads' },
   { label: 'Оператор', routerLink: '/operator' },
-  { label: 'Маркетолог', href: managerLegacyUrl('/admin/analyse') },
   { label: 'Менеджер', routerLink: '/manager' },
   { label: 'Специалист', href: '/worker' },
   { label: 'Личный кабинет', routerLink: '/' }
@@ -286,23 +286,7 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
 }
 
 export function managerErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object' && 'error' in err) {
-    const body = (err as { error?: { message?: string } | string }).error;
-
-    if (typeof body === 'string' && body.trim()) {
-      return body;
-    }
-
-    if (body && typeof body === 'object' && 'message' in body && body.message) {
-      return body.message;
-    }
-  }
-
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: string }).message ?? fallback);
-  }
-
-  return fallback;
+  return apiErrorMessage(err, fallback);
 }
 
 export function trackManagerSection(_index: number, section: SectionTab): ManagerSection {

@@ -1,42 +1,44 @@
 <app-admin-layout title="Миграция аккаунта" active="migration">
-  <form class="panel form-grid" [formGroup]="form" (ngSubmit)="submit()">
-    <label>
-      <span>Старый логин</span>
-      <input type="text" formControlName="username" autocomplete="username">
-    </label>
+  @if (!migratedUser()) {
+    <form class="panel form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label>
+        <span>Старый логин</span>
+        <input type="text" formControlName="username" autocomplete="username">
+      </label>
 
-    <label>
-      <span>Старый пароль</span>
-      <input type="password" formControlName="password" autocomplete="current-password">
-    </label>
+      <label>
+        <span>Старый пароль</span>
+        <input type="password" formControlName="password" autocomplete="current-password">
+      </label>
 
-    @if (form.invalid && form.touched) {
-      <p class="error">Введи логин и пароль.</p>
-    }
+      @if (form.invalid && form.touched) {
+        <p class="error">Введи логин и пароль.</p>
+      }
 
-    @if (error()) {
-      <p class="error">{{ error() }}</p>
-    }
+      @if (error()) {
+        <app-load-error-card title="Миграция не выполнена" [message]="error()!" />
+      }
 
-    <div class="actions">
-      <a class="button secondary" routerLink="/">
-        <span class="material-icons-sharp">arrow_back</span>
-        Назад
-      </a>
-      <button type="submit" [disabled]="saving()">
-        <span class="material-icons-sharp">sync</span>
-        {{ saving() ? 'Переношу' : 'Перенести аккаунт' }}
-      </button>
-    </div>
-  </form>
-
-  @if (migratedUser()) {
-    <section class="panel">
-      <div class="result-header">
-        <h2>Аккаунт готов в Keycloak</h2>
-        <button type="button" (click)="login()">Логин</button>
+      <div class="actions">
+        <a class="button secondary" routerLink="/">
+          <span class="material-icons-sharp">arrow_back</span>
+          Назад
+        </a>
+        <button type="submit" [disabled]="saving()">
+          <span class="material-icons-sharp">sync</span>
+          {{ saving() ? 'Переношу' : 'Перенести аккаунт' }}
+        </button>
       </div>
-      <pre>{{ migratedUser() | json }}</pre>
+    </form>
+  } @else {
+    <section class="panel migration-success">
+      <span class="success-icon material-icons-sharp">task_alt</span>
+      <h2>Аккаунт успешно перенесён</h2>
+      <p>Теперь можно войти в систему через новый вход.</p>
+      <button type="button" class="login-button" (click)="login()">
+        <span class="material-icons-sharp">login</span>
+        Войти
+      </button>
     </section>
   }
 </app-admin-layout>

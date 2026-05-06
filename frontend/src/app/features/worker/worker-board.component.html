@@ -67,10 +67,10 @@
     </div>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Специалист не загрузился" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
     }
 
-    @if (board()?.message) {
+    @if (boardNoticeVisible() && board()?.message) {
       <p class="notice" [class.warning]="board()?.warning">{{ board()?.message }}</p>
     }
 

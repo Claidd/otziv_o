@@ -7,13 +7,16 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.manager.dto.api.CompanyEditResponse;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateResponse;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateResultResponse;
 import com.hunt.otziv.manager.dto.api.CompanyUpdateRequest;
+import com.hunt.otziv.manager.dto.api.FilialUpdateRequest;
 import com.hunt.otziv.manager.dto.api.OptionResponse;
 import com.hunt.otziv.manager.dto.api.StatusChangeRequest;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
@@ -42,6 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequiredArgsConstructor
@@ -49,6 +53,7 @@ import java.util.List;
 public class ApiManagerCompanyController {
 
     private final CompanyService companyService;
+    private final FilialService filialService;
     private final OrderService orderService;
     private final OrderCreationService orderCreationService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
@@ -190,6 +195,49 @@ public class ApiManagerCompanyController {
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
     }
 
+    @PutMapping("/companies/{companyId}/filials/{filialId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public CompanyEditResponse updateCompanyFilial(
+            @PathVariable Long companyId,
+            @PathVariable Long filialId,
+            @RequestBody FilialUpdateRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        CompanyDTO company = companyService.getCompaniesDTOById(companyId);
+        if (!companyHasFilial(company, filialId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Филиал не найден у компании");
+        }
+
+        String title = normalize(request == null ? null : request.title());
+        String url = normalize(request == null ? null : request.url());
+        Long cityId = request == null ? null : request.cityId();
+
+        if (isBlank(title) || isBlank(url) || cityId == null || cityId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для филиала нужны город, адрес и ссылка 2ГИС");
+        }
+
+        Filial existingByUrl = filialService.findFilialByUrl(url);
+        if (existingByUrl != null && !Objects.equals(existingByUrl.getId(), filialId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой url филиала уже есть в базе");
+        }
+
+        try {
+            filialService.updateFilial(FilialDTO.builder()
+                    .id(filialId)
+                    .title(title)
+                    .url(url)
+                    .city(City.builder().id(cityId).build())
+                    .build());
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Филиал уже используется", exception);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Филиал не сохранен: " + exception.getMessage(), exception);
+        }
+
+        return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
+    }
+
     @GetMapping("/categories/{categoryId}/subcategories")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public List<OptionResponse> getSubcategories(@PathVariable Long categoryId) {
@@ -245,6 +293,12 @@ public class ApiManagerCompanyController {
     private WorkerDTO toWorkerDTO(CompanyUpdateRequest request) {
         Long workerId = request == null || request.newWorkerId() == null ? 0L : request.newWorkerId();
         return WorkerDTO.builder().workerId(workerId).build();
+    }
+
+    private boolean companyHasFilial(CompanyDTO company, Long filialId) {
+        return company != null
+                && company.getFilials() != null
+                && company.getFilials().stream().anyMatch(filial -> Objects.equals(filial.getId(), filialId));
     }
 
     private Long idOf(CategoryDTO category) {

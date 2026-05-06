@@ -8,6 +8,8 @@ import {
   CompanyCreateResult,
   CompanyCreateSource
 } from '../core/company-create.api';
+import { apiErrorMessage } from './api-error-message';
+import { LoadErrorCardComponent } from './load-error-card.component';
 
 type CompanyCreateDraft = {
   source: CompanyCreateSource;
@@ -34,7 +36,7 @@ type PreservedDraftFields = Pick<
 
 @Component({
   selector: 'app-company-create-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, LoadErrorCardComponent],
   template: `
     <div class="lead-edit-backdrop" role="presentation" (click)="close()">
       <section
@@ -59,7 +61,7 @@ type PreservedDraftFields = Pick<
         }
 
         @if (error()) {
-          <p class="error compact">{{ error() }}</p>
+          <app-load-error-card title="Компания не сохранена" [message]="error()!" />
         }
 
         @if (draft(); as draft) {
@@ -446,41 +448,6 @@ export class CompanyCreateModalComponent implements OnChanges {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown; status?: unknown };
-      if (typeof response.error === 'string') {
-        return this.cleanMessage(response.error, fallback);
-      }
-
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown; title?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-
-        if (typeof body.title === 'string') {
-          return body.title;
-        }
-      }
-
-      if (typeof response.message === 'string') {
-        return this.cleanMessage(response.message, fallback);
-      }
-    }
-
-    return fallback;
-  }
-
-  private cleanMessage(message: string, fallback: string): string {
-    const trimmed = message.trim();
-    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-      return fallback;
-    }
-
-    return trimmed || fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

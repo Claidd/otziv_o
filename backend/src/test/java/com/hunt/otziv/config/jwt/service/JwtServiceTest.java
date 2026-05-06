@@ -3,10 +3,12 @@ package com.hunt.otziv.config.jwt.service;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 
@@ -56,11 +58,12 @@ class JwtServiceTest {
     }
 
     private Claims parse(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(SECRET.getBytes(StandardCharsets.UTF_8))
+        SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        return Jwts.parser()
+                .verifyWith(key)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     private LeadDtoTransfer leadTransfer() {

@@ -3,7 +3,6 @@ package com.hunt.otziv.r_review.repository;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
@@ -22,76 +21,108 @@ import java.util.*;
 @Repository
 public interface ReviewRepository extends CrudRepository<Review, Long> {
 
-    @Query("""
-        SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
-            c.id,
-            c.title,
-            CAST(COUNT(r) AS long),
-            CAST(SUM(CASE
-                WHEN (r.orderDetails IS NULL
-                      OR r.orderDetails.order IS NULL
-                      OR r.orderDetails.order.status IS NULL
-                      OR r.orderDetails.order.status.title != 'Архив')
-                THEN 1
-                ELSE 0
-            END) AS long),
-            CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
-        )
-        FROM City c
-        LEFT JOIN c.filial f
-        LEFT JOIN Review r ON r.filial = f AND r.publish = false
-        GROUP BY c.id, c.title
-        HAVING COUNT(r) > 0
-        ORDER BY c.title
-    """)
-    List<CityWithUnpublishedReviewsDTO> findCitiesWithUnpublishedReviewCount();
+    interface CityStatsRow {
+        Long getCityId();
+        String getCityTitle();
+        Long getUnpublishedCount();
+        Long getUnpublishedNotArchiveCount();
+        Integer getActiveBotsCount();
+    }
 
-    @Query("""
-        SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
-            c.id,
-            c.title,
-            CAST(COUNT(r) AS long),
-            CAST(SUM(CASE
-                WHEN (r.orderDetails IS NULL
-                      OR r.orderDetails.order IS NULL
-                      OR r.orderDetails.order.status IS NULL
-                      OR r.orderDetails.order.status.title != 'Архив')
-                THEN 1
-                ELSE 0
-            END) AS long),
-            CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
-        )
-        FROM City c
-        LEFT JOIN c.filial f
-        LEFT JOIN Review r ON r.filial = f AND r.publish = false
-        GROUP BY c.id, c.title
-        HAVING COUNT(r) > 0
-    """)
-    List<CityWithUnpublishedReviewsDTO> findAllWithStats();
+    @Query(value = """
+        SELECT c.city_id AS cityId,
+               c.city_title AS cityTitle,
+               CAST(rs.unpublished_count AS SIGNED) AS unpublishedCount,
+               CAST(rs.unpublished_not_archive_count AS SIGNED) AS unpublishedNotArchiveCount,
+               CAST(COALESCE(bs.active_bots_count, 0) AS SIGNED) AS activeBotsCount
+        FROM cities c
+        JOIN (
+            SELECT f.city_id,
+                   COUNT(r.review_id) AS unpublished_count,
+                   SUM(CASE WHEN s.order_status_id IS NULL THEN 1 ELSE 0 END) AS unpublished_not_archive_count
+            FROM reviews r
+            JOIN filial f ON f.filial_id = r.review_filial
+            LEFT JOIN order_details od ON od.order_detail_id = r.review_order_details
+            LEFT JOIN orders o ON o.order_id = od.order_detail_order
+            LEFT JOIN order_statuses s
+              ON s.order_status_id = o.order_status
+             AND s.order_status_title = 'Архив'
+            WHERE r.review_publish = 0
+            GROUP BY f.city_id
+        ) rs ON rs.city_id = c.city_id
+        LEFT JOIN (
+            SELECT b.bot_city_id AS city_id,
+                   COUNT(b.bot_id) AS active_bots_count
+            FROM bots b
+            WHERE b.bot_active = TRUE
+            GROUP BY b.bot_city_id
+        ) bs ON bs.city_id = c.city_id
+        ORDER BY c.city_title
+    """, nativeQuery = true)
+    List<CityStatsRow> findCitiesWithUnpublishedReviewCount();
 
-    @Query("""
-        SELECT new com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO(
-            c.id,
-            c.title,
-            CAST(COUNT(r) AS long),
-            CAST(SUM(CASE
-                WHEN (r.orderDetails IS NULL
-                      OR r.orderDetails.order IS NULL
-                      OR r.orderDetails.order.status IS NULL
-                      OR r.orderDetails.order.status.title != 'Архив')
-                THEN 1
-                ELSE 0
-            END) AS long),
-            CAST((SELECT COUNT(b) FROM Bot b WHERE b.botCity = c AND b.active = true) AS integer)
-        )
-        FROM City c
-        LEFT JOIN c.filial f
-        LEFT JOIN Review r ON r.filial = f AND r.publish = false
-        WHERE LOWER(c.title) LIKE LOWER(CONCAT('%', :search, '%'))
-        GROUP BY c.id, c.title
-        HAVING COUNT(r) > 0
-    """)
-    List<CityWithUnpublishedReviewsDTO> findAllWithStatsBySearch(@Param("search") String search);
+    @Query(value = """
+        SELECT c.city_id AS cityId,
+               c.city_title AS cityTitle,
+               CAST(rs.unpublished_count AS SIGNED) AS unpublishedCount,
+               CAST(rs.unpublished_not_archive_count AS SIGNED) AS unpublishedNotArchiveCount,
+               CAST(COALESCE(bs.active_bots_count, 0) AS SIGNED) AS activeBotsCount
+        FROM cities c
+        JOIN (
+            SELECT f.city_id,
+                   COUNT(r.review_id) AS unpublished_count,
+                   SUM(CASE WHEN s.order_status_id IS NULL THEN 1 ELSE 0 END) AS unpublished_not_archive_count
+            FROM reviews r
+            JOIN filial f ON f.filial_id = r.review_filial
+            LEFT JOIN order_details od ON od.order_detail_id = r.review_order_details
+            LEFT JOIN orders o ON o.order_id = od.order_detail_order
+            LEFT JOIN order_statuses s
+              ON s.order_status_id = o.order_status
+             AND s.order_status_title = 'Архив'
+            WHERE r.review_publish = 0
+            GROUP BY f.city_id
+        ) rs ON rs.city_id = c.city_id
+        LEFT JOIN (
+            SELECT b.bot_city_id AS city_id,
+                   COUNT(b.bot_id) AS active_bots_count
+            FROM bots b
+            WHERE b.bot_active = TRUE
+            GROUP BY b.bot_city_id
+        ) bs ON bs.city_id = c.city_id
+    """, nativeQuery = true)
+    List<CityStatsRow> findAllWithStats();
+
+    @Query(value = """
+        SELECT c.city_id AS cityId,
+               c.city_title AS cityTitle,
+               CAST(rs.unpublished_count AS SIGNED) AS unpublishedCount,
+               CAST(rs.unpublished_not_archive_count AS SIGNED) AS unpublishedNotArchiveCount,
+               CAST(COALESCE(bs.active_bots_count, 0) AS SIGNED) AS activeBotsCount
+        FROM cities c
+        JOIN (
+            SELECT f.city_id,
+                   COUNT(r.review_id) AS unpublished_count,
+                   SUM(CASE WHEN s.order_status_id IS NULL THEN 1 ELSE 0 END) AS unpublished_not_archive_count
+            FROM reviews r
+            JOIN filial f ON f.filial_id = r.review_filial
+            LEFT JOIN order_details od ON od.order_detail_id = r.review_order_details
+            LEFT JOIN orders o ON o.order_id = od.order_detail_order
+            LEFT JOIN order_statuses s
+              ON s.order_status_id = o.order_status
+             AND s.order_status_title = 'Архив'
+            WHERE r.review_publish = 0
+            GROUP BY f.city_id
+        ) rs ON rs.city_id = c.city_id
+        LEFT JOIN (
+            SELECT b.bot_city_id AS city_id,
+                   COUNT(b.bot_id) AS active_bots_count
+            FROM bots b
+            WHERE b.bot_active = TRUE
+            GROUP BY b.bot_city_id
+        ) bs ON bs.city_id = c.city_id
+        WHERE LOWER(c.city_title) LIKE LOWER(CONCAT('%', :search, '%'))
+    """, nativeQuery = true)
+    List<CityStatsRow> findAllWithStatsBySearch(@Param("search") String search);
 
     List<Review> findAllByOrderDetailsId(UUID orderDetailsId);
 
@@ -543,17 +574,19 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.publish = false")
     long countUnpublished();
 
-    @Query("""
-        SELECT COUNT(r.id)
-        FROM Review r
-        WHERE r.publish = false
-          AND (
-            r.orderDetails IS NULL
-            OR r.orderDetails.order IS NULL
-            OR r.orderDetails.order.status IS NULL
-            OR r.orderDetails.order.status.title <> 'Архив'
+    @Query(value = """
+        SELECT COUNT(r.review_id)
+        FROM reviews r
+        WHERE r.review_publish = 0
+          AND NOT EXISTS (
+            SELECT 1
+            FROM order_details od
+            JOIN orders o ON o.order_id = od.order_detail_order
+            JOIN order_statuses s ON s.order_status_id = o.order_status
+            WHERE od.order_detail_id = r.review_order_details
+              AND s.order_status_title = 'Архив'
           )
-    """)
+    """, nativeQuery = true)
     long countUnpublishedNotArchive();
 
     @Query("""

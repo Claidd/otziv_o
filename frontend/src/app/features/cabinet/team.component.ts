@@ -4,6 +4,8 @@ import { RouterLink } from '@angular/router';
 import { appEnvironment } from '../../core/app-environment';
 import { CabinetApi, TeamMember, TeamResponse } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { apiErrorDetail } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 type TeamRole = 'manager' | 'marketolog' | 'worker' | 'operator';
 
@@ -15,7 +17,7 @@ type TeamSection = {
 
 @Component({
   selector: 'app-team',
-  imports: [AdminLayoutComponent, FormsModule, RouterLink],
+  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './team.component.html',
   styleUrl: './team.component.scss'
 })
@@ -46,7 +48,7 @@ export class TeamComponent {
         this.loading.set(false);
       },
       error: (error) => {
-        this.error.set(error?.error?.message ?? error?.message ?? 'Не удалось загрузить команду');
+        this.error.set(apiErrorDetail(error, 'Обновите данные через пару минут или обратитесь к администратору.'));
         this.loading.set(false);
       }
     });

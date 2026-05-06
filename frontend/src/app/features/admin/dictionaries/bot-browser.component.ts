@@ -2,9 +2,12 @@ import { Component, HostListener, OnDestroy, computed, inject, signal } from '@a
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import { AdminBot, AdminDictionariesApi } from '../../../core/admin-dictionaries.api';
+import { apiErrorMessage } from '../../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 
 @Component({
   selector: 'app-bot-browser',
+  imports: [LoadErrorCardComponent],
   templateUrl: './bot-browser.component.html',
   styleUrl: './bot-browser.component.scss'
 })
@@ -72,6 +75,14 @@ export class BotBrowserComponent implements OnDestroy {
     });
   }
 
+  retry(): void {
+    this.error.set(null);
+    this.frameLoaded.set(false);
+    this.vncUrl.set(null);
+    this.loadBot();
+    this.openSession();
+  }
+
   private loadBot(): void {
     this.dictionariesApi.getBot(this.botId).subscribe({
       next: (bot) => this.bot.set(bot),
@@ -105,28 +116,6 @@ export class BotBrowserComponent implements OnDestroy {
   }
 
   private errorMessage(err: unknown, fallback: string): string {
-    if (typeof err === 'object' && err !== null) {
-      const response = err as { error?: unknown; message?: unknown };
-      if (typeof response.error === 'object' && response.error !== null) {
-        const body = response.error as { detail?: unknown; message?: unknown };
-        if (typeof body.detail === 'string') {
-          return body.detail;
-        }
-
-        if (typeof body.message === 'string') {
-          return body.message;
-        }
-      }
-
-      if (typeof response.error === 'string') {
-        return response.error;
-      }
-
-      if (typeof response.message === 'string') {
-        return response.message;
-      }
-    }
-
-    return fallback;
+    return apiErrorMessage(err, fallback);
   }
 }

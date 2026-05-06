@@ -4,6 +4,7 @@ import com.hunt.otziv.l_lead.model.Lead;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -26,4 +27,17 @@ public class Marketolog {
     @OneToMany(mappedBy = "marketolog", fetch = FetchType.LAZY)
     @ToString.Exclude
     private Set<Lead> leads;
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Marketolog marketolog = (Marketolog) obj;
+        return Objects.equals(id, marketolog.id);
+    }
 }

@@ -10,8 +10,6 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.coobird.thumbnailator.Thumbnails;
-import net.coobird.thumbnailator.geometry.Positions;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -20,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
@@ -39,6 +36,7 @@ public class UserServiceImpl implements UserService {
     private final MarketologService marketologService;
     private final PasswordEncoder passwordEncoder;
     private final ImageRepository imageRepository;
+    private final ImageService imageService;
 
     // ===================================== SECURITY =====================================
 
@@ -569,23 +567,6 @@ public class UserServiceImpl implements UserService {
     }
 
     private Image toImageEntity(MultipartFile file) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-        Thumbnails.of(file.getInputStream())
-                .size(512, 512)
-                .crop(Positions.CENTER)
-                .outputFormat("jpg")
-                .outputQuality(0.7)
-                .toOutputStream(baos);
-
-        Image image = new Image();
-        image.setName(file.getName());
-        image.setOriginalFileName(file.getOriginalFilename());
-        image.setContentType(file.getContentType());
-        image.setSize((long) baos.size());
-        image.setBytes(baos.toByteArray());
-
-        imageRepository.save(image);
-        return image;
+        return imageService.saveCompressedProfileImage(file);
     }
 }

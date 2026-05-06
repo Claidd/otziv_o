@@ -4,13 +4,13 @@ import com.hunt.otziv.c_categories.dto.ProductCategoryDTO;
 import com.hunt.otziv.c_categories.model.ProductCategory;
 import com.hunt.otziv.c_categories.services.ProductCategoryService;
 import com.hunt.otziv.p_products.dto.ProductDTO;
-import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -37,6 +37,7 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findById(filialId).orElse(null);
     } // взять продукт по Id
 
+    @Transactional
     public boolean save(ProductDTO productDTO){ // Сохранение продукта в БД
         Product product = new Product();
         product.setTitle(productDTO.getTitle());
@@ -50,6 +51,7 @@ public class ProductServiceImpl implements ProductService {
         return true;
     } // Сохранение продукта в БД
 
+    @Transactional
     public boolean delete(ProductDTO productDTO){ // Удаление продукта
         Product product = productRepository.findById(productDTO.getId()).orElse(null);
         ProductCategory productCategory = productCategoryService.findById(productDTO.getProductCategory().getId());
@@ -61,6 +63,7 @@ public class ProductServiceImpl implements ProductService {
     } // Удаление продукта
 
 
+    @Transactional
     public boolean update(ProductDTO productDTO){ // Обновление продукта
         log.info("2. Вошли в обновление данных Продукта");
         Product saveProduct = productRepository.findById(productDTO.getId()).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%s' не найден", productDTO)));

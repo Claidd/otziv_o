@@ -20,7 +20,7 @@ function order(overrides: Partial<OrderCardItem> = {}): OrderCardItem {
     badReviewTasksSum: 250,
     badReviewTasksTotal: 2,
     badReviewTasksDone: 1,
-    companyTelephone: '+79990000000',
+    companyTelephone: '+79086431055',
     companyComments: 'company note',
     orderComments: 'worker note',
     amount: 10,
@@ -59,8 +59,46 @@ describe('WorkerOrderCardComponent', () => {
     expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company - Filial');
     expect(element.textContent).toContain('1250 руб.');
     expect(element.textContent).toContain('Плохие: 1/2');
+    expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Worker');
     expect(element.querySelector('.order-note-text')?.textContent).toContain('worker note');
+    expect(element.querySelector('article')?.classList.contains('order-card--compact')).toBe(false);
+  });
+
+  it('uses a compact layout when order controls are hidden for worker-like roles', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    fixture.componentInstance.order = order();
+    fixture.componentInstance.permissions = {
+      ...DEFAULT_WORKER_PERMISSIONS,
+      canSeeMoney: true,
+      canEditNotes: true
+    };
+
+    fixture.detectChanges();
+
+    const article = fixture.nativeElement.querySelector('article') as HTMLElement;
+    expect(article.classList.contains('order-card--compact')).toBe(true);
+  });
+
+  it('keeps full category names available from compact category chips', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    fixture.componentInstance.order = order({
+      categoryTitle: 'Юридические услуги',
+      subCategoryTitle: 'Управленческий консалтинг'
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const chips = element.querySelectorAll<HTMLButtonElement>('.category-chip');
+    expect(chips[0].title).toBe('Юридические услуги');
+    expect(chips[0].querySelector('.category-chip__label')?.textContent?.trim()).toBe('Юридические услуги');
+    expect(chips[1].title).toBe('Управленческий консалтинг');
+
+    chips[1].click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.category-popover')?.textContent?.trim()).toBe('Управленческий консалтинг');
   });
 
   it('emits card actions without owning board mutations', () => {
@@ -98,7 +136,7 @@ describe('WorkerOrderCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.order-status-actions button')?.click();
     element.querySelector<HTMLAnchorElement>('footer a')?.click();
 
-    expect(copiedPhone).toBe('+79990000000');
+    expect(copiedPhone).toBe('79086431055');
     expect(copyKind).toBe('check');
     expect(status).toBe('На проверке');
     expect(editOpened).toBe(true);

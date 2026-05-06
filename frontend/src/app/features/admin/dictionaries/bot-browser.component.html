@@ -21,10 +21,7 @@
   </header>
 
   @if (error()) {
-    <div class="browser-error">
-      <span class="material-icons-sharp">error</span>
-      {{ error() }}
-    </div>
+    <app-load-error-card title="Браузер аккаунта не открылся" [message]="error()!" actionLabel="Повторить" (retry)="retry()" />
   }
 
   <main class="browser-frame-wrap">

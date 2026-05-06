@@ -28,7 +28,7 @@
 
       <header class="lead-toolbar">
         <nav class="status-tabs" aria-label="Статусы лидов">
-          @for (bucket of buckets; track trackBucket($index, bucket)) {
+          @for (bucket of visibleBuckets(); track trackBucket($index, bucket)) {
             <button
               type="button"
               [class.active]="activeBucket() === bucket.key"
@@ -43,8 +43,8 @@
 
         <div class="quick-links">
           <button type="button" (click)="openCreateModal()">Новый лид</button>
-          <a [href]="legacyCategoriesUrl">Категории</a>
-          <a [href]="legacyCompaniesUrl">Компании</a>
+          <a routerLink="/admin/dictionaries">Категории</a>
+          <a routerLink="/manager">Компании</a>
         </div>
       </header>
 
@@ -101,7 +101,7 @@
     </div>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Лиды не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
     }
 
     <section class="cards-grid">

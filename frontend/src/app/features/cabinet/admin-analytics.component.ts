@@ -2,6 +2,8 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { AnalyticsResponse, CabinetApi, StatDto } from '../../core/cabinet.api';
+import { apiErrorDetail } from '../../shared/api-error-message';
+import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { CabinetBarChartComponent } from './cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
@@ -21,7 +23,7 @@ type Metric = {
 
 @Component({
   selector: 'app-admin-analytics',
-  imports: [AdminLayoutComponent, FormsModule, CabinetBarChartComponent, CabinetLineChartComponent],
+  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, CabinetBarChartComponent, CabinetLineChartComponent],
   templateUrl: './admin-analytics.component.html',
   styleUrl: './admin-analytics.component.scss'
 })
@@ -97,7 +99,7 @@ export class AdminAnalyticsComponent {
         this.loading.set(false);
       },
       error: (error) => {
-        this.error.set(error?.error?.message ?? error?.message ?? 'Не удалось загрузить аналитику');
+        this.error.set(apiErrorDetail(error, 'Обновите данные через пару минут или обратитесь к администратору.'));
         this.loading.set(false);
       }
     });

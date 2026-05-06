@@ -33,7 +33,7 @@
               type="button"
               [class.active]="metric.label === 'К выдаче'"
               [title]="metric.label + ': ' + metric.value"
-              (click)="metric.label === 'Телефон' ? openBindModal() : null"
+              (click)="handleMetricClick(metric)"
             >
               <span class="material-icons-sharp">{{ metric.icon }}</span>
               {{ metric.label }}
@@ -43,12 +43,10 @@
         </nav>
 
         <div class="quick-links">
-          <button type="button" (click)="openBindModal()">
+          <a [routerLink]="phonesRoute">
             <span class="material-icons-sharp">settings_cell</span>
             Телефон
-          </button>
-          <a [href]="legacyCategoriesUrl">Категории</a>
-          <a [href]="legacyCompaniesUrl">Компании</a>
+          </a>
         </div>
       </header>
 
@@ -94,7 +92,7 @@
     </div>
 
     @if (error()) {
-      <p class="error compact">{{ error() }}</p>
+      <app-load-error-card title="Оператор не загрузился" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
     }
 
     <section class="cards-grid">
@@ -181,28 +179,28 @@
       </button>
     </footer>
 
-    <section class="mobile-lead-stats" aria-label="Статистика оператора">
+    <section class="mobile-lead-stats mobile-operator-stats" aria-label="Статистика оператора">
       @for (metric of metrics(); track trackMetric($index, metric)) {
-        <article class="stat-card" [class]="metric.tone">
+        <button type="button" class="stat-card" [class]="metric.tone" (click)="handleMetricClick(metric)">
           <div>
             <span>{{ metric.label }}</span>
             <strong>{{ metric.value }}</strong>
           </div>
           <i class="material-icons-sharp">{{ metric.icon }}</i>
-        </article>
+        </button>
       }
     </section>
   </section>
 
-  <section admin-right-content class="lead-stats">
+  <section admin-right-content class="lead-stats operator-stats">
     @for (metric of metrics(); track trackMetric($index, metric)) {
-      <article class="stat-card" [class]="metric.tone">
+      <button type="button" class="stat-card" [class]="metric.tone" (click)="handleMetricClick(metric)">
         <div>
           <span>{{ metric.label }}</span>
           <strong>{{ metric.value }}</strong>
         </div>
         <i class="material-icons-sharp">{{ metric.icon }}</i>
-      </article>
+      </button>
     }
   </section>
 

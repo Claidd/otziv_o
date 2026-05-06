@@ -1,4 +1,5 @@
 import { computed, signal } from '@angular/core';
+import type { Signal } from '@angular/core';
 import type {
   ManagerApi,
   OrderCardItem,
@@ -6,7 +7,7 @@ import type {
   OrderEditPayload,
   OrderUpdateRequest
 } from '../../core/manager.api';
-import type { WorkerReviewItem } from '../../core/worker.api';
+import type { WorkerBoard, WorkerReviewItem } from '../../core/worker.api';
 import type { ToastService } from '../../shared/toast.service';
 import type { ReviewEditDraft, ReviewEditItem } from './worker-board.config';
 import type { WorkerOrderEditDraftChange } from './worker-order-edit-modal.component';
@@ -29,6 +30,8 @@ export type WorkerBoardEditFacadeDeps = {
   managerApi: WorkerBoardEditApi;
   toastService: WorkerBoardEditToast;
   loadBoard: () => void;
+  board?: Signal<WorkerBoard | null>;
+  setBoardPatch?: (board: WorkerBoard | null) => void;
   errorMessage: (err: unknown, fallback: string) => string;
   clearReviewEditDrafts: (reviewId: number) => void;
   canOpenOrderEditModal: () => boolean;
@@ -108,7 +111,8 @@ export class WorkerBoardEditFacade {
     this.orderError.set(null);
 
     this.deps.managerApi.updateOrder(order.id, draft).subscribe({
-      next: () => {
+      next: (payload) => {
+        this.patchOrderCard(payload);
         this.orderSaving.set(false);
         this.closeOrderEdit();
         this.deps.toastService.success('Заказ сохранен', `Изменения по заказу #${order.id} применены`);
@@ -140,6 +144,7 @@ export class WorkerBoardEditFacade {
 
     this.deps.managerApi.deleteOrder(order.id).subscribe({
       next: () => {
+        this.removeOrderCard(order.id);
         this.orderDeleting.set(false);
         this.closeOrderEdit();
         this.deps.toastService.success('Заказ удален', `Заказ #${order.id} удален`);
@@ -220,6 +225,7 @@ export class WorkerBoardEditFacade {
     this.deps.managerApi.updateOrderReview(review.orderId, review.id, draft).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
+        this.patchReviewsFromDetails(details);
         this.deps.clearReviewEditDrafts(review.id);
         this.reviewEditSaving.set(false);
         this.editReview.set(null);
@@ -254,6 +260,7 @@ export class WorkerBoardEditFacade {
     this.deps.managerApi.deleteOrderReview(review.orderId, review.id).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
+        this.removeReviewCard(review.id);
         this.reviewEditDeleting.set(false);
         this.editReview.set(null);
         this.reviewEditDraft.set(null);
@@ -282,6 +289,7 @@ export class WorkerBoardEditFacade {
     this.deps.managerApi.uploadOrderReviewPhoto(review.orderId, review.id, file).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
+        this.patchReviewsFromDetails(details);
         this.reviewEditUploading.set(false);
 
         const updatedReview = details.reviews.find((item) => item.id === review.id);
@@ -333,5 +341,74 @@ export class WorkerBoardEditFacade {
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
     };
+  }
+
+  private patchOrderCard(payload: OrderEditPayload): void {
+    this.patchBoard((board) => ({
+      ...board,
+      orders: {
+        ...board.orders,
+        content: board.orders.content.map((order) => order.id === payload.id
+          ? {
+              ...order,
+              filialTitle: payload.filial?.label ?? order.filialTitle,
+              status: payload.status,
+              sum: payload.sum,
+              amount: payload.amount,
+              counter: payload.counter,
+              orderComments: payload.orderComments,
+              companyComments: payload.commentsCompany,
+              workerUserFio: payload.worker?.label ?? order.workerUserFio,
+              changed: payload.changed,
+              payDay: payload.payDay
+            }
+          : order
+        )
+      }
+    }));
+  }
+
+  private removeOrderCard(orderId: number): void {
+    this.patchBoard((board) => ({
+      ...board,
+      orders: {
+        ...board.orders,
+        content: board.orders.content.filter((order) => order.id !== orderId)
+      }
+    }));
+  }
+
+  private patchReviewsFromDetails(details: OrderDetailsPayload): void {
+    const updatedReviews = new Map(details.reviews.map((review) => [review.id, review]));
+
+    this.patchBoard((board) => ({
+      ...board,
+      reviews: {
+        ...board.reviews,
+        content: board.reviews.content.map((review) => {
+          const updatedReview = updatedReviews.get(review.id);
+          return updatedReview ? { ...review, ...updatedReview } : review;
+        })
+      }
+    }));
+  }
+
+  private removeReviewCard(reviewId: number): void {
+    this.patchBoard((board) => ({
+      ...board,
+      reviews: {
+        ...board.reviews,
+        content: board.reviews.content.filter((review) => review.id !== reviewId)
+      }
+    }));
+  }
+
+  private patchBoard(updater: (board: WorkerBoard) => WorkerBoard): void {
+    if (!this.deps.board || !this.deps.setBoardPatch) {
+      return;
+    }
+
+    const board = this.deps.board();
+    this.deps.setBoardPatch(board ? updater(board) : board);
   }
 }

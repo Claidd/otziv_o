@@ -16,7 +16,8 @@ function filial(id: number): CompanyFilialEditItem {
   return {
     id,
     title: `Filial ${id}`,
-    url: '',
+    url: `https://filial-${id}.example.test`,
+    cityId: 8,
     city: 'City'
   };
 }
@@ -103,6 +104,7 @@ describe('ManagerCompanyEditModalComponent', () => {
     let categoryId: number | null = null;
     let deletedWorkerLabel = '';
     let deletedFilialTitle = '';
+    let updatedFilialId: number | null = null;
     component.company = company();
     component.draft = draft();
     component.closed.subscribe(() => {
@@ -120,6 +122,9 @@ describe('ManagerCompanyEditModalComponent', () => {
     component.filialDeleted.subscribe((filial) => {
       deletedFilialTitle = filial.title;
     });
+    component.filialUpdated.subscribe((filial) => {
+      updatedFilialId = filial.filialId;
+    });
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -128,6 +133,9 @@ describe('ManagerCompanyEditModalComponent', () => {
     component.categoryChanged.emit(2);
     element.querySelector<HTMLButtonElement>('.lead-edit-close')?.click();
     element.querySelector<HTMLButtonElement>('.worker-delete')?.click();
+    element.querySelector<HTMLButtonElement>('.filial-edit')?.click();
+    fixture.detectChanges();
+    element.querySelector<HTMLButtonElement>('.company-filial-edit-actions button:not(.secondary)')?.click();
     element.querySelector<HTMLButtonElement>('.filial-delete')?.click();
     element.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
@@ -135,6 +143,7 @@ describe('ManagerCompanyEditModalComponent', () => {
     expect(closed).toBe(true);
     expect(deletedWorkerLabel).toBe('Worker 6');
     expect(deletedFilialTitle).toBe('Filial 7');
+    expect(updatedFilialId).toBe(7);
     expect(submitted).toBe(true);
   });
 
