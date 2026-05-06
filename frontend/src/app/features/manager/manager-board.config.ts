@@ -186,8 +186,9 @@ export function managerPromoItems(section: ManagerSection, texts: string[]): Pro
   ];
 }
 
-export function managerStatusOptionLabel(status: string, count: number | null): string {
-  return count === null ? status : `${status}: ${count}`;
+export function managerStatusOptionLabel(status: string, count: number | null, delta = 0): string {
+  const label = count === null ? status : `${status}: ${count}`;
+  return delta > 0 ? `${label} +${delta}` : label;
 }
 
 export function managerPayableOrderSum(order: OrderCardItem): number {

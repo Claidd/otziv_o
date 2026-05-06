@@ -1,10 +1,13 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
+import com.hunt.otziv.l_lead.dto.api.DeviceTokenResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneListResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneOperatorOptionResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneUpsertRequest;
+import com.hunt.otziv.l_lead.model.DeviceToken;
+import com.hunt.otziv.l_lead.repository.DeviceTokenRepository;
 import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.services.service.OperatorService;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -34,6 +38,7 @@ public class ApiAdminPhoneController {
 
     private final TelephoneService telephoneService;
     private final OperatorService operatorService;
+    private final DeviceTokenRepository deviceTokenRepository;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
@@ -78,6 +83,19 @@ public class ApiAdminPhoneController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deletePhone(@PathVariable Long id) {
         telephoneService.deletePhone(id);
+    }
+
+    @DeleteMapping("/{id}/device-tokens/{token}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public void deleteDeviceToken(
+            @PathVariable Long id,
+            @PathVariable String token
+    ) {
+        DeviceToken deviceToken = deviceTokenRepository.findByTokenAndTelephone_Id(token, id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Токен устройства не найден"));
+
+        deviceTokenRepository.delete(deviceToken);
     }
 
     private TelephoneDTO toDto(PhoneUpsertRequest request, TelephoneDTO defaults) {
@@ -132,8 +150,23 @@ public class ApiAdminPhoneController {
                 phone.isActive(),
                 phone.getCreateDate(),
                 phone.getUpdateStatus(),
-                toOperatorOption(phone.getOperator())
+                toOperatorOption(phone.getOperator()),
+                deviceTokens(phone.getId())
         );
+    }
+
+    private List<DeviceTokenResponse> deviceTokens(Long telephoneId) {
+        if (telephoneId == null) {
+            return List.of();
+        }
+
+        return deviceTokenRepository.findByTelephone_IdOrderByCreatedAtDesc(telephoneId).stream()
+                .map(deviceToken -> new DeviceTokenResponse(
+                        deviceToken.getToken(),
+                        deviceToken.getCreatedAt(),
+                        deviceToken.isActive()
+                ))
+                .toList();
     }
 
     private List<PhoneOperatorOptionResponse> operatorOptions() {

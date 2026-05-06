@@ -1205,21 +1205,21 @@ app-worker-board .bot-line--empty span {
 }
 
 @media (min-width: 861px) {
-  app-manager-board app-admin-layout {
+  app-admin-layout {
     height: 100vh;
     height: 100dvh;
     min-height: 0;
     overflow: hidden;
   }
 
-  app-manager-board app-admin-layout .admin-layout.admin-layout {
+  app-admin-layout .admin-layout.admin-layout {
     height: 100vh;
     height: 100dvh;
     min-height: 0;
     overflow: hidden;
   }
 
-  app-manager-board app-admin-layout .admin-layout .admin-content {
+  app-admin-layout .admin-layout .admin-content {
     height: 100vh;
     height: 100dvh;
     min-height: 0;
@@ -1230,7 +1230,7 @@ app-worker-board .bot-line--empty span {
     scrollbar-width: none;
   }
 
-  app-manager-board app-admin-layout .admin-layout .admin-content::-webkit-scrollbar {
+  app-admin-layout .admin-layout .admin-content::-webkit-scrollbar {
     display: none;
   }
 }

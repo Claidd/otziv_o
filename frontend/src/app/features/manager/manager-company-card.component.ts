@@ -69,6 +69,41 @@ export class ManagerCompanyCardComponent {
     return this.company.status === 'На стопе' || this.company.status === 'Бан';
   }
 
+  hasNextOrderRequest(): boolean {
+    return (this.company.nextOrderRequestsCount ?? 0) > 0;
+  }
+
+  nextOrderRequestLabel(): string {
+    const count = this.company.nextOrderRequestsCount ?? 0;
+    const filial = this.nextOrderRequestFilialTitle();
+    if (count <= 1) {
+      const label = (this.company.failedNextOrderRequestsCount ?? 0) > 0
+        ? 'Автозаказ не создан'
+        : 'Нужен заказ';
+      return filial ? `${label}: ${filial}` : label;
+    }
+    return filial ? `Нужны заказы: ${count}, ${filial}` : `Нужны заказы: ${count}`;
+  }
+
+  nextOrderRequestTitle(): string {
+    const filial = this.nextOrderRequestFilialTitle();
+    const error = (this.company.nextOrderRequestError ?? '').trim();
+    if (error) {
+      return filial ? `${filial}: ${error}` : error;
+    }
+    return filial
+      ? `Есть открытая заявка на следующий заказ: ${filial}`
+      : 'Есть открытая заявка на следующий заказ';
+  }
+
+  hasFailedNextOrderRequest(): boolean {
+    return (this.company.failedNextOrderRequestsCount ?? 0) > 0;
+  }
+
+  private nextOrderRequestFilialTitle(): string {
+    return (this.company.nextOrderRequestFilialTitle ?? '').trim();
+  }
+
   trackAction(index: number, action: StatusAction): string {
     return trackManagerAction(index, action);
   }

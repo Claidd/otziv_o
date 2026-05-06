@@ -48,4 +48,12 @@ public class CompanyListDTO {
     private LocalDate dateNewTry;
 
     private String groupId;
+
+    private int nextOrderRequestsCount;
+
+    private int failedNextOrderRequestsCount;
+
+    private String nextOrderRequestFilialTitle;
+
+    private String nextOrderRequestError;
 }

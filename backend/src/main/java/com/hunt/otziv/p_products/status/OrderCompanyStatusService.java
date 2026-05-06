@@ -4,6 +4,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,9 +32,11 @@ public class OrderCompanyStatusService {
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
     private static final String STATUS_COMPANY_IN_STOP = "На стопе";
+    private static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
 
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
+    private final NextOrderRequestService nextOrderRequestService;
 
     public void autoManageCompanyStatus(Order changedOrder, String newOrderStatus) {
         try {
@@ -54,8 +57,13 @@ public class OrderCompanyStatusService {
 
             if (STATUS_ARCHIVE.equals(newOrderStatus)) {
                 if (!hasOtherActiveOrders) {
-                    log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет других активных заказов -> компания в 'Стоп'");
-                    company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+                    if (nextOrderRequestService.hasOpenRequests(company.getId())) {
+                        log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет активных заказов, но есть заявка на следующий -> компания в 'Новый заказ'");
+                        company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_NEW_ORDER));
+                    } else {
+                        log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет других активных заказов -> компания в 'Стоп'");
+                        company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+                    }
                     companyService.save(company);
                     log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
                 } else {

@@ -37,6 +37,17 @@
     </button>
   </div>
 
+  @if (hasNextOrderRequest()) {
+    <div
+      class="next-order-alert"
+      [class.next-order-alert--failed]="hasFailedNextOrderRequest()"
+      [title]="nextOrderRequestTitle()"
+    >
+      <span class="material-icons-sharp">{{ hasFailedNextOrderRequest() ? 'error' : 'assignment_add' }}</span>
+      <span>{{ nextOrderRequestLabel() }}</span>
+    </div>
+  }
+
   <details class="comment-details">
     <summary>
       <span>{{ company.commentsCompany || 'Комментарий' }}</span>

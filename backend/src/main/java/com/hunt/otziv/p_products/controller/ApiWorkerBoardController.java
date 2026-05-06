@@ -70,10 +70,18 @@ public class ApiWorkerBoardController {
     private static final String SECTION_PUBLISH = "publish";
     private static final String SECTION_BAD = "bad";
     private static final String SECTION_ALL = "all";
+    private static final String SECTION_CURRENT = "current";
     private static final String ORDER_STATUS_NEW = "Новый";
     private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
     private static final Set<String> CLIENT_WAITING_ORDER_STATUSES = Set.of(ORDER_STATUS_NEW, ORDER_STATUS_CORRECT);
+    private static final List<String> CURRENT_WORK_SECTIONS = List.of(
+            SECTION_NEW,
+            SECTION_CORRECT,
+            SECTION_NAGUL,
+            SECTION_PUBLISH,
+            SECTION_BAD
+    );
     private static final int MAX_PAGE_SIZE = 50;
 
     private final OrderService orderService;
@@ -104,12 +112,18 @@ public class ApiWorkerBoardController {
             String normalizedSection = normalizeSection(section);
             String message = "";
             boolean warning = false;
+            List<WorkerMetricResponse> metrics = null;
 
-            WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
-            if (redirect != null) {
-                normalizedSection = redirect.section();
-                message = redirect.message();
-                warning = true;
+            if (isCurrentSectionRequest(section)) {
+                metrics = buildMetrics(principal, authentication);
+                normalizedSection = currentWorkSection(metrics);
+            } else {
+                WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
+                if (redirect != null) {
+                    normalizedSection = redirect.section();
+                    message = redirect.message();
+                    warning = true;
+                }
             }
 
             int safePageNumber = Math.max(pageNumber, 0);
@@ -131,7 +145,7 @@ public class ApiWorkerBoardController {
                     toPageResponse(orders),
                     reviews,
                     List.of(),
-                    buildMetrics(principal, authentication),
+                    metrics != null ? metrics : buildMetrics(principal, authentication),
                     promoTextService.getAllPromoTexts(),
                     buildPermissions(authentication),
                     message,
@@ -855,6 +869,29 @@ public class ApiWorkerBoardController {
 
     private boolean isReviewSection(String section) {
         return SECTION_NAGUL.equals(section) || SECTION_PUBLISH.equals(section) || SECTION_BAD.equals(section);
+    }
+
+    private boolean isCurrentSectionRequest(String section) {
+        return section != null && SECTION_CURRENT.equals(section.toLowerCase(Locale.ROOT).trim());
+    }
+
+    private String currentWorkSection(List<WorkerMetricResponse> metrics) {
+        return CURRENT_WORK_SECTIONS.stream()
+                .filter(section -> metricValue(metrics, section) > 0)
+                .findFirst()
+                .orElse(SECTION_NEW);
+    }
+
+    private int metricValue(List<WorkerMetricResponse> metrics, String section) {
+        if (metrics == null || metrics.isEmpty()) {
+            return 0;
+        }
+
+        return metrics.stream()
+                .filter(metric -> section.equals(metric.section()))
+                .mapToInt(WorkerMetricResponse::value)
+                .findFirst()
+                .orElse(0);
     }
 
     private WorkerFlowRedirect workerFlowRedirect(Principal principal, Authentication authentication, String requestedSection) {

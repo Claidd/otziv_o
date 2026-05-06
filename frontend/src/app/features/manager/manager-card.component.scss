@@ -232,6 +232,42 @@
   background: #c461dc;
 }
 
+.next-order-alert {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 1.72rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  overflow: hidden;
+  border: 1px solid rgba(72, 150, 136, 0.28);
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  color: #2f6f65;
+  background: rgba(226, 248, 241, 0.84);
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.next-order-alert--failed {
+  border-color: rgba(226, 44, 95, 0.3);
+  color: var(--otziv-danger);
+  background: rgba(255, 235, 242, 0.88);
+}
+
+.next-order-alert .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.next-order-alert span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .category-row {
   flex-wrap: wrap;
   overflow: visible;

@@ -475,6 +475,51 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                      Pageable pageable);
 
     @Query("""
+        SELECT CASE WHEN COUNT(o.id) > 0 THEN true ELSE false END
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.company.id = :companyId
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+    """)
+    boolean existsActiveOrderByCompanyId(@Param("companyId") Long companyId,
+                                         @Param("inactiveStatuses") Set<String> inactiveStatuses);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(o.id) > 0 THEN true ELSE false END
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.company.id = :companyId
+          AND ((:filialId IS NULL AND o.filial IS NULL) OR (:filialId IS NOT NULL AND o.filial.id = :filialId))
+          AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+    """)
+    boolean existsActiveOrderByCompanyIdAndFilialId(@Param("companyId") Long companyId,
+                                                    @Param("filialId") Long filialId,
+                                                    @Param("excludedOrderId") Long excludedOrderId,
+                                                    @Param("inactiveStatuses") Set<String> inactiveStatuses);
+
+    @Query("""
+        SELECT o
+        FROM Order o
+        LEFT JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        WHERE o.company.id = :companyId
+          AND ((:filialId IS NULL AND o.filial IS NULL) OR (:filialId IS NOT NULL AND o.filial.id = :filialId))
+          AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+        ORDER BY o.id DESC
+    """)
+    List<Order> findActiveOrdersByCompanyIdAndFilialId(@Param("companyId") Long companyId,
+                                                       @Param("filialId") Long filialId,
+                                                       @Param("excludedOrderId") Long excludedOrderId,
+                                                       @Param("inactiveStatuses") Set<String> inactiveStatuses,
+                                                       Pageable pageable);
+
+    @Query("""
         SELECT o.id
         FROM Order o
         WHERE o.company.id = :companyId

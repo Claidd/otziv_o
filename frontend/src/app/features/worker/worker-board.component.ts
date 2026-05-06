@@ -5,6 +5,7 @@ import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import {
   WorkerApi,
   WorkerBoard,
+  WorkerBoardSectionQuery,
   WorkerBotItem,
   WorkerMetric,
   WorkerPage,
@@ -168,7 +169,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly savedSideNoteKey = this.noteFacade.savedSideNoteKey;
 
   constructor() {
-    this.loadBoard();
+    this.openCurrentWorkSection();
   }
 
   ngOnDestroy(): void {
@@ -181,13 +182,13 @@ export class WorkerBoardComponent implements OnDestroy {
     this.closeReviewEdit();
   }
 
-  loadBoard(): void {
+  loadBoard(section: WorkerBoardSectionQuery = this.activeSection()): void {
     this.loading.set(true);
     this.error.set(null);
     this.hideBoardNotice();
 
     this.workerApi.getBoard({
-      section: this.activeSection(),
+      section,
       keyword: this.keyword(),
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
@@ -231,6 +232,14 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     this.setSection(section);
+  }
+
+  handleActiveShellLink(active: string): void {
+    if (active !== 'worker') {
+      return;
+    }
+
+    this.openCurrentWorkSection();
   }
 
   search(): void {
@@ -548,6 +557,12 @@ export class WorkerBoardComponent implements OnDestroy {
     return trackWorkerSection(_index, section);
   }
 
+  sectionOptionLabel(section: SectionTab): string {
+    const metric = this.findMetric(section.key);
+    const label = metric ? `${section.label}: ${metric.value}` : section.label;
+    return (metric?.delta ?? 0) > 0 ? `${label} +${metric?.delta}` : label;
+  }
+
   trackOrder(_index: number, order: OrderCardItem): number {
     return trackWorkerOrder(_index, order);
   }
@@ -570,6 +585,14 @@ export class WorkerBoardComponent implements OnDestroy {
 
   private findMetric(section: WorkerSection): WorkerMetric | undefined {
     return this.board()?.metrics.find((item) => item.section === section);
+  }
+
+  private openCurrentWorkSection(): void {
+    this.keyword.set('');
+    this.activeSection.set('new');
+    this.pageNumber.set(0);
+    this.mobileMenuOpen.set(false);
+    this.loadBoard('current');
   }
 
   private loadBoardAfterMetricSeen(metric?: WorkerMetric): void {

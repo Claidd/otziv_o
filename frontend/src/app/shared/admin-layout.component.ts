@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, Input, signal } from '@angular/core';
+import { Component, computed, effect, EventEmitter, inject, Input, Output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
@@ -36,6 +36,7 @@ export class AdminLayoutComponent {
   @Input() rightPanelMode: 'default' | 'custom' = 'default';
   @Input() profileImageUrl: string | null = null;
   @Input() profileImageAlt = 'Фото профиля';
+  @Output() readonly activeLinkClicked = new EventEmitter<string>();
 
   readonly brandLogoUrl = `${appEnvironment.legacyBaseUrl}/images/image/logo-o.png`;
   readonly authenticated = this.auth.authenticated;
@@ -133,6 +134,12 @@ export class AdminLayoutComponent {
     }
 
     return link.routerLink;
+  }
+
+  handleRouterLinkClick(link: ShellLink): void {
+    if (this.isActive(link)) {
+      this.activeLinkClicked.emit(link.active);
+    }
   }
 
   login(): void {

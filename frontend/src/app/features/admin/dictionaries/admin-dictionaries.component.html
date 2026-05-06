@@ -271,6 +271,53 @@
               </table>
             }
 
+            @case ('phones') {
+              <table class="phone-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Номер</th>
+                    <th>ФИО</th>
+                    <th>Разрешено</th>
+                    <th>Отправлено</th>
+                    <th>Блок</th>
+                    <th>Таймер</th>
+                    <th>Оператор</th>
+                    <th>Токены</th>
+                    <th>Активен</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (phone of phones(); track trackPhone($index, phone)) {
+                    <tr [class.selected]="selectedPhone()?.id === phone.id" (click)="selectPhone(phone)">
+                      <td>{{ phone.id }}</td>
+                      <td>
+                        <strong>{{ phone.number }}</strong>
+                        <span>{{ phone.mailLogin || phone.googleLogin || '-' }}</span>
+                      </td>
+                      <td>{{ phone.fio || '-' }}</td>
+                      <td>{{ phone.amountAllowed }}</td>
+                      <td>{{ phone.amountSent }}</td>
+                      <td>{{ phone.blockTime }} мин</td>
+                      <td>
+                        <strong>{{ phone.timer | date:'dd.MM.yyyy HH:mm' }}</strong>
+                        <span class="status-pill" [class.off]="!isTimerReady(phone)">{{ timerState(phone) }}</span>
+                      </td>
+                      <td>{{ phoneOperatorName(phone.operator) }}</td>
+                      <td>
+                        <span class="status-pill" [class.off]="deviceTokenCount(phone) === 0">{{ deviceTokenCount(phone) }}</span>
+                      </td>
+                      <td>
+                        <span class="status-pill" [class.off]="!phone.active">{{ phone.active ? 'Да' : 'Нет' }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="10" class="no-results">Телефонов нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
             @case ('accounts') {
               <table>
                 <thead>
@@ -489,6 +536,144 @@
                 <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
+          }
+
+          @case ('phones') {
+            <form [formGroup]="phoneForm" (ngSubmit)="saveActive()">
+              <div class="form-grid">
+                <label>
+                  <span>Номер телефона</span>
+                  <input type="text" formControlName="number" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>ФИО</span>
+                  <input type="text" formControlName="fio" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Дата рождения</span>
+                  <input type="date" formControlName="birthday">
+                </label>
+
+                <label>
+                  <span>Оператор</span>
+                  <select formControlName="operatorId">
+                    <option [ngValue]="null">Не выбран</option>
+                    @for (operator of phoneOperators(); track trackPhoneOperator($index, operator)) {
+                      <option [ngValue]="operator.id">{{ operator.title }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label>
+                  <span>Разрешено отправлять</span>
+                  <input type="number" min="0" step="1" formControlName="amountAllowed">
+                </label>
+
+                <label>
+                  <span>Отправлено</span>
+                  <input type="number" min="0" step="1" formControlName="amountSent">
+                </label>
+
+                <label>
+                  <span>Блокировка, мин</span>
+                  <input type="number" min="0" step="1" formControlName="blockTime">
+                </label>
+
+                <label>
+                  <span>Таймер блокировки</span>
+                  <input type="datetime-local" formControlName="timer">
+                </label>
+
+                <label>
+                  <span>Google логин</span>
+                  <input type="text" formControlName="googleLogin" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Google пароль</span>
+                  <input type="text" formControlName="googlePassword" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Avito пароль</span>
+                  <input type="text" formControlName="avitoPassword" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Mail логин</span>
+                  <input type="text" formControlName="mailLogin" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Mail пароль</span>
+                  <input type="text" formControlName="mailPassword" autocomplete="off">
+                </label>
+
+                <label>
+                  <span>Дата создания</span>
+                  <input type="date" formControlName="createDate">
+                </label>
+
+                <label class="wide">
+                  <span>Фото Instagram</span>
+                  <input type="text" formControlName="fotoInstagram" autocomplete="off">
+                </label>
+
+                <label class="checkbox wide">
+                  <input type="checkbox" formControlName="active">
+                  <span>Телефон активен</span>
+                </label>
+              </div>
+
+              @if (phoneForm.invalid && phoneForm.touched) {
+                <p class="error compact">Номер и числовые поля обязательны.</p>
+              }
+
+              <div class="actions">
+                @if (selectedPhone()) {
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                }
+                <button type="button" class="secondary" (click)="startNewPhone()" [disabled]="saving() || deleting()">Новый</button>
+                <button type="submit" [disabled]="saving() || deleting()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+
+            @if (selectedPhone(); as phone) {
+              <section class="device-token-panel" aria-label="Device tokens">
+                <div class="assignment-head">
+                  <div>
+                    <p class="eyebrow">Device tokens</p>
+                    <h3>Устройства телефона</h3>
+                  </div>
+                  <span>{{ deviceTokenCount(phone) }}</span>
+                </div>
+
+                <div class="device-token-list">
+                  @for (deviceToken of phone.deviceTokens; track trackDeviceToken($index, deviceToken)) {
+                    <div class="device-token-row">
+                      <div>
+                        <strong [title]="deviceToken.token">{{ tokenPreview(deviceToken.token) }}</strong>
+                        <span>{{ deviceToken.createdAt | date:'dd.MM.yyyy HH:mm' }}</span>
+                      </div>
+                      <span class="status-pill" [class.off]="!deviceToken.active">{{ deviceToken.active ? 'Активен' : 'Выключен' }}</span>
+                      <button
+                        type="button"
+                        class="row-icon-button danger-icon"
+                        (click)="deleteDeviceToken(phone, deviceToken)"
+                        [disabled]="deleting() || saving()"
+                        title="Удалить токен"
+                      >
+                        <span class="material-icons-sharp">delete</span>
+                      </button>
+                    </div>
+                  } @empty {
+                    <p class="no-results">У телефона нет привязанных устройств.</p>
+                  }
+                </div>
+              </section>
+            }
           }
 
           @case ('accounts') {

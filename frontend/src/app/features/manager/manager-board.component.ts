@@ -355,8 +355,8 @@ export class ManagerBoardComponent {
   }
 
   statusOptionLabel(section: ManagerSection, status: string): string {
-    const count = this.metricValue(section, status);
-    return managerStatusOptionLabel(status, count);
+    const metric = this.findMetric(section, status);
+    return managerStatusOptionLabel(status, metric?.value ?? null, metric?.delta ?? 0);
   }
 
   search(): void {
@@ -610,11 +610,6 @@ export class ManagerBoardComponent {
 
   overdueMaxDays(summary: ManagerOverdueOrders): number {
     return summary.statuses.reduce((max, status) => Math.max(max, status.maxDays), 0);
-  }
-
-  private metricValue(section: ManagerSection, status: string): number | null {
-    const metric = this.board()?.metrics.find((item) => item.section === section && item.status === status);
-    return metric?.value ?? null;
   }
 
   private findMetric(section: ManagerSection, status: string): ManagerMetric | undefined {

@@ -279,7 +279,7 @@
                   <footer>
                     <span>{{ reviewDate(review) }}</span>
                     @if (isReviewWindowApproved(details)) {
-                      <span class="review-footer-state">одобрено</span>
+                      <span class="review-footer-state">{{ reviewFooterStateLabel(details) }}</span>
                     } @else if (needsReviewPhoto(review)) {
                       <span class="review-footer-state missing-photo-text">нужно фото</span>
                     }
@@ -417,6 +417,19 @@
             </div>
             <i class="material-icons-sharp">task_alt</i>
           </article>
+
+          <article
+            class="stat-card review-window-status-card"
+            [class.green]="reviewWindowStatus(details) === 'approved' || reviewWindowStatus(details) === 'paid'"
+            [class.blue]="reviewWindowStatus(details) === 'correction'"
+            [class.teal]="reviewWindowStatus(details) === 'not-approved'"
+          >
+            <div>
+              <span>Статус</span>
+              <strong>{{ reviewWindowStatusLabel(details) }}</strong>
+            </div>
+            <i class="material-icons-sharp">{{ reviewWindowStatusIcon(details) }}</i>
+          </article>
         </div>
 
         @if (details.workerFio) {
@@ -536,7 +549,7 @@
 
       <article
         class="stat-card review-window-status-card"
-        [class.green]="reviewWindowStatus(details) === 'approved'"
+        [class.green]="reviewWindowStatus(details) === 'approved' || reviewWindowStatus(details) === 'paid'"
         [class.blue]="reviewWindowStatus(details) === 'correction'"
         [class.teal]="reviewWindowStatus(details) === 'not-approved'"
       >

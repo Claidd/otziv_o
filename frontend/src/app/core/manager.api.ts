@@ -28,6 +28,10 @@ export interface CompanyCardItem {
   city?: string;
   dateNewTry?: string;
   groupId?: string;
+  nextOrderRequestsCount?: number;
+  failedNextOrderRequestsCount?: number;
+  nextOrderRequestFilialTitle?: string;
+  nextOrderRequestError?: string;
 }
 
 export interface OrderCardItem {

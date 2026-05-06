@@ -722,8 +722,12 @@
   color: var(--otziv-success);
 }
 
-.review-check-side .teal {
+.teal {
   color: #2f9f95;
+}
+
+.review-window-status-card {
+  grid-column: 1 / -1;
 }
 
 .staff-actions-card a,

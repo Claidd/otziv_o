@@ -14,7 +14,7 @@
             <strong>{{ link.label }}</strong>
           </a>
         } @else if (link.routerLink) {
-          <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">
+          <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)" (click)="handleRouterLinkClick(link)">
             <span class="material-icons-sharp">{{ link.icon }}</span>
             <strong>{{ link.label }}</strong>
           </a>
@@ -70,7 +70,7 @@
         <nav class="top-links" aria-label="Role sections">
           @for (link of visibleHeaderLinks(); track link.label) {
             @if (link.routerLink) {
-              <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)">{{ link.label }}</a>
+              <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)" (click)="handleRouterLinkClick(link)">{{ link.label }}</a>
             } @else {
               <a
                 [href]="link.href"

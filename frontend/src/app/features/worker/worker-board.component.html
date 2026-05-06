@@ -1,4 +1,4 @@
-<app-admin-layout [title]="title()" active="worker" rightPanelMode="custom">
+<app-admin-layout [title]="title()" active="worker" rightPanelMode="custom" (activeLinkClicked)="handleActiveShellLink($event)">
   <section class="worker-workspace" [class.menu-open]="mobileMenuOpen()">
     <button
       type="button"
@@ -17,7 +17,7 @@
         <nav class="worker-dropdowns" aria-label="Меню специалиста">
           <select class="worker-section-select" [ngModel]="activeSection()" (ngModelChange)="handleSectionMenu($event)" aria-label="Раздел специалиста">
             @for (section of sections; track trackSection($index, section)) {
-              <option [ngValue]="section.key">{{ section.label }}</option>
+              <option [ngValue]="section.key">{{ sectionOptionLabel(section) }}</option>
             }
           </select>
 

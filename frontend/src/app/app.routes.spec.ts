@@ -14,7 +14,6 @@ describe('routes', () => {
       'legacy-migration',
       'leads',
       'operator',
-      'operator/phones',
       'manager',
       'manager/orders/:companyId/:orderId',
       'worker',
@@ -22,6 +21,7 @@ describe('routes', () => {
       'admin/score',
       'admin/analyse',
       'admin/user-info/:userId',
+      'admin/dictionaries/phones',
       'admin/dictionaries',
       'review/editReviews/:orderDetailId'
     ].forEach((path) => {
@@ -58,10 +58,10 @@ describe('routes', () => {
     const protectedRoutes = [
       ['leads', ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']],
       ['operator', ['ADMIN', 'OWNER', 'OPERATOR']],
-      ['operator/phones', ['ADMIN', 'OWNER']],
       ['manager', ['ADMIN', 'OWNER', 'MANAGER']],
       ['worker', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
       ['admin/analyse', ['ADMIN', 'OWNER']],
+      ['admin/dictionaries/phones', ['ADMIN', 'OWNER']],
       ['admin/dictionaries', ['ADMIN', 'OWNER', 'MANAGER']]
     ];
 

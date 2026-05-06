@@ -21,6 +21,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.*;
 import com.hunt.otziv.r_review.model.Review;
@@ -63,6 +64,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final FilialService filialService;
     private final ReviewRepository reviewRepository;
     private final BotAssignmentService botAssignmentService;
+    private final NextOrderRequestService nextOrderRequestService;
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
 
@@ -102,6 +104,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             // 7. Обновляем счётчики компании
             updateCompanyCounter(order, companyId);
             log.info("7. Обновили счётчики компании");
+            nextOrderRequestService.completeOpenRequestForCreatedOrder(order);
 
             // 8. Оповещение
             notifyWorker(order);

@@ -1,5 +1,7 @@
+import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { forkJoin, Observable } from 'rxjs';
 import {
   AdminBot,
@@ -30,8 +32,16 @@ import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
+import {
+  DeviceToken,
+  OperatorPhone,
+  OperatorPhoneRequest,
+  OperatorPhonesApi,
+  OperatorPhonesResponse,
+  PhoneOperatorOption
+} from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'accounts' | 'promo' | 'managerTexts';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -61,20 +71,24 @@ const PROMO_TEXT_LABELS: Record<number, string> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule],
   templateUrl: './admin-dictionaries.component.html',
   styleUrl: './admin-dictionaries.component.scss'
 })
 export class AdminDictionariesComponent {
   private readonly fb = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
   private readonly dictionariesApi = inject(AdminDictionariesApi);
+  private readonly phonesApi = inject(OperatorPhonesApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
+  private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
 
   private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
     { key: 'cities', label: 'Города', icon: 'location_city' },
     { key: 'products', label: 'Продукты', icon: 'inventory_2' },
+    { key: 'phones', label: 'Телефоны', icon: 'phone_iphone' },
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' }
@@ -83,7 +97,7 @@ export class AdminDictionariesComponent {
     { key: 'categories', label: 'Категории', icon: 'category' }
   ];
 
-  readonly activeTab = signal<DictionaryTabKey>('categories');
+  readonly activeTab = signal<DictionaryTabKey>(this.initialTab());
   readonly search = signal('');
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -105,6 +119,9 @@ export class AdminDictionariesComponent {
   readonly subCategories = signal<AdminSubCategory[]>([]);
   readonly cities = signal<AdminCity[]>([]);
   readonly products = signal<AdminProduct[]>([]);
+  readonly phones = signal<OperatorPhone[]>([]);
+  readonly phoneOperators = signal<PhoneOperatorOption[]>([]);
+  readonly selectedPhone = signal<OperatorPhone | null>(null);
   readonly bots = signal<AdminBot[]>([]);
   readonly promoTexts = signal<AdminPromoText[]>([]);
   readonly managerTexts = signal<AdminManagerText[]>([]);
@@ -140,6 +157,25 @@ export class AdminDictionariesComponent {
     price: this.fb.nonNullable.control('0', Validators.required),
     categoryId: this.fb.control<number | null>(null, Validators.required),
     photo: this.fb.nonNullable.control(false)
+  });
+
+  readonly phoneForm = this.fb.nonNullable.group({
+    number: ['+7', Validators.required],
+    fio: [''],
+    birthday: [''],
+    amountAllowed: [1, Validators.required],
+    amountSent: [0, Validators.required],
+    blockTime: [3, Validators.required],
+    timer: [''],
+    googleLogin: [''],
+    googlePassword: [''],
+    avitoPassword: [''],
+    mailLogin: [''],
+    mailPassword: [''],
+    fotoInstagram: [''],
+    active: [true],
+    createDate: [''],
+    operatorId: this.fb.control<number | null>(null)
   });
 
   readonly botForm = this.fb.group({
@@ -190,6 +226,9 @@ export class AdminDictionariesComponent {
   readonly subCategoryEditorTitle = computed(() =>
     this.editingSubCategoryId() == null ? 'Новая подкатегория' : `Подкатегория #${this.editingSubCategoryId()}`
   );
+  readonly phoneDeviceTokenTotal = computed(() =>
+    this.phones().reduce((total, phone) => total + this.deviceTokenCount(phone), 0)
+  );
   readonly activeItemsTotal = computed(() => {
     switch (this.activeTab()) {
       case 'categories':
@@ -200,6 +239,8 @@ export class AdminDictionariesComponent {
         return this.cities().length;
       case 'products':
         return this.products().length;
+      case 'phones':
+        return this.phones().length;
       case 'accounts':
         return this.bots().length;
       case 'promo':
@@ -222,6 +263,8 @@ export class AdminDictionariesComponent {
       ...categoryMetrics,
       { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
       { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
+      { label: 'Телефоны', value: this.phones().length, icon: 'phone_iphone', tone: 'teal' },
+      { label: 'Токены', value: this.phoneDeviceTokenTotal(), icon: 'devices', tone: 'yellow' },
       { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' },
       { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' }
@@ -229,6 +272,10 @@ export class AdminDictionariesComponent {
   });
 
   constructor() {
+    if (!this.tabs().some((item) => item.key === this.activeTab())) {
+      this.activeTab.set('categories');
+    }
+
     this.loadAll();
   }
 
@@ -252,16 +299,18 @@ export class AdminDictionariesComponent {
         subCategories: this.dictionariesApi.getSubCategories(),
         cities: this.dictionariesApi.getCities(),
         products: this.dictionariesApi.getProducts(),
+        phones: this.phonesApi.getPhones(),
         bots: this.dictionariesApi.getBots(),
         promoTexts: this.dictionariesApi.getPromoTextManagement(),
         managerTexts: this.dictionariesApi.getManagerTexts()
       }).subscribe({
-        next: ({ categories, subCategories, cities, products, bots, promoTexts, managerTexts }) => {
+        next: ({ categories, subCategories, cities, products, phones, bots, promoTexts, managerTexts }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
           this.cities.set(cities);
           this.products.set(products.products);
           this.productCategories.set(products.categories);
+          this.applyPhonesResponse(phones);
           this.applyBotsResponse(bots);
           this.applyPromoManagement(promoTexts);
           this.managerTexts.set(managerTexts);
@@ -283,6 +332,9 @@ export class AdminDictionariesComponent {
         this.cities.set([]);
         this.products.set([]);
         this.productCategories.set([]);
+        this.phones.set([]);
+        this.phoneOperators.set([]);
+        this.selectedPhone.set(null);
         this.bots.set([]);
         this.promoTexts.set([]);
         this.managerTexts.set([]);
@@ -314,6 +366,11 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'subcategories') {
       this.openNewSubCategory();
+      return;
+    }
+
+    if (this.activeTab() === 'phones') {
+      this.startNewPhone();
       return;
     }
 
@@ -403,6 +460,54 @@ export class AdminDictionariesComponent {
     this.error.set(null);
   }
 
+  selectPhone(phone: OperatorPhone): void {
+    this.selectedId.set(phone.id);
+    this.selectedPhone.set(phone);
+    this.error.set(null);
+    this.phoneForm.reset({
+      number: phone.number ?? '+7',
+      fio: phone.fio ?? '',
+      birthday: this.toDateInput(phone.birthday),
+      amountAllowed: phone.amountAllowed,
+      amountSent: phone.amountSent,
+      blockTime: phone.blockTime,
+      timer: this.toDateTimeInput(phone.timer),
+      googleLogin: phone.googleLogin ?? '',
+      googlePassword: phone.googlePassword ?? '',
+      avitoPassword: phone.avitoPassword ?? '',
+      mailLogin: phone.mailLogin ?? '',
+      mailPassword: phone.mailPassword ?? '',
+      fotoInstagram: phone.fotoInstagram ?? '',
+      active: phone.active,
+      createDate: this.toDateInput(phone.createDate),
+      operatorId: phone.operator?.id ?? null
+    });
+  }
+
+  startNewPhone(): void {
+    this.selectedId.set(null);
+    this.selectedPhone.set(null);
+    this.error.set(null);
+    this.phoneForm.reset({
+      number: '+7',
+      fio: '',
+      birthday: '',
+      amountAllowed: 1,
+      amountSent: 0,
+      blockTime: 3,
+      timer: this.toDateTimeInput(new Date().toISOString()),
+      googleLogin: '',
+      googlePassword: '',
+      avitoPassword: '',
+      mailLogin: '',
+      mailPassword: '',
+      fotoInstagram: '',
+      active: true,
+      createDate: this.toDateInput(new Date().toISOString()),
+      operatorId: null
+    });
+  }
+
   selectBot(bot: AdminBot): void {
     this.selectedId.set(bot.id);
     this.botForm.setValue({
@@ -452,6 +557,25 @@ export class AdminDictionariesComponent {
       price: '0',
       categoryId: this.defaultProductCategoryId(),
       photo: false
+    });
+    this.selectedPhone.set(null);
+    this.phoneForm.reset({
+      number: '+7',
+      fio: '',
+      birthday: '',
+      amountAllowed: 1,
+      amountSent: 0,
+      blockTime: 3,
+      timer: '',
+      googleLogin: '',
+      googlePassword: '',
+      avitoPassword: '',
+      mailLogin: '',
+      mailPassword: '',
+      fotoInstagram: '',
+      active: true,
+      createDate: '',
+      operatorId: null
     });
     this.botForm.reset({
       login: '',
@@ -575,6 +699,9 @@ export class AdminDictionariesComponent {
       case 'products':
         this.saveProduct();
         return;
+      case 'phones':
+        this.savePhone();
+        return;
       case 'accounts':
         this.saveBot();
         return;
@@ -590,6 +717,11 @@ export class AdminDictionariesComponent {
   deleteSelected(): void {
     const activeTab = this.activeTab();
     if (activeTab === 'promo' || activeTab === 'managerTexts') {
+      return;
+    }
+
+    if (activeTab === 'phones') {
+      this.deleteSelectedPhone();
       return;
     }
 
@@ -631,12 +763,41 @@ export class AdminDictionariesComponent {
     });
   }
 
+  deleteDeviceToken(phone: OperatorPhone, deviceToken: DeviceToken): void {
+    if (this.deleting()) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Удалить токен устройства телефона ${phone.number}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.deleting.set(true);
+    this.error.set(null);
+
+    this.phonesApi.deleteDeviceToken(phone.id, deviceToken.token).subscribe({
+      next: () => {
+        this.deleting.set(false);
+        this.removeDeviceToken(phone.id, deviceToken.token);
+        this.toastService.success('Токен удален', phone.number);
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось удалить токен устройства');
+        this.error.set(message);
+        this.deleting.set(false);
+        this.toastService.error('Токен не удален', message);
+      }
+    });
+  }
+
   tabTotal(tab: DictionaryTabKey): number {
     return {
       categories: this.categories().length,
       subcategories: this.subCategories().length,
       cities: this.cities().length,
       products: this.products().length,
+      phones: this.phones().length,
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length
@@ -647,6 +808,26 @@ export class AdminDictionariesComponent {
     return category?.title || '-';
   }
 
+  phoneOperatorName(operator?: PhoneOperatorOption | null): string {
+    return operator?.title || '-';
+  }
+
+  timerState(phone: OperatorPhone): string {
+    return this.isTimerReady(phone) ? 'готов' : 'пауза';
+  }
+
+  isTimerReady(phone: OperatorPhone): boolean {
+    return !phone.timer || new Date(phone.timer).getTime() <= Date.now();
+  }
+
+  deviceTokenCount(phone: OperatorPhone): number {
+    return phone.deviceTokens?.length ?? 0;
+  }
+
+  tokenPreview(token: string): string {
+    return token.length > 18 ? `${token.slice(0, 8)}...${token.slice(-6)}` : token;
+  }
+
   selectedTitle(): string {
     if (this.activeTab() === 'managerTexts') {
       return this.selectedManagerText()?.managerTitle ?? 'Выберите менеджера';
@@ -654,6 +835,10 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'promo' && this.selectedId() == null) {
       return 'Новый промо-текст';
+    }
+
+    if (this.activeTab() === 'phones') {
+      return this.selectedPhone() ? `Телефон #${this.selectedPhone()!.id}` : 'Новый телефон';
     }
 
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
@@ -857,6 +1042,18 @@ export class AdminDictionariesComponent {
     return product.id;
   }
 
+  trackPhone(_index: number, phone: OperatorPhone): number {
+    return phone.id;
+  }
+
+  trackPhoneOperator(_index: number, operator: PhoneOperatorOption): number {
+    return operator.id;
+  }
+
+  trackDeviceToken(_index: number, deviceToken: DeviceToken): string {
+    return deviceToken.token;
+  }
+
   trackBot(_index: number, bot: AdminBot): number {
     return bot.id;
   }
@@ -887,7 +1084,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -901,6 +1098,9 @@ export class AdminDictionariesComponent {
       case 'products':
         request = this.dictionariesApi.getProducts(keyword);
         break;
+      case 'phones':
+        request = this.phonesApi.getPhones(keyword);
+        break;
       case 'accounts':
         request = this.dictionariesApi.getBots(keyword);
         break;
@@ -913,7 +1113,7 @@ export class AdminDictionariesComponent {
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -931,6 +1131,9 @@ export class AdminDictionariesComponent {
             this.productCategories.set(payload.categories);
             break;
           }
+          case 'phones':
+            this.applyPhonesResponse(response as OperatorPhonesResponse);
+            break;
           case 'accounts':
             this.applyBotsResponse(response as BotsResponse);
             this.ensureDefaults();
@@ -1030,6 +1233,70 @@ export class AdminDictionariesComponent {
       : this.dictionariesApi.updateProduct(selectedId, request);
 
     this.runSave(call, 'Продукт сохранен');
+  }
+
+  private savePhone(): void {
+    if (this.phoneForm.invalid) {
+      this.phoneForm.markAllAsTouched();
+      return;
+    }
+
+    const phone = this.selectedPhone();
+    const request = this.toPhoneRequest();
+    const call = phone
+      ? this.phonesApi.updatePhone(phone.id, request)
+      : this.phonesApi.createPhone(request);
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    call.subscribe({
+      next: (saved) => {
+        this.saving.set(false);
+        this.selectedId.set(saved.id);
+        this.selectedPhone.set(saved);
+        this.patchSavedPhone(saved);
+        this.selectPhone(saved);
+        this.toastService.success('Телефон сохранен', `ID ${saved.id}`);
+        this.reloadAfterMutation();
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить телефон');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Телефон не сохранен', message);
+      }
+    });
+  }
+
+  private deleteSelectedPhone(): void {
+    const phone = this.selectedPhone();
+    if (!phone || this.deleting()) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Удалить телефон ${phone.number}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.deleting.set(true);
+    this.error.set(null);
+
+    this.phonesApi.deletePhone(phone.id).subscribe({
+      next: () => {
+        this.deleting.set(false);
+        this.toastService.success('Телефон удален', phone.number);
+        this.startNewPhone();
+        this.reloadAfterMutation();
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось удалить телефон');
+        this.error.set(message);
+        this.deleting.set(false);
+        this.toastService.error('Телефон не удален', message);
+      }
+    });
   }
 
   private saveBot(): void {
@@ -1178,6 +1445,88 @@ export class AdminDictionariesComponent {
     return this.productCategories()[0]?.id ?? null;
   }
 
+  private toPhoneRequest(): OperatorPhoneRequest {
+    const raw = this.phoneForm.getRawValue();
+    return {
+      number: raw.number.trim(),
+      fio: this.emptyToNull(raw.fio),
+      birthday: raw.birthday || null,
+      amountAllowed: Number(raw.amountAllowed || 0),
+      amountSent: Number(raw.amountSent || 0),
+      blockTime: Number(raw.blockTime || 0),
+      timer: raw.timer || null,
+      googleLogin: this.emptyToNull(raw.googleLogin),
+      googlePassword: this.emptyToNull(raw.googlePassword),
+      avitoPassword: this.emptyToNull(raw.avitoPassword),
+      mailLogin: this.emptyToNull(raw.mailLogin),
+      mailPassword: this.emptyToNull(raw.mailPassword),
+      fotoInstagram: this.emptyToNull(raw.fotoInstagram),
+      active: raw.active,
+      createDate: raw.createDate || null,
+      operatorId: raw.operatorId
+    };
+  }
+
+  private toDateInput(value?: string | null): string {
+    return value ? value.slice(0, 10) : '';
+  }
+
+  private toDateTimeInput(value?: string | null): string {
+    return value ? value.slice(0, 16) : '';
+  }
+
+  private emptyToNull(value: string): string | null {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private patchSavedPhone(phone: OperatorPhone): void {
+    this.phones.update((phones) => {
+      const exists = phones.some((item) => item.id === phone.id);
+      return exists
+        ? phones.map((item) => item.id === phone.id ? phone : item)
+        : [phone, ...phones];
+    });
+  }
+
+  private removeDeviceToken(phoneId: number, token: string): void {
+    const removeFromPhone = (phone: OperatorPhone): OperatorPhone => ({
+      ...phone,
+      deviceTokens: (phone.deviceTokens ?? []).filter((item) => item.token !== token)
+    });
+
+    this.phones.update((phones) =>
+      phones.map((phone) => phone.id === phoneId ? removeFromPhone(phone) : phone)
+    );
+
+    const selectedPhone = this.selectedPhone();
+    if (selectedPhone?.id === phoneId) {
+      const updatedPhone = removeFromPhone(selectedPhone);
+      this.selectedPhone.set(updatedPhone);
+      this.selectPhone(updatedPhone);
+    }
+  }
+
+  private applyPhonesResponse(response: OperatorPhonesResponse): void {
+    this.phones.set(response.phones);
+    this.phoneOperators.set(response.operators);
+    this.restorePhoneSelection(response.phones);
+  }
+
+  private restorePhoneSelection(phones: OperatorPhone[]): void {
+    const selectedId = this.selectedPhone()?.id || (Number.isFinite(this.requestedPhoneId) ? this.requestedPhoneId : null);
+    const nextSelected = selectedId ? phones.find((phone) => phone.id === selectedId) : null;
+
+    if (nextSelected) {
+      this.selectPhone(nextSelected);
+      return;
+    }
+
+    if (this.activeTab() === 'phones' && !this.selectedPhone()) {
+      this.startNewPhone();
+    }
+  }
+
   private defaultBotWorkerId(): number | null {
     return this.botWorkers()[0]?.id ?? null;
   }
@@ -1240,6 +1589,24 @@ export class AdminDictionariesComponent {
     this.error.set(message);
     this.loading.set(false);
     this.toastService.error('Справочники не загрузились', message);
+  }
+
+  private initialTab(): DictionaryTabKey {
+    const routeTab = this.route.snapshot.data['initialTab'] ?? this.route.snapshot.queryParamMap.get('tab');
+    return this.isDictionaryTab(routeTab) ? routeTab : 'categories';
+  }
+
+  private isDictionaryTab(value: unknown): value is DictionaryTabKey {
+    return [
+      'categories',
+      'subcategories',
+      'cities',
+      'products',
+      'phones',
+      'accounts',
+      'promo',
+      'managerTexts'
+    ].includes(String(value));
   }
 
   private ensureDefaults(): void {

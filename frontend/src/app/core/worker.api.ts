@@ -5,6 +5,7 @@ import { appEnvironment } from './app-environment';
 import { OrderCardItem } from './manager.api';
 
 export type WorkerSection = 'new' | 'correct' | 'nagul' | 'publish' | 'bad' | 'all';
+export type WorkerBoardSectionQuery = WorkerSection | 'current';
 
 export interface WorkerPage<T> {
   content: T[];
@@ -118,7 +119,7 @@ export interface BotChangeResponse {
 }
 
 export interface WorkerBoardQuery {
-  section: WorkerSection;
+  section: WorkerBoardSectionQuery;
   keyword?: string;
   pageNumber?: number;
   pageSize?: number;

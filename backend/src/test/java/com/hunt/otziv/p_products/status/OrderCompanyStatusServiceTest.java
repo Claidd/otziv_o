@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,6 +28,9 @@ class OrderCompanyStatusServiceTest {
     @Mock
     private CompanyStatusService companyStatusService;
 
+    @Mock
+    private NextOrderRequestService nextOrderRequestService;
+
     @Test
     void archiveMovesCompanyToStopWhenNoOtherActiveOrders() {
         OrderCompanyStatusService service = service();
@@ -37,6 +41,7 @@ class OrderCompanyStatusServiceTest {
         CompanyStatus stop = status("На стопе");
 
         when(companyStatusService.getStatusByTitle("На стопе")).thenReturn(stop);
+        when(nextOrderRequestService.hasOpenRequests(company.getId())).thenReturn(false);
 
         service.autoManageCompanyStatus(current, "Архив");
 
@@ -57,6 +62,23 @@ class OrderCompanyStatusServiceTest {
         assertEquals("В работе", company.getStatus().getTitle());
         verify(companyStatusService, never()).getStatusByTitle("На стопе");
         verify(companyService, never()).save(company);
+    }
+
+    @Test
+    void archiveMovesCompanyToNewOrderWhenOpenRequestExists() {
+        OrderCompanyStatusService service = service();
+        Company company = company("В работе");
+        Order current = order(1L, "Архив", company);
+        company.setOrderList(new LinkedHashSet<>(java.util.List.of(current)));
+        CompanyStatus newOrder = status("Новый заказ");
+
+        when(nextOrderRequestService.hasOpenRequests(company.getId())).thenReturn(true);
+        when(companyStatusService.getStatusByTitle("Новый заказ")).thenReturn(newOrder);
+
+        service.autoManageCompanyStatus(current, "Архив");
+
+        assertEquals("Новый заказ", company.getStatus().getTitle());
+        verify(companyService).save(company);
     }
 
     @Test
@@ -107,7 +129,7 @@ class OrderCompanyStatusServiceTest {
     }
 
     private OrderCompanyStatusService service() {
-        return new OrderCompanyStatusService(companyService, companyStatusService);
+        return new OrderCompanyStatusService(companyService, companyStatusService, nextOrderRequestService);
     }
 
     private Company company(String statusTitle) {

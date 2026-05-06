@@ -313,6 +313,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/operator/device-token", "создание токена телефона {telephoneId}");
         put(actions, "POST", "/api/operator/leads/{id}/status/send", "смена статуса лида {id} на \"Отправлен\"");
         put(actions, "POST", "/api/operator/leads/{id}/status/to-work", "смена статуса лида {id} на \"В работу\"");
+        put(actions, "DELETE", "/api/admin/phones/{id}/device-tokens/{token}", "удаление токена устройства телефона {id}");
 
         put(actions, "GET", "/api/review-check/{orderDetailId}", "загрузка проверки отзывов {orderDetailId}");
         put(actions, "PUT", "/api/review-check/{orderDetailId}", "сохранение проверки отзывов {orderDetailId}");

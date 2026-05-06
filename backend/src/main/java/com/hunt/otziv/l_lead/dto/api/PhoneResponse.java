@@ -2,6 +2,7 @@ package com.hunt.otziv.l_lead.dto.api;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record PhoneResponse(
         Long id,
@@ -21,6 +22,7 @@ public record PhoneResponse(
         boolean active,
         LocalDate createDate,
         LocalDateTime updateStatus,
-        PhoneOperatorOptionResponse operator
+        PhoneOperatorOptionResponse operator,
+        List<DeviceTokenResponse> deviceTokens
 ) {
 }

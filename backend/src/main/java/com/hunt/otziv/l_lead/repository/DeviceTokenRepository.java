@@ -6,12 +6,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface DeviceTokenRepository extends CrudRepository<DeviceToken, String> {
 
     Optional<DeviceToken> findByToken(String token);
+
+    Optional<DeviceToken> findByTokenAndTelephone_Id(String token, Long telephoneId);
+
+    List<DeviceToken> findByTelephone_IdOrderByCreatedAtDesc(Long telephoneId);
 
     @Query("SELECT d.telephone FROM DeviceToken d WHERE d.token = :token AND d.active = true")
     Optional<Telephone> findTelephoneByToken(String token);

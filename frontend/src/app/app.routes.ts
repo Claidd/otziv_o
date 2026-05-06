@@ -53,12 +53,8 @@ export const routes: Routes = [
   },
   {
     path: 'operator/phones',
-    loadComponent: () => import('./features/operator/operator-phones.component')
-      .then((m) => m.OperatorPhonesComponent),
-    canActivate: [roleGuard],
-    data: {
-      roles: ['ADMIN', 'OWNER']
-    }
+    redirectTo: 'admin/dictionaries/phones',
+    pathMatch: 'full'
   },
   {
     path: 'manager',
@@ -149,6 +145,16 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/dictionaries/phones',
+    loadComponent: () => import('./features/admin/dictionaries/admin-dictionaries.component')
+      .then((m) => m.AdminDictionariesComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER'],
+      initialTab: 'phones'
     }
   },
   {

@@ -53,7 +53,7 @@ export class OperatorBoardComponent {
   };
 
   readonly pageSizeOptions = [1, 5, 10];
-  readonly phonesRoute = '/operator/phones';
+  readonly phonesRoute = '/admin/dictionaries/phones';
   readonly mobileNavLinks: MobileNavLink[] = [
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },

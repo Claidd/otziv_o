@@ -8,6 +8,12 @@ export interface PhoneOperatorOption {
   title: string;
 }
 
+export interface DeviceToken {
+  token: string;
+  createdAt?: string | null;
+  active: boolean;
+}
+
 export interface OperatorPhone {
   id: number;
   number: string;
@@ -27,6 +33,7 @@ export interface OperatorPhone {
   createDate?: string | null;
   updateStatus?: string | null;
   operator?: PhoneOperatorOption | null;
+  deviceTokens: DeviceToken[];
 }
 
 export interface OperatorPhonesResponse {
@@ -75,5 +82,11 @@ export class OperatorPhonesApi {
 
   deletePhone(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  deleteDeviceToken(phoneId: number, token: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/${phoneId}/device-tokens/${encodeURIComponent(token)}`
+    );
   }
 }

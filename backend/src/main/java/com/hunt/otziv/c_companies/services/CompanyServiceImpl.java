@@ -24,6 +24,10 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.next_order.NextOrderRequest;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestStatus;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestSummary;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.*;
@@ -46,6 +50,7 @@ import java.math.BigDecimal;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -54,6 +59,11 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class CompanyServiceImpl implements CompanyService{
+    private static final Set<NextOrderRequestStatus> OPEN_NEXT_ORDER_STATUSES = Set.of(
+            NextOrderRequestStatus.PENDING,
+            NextOrderRequestStatus.FAILED
+    );
+
     private final CompanyRepository companyRepository;
     private final LeadService leadService;
     private final UserService userService;
@@ -66,6 +76,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final ReviewService reviewService;
     private final OperatorService operatorService;
     private final TelegramService telegramService;
+    private final NextOrderRequestRepository nextOrderRequestRepository;
 
     @Transactional
     public void save(Company company){
@@ -302,9 +313,13 @@ public class CompanyServiceImpl implements CompanyService{
             orderById.put(ids.get(i), i);
         }
 
-        List<CompanyListDTO> companyListDTOs = companyRepository.findAll(ids).stream()
+        List<Company> companies = companyRepository.findAll(ids).stream()
                 .sorted(Comparator.comparingInt(company -> orderById.getOrDefault(company.getId(), Integer.MAX_VALUE)))
-                .map(this::convertCompanyListDTO)
+                .toList();
+        Map<Long, NextOrderRequestSummary> nextOrderSummaries = nextOrderSummaries(ids);
+
+        List<CompanyListDTO> companyListDTOs = companies.stream()
+                .map(company -> convertCompanyListDTO(company, nextOrderSummaries.get(company.getId())))
                 .filter(company -> !onlyAfterDateNewTry || LocalDate.now().isAfter(company.getDateNewTry()))
                 .collect(Collectors.toList());
 
@@ -689,6 +704,13 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     public CompanyListDTO convertCompanyListDTO(Company company) { // перевод компании в ДТО
+        if (company == null || company.getId() == null) {
+            return convertCompanyListDTO(company, null);
+        }
+        return convertCompanyListDTO(company, nextOrderSummaries(List.of(company.getId())).get(company.getId()));
+    }
+
+    private CompanyListDTO convertCompanyListDTO(Company company, NextOrderRequestSummary nextOrderSummary) { // перевод компании в ДТО
         if (company != null && company.getId() != null) {
             Filial firstFilial = company.getFilial() == null
                     ? null
@@ -711,6 +733,10 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setCommentsCompany(company.getCommentsCompany());
             companyListDTO.setCity(firstFilial != null && firstFilial.getCity() != null ? firstFilial.getCity().getTitle() : "");
             companyListDTO.setDateNewTry(company.getDateNewTry());
+            companyListDTO.setNextOrderRequestsCount(nextOrderSummary == null ? 0 : nextOrderSummary.openCount());
+            companyListDTO.setFailedNextOrderRequestsCount(nextOrderSummary == null ? 0 : nextOrderSummary.failedCount());
+            companyListDTO.setNextOrderRequestFilialTitle(nextOrderSummary == null ? null : nextOrderSummary.latestFilialTitle());
+            companyListDTO.setNextOrderRequestError(nextOrderSummary == null ? null : nextOrderSummary.latestError());
             return companyListDTO;
         }
         else {
@@ -718,6 +744,67 @@ public class CompanyServiceImpl implements CompanyService{
             return new CompanyListDTO();
         }
     } // перевод компании в ДТО
+
+    private Map<Long, NextOrderRequestSummary> nextOrderSummaries(Collection<Long> companyIds) {
+        if (companyIds == null || companyIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, MutableNextOrderSummary> mutableSummaries = new HashMap<>();
+        List<NextOrderRequest> requests = nextOrderRequestRepository.findByCompanyIdInAndStatusIn(
+                companyIds,
+                OPEN_NEXT_ORDER_STATUSES
+        );
+
+        for (NextOrderRequest request : requests) {
+            if (request.getCompany() == null || request.getCompany().getId() == null) {
+                continue;
+            }
+            MutableNextOrderSummary summary = mutableSummaries.computeIfAbsent(
+                    request.getCompany().getId(),
+                    id -> new MutableNextOrderSummary()
+            );
+            summary.openCount++;
+            if (isAfter(request.getUpdatedAt(), summary.latestRequestAt)) {
+                summary.latestRequestAt = request.getUpdatedAt();
+                summary.latestFilialTitle = request.getFilial() == null ? null : request.getFilial().getTitle();
+            }
+            if (request.getStatus() == NextOrderRequestStatus.FAILED) {
+                summary.failedCount++;
+                if (request.getErrorMessage() != null
+                        && !request.getErrorMessage().isBlank()
+                        && isAfter(request.getUpdatedAt(), summary.latestErrorAt)) {
+                    summary.latestErrorAt = request.getUpdatedAt();
+                    summary.latestError = request.getErrorMessage();
+                }
+            }
+        }
+
+        Map<Long, NextOrderRequestSummary> result = new HashMap<>();
+        mutableSummaries.forEach((companyId, summary) -> result.put(
+                companyId,
+                new NextOrderRequestSummary(
+                        summary.openCount,
+                        summary.failedCount,
+                        summary.latestFilialTitle,
+                        summary.latestError
+                )
+        ));
+        return result;
+    }
+
+    private boolean isAfter(LocalDateTime candidate, LocalDateTime current) {
+        return candidate != null && (current == null || candidate.isAfter(current));
+    }
+
+    private static class MutableNextOrderSummary {
+        private int openCount;
+        private int failedCount;
+        private LocalDateTime latestRequestAt;
+        private String latestFilialTitle;
+        private LocalDateTime latestErrorAt;
+        private String latestError;
+    }
 
     private Set<OrderDTO> convertToOrderDTOSet(Set<Order> orders){ // перевод заказа в ДТО Сэт
         return orders.stream().map(this::convertToOrderDTO).collect(Collectors.toSet());

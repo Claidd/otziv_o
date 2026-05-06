@@ -29,7 +29,7 @@ type ReviewCheckDraft = {
 type ReviewCheckAction = 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
-type ReviewWindowStatus = 'approved' | 'correction' | 'not-approved';
+type ReviewWindowStatus = 'approved' | 'paid' | 'correction' | 'not-approved';
 
 @Component({
   selector: 'app-review-check',
@@ -616,6 +616,10 @@ export class ReviewCheckComponent {
   reviewWindowStatus(details: ReviewCheckPayload): ReviewWindowStatus {
     const status = (details.status || '').trim().toLowerCase();
 
+    if (status === 'оплачено') {
+      return 'paid';
+    }
+
     if (status === 'коррекция') {
       return 'correction';
     }
@@ -632,11 +636,18 @@ export class ReviewCheckComponent {
   }
 
   isReviewWindowApproved(details: ReviewCheckPayload): boolean {
-    return this.reviewWindowStatus(details) === 'approved';
+    const status = this.reviewWindowStatus(details);
+    return status === 'approved' || status === 'paid';
+  }
+
+  reviewFooterStateLabel(details: ReviewCheckPayload): string {
+    return this.reviewWindowStatus(details) === 'paid' ? 'оплачено' : 'одобрено';
   }
 
   reviewWindowStatusLabel(details: ReviewCheckPayload): string {
     switch (this.reviewWindowStatus(details)) {
+      case 'paid':
+        return 'Оплачено';
       case 'approved':
         return 'Одобрено';
       case 'correction':
@@ -648,6 +659,8 @@ export class ReviewCheckComponent {
 
   reviewWindowStatusIcon(details: ReviewCheckPayload): string {
     switch (this.reviewWindowStatus(details)) {
+      case 'paid':
+        return 'payments';
       case 'approved':
         return 'task_alt';
       case 'correction':
