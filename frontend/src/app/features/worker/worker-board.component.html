@@ -197,9 +197,13 @@
         </button>
       }
     </section>
+
+    <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
 
   <section admin-right-content class="lead-stats worker-stats">
+    <app-personal-reminders mode="alert" />
+
     @for (metric of metrics(); track trackMetric($index, metric)) {
       <button
         type="button"
@@ -219,6 +223,8 @@
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </button>
     }
+
+    <app-personal-reminders mode="list" />
   </section>
 
   @if (orderLoading() || editOrder()) {

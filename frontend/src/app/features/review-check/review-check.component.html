@@ -26,7 +26,7 @@
       } @else {
         <form class="review-check-form" (ngSubmit)="saveReviews()">
           <div class="review-carousel">
-            @if (!details.approved) {
+            @if (!isReviewWindowApproved(details)) {
               <span class="review-edit-hint" aria-hidden="true">
                 <span class="material-icons-sharp">arrow_downward</span>
                 <strong>текст можно редактировать нажав на него</strong>
@@ -42,7 +42,6 @@
                   <header>
                     <span class="review-card-title">{{ details.companyTitle || 'Компания' }}</span>
                     <div class="review-id-line">
-                      #{{ review.id }}
                       @if (hasReviewPhoto(review)) {
                         <a
                           class="review-photo-link"
@@ -59,6 +58,7 @@
                           <span class="material-icons-sharp">photo_camera</span>
                         </span>
                       }
+                      <span class="review-id-text">#{{ review.id }}</span>
                       @if (details.permissions.canSeeInternalInfo && (hasReviewNote(review) || isReviewNoteEditing(review))) {
                         <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle(review)" [title]="reviewNoteTitle(review)">
                           <span class="material-icons-sharp">priority_high</span>
@@ -278,10 +278,10 @@
 
                   <footer>
                     <span>{{ reviewDate(review) }}</span>
-                    @if (details.approved) {
-                      <span>одобрено</span>
+                    @if (isReviewWindowApproved(details)) {
+                      <span class="review-footer-state">одобрено</span>
                     } @else if (needsReviewPhoto(review)) {
-                      <span class="missing-photo-text">нужно фото</span>
+                      <span class="review-footer-state missing-photo-text">нужно фото</span>
                     }
                   </footer>
                 </article>
@@ -303,7 +303,7 @@
 
           @if (details.permissions.canApprovePublication) {
             <footer class="details-actions details-actions--after-cards">
-              @if (!details.approved) {
+              @if (!isReviewWindowApproved(details)) {
                 <span class="approve-publication-hint" aria-hidden="true">
                   <span class="material-icons-sharp">arrow_downward</span>
                   <strong>разрешите публикацию</strong>
@@ -313,11 +313,11 @@
               <button
                 type="button"
                 class="approve-publication-button"
-                [class.approved]="details.approved"
+                [class.approved]="isReviewWindowApproved(details)"
                 (click)="approveReviews()"
-                [disabled]="busy() || details.approved"
+                [disabled]="busy() || isReviewWindowApproved(details)"
               >
-                {{ details.approved ? 'разрешена публикация' : isAction('approve') ? 'РАЗРЕШАЮ...' : 'РАЗРЕШИТЬ ПУБЛИКАЦИЮ' }}
+                {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : isAction('approve') ? 'Разрешаю...' : 'Разрешить публикацию' }}
               </button>
             </footer>
           }
@@ -325,6 +325,9 @@
           <section class="check-comment-card">
             <label>
               <span>На коррекцию</span>
+              <p>Если есть замечания:
+                Вы можете самостоятельно редактировать отзывы, находящиеся выше, после чего необходимо нажать кнопку "Разрешить публикацию".
+                Если потребуется полная переработка текстов, внесите замечания в поля под каждым отзывом или общее замечание в поле, находящемся ниже, а затем нажмите кнопку "На коррекцию"</p>
               <textarea
                 name="check-comment"
                 rows="4"
@@ -338,10 +341,11 @@
           @if (details.permissions.canSendCorrection) {
             <footer class="details-actions details-actions--correction">
               <button type="button" (click)="sendToCorrection()" [disabled]="busy()">
-                {{ isAction('correction') ? 'ОТПРАВЛЯЮ...' : 'КОРРЕКЦИЯ' }}
+                {{ isAction('correction') ? 'ОТПРАВЛЯЮ...' : 'На коррекцию' }}
               </button>
             </footer>
           }
+
         </form>
       }
 
@@ -414,6 +418,18 @@
             <i class="material-icons-sharp">task_alt</i>
           </article>
         </div>
+
+        @if (details.workerFio) {
+          <article class="stat-card blue worker-card">
+            <div>
+              @if (details.permissions.authenticated) {
+                <span>Исполнитель</span>
+              }
+              <strong>{{ details.workerFio }}</strong>
+            </div>
+            <i class="material-icons-sharp">badge</i>
+          </article>
+        }
       </section>
     }
   </section>
@@ -472,15 +488,6 @@
         </article>
       }
 
-      @if (details.workerFio) {
-        <article class="side-note-card worker-card">
-          <h2>Специалист</h2>
-          <p>
-            <span>{{ details.workerFio }}</span>
-          </p>
-        </article>
-      }
-
       @if (showStaffActions(details)) {
         <article class="staff-actions-card">
           <h2>Действия</h2>
@@ -527,13 +534,30 @@
         <i class="material-icons-sharp">task_alt</i>
       </article>
 
-      <article class="stat-card teal">
+      <article
+        class="stat-card review-window-status-card"
+        [class.green]="reviewWindowStatus(details) === 'approved'"
+        [class.blue]="reviewWindowStatus(details) === 'correction'"
+        [class.teal]="reviewWindowStatus(details) === 'not-approved'"
+      >
         <div>
           <span>Статус</span>
-          <strong>{{ details.approved ? 'Одобрено' : 'Не одобрено' }}</strong>
+          <strong>{{ reviewWindowStatusLabel(details) }}</strong>
         </div>
-        <i class="material-icons-sharp">fact_check</i>
+        <i class="material-icons-sharp">{{ reviewWindowStatusIcon(details) }}</i>
       </article>
+
+      @if (details.workerFio) {
+        <article class="stat-card blue worker-card">
+          <div>
+            @if (details.permissions.authenticated) {
+              <span>Исполнитель</span>
+            }
+            <strong>{{ details.workerFio }}</strong>
+          </div>
+          <i class="material-icons-sharp">badge</i>
+        </article>
+      }
     }
   </section>
 </app-admin-layout>

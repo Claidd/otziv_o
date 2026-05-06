@@ -18,7 +18,9 @@ public final class PromoButtonCatalog {
             new Slot(SECTION_MANAGER_COMPANIES, "Менеджер: компании", "broadcast", "рассылка", 9, 10),
             new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "explanation", "пояснение", 10, 11),
             new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "reminder", "напоминание", 5, 6),
-            new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "threat", "угроза", 6, 7)
+            new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "threat", "угроза", 6, 7),
+            new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "review_first", "текст первого заказа", 4, 5),
+            new Slot(SECTION_MANAGER_ORDERS, "Менеджер: заказы", "review_repeat", "текст повторного заказа", 11, 12)
     );
 
     private PromoButtonCatalog() {

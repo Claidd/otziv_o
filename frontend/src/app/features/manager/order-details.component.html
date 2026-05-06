@@ -32,7 +32,6 @@
                 {{ review.companyTitle || details.companyTitle || 'Компания' }}
               </a>
               <div class="review-id-line">
-                #{{ review.id }}
                 @if (hasReviewPhoto(review)) {
                   <a
                     class="review-photo-link"
@@ -56,6 +55,7 @@
                     <span class="material-icons-sharp">photo_camera</span>
                   </button>
                 }
+                <span class="review-id-text">#{{ review.id }}</span>
                 @if (hasReviewNote(review) || isReviewNoteEditing(review)) {
                   <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle(review)" [title]="reviewNoteTitle(review)">
                     <span class="material-icons-sharp">priority_high</span>
@@ -292,6 +292,7 @@
             <button
               type="button"
               class="publish-button"
+              [class.publish-button--published]="review.publish"
               (click)="publishReview(review)"
               [disabled]="review.publish || isMutating('publish-' + review.id)"
             >
@@ -329,11 +330,11 @@
       </div>
 
       <footer class="details-actions">
-        <button type="button" (click)="sendToCheck()" [disabled]="isMutating('send-check')">
+        <button type="button" class="send-check-action" (click)="sendToCheck()" [disabled]="isMutating('send-check')">
           {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
         </button>
-        <a [href]="editAllReviewsUrl()" target="_blank" rel="noopener">
-          Изменить все отзывы
+        <a [routerLink]="editAllReviewsRoute()">
+          Проверка отзывов
         </a>
         <button type="button" (click)="addReview()" [disabled]="isMutating('add-review')">
           {{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}

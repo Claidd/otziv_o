@@ -44,12 +44,17 @@ public class ApiManagerOrderController {
 
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void updateOrderStatus(
             @PathVariable Long orderId,
-            @RequestBody StatusChangeRequest request
+            @RequestBody StatusChangeRequest request,
+            Authentication authentication
     ) throws Exception {
         String status = requireStatus(request);
+        if (managerPermissionService.hasOnlyWorkerRole(authentication) && !"В проверку".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Специалист может отправить заказ только на проверку");
+        }
+
         Order order = orderService.getOrder(orderId);
 
         if ("Опубликовано".equals(status) || "Оплачено".equals(status)) {

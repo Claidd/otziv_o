@@ -844,6 +844,7 @@ public class ApiAdminDictionaryController {
             case 7 -> "угроза";
             case 10 -> "рассылка";
             case 11 -> "пояснение";
+            case 12 -> "текст повторного заказа";
             default -> position > 0 ? "Текст #" + position : "Промо-текст";
         };
     }

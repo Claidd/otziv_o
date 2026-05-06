@@ -135,6 +135,20 @@ body.otziv-dark-theme app-admin-layout {
   padding-top: 1.4rem;
 }
 
+.admin-right {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 1.4rem;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.admin-right::-webkit-scrollbar {
+  display: none;
+}
+
 .admin-sidebar {
   display: flex;
   min-height: 0;
@@ -462,6 +476,10 @@ button.login-pill.logout {
   object-fit: cover;
 }
 
+.profile-card + app-personal-reminders {
+  margin-top: 1rem;
+}
+
 .reminders {
   margin-top: 1.45rem;
 }
@@ -628,6 +646,7 @@ button.login-pill.logout {
     width: min(100%, 34rem);
     height: auto;
     margin-inline: auto;
+    overflow: visible;
     padding: 0 0 2rem;
   }
 

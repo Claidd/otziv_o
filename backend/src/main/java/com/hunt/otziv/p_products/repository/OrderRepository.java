@@ -66,7 +66,17 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             o.created,
             o.changed,
             o.payDay,
-            o.zametka
+            o.zametka,
+            CASE
+                WHEN c.id IS NOT NULL
+                 AND o.id = (
+                    SELECT MIN(companyOrder.id)
+                    FROM Order companyOrder
+                    WHERE companyOrder.company.id = c.id
+                 )
+                THEN true
+                ELSE false
+            END
         FROM Order o
         LEFT JOIN o.details d
         LEFT JOIN o.status s

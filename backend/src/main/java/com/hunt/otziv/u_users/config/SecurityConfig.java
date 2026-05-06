@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.config;
 
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,6 +62,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/auth", "/api/auth/**").permitAll()
                         .requestMatchers("/api/me").authenticated()
+                        .requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated()
                         .requestMatchers("/api/cabinet/profile").authenticated()
                         .requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER")
@@ -77,9 +79,28 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/leads/*/status/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG")
                         .requestMatchers("/api/review-check/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/manager/orders/*/edit", "/api/manager/orders/*/details").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
-                        .requestMatchers(HttpMethod.PUT, "/api/manager/orders/*", "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/manager/orders/*",
+                                "/api/manager/orders/*/note",
+                                "/api/manager/orders/*/company-note",
+                                "/api/manager/orders/*/reviews/*",
+                                "/api/manager/orders/*/reviews/*/text",
+                                "/api/manager/orders/*/reviews/*/answer",
+                                "/api/manager/orders/*/reviews/*/note"
+                        ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/manager/orders/*/status",
+                                "/api/manager/orders/*/reviews"
+                        ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
                         .requestMatchers(HttpMethod.POST, "/api/manager/orders/*/reviews/*/photo").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
-                        .requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/manager/orders/*/reviews/*/change-bot",
+                                "/api/manager/orders/*/reviews/*/bots/*/deactivate"
+                        ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                         .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER")
                         .requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
                         .requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER")
@@ -136,7 +157,26 @@ public class SecurityConfig {
 //                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .exceptionHandling(ex -> ex
-                        .accessDeniedPage("/access-denied")
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json;charset=UTF-8");
+                                response.getWriter().write("{\"message\":\"Сессия закончилась. Войдите в систему заново.\"}");
+                                return;
+                            }
+
+                            response.sendRedirect(request.getContextPath() + "/login");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                                response.setContentType("application/json;charset=UTF-8");
+                                response.getWriter().write("{\"message\":\"У вас нет доступа к этому действию.\"}");
+                                return;
+                            }
+
+                            response.sendRedirect(request.getContextPath() + "/access-denied");
+                        })
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtAuthenticationConverter()))

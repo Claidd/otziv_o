@@ -1,0 +1,321 @@
+:host {
+  display: block;
+  min-width: 0;
+  font-family: 'laptev_brush', var(--otziv-font-family);
+}
+
+.reminder-alert,
+.personal-reminders {
+  display: grid;
+  gap: 0.68rem;
+  border-radius: 1.05rem;
+  padding: 0.9rem 1.05rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.reminder-alert {
+  border: 1px solid rgba(255, 0, 96, 0.18);
+  color: var(--otziv-danger);
+  background:
+    linear-gradient(135deg, rgba(255, 0, 96, 0.1), transparent 46%),
+    var(--otziv-white);
+}
+
+.reminder-alert__head,
+.personal-reminders__head,
+.reminder-alert__item,
+.personal-reminder,
+.personal-reminder__actions,
+.reminder-form__actions {
+  display: flex;
+  align-items: center;
+}
+
+.reminder-alert__head,
+.personal-reminders__head {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reminder-alert__head > span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.3rem;
+  height: 2.3rem;
+  place-items: center;
+  border-radius: 0.72rem;
+  color: white;
+  background: var(--otziv-danger);
+  font-size: 1.15rem;
+}
+
+.reminder-alert__head strong,
+.personal-reminders__head h2,
+.reminder-alert__item h3,
+.personal-reminder h3,
+.personal-reminders__empty p {
+  margin: 0;
+}
+
+.reminder-alert__head small,
+.personal-reminders__head small,
+.reminder-alert__item small,
+.personal-reminder small {
+  color: var(--otziv-info);
+  font-weight: 900;
+}
+
+.reminder-alert__list,
+.personal-reminders__list,
+.reminder-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.reminder-alert__item,
+.personal-reminder {
+  min-width: 0;
+  gap: 0.62rem;
+  border: 0;
+  border-radius: 0.72rem;
+  padding: 0.68rem 0;
+  color: var(--otziv-dark);
+  background: transparent;
+}
+
+.reminder-alert__item + .reminder-alert__item,
+.personal-reminder + .personal-reminder {
+  border-top: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0;
+}
+
+.reminder-alert__item > div,
+.personal-reminder__body {
+  min-width: 0;
+}
+
+.reminder-alert__item h3,
+.personal-reminder h3 {
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reminder-alert__item p,
+.personal-reminder p {
+  display: -webkit-box;
+  margin: 0.2rem 0 0.12rem;
+  overflow: hidden;
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.22;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.reminder-alert__more {
+  color: var(--otziv-danger);
+  font-weight: 900;
+}
+
+.personal-reminders__head h2 {
+  color: var(--otziv-info);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+button.reminder-icon-button.reminder-icon-button,
+button.reminder-action-button.reminder-action-button {
+  min-height: 0;
+}
+
+button.reminder-icon-button.reminder-icon-button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.85rem;
+  height: 1.85rem;
+  min-height: 1.85rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+  box-shadow: none;
+}
+
+button.reminder-icon-button.reminder-icon-button span {
+  font-size: 1rem;
+}
+
+button.reminder-icon-button.add {
+  width: 2.6rem;
+  height: 2.6rem;
+  min-height: 2.6rem;
+  border: 0.34rem solid currentColor;
+  color: var(--otziv-primary);
+  background: transparent;
+}
+
+button.reminder-icon-button.add span {
+  font-size: 1.06rem;
+}
+
+button.reminder-icon-button.done {
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.12);
+}
+
+button.reminder-icon-button.danger {
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+}
+
+.reminder-form {
+  border: 0;
+  border-radius: 0.82rem;
+  padding: 0.76rem;
+  background: var(--otziv-background);
+}
+
+.reminder-form label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.reminder-form label > span {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.75rem;
+}
+
+.reminder-form input,
+.reminder-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+}
+
+.reminder-form input {
+  min-height: 2.15rem;
+  padding: 0 0.62rem;
+}
+
+.reminder-form textarea {
+  min-height: 4.6rem;
+  max-height: 8rem;
+  padding: 0.58rem 0.62rem;
+  resize: vertical;
+}
+
+.reminder-mode {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.reminder-mode button {
+  min-height: 2rem;
+  border-radius: 0.62rem;
+  padding: 0;
+  color: var(--otziv-info);
+  background: var(--otziv-white);
+  box-shadow: none;
+}
+
+.reminder-mode button.active {
+  color: white;
+  background: var(--otziv-primary);
+}
+
+.reminder-mode .material-icons-sharp {
+  font-size: 1.1rem;
+}
+
+.reminder-form__actions {
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+button.reminder-action-button.reminder-action-button {
+  width: 2.25rem;
+  min-height: 2.1rem;
+  border-radius: 0.65rem;
+  padding: 0;
+}
+
+button.reminder-action-button.reminder-action-button span {
+  font-size: 1.1rem;
+}
+
+.personal-reminders__list.scrollable {
+  max-height: 22rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  scrollbar-width: none;
+}
+
+.personal-reminders__list.scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+.personal-reminder {
+  align-items: flex-start;
+}
+
+.personal-reminder.due {
+  margin-inline: -0.35rem;
+  border-radius: 0.74rem;
+  padding-inline: 0.35rem;
+  background:
+    linear-gradient(90deg, rgba(255, 0, 96, 0.07), transparent 48%),
+    var(--otziv-white);
+}
+
+.personal-reminder__icon {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  padding-top: 0.08rem;
+  color: var(--otziv-info);
+  font-size: 1rem;
+}
+
+.personal-reminder.due .personal-reminder__icon {
+  color: var(--otziv-danger);
+}
+
+.personal-reminder__body {
+  flex: 1 1 auto;
+}
+
+.personal-reminder__actions {
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 0.28rem;
+  padding-top: 0.02rem;
+}
+
+.personal-reminders__empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  border: 1px dashed rgba(103, 116, 131, 0.18);
+  border-radius: 0.78rem;
+  padding: 0.75rem;
+  color: var(--otziv-info);
+}
+
+.personal-reminders__empty span {
+  font-size: 1.35rem;
+}

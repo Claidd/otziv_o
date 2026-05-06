@@ -12,6 +12,7 @@ import {
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
 import {
@@ -32,9 +33,9 @@ import {
   trackWorkerOrder,
   trackWorkerReview,
   trackWorkerSection,
-  workerAbsoluteAppUrl,
   workerErrorMessage,
   workerLegacyUrl,
+  workerOrderReviewCopyText,
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
@@ -54,6 +55,7 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
     AdminLayoutComponent,
     FormsModule,
     LoadErrorCardComponent,
+    PersonalRemindersComponent,
     WorkerOrderCardComponent,
     WorkerOrderEditModalComponent,
     WorkerReviewCardComponent,
@@ -438,9 +440,8 @@ export class WorkerBoardComponent implements OnDestroy {
 
   async copyOrderText(order: OrderCardItem, kind: 'check' | 'payment'): Promise<void> {
     if (kind === 'check') {
-      const url = order.orderDetailsId ? workerAbsoluteAppUrl(`/review/editReviews/${order.orderDetailsId}`) : '';
       await this.copyText(
-        `${this.board()?.promoTexts?.[4] ?? ''} Ссылка на проверку отзывов: ${url}`.trim(),
+        workerOrderReviewCopyText(order, this.board()?.promoTexts ?? []),
         `check-${order.id}`,
         'Текст проверки скопирован'
       );

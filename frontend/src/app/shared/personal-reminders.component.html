@@ -1,0 +1,146 @@
+@if (showAlert()) {
+  <section class="reminder-alert" role="status" aria-label="Сработавшие напоминания">
+    <div class="reminder-alert__head">
+      <span class="material-icons-sharp">notifications_active</span>
+      <div>
+        <strong>Напоминание</strong>
+        <small>{{ dueReminders().length }}</small>
+      </div>
+    </div>
+
+    <div class="reminder-alert__list">
+      @for (reminder of alertReminders(); track reminder.id) {
+        <article class="reminder-alert__item">
+          <div>
+            <h3>{{ reminder.title }}</h3>
+            <p>{{ noteText(reminder) }}</p>
+            <small>{{ reminderTimeLabel(reminder) }}</small>
+          </div>
+          <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+            <span class="material-icons-sharp">done</span>
+          </button>
+        </article>
+      }
+    </div>
+
+    @if (extraDueCount()) {
+      <small class="reminder-alert__more">Еще {{ extraDueCount() }}</small>
+    }
+  </section>
+}
+
+@if (showList()) {
+  <section class="personal-reminders" aria-label="Личные заметки">
+    <header class="personal-reminders__head">
+      <div>
+        <h2>Заметки</h2>
+        <small>{{ reminders().length }}</small>
+      </div>
+      <button type="button" class="reminder-icon-button add" (click)="openCreate()" title="Добавить" aria-label="Добавить">
+        <span class="material-icons-sharp">add</span>
+      </button>
+    </header>
+
+    @if (formOpen()) {
+      <form class="reminder-form" (ngSubmit)="saveDraft()">
+        <label>
+          <span>Название</span>
+          <input
+            type="text"
+            [ngModel]="draft().title"
+            (ngModelChange)="setDraftField('title', $event)"
+            name="personalReminderTitle"
+            maxlength="80"
+          >
+        </label>
+
+        <label>
+          <span>Текст</span>
+          <textarea
+            [ngModel]="draft().text"
+            (ngModelChange)="setDraftField('text', $event)"
+            name="personalReminderText"
+            rows="3"
+            maxlength="400"
+          ></textarea>
+        </label>
+
+        <div class="reminder-mode" role="group" aria-label="Тип напоминания">
+          <button type="button" [class.active]="draft().reminderMode === 'none'" (click)="setReminderMode('none')" title="Без напоминания">
+            <span class="material-icons-sharp">sticky_note_2</span>
+          </button>
+          <button type="button" [class.active]="draft().reminderMode === 'datetime'" (click)="setReminderMode('datetime')" title="Дата">
+            <span class="material-icons-sharp">event</span>
+          </button>
+          <button type="button" [class.active]="draft().reminderMode === 'timer'" (click)="setReminderMode('timer')" title="Таймер">
+            <span class="material-icons-sharp">timer</span>
+          </button>
+        </div>
+
+        @if (draft().reminderMode === 'datetime') {
+          <label>
+            <span>Дата</span>
+            <input
+              type="datetime-local"
+              [ngModel]="draft().remindAtLocal"
+              (ngModelChange)="setDraftField('remindAtLocal', $event)"
+              name="personalReminderDate"
+            >
+          </label>
+        }
+
+        @if (draft().reminderMode === 'timer') {
+          <label>
+            <span>Минут</span>
+            <input
+              type="number"
+              min="1"
+              max="10080"
+              [ngModel]="draft().timerMinutes"
+              (ngModelChange)="setDraftField('timerMinutes', $event)"
+              name="personalReminderTimer"
+            >
+          </label>
+        }
+
+        <div class="reminder-form__actions">
+          <button type="button" class="secondary reminder-action-button" (click)="cancelEdit()">
+            <span class="material-icons-sharp">close</span>
+          </button>
+          <button type="submit" class="reminder-action-button" [disabled]="!canSave()">
+            <span class="material-icons-sharp">save</span>
+          </button>
+        </div>
+      </form>
+    }
+
+    <div class="personal-reminders__list" [class.scrollable]="isScrollable()">
+      @for (reminder of reminders(); track reminder.id) {
+        <article class="personal-reminder" [class.due]="isDue(reminder)">
+          <span class="personal-reminder__icon material-icons-sharp">{{ reminderIcon(reminder) }}</span>
+          <div class="personal-reminder__body">
+            <h3>{{ reminder.title }}</h3>
+            <p>{{ noteText(reminder) }}</p>
+            <small>{{ reminderTimeLabel(reminder) }}</small>
+          </div>
+          <div class="personal-reminder__actions">
+            <button type="button" class="reminder-icon-button" (click)="startEdit(reminder)" title="Редактировать" aria-label="Редактировать">
+              <span class="material-icons-sharp">edit</span>
+            </button>
+            <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+              <span class="material-icons-sharp">done</span>
+            </button>
+            <button type="button" class="reminder-icon-button danger" (click)="remove(reminder)" title="Удалить" aria-label="Удалить">
+              <span class="material-icons-sharp">delete</span>
+            </button>
+          </div>
+        </article>
+      } @empty {
+        <article class="personal-reminders__empty">
+          <span class="material-icons-sharp">edit_note</span>
+          <p>Нет заметок</p>
+        </article>
+      }
+    </div>
+  </section>
+}

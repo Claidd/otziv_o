@@ -201,13 +201,26 @@ select {
   }
 
   .promo-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .promo-strip button {
+    min-height: 2rem;
+    padding-inline: 0.16rem;
+    font-size: clamp(0.62rem, 2.35vw, 0.72rem);
   }
 }
 
 @media (max-width: 430px) {
   .promo-strip {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.28rem;
+  }
+
+  .promo-strip button {
+    padding-inline: 0.1rem;
+    font-size: clamp(0.56rem, 2.25vw, 0.64rem);
   }
 
   .quick-links {
@@ -237,6 +250,12 @@ select {
   .icon-button {
     flex: 1 1 2.2rem;
     width: auto;
+  }
+}
+
+@media (max-width: 350px) {
+  .promo-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

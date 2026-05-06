@@ -15,6 +15,7 @@ import {
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
 import {
@@ -33,14 +34,13 @@ import {
   PromoItem,
   SelectedCompany,
   StatusAction,
-  managerAbsoluteAppUrl,
   managerBoardTitle,
   managerErrorMessage,
   managerLayoutTitle,
   managerOrderActions,
+  managerOrderReviewCopyText,
   managerPayableOrderSum,
   managerPromoItems,
-  managerReviewCheckPath,
   managerStatusOptionLabel,
   trackManagerCompany,
   trackManagerMetric,
@@ -58,6 +58,7 @@ import { ManagerBoardCompanyFacade } from './manager-board-company.facade';
 import {
   managerReadHistoryView,
   managerReadQueryView,
+  managerViewQueryParams,
   managerWithHistoryState
 } from './manager-board.history';
 import { ManagerBoardOrderFacade } from './manager-board-order.facade';
@@ -84,6 +85,7 @@ type CompanyCreateContext = {
     ManagerOrderCardComponent,
     ManagerOrderEditModalComponent,
     ManagerOrderCreateModalComponent,
+    PersonalRemindersComponent,
     RouterLink
   ],
   templateUrl: './manager-board.component.html',
@@ -405,11 +407,8 @@ export class ManagerBoardComponent {
 
   async copyOrderText(order: OrderCardItem, kind: 'review' | 'payment'): Promise<void> {
     if (kind === 'review') {
-      const url = order.orderDetailsId
-        ? managerAbsoluteAppUrl(managerReviewCheckPath(order.orderDetailsId))
-        : '';
       await this.copyText(
-        `Ссылка на проверку отзывов: ${url}`,
+        managerOrderReviewCopyText(order, this.board()?.promoTexts ?? []),
         `review-${order.id}`,
         'Текст проверки скопирован'
       );
@@ -608,13 +607,21 @@ export class ManagerBoardComponent {
   }
 
   private replaceCurrentHistoryState(): void {
-    const state = managerWithHistoryState(window.history.state, this.captureHistoryView(), this.historyStateKey);
-    window.history.replaceState(state, document.title, window.location.href);
+    const view = this.captureHistoryView();
+    const state = managerWithHistoryState(window.history.state, view, this.historyStateKey);
+    window.history.replaceState(state, document.title, this.managerUrlForView(view));
   }
 
   private pushCurrentHistoryState(): void {
-    const state = managerWithHistoryState(window.history.state, this.captureHistoryView(), this.historyStateKey);
-    window.history.pushState(state, document.title, window.location.href);
+    const view = this.captureHistoryView();
+    const state = managerWithHistoryState(window.history.state, view, this.historyStateKey);
+    window.history.pushState(state, document.title, this.managerUrlForView(view));
+  }
+
+  private managerUrlForView(view: ManagerHistoryView): string {
+    return this.router.serializeUrl(this.router.createUrlTree(['/manager'], {
+      queryParams: managerViewQueryParams(view)
+    }));
   }
 
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {

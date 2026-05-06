@@ -202,9 +202,13 @@
         </button>
       }
     </section>
+
+    <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
 
   <section admin-right-content class="lead-stats manager-stats">
+    <app-personal-reminders mode="alert" />
+
     @for (metric of metrics(); track trackMetric($index, metric)) {
       <button type="button" class="stat-card" [class]="metric.tone" (click)="openMetric(metric)">
         <div>
@@ -214,6 +218,8 @@
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </button>
     }
+
+    <app-personal-reminders mode="list" />
   </section>
 
   @if (createOrderLoading() || createOrderPayload()) {

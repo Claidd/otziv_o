@@ -1,5 +1,21 @@
 import { Routes } from '@angular/router';
+import type { UrlMatchResult, UrlSegment } from '@angular/router';
 import { roleGuard } from './core/role.guard';
+
+const REVIEW_SHORT_LINK_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function reviewShortLinkMatcher(segments: UrlSegment[]): UrlMatchResult | null {
+  if (segments.length !== 1 || !REVIEW_SHORT_LINK_PATTERN.test(segments[0].path)) {
+    return null;
+  }
+
+  return {
+    consumed: segments,
+    posParams: {
+      orderDetailId: segments[0]
+    }
+  };
+}
 
 export const routes: Routes = [
   {
@@ -109,6 +125,11 @@ export const routes: Routes = [
   },
   {
     path: 'review/editReviews/:orderDetailId',
+    loadComponent: () => import('./features/review-check/review-check.component')
+      .then((m) => m.ReviewCheckComponent)
+  },
+  {
+    matcher: reviewShortLinkMatcher,
     loadComponent: () => import('./features/review-check/review-check.component')
       .then((m) => m.ReviewCheckComponent)
   },

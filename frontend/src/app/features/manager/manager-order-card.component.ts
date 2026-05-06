@@ -43,15 +43,19 @@ export class ManagerOrderCardComponent {
   @Output() readonly editOpened = new EventEmitter<void>();
 
   orderChatUrl(): string {
-    return managerOrderChatUrl(this.order);
+    return this.cleanUrl(managerOrderChatUrl(this.order));
   }
 
   orderDetailsUrl(): string {
-    return managerOrderDetailsUrl(this.order);
+    return this.cleanUrl(managerOrderDetailsUrl(this.order));
+  }
+
+  orderFilialUrl(): string {
+    return this.cleanUrl(this.order.filialUrl) || this.orderDetailsUrl();
   }
 
   orderReviewUrl(): string {
-    return managerOrderReviewUrl(this.order);
+    return this.cleanUrl(managerOrderReviewUrl(this.order));
   }
 
   orderPhoneLabel(): string {
@@ -183,5 +187,9 @@ export class ManagerOrderCardComponent {
 
   trackAction(index: number, action: StatusAction): string {
     return trackManagerAction(index, action);
+  }
+
+  private cleanUrl(value?: string | null): string {
+    return (value ?? '').trim();
   }
 }

@@ -175,6 +175,8 @@
 }
 
 .table-card {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
   overflow: hidden;
 }
 

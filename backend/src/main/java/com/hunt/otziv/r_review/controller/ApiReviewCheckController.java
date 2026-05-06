@@ -101,6 +101,11 @@ public class ApiReviewCheckController {
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication
     ) throws Exception {
+        ReviewCheckPermissions permissions = permissions(authentication);
+        if (!permissions.canSendCorrection()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
+        }
+
         OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
         Order order = requireOrder(orderDetails);
 
@@ -348,7 +353,7 @@ public class ApiReviewCheckController {
                 canSeeInternal,
                 !workerOnly,
                 true,
-                true,
+                !workerOnly,
                 hasAnyRole(authentication, "WORKER", "ADMIN"),
                 hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER"),
                 canManage,

@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.services;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -72,7 +73,7 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 2, "В работе", 3));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 4, "Оплачено", 1));
-        when(promoTextService.getAllPromoTexts())
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
                 .thenReturn(List.of("promo"));
 
         ManagerBoardResponse response = service.getBoard(
@@ -114,7 +115,7 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 1));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 2));
-        when(promoTextService.getAllPromoTexts())
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_COMPANIES))
                 .thenReturn(List.of());
 
         ManagerBoardResponse response = service.getBoard(

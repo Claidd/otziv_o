@@ -10,10 +10,6 @@
   <header>
     <a [href]="review.filialUrl || reviewEditUrl()" target="_blank" rel="noopener">{{ review.companyTitle || 'Компания' }}</a>
     <div class="review-id-line">
-      #{{ review.id }}
-      @if (isBadTask()) {
-        <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{ ratingTaskLabel() }}</span>
-      }
       @if (needsReviewPhoto()) {
         @if (hasReviewPhoto()) {
           <a
@@ -31,6 +27,10 @@
             <span class="material-icons-sharp">photo_camera</span>
           </span>
         }
+      }
+      <span class="review-id-text">#{{ review.id }}</span>
+      @if (isBadTask()) {
+        <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{ ratingTaskLabel() }}</span>
       }
       @if (hasReviewNote() || isReviewNoteEditing()) {
         <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle()" [title]="reviewNoteTitle()">
@@ -271,8 +271,9 @@
   <button
     type="button"
     class="publish-button"
+    [class.publish-button--published]="isPublishedPublishAction()"
     (click)="doneRequested.emit()"
-    [disabled]="isMutating('review-' + review.id + '-publish') || isMutating('review-' + review.id + '-nagul')"
+    [disabled]="isPublishedPublishAction() || isMutating('review-' + review.id + '-publish') || isMutating('review-' + review.id + '-nagul')"
   >
     {{ doneLabel() }}
   </button>

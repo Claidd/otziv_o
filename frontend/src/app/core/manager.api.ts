@@ -53,6 +53,7 @@ export interface OrderCardItem {
   amount?: number;
   counter?: number;
   waitingForClient?: boolean;
+  firstOrderForCompany?: boolean;
   workerUserFio?: string;
   categoryTitle?: string;
   subCategoryTitle?: string;

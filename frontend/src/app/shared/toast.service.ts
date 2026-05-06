@@ -18,7 +18,7 @@ export class ToastService {
   private readonly timers = new Map<number, number>();
 
   success(title: string, message?: string): number {
-    return this.show({ type: 'success', title, message }, 3600);
+    return this.show({ type: 'success', title, message }, 2000);
   }
 
   error(title: string, message?: string): number {

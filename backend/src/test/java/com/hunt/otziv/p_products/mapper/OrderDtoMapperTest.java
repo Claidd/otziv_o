@@ -51,6 +51,7 @@ class OrderDtoMapperTest {
         assertEquals(2, dto.getAmount());
         assertEquals(7, dto.getCounter());
         assertFalse(dto.isWaitingForClient());
+        assertTrue(dto.isFirstOrderForCompany());
         assertEquals("Worker Fio", dto.getWorkerUserFio());
         assertEquals("Категория", dto.getCategoryTitle());
         assertEquals("Подкатегория", dto.getSubCategoryTitle());
@@ -84,7 +85,8 @@ class OrderDtoMapperTest {
                 now.minusDays(10),
                 now.minusDays(4),
                 now.plusDays(1),
-                null
+                null,
+                true
         };
 
         OrderDTOList dto = mapper.toBoardDTO(row);
@@ -108,6 +110,27 @@ class OrderDtoMapperTest {
         assertEquals(now.plusDays(1), dto.getPayDay());
         assertEquals(4, dto.getDayToChangeStatusAgo());
         assertEquals("нет заметок", dto.getOrderComments());
+        assertTrue(dto.isFirstOrderForCompany());
+    }
+
+    @Test
+    void toBoardDTOOnlyMarksLowestCompanyOrderIdAsFirst() {
+        Company company = Company.builder()
+                .id(5L)
+                .title("Компания")
+                .build();
+        Order first = Order.builder()
+                .id(10L)
+                .company(company)
+                .build();
+        Order repeat = Order.builder()
+                .id(11L)
+                .company(company)
+                .build();
+        company.setOrderList(Set.of(first, repeat));
+
+        assertTrue(mapper.toBoardDTO(first).isFirstOrderForCompany());
+        assertFalse(mapper.toBoardDTO(repeat).isFirstOrderForCompany());
     }
 
     @Test
@@ -221,6 +244,7 @@ class OrderDtoMapperTest {
                 .build();
         details.setReviews(List.of(review));
         order.setDetails(List.of(details));
+        company.setOrderList(Set.of(order));
         return order;
     }
 }

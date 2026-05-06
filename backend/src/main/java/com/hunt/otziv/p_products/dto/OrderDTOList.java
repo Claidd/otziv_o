@@ -65,6 +65,8 @@ public class OrderDTOList {
 
     private boolean waitingForClient;
 
+    private boolean firstOrderForCompany;
+
     private String workerUserFio;
 
     private String categoryTitle;

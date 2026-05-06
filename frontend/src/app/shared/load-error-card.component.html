@@ -1,22 +1,24 @@
-<article class="load-error-card" role="alert">
-  <span class="load-error-icon material-icons-sharp">{{ icon }}</span>
+@if (visible) {
+  <article class="load-error-card" role="alert">
+    <span class="load-error-icon material-icons-sharp">{{ icon }}</span>
 
-  <div class="load-error-copy">
-    <h3>{{ title }}</h3>
-    @if (message) {
-      <p>{{ message }}</p>
+    <div class="load-error-copy">
+      <h3>{{ title }}</h3>
+      @if (message) {
+        <p>{{ message }}</p>
+      }
+    </div>
+
+    @if (actionLabel) {
+      <button
+        type="button"
+        class="load-error-action"
+        (click)="onRetry()"
+        [disabled]="disabled || loading"
+      >
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading ? 'Обновляю' : actionLabel }}
+      </button>
     }
-  </div>
-
-  @if (actionLabel) {
-    <button
-      type="button"
-      class="load-error-action"
-      (click)="retry.emit()"
-      [disabled]="disabled || loading"
-    >
-      <span class="material-icons-sharp">refresh</span>
-      {{ loading ? 'Обновляю' : actionLabel }}
-    </button>
-  }
-</article>
+  </article>
+}

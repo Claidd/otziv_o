@@ -22,6 +22,28 @@ export function managerWithHistoryState(
   };
 }
 
+export function managerViewQueryParams(view: ManagerHistoryView): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    section: view.activeSection,
+    status: view.activeSection === 'companies' ? view.companyStatus : view.orderStatus,
+    pageNumber: Math.max(view.pageNumber, 0),
+    pageSize: view.pageSize,
+    sortDirection: view.sortDirection
+  };
+
+  const keyword = view.keyword.trim();
+  if (keyword) {
+    params['keyword'] = keyword;
+  }
+
+  if (view.activeSection === 'orders' && view.selectedCompany) {
+    params['companyId'] = view.selectedCompany.id;
+    params['companyTitle'] = view.selectedCompany.title.trim() || `Компания #${view.selectedCompany.id}`;
+  }
+
+  return params;
+}
+
 export function managerReadHistoryView(
   state: unknown,
   stateKey = MANAGER_HISTORY_STATE_KEY

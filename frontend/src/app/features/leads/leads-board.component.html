@@ -13,19 +13,6 @@
     </button>
 
     <div id="lead-menu-panel" class="lead-menu-panel" [class.open]="mobileMenuOpen()">
-      <div class="mobile-menu-heading">
-        <h1>Лид кабинет</h1>
-        <nav class="mobile-role-links" aria-label="Разделы">
-          @for (link of mobileNavLinks; track link.label) {
-            @if (link.routerLink) {
-              <a [routerLink]="link.routerLink">{{ link.label }}</a>
-            } @else {
-              <a [href]="link.href">{{ link.label }}</a>
-            }
-          }
-        </nav>
-      </div>
-
       <header class="lead-toolbar">
         <nav class="status-tabs" aria-label="Статусы лидов">
           @for (bucket of visibleBuckets(); track trackBucket($index, bucket)) {

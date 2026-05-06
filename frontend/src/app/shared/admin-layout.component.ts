@@ -4,6 +4,7 @@ import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
 import { CabinetApi } from '../core/cabinet.api';
 import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
+import { PersonalRemindersComponent } from './personal-reminders.component';
 import { normalizeRole, roleLabel } from './role-labels';
 
 type ThemeMode = 'light' | 'dark';
@@ -20,7 +21,7 @@ type ShellLink = {
 
 @Component({
   selector: 'app-admin-layout',
-  imports: [RouterLink],
+  imports: [PersonalRemindersComponent, RouterLink],
   templateUrl: './admin-layout.component.html'
 })
 export class AdminLayoutComponent {

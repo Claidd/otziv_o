@@ -188,6 +188,8 @@ function isTechnicalErrorText(value: string): boolean {
     /https?:\/\//i,
     /localhost:\d+/i,
     /\/api\//i,
+    /No static resource/i,
+    /access-denied/i,
     /Internal Server Error/i,
     /^<!doctype/i,
     /^<html/i,

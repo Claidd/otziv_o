@@ -237,7 +237,15 @@ export class WorkerReviewCardComponent {
       return 'Сменил';
     }
 
+    if (this.isPublishedPublishAction()) {
+      return 'ОПУБЛИКОВАНО';
+    }
+
     return this.activeSection === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ';
+  }
+
+  isPublishedPublishAction(): boolean {
+    return this.activeSection === 'publish' && !this.isBadTask() && !!this.review.publish;
   }
 
   isMutating(key: string): boolean {

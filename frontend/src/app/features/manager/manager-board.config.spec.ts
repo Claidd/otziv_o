@@ -15,6 +15,7 @@ import {
   managerOrderChatUrl,
   managerOrderDetailsUrl,
   managerOrderInfoUrl,
+  managerOrderReviewCopyText,
   managerOrderReviewUrl,
   managerPayableOrderSum,
   managerProgress,
@@ -100,10 +101,36 @@ describe('manager-board config helpers', () => {
     expect(managerShowBadReviewSummary(order({ status: 'Оплачено', badReviewTasksTotal: 1 }))).toBe(false);
     expect(managerProgress(order({ amount: 4, counter: 3 }))).toBe(75);
     expect(managerProgress(order({ amount: 0, counter: 3 }))).toBe(0);
-    expect(managerReviewCheckPath('uuid-1')).toBe('/review/editReviews/uuid-1');
-    expect(managerOrderReviewUrl(order({ orderDetailsId: 'uuid-2' }))).toBe('/review/editReviews/uuid-2');
+    expect(managerReviewCheckPath('uuid-1')).toBe('/uuid-1');
+    expect(managerOrderReviewUrl(order({ orderDetailsId: 'uuid-2' }))).toBe('/uuid-2');
     expect(managerOrderReviewUrl(order({ orderDetailsId: undefined }))).toBe('');
     expect(managerOptionLabel({ id: 5, label: '' })).toBe('ID 5');
+  });
+
+  it('builds review check copy text for first and repeat orders', () => {
+    const promoTexts = Array.from({ length: 12 }, () => '');
+    promoTexts[4] = 'Здравствуйте, это тексты на проверку. Нажмите «РАЗРЕШИТЬ ПУБЛИКАЦИЮ».';
+    promoTexts[11] = 'Повторный текст из промо';
+
+    const firstText = managerOrderReviewCopyText(
+      order({ orderDetailsId: 'uuid-1', firstOrderForCompany: true }),
+      promoTexts
+    );
+    const repeatText = managerOrderReviewCopyText(
+      order({ orderDetailsId: 'uuid-2', firstOrderForCompany: false }),
+      promoTexts
+    );
+
+    expect(firstText).toBe([
+      'Здравствуйте, это тексты на проверку. Нажмите «РАЗРЕШИТЬ ПУБЛИКАЦИЮ».',
+      '',
+      'Ссылка на проверку отзывов: https://o-ogo.ru/uuid-1'
+    ].join('\n'));
+    expect(repeatText).toBe([
+      'Повторный текст из промо',
+      '',
+      'Ссылка на проверку отзывов: https://o-ogo.ru/uuid-2'
+    ].join('\n'));
   });
 
   it('keeps note, chat and legacy URL helpers stable', () => {

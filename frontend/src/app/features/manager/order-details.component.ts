@@ -2,9 +2,10 @@ import { DecimalPipe } from '@angular/common';
 import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { appEnvironment } from '../../core/app-environment';
+import { AuthService } from '../../core/auth.service';
 import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
@@ -18,13 +19,15 @@ type ReviewEditDraft = ReviewUpdateRequest;
 
 @Component({
   selector: 'app-order-details',
-  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent],
+  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './order-details.component.html',
   styleUrl: './order-details.component.scss'
 })
 export class OrderDetailsComponent {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
 
@@ -779,6 +782,12 @@ export class OrderDetailsComponent {
       next: () => {
         this.mutationKey.set(null);
         this.toastService.success('Заказ отправлен', 'Статус изменен на "В проверку"');
+
+        if (this.isOnlyWorkerRole()) {
+          void this.router.navigate(['/worker']);
+          return;
+        }
+
         this.loadDetails();
       },
       error: (err) => {
@@ -792,9 +801,9 @@ export class OrderDetailsComponent {
     return this.legacyUrl(`/review/editReview/${review.id}`);
   }
 
-  editAllReviewsUrl(): string {
+  editAllReviewsRoute(): unknown[] {
     const details = this.details();
-    return details?.orderDetailsId ? this.appUrl(`/review/editReviews/${details.orderDetailsId}`) : this.appUrl('/manager');
+    return details?.orderDetailsId ? ['/review/editReviews', details.orderDetailsId] : ['/manager'];
   }
 
   botLabel(review: OrderReviewItem): string {
@@ -816,6 +825,11 @@ export class OrderDetailsComponent {
 
   private botIdLabel(botId?: number | null): string {
     return botId ? String(botId) : 'не назначен';
+  }
+
+  private isOnlyWorkerRole(): boolean {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['WORKER']) && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }
 
   trackReview(_index: number, review: OrderReviewItem): number {
@@ -898,10 +912,6 @@ export class OrderDetailsComponent {
 
   private legacyUrl(path: string): string {
     return `${appEnvironment.legacyBaseUrl}${path}`;
-  }
-
-  private appUrl(path: string): string {
-    return path;
   }
 
   private reviewFieldKey(review: OrderReviewItem, field: ReviewEditableField): string {

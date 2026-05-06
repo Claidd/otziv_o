@@ -52,7 +52,7 @@
 
     <div class="card-actions order-links">
       <button type="button" (click)="copyTextRequested.emit('check')">текст</button>
-      <a [href]="order.orderDetailsId ? '/review/editReviews/' + order.orderDetailsId : orderDetailsUrl()" target="_blank" rel="noopener">url</a>
+      <a [href]="order.orderDetailsId ? '/' + order.orderDetailsId : orderDetailsUrl()" target="_blank" rel="noopener">url</a>
       <button type="button" (click)="copyTextRequested.emit('payment')">счет</button>
       <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">ссылка</a>
     </div>

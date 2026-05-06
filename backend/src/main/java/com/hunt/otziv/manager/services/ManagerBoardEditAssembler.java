@@ -268,7 +268,7 @@ public class ManagerBoardEditAssembler {
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
-                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER")
+                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER")
         );
     }
 

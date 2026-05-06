@@ -64,7 +64,7 @@ public class ApiManagerReviewController {
     }
 
     @PostMapping("/orders/{orderId}/reviews")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse addOrderReview(
             @PathVariable Long orderId,
             Authentication authentication
@@ -162,7 +162,7 @@ public class ApiManagerReviewController {
     }
 
     @DeleteMapping("/orders/{orderId}/reviews/{reviewId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public OrderDetailsResponse deleteOrderReview(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -177,7 +177,7 @@ public class ApiManagerReviewController {
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/text")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse updateOrderReviewText(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -196,7 +196,7 @@ public class ApiManagerReviewController {
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/answer")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse updateOrderReviewAnswer(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -215,7 +215,7 @@ public class ApiManagerReviewController {
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/note")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse updateOrderReviewNote(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -234,7 +234,7 @@ public class ApiManagerReviewController {
     }
 
     @PutMapping("/orders/{orderId}/note")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse updateOrderNote(
             @PathVariable Long orderId,
             @RequestBody OrderNoteUpdateRequest request,
@@ -252,7 +252,7 @@ public class ApiManagerReviewController {
     }
 
     @PutMapping("/orders/{orderId}/company-note")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse updateOrderCompanyNote(
             @PathVariable Long orderId,
             @RequestBody CompanyNoteUpdateRequest request,
@@ -275,7 +275,7 @@ public class ApiManagerReviewController {
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/change-bot")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse changeOrderReviewBot(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -286,7 +286,7 @@ public class ApiManagerReviewController {
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/bots/{botId}/deactivate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse deactivateOrderReviewBot(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,

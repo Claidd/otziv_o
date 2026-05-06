@@ -77,6 +77,7 @@ public class OrderDtoMapper {
                 .amount(order.getAmount())
                 .counter(order.getCounter())
                 .waitingForClient(order.isWaitingForClient())
+                .firstOrderForCompany(isFirstOrderForCompany(order))
                 .workerUserFio(order.getWorker() != null && order.getWorker().getUser() != null
                         ? safeString(order.getWorker().getUser().getFio())
                         : "")
@@ -127,6 +128,7 @@ public class OrderDtoMapper {
                 .payDay(rowLocalDate(row, 20))
                 .dayToChangeStatusAgo(daysDifference)
                 .orderComments(rowString(row, 21, "нет заметок"))
+                .firstOrderForCompany(rowBoolean(row, 22))
                 .build();
     }
 
@@ -395,6 +397,20 @@ public class OrderDtoMapper {
         return order.getDetails().get(0);
     }
 
+    private boolean isFirstOrderForCompany(Order order) {
+        if (order == null || order.getId() == null || order.getCompany() == null || order.getCompany().getOrderList() == null) {
+            return false;
+        }
+
+        return order.getCompany().getOrderList().stream()
+                .filter(Objects::nonNull)
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .min(Long::compareTo)
+                .map(order.getId()::equals)
+                .orElse(false);
+    }
+
     private String safeStatusTitle(Order order) {
         if (order == null || order.getStatus() == null || order.getStatus().getTitle() == null) {
             return "";
@@ -428,7 +444,13 @@ public class OrderDtoMapper {
 
     private boolean rowBoolean(Object[] row, int index) {
         Object value = rowValue(row, index);
-        return value instanceof Boolean bool && bool;
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        return value instanceof String string && Boolean.parseBoolean(string);
     }
 
     private LocalDate rowLocalDate(Object[] row, int index) {

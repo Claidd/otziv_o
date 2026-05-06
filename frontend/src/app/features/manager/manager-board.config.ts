@@ -1,5 +1,10 @@
 import { appEnvironment } from '../../core/app-environment';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import {
+  absoluteAppUrl,
+  orderReviewCopyText,
+  reviewCheckPath
+} from '../../shared/order-review-copy-text';
 import type {
   CompanyCardItem,
   ManagerMetric,
@@ -137,11 +142,11 @@ export function managerLegacyUrl(path: string): string {
 }
 
 export function managerReviewCheckPath(orderDetailsId: string): string {
-  return `/review/editReviews/${orderDetailsId}`;
+  return reviewCheckPath(orderDetailsId);
 }
 
 export function managerAbsoluteAppUrl(path: string): string {
-  return new URL(path, window.location.origin).toString();
+  return absoluteAppUrl(path);
 }
 
 export function managerSectionLabel(section: ManagerSection): string {
@@ -236,6 +241,10 @@ export function managerOrderInfoUrl(order: OrderCardItem): string {
 
 export function managerOrderReviewUrl(order: OrderCardItem): string {
   return order.orderDetailsId ? managerReviewCheckPath(order.orderDetailsId) : '';
+}
+
+export function managerOrderReviewCopyText(order: OrderCardItem, promoTexts: string[]): string {
+  return orderReviewCopyText(order, promoTexts);
 }
 
 export function managerOptionLabel(option: ManagerOption): string {

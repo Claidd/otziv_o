@@ -1,6 +1,11 @@
 import { appEnvironment } from '../../core/app-environment';
 import type { ManagerOption, OrderCardItem, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import {
+  absoluteAppUrl,
+  orderReviewCopyText,
+  reviewCheckPath
+} from '../../shared/order-review-copy-text';
 import type {
   WorkerBotItem,
   WorkerMetric,
@@ -110,7 +115,15 @@ export function workerLegacyUrl(path: string): string {
 }
 
 export function workerAbsoluteAppUrl(path: string): string {
-  return new URL(path, window.location.origin).toString();
+  return absoluteAppUrl(path);
+}
+
+export function workerReviewCheckPath(orderDetailsId: string): string {
+  return reviewCheckPath(orderDetailsId);
+}
+
+export function workerOrderReviewCopyText(order: OrderCardItem, promoTexts: string[]): string {
+  return orderReviewCopyText(order, promoTexts);
 }
 
 export function workerErrorMessage(err: unknown, fallback: string): string {

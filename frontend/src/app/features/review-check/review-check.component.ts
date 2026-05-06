@@ -29,6 +29,7 @@ type ReviewCheckDraft = {
 type ReviewCheckAction = 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
+type ReviewWindowStatus = 'approved' | 'correction' | 'not-approved';
 
 @Component({
   selector: 'app-review-check',
@@ -610,6 +611,50 @@ export class ReviewCheckComponent {
   showStaffActions(details: ReviewCheckPayload): boolean {
     const permissions = details.permissions;
     return permissions.canOpenManagerLinks || permissions.canSendToCheck || permissions.canMarkPaid;
+  }
+
+  reviewWindowStatus(details: ReviewCheckPayload): ReviewWindowStatus {
+    const status = (details.status || '').trim().toLowerCase();
+
+    if (status === 'коррекция') {
+      return 'correction';
+    }
+
+    if (status === 'в проверку' || status === 'на проверке') {
+      return 'not-approved';
+    }
+
+    if (details.approved || status === 'публикация' || status === 'опубликовано') {
+      return 'approved';
+    }
+
+    return 'not-approved';
+  }
+
+  isReviewWindowApproved(details: ReviewCheckPayload): boolean {
+    return this.reviewWindowStatus(details) === 'approved';
+  }
+
+  reviewWindowStatusLabel(details: ReviewCheckPayload): string {
+    switch (this.reviewWindowStatus(details)) {
+      case 'approved':
+        return 'Одобрено';
+      case 'correction':
+        return 'На коррекции';
+      default:
+        return 'Не одобрено';
+    }
+  }
+
+  reviewWindowStatusIcon(details: ReviewCheckPayload): string {
+    switch (this.reviewWindowStatus(details)) {
+      case 'approved':
+        return 'task_alt';
+      case 'correction':
+        return 'edit_note';
+      default:
+        return 'fact_check';
+    }
   }
 
   isAction(action: ReviewCheckAction): boolean {

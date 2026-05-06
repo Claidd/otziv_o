@@ -113,8 +113,9 @@ import { Component, input, output, signal } from '@angular/core';
     }
 
     .a {
-      display: inline-flex;
-      justify-self: end;
+      display: flex;
+      width: 100%;
+      justify-content: space-between;
       gap: 0.35rem;
     }
 

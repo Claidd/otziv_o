@@ -37,12 +37,6 @@ type PromoItem = {
   text: string;
 };
 
-type MobileNavLink = {
-  label: string;
-  routerLink?: string;
-  href?: string;
-};
-
 type LeadMetric = {
   label: string;
   value: number;
@@ -85,15 +79,6 @@ export class LeadsBoardComponent {
   ];
 
   readonly pageSizeOptions = [5, 10, 15];
-  readonly mobileNavLinks: MobileNavLink[] = [
-    { label: 'Главная', routerLink: '/' },
-    { label: 'Лиды', routerLink: '/leads' },
-    { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Менеджер', routerLink: '/manager' },
-    { label: 'Специалист', routerLink: '/worker' },
-    { label: 'Личный кабинет', routerLink: '/' }
-  ];
-
   readonly board = signal<LeadBoard | null>(null);
   readonly activeBucket = signal<LeadBucketKey>('newLeads');
   readonly keyword = signal('');

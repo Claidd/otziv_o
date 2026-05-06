@@ -6,6 +6,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Material Icons Sharp';
+  src: url('/assets/fonts/material-icons-sharp.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
 :root {
   --otziv-font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
   --otziv-card-title-font: 'laptev_brush', var(--otziv-font-family);
@@ -128,6 +136,18 @@ body.otziv-dark-theme select option:checked {
 
 app-review-check app-admin-layout .admin-layout .page-heading {
   display: none;
+}
+
+app-order-details .details-actions .send-check-action {
+  border-color: rgba(122, 158, 210, 0.34) !important;
+  color: #3f6f9f !important;
+  background: #eaf3ff !important;
+  box-shadow: 0 0.55rem 1.2rem rgba(122, 158, 210, 0.16) !important;
+}
+
+app-order-details .details-actions .send-check-action:not(:disabled):hover {
+  color: white !important;
+  background: #7a9ed2 !important;
 }
 
 app-review-check .review-edit-hint,
@@ -714,6 +734,15 @@ app-review-check .approve-publication-hint .material-icons-sharp {
 
 :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger:not(:disabled):hover {
   background: #d90052;
+}
+
+app-order-details .review-card.review-card {
+  transition: box-shadow 1.2s cubic-bezier(.22,1,.36,1), border-color 1.2s ease;
+}
+
+app-order-details .review-card.review-card:hover {
+  border-color: rgba(103, 116, 131, 0.32);
+  box-shadow: 0 6px 15px rgba(54, 57, 73, 0.16);
 }
 
 app-manager-board .company-edit-modal {

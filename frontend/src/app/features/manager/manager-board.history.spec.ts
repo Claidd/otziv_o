@@ -3,6 +3,7 @@ import {
   managerNormalizeSelectedCompany,
   managerReadHistoryView,
   managerReadQueryView,
+  managerViewQueryParams,
   managerWithHistoryState
 } from './manager-board.history';
 
@@ -124,6 +125,42 @@ describe('manager-board history helpers', () => {
       pageSize: 15,
       sortDirection: 'desc',
       selectedCompany: { id: 4, title: 'Компания #4' }
+    });
+  });
+
+  it('writes order view query params for stable return navigation', () => {
+    expect(managerViewQueryParams(view({
+      activeSection: 'orders',
+      orderStatus: 'Новый',
+      keyword: ' order ',
+      pageNumber: 2,
+      pageSize: 15,
+      sortDirection: 'asc',
+      selectedCompany: { id: 8, title: ' Acme ' }
+    }))).toEqual({
+      section: 'orders',
+      status: 'Новый',
+      keyword: 'order',
+      pageNumber: 2,
+      pageSize: 15,
+      sortDirection: 'asc',
+      companyId: 8,
+      companyTitle: 'Acme'
+    });
+  });
+
+  it('writes company view query params without leaking order context', () => {
+    expect(managerViewQueryParams(view({
+      activeSection: 'companies',
+      companyStatus: 'Новая',
+      orderStatus: 'Оплачено',
+      selectedCompany: { id: 8, title: 'Acme' }
+    }))).toEqual({
+      section: 'companies',
+      status: 'Новая',
+      pageNumber: 0,
+      pageSize: 10,
+      sortDirection: 'desc'
     });
   });
 

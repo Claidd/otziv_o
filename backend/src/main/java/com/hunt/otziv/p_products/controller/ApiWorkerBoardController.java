@@ -188,7 +188,7 @@ public class ApiWorkerBoardController {
 
     @PutMapping("/orders/{orderId}/note")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void updateOrderNote(
             @PathVariable Long orderId,
             @RequestBody OrderNoteUpdateRequest request
@@ -204,7 +204,7 @@ public class ApiWorkerBoardController {
 
     @PutMapping("/orders/{orderId}/company-note")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void updateOrderCompanyNote(
             @PathVariable Long orderId,
             @RequestBody CompanyNoteUpdateRequest request
@@ -642,7 +642,7 @@ public class ApiWorkerBoardController {
                 admin || owner || worker,
                 admin || owner || manager,
                 admin || owner || manager || worker,
-                admin || owner || manager
+                admin || owner || manager || worker
         );
     }
 
