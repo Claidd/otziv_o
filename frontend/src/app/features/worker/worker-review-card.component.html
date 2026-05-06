@@ -2,6 +2,9 @@
   class="worker-card review-card"
   [class.published]="review.publish"
   [class.bad-task]="isBadTask()"
+  [class.card-tone--walk]="isWalkTone()"
+  [class.card-tone--publication]="isPublicationTone()"
+  [class.card-tone--bad]="isBadTone()"
   [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
 >
   <header>

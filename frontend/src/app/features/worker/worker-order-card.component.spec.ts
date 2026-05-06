@@ -84,6 +84,56 @@ describe('WorkerOrderCardComponent', () => {
     expect(statusChip.textContent?.trim()).toBe('Ждем');
   });
 
+  it('adds soft status tones without overriding client waiting', () => {
+    const render = (overrides: Partial<OrderCardItem>): HTMLElement => {
+      const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+      fixture.componentInstance.order = order(overrides);
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('article') as HTMLElement;
+    };
+
+    let article = render({ status: 'В проверку' });
+
+    expect(article.classList.contains('card-tone--walk')).toBe(true);
+
+    article = render({ status: 'Архив' });
+
+    expect(article.classList.contains('card-tone--walk')).toBe(true);
+
+    article = render({ status: 'Выставлен счет' });
+
+    expect(article.classList.contains('card-tone--walk')).toBe(true);
+
+    article = render({ status: 'На проверке' });
+
+    expect(article.classList.contains('card-tone--wait')).toBe(true);
+
+    article = render({ status: 'Напоминание' });
+
+    expect(article.classList.contains('card-tone--wait')).toBe(true);
+
+    article = render({ status: 'Коррекция' });
+
+    expect(article.classList.contains('card-tone--correction')).toBe(true);
+
+    article = render({ status: 'Публикация' });
+
+    expect(article.classList.contains('card-tone--publication')).toBe(true);
+
+    article = render({ status: 'Опубликовано' });
+
+    expect(article.classList.contains('card-tone--success')).toBe(true);
+
+    article = render({ status: 'Не оплачено' });
+
+    expect(article.classList.contains('card-tone--bad')).toBe(true);
+
+    article = render({ status: 'Коррекция', waitingForClient: true });
+
+    expect(article.classList.contains('waiting-client')).toBe(true);
+    expect(article.classList.contains('card-tone--correction')).toBe(false);
+  });
+
   it('keeps full category names available from compact category chips', () => {
     const fixture = TestBed.createComponent(WorkerOrderCardComponent);
     fixture.componentInstance.order = order({

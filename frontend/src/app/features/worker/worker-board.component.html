@@ -71,7 +71,13 @@
     }
 
     @if (boardNoticeVisible() && board()?.message) {
-      <p class="notice" [class.warning]="board()?.warning">{{ board()?.message }}</p>
+      <article class="notice" [class.warning]="board()?.warning" role="status">
+        <span class="notice-icon material-icons-sharp">{{ board()?.warning ? 'priority_high' : 'info' }}</span>
+        <div>
+          <strong>{{ board()?.warning ? 'Важное напоминание' : 'Подсказка' }}</strong>
+          <p>{{ board()?.message }}</p>
+        </div>
+      </article>
     }
 
     <h2 class="workspace-title">{{ title() }}</h2>

@@ -20,6 +20,18 @@
   --otziv-background: #f6f6f9;
   --otziv-field-background: #ffffff;
   --otziv-muted-surface: #f8fafc;
+  --otziv-tone-wait-border: rgba(214, 159, 43, 0.42);
+  --otziv-tone-wait-surface: #fffdf7;
+  --otziv-tone-correction-border: rgba(232, 64, 112, 0.34);
+  --otziv-tone-correction-surface: #fff7fb;
+  --otziv-tone-walk-border: rgba(125, 139, 158, 0.38);
+  --otziv-tone-walk-surface: #f8faff;
+  --otziv-tone-publication-border: rgba(174, 94, 207, 0.34);
+  --otziv-tone-publication-surface: #fbf7ff;
+  --otziv-tone-success-border: rgba(67, 153, 121, 0.34);
+  --otziv-tone-success-surface: #f5fff9;
+  --otziv-tone-bad-border: rgba(232, 64, 112, 0.34);
+  --otziv-tone-bad-surface: #fff7fb;
   --otziv-shadow: 0 2rem 3rem var(--otziv-light);
   --otziv-shadow-hover: none;
   --otziv-card-radius: 2rem;
@@ -40,6 +52,18 @@ body.otziv-dark-theme {
   --otziv-background: #181a1e;
   --otziv-field-background: #202528;
   --otziv-muted-surface: #252b2f;
+  --otziv-tone-wait-border: rgba(248, 217, 117, 0.26);
+  --otziv-tone-wait-surface: #282825;
+  --otziv-tone-correction-border: rgba(255, 91, 143, 0.24);
+  --otziv-tone-correction-surface: #28242b;
+  --otziv-tone-walk-border: rgba(163, 189, 204, 0.22);
+  --otziv-tone-walk-surface: #252a31;
+  --otziv-tone-publication-border: rgba(192, 124, 226, 0.24);
+  --otziv-tone-publication-surface: #292432;
+  --otziv-tone-success-border: rgba(74, 198, 177, 0.24);
+  --otziv-tone-success-surface: #222b29;
+  --otziv-tone-bad-border: rgba(255, 91, 143, 0.24);
+  --otziv-tone-bad-surface: #28242b;
   --otziv-shadow: 0 2rem 3rem rgba(0, 0, 0, 0.4);
 }
 
@@ -55,6 +79,31 @@ body {
   font-family: var(--otziv-font-family);
   font-size: 15px;
   line-height: 1.35;
+}
+
+select {
+  color-scheme: light;
+}
+
+select option,
+select optgroup {
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+}
+
+body.otziv-dark-theme select {
+  color-scheme: dark;
+}
+
+body.otziv-dark-theme select option,
+body.otziv-dark-theme select optgroup {
+  color: #edeffd;
+  background: #202528;
+}
+
+body.otziv-dark-theme select option:checked {
+  color: #ffffff;
+  background: #315f97;
 }
 
 * {

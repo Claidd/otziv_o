@@ -22,8 +22,38 @@
 }
 
 .manager-card.waiting-client {
-  border-color: rgba(214, 159, 43, 0.42);
-  background: linear-gradient(180deg, #fffdf7 0%, var(--otziv-white) 100%);
+  border-color: var(--otziv-tone-wait-border);
+  background: linear-gradient(180deg, var(--otziv-tone-wait-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--wait {
+  border-color: var(--otziv-tone-wait-border);
+  background: linear-gradient(180deg, var(--otziv-tone-wait-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--walk {
+  border-color: var(--otziv-tone-walk-border);
+  background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--correction {
+  border-color: var(--otziv-tone-correction-border);
+  background: linear-gradient(180deg, var(--otziv-tone-correction-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--publication {
+  border-color: var(--otziv-tone-publication-border);
+  background: linear-gradient(180deg, var(--otziv-tone-publication-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--success {
+  border-color: var(--otziv-tone-success-border);
+  background: linear-gradient(180deg, var(--otziv-tone-success-surface) 0%, var(--otziv-white) 100%);
+}
+
+.manager-card.card-tone--bad {
+  border-color: var(--otziv-tone-bad-border);
+  background: linear-gradient(180deg, var(--otziv-tone-bad-surface) 0%, var(--otziv-white) 100%);
 }
 
 .order-card {

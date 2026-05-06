@@ -65,6 +65,32 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('.publish-button')?.textContent?.trim()).toBe('Сменил');
   });
 
+  it('adds soft section tones for review work cards', () => {
+    const render = (
+      activeSection: WorkerReviewCardComponent['activeSection'],
+      overrides: Partial<WorkerReviewItem> = {}
+    ): HTMLElement => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      fixture.componentInstance.review = review(overrides);
+      fixture.componentInstance.activeSection = activeSection;
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('article') as HTMLElement;
+    };
+
+    let article = render('nagul');
+
+    expect(article.classList.contains('card-tone--walk')).toBe(true);
+
+    article = render('publish');
+
+    expect(article.classList.contains('card-tone--publication')).toBe(true);
+
+    article = render('bad', { badTask: true });
+
+    expect(article.classList.contains('card-tone--bad')).toBe(true);
+    expect(article.classList.contains('card-tone--publication')).toBe(false);
+  });
+
   it('emits review action events without owning mutations', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

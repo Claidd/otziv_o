@@ -97,6 +97,8 @@ export class AdminDictionariesComponent {
   readonly activeCategoryId = signal<number | null>(null);
   readonly editingCategoryId = signal<number | null>(null);
   readonly editingSubCategoryId = signal<number | null>(null);
+  readonly categoryEditorOpen = signal(false);
+  readonly subCategoryEditorOpen = signal(false);
 
   readonly categories = signal<AdminCategory[]>([]);
   readonly subCategories = signal<AdminSubCategory[]>([]);
@@ -303,10 +305,29 @@ export class AdminDictionariesComponent {
     this.loadActive();
   }
 
+  openActiveCreate(): void {
+    if (this.activeTab() === 'categories') {
+      this.openNewCategory();
+      return;
+    }
+
+    if (this.activeTab() === 'subcategories') {
+      this.openNewSubCategory();
+      return;
+    }
+
+    this.clearSelection();
+  }
+
   selectCategory(category: AdminCategory): void {
     this.activeCategoryId.set(category.id);
     this.startNewSubCategory();
     this.error.set(null);
+  }
+
+  openNewCategory(): void {
+    this.startNewCategory();
+    this.categoryEditorOpen.set(true);
   }
 
   editCategory(event: Event, category: AdminCategory): void {
@@ -315,7 +336,17 @@ export class AdminDictionariesComponent {
     this.activeCategoryId.set(category.id);
     this.editingCategoryId.set(category.id);
     this.categoryForm.setValue({ title: category.title });
+    this.categoryEditorOpen.set(true);
     this.error.set(null);
+  }
+
+  closeCategoryEditor(): void {
+    if (this.saving() || this.deleting()) {
+      return;
+    }
+
+    this.categoryEditorOpen.set(false);
+    this.startNewCategory();
   }
 
   selectSubCategory(subCategory: AdminSubCategory): void {
@@ -327,6 +358,31 @@ export class AdminDictionariesComponent {
       categoryId
     });
     this.error.set(null);
+  }
+
+  openNewSubCategory(): void {
+    if (this.activeCategoryId() == null) {
+      this.activeCategoryId.set(this.defaultCategoryId());
+    }
+
+    this.startNewSubCategory();
+    this.subCategoryEditorOpen.set(true);
+  }
+
+  editSubCategory(event: Event, subCategory: AdminSubCategory): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.selectSubCategory(subCategory);
+    this.subCategoryEditorOpen.set(true);
+  }
+
+  closeSubCategoryEditor(): void {
+    if (this.saving() || this.deleting()) {
+      return;
+    }
+
+    this.subCategoryEditorOpen.set(false);
+    this.startNewSubCategory();
   }
 
   selectCity(city: AdminCity): void {
@@ -383,6 +439,8 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
     this.editingCategoryId.set(null);
     this.editingSubCategoryId.set(null);
+    this.categoryEditorOpen.set(false);
+    this.subCategoryEditorOpen.set(false);
     this.error.set(null);
 
     this.categoryForm.reset({ title: '' });
@@ -450,6 +508,7 @@ export class AdminDictionariesComponent {
     this.dictionariesApi.deleteCategory(selectedId).subscribe({
       next: () => {
         this.deleting.set(false);
+        this.categoryEditorOpen.set(false);
         this.editingCategoryId.set(null);
         this.categoryForm.reset({ title: '' });
 
@@ -487,6 +546,7 @@ export class AdminDictionariesComponent {
     this.dictionariesApi.deleteSubCategory(selectedId).subscribe({
       next: () => {
         this.deleting.set(false);
+        this.subCategoryEditorOpen.set(false);
         this.startNewSubCategory();
         this.toastService.success('Подкатегория удалена');
         this.reloadAfterMutation();
@@ -908,6 +968,7 @@ export class AdminDictionariesComponent {
     this.runSave(call, 'Категория сохранена', (saved) => {
       this.activeCategoryId.set(saved.id);
       this.editingCategoryId.set(saved.id);
+      this.categoryEditorOpen.set(false);
     });
   }
 
@@ -930,6 +991,7 @@ export class AdminDictionariesComponent {
     this.runSave(call, 'Подкатегория сохранена', (saved) => {
       this.editingSubCategoryId.set(saved.id);
       this.subCategoryForm.controls.categoryId.setValue(request.categoryId);
+      this.subCategoryEditorOpen.set(false);
     });
   }
 

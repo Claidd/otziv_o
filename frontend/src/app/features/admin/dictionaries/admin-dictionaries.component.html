@@ -16,7 +16,7 @@
       </nav>
 
       <div class="quick-links">
-        <button type="button" (click)="clearSelection()">
+        <button type="button" (click)="openActiveCreate()">
           <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
           {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
         </button>
@@ -55,37 +55,18 @@
     @if (activeTab() === 'categories') {
     <section class="dictionary-grid category-builder-grid">
       <article class="dictionary-card category-panel">
-        <div class="editor-title">
+        <div class="panel-heading">
           <div>
-            <p class="eyebrow">Добавление</p>
-            <h2>{{ categoryEditorTitle() }}</h2>
-          </div>
-          <span>Категории</span>
-        </div>
-
-        <form class="category-form" [formGroup]="categoryForm" (ngSubmit)="saveActive()">
-          <label>
-            <span>Название категории</span>
-            <input type="text" formControlName="title">
-          </label>
-          @if (categoryForm.invalid && categoryForm.touched) {
-            <p class="error compact">Название обязательно.</p>
-          }
-          <div class="actions">
-            @if (editingCategoryId() !== null) {
-              <button type="button" class="secondary" (click)="startNewCategory()" [disabled]="saving() || deleting()">Новая</button>
-              <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="deleting() || saving()">Удалить</button>
-            }
-            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
-          </div>
-        </form>
-
-        <div class="table-head list-title">
-          <div>
-            <p class="eyebrow">Список</p>
+            <p class="eyebrow">Справочник</p>
             <h2>Категории</h2>
           </div>
-          <span>{{ categories().length }}</span>
+          <div class="panel-actions">
+            <span class="total-badge">{{ categories().length }}</span>
+            <button type="button" class="compact-action" (click)="openNewCategory()">
+              <span class="material-icons-sharp">add</span>
+              Новая категория
+            </button>
+          </div>
         </div>
 
         <div class="table-scroll category-list-scroll">
@@ -123,43 +104,18 @@
 
       <article class="dictionary-card subcategory-panel">
         @if (activeCategory(); as category) {
-          <div class="editor-title">
+          <div class="panel-heading">
             <div>
-              <p class="eyebrow">Добавление</p>
-              <h2>{{ subCategoryEditorTitle() }}</h2>
+              <p class="eyebrow">Подкатегории</p>
+              <h2>{{ category.title }}</h2>
             </div>
-            <span>{{ category.title }}</span>
-          </div>
-
-          <form class="subcategory-form" [formGroup]="subCategoryForm" (ngSubmit)="saveSelectedSubCategory()">
-            <label>
-              <span>Название подкатегории</span>
-              <input type="text" formControlName="title">
-            </label>
-
-            <label>
-              <span>Категория</span>
-              <input type="text" [value]="category.title" readonly>
-            </label>
-
-            @if (subCategoryForm.invalid && subCategoryForm.touched) {
-              <p class="error compact">Название и категория обязательны.</p>
-            }
-            <div class="actions">
-              <button type="button" class="secondary" (click)="startNewSubCategory()" [disabled]="saving() || deleting()">Новая</button>
-              @if (editingSubCategoryId() !== null) {
-                <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="deleting() || saving()">Удалить</button>
-              }
-              <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+            <div class="panel-actions">
+              <span class="total-badge">{{ selectedCategorySubCategories().length }}</span>
+              <button type="button" class="compact-action" (click)="openNewSubCategory()">
+                <span class="material-icons-sharp">add</span>
+                Новая подкатегория
+              </button>
             </div>
-          </form>
-
-          <div class="table-head list-title">
-            <div>
-              <p class="eyebrow">Список</p>
-              <h2>Подкатегории</h2>
-            </div>
-            <span>{{ selectedCategorySubCategories().length }}</span>
           </div>
 
           <div class="table-scroll category-list-scroll">
@@ -168,16 +124,22 @@
                 <tr>
                   <th>Подкатегория</th>
                   <th>ID</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 @for (subCategory of selectedCategorySubCategories(); track trackSubCategory($index, subCategory)) {
-                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="selectSubCategory(subCategory)">
+                  <tr [class.selected]="editingSubCategoryId() === subCategory.id" (click)="editSubCategory($event, subCategory)">
                     <td><strong>{{ subCategory.title }}</strong></td>
                     <td>{{ subCategory.id }}</td>
+                    <td class="row-tools">
+                      <button type="button" class="row-icon-button" (click)="editSubCategory($event, subCategory)" title="Редактировать подкатегорию">
+                        <span class="material-icons-sharp">edit</span>
+                      </button>
+                    </td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="2" class="no-results">У категории пока нет подкатегорий.</td></tr>
+                  <tr><td colspan="3" class="no-results">У категории пока нет подкатегорий.</td></tr>
                 }
               </tbody>
             </table>
@@ -187,6 +149,10 @@
             <span class="material-icons-sharp">account_tree</span>
             <h2>Выберите категорию</h2>
             <p>Подкатегории появятся справа после выбора категории слева.</p>
+            <button type="button" class="compact-action" (click)="openNewCategory()">
+              <span class="material-icons-sharp">add</span>
+              Новая категория
+            </button>
           </div>
         }
       </article>
@@ -716,6 +682,78 @@
       </button>
     }
   </section>
+
+  @if (categoryEditorOpen()) {
+    <section class="dictionary-modal-backdrop" (click)="closeCategoryEditor()">
+      <article class="dictionary-modal" role="dialog" aria-modal="true" aria-label="Категория" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <p class="eyebrow">{{ editingCategoryId() === null ? 'Создание' : 'Редактирование' }}</p>
+            <h2>{{ categoryEditorTitle() }}</h2>
+          </div>
+          <button type="button" class="row-icon-button" (click)="closeCategoryEditor()" [disabled]="saving() || deleting()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <form class="category-form" [formGroup]="categoryForm" (ngSubmit)="saveActive()">
+          <label>
+            <span>Название категории</span>
+            <input type="text" formControlName="title">
+          </label>
+          @if (categoryForm.invalid && categoryForm.touched) {
+            <p class="error compact">Название обязательно.</p>
+          }
+          <div class="actions">
+            @if (editingCategoryId() !== null) {
+              <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="deleting() || saving()">Удалить</button>
+            }
+            <button type="button" class="secondary" (click)="closeCategoryEditor()" [disabled]="saving() || deleting()">Закрыть</button>
+            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+          </div>
+        </form>
+      </article>
+    </section>
+  }
+
+  @if (subCategoryEditorOpen()) {
+    <section class="dictionary-modal-backdrop" (click)="closeSubCategoryEditor()">
+      <article class="dictionary-modal" role="dialog" aria-modal="true" aria-label="Подкатегория" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <p class="eyebrow">{{ editingSubCategoryId() === null ? 'Создание' : 'Редактирование' }}</p>
+            <h2>{{ subCategoryEditorTitle() }}</h2>
+          </div>
+          <button type="button" class="row-icon-button" (click)="closeSubCategoryEditor()" [disabled]="saving() || deleting()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <form class="subcategory-form" [formGroup]="subCategoryForm" (ngSubmit)="saveSelectedSubCategory()">
+          <label>
+            <span>Название подкатегории</span>
+            <input type="text" formControlName="title">
+          </label>
+
+          <label>
+            <span>Категория</span>
+            <input type="text" [value]="activeCategory()?.title || ''" readonly>
+          </label>
+
+          @if (subCategoryForm.invalid && subCategoryForm.touched) {
+            <p class="error compact">Название и категория обязательны.</p>
+          }
+          <div class="actions">
+            @if (editingSubCategoryId() !== null) {
+              <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="deleting() || saving()">Удалить</button>
+            }
+            <button type="button" class="secondary" (click)="closeSubCategoryEditor()" [disabled]="saving() || deleting()">Закрыть</button>
+            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+          </div>
+        </form>
+      </article>
+    </section>
+  }
 
   @if (importModalOpen()) {
     <section class="import-backdrop" (click)="closeBotImport()">

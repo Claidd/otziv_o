@@ -53,6 +53,22 @@ export class ManagerCompanyCardComponent {
     return this.mutationKey === `company-${this.company.id}-${action.status}`;
   }
 
+  isWaitTone(): boolean {
+    return this.company.status === 'Ожидание';
+  }
+
+  isWalkTone(): boolean {
+    return this.company.status === 'К рассылке';
+  }
+
+  isSuccessTone(): boolean {
+    return this.company.status === 'В работе' || this.company.status === 'Новый заказ';
+  }
+
+  isBadTone(): boolean {
+    return this.company.status === 'На стопе' || this.company.status === 'Бан';
+  }
+
   trackAction(index: number, action: StatusAction): string {
     return trackManagerAction(index, action);
   }

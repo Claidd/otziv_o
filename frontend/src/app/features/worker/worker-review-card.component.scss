@@ -20,6 +20,21 @@
   box-shadow: none;
 }
 
+.worker-card.card-tone--walk {
+  border-color: var(--otziv-tone-walk-border);
+  background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 100%);
+}
+
+.worker-card.card-tone--publication {
+  border-color: var(--otziv-tone-publication-border);
+  background: linear-gradient(180deg, var(--otziv-tone-publication-surface) 0%, var(--otziv-white) 100%);
+}
+
+.worker-card.card-tone--bad {
+  border-color: var(--otziv-tone-bad-border);
+  background: linear-gradient(180deg, var(--otziv-tone-bad-surface) 0%, var(--otziv-white) 100%);
+}
+
 .worker-card header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;

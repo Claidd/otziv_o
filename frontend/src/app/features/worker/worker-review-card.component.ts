@@ -79,6 +79,18 @@ export class WorkerReviewCardComponent {
     return !!this.review.badTask;
   }
 
+  isWalkTone(): boolean {
+    return this.activeSection === 'nagul' && !this.isBadTask();
+  }
+
+  isPublicationTone(): boolean {
+    return this.activeSection === 'publish' && !this.isBadTask();
+  }
+
+  isBadTone(): boolean {
+    return this.activeSection === 'bad' || this.isBadTask();
+  }
+
   ratingTaskLabel(): string {
     if (!this.isBadTask()) {
       return '';

@@ -130,4 +130,27 @@ describe('ManagerOrderCardComponent', () => {
     expect(toggled).toBe(true);
     expect(element.querySelector('footer a')?.textContent?.trim()).toBe('Worker');
   });
+
+  it('adds soft status tones to order cards without overriding client waiting', () => {
+    const render = (overrides: Partial<OrderCardItem>): HTMLElement => {
+      const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+      fixture.componentInstance.order = order(overrides);
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('article') as HTMLElement;
+    };
+
+    expect(render({ status: 'В проверку' }).classList.contains('card-tone--walk')).toBe(true);
+    expect(render({ status: 'Архив' }).classList.contains('card-tone--walk')).toBe(true);
+    expect(render({ status: 'Выставлен счет' }).classList.contains('card-tone--walk')).toBe(true);
+    expect(render({ status: 'На проверке' }).classList.contains('card-tone--wait')).toBe(true);
+    expect(render({ status: 'Напоминание' }).classList.contains('card-tone--wait')).toBe(true);
+    expect(render({ status: 'Коррекция' }).classList.contains('card-tone--correction')).toBe(true);
+    expect(render({ status: 'Публикация' }).classList.contains('card-tone--publication')).toBe(true);
+    expect(render({ status: 'Опубликовано' }).classList.contains('card-tone--success')).toBe(true);
+    expect(render({ status: 'Не оплачено' }).classList.contains('card-tone--bad')).toBe(true);
+
+    const waitingArticle = render({ status: 'Коррекция', waitingForClient: true });
+    expect(waitingArticle.classList.contains('waiting-client')).toBe(true);
+    expect(waitingArticle.classList.contains('card-tone--correction')).toBe(false);
+  });
 });

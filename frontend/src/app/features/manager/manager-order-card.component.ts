@@ -18,6 +18,7 @@ import {
 } from './manager-board.config';
 
 type CategoryPopover = 'category' | 'subcategory';
+type OrderTone = 'wait' | 'walk' | 'correction' | 'publication' | 'success' | 'bad' | null;
 
 @Component({
   selector: 'app-manager-order-card',
@@ -123,6 +124,57 @@ export class ManagerOrderCardComponent {
 
   isClientWaitingMutating(): boolean {
     return this.mutationKey === this.clientWaitingMutationKey();
+  }
+
+  isWaitTone(): boolean {
+    return this.statusTone() === 'wait';
+  }
+
+  isWalkTone(): boolean {
+    return this.statusTone() === 'walk';
+  }
+
+  isCorrectionTone(): boolean {
+    return this.statusTone() === 'correction';
+  }
+
+  isPublicationTone(): boolean {
+    return this.statusTone() === 'publication';
+  }
+
+  isSuccessTone(): boolean {
+    return this.statusTone() === 'success';
+  }
+
+  isBadTone(): boolean {
+    return this.statusTone() === 'bad';
+  }
+
+  private statusTone(): OrderTone {
+    if (this.order.waitingForClient) {
+      return null;
+    }
+
+    switch (this.order.status) {
+      case 'В проверку':
+      case 'Выставлен счет':
+      case 'Архив':
+        return 'walk';
+      case 'На проверке':
+      case 'Напоминание':
+        return 'wait';
+      case 'Коррекция':
+        return 'correction';
+      case 'Публикация':
+        return 'publication';
+      case 'Опубликовано':
+      case 'Оплачено':
+        return 'success';
+      case 'Не оплачено':
+        return 'bad';
+      default:
+        return null;
+    }
   }
 
   workerLabel(): string {

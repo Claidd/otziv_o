@@ -81,4 +81,21 @@ describe('ManagerCompanyCardComponent', () => {
     expect(ordersOpened).toBe(true);
     expect(editOpened).toBe(true);
   });
+
+  it('adds soft status tones to company cards', () => {
+    const render = (overrides: Partial<CompanyCardItem>): HTMLElement => {
+      const fixture = TestBed.createComponent(ManagerCompanyCardComponent);
+      fixture.componentInstance.company = company(overrides);
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('article') as HTMLElement;
+    };
+
+    expect(render({ status: 'Ожидание' }).classList.contains('card-tone--wait')).toBe(true);
+    expect(render({ status: 'К рассылке' }).classList.contains('card-tone--walk')).toBe(true);
+    expect(render({ status: 'В работе' }).classList.contains('card-tone--success')).toBe(true);
+    expect(render({ status: 'Новый заказ' }).classList.contains('card-tone--success')).toBe(true);
+    expect(render({ status: 'На стопе' }).classList.contains('card-tone--bad')).toBe(true);
+    expect(render({ status: 'Бан' }).classList.contains('card-tone--bad')).toBe(true);
+    expect(render({ status: 'Новая' }).className).not.toContain('card-tone--');
+  });
 });

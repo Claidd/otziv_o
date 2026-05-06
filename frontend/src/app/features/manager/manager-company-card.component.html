@@ -1,4 +1,10 @@
-<article class="manager-card company-card">
+<article
+  class="manager-card company-card"
+  [class.card-tone--wait]="isWaitTone()"
+  [class.card-tone--walk]="isWalkTone()"
+  [class.card-tone--success]="isSuccessTone()"
+  [class.card-tone--bad]="isBadTone()"
+>
   <header>
     <a [href]="companyFilialUrl()" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
     <div class="card-id-line">
