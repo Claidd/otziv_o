@@ -5,16 +5,40 @@ import { CabinetApi, CabinetUserInfo, UserStat } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { CabinetBarChartComponent } from './cabinet-bar-chart.component';
+import {
+  cabinetDailyBarChartFrom,
+  cabinetYearlyLineChartFrom,
+  type CabinetBarChart,
+  type CabinetLineChart
+} from './cabinet-chart.helpers';
+import { CabinetLineChartComponent } from './cabinet-line-chart.component';
 
-type ChartPoint = {
-  label: string;
-  value: number;
-  height: number;
-};
+const MONTH_NAMES = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь'
+];
 
 @Component({
   selector: 'app-user-info',
-  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    FormsModule,
+    LoadErrorCardComponent,
+    RouterLink,
+    CabinetBarChartComponent,
+    CabinetLineChartComponent
+  ],
   templateUrl: './user-info.component.html',
   styleUrl: './user-info.component.scss'
 })
@@ -84,26 +108,17 @@ export class UserInfoComponent {
     return this.cabinetApi.imageUrl(stat?.imageId);
   }
 
-  chartFrom(map?: string | null): ChartPoint[] {
-    if (!map) {
-      return [];
-    }
+  dailyChartFrom(map?: string | null): CabinetBarChart {
+    return cabinetDailyBarChartFrom(map, this.selectedDate());
+  }
 
-    try {
-      const parsed = JSON.parse(map) as Record<string, number | string>;
-      const points = Object.entries(parsed).map(([label, rawValue]) => ({
-        label,
-        value: Number(rawValue) || 0
-      }));
-      const max = Math.max(...points.map((point) => point.value), 1);
+  yearlyLineChartFrom(map?: string | null): CabinetLineChart {
+    return cabinetYearlyLineChartFrom(map, { fallbackYear: new Date(this.selectedDate()).getFullYear() });
+  }
 
-      return points.map((point) => ({
-        ...point,
-        height: Math.max(4, Math.round((point.value / max) * 100))
-      }));
-    } catch {
-      return [];
-    }
+  selectedMonthLabel(): string {
+    const date = new Date(this.selectedDate());
+    return `Месяц: ${MONTH_NAMES[date.getMonth()] ?? MONTH_NAMES[0]}`;
   }
 
   tone(percent: number): string {

@@ -5,7 +5,6 @@
 .profile-toolbar,
 .person-head,
 .metric-card,
-.chart-card,
 .empty-state {
   border-radius: var(--otziv-card-radius);
   background: var(--otziv-white);
@@ -77,8 +76,7 @@ input[type='date'] {
   object-fit: cover;
 }
 
-.person-head p:not(.eyebrow),
-.chart-head small {
+.person-head p:not(.eyebrow) {
   color: var(--otziv-info);
 }
 
@@ -144,41 +142,6 @@ input[type='date'] {
 
 .red {
   color: var(--otziv-danger);
-}
-
-.chart-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.2rem;
-}
-
-.chart-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.bar-chart {
-  display: flex;
-  height: 14rem;
-  align-items: end;
-  gap: 0.28rem;
-  border: 1px solid rgba(103, 116, 131, 0.14);
-  border-radius: 1rem;
-  padding: 1rem;
-  background: var(--otziv-muted-surface);
-}
-
-.bar-chart span {
-  flex: 1 1 0;
-  min-width: 0.32rem;
-  border-radius: 999px 999px 0 0;
-  background: var(--otziv-primary);
-}
-
-.bar-chart.month span {
-  background: var(--otziv-success);
 }
 
 .empty-state {

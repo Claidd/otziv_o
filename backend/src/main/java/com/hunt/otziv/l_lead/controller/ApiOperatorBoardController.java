@@ -116,7 +116,11 @@ public class ApiOperatorBoardController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')")
     public void markSend(@PathVariable Long id) {
-        leadService.changeStatusLeadOnSendAndTelephone(id);
+        try {
+            leadService.changeStatusLeadOnSendAndTelephone(id);
+        } catch (IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 
     @PostMapping("/leads/{id}/status/to-work")

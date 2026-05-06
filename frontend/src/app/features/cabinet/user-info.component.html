@@ -45,29 +45,21 @@
     </section>
 
     <section class="chart-grid">
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Зарплаты по дням</h3>
-          <small>{{ payload()?.date }}</small>
-        </div>
-        <div class="bar-chart">
-          @for (point of chartFrom(payload()?.workerZp?.zpPayMap); track point.label) {
-            <span [style.height.%]="point.height" [title]="point.label + ': ' + point.value"></span>
-          }
-        </div>
-      </article>
+      <app-cabinet-bar-chart
+        heading="Зарплаты по дням"
+        [subtitle]="payload()?.date || ''"
+        [legendLabel]="selectedMonthLabel()"
+        [legendColor]="'#9a7bd9'"
+        [chart]="dailyChartFrom(payload()?.workerZp?.zpPayMap)"
+        [salary]="true"
+      />
 
-      <article class="chart-card">
-        <div class="chart-head">
-          <h3>Зарплаты по месяцам</h3>
-          <small>годовой срез</small>
-        </div>
-        <div class="bar-chart month">
-          @for (point of chartFrom(payload()?.workerZp?.zpPayMapMonth); track point.label) {
-            <span [style.height.%]="point.height" [title]="point.label + ': ' + point.value"></span>
-          }
-        </div>
-      </article>
+      <app-cabinet-line-chart
+        heading="Зарплаты по месяцам"
+        subtitle="все годы"
+        ariaLabel="Зарплаты по месяцам"
+        [chart]="yearlyLineChartFrom(payload()?.workerZp?.zpPayMapMonth)"
+      />
     </section>
   } @else if (loading()) {
     <section class="empty-state">
