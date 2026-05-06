@@ -96,6 +96,7 @@
             (phoneCopied)="copyPhone($event)"
             (copyTextRequested)="copyOrderText(order, $event)"
             (statusUpdated)="updateOrderStatus(order, $event)"
+            (clientWaitingToggled)="toggleOrderClientWaiting(order)"
             (noteEditStarted)="startOrderNoteEdit(order)"
             (noteDraftChanged)="setOrderNoteDraft(order, $event)"
             (noteEditCanceled)="cancelOrderNoteEdit(order)"

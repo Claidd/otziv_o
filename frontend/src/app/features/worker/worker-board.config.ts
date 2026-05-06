@@ -73,6 +73,7 @@ export const EMPTY_WORKER_REVIEW_PAGE: WorkerPage<WorkerReviewItem> = {
 
 export const DEFAULT_WORKER_PERMISSIONS: WorkerPermissions = {
   canManageOrderStatuses: false,
+  canManageClientWaiting: false,
   canSeePhoneAndPayment: false,
   canManageBots: false,
   canAddBot: false,

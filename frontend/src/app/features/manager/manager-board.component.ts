@@ -541,6 +541,10 @@ export class ManagerBoardComponent {
     this.actionFacade.updateOrderStatus(order, action);
   }
 
+  toggleOrderClientWaiting(order: OrderCardItem): void {
+    this.actionFacade.toggleOrderClientWaiting(order);
+  }
+
   saveCompanyCardNote(company: CompanyCardItem, value: string): void {
     this.actionFacade.saveCompanyCardNote(company, value);
   }

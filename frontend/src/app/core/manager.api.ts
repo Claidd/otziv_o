@@ -52,6 +52,7 @@ export interface OrderCardItem {
   managerPayText?: string;
   amount?: number;
   counter?: number;
+  waitingForClient?: boolean;
   workerUserFio?: string;
   categoryTitle?: string;
   subCategoryTitle?: string;
@@ -435,6 +436,13 @@ export class ManagerApi {
     return this.http.post<void>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/status`,
       { status }
+    );
+  }
+
+  updateOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/orders/${orderId}/client-waiting`,
+      { waitingForClient }
     );
   }
 

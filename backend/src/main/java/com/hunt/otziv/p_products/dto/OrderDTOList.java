@@ -63,6 +63,8 @@ public class OrderDTOList {
 
     private Integer counter;
 
+    private boolean waitingForClient;
+
     private String workerUserFio;
 
     private String categoryTitle;

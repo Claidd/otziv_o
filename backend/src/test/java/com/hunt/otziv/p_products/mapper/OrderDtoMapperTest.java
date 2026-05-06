@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderDtoMapperTest {
 
@@ -49,6 +50,7 @@ class OrderDtoMapperTest {
         assertEquals("pay text", dto.getManagerPayText());
         assertEquals(2, dto.getAmount());
         assertEquals(7, dto.getCounter());
+        assertFalse(dto.isWaitingForClient());
         assertEquals("Worker Fio", dto.getWorkerUserFio());
         assertEquals("Категория", dto.getCategoryTitle());
         assertEquals("Подкатегория", dto.getSubCategoryTitle());
@@ -75,6 +77,7 @@ class OrderDtoMapperTest {
                 "pay text",
                 2,
                 7,
+                true,
                 "Worker Fio",
                 null,
                 "Подкатегория",
@@ -96,6 +99,7 @@ class OrderDtoMapperTest {
         assertEquals(new BigDecimal("300.00"), dto.getSum());
         assertEquals(2, dto.getAmount());
         assertEquals(7, dto.getCounter());
+        assertTrue(dto.isWaitingForClient());
         assertEquals("Worker Fio", dto.getWorkerUserFio());
         assertEquals("Не выбрано", dto.getCategoryTitle());
         assertEquals("Подкатегория", dto.getSubCategoryTitle());

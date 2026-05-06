@@ -46,6 +46,52 @@ export interface AdminBot {
   city?: DictionaryOption | null;
 }
 
+export interface AdminPromoText {
+  id: number;
+  position: number;
+  text: string;
+}
+
+export interface AdminManagerText {
+  managerId: number;
+  managerTitle: string;
+  payText: string;
+  beginText: string;
+  offerText: string;
+  reminderText: string;
+  startText: string;
+}
+
+export interface PromoButtonSlot {
+  section: string;
+  sectionTitle: string;
+  buttonKey: string;
+  buttonLabel: string;
+  outputPosition: number;
+  defaultPromoPosition: number;
+  defaultPromoTextId?: number | null;
+}
+
+export interface PromoTextAssignment {
+  id: number;
+  managerId?: number | null;
+  managerTitle: string;
+  section: string;
+  sectionTitle: string;
+  buttonKey: string;
+  buttonLabel: string;
+  outputPosition: number;
+  promoTextId?: number | null;
+  promoTextLabel: string;
+}
+
+export interface PromoTextManagementResponse {
+  texts: AdminPromoText[];
+  managers: DictionaryOption[];
+  assignments: PromoTextAssignment[];
+  buttons: PromoButtonSlot[];
+}
+
 export interface ProductsResponse {
   products: AdminProduct[];
   categories: DictionaryOption[];
@@ -98,6 +144,25 @@ export interface BotRequest {
   statusId: number | null;
   active: boolean;
   counter: number;
+}
+
+export interface PromoTextRequest {
+  text: string;
+}
+
+export interface PromoTextAssignmentRequest {
+  managerId: number;
+  section: string;
+  buttonKey: string;
+  promoTextId: number;
+}
+
+export interface ManagerTextRequest {
+  payText: string;
+  beginText: string;
+  offerText: string;
+  reminderText: string;
+  startText: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -221,6 +286,46 @@ export class AdminDictionariesApi {
       `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/close`,
       {}
     );
+  }
+
+  getPromoTexts(keyword = ''): Observable<AdminPromoText[]> {
+    return this.http.get<AdminPromoText[]>(`${this.baseUrl}/promo-texts`, {
+      params: this.keywordParams(keyword)
+    });
+  }
+
+  getPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> {
+    return this.http.get<PromoTextManagementResponse>(`${this.baseUrl}/promo-texts/management`, {
+      params: this.keywordParams(keyword)
+    });
+  }
+
+  createPromoText(request: PromoTextRequest): Observable<AdminPromoText> {
+    return this.http.post<AdminPromoText>(`${this.baseUrl}/promo-texts`, request);
+  }
+
+  updatePromoText(id: number, request: PromoTextRequest): Observable<AdminPromoText> {
+    return this.http.put<AdminPromoText>(`${this.baseUrl}/promo-texts/${id}`, request);
+  }
+
+  savePromoTextAssignment(request: PromoTextAssignmentRequest): Observable<PromoTextAssignment> {
+    return this.http.put<PromoTextAssignment>(`${this.baseUrl}/promo-text-assignments`, request);
+  }
+
+  resetPromoTextAssignment(managerId: number, section: string, buttonKey: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/promo-text-assignments/${managerId}/${section}/${buttonKey}`
+    );
+  }
+
+  getManagerTexts(keyword = ''): Observable<AdminManagerText[]> {
+    return this.http.get<AdminManagerText[]>(`${this.baseUrl}/manager-texts`, {
+      params: this.keywordParams(keyword)
+    });
+  }
+
+  updateManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText> {
+    return this.http.put<AdminManagerText>(`${this.baseUrl}/manager-texts/${managerId}`, request);
   }
 
   private keywordParams(keyword: string): HttpParams {

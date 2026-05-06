@@ -269,6 +269,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/cancel", "отмена плохого отзыва {taskId}");
 
         put(actions, "POST", "/api/worker/orders/{orderId}/status", "смена статуса заказа на \"{status}\"");
+        put(actions, "POST", "/api/worker/orders/{orderId}/client-waiting", "изменение ожидания клиента у заказа {orderId}");
         put(actions, "PUT", "/api/worker/orders/{orderId}/note", "редактирование заметки заказа {orderId}");
         put(actions, "PUT", "/api/worker/orders/{orderId}/company-note", "редактирование заметки компании в заказе {orderId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");

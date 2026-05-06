@@ -17,8 +17,8 @@
 
       <div class="quick-links">
         <button type="button" (click)="clearSelection()">
-          <span class="material-icons-sharp">add</span>
-          Новая запись
+          <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
+          {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
         </button>
         <button type="button" (click)="loadAll()" [disabled]="loading()">
           <span class="material-icons-sharp">refresh</span>
@@ -351,6 +351,64 @@
                 </tbody>
               </table>
             }
+
+            @case ('promo') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Промо-текст</th>
+                    <th>Кнопки</th>
+                    <th>ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (promoText of promoTexts(); track trackPromoText($index, promoText)) {
+                    <tr [class.selected]="selectedId() === promoText.id" (click)="selectPromoText(promoText)">
+                      <td>
+                        <strong>{{ promoTextLabel(promoText) }}</strong>
+                        <span class="promo-preview">{{ promoTextPreview(promoText.text) }}</span>
+                      </td>
+                      <td>
+                        <span class="usage-pill">{{ promoUsageSummary(promoText) }}</span>
+                      </td>
+                      <td>{{ promoTextMeta(promoText) }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="3" class="no-results">Промо-текстов нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @case ('managerTexts') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Менеджер</th>
+                    <th>Заполнено</th>
+                    <th>Пример текста</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (managerText of managerTexts(); track trackManagerText($index, managerText)) {
+                    <tr [class.selected]="selectedId() === managerText.managerId" (click)="selectManagerText(managerText)">
+                      <td>
+                        <strong>{{ managerText.managerTitle }}</strong>
+                        <span>ID {{ managerText.managerId }}</span>
+                      </td>
+                      <td>
+                        <span class="usage-pill">{{ managerTextSummary(managerText) }}</span>
+                      </td>
+                      <td>
+                        <span class="promo-preview">{{ managerTextPreview(managerText) || 'пусто' }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="3" class="no-results">Текстов менеджеров нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
           }
         </div>
       </article>
@@ -531,6 +589,108 @@
                 <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
+          }
+
+          @case ('promo') {
+            <form [formGroup]="promoTextForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Текст для копирования</span>
+                <textarea rows="8" formControlName="text"></textarea>
+              </label>
+
+              @if (promoTextForm.invalid && promoTextForm.touched) {
+                <p class="error compact">Текст обязателен.</p>
+              }
+              <div class="actions">
+                @if (selectedId() !== null) {
+                  <button type="button" class="secondary" (click)="clearSelection()" [disabled]="saving()">Новая</button>
+                }
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+
+            <section class="promo-assignment-panel" aria-label="Назначения промо-текстов">
+              <div class="assignment-head">
+                <div>
+                  <p class="eyebrow">Назначения</p>
+                  <h3>Кнопки менеджера</h3>
+                </div>
+                <span>{{ selectedPromoManagerTitle() }}</span>
+              </div>
+
+              <label>
+                <span>Менеджер</span>
+                <select [value]="selectedPromoManagerId() ?? ''" (change)="selectPromoManager($any($event.target).value)">
+                  @for (manager of promoManagers(); track trackOption($index, manager)) {
+                    <option [value]="manager.id">{{ manager.title }}</option>
+                  }
+                </select>
+              </label>
+
+              <div class="promo-assignment-list">
+                @for (button of promoButtons(); track trackPromoButton($index, button)) {
+                  <div class="promo-assignment-row">
+                    <div>
+                      <strong>{{ button.buttonLabel }}</strong>
+                      <span>{{ button.sectionTitle }} · сейчас {{ promoAssignedTextLabel(button) }}</span>
+                    </div>
+                    <select
+                      [value]="promoAssignmentValue(button)"
+                      (change)="savePromoAssignment(button, $any($event.target).value)"
+                      [disabled]="saving() || selectedPromoManagerId() === null"
+                    >
+                      <option value="">По умолчанию: {{ promoDefaultTextLabel(button) }}</option>
+                      @for (promoText of promoTexts(); track trackPromoText($index, promoText)) {
+                        <option [value]="promoText.id">{{ promoTextLabel(promoText) }} · ID {{ promoText.id }}</option>
+                      }
+                    </select>
+                  </div>
+                } @empty {
+                  <p class="no-results">Кнопки для назначения не настроены.</p>
+                }
+              </div>
+            </section>
+          }
+
+          @case ('managerTexts') {
+            @if (selectedManagerText(); as managerText) {
+              <form class="manager-text-form" [formGroup]="managerTextForm" (ngSubmit)="saveActive()">
+                <label>
+                  <span>Текст оплаты</span>
+                  <textarea rows="5" formControlName="payText"></textarea>
+                </label>
+
+                <label>
+                  <span>Начальный текст</span>
+                  <textarea rows="5" formControlName="beginText"></textarea>
+                </label>
+
+                <label>
+                  <span>Текст предложения</span>
+                  <textarea rows="8" formControlName="offerText"></textarea>
+                </label>
+
+                <label>
+                  <span>Напоминание</span>
+                  <textarea rows="5" formControlName="reminderText"></textarea>
+                </label>
+
+                <label>
+                  <span>Старт группы</span>
+                  <textarea rows="5" formControlName="startText"></textarea>
+                </label>
+
+                <div class="actions">
+                  <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                </div>
+              </form>
+            } @else {
+              <div class="empty-picker">
+                <span class="material-icons-sharp">article</span>
+                <h2>Выберите менеджера</h2>
+                <p>Тексты оплаты, начала, предложения, напоминания и старта откроются здесь.</p>
+              </div>
+            }
           }
         }
       </article>

@@ -38,6 +38,7 @@ export class ManagerOrderCardComponent {
   @Output() readonly phoneCopied = new EventEmitter<string | undefined>();
   @Output() readonly copyTextRequested = new EventEmitter<'review' | 'payment'>();
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
+  @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
 
   orderChatUrl(): string {
@@ -102,6 +103,30 @@ export class ManagerOrderCardComponent {
 
   isMutating(action: StatusAction): boolean {
     return this.mutationKey === `order-${this.order.id}-${action.status}`;
+  }
+
+  canManageClientWaiting(): boolean {
+    return this.order.status === 'Новый' || this.order.status === 'Коррекция' || !!this.order.waitingForClient;
+  }
+
+  clientWaitingMutationKey(): string {
+    return `order-${this.order.id}-client-waiting`;
+  }
+
+  clientWaitingTitle(): string {
+    return this.order.waitingForClient ? 'Вернуть заказ в работу специалиста' : 'Заказ ждет текст от клиента';
+  }
+
+  clientWaitingLabel(): string {
+    return this.order.waitingForClient ? 'ждет клиента' : 'клиент';
+  }
+
+  isClientWaitingMutating(): boolean {
+    return this.mutationKey === this.clientWaitingMutationKey();
+  }
+
+  workerLabel(): string {
+    return this.order.workerUserFio || '-';
   }
 
   trackAction(index: number, action: StatusAction): string {

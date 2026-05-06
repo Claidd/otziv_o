@@ -57,11 +57,22 @@ public class OrderStatisticsService {
         return toStatusCountMap(orderRepository.countGroupedByStatus());
     }
 
+    public Map<String, Integer> countActionableOrdersByStatus() {
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatus());
+    }
+
     public Map<String, Integer> countOrdersByStatusToManager(Manager manager) {
         if (manager == null) {
             return Map.of();
         }
         return toStatusCountMap(orderRepository.countGroupedByStatusAndManager(manager));
+    }
+
+    public Map<String, Integer> countActionableOrdersByStatusToManager(Manager manager) {
+        if (manager == null) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManager(manager));
     }
 
     public Map<String, Integer> countOrdersByStatusToOwner(Set<Manager> managerList) {
@@ -71,11 +82,25 @@ public class OrderStatisticsService {
         return toStatusCountMap(orderRepository.countGroupedByStatusAndManagers(managerList));
     }
 
+    public Map<String, Integer> countActionableOrdersByStatusToOwner(Set<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManagers(managerList));
+    }
+
     public Map<String, Integer> countOrdersByStatusToWorker(Worker worker) {
         if (worker == null) {
             return Map.of();
         }
         return toStatusCountMap(orderRepository.countGroupedByStatusAndWorker(worker));
+    }
+
+    public Map<String, Integer> countActionableOrdersByStatusToWorker(Worker worker) {
+        if (worker == null) {
+            return Map.of();
+        }
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndWorker(worker));
     }
 
     public int countAllOrders() {

@@ -6,14 +6,22 @@ import {
   AdminCategory,
   AdminCity,
   AdminDictionariesApi,
+  AdminManagerText,
   AdminProduct,
+  AdminPromoText,
   AdminSubCategory,
   BotImportResponse,
   BotRequest,
   BotsResponse,
   DictionaryOption,
+  ManagerTextRequest,
+  PromoButtonSlot,
+  PromoTextAssignment,
+  PromoTextAssignmentRequest,
+  PromoTextManagementResponse,
   ProductRequest,
   ProductsResponse,
+  PromoTextRequest,
   SubCategoryRequest,
   TitleRequest
 } from '../../../core/admin-dictionaries.api';
@@ -23,7 +31,7 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'accounts';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'accounts' | 'promo' | 'managerTexts';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -36,6 +44,18 @@ type DictionaryMetric = {
   value: number;
   icon: string;
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink';
+};
+
+const PROMO_TEXT_LABELS: Record<number, string> = {
+  1: 'предложение',
+  2: 'напоминание',
+  3: 'данные',
+  4: 'ответы',
+  5: 'ссылка на проверку',
+  6: 'напоминание заказа',
+  7: 'угроза',
+  10: 'рассылка',
+  11: 'пояснение'
 };
 
 @Component({
@@ -54,7 +74,9 @@ export class AdminDictionariesComponent {
     { key: 'categories', label: 'Категории', icon: 'category' },
     { key: 'cities', label: 'Города', icon: 'location_city' },
     { key: 'products', label: 'Продукты', icon: 'inventory_2' },
-    { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' }
+    { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
+    { key: 'promo', label: 'Промо', icon: 'smart_button' },
+    { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' }
   ];
   private readonly managerTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' }
@@ -81,6 +103,12 @@ export class AdminDictionariesComponent {
   readonly cities = signal<AdminCity[]>([]);
   readonly products = signal<AdminProduct[]>([]);
   readonly bots = signal<AdminBot[]>([]);
+  readonly promoTexts = signal<AdminPromoText[]>([]);
+  readonly managerTexts = signal<AdminManagerText[]>([]);
+  readonly promoManagers = signal<DictionaryOption[]>([]);
+  readonly promoAssignments = signal<PromoTextAssignment[]>([]);
+  readonly promoButtons = signal<PromoButtonSlot[]>([]);
+  readonly selectedPromoManagerId = signal<number | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -122,6 +150,18 @@ export class AdminDictionariesComponent {
     active: this.fb.nonNullable.control(true)
   });
 
+  readonly promoTextForm = this.fb.nonNullable.group({
+    text: ['', Validators.required]
+  });
+
+  readonly managerTextForm = this.fb.nonNullable.group({
+    payText: [''],
+    beginText: [''],
+    offerText: [''],
+    reminderText: [''],
+    startText: ['']
+  });
+
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
   readonly activeCategory = computed(() => {
     const id = this.activeCategoryId();
@@ -134,6 +174,12 @@ export class AdminDictionariesComponent {
     }
 
     return this.subCategories().filter((subCategory) => subCategory.category?.id === categoryId);
+  });
+  readonly selectedManagerText = computed(() => {
+    const managerId = this.selectedId();
+    return managerId == null
+      ? null
+      : this.managerTexts().find((managerText) => managerText.managerId === managerId) ?? null;
   });
   readonly categoryEditorTitle = computed(() =>
     this.editingCategoryId() == null ? 'Новая категория' : `Категория #${this.editingCategoryId()}`
@@ -153,6 +199,10 @@ export class AdminDictionariesComponent {
         return this.products().length;
       case 'accounts':
         return this.bots().length;
+      case 'promo':
+        return this.promoTexts().length;
+      case 'managerTexts':
+        return this.managerTexts().length;
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => {
@@ -169,7 +219,9 @@ export class AdminDictionariesComponent {
       ...categoryMetrics,
       { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
       { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
-      { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' }
+      { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' },
+      { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
+      { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' }
     ];
   });
 
@@ -197,15 +249,19 @@ export class AdminDictionariesComponent {
         subCategories: this.dictionariesApi.getSubCategories(),
         cities: this.dictionariesApi.getCities(),
         products: this.dictionariesApi.getProducts(),
-        bots: this.dictionariesApi.getBots()
+        bots: this.dictionariesApi.getBots(),
+        promoTexts: this.dictionariesApi.getPromoTextManagement(),
+        managerTexts: this.dictionariesApi.getManagerTexts()
       }).subscribe({
-        next: ({ categories, subCategories, cities, products, bots }) => {
+        next: ({ categories, subCategories, cities, products, bots, promoTexts, managerTexts }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
           this.cities.set(cities);
           this.products.set(products.products);
           this.productCategories.set(products.categories);
           this.applyBotsResponse(bots);
+          this.applyPromoManagement(promoTexts);
+          this.managerTexts.set(managerTexts);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -225,6 +281,12 @@ export class AdminDictionariesComponent {
         this.products.set([]);
         this.productCategories.set([]);
         this.bots.set([]);
+        this.promoTexts.set([]);
+        this.managerTexts.set([]);
+        this.promoManagers.set([]);
+        this.promoAssignments.set([]);
+        this.promoButtons.set([]);
+        this.selectedPromoManagerId.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -299,6 +361,24 @@ export class AdminDictionariesComponent {
     this.error.set(null);
   }
 
+  selectPromoText(promoText: AdminPromoText): void {
+    this.selectedId.set(promoText.id);
+    this.promoTextForm.setValue({ text: promoText.text });
+    this.error.set(null);
+  }
+
+  selectManagerText(managerText: AdminManagerText): void {
+    this.selectedId.set(managerText.managerId);
+    this.managerTextForm.setValue({
+      payText: managerText.payText,
+      beginText: managerText.beginText,
+      offerText: managerText.offerText,
+      reminderText: managerText.reminderText,
+      startText: managerText.startText
+    });
+    this.error.set(null);
+  }
+
   clearSelection(): void {
     this.selectedId.set(null);
     this.editingCategoryId.set(null);
@@ -323,6 +403,14 @@ export class AdminDictionariesComponent {
       statusId: this.defaultBotStatusId(),
       counter: '0',
       active: true
+    });
+    this.promoTextForm.reset({ text: '' });
+    this.managerTextForm.reset({
+      payText: '',
+      beginText: '',
+      offerText: '',
+      reminderText: '',
+      startText: ''
     });
   }
 
@@ -429,10 +517,21 @@ export class AdminDictionariesComponent {
       case 'accounts':
         this.saveBot();
         return;
+      case 'promo':
+        this.savePromoText();
+        return;
+      case 'managerTexts':
+        this.saveManagerText();
+        return;
     }
   }
 
   deleteSelected(): void {
+    const activeTab = this.activeTab();
+    if (activeTab === 'promo' || activeTab === 'managerTexts') {
+      return;
+    }
+
     const selectedId = this.selectedId();
     if (selectedId == null || this.deleting()) {
       return;
@@ -451,8 +550,9 @@ export class AdminDictionariesComponent {
       subcategories: () => this.dictionariesApi.deleteSubCategory(selectedId),
       cities: () => this.dictionariesApi.deleteCity(selectedId),
       products: () => this.dictionariesApi.deleteProduct(selectedId),
-      accounts: () => this.dictionariesApi.deleteBot(selectedId)
-    }[this.activeTab()]();
+      accounts: () => this.dictionariesApi.deleteBot(selectedId),
+      promo: () => this.dictionariesApi.deleteBot(selectedId)
+    }[activeTab]();
 
     request.subscribe({
       next: () => {
@@ -461,7 +561,7 @@ export class AdminDictionariesComponent {
         this.toastService.success('Запись удалена', this.activeLabel());
         this.reloadAfterMutation();
       },
-      error: (err) => {
+      error: (err: unknown) => {
         const message = this.errorMessage(err, 'Не удалось удалить запись');
         this.error.set(message);
         this.deleting.set(false);
@@ -476,7 +576,9 @@ export class AdminDictionariesComponent {
       subcategories: this.subCategories().length,
       cities: this.cities().length,
       products: this.products().length,
-      accounts: this.bots().length
+      accounts: this.bots().length,
+      promo: this.promoTexts().length,
+      managerTexts: this.managerTexts().length
     }[tab];
   }
 
@@ -485,7 +587,131 @@ export class AdminDictionariesComponent {
   }
 
   selectedTitle(): string {
+    if (this.activeTab() === 'managerTexts') {
+      return this.selectedManagerText()?.managerTitle ?? 'Выберите менеджера';
+    }
+
+    if (this.activeTab() === 'promo' && this.selectedId() == null) {
+      return 'Новый промо-текст';
+    }
+
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
+  }
+
+  promoTextLabel(promoText: AdminPromoText): string {
+    return PROMO_TEXT_LABELS[promoText.position] ?? `Текст #${promoText.position}`;
+  }
+
+  promoTextMeta(promoText: AdminPromoText): string {
+    return `ID ${promoText.id} · позиция ${promoText.position}`;
+  }
+
+  promoTextPreview(value: string): string {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    return normalized.length > 110 ? `${normalized.slice(0, 110)}...` : normalized;
+  }
+
+  promoUsageSummary(promoText: AdminPromoText): string {
+    const usages = this.promoAssignments()
+      .filter((assignment) => assignment.promoTextId === promoText.id)
+      .map((assignment) => `${assignment.managerTitle}: ${assignment.buttonLabel}`);
+
+    if (usages.length) {
+      return usages.slice(0, 2).join(', ') + (usages.length > 2 ? ` +${usages.length - 2}` : '');
+    }
+
+    const defaultButtons = this.promoButtons()
+      .filter((button) => button.defaultPromoTextId === promoText.id)
+      .map((button) => `${button.sectionTitle}: ${button.buttonLabel}`);
+
+    return defaultButtons.length ? `по умолчанию: ${defaultButtons.slice(0, 2).join(', ')}` : 'не назначен';
+  }
+
+  managerTextSummary(managerText: AdminManagerText): string {
+    const fields = [
+      ['оплата', managerText.payText],
+      ['начало', managerText.beginText],
+      ['оффер', managerText.offerText],
+      ['напоминание', managerText.reminderText],
+      ['старт', managerText.startText]
+    ];
+    const filled = fields.filter(([, value]) => value.trim().length > 0).map(([label]) => label);
+    return filled.length ? filled.join(', ') : 'тексты не заполнены';
+  }
+
+  managerTextPreview(managerText: AdminManagerText): string {
+    const value = [
+      managerText.payText,
+      managerText.beginText,
+      managerText.offerText,
+      managerText.reminderText,
+      managerText.startText
+    ].find((text) => text.trim().length > 0) ?? '';
+    return this.promoTextPreview(value);
+  }
+
+  selectedPromoManagerTitle(): string {
+    const managerId = this.selectedPromoManagerId();
+    return this.promoManagers().find((manager) => manager.id === managerId)?.title ?? 'Выберите менеджера';
+  }
+
+  selectPromoManager(value: string | number): void {
+    const managerId = Number(value);
+    this.selectedPromoManagerId.set(Number.isFinite(managerId) && managerId > 0 ? managerId : null);
+    this.error.set(null);
+  }
+
+  promoAssignmentValue(button: PromoButtonSlot): number | '' {
+    return this.promoAssignmentFor(button)?.promoTextId ?? '';
+  }
+
+  promoDefaultTextLabel(button: PromoButtonSlot): string {
+    const defaultText = this.promoTexts().find((text) => text.id === button.defaultPromoTextId);
+    return defaultText ? this.promoTextLabel(defaultText) : `позиция ${button.defaultPromoPosition}`;
+  }
+
+  promoAssignedTextLabel(button: PromoButtonSlot): string {
+    const assignment = this.promoAssignmentFor(button);
+    if (!assignment?.promoTextId) {
+      return `по умолчанию: ${this.promoDefaultTextLabel(button)}`;
+    }
+
+    const text = this.promoTexts().find((promoText) => promoText.id === assignment.promoTextId);
+    return text ? this.promoTextLabel(text) : assignment.promoTextLabel;
+  }
+
+  savePromoAssignment(button: PromoButtonSlot, value: string): void {
+    const managerId = this.selectedPromoManagerId();
+    if (managerId == null) {
+      this.error.set('Выберите менеджера для назначения промо-текста.');
+      return;
+    }
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    const request: Observable<PromoTextAssignment | void> = value
+      ? this.dictionariesApi.savePromoTextAssignment({
+          managerId,
+          section: button.section,
+          buttonKey: button.buttonKey,
+          promoTextId: Number(value)
+        } satisfies PromoTextAssignmentRequest)
+      : this.dictionariesApi.resetPromoTextAssignment(managerId, button.section, button.buttonKey);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.toastService.success('Назначение сохранено', `${button.sectionTitle}: ${button.buttonLabel}`);
+        this.reloadPromoManagement();
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить назначение');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Назначение не сохранено', message);
+      }
+    });
   }
 
   botBrowserUrl(bot: AdminBot): string {
@@ -574,6 +800,18 @@ export class AdminDictionariesComponent {
     return bot.id;
   }
 
+  trackPromoText(_index: number, promoText: AdminPromoText): number {
+    return promoText.id;
+  }
+
+  trackManagerText(_index: number, managerText: AdminManagerText): number {
+    return managerText.managerId;
+  }
+
+  trackPromoButton(_index: number, button: PromoButtonSlot): string {
+    return `${button.section}:${button.buttonKey}`;
+  }
+
   trackOption(_index: number, option: DictionaryOption): number {
     return option.id;
   }
@@ -588,7 +826,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -605,10 +843,16 @@ export class AdminDictionariesComponent {
       case 'accounts':
         request = this.dictionariesApi.getBots(keyword);
         break;
+      case 'promo':
+        request = this.dictionariesApi.getPromoTextManagement(keyword);
+        break;
+      case 'managerTexts':
+        request = this.dictionariesApi.getManagerTexts(keyword);
+        break;
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -629,6 +873,12 @@ export class AdminDictionariesComponent {
           case 'accounts':
             this.applyBotsResponse(response as BotsResponse);
             this.ensureDefaults();
+            break;
+          case 'promo':
+            this.applyPromoManagement(response as PromoTextManagementResponse);
+            break;
+          case 'managerTexts':
+            this.managerTexts.set(response as AdminManagerText[]);
             break;
         }
 
@@ -744,6 +994,68 @@ export class AdminDictionariesComponent {
     this.runSave(call, 'Аккаунт сохранен');
   }
 
+  private savePromoText(): void {
+    if (this.promoTextForm.invalid) {
+      this.promoTextForm.markAllAsTouched();
+      return;
+    }
+
+    const request: PromoTextRequest = {
+      text: this.promoTextForm.controls.text.value.trim()
+    };
+
+    const selectedId = this.selectedId();
+    const call = selectedId == null
+      ? this.dictionariesApi.createPromoText(request)
+      : this.dictionariesApi.updatePromoText(selectedId, request);
+
+    this.runSave(call, 'Промо-текст сохранен');
+  }
+
+  private saveManagerText(): void {
+    const managerId = this.selectedId();
+    if (managerId == null) {
+      this.error.set('Выберите менеджера для редактирования текстов.');
+      return;
+    }
+
+    const raw = this.managerTextForm.getRawValue();
+    const request: ManagerTextRequest = {
+      payText: raw.payText,
+      beginText: raw.beginText,
+      offerText: raw.offerText,
+      reminderText: raw.reminderText,
+      startText: raw.startText
+    };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.updateManagerText(managerId, request).subscribe({
+      next: (saved) => {
+        this.saving.set(false);
+        this.selectedId.set(saved.managerId);
+        this.managerTexts.update((items) =>
+          items.map((item) => item.managerId === saved.managerId ? saved : item)
+        );
+        this.managerTextForm.setValue({
+          payText: saved.payText,
+          beginText: saved.beginText,
+          offerText: saved.offerText,
+          reminderText: saved.reminderText,
+          startText: saved.startText
+        });
+        this.toastService.success('Тексты менеджера сохранены', saved.managerTitle);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить тексты менеджера');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Тексты не сохранены', message);
+      }
+    });
+  }
+
   private runSave<T extends { id: number }>(
     request: Observable<T>,
     title: string,
@@ -773,6 +1085,11 @@ export class AdminDictionariesComponent {
   }
 
   private reloadAfterMutation(): void {
+    if (this.activeTab() === 'promo') {
+      this.reloadPromoManagement();
+      return;
+    }
+
     if (this.activeTab() === 'categories' || this.activeTab() === 'subcategories') {
       forkJoin({
         categories: this.dictionariesApi.getCategories(this.activeTab() === 'categories' ? this.search() : ''),
@@ -815,6 +1132,44 @@ export class AdminDictionariesComponent {
     this.botWorkers.set(response.workers);
     this.botStatuses.set(response.statuses);
     this.botCities.set(response.cities);
+  }
+
+  private applyPromoManagement(response: PromoTextManagementResponse): void {
+    this.promoTexts.set(response.texts);
+    this.promoManagers.set(response.managers);
+    this.promoAssignments.set(response.assignments);
+    this.promoButtons.set(response.buttons);
+
+    const selectedManagerId = this.selectedPromoManagerId();
+    const hasSelectedManager = selectedManagerId != null
+      && response.managers.some((manager) => manager.id === selectedManagerId);
+    if (!hasSelectedManager) {
+      this.selectedPromoManagerId.set(response.managers[0]?.id ?? null);
+    }
+  }
+
+  private reloadPromoManagement(): void {
+    this.dictionariesApi.getPromoTextManagement(this.search()).subscribe({
+      next: (response) => this.applyPromoManagement(response),
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось обновить промо-тексты');
+        this.error.set(message);
+        this.toastService.error('Промо не обновилось', message);
+      }
+    });
+  }
+
+  private promoAssignmentFor(button: PromoButtonSlot): PromoTextAssignment | null {
+    const managerId = this.selectedPromoManagerId();
+    if (managerId == null) {
+      return null;
+    }
+
+    return this.promoAssignments().find((assignment) =>
+      assignment.managerId === managerId
+      && assignment.section === button.section
+      && assignment.buttonKey === button.buttonKey
+    ) ?? null;
   }
 
   private handleLoadAllError(err: unknown): void {

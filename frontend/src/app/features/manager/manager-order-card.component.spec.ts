@@ -109,4 +109,25 @@ describe('ManagerOrderCardComponent', () => {
     expect(status).toBe('На проверке');
     expect(editOpened).toBe(true);
   });
+
+  it('shows client waiting state and emits the toggle', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    const component = fixture.componentInstance;
+    let toggled = false;
+    component.order = order({ status: 'Новый', waitingForClient: true });
+    component.clientWaitingToggled.subscribe(() => {
+      toggled = true;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('article')?.classList.contains('waiting-client')).toBe(true);
+    expect(element.querySelector('.client-waiting-badge')).toBeNull();
+    expect(element.querySelector('.client-waiting-action')?.textContent?.trim()).toBe('ждет клиента');
+    element.querySelector<HTMLButtonElement>('.client-waiting-action')?.click();
+
+    expect(toggled).toBe(true);
+    expect(element.querySelector('footer a')?.textContent?.trim()).toBe('Worker');
+  });
 });

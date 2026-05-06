@@ -68,7 +68,10 @@ public class ApiWorkerBoardController {
     private static final String SECTION_PUBLISH = "publish";
     private static final String SECTION_BAD = "bad";
     private static final String SECTION_ALL = "all";
+    private static final String ORDER_STATUS_NEW = "Новый";
+    private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
+    private static final Set<String> CLIENT_WAITING_ORDER_STATUSES = Set.of(ORDER_STATUS_NEW, ORDER_STATUS_CORRECT);
     private static final int MAX_PAGE_SIZE = 50;
 
     private final OrderService orderService;
@@ -99,16 +102,10 @@ public class ApiWorkerBoardController {
             String message = "";
             boolean warning = false;
 
-            boolean workerMustFinishNagul = hasRole(authentication, "WORKER")
-                    && (SECTION_PUBLISH.equals(normalizedSection) || SECTION_ALL.equals(normalizedSection))
-                    && reviewService.hasActiveNagulReviews(principal);
-
-            if (workerMustFinishNagul) {
-                String requestedSection = normalizedSection;
-                normalizedSection = SECTION_NAGUL;
-                message = SECTION_ALL.equals(requestedSection)
-                        ? "Есть не выгулянные аккаунты. Раздел \"Все\" доступен после выгула всех отзывов"
-                        : "Есть не выгулянные аккаунты. Публикация запрещена";
+            WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
+            if (redirect != null) {
+                normalizedSection = redirect.section();
+                message = redirect.message();
                 warning = true;
             }
 
@@ -158,9 +155,35 @@ public class ApiWorkerBoardController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус заказа не изменен");
         }
 
+        clearClientWaitingIfNeeded(orderId, status);
+
         if ("Публикация".equals(status)) {
             updateReviewPublishDates(order);
         }
+    }
+
+    @PostMapping("/orders/{orderId}/client-waiting")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public void updateOrderClientWaiting(
+            @PathVariable Long orderId,
+            @RequestBody ClientWaitingRequest request
+    ) {
+        if (request == null || request.waitingForClient() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Состояние ожидания клиента не указано");
+        }
+
+        Order order = orderService.getOrder(orderId);
+        boolean waitingForClient = request.waitingForClient();
+        if (waitingForClient && !isClientWaitingStatus(orderStatusTitle(order))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ожидание клиента доступно только для статусов \"" + ORDER_STATUS_NEW + "\" и \"" + ORDER_STATUS_CORRECT + "\""
+            );
+        }
+
+        order.setWaitingForClient(waitingForClient);
+        orderService.save(order);
     }
 
     @PutMapping("/orders/{orderId}/note")
@@ -566,15 +589,15 @@ public class ApiWorkerBoardController {
 
     private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
-            return orderService.countOrdersByStatus();
+            return orderService.countActionableOrdersByStatus();
         }
         if (hasRole(authentication, "OWNER")) {
-            return orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
+            return orderService.countActionableOrdersByStatusToOwner(resolveOwnerManagers(principal));
         }
         if (hasRole(authentication, "MANAGER")) {
-            return orderService.countOrdersByStatusToManager(resolveManager(principal));
+            return orderService.countActionableOrdersByStatusToManager(resolveManager(principal));
         }
-        return orderService.countOrdersByStatusToWorker(resolveWorker(principal));
+        return orderService.countActionableOrdersByStatusToWorker(resolveWorker(principal));
     }
 
     private int countStatus(Map<String, Integer> counts, String status) {
@@ -609,15 +632,17 @@ public class ApiWorkerBoardController {
     private WorkerPermissionsResponse buildPermissions(Authentication authentication) {
         boolean admin = hasRole(authentication, "ADMIN");
         boolean owner = hasRole(authentication, "OWNER");
+        boolean manager = hasRole(authentication, "MANAGER");
         boolean worker = hasRole(authentication, "WORKER");
         return new WorkerPermissionsResponse(
                 admin || owner,
+                admin || owner || manager,
                 admin || owner,
                 admin || owner,
                 admin || owner || worker,
-                admin || owner || hasRole(authentication, "MANAGER"),
-                admin || owner || hasRole(authentication, "MANAGER") || worker,
-                admin || owner || hasRole(authentication, "MANAGER")
+                admin || owner || manager,
+                admin || owner || manager || worker,
+                admin || owner || manager
         );
     }
 
@@ -765,6 +790,20 @@ public class ApiWorkerBoardController {
         reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailsService.getOrderDetailDTOById(order.getDetails().getFirst().getId()));
     }
 
+    private void clearClientWaitingIfNeeded(Long orderId, String status) {
+        if (isClientWaitingStatus(status)) {
+            return;
+        }
+
+        Order order = orderService.getOrder(orderId);
+        if (!order.isWaitingForClient()) {
+            return;
+        }
+
+        order.setWaitingForClient(false);
+        orderService.save(order);
+    }
+
     private Manager resolveManager(Principal principal) {
         User user = userService.findByUserName(principal.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
@@ -793,6 +832,56 @@ public class ApiWorkerBoardController {
 
     private boolean isReviewSection(String section) {
         return SECTION_NAGUL.equals(section) || SECTION_PUBLISH.equals(section) || SECTION_BAD.equals(section);
+    }
+
+    private WorkerFlowRedirect workerFlowRedirect(Principal principal, Authentication authentication, String requestedSection) {
+        if (!isWorkerFlowRestricted(authentication)) {
+            return null;
+        }
+
+        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
+        if (!SECTION_NEW.equals(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
+            return new WorkerFlowRedirect(
+                    SECTION_NEW,
+                    "Сначала завершите активные заказы в разделе \"Новые\". Заказы, которые ждут клиента, переход не блокируют"
+            );
+        }
+
+        if (isAfterCorrection(requestedSection) && countStatus(orderCounts, ORDER_STATUS_CORRECT) > 0) {
+            return new WorkerFlowRedirect(
+                    SECTION_CORRECT,
+                    "Сначала завершите активные заказы в разделе \"Коррекция\". Заказы, которые ждут клиента, переход не блокируют"
+            );
+        }
+
+        if (isAfterNagul(requestedSection) && reviewService.hasActiveNagulReviews(principal)) {
+            return new WorkerFlowRedirect(
+                    SECTION_NAGUL,
+                    "Есть не выгулянные аккаунты. Публикация и плохие задачи доступны после выгула всех отзывов"
+            );
+        }
+
+        return null;
+    }
+
+    private boolean isWorkerFlowRestricted(Authentication authentication) {
+        return hasRole(authentication, "WORKER")
+                && !hasRole(authentication, "ADMIN")
+                && !hasRole(authentication, "OWNER")
+                && !hasRole(authentication, "MANAGER");
+    }
+
+    private boolean isAfterCorrection(String section) {
+        return SECTION_NAGUL.equals(section)
+                || SECTION_PUBLISH.equals(section)
+                || SECTION_BAD.equals(section)
+                || SECTION_ALL.equals(section);
+    }
+
+    private boolean isAfterNagul(String section) {
+        return SECTION_PUBLISH.equals(section)
+                || SECTION_BAD.equals(section)
+                || SECTION_ALL.equals(section);
     }
 
     private boolean matchesReviewKeyword(ReviewDTOOne review, String keyword) {
@@ -873,6 +962,14 @@ public class ApiWorkerBoardController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус не указан");
         }
         return request.status().trim();
+    }
+
+    private boolean isClientWaitingStatus(String status) {
+        return CLIENT_WAITING_ORDER_STATUSES.contains(status);
+    }
+
+    private String orderStatusTitle(Order order) {
+        return order != null && order.getStatus() != null ? safe(order.getStatus().getTitle()) : "";
     }
 
     private Long requireReviewOrderId(Long orderId) {
@@ -1029,6 +1126,7 @@ public class ApiWorkerBoardController {
 
     public record WorkerPermissionsResponse(
             boolean canManageOrderStatuses,
+            boolean canManageClientWaiting,
             boolean canSeePhoneAndPayment,
             boolean canManageBots,
             boolean canAddBot,
@@ -1101,6 +1199,9 @@ public class ApiWorkerBoardController {
     public record StatusChangeRequest(String status) {
     }
 
+    public record ClientWaitingRequest(Boolean waitingForClient) {
+    }
+
     public record OrderNoteUpdateRequest(String orderComments) {
     }
 
@@ -1120,5 +1221,8 @@ public class ApiWorkerBoardController {
     }
 
     public record BotChangeResponse(Long oldBotId, Long newBotId) {
+    }
+
+    private record WorkerFlowRedirect(String section, String message) {
     }
 }

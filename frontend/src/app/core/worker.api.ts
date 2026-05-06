@@ -84,6 +84,7 @@ export interface WorkerMetric {
 
 export interface WorkerPermissions {
   canManageOrderStatuses: boolean;
+  canManageClientWaiting: boolean;
   canSeePhoneAndPayment: boolean;
   canManageBots: boolean;
   canAddBot: boolean;
@@ -140,6 +141,13 @@ export class WorkerApi {
 
   updateOrderStatus(orderId: number, status: string): Observable<void> {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/orders/${orderId}/status`, { status });
+  }
+
+  updateOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/orders/${orderId}/client-waiting`,
+      { waitingForClient }
+    );
   }
 
   updateOrderNote(orderId: number, orderComments: string): Observable<void> {

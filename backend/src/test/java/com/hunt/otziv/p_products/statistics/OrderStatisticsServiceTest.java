@@ -50,6 +50,20 @@ class OrderStatisticsServiceTest {
     }
 
     @Test
+    void countActionableOrdersByStatusUsesWaitingFilteredRepository() {
+        OrderStatisticsService service = service();
+        when(orderRepository.countGroupedByActionableStatus()).thenReturn(List.of(
+                new Object[]{"Новый", 2L},
+                new Object[]{"Коррекция", 1L}
+        ));
+
+        Map<String, Integer> result = service.countActionableOrdersByStatus();
+
+        assertEquals(2, result.get("Новый"));
+        assertEquals(1, result.get("Коррекция"));
+    }
+
+    @Test
     void scopedCountersReturnEmptyValuesWithoutRepositoryForMissingScope() {
         OrderStatisticsService service = service();
 
@@ -59,6 +73,9 @@ class OrderStatisticsServiceTest {
         assertTrue(service.countOrdersByStatusToManager(null).isEmpty());
         assertTrue(service.countOrdersByStatusToOwner(Set.of()).isEmpty());
         assertTrue(service.countOrdersByStatusToWorker(null).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToManager(null).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToOwner(Set.of()).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToWorker(null).isEmpty());
         assertEquals(0, service.countAllOrdersToManager(null));
         assertEquals(0, service.countAllOrdersToOwner(Set.of()));
         assertEquals(0, service.countOrdersByWorker(null));

@@ -258,8 +258,18 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Map<String, Integer> countActionableOrdersByStatus() {
+        return orderStatisticsService.countActionableOrdersByStatus();
+    }
+
+    @Override
     public Map<String, Integer> countOrdersByStatusToManager(Manager manager) {
         return orderStatisticsService.countOrdersByStatusToManager(manager);
+    }
+
+    @Override
+    public Map<String, Integer> countActionableOrdersByStatusToManager(Manager manager) {
+        return orderStatisticsService.countActionableOrdersByStatusToManager(manager);
     }
 
     @Override
@@ -268,8 +278,18 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Map<String, Integer> countActionableOrdersByStatusToOwner(Set<Manager> managerList) {
+        return orderStatisticsService.countActionableOrdersByStatusToOwner(managerList);
+    }
+
+    @Override
     public Map<String, Integer> countOrdersByStatusToWorker(Worker worker) {
         return orderStatisticsService.countOrdersByStatusToWorker(worker);
+    }
+
+    @Override
+    public Map<String, Integer> countActionableOrdersByStatusToWorker(Worker worker) {
+        return orderStatisticsService.countActionableOrdersByStatusToWorker(worker);
     }
 
     @Override

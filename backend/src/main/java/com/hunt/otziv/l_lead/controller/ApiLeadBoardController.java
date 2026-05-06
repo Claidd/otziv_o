@@ -11,6 +11,7 @@ import com.hunt.otziv.l_lead.dto.api.LeadResponse;
 import com.hunt.otziv.l_lead.dto.api.LeadStatusChangeRequest;
 import com.hunt.otziv.l_lead.dto.api.LeadUpdateRequest;
 import com.hunt.otziv.l_lead.model.LeadStatus;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.LeadImportService;
 import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportResult;
@@ -25,6 +26,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
+import com.hunt.otziv.u_users.services.service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -69,6 +71,7 @@ public class ApiLeadBoardController {
     private final OperatorService operatorService;
     private final ManagerService managerService;
     private final MarketologService marketologService;
+    private final UserService userService;
     private final LeadImportService leadImportService;
     private final PerformanceMetrics performanceMetrics;
 
@@ -146,7 +149,10 @@ public class ApiLeadBoardController {
                             ), () -> leadService.countLeadsNoStatus(normalizedKeyword, principal), normalizedPage, normalizedSize)
                             : emptyPage(normalizedPage, normalizedSize, 0),
                     Arrays.stream(LeadStatus.values()).map(status -> status.title).toList(),
-                    promoTextService.getAllPromoTexts()
+                    promoTextService.getPromoTextsForManager(
+                            resolvePromoManagerId(authentication, principal),
+                            PromoButtonCatalog.SECTION_LEADS
+                    )
             );
         });
     }
@@ -395,6 +401,18 @@ public class ApiLeadBoardController {
                 user != null ? user.getFio() : null,
                 user != null ? user.getEmail() : null
         );
+    }
+
+    private Long resolvePromoManagerId(Authentication authentication, Principal principal) {
+        if (!hasAnyRole(authentication, "ROLE_MANAGER") || principal == null) {
+            return null;
+        }
+
+        return userService.findByUserName(principal.getName())
+                .map(User::getId)
+                .map(managerService::getManagerByUserId)
+                .map(Manager::getId)
+                .orElse(null);
     }
 
     private String changeNumberPhone(String phone) {

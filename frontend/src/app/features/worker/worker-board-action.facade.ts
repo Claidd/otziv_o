@@ -14,6 +14,7 @@ import { workerBotChangeMessage } from './worker-board.config';
 type WorkerBoardActionApi = Pick<
   WorkerApi,
   | 'updateOrderStatus'
+  | 'updateOrderClientWaiting'
   | 'changeReviewBot'
   | 'deactivateReviewBot'
   | 'publishReview'
@@ -53,6 +54,31 @@ export class WorkerBoardActionFacade {
       error: (err) => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Статус не изменен', this.deps.errorMessage(err, 'Не удалось изменить статус заказа'));
+      }
+    });
+  }
+
+  toggleOrderClientWaiting(order: OrderCardItem): void {
+    const waitingForClient = !order.waitingForClient;
+    const key = `order-${order.id}-client-waiting`;
+    this.deps.mutationKey.set(key);
+
+    this.deps.workerApi.updateOrderClientWaiting(order.id, waitingForClient).subscribe({
+      next: () => {
+        this.patchOrder(order.id, { waitingForClient });
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.success(
+          waitingForClient ? 'Ждет клиента' : 'Вернули в работу',
+          order.companyTitle
+        );
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error(
+          'Ожидание не изменено',
+          this.deps.errorMessage(err, 'Не удалось изменить ожидание клиента')
+        );
       }
     });
   }

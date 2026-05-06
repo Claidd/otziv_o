@@ -76,6 +76,7 @@ public class OrderDtoMapper {
                 .managerPayText(order.getManager() != null ? safeString(order.getManager().getPayText()) : "")
                 .amount(order.getAmount())
                 .counter(order.getCounter())
+                .waitingForClient(order.isWaitingForClient())
                 .workerUserFio(order.getWorker() != null && order.getWorker().getUser() != null
                         ? safeString(order.getWorker().getUser().getFio())
                         : "")
@@ -99,7 +100,7 @@ public class OrderDtoMapper {
         }
 
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = rowLocalDate(row, 18);
+        LocalDate changedDate = rowLocalDate(row, 19);
         long daysDifference = ChronoUnit.DAYS.between(changedDate != null ? changedDate : now, now);
 
         return OrderDTOList.builder()
@@ -117,14 +118,15 @@ public class OrderDtoMapper {
                 .managerPayText(rowString(row, 11, ""))
                 .amount(rowInteger(row, 12))
                 .counter(rowInteger(row, 13))
-                .workerUserFio(rowString(row, 14, ""))
-                .categoryTitle(rowString(row, 15, "Не выбрано"))
-                .subCategoryTitle(rowString(row, 16, "Не выбрано"))
-                .created(rowLocalDate(row, 17))
+                .waitingForClient(rowBoolean(row, 14))
+                .workerUserFio(rowString(row, 15, ""))
+                .categoryTitle(rowString(row, 16, "Не выбрано"))
+                .subCategoryTitle(rowString(row, 17, "Не выбрано"))
+                .created(rowLocalDate(row, 18))
                 .changed(changedDate)
-                .payDay(rowLocalDate(row, 19))
+                .payDay(rowLocalDate(row, 20))
                 .dayToChangeStatusAgo(daysDifference)
-                .orderComments(rowString(row, 20, "нет заметок"))
+                .orderComments(rowString(row, 21, "нет заметок"))
                 .build();
     }
 
@@ -422,6 +424,11 @@ public class OrderDtoMapper {
     private BigDecimal rowBigDecimal(Object[] row, int index) {
         Object value = rowValue(row, index);
         return value instanceof BigDecimal bigDecimal ? bigDecimal : null;
+    }
+
+    private boolean rowBoolean(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof Boolean bool && bool;
     }
 
     private LocalDate rowLocalDate(Object[] row, int index) {

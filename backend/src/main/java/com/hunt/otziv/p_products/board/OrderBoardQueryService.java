@@ -239,9 +239,10 @@ public class OrderBoardQueryService {
     }
 
     private Pageable orderPageable(int pageNumber, int pageSize, String sortDirection) {
-        Sort sort = "asc".equalsIgnoreCase(sortDirection)
+        Sort changedSort = "asc".equalsIgnoreCase(sortDirection)
                 ? Sort.by("changed").descending()
                 : Sort.by("changed").ascending();
+        Sort sort = Sort.by("waitingForClient").ascending().and(changedSort);
         return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
     }
 

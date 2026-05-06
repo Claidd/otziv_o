@@ -41,6 +41,10 @@ function createFacade(config: { failCompanyStatus?: boolean } = {}) {
         calls.push(`order-status:${orderId}:${status}`);
         return of(void 0);
       },
+      updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
+        calls.push(`client-waiting:${orderId}:${waitingForClient}`);
+        return of(void 0);
+      },
       updateCompanyNote: (companyId: number, value: string) => {
         calls.push(`company-note:${companyId}:${value}`);
         return of(void 0);
@@ -107,6 +111,16 @@ describe('ManagerBoardActionFacade', () => {
     expect(calls).toEqual(['company-status:10:Архив']);
     expect(mutationKey()).toBeNull();
     expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус компании');
+  });
+
+  it('toggles client waiting for an order', () => {
+    const { facade, calls, mutationKey, toastMessages } = createFacade();
+
+    facade.toggleOrderClientWaiting(order({ id: 21, companyTitle: 'Acme', waitingForClient: false }));
+
+    expect(calls).toEqual(['client-waiting:21:true', 'load-board']);
+    expect(mutationKey()).toBeNull();
+    expect(toastMessages).toContain('success:Ждет клиента:Acme');
   });
 
   it('saves card notes and reloads board', () => {

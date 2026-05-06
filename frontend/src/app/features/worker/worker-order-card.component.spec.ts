@@ -67,7 +67,7 @@ describe('WorkerOrderCardComponent', () => {
 
   it('uses a compact layout when order controls are hidden for worker-like roles', () => {
     const fixture = TestBed.createComponent(WorkerOrderCardComponent);
-    fixture.componentInstance.order = order();
+    fixture.componentInstance.order = order({ status: 'Новый', waitingForClient: true });
     fixture.componentInstance.permissions = {
       ...DEFAULT_WORKER_PERMISSIONS,
       canSeeMoney: true,
@@ -77,7 +77,11 @@ describe('WorkerOrderCardComponent', () => {
     fixture.detectChanges();
 
     const article = fixture.nativeElement.querySelector('article') as HTMLElement;
+    const statusChip = fixture.nativeElement.querySelector('.status-chip') as HTMLElement;
     expect(article.classList.contains('order-card--compact')).toBe(true);
+    expect(article.classList.contains('waiting-client')).toBe(true);
+    expect(statusChip.classList.contains('status-chip--waiting')).toBe(true);
+    expect(statusChip.textContent?.trim()).toBe('Ждем');
   });
 
   it('keeps full category names available from compact category chips', () => {
@@ -140,6 +144,31 @@ describe('WorkerOrderCardComponent', () => {
     expect(copyKind).toBe('check');
     expect(status).toBe('На проверке');
     expect(editOpened).toBe(true);
+  });
+
+  it('shows client waiting state and emits the manager toggle', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    const component = fixture.componentInstance;
+    let toggled = false;
+    component.order = order({ status: 'Новый', waitingForClient: true });
+    component.permissions = {
+      ...DEFAULT_WORKER_PERMISSIONS,
+      canManageClientWaiting: true
+    };
+    component.clientWaitingToggled.subscribe(() => {
+      toggled = true;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('article')?.classList.contains('waiting-client')).toBe(true);
+    expect(element.querySelector('.client-waiting-badge')).toBeNull();
+    expect(element.querySelector('.client-waiting-action')?.textContent?.trim()).toBe('ждет клиента');
+    element.querySelector<HTMLButtonElement>('.client-waiting-action')?.click();
+
+    expect(toggled).toBe(true);
+    expect(component.canOpenInlineEdit()).toBe(false);
   });
 
   it('emits note editing events', () => {

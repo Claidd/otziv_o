@@ -44,6 +44,10 @@ public class Order {
     @Column(name = "order_counter")
     private int counter;
 
+    @Builder.Default
+    @Column(name = "order_waiting_for_client")
+    private boolean waitingForClient = false;
+
     @Column(name = "order_zametka")
     private String zametka;
 

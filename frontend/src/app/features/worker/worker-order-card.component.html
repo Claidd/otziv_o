@@ -1,6 +1,7 @@
 <article
   class="worker-card order-card"
   [class.order-card--compact]="!permissions.canSeePhoneAndPayment && !permissions.canManageOrderStatuses"
+  [class.waiting-client]="order.waitingForClient"
 >
   <header>
     <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
@@ -18,7 +19,13 @@
   </header>
 
   <div class="meta-row">
-    <span>{{ order.status || '-' }}</span>
+    <span
+      class="status-chip"
+      [class.status-chip--waiting]="order.waitingForClient"
+      [title]="order.waitingForClient ? 'Ждет текст от клиента' : (order.status || '-')"
+    >
+      {{ statusLabel() }}
+    </span>
     <span>{{ orderAmountLabel() }}</span>
   </div>
 
@@ -51,22 +58,34 @@
     </div>
   </div>
 
-  @if (permissions.canManageOrderStatuses) {
+  @if (permissions.canManageOrderStatuses || canManageClientWaiting()) {
     <div class="card-actions order-status-actions">
-      @for (action of actions; track trackAction($index, action)) {
+      @if (permissions.canManageOrderStatuses) {
+        @for (action of actions; track trackAction($index, action)) {
+          <button
+            type="button"
+            [disabled]="order.waitingForClient || isMutating('order-' + order.id + '-' + action.status)"
+            (click)="statusUpdated.emit(action)"
+            [title]="order.waitingForClient ? 'Сначала верните заказ в работу' : action.status"
+          >
+            {{ action.label }}
+          </button>
+        }
+      }
+
+      @if (canManageClientWaiting()) {
         <button
           type="button"
-          [disabled]="isMutating('order-' + order.id + '-' + action.status)"
-          (click)="statusUpdated.emit(action)"
-          [title]="action.status"
+          class="client-waiting-action"
+          [class.active]="order.waitingForClient"
+          [disabled]="isMutating(clientWaitingMutationKey())"
+          (click)="clientWaitingToggled.emit()"
+          [title]="clientWaitingTitle()"
         >
-          {{ action.label }}
+          {{ clientWaitingLabel() }}
         </button>
       }
 
-      <span class="worker-chip worker-chip--action" [title]="order.workerUserFio || 'Специалист не назначен'">
-        {{ order.workerUserFio || '-' }}
-      </span>
     </div>
   }
 
@@ -161,20 +180,18 @@
     }
   </div>
 
-  @if (!permissions.canManageOrderStatuses) {
-    <span class="worker-chip" [title]="order.workerUserFio || 'Специалист не назначен'">
-      {{ order.workerUserFio || '-' }}
-    </span>
-  }
-
   <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
 
   <footer>
     <span>Без изменений: {{ order.dayToChangeStatusAgo || 0 }} дн.</span>
     @if (canOpenInlineEdit()) {
-      <a href="" (click)="$event.preventDefault(); editOpened.emit()">заказ</a>
+      <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="order.workerUserFio || 'Специалист не назначен'">
+        {{ workerLabel() }}
+      </a>
     } @else {
-      <a [href]="orderEditUrl()">заказ</a>
+      <a [href]="orderEditUrl()" [title]="order.workerUserFio || 'Специалист не назначен'">
+        {{ workerLabel() }}
+      </a>
     }
   </footer>
 </article>

@@ -51,11 +51,19 @@ public interface OrderService {
 
     Map<String, Integer> countOrdersByStatus();
 
+    Map<String, Integer> countActionableOrdersByStatus();
+
     Map<String, Integer> countOrdersByStatusToManager(Manager manager);
+
+    Map<String, Integer> countActionableOrdersByStatusToManager(Manager manager);
 
     Map<String, Integer> countOrdersByStatusToOwner(Set<Manager> managerList);
 
+    Map<String, Integer> countActionableOrdersByStatusToOwner(Set<Manager> managerList);
+
     Map<String, Integer> countOrdersByStatusToWorker(Worker worker);
+
+    Map<String, Integer> countActionableOrdersByStatusToWorker(Worker worker);
 
     int countAllOrders();
 

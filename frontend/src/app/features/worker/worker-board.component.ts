@@ -280,6 +280,10 @@ export class WorkerBoardComponent implements OnDestroy {
     this.actionFacade.updateOrderStatus(order, action);
   }
 
+  toggleOrderClientWaiting(order: OrderCardItem): void {
+    this.actionFacade.toggleOrderClientWaiting(order);
+  }
+
   changeReviewBot(review: WorkerReviewItem): void {
     this.actionFacade.changeReviewBot(review);
   }

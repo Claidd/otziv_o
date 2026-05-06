@@ -21,6 +21,11 @@
   box-shadow: none;
 }
 
+.manager-card.waiting-client {
+  border-color: rgba(214, 159, 43, 0.42);
+  background: linear-gradient(180deg, #fffdf7 0%, var(--otziv-white) 100%);
+}
+
 .order-card {
   min-height: 25.2rem;
   gap: 0.55rem;
@@ -247,8 +252,7 @@
 
 .card-actions button,
 .card-actions a,
-.details-button,
-.order-worker-chip {
+.details-button {
   display: inline-flex;
   min-width: 0;
   min-height: 1.7rem;
@@ -281,8 +285,7 @@
 
 .order-links button,
 .order-links a,
-.order-status-actions button,
-.order-worker-chip {
+.order-status-actions button {
   font-size: 0.66rem;
 }
 
@@ -296,9 +299,18 @@
   line-height: 1.1;
 }
 
-.order-worker-chip {
-  color: var(--otziv-info);
-  font-weight: 900;
+.card-actions .client-waiting-action {
+  color: var(--otziv-dark);
+  border-color: rgba(103, 116, 131, 0.24);
+  background: var(--otziv-white);
+}
+
+.card-actions .client-waiting-action.active {
+  grid-column: 1 / -1;
+  color: #8a6416;
+  border-color: rgba(214, 159, 43, 0.36);
+  background: rgba(255, 244, 214, 0.86);
+  text-transform: uppercase;
 }
 
 .comment-details,
@@ -455,8 +467,7 @@
   }
 
   .card-actions button,
-  .card-actions a,
-  .order-worker-chip {
+  .card-actions a {
     min-height: 2.85rem;
     padding: 0 0.45rem;
     font-size: 0.82rem;
@@ -467,8 +478,7 @@
     min-height: 2.5rem;
   }
 
-  .order-status-actions button,
-  .order-worker-chip {
+  .order-status-actions button {
     min-height: 2.5rem;
     font-size: 0.72rem;
   }

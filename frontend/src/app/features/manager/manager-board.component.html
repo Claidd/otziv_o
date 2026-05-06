@@ -169,6 +169,7 @@
             (phoneCopied)="copyPhone($event)"
             (copyTextRequested)="copyOrderText(order, $event)"
             (statusUpdated)="updateOrderStatus(order, $event)"
+            (clientWaitingToggled)="toggleOrderClientWaiting(order)"
             (editOpened)="openOrderEdit(order)"
           />
         } @empty {

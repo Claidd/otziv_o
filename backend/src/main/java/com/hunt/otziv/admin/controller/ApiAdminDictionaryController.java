@@ -14,12 +14,22 @@ import com.hunt.otziv.c_categories.repository.ProductCategoryRepository;
 import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
+import com.hunt.otziv.config.cache.CacheConfig;
+import com.hunt.otziv.l_lead.model.PromoText;
+import com.hunt.otziv.l_lead.model.PromoTextAssignment;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog.Slot;
+import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
+import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -59,7 +69,10 @@ public class ApiAdminDictionaryController {
     private final BotsRepository botsRepository;
     private final StatusBotRepository statusBotRepository;
     private final WorkerRepository workerRepository;
+    private final ManagerRepository managerRepository;
     private final BotImportService botImportService;
+    private final PromoTextRepository promoTextRepository;
+    private final PromoTextAssignmentRepository promoTextAssignmentRepository;
 
     @GetMapping("/categories")
     public List<CategoryResponse> getCategories(String keyword) {
@@ -320,6 +333,152 @@ public class ApiAdminDictionaryController {
         botsRepository.deleteById(id);
     }
 
+    @GetMapping("/promo-texts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public List<PromoTextResponse> getPromoTexts(String keyword) {
+        return toPromoTextResponses(promoTextRepository.findAllByOrderByIdAsc()).stream()
+                .filter(text -> matches(keyword, String.valueOf(text.id()))
+                        || matches(keyword, String.valueOf(text.position()))
+                        || matches(keyword, text.text()))
+                .toList();
+    }
+
+    @GetMapping("/promo-texts/management")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public PromoTextManagementResponse getPromoTextManagement(String keyword) {
+        List<PromoText> promoTexts = promoTextRepository.findAllByOrderByIdAsc();
+        List<PromoTextResponse> textResponses = toPromoTextResponses(promoTexts).stream()
+                .filter(text -> matches(keyword, String.valueOf(text.id()))
+                        || matches(keyword, String.valueOf(text.position()))
+                        || matches(keyword, text.text())
+                        || matches(keyword, promoTextLabel(text.position())))
+                .toList();
+
+        return new PromoTextManagementResponse(
+                textResponses,
+                managerOptions(),
+                promoTextAssignmentRepository.findAllWithDetails().stream()
+                        .map(this::toPromoAssignmentResponse)
+                        .toList(),
+                PromoButtonCatalog.slots().stream()
+                        .map(slot -> toPromoButtonResponse(slot, promoTexts))
+                        .toList()
+        );
+    }
+
+    @PostMapping("/promo-texts")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @CacheEvict(value = CacheConfig.PROMO_TEXTS, allEntries = true)
+    public PromoTextResponse createPromoText(@RequestBody PromoTextRequest request) {
+        PromoText promoText = PromoText.builder()
+                .promoText(toStoredPromoText(requiredText(request.text(), "Текст обязателен")))
+                .build();
+        PromoText saved = promoTextRepository.save(promoText);
+        return toPromoTextResponses(promoTextRepository.findAllByOrderByIdAsc()).stream()
+                .filter(text -> text.id().equals(saved.getId()))
+                .findFirst()
+                .orElseGet(() -> new PromoTextResponse(saved.getId(), 0, toDisplayPromoText(saved.getPromoText())));
+    }
+
+    @PutMapping("/promo-texts/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @CacheEvict(value = CacheConfig.PROMO_TEXTS, allEntries = true)
+    public PromoTextResponse updatePromoText(@PathVariable Long id, @RequestBody PromoTextRequest request) {
+        PromoText promoText = promoTextRepository.findById(id)
+                .orElseThrow(() -> notFound("Промо-текст не найден"));
+        promoText.setPromoText(toStoredPromoText(requiredText(request.text(), "Текст обязателен")));
+        PromoText saved = promoTextRepository.save(promoText);
+        return toPromoTextResponses(promoTextRepository.findAllByOrderByIdAsc()).stream()
+                .filter(text -> text.id().equals(saved.getId()))
+                .findFirst()
+                .orElseGet(() -> new PromoTextResponse(saved.getId(), 0, toDisplayPromoText(saved.getPromoText())));
+    }
+
+    @PutMapping("/promo-text-assignments")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @CacheEvict(value = CacheConfig.PROMO_TEXTS, allEntries = true)
+    public PromoAssignmentResponse savePromoTextAssignment(@RequestBody PromoAssignmentRequest request) {
+        Manager manager = managerRepository.findById(requiredId(request.managerId(), "Менеджер обязателен"))
+                .orElseThrow(() -> notFound("Менеджер не найден"));
+        PromoText promoText = promoTextRepository.findById(requiredId(request.promoTextId(), "Промо-текст обязателен"))
+                .orElseThrow(() -> notFound("Промо-текст не найден"));
+        Slot slot = PromoButtonCatalog.find(requiredText(request.section(), "Раздел обязателен"), requiredText(request.buttonKey(), "Кнопка обязательна"))
+                .orElseThrow(() -> badRequest("Кнопка для промо-текста не найдена"));
+
+        PromoTextAssignment assignment = promoTextAssignmentRepository
+                .findForSlot(manager.getId(), slot.sectionCode(), slot.buttonKey())
+                .orElseGet(PromoTextAssignment::new);
+        assignment.setManager(manager);
+        assignment.setSectionCode(slot.sectionCode());
+        assignment.setButtonKey(slot.buttonKey());
+        assignment.setPromoText(promoText);
+
+        promoTextAssignmentRepository.save(assignment);
+        return promoTextAssignmentRepository.findForSlot(manager.getId(), slot.sectionCode(), slot.buttonKey())
+                .map(this::toPromoAssignmentResponse)
+                .orElseThrow(() -> notFound("Назначение промо-текста не найдено"));
+    }
+
+    @DeleteMapping("/promo-text-assignments/{managerId}/{section}/{buttonKey}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @CacheEvict(value = CacheConfig.PROMO_TEXTS, allEntries = true)
+    public void resetPromoTextAssignment(
+            @PathVariable Long managerId,
+            @PathVariable String section,
+            @PathVariable String buttonKey
+    ) {
+        Slot slot = PromoButtonCatalog.find(requiredText(section, "Раздел обязателен"), requiredText(buttonKey, "Кнопка обязательна"))
+                .orElseThrow(() -> badRequest("Кнопка для промо-текста не найдена"));
+        promoTextAssignmentRepository.findForSlot(managerId, slot.sectionCode(), slot.buttonKey())
+                .ifPresent(promoTextAssignmentRepository::delete);
+    }
+
+    @GetMapping("/manager-texts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public List<ManagerTextResponse> getManagerTexts(String keyword) {
+        return managerTextResponses().stream()
+                .filter(text -> matches(keyword, String.valueOf(text.managerId()))
+                        || matches(keyword, text.managerTitle())
+                        || matches(keyword, text.payText())
+                        || matches(keyword, text.beginText())
+                        || matches(keyword, text.offerText())
+                        || matches(keyword, text.reminderText())
+                        || matches(keyword, text.startText()))
+                .toList();
+    }
+
+    @PutMapping("/manager-texts/{managerId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ManagerTextResponse updateManagerTexts(
+            @PathVariable Long managerId,
+            @RequestBody ManagerTextRequest request
+    ) {
+        Manager manager = managerRepository.findById(managerId)
+                .orElseThrow(() -> notFound("Менеджер не найден"));
+
+        manager.setPayText(safe(request.payText()));
+        manager.setBeginText(safe(request.beginText()));
+        manager.setOfferText(safe(request.offerText()));
+        manager.setReminderText(safe(request.reminderText()));
+        manager.setStartText(safe(request.startText()));
+
+        Manager saved = managerRepository.save(manager);
+        return managerTextResponses().stream()
+                .filter(text -> text.managerId().equals(saved.getId()))
+                .findFirst()
+                .orElseGet(() -> new ManagerTextResponse(
+                        saved.getId(),
+                        "Manager #" + saved.getId(),
+                        safe(saved.getPayText()),
+                        safe(saved.getBeginText()),
+                        safe(saved.getOfferText()),
+                        safe(saved.getReminderText()),
+                        safe(saved.getStartText())
+                ));
+    }
+
     private List<Category> uniqueCategories(List<Category> categories) {
         Map<Long, Category> unique = new LinkedHashMap<>();
         categories.forEach(category -> unique.putIfAbsent(category.getId(), category));
@@ -397,10 +556,89 @@ public class ApiAdminDictionaryController {
         );
     }
 
+    private List<PromoTextResponse> toPromoTextResponses(List<PromoText> texts) {
+        List<PromoTextResponse> response = new ArrayList<>();
+        for (int index = 0; index < texts.size(); index++) {
+            PromoText text = texts.get(index);
+            response.add(new PromoTextResponse(
+                    text.getId(),
+                    index + 1,
+                    toDisplayPromoText(text.getPromoText())
+            ));
+        }
+        return response;
+    }
+
+    private PromoAssignmentResponse toPromoAssignmentResponse(PromoTextAssignment assignment) {
+        Slot slot = PromoButtonCatalog.find(assignment.getSectionCode(), assignment.getButtonKey())
+                .orElse(new Slot(
+                        assignment.getSectionCode(),
+                        assignment.getSectionCode(),
+                        assignment.getButtonKey(),
+                        assignment.getButtonKey(),
+                        0,
+                        0
+                ));
+        PromoText promoText = assignment.getPromoText();
+        Manager manager = assignment.getManager();
+
+        return new PromoAssignmentResponse(
+                assignment.getId(),
+                manager == null ? null : manager.getId(),
+                managerTitle(manager),
+                slot.sectionCode(),
+                slot.sectionTitle(),
+                slot.buttonKey(),
+                slot.buttonLabel(),
+                slot.outputIndex() + 1,
+                promoText == null ? null : promoText.getId(),
+                promoText == null ? "" : promoTextLabel(positionOfPromoText(promoText.getId()))
+        );
+    }
+
+    private PromoButtonResponse toPromoButtonResponse(Slot slot, List<PromoText> promoTexts) {
+        Long defaultPromoTextId = promoTextIdAtPosition(promoTexts, slot.defaultPosition());
+        return new PromoButtonResponse(
+                slot.sectionCode(),
+                slot.sectionTitle(),
+                slot.buttonKey(),
+                slot.buttonLabel(),
+                slot.outputIndex() + 1,
+                slot.defaultPosition(),
+                defaultPromoTextId
+        );
+    }
+
+    private List<ManagerTextResponse> managerTextResponses() {
+        return managerRepository.findAllWithUserAndImage().stream()
+                .sorted(Comparator.comparing(this::managerTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toManagerTextResponse)
+                .toList();
+    }
+
+    private ManagerTextResponse toManagerTextResponse(Manager manager) {
+        return new ManagerTextResponse(
+                manager.getId(),
+                managerTitle(manager),
+                safe(manager.getPayText()),
+                safe(manager.getBeginText()),
+                safe(manager.getOfferText()),
+                safe(manager.getReminderText()),
+                safe(manager.getStartText())
+        );
+    }
+
     private List<OptionResponse> productCategoryOptions() {
         return productCategoryRepository.findAll().stream()
                 .sorted(Comparator.comparing(ProductCategory::getTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(category -> new OptionResponse(category.getId(), safe(category.getTitle())))
+                .toList();
+    }
+
+    private List<OptionResponse> managerOptions() {
+        return managerRepository.findAllWithUserAndImage().stream()
+                .sorted(Comparator.comparing(this::managerTitle, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(manager -> new OptionResponse(manager.getId(), managerTitle(manager)))
                 .toList();
     }
 
@@ -558,6 +796,58 @@ public class ApiAdminDictionaryController {
         return username.isBlank() ? "Worker #" + workerId : username;
     }
 
+    private String managerTitle(Manager manager) {
+        if (manager == null) {
+            return "";
+        }
+
+        User user = manager.getUser();
+        if (user == null) {
+            return "Manager #" + manager.getId();
+        }
+
+        String fio = safe(user.getFio()).trim();
+        if (!fio.isBlank()) {
+            return fio;
+        }
+
+        String username = safe(user.getUsername()).trim();
+        return username.isBlank() ? "Manager #" + manager.getId() : username;
+    }
+
+    private Long promoTextIdAtPosition(List<PromoText> promoTexts, int position) {
+        int index = position - 1;
+        if (index < 0 || index >= promoTexts.size()) {
+            return null;
+        }
+        return promoTexts.get(index).getId();
+    }
+
+    private int positionOfPromoText(Long promoTextId) {
+        List<PromoText> promoTexts = promoTextRepository.findAllByOrderByIdAsc();
+        for (int index = 0; index < promoTexts.size(); index++) {
+            if (promoTexts.get(index).getId().equals(promoTextId)) {
+                return index + 1;
+            }
+        }
+        return 0;
+    }
+
+    private String promoTextLabel(int position) {
+        return switch (position) {
+            case 1 -> "предложение";
+            case 2 -> "напоминание";
+            case 3 -> "данные";
+            case 4 -> "ответы";
+            case 5 -> "ссылка на проверку";
+            case 6 -> "напоминание заказа";
+            case 7 -> "угроза";
+            case 10 -> "рассылка";
+            case 11 -> "пояснение";
+            default -> position > 0 ? "Текст #" + position : "Промо-текст";
+        };
+    }
+
     private boolean matches(String keyword, String value) {
         String query = safe(keyword).trim().toLowerCase(Locale.ROOT);
         return query.isBlank() || safe(value).toLowerCase(Locale.ROOT).contains(query);
@@ -565,6 +855,17 @@ public class ApiAdminDictionaryController {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String toDisplayPromoText(String value) {
+        return safe(value).replace("lineSep", System.lineSeparator());
+    }
+
+    private String toStoredPromoText(String value) {
+        return safe(value)
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replace("\n", "lineSep");
     }
 
     private ResponseStatusException badRequest(String message) {
@@ -655,6 +956,77 @@ public class ApiAdminDictionaryController {
             List<OptionResponse> workers,
             List<OptionResponse> statuses,
             List<OptionResponse> cities
+    ) {
+    }
+
+    public record PromoTextRequest(String text) {
+    }
+
+    public record PromoTextResponse(
+            Long id,
+            int position,
+            String text
+    ) {
+    }
+
+    public record PromoTextManagementResponse(
+            List<PromoTextResponse> texts,
+            List<OptionResponse> managers,
+            List<PromoAssignmentResponse> assignments,
+            List<PromoButtonResponse> buttons
+    ) {
+    }
+
+    public record PromoAssignmentRequest(
+            Long managerId,
+            String section,
+            String buttonKey,
+            Long promoTextId
+    ) {
+    }
+
+    public record PromoAssignmentResponse(
+            Long id,
+            Long managerId,
+            String managerTitle,
+            String section,
+            String sectionTitle,
+            String buttonKey,
+            String buttonLabel,
+            int outputPosition,
+            Long promoTextId,
+            String promoTextLabel
+    ) {
+    }
+
+    public record PromoButtonResponse(
+            String section,
+            String sectionTitle,
+            String buttonKey,
+            String buttonLabel,
+            int outputPosition,
+            int defaultPromoPosition,
+            Long defaultPromoTextId
+    ) {
+    }
+
+    public record ManagerTextRequest(
+            String payText,
+            String beginText,
+            String offerText,
+            String reminderText,
+            String startText
+    ) {
+    }
+
+    public record ManagerTextResponse(
+            Long managerId,
+            String managerTitle,
+            String payText,
+            String beginText,
+            String offerText,
+            String reminderText,
+            String startText
     ) {
     }
 }

@@ -76,6 +76,10 @@ function createFacade(section: WorkerSection = 'publish') {
         calls.push(`status:${orderId}:${status}`);
         return of(void 0);
       },
+      updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
+        calls.push(`client-waiting:${orderId}:${waitingForClient}`);
+        return of(void 0);
+      },
       changeReviewBot: (reviewId: number) => {
         calls.push(`change:${reviewId}`);
         return of({ oldBotId: 11, newBotId: 44 });
@@ -150,6 +154,16 @@ describe('WorkerBoardActionFacade', () => {
     expect(calls).toEqual(['status:30:Архив', 'load-board']);
     expect(mutationKey()).toBeNull();
     expect(toastMessages).toContain('success:Статус изменен:Acme: Архив');
+  });
+
+  it('toggles client waiting for an order', () => {
+    const { facade, calls, mutationKey, toastMessages } = createFacade();
+
+    facade.toggleOrderClientWaiting(order({ id: 31, companyTitle: 'Acme', waitingForClient: false }));
+
+    expect(calls).toEqual(['client-waiting:31:true', 'load-board']);
+    expect(mutationKey()).toBeNull();
+    expect(toastMessages).toContain('success:Ждет клиента:Acme');
   });
 
   it('changes a regular review bot or bad-task bot', () => {

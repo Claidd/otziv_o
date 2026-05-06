@@ -2,6 +2,7 @@ package com.hunt.otziv.manager.services;
 
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
 import com.hunt.otziv.manager.dto.api.ManagerMetricResponse;
@@ -80,7 +81,10 @@ public class ManagerBoardService {
                 ManagerBoardStatusCatalog.companyStatuses(),
                 ManagerBoardStatusCatalog.orderStatuses(),
                 buildMetrics(principal, authentication),
-                promoTextService.getAllPromoTexts()
+                promoTextService.getPromoTextsForManager(
+                        resolvePromoManagerId(principal, authentication),
+                        promoSectionCode(normalizedSection)
+                )
         );
     }
 
@@ -242,6 +246,24 @@ public class ManagerBoardService {
         User user = userService.findByUserName(principal.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
         return managerService.getManagerByUserId(user.getId());
+    }
+
+    private Long resolvePromoManagerId(Principal principal, Authentication authentication) {
+        if (principal == null || !managerPermissionService.hasRole(authentication, "MANAGER")) {
+            return null;
+        }
+
+        return userService.findByUserName(principal.getName())
+                .map(User::getId)
+                .map(managerService::getManagerByUserId)
+                .map(Manager::getId)
+                .orElse(null);
+    }
+
+    private String promoSectionCode(String section) {
+        return SECTION_ORDERS.equals(section)
+                ? PromoButtonCatalog.SECTION_MANAGER_ORDERS
+                : PromoButtonCatalog.SECTION_MANAGER_COMPANIES;
     }
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {

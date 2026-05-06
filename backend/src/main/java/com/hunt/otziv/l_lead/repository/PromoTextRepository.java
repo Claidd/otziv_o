@@ -7,6 +7,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface PromoTextRepository extends CrudRepository<PromoText, Integer> {
+public interface PromoTextRepository extends CrudRepository<PromoText, Long> {
     List<PromoText> findAll();
+
+    List<PromoText> findAllByOrderByIdAsc();
 }

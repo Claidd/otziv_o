@@ -59,6 +59,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             m.payText,
             o.amount,
             o.counter,
+            o.waitingForClient,
             wu.fio,
             cat.categoryTitle,
             sub.subCategoryTitle,
@@ -118,7 +119,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 SELECT o.id
                 FROM Order o
                 WHERE o.worker = :worker
-                ORDER BY CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
             """,
             countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker"
     )
@@ -265,7 +266,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-                ORDER BY CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -511,10 +512,29 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s
+        WHERE o.waitingForClient = false
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByActionableStatus();
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
         WHERE o.manager = :manager
         GROUP BY s.title
     """)
     List<Object[]> countGroupedByStatusAndManager(@Param("manager") Manager manager);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.manager = :manager
+          AND o.waitingForClient = false
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndManager(@Param("manager") Manager manager);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)
@@ -529,10 +549,30 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s
+        WHERE o.manager IN :managers
+          AND o.waitingForClient = false
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndManagers(@Param("managers") Set<Manager> managers);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
         WHERE o.worker = :worker
         GROUP BY s.title
     """)
     List<Object[]> countGroupedByStatusAndWorker(@Param("worker") Worker worker);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.worker = :worker
+          AND o.waitingForClient = false
+        GROUP BY s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndWorker(@Param("worker") Worker worker);
 
     @Query("SELECT COUNT(o.id) FROM Order o")
     int countAllOrders();

@@ -7,6 +7,7 @@ type ManagerBoardActionApi = Pick<
   ManagerApi,
   | 'updateCompanyStatus'
   | 'updateOrderStatus'
+  | 'updateOrderClientWaiting'
   | 'updateCompanyNote'
   | 'updateOrderCompanyNote'
   | 'updateOrderNote'
@@ -58,6 +59,31 @@ export class ManagerBoardActionFacade {
       error: (err) => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Статус не изменен', this.deps.errorMessage(err, 'Не удалось изменить статус заказа'));
+      }
+    });
+  }
+
+  toggleOrderClientWaiting(order: OrderCardItem): void {
+    const waitingForClient = !order.waitingForClient;
+    const key = `order-${order.id}-client-waiting`;
+    this.deps.mutationKey.set(key);
+
+    this.deps.managerApi.updateOrderClientWaiting(order.id, waitingForClient).subscribe({
+      next: () => {
+        this.patchOrder(order.id, { waitingForClient });
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.success(
+          waitingForClient ? 'Ждет клиента' : 'Вернули в работу',
+          order.companyTitle || `Заказ #${order.id}`
+        );
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error(
+          'Ожидание не изменено',
+          this.deps.errorMessage(err, 'Не удалось изменить ожидание клиента')
+        );
       }
     });
   }

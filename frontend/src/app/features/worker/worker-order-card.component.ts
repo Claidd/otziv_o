@@ -45,6 +45,7 @@ export class WorkerOrderCardComponent {
   @Output() readonly phoneCopied = new EventEmitter<string | undefined>();
   @Output() readonly copyTextRequested = new EventEmitter<'check' | 'payment'>();
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
+  @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly noteEditStarted = new EventEmitter<void>();
   @Output() readonly noteDraftChanged = new EventEmitter<string>();
   @Output() readonly noteEditCanceled = new EventEmitter<void>();
@@ -66,6 +67,10 @@ export class WorkerOrderCardComponent {
 
   showBadReviewSummary(): boolean {
     return this.order.status !== 'Оплачено' && (this.order.badReviewTasksTotal ?? 0) > 0;
+  }
+
+  statusLabel(): string {
+    return this.order.waitingForClient ? 'Ждем' : (this.order.status || '-');
   }
 
   orderChatUrl(): string {
@@ -137,7 +142,33 @@ export class WorkerOrderCardComponent {
   }
 
   canOpenInlineEdit(): boolean {
-    return (this.activeSection === 'new' || this.activeSection === 'correct') && this.canOpenEditModal;
+    return (this.activeSection === 'new' || this.activeSection === 'correct')
+      && this.canOpenEditModal
+      && !this.order.waitingForClient;
+  }
+
+  canManageClientWaiting(): boolean {
+    return this.permissions.canManageClientWaiting && this.isClientWaitingEligible();
+  }
+
+  clientWaitingMutationKey(): string {
+    return `order-${this.order.id}-client-waiting`;
+  }
+
+  clientWaitingLabel(): string {
+    return this.order.waitingForClient ? 'ждет клиента' : 'клиент';
+  }
+
+  clientWaitingTitle(): string {
+    return this.order.waitingForClient ? 'Вернуть заказ в работу специалиста' : 'Заказ ждет текст от клиента';
+  }
+
+  isClientWaitingEligible(): boolean {
+    return this.order.status === 'Новый' || this.order.status === 'Коррекция' || !!this.order.waitingForClient;
+  }
+
+  workerLabel(): string {
+    return this.order.workerUserFio || '-';
   }
 
   trackAction(index: number, action: StatusAction): string {
