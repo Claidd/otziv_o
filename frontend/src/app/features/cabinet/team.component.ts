@@ -1,7 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { appEnvironment } from '../../core/app-environment';
 import { CabinetApi, TeamMember, TeamResponse } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
@@ -126,11 +125,11 @@ export class TeamComponent {
   }
 
   editUrl(userId: number): string {
-    return `${appEnvironment.legacyBaseUrl}/allUsers/${userId}/edit`;
+    return `/admin/users?userId=${userId}`;
   }
 
   addUserUrl(): string {
-    return `${appEnvironment.legacyBaseUrl}/allUsers`;
+    return '/admin/users/new';
   }
 
   memberTrack(member: TeamMember): number {

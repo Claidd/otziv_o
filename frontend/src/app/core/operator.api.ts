@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { LeadPage } from './leads.api';
 
+export type OperatorBoardSection = 'queue' | 'sent';
+
 export interface OperatorText {
   beginText: string;
   offerText: string;
@@ -20,12 +22,16 @@ export interface OperatorBoard {
   operatorId?: number | null;
   timer?: string | null;
   timerExpired: boolean;
+  section: OperatorBoardSection;
+  queueTotal: number;
+  sentTotal: number;
 }
 
 export interface OperatorBoardQuery {
   keyword?: string;
   pageNumber?: number;
   pageSize?: number;
+  section?: OperatorBoardSection;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -36,7 +42,8 @@ export class OperatorApi {
     const params = new HttpParams()
       .set('keyword', query.keyword?.trim() ?? '')
       .set('pageNumber', String(query.pageNumber ?? 0))
-      .set('pageSize', String(query.pageSize ?? 10));
+      .set('pageSize', String(query.pageSize ?? 10))
+      .set('section', query.section ?? 'queue');
 
     return this.http.get<OperatorBoard>(`${appEnvironment.apiBaseUrl}/api/operator/board`, { params });
   }

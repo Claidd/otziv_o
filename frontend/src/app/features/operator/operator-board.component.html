@@ -28,26 +28,28 @@
 
       <header class="lead-toolbar">
         <nav class="status-tabs" aria-label="Состояние оператора">
-          @for (metric of metrics(); track trackMetric($index, metric)) {
+          @for (tab of sectionTabs(); track trackSection($index, tab)) {
             <button
               type="button"
-              [class.active]="metric.label === 'К выдаче'"
-              [title]="metric.label + ': ' + metric.value"
-              (click)="handleMetricClick(metric)"
+              [class.active]="activeSection() === tab.key"
+              [title]="tab.label + ': ' + tab.value"
+              (click)="setSection(tab.key)"
             >
-              <span class="material-icons-sharp">{{ metric.icon }}</span>
-              {{ metric.label }}
-              <small>{{ metric.value }}</small>
+              <span class="material-icons-sharp">{{ tab.icon }}</span>
+              {{ tab.label }}
+              <small>{{ tab.value }}</small>
             </button>
           }
         </nav>
 
-        <div class="quick-links">
-          <a [routerLink]="phonesRoute">
-            <span class="material-icons-sharp">settings_cell</span>
-            Телефон
-          </a>
-        </div>
+        @if (canManagePhones()) {
+          <div class="quick-links">
+            <a [routerLink]="phonesRoute">
+              <span class="material-icons-sharp">settings_cell</span>
+              Телефон
+            </a>
+          </div>
+        }
       </header>
 
       <section class="copy-search">
@@ -125,30 +127,22 @@
           ></textarea>
 
           <div class="card-actions">
-            <button
-              type="button"
-              [disabled]="isMutating(lead, 'send')"
-              (click)="runAction(lead, 'send')"
-              title="отправил"
-            >
-              <span class="material-icons-sharp">{{ actionIcon('send') }}</span>
-              {{ actionLabel('send') }}
-            </button>
+            @for (action of actionsForLead(lead); track action) {
+              <button
+                type="button"
+                [disabled]="isMutating(lead, action)"
+                (click)="runAction(lead, action)"
+                [title]="actionLabel(action)"
+              >
+                <span class="material-icons-sharp">{{ actionIcon(action) }}</span>
+                {{ actionLabel(action) }}
+              </button>
+            }
 
-            <button
-              type="button"
-              [disabled]="isMutating(lead, 'toWork')"
-              (click)="runAction(lead, 'toWork')"
-              title="передать"
-            >
-              <span class="material-icons-sharp">{{ actionIcon('toWork') }}</span>
-              {{ actionLabel('toWork') }}
-            </button>
-
-            <a [href]="companyUrl(lead)">
+            <button type="button" (click)="openCompanyCreate(lead)">
               <span class="material-icons-sharp">business_center</span>
               работа
-            </a>
+            </button>
           </div>
 
           <footer>
@@ -252,5 +246,14 @@
         </form>
       </section>
     </div>
+  }
+
+  @if (companyCreateLead(); as lead) {
+    <app-company-create-modal
+      source="operator"
+      [leadId]="lead.id"
+      (closed)="closeCompanyCreate()"
+      (created)="handleCompanyCreated($event)"
+    />
   }
 </app-admin-layout>

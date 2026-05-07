@@ -11,12 +11,14 @@ import com.hunt.otziv.l_lead.dto.api.LeadResponse;
 import com.hunt.otziv.l_lead.dto.api.LeadStatusChangeRequest;
 import com.hunt.otziv.l_lead.dto.api.LeadUpdateRequest;
 import com.hunt.otziv.l_lead.model.LeadStatus;
+import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.LeadImportService;
 import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportResult;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.u_users.model.Manager;
@@ -73,6 +75,7 @@ public class ApiLeadBoardController {
     private final MarketologService marketologService;
     private final UserService userService;
     private final LeadImportService leadImportService;
+    private final TelephoneService telephoneService;
     private final PerformanceMetrics performanceMetrics;
 
     @GetMapping("/board")
@@ -226,7 +229,8 @@ public class ApiLeadBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public LeadResponse updateLead(
             @PathVariable Long id,
-            @RequestBody LeadUpdateRequest request
+            @RequestBody LeadUpdateRequest request,
+            Authentication authentication
     ) {
         String telephoneLead = changeNumberPhone(request.telephoneLead());
         if (telephoneLead.isBlank()) {
@@ -237,12 +241,18 @@ public class ApiLeadBoardController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой номер телефона уже есть в базе");
         }
 
+        boolean canUpdateTelephone = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+        Telephone telephone = canUpdateTelephone ? resolveTelephone(request.telephoneId()) : null;
+
         LeadDTO leadDTO = LeadDTO.builder()
                 .telephoneLead(telephoneLead)
                 .cityLead(request.cityLead())
                 .commentsLead(request.commentsLead())
                 .lidStatus(request.lidStatus())
                 .operator(request.operatorId() == null ? null : operatorService.getOperatorById(request.operatorId()))
+                .telephone(telephone)
+                .telephoneId(canUpdateTelephone ? request.telephoneId() : null)
+                .telephoneUpdateRequested(canUpdateTelephone)
                 .manager(request.managerId() == null ? null : managerService.getManagerById(request.managerId()))
                 .marketolog(request.marketologId() == null ? null : marketologService.getMarketologById(request.marketologId()))
                 .build();
@@ -366,10 +376,27 @@ public class ApiLeadBoardController {
                 lead.getDateNewTry(),
                 lead.isOffer(),
                 lead.getOperatorId(),
+                lead.getTelephoneId(),
                 toPerson(lead.getOperator()),
                 toPerson(lead.getManager()),
                 toPerson(lead.getMarketolog())
         );
+    }
+
+    private Telephone resolveTelephone(Long telephoneId) {
+        if (telephoneId == null) {
+            return null;
+        }
+        if (telephoneId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID телефона должен быть больше нуля");
+        }
+
+        Telephone telephone = telephoneService.getTelephoneById(telephoneId);
+        if (telephone == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Телефон не найден");
+        }
+
+        return telephone;
     }
 
     private LeadPersonResponse toPerson(Operator operator) {

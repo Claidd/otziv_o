@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +22,9 @@ public class DeviceTokenController {
         try {
             deviceTokenService.createDeviceToken(telephoneId, response);
             return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            e.printStackTrace(); // ← покажет, что именно произошло
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (EntityNotFoundException e) {
             return ResponseEntity.badRequest().body("Не удалось найти телефон");
         }
     }

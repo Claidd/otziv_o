@@ -105,6 +105,8 @@ public interface LeadService {
     long countLeadsToWork(String title, String keyword, Principal principal);
 
     Page<LeadDTO> getAllLeadsToOperatorAll(Long operatorID, String keyword, Principal principal, int pageNumber, int i);
+    Page<LeadDTO> getOperatorSentLeads(Long operatorID, String keyword, Principal principal, int pageNumber, int pageSize);
+    Page<LeadDTO> searchOperatorQueueAndSentLeads(Long operatorID, Long telephoneId, String keyword, Principal principal, int pageNumber, int pageSize);
 
     List<Lead> findNewLeadsByClient(Long telephoneId, String status);
 

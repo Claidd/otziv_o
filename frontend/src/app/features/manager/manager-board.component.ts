@@ -111,7 +111,7 @@ export class ManagerBoardComponent {
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
   readonly allOrderActions = MANAGER_ORDER_ACTIONS;
   readonly pageSizeOptions = MANAGER_PAGE_SIZE_OPTIONS;
-  readonly legacyWorkersUrl = '/worker';
+  readonly workersRoute = '/worker';
   readonly mobileNavLinks: MobileNavLink[] = MANAGER_MOBILE_NAV_LINKS;
 
   readonly board = signal<ManagerBoard | null>(null);

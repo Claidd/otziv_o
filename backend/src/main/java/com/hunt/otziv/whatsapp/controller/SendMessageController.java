@@ -1,5 +1,7 @@
 package com.hunt.otziv.whatsapp.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 
 
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -15,6 +17,7 @@ import org.springframework.web.servlet.ModelAndView;
 import java.util.Map;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/whatsapp")

@@ -14,6 +14,7 @@ public record LeadResponse(
         LocalDate dateNewTry,
         boolean offer,
         Long operatorId,
+        Long telephoneId,
         LeadPersonResponse operator,
         LeadPersonResponse manager,
         LeadPersonResponse marketolog

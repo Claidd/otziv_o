@@ -144,7 +144,7 @@ export const routes: Routes = [
       .then((m) => m.BotBrowserComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER']
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
     }
   },
   {

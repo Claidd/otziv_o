@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -22,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/orders")

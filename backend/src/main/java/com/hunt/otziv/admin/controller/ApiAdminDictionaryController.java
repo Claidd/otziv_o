@@ -269,7 +269,7 @@ public class ApiAdminDictionaryController {
     }
 
     @GetMapping("/bots/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotResponse getBot(@PathVariable Long id) {
         return botsRepository.findByIdWithAdminDetails(id)
                 .map(this::toBotResponse)

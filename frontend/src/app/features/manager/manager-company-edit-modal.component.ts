@@ -8,7 +8,6 @@ import type {
   ManagerOption
 } from '../../core/manager.api';
 import {
-  managerFilialEditUrl,
   managerOptionLabel,
   trackManagerOption
 } from './manager-board.config';
@@ -114,10 +113,6 @@ export class ManagerCompanyEditModalComponent {
 
   filialEditKey(filialId: number): string {
     return `filial-edit-${filialId}`;
-  }
-
-  filialEditUrl(filialId: number): string {
-    return managerFilialEditUrl(filialId);
   }
 
   optionLabel(option: ManagerOption): string {

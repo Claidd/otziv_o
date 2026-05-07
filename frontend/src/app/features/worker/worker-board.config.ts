@@ -1,4 +1,3 @@
-import { appEnvironment } from '../../core/app-environment';
 import type { ManagerOption, OrderCardItem, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
@@ -110,8 +109,18 @@ export function workerBotIdLabel(botId?: number | null): string {
   return botId ? String(botId) : 'не назначен';
 }
 
-export function workerLegacyUrl(path: string): string {
-  return `${appEnvironment.legacyBaseUrl}${path}`;
+export function workerOrderDetailsPath(order: OrderCardItem): string {
+  return `/manager/orders/${order.companyId}/${order.id}`;
+}
+
+export function workerReviewDetailsPath(review: { companyId: number; orderId: number; orderDetailsId?: string }): string {
+  return review.orderDetailsId
+    ? reviewCheckPath(review.orderDetailsId)
+    : `/manager/orders/${review.companyId}/${review.orderId}`;
+}
+
+export function workerBotBrowserPath(botId?: number | null): string {
+  return botId ? `/admin/dictionaries/accounts/${botId}/browser` : 'https://vk.com/';
 }
 
 export function workerAbsoluteAppUrl(path: string): string {

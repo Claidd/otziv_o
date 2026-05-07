@@ -444,6 +444,20 @@
               </select>
             </label>
 
+            @if (canEditLeadTelephone()) {
+              <label class="lead-edit-field">
+                <span>ID телефона</span>
+                <input
+                  name="telephoneId"
+                  type="number"
+                  min="1"
+                  placeholder="Не выбран"
+                  [ngModel]="draft.telephoneId"
+                  (ngModelChange)="setEditTelephoneId($event)"
+                >
+              </label>
+            }
+
             <label class="lead-edit-field">
               <span>Маркетолог</span>
               <select

@@ -37,6 +37,10 @@ export class ManagerCompanyCardComponent {
     return managerCompanyFilialUrl(this.company);
   }
 
+  hasCompanyFilialUrl(): boolean {
+    return !!this.companyFilialUrl();
+  }
+
   companyPhoneLabel(): string {
     return formatPhoneForDisplay(this.company.telephone);
   }

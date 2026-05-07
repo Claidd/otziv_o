@@ -168,6 +168,13 @@ public class LeadServiceImpl implements LeadService {
             log.info("Обновили менеджера");
         }
 
+        if (leadDTO.isTelephoneUpdateRequested()
+                && !Objects.equals(telephoneId(leadDTO.getTelephone()), telephoneId(saveLead.getTelephone()))) {
+            saveLead.setTelephone(leadDTO.getTelephone());
+            isChanged = true;
+            log.info("Обновили ID телефона");
+        }
+
         if (!Objects.equals(leadDTO.getLidStatus(), saveLead.getLidStatus())) {
             saveLead.setLidStatus(leadDTO.getLidStatus());
             isChanged = true;
@@ -487,6 +494,35 @@ public class LeadServiceImpl implements LeadService {
         return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
     }
 
+    @Override
+    public Page<LeadDTO> getOperatorSentLeads(Long operatorId, String keywords, Principal principal, int pageNumber, int pageSize) {
+        Operator operator = operatorService.getOperatorById(operatorId);
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        String keywordPattern = "%" + normalizeKeyword(keywords).toLowerCase() + "%";
+        List<String> sentStatuses = List.of(LeadStatus.SEND.title, LeadStatus.ARCHIVE.title);
+
+        Page<Lead> leadsPage = leadsRepository.getSentLeadsByOperator(operator, sentStatuses, keywordPattern, pageable);
+        return toDtoPage(leadsPage, pageable);
+    }
+
+    @Override
+    public Page<LeadDTO> searchOperatorQueueAndSentLeads(Long operatorId, Long telephoneId, String keywords, Principal principal, int pageNumber, int pageSize) {
+        Operator operator = operatorService.getOperatorById(operatorId);
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        String keywordPattern = "%" + normalizeKeyword(keywords).toLowerCase() + "%";
+        List<String> sentStatuses = List.of(LeadStatus.SEND.title, LeadStatus.ARCHIVE.title);
+
+        Page<Lead> leadsPage = leadsRepository.searchOperatorQueueAndSentLeads(
+                operator,
+                telephoneId,
+                LeadStatus.NEW.title,
+                sentStatuses,
+                keywordPattern,
+                pageable
+        );
+        return toDtoPage(leadsPage, pageable);
+    }
+
 
 
 
@@ -766,6 +802,10 @@ public class LeadServiceImpl implements LeadService {
                         .findFirst()
                         .orElse(""));
     } // Берем роль пользователя
+
+    private Long telephoneId(Telephone telephone) {
+        return telephone != null ? telephone.getId() : null;
+    }
     //    =============================== ВЗЯТЬ ВСЕХ ЮЗЕРОВ - КОНЕЦ =========================================
 
 
@@ -787,6 +827,8 @@ public class LeadServiceImpl implements LeadService {
         leadDTO.setOperator(lead.getOperator() != null ? lead.getOperator() : null);
         leadDTO.setManager(lead.getManager() != null ? lead.getManager() : null);
         leadDTO.setMarketolog(lead.getMarketolog() != null ? lead.getMarketolog() : null);
+        leadDTO.setTelephone(lead.getTelephone() != null ? lead.getTelephone() : null);
+        leadDTO.setTelephoneId(lead.getTelephone() != null ? lead.getTelephone().getId() : null);
         return leadDTO;
     }
     //    =============================== В DTO - КОНЕЦ =========================================
@@ -1096,6 +1138,8 @@ public class LeadServiceImpl implements LeadService {
                     .operator(lead.getOperator())
                     .manager(lead.getManager())
                     .marketolog(lead.getMarketolog())
+                    .telephone(lead.getTelephone())
+                    .telephoneId(lead.getTelephone().getId())
                     .operatorId(lead.getTelephone().getTelephoneOperator().getId())
                     .build();
         }
@@ -1112,6 +1156,8 @@ public class LeadServiceImpl implements LeadService {
                     .operator(lead.getOperator())
                     .manager(lead.getManager())
                     .marketolog(lead.getMarketolog())
+                    .telephone(lead.getTelephone())
+                    .telephoneId(lead.getTelephone() != null ? lead.getTelephone().getId() : null)
                     .build();
         }
     }// Перевод юзера в дто - конец

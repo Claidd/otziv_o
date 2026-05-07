@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.p_products.dto.NagulResult;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/ordersDetails")

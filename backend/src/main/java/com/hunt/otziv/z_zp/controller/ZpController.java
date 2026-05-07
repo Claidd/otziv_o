@@ -1,5 +1,7 @@
 package com.hunt.otziv.z_zp.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/zp")

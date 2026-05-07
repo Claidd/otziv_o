@@ -63,6 +63,8 @@ public class CompanyServiceImpl implements CompanyService{
             NextOrderRequestStatus.PENDING,
             NextOrderRequestStatus.FAILED
     );
+    private static final long OPERATOR_COUNT_ZERO_MANAGER_ID = 2L;
+    private static final long OPERATOR_COUNT_ONE_MANAGER_ID = 3L;
 
     private final CompanyRepository companyRepository;
     private final LeadService leadService;
@@ -474,19 +476,8 @@ public class CompanyServiceImpl implements CompanyService{
     public CompanyDTO convertToDtoToOperator(Long leadId, Principal principal) { //    Метод подготовки ДТО при создании компании из Лида оператора
         LeadDTO leadDTO = leadService.findById(leadId);
         Operator operator = operatorService.getOperatorById(leadDTO.getOperatorId());
-        System.out.println("Оператор " + operator);
-        int countManagers = operator.getCount();
-
-        if (countManagers >= 1) {
-            SecureRandom random = new SecureRandom();
-            User user = userService.findByUserName("hunt").orElseThrow();
-            return getCompanyDTO(principal, leadDTO, random, user);
-        }
-        else {
-            SecureRandom random = new SecureRandom();
-            User user = userService.findByUserName("mia").orElseThrow();
-            return getCompanyDTO(principal, leadDTO, random, user);
-        }
+        Manager manager = operatorManager(operator);
+        return getCompanyDTO(leadDTO, manager);
     } //    Метод подготовки ДТО при создании компании из Лида оператора
 
 
@@ -502,29 +493,46 @@ public class CompanyServiceImpl implements CompanyService{
         return companyRepository.findByGroupId(groupId);
     }
 
-    private CompanyDTO getCompanyDTO(Principal principal, LeadDTO leadDTO, SecureRandom random, User user) {
-        List<Manager> managers = new ArrayList<>(user.getManagers());
-        if (!managers.isEmpty()) {
-            Manager manager = managers.get(random.nextInt(managers.size()));
-            System.out.println("Новая компания создается для менеджера: " + manager);
-            List<Worker> workers = new ArrayList<>(manager.getUser().getWorkers());
-            Worker randomWorker = workers.get(random.nextInt(workers.size()));
-            System.out.println("Новая компания создается для работника: " + randomWorker);
-            CompanyDTO companyDTO = new CompanyDTO();
-            companyDTO.setTelephone(leadDTO.getTelephoneLead());
-            companyDTO.setCity(leadDTO.getCityLead());
-            companyDTO.setUser(convertToUserDto(manager.getUser()));
-            companyDTO.setOperator(leadOperatorName(leadDTO));
-            companyDTO.setManager(convertToManagerDto(manager));
-            companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
-            companyDTO.setFilial(new FilialDTO());
-            companyDTO.setWorker(convertToWorkerDTO(randomWorker));
-            return companyDTO;
-            // Используй manager
-        } else {
-            // Обработка случая, когда у пользователя нет менеджеров
-            throw new IllegalStateException("У пользователя mia нет менеджеров");
+    private Manager operatorManager(Operator operator) {
+        if (operator == null) {
+            throw new IllegalStateException("Оператор для лида не найден");
         }
+
+        Long managerId = switch (operator.getCount()) {
+            case 0 -> OPERATOR_COUNT_ZERO_MANAGER_ID;
+            case 1 -> OPERATOR_COUNT_ONE_MANAGER_ID;
+            default -> throw new IllegalStateException("Неизвестное значение счетчика оператора: " + operator.getCount());
+        };
+
+        return managerService.getManagerById(managerId);
+    }
+
+    private CompanyDTO getCompanyDTO(LeadDTO leadDTO, Manager manager) {
+        if (manager == null || manager.getUser() == null) {
+            throw new IllegalStateException("Менеджер для операторского лида не найден");
+        }
+
+        Set<Worker> managerWorkers = manager.getUser().getWorkers() == null
+                ? Set.of()
+                : manager.getUser().getWorkers();
+        if (managerWorkers.isEmpty()) {
+            throw new IllegalStateException("У менеджера нет доступных сотрудников");
+        }
+
+        List<Worker> workers = new ArrayList<>(managerWorkers);
+        Worker randomWorker = workers.get(new SecureRandom().nextInt(workers.size()));
+
+        CompanyDTO companyDTO = new CompanyDTO();
+        companyDTO.setTelephone(leadDTO.getTelephoneLead());
+        companyDTO.setCity(leadDTO.getCityLead());
+        companyDTO.setUser(convertToUserDto(manager.getUser()));
+        companyDTO.setOperator(leadOperatorName(leadDTO));
+        companyDTO.setManager(convertToManagerDto(manager));
+        companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
+        companyDTO.setFilial(new FilialDTO());
+        companyDTO.setWorkers(convertToWorkerDTOList(managerWorkers));
+        companyDTO.setWorker(convertToWorkerDTO(randomWorker));
+        return companyDTO;
     }
 
     public CompanyDTO convertToDtoToManagerNotLead(Principal principal) {

@@ -8,7 +8,7 @@ const metricsDashboardPath =
 
 export const appEnvironment = {
   apiBaseUrl: '',
-  legacyBaseUrl: isLocalAngularDevServer ? 'http://localhost:8080' : '/legacy',
+  backendBaseUrl: '',
   metricsBaseUrl: isLocalAngularDevServer ? `http://localhost:3000${metricsDashboardPath}` : `/grafana${metricsDashboardPath}`,
   keycloak: {
     url: isLocalAngularDevServer ? 'http://localhost:8180' : '/keycloak',

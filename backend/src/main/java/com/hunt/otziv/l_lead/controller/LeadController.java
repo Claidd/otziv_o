@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
@@ -17,6 +19,7 @@ import java.security.Principal;
 import java.util.Map;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequestMapping("/lead")
 public class LeadController {

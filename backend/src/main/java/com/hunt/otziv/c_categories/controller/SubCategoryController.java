@@ -1,5 +1,7 @@
 package com.hunt.otziv.c_categories.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
@@ -14,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 
 @Controller
+@LegacyMvc
 @RequestMapping("/subcategories")
 public class SubCategoryController {
 

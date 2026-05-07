@@ -9,7 +9,7 @@ import {
   DEFAULT_WORKER_PERMISSIONS,
   StatusAction,
   trackWorkerAction,
-  workerLegacyUrl
+  workerOrderDetailsPath
 } from './worker-board.config';
 import {
   workerHasMeaningfulNote,
@@ -111,11 +111,11 @@ export class WorkerOrderCardComponent {
   }
 
   orderDetailsUrl(): string {
-    return workerLegacyUrl(`/ordersDetails/${this.order.companyId}/${this.order.id}`);
+    return workerOrderDetailsPath(this.order);
   }
 
   orderEditUrl(): string {
-    return workerLegacyUrl(`/ordersCompany/ordersDetails/${this.order.companyId}/${this.order.id}`);
+    return workerOrderDetailsPath(this.order);
   }
 
   progress(): number {

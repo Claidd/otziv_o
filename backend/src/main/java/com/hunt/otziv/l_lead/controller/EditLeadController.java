@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
@@ -20,6 +22,7 @@ import java.security.Principal;
 import java.util.Map;
 
 @Controller
+@LegacyMvc
 @Slf4j
 public class EditLeadController {
     private final LeadService leadService;

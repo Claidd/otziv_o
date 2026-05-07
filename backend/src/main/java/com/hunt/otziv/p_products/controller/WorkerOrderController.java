@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -24,6 +26,7 @@ import java.util.Comparator;
 import java.util.Objects;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/worker")

@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
 import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
@@ -9,6 +11,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 @Controller
+@LegacyMvc
 @RequestMapping("/phone")
 @RequiredArgsConstructor
 public class TelephoneController {

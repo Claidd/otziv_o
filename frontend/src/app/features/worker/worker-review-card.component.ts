@@ -5,7 +5,8 @@ import {
   ReviewCopyKind,
   ReviewEditableField,
   SideNoteField,
-  workerLegacyUrl
+  workerBotBrowserPath,
+  workerReviewDetailsPath
 } from './worker-board.config';
 import {
   workerHasReviewCompanyNote,
@@ -100,11 +101,11 @@ export class WorkerReviewCardComponent {
   }
 
   reviewEditUrl(): string {
-    return workerLegacyUrl(`/review/editReview/${this.review.sourceReviewId ?? this.review.id}`);
+    return workerReviewDetailsPath(this.review);
   }
 
   botBrowserUrl(): string {
-    return this.review.botId ? workerLegacyUrl(`/bots/${this.review.botId}/browser`) : 'https://vk.com/';
+    return workerBotBrowserPath(this.review.botId);
   }
 
   reviewPhotoUrl(): string {

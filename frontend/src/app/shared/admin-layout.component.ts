@@ -1,7 +1,7 @@
 import { Component, computed, effect, EventEmitter, inject, Input, Output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { AuthService } from '../core/auth.service';
 import { appEnvironment } from '../core/app-environment';
+import { AuthService } from '../core/auth.service';
 import { CabinetApi } from '../core/cabinet.api';
 import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
 import { PersonalRemindersComponent } from './personal-reminders.component';
@@ -28,6 +28,7 @@ export class AdminLayoutComponent {
   private readonly auth = inject(AuthService);
   private readonly cabinetApi = inject(CabinetApi);
   private readonly themeStorageKey = 'otziv-theme';
+  private readonly defaultBackendImageId = 1;
   private loadedHeaderProfileFor: string | null = null;
 
   @Input() title = 'Админка';
@@ -38,7 +39,7 @@ export class AdminLayoutComponent {
   @Input() profileImageAlt = 'Фото профиля';
   @Output() readonly activeLinkClicked = new EventEmitter<string>();
 
-  readonly brandLogoUrl = `${appEnvironment.legacyBaseUrl}/images/image/logo-o.png`;
+  readonly brandLogoUrl = '/assets/images/logo-o.png';
   readonly authenticated = this.auth.authenticated;
   readonly theme = signal<ThemeMode>(this.getInitialTheme());
   readonly headerProfileFallbackUrl = signal<string | null>(null);
@@ -151,11 +152,11 @@ export class AdminLayoutComponent {
   }
 
   headerProfileImageUrl(): string | null {
-    return this.profileImageUrl || this.headerProfileFallbackUrl();
+    return this.profileImageUrl || this.headerProfileFallbackUrl() || this.brandLogoUrl;
   }
 
   headerProfileImageAlt(): string {
-    return this.profileImageUrl ? this.profileImageAlt : 'Фото профиля';
+    return this.profileImageUrl || this.headerProfileFallbackUrl() ? this.profileImageAlt : 'Компания О!';
   }
 
   setTheme(theme: ThemeMode): void {
@@ -200,7 +201,7 @@ export class AdminLayoutComponent {
     this.loadedHeaderProfileFor = username;
     this.cabinetApi.getProfile().subscribe({
       next: (profile) => {
-        const imageId = profile.workerZp?.imageId || profile.user?.image;
+        const imageId = this.customProfileImageId(profile.workerZp?.imageId, profile.user?.image);
         this.headerProfileFallbackUrl.set(imageId ? this.cabinetApi.imageUrl(imageId) : null);
       },
       error: () => {
@@ -211,6 +212,10 @@ export class AdminLayoutComponent {
 
   private realmRoles(): string[] {
     return this.token()?.realm_access?.roles ?? [];
+  }
+
+  private customProfileImageId(...imageIds: Array<number | null | undefined>): number | null {
+    return imageIds.find((imageId): imageId is number => Boolean(imageId && imageId !== this.defaultBackendImageId)) ?? null;
   }
 
   private token(): { preferred_username?: string; realm_access?: { roles?: string[] } } | undefined {

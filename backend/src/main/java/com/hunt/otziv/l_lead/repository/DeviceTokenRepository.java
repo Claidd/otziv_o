@@ -16,6 +16,8 @@ public interface DeviceTokenRepository extends CrudRepository<DeviceToken, Strin
 
     Optional<DeviceToken> findByTokenAndTelephone_Id(String token, Long telephoneId);
 
+    boolean existsByTelephone_Id(Long telephoneId);
+
     List<DeviceToken> findByTelephone_IdOrderByCreatedAtDesc(Long telephoneId);
 
     @Query("SELECT d.telephone FROM DeviceToken d WHERE d.token = :token AND d.active = true")

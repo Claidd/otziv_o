@@ -1,5 +1,7 @@
 package com.hunt.otziv.u_users.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.services.RoleService;
@@ -17,6 +19,7 @@ import java.io.IOException;
 import java.util.List;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/allUsers")

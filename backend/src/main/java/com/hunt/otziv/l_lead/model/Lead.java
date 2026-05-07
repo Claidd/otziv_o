@@ -26,7 +26,14 @@ import java.time.LocalDateTime;
         attributeNodes = {
                 @NamedAttributeNode("manager"),
                 @NamedAttributeNode("operator"),
-                @NamedAttributeNode("marketolog")
+                @NamedAttributeNode("marketolog"),
+                @NamedAttributeNode(value = "telephone", subgraph = "telephone.detail")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "telephone.detail",
+                        attributeNodes = @NamedAttributeNode("telephoneOperator")
+                )
         }
 )
 public class Lead {

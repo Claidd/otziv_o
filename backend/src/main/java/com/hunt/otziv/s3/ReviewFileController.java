@@ -1,5 +1,7 @@
 package com.hunt.otziv.s3;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.s3.service.S3UploadService;
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
+@LegacyMvc
 @RequiredArgsConstructor
 public class ReviewFileController {
 

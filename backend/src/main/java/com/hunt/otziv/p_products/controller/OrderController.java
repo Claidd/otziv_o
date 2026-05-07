@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -25,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/ordersCompany")

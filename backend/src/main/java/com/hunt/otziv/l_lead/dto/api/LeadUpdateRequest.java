@@ -6,6 +6,7 @@ public record LeadUpdateRequest(
         String commentsLead,
         String lidStatus,
         Long operatorId,
+        Long telephoneId,
         Long managerId,
         Long marketologId
 ) {

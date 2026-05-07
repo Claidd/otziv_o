@@ -1,5 +1,7 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.c_categories.services.ProductCategoryService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
+@LegacyMvc
 @RequiredArgsConstructor
 @RequestMapping("/products")
 public class ProductController {

@@ -1,5 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/operators")

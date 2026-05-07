@@ -227,7 +227,7 @@ export class CabinetApi {
 
   imageUrl(imageId?: number | null): string {
     const id = imageId || 1;
-    return `${appEnvironment.legacyBaseUrl}/images/${id}`;
+    return `${appEnvironment.backendBaseUrl}/images/${id}`;
   }
 
   private paramsWithDate(date?: string, options: CacheOptions = {}): HttpParams {

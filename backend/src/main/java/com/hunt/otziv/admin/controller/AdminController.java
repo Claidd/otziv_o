@@ -1,5 +1,7 @@
 package com.hunt.otziv.admin.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.u_users.model.*;
@@ -26,6 +28,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 @Slf4j
 @Controller
+@LegacyMvc
 @RequiredArgsConstructor
 @RequestMapping("/admin")
 public class AdminController {

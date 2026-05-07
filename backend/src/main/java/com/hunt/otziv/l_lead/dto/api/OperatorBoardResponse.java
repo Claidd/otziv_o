@@ -13,6 +13,9 @@ public record OperatorBoardResponse(
         Long telephoneId,
         Long operatorId,
         LocalDateTime timer,
-        boolean timerExpired
+        boolean timerExpired,
+        String section,
+        long queueTotal,
+        long sentTotal
 ) {
 }

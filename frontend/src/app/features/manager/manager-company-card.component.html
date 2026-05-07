@@ -6,7 +6,11 @@
   [class.card-tone--bad]="isBadTone()"
 >
   <header>
-    <a [href]="companyFilialUrl()" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
+    @if (hasCompanyFilialUrl()) {
+      <a [href]="companyFilialUrl()" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
+    } @else {
+      <a href="" (click)="$event.preventDefault(); editOpened.emit()">{{ company.title || 'Без названия' }}</a>
+    }
     <div class="card-id-line">
       <small>#{{ company.id }}</small>
       @if (hasMeaningfulNote(company.commentsCompany)) {

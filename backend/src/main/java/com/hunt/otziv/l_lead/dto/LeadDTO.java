@@ -3,6 +3,7 @@ package com.hunt.otziv.l_lead.dto;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
+import com.hunt.otziv.l_lead.model.Telephone;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
@@ -50,8 +51,11 @@ public class LeadDTO {
     private Operator operator;
     private Manager manager;
     private Marketolog marketolog;
+    private Telephone telephone;
 
     private Long operatorId;
+    private Long telephoneId;
+    private boolean telephoneUpdateRequested;
 
     private boolean offer;
 

@@ -8,10 +8,12 @@ import com.hunt.otziv.l_lead.repository.TelephoneRepository;
 import com.hunt.otziv.l_lead.model.DeviceToken;
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
 import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -28,7 +30,11 @@ public class DeviceTokenServiceImpl implements DeviceTokenService {
 
     public String createDeviceToken(Long telephoneId, HttpServletResponse response) {
         Telephone tel = telephoneRepository.findById(telephoneId)
-                .orElseThrow(() -> new RuntimeException("Телефон не найден"));
+                .orElseThrow(() -> new EntityNotFoundException("Телефон не найден"));
+
+        if (deviceTokenRepository.existsByTelephone_Id(telephoneId)) {
+            throw new IllegalStateException("Токен уже есть в системе");
+        }
 
         String token = UUID.randomUUID().toString();
 
@@ -39,7 +45,11 @@ public class DeviceTokenServiceImpl implements DeviceTokenService {
                 .active(true)
                 .build();
 
-        deviceTokenRepository.save(deviceToken);
+        try {
+            deviceTokenRepository.save(deviceToken);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalStateException("Токен уже есть в системе", ex);
+        }
 
         Cookie cookie = new Cookie("device_token", token);
         cookie.setHttpOnly(true); // ← временно, для JS-доступа

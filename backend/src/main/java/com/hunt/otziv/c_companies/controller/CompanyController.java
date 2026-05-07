@@ -1,5 +1,7 @@
 package com.hunt.otziv.c_companies.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
@@ -29,6 +31,7 @@ import java.security.Principal;
 import java.util.*;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/companies")

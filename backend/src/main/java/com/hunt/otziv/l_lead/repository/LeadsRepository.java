@@ -301,6 +301,36 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
             @Param("keyword") String keyword,
             Pageable pageable);
 
+    @Query("""
+        SELECT DISTINCT l FROM Lead l
+        LEFT JOIN l.telephone t
+        WHERE (l.operator = :operator OR t.telephoneOperator = :operator)
+          AND l.lidStatus IN :statuses
+          AND LOWER(l.telephoneLead) LIKE LOWER(:keyword)
+    """)
+    Page<Lead> getSentLeadsByOperator(
+            @Param("operator") Operator operator,
+            @Param("statuses") Collection<String> statuses,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT l FROM Lead l
+        LEFT JOIN l.telephone t
+        WHERE LOWER(l.telephoneLead) LIKE LOWER(:keyword)
+          AND (
+            (t.id = :telephoneId AND l.lidStatus = :newStatus)
+            OR ((l.operator = :operator OR t.telephoneOperator = :operator) AND l.lidStatus IN :sentStatuses)
+          )
+    """)
+    Page<Lead> searchOperatorQueueAndSentLeads(
+            @Param("operator") Operator operator,
+            @Param("telephoneId") Long telephoneId,
+            @Param("newStatus") String newStatus,
+            @Param("sentStatuses") Collection<String> sentStatuses,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
 
 
 }

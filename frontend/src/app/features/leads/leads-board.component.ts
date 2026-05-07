@@ -117,6 +117,10 @@ export class LeadsBoardComponent {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   });
+  readonly canEditLeadTelephone = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
   readonly canCreateCompany = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
@@ -503,6 +507,7 @@ export class LeadsBoardComponent {
       commentsLead: this.commentFor(lead),
       lidStatus: lead.lidStatus,
       operatorId: lead.operator?.id ?? null,
+      telephoneId: lead.telephoneId ?? null,
       managerId: lead.manager?.id ?? null,
       marketologId: lead.marketolog?.id ?? null
     });
@@ -528,6 +533,16 @@ export class LeadsBoardComponent {
     this.editDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
   }
 
+  setEditTelephoneId(value: unknown): void {
+    if (value === null || value === undefined || value === '') {
+      this.setEditField('telephoneId', null);
+      return;
+    }
+
+    const parsed = Number(value);
+    this.setEditField('telephoneId', Number.isFinite(parsed) ? parsed : null);
+  }
+
   saveLeadEdit(): void {
     const lead = this.editLead();
     const draft = this.editDraft();
@@ -539,7 +554,11 @@ export class LeadsBoardComponent {
     this.editSaving.set(true);
     this.editError.set(null);
 
-    this.leadsApi.updateLead(lead.id, draft).subscribe({
+    const request: LeadUpdateRequest = this.canEditLeadTelephone()
+      ? draft
+      : { ...draft, telephoneId: undefined };
+
+    this.leadsApi.updateLead(lead.id, request).subscribe({
       next: (updatedLead) => {
         this.editSaving.set(false);
         this.applyUpdatedLead(updatedLead);

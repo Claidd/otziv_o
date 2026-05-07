@@ -21,6 +21,7 @@ export interface LeadItem {
   dateNewTry?: string;
   offer: boolean;
   operatorId?: number;
+  telephoneId?: number | null;
   operator?: LeadPerson;
   manager?: LeadPerson;
   marketolog?: LeadPerson;
@@ -85,6 +86,7 @@ export interface LeadUpdateRequest {
   commentsLead?: string;
   lidStatus: string;
   operatorId?: number | null;
+  telephoneId?: number | null;
   managerId?: number | null;
   marketologId?: number | null;
 }

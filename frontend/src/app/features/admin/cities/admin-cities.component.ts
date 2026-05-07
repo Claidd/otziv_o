@@ -8,7 +8,6 @@ import {
   CityStatsSort,
   SortDirection
 } from '../../../core/admin-city-stats.api';
-import { appEnvironment } from '../../../core/app-environment';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
@@ -215,15 +214,15 @@ export class AdminCitiesComponent implements OnDestroy {
   }
 
   reviewUrl(city: CityStatsItem): string {
-    return this.legacyUrl(`/admin/reviews?cityId=${city.cityId}&published=false`);
+    return `/admin/cities?cityId=${city.cityId}&view=reviews`;
   }
 
   botsUrl(city: CityStatsItem): string {
-    return this.legacyUrl(`/admin/bots?cityId=${city.cityId}&active=true`);
+    return `/admin/dictionaries?cityId=${city.cityId}&section=bots`;
   }
 
   detailsUrl(city: CityStatsItem): string {
-    return this.legacyUrl(`/admin/cities/${city.cityId}`);
+    return `/admin/cities?cityId=${city.cityId}`;
   }
 
   countClass(city: CityStatsItem): string {
@@ -272,10 +271,6 @@ export class AdminCitiesComponent implements OnDestroy {
     link.download = `cities_full_export_${stamp}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
-  }
-
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
   }
 
   private errorMessage(err: unknown, fallback: string): string {

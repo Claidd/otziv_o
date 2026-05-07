@@ -1,4 +1,3 @@
-import { appEnvironment } from '../../core/app-environment';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
   absoluteAppUrl,
@@ -133,13 +132,9 @@ export const MANAGER_MOBILE_NAV_LINKS: MobileNavLink[] = [
   { label: 'Лиды', routerLink: '/leads' },
   { label: 'Оператор', routerLink: '/operator' },
   { label: 'Менеджер', routerLink: '/manager' },
-  { label: 'Специалист', href: '/worker' },
+  { label: 'Специалист', routerLink: '/worker' },
   { label: 'Личный кабинет', routerLink: '/' }
 ];
-
-export function managerLegacyUrl(path: string): string {
-  return `${appEnvironment.legacyBaseUrl}${path}`;
-}
 
 export function managerReviewCheckPath(orderDetailsId: string): string {
   return reviewCheckPath(orderDetailsId);
@@ -221,23 +216,19 @@ export function managerOrderChatUrl(order: OrderCardItem): string {
 }
 
 export function managerCompanyFilialUrl(company: CompanyCardItem): string {
-  return company.urlFilial || managerLegacyUrl(`/companies/editCompany/${company.id}`);
+  return company.urlFilial || '';
 }
 
 export function managerCompanyOrderUrl(company: CompanyCardItem): string {
-  return managerLegacyUrl(`/ordersCompany/${company.id}`);
-}
-
-export function managerFilialEditUrl(filialId: number): string {
-  return managerLegacyUrl(`/filial/edit/${filialId}`);
+  return `/manager?companyId=${company.id}`;
 }
 
 export function managerOrderDetailsUrl(order: OrderCardItem): string {
-  return managerLegacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
+  return `/manager/orders/${order.companyId}/${order.id}`;
 }
 
 export function managerOrderInfoUrl(order: OrderCardItem): string {
-  return managerLegacyUrl(`/ordersDetails/${order.companyId}/${order.id}`);
+  return managerOrderDetailsUrl(order);
 }
 
 export function managerOrderReviewUrl(order: OrderCardItem): string {

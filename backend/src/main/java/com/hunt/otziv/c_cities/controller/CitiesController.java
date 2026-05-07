@@ -1,5 +1,7 @@
 package com.hunt.otziv.c_cities.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.repository.CityRepository;
@@ -17,6 +19,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.security.Principal;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/cities")

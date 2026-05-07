@@ -1,5 +1,7 @@
 package com.hunt.otziv.b_bots.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
@@ -19,6 +21,7 @@ import java.security.Principal;
 import java.util.Comparator;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequestMapping("/bots")
 public class BotsController {

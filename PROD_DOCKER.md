@@ -100,6 +100,44 @@ docker compose -f docker-compose.build.yaml push
 
 На VPS поставь такие же значения `APP_IMAGE` и `WEB_IMAGE` в `.env.prod`, затем сделай `pull` и `up -d`.
 
+## Автоматический деплой с локального компьютера
+
+Для обычного обновления prod можно запустить PowerShell-скрипт:
+
+```powershell
+.\infrastructure\scripts\prod\deploy-prod.ps1 `
+  -VpsHost 203.0.113.10 `
+  -VpsUser root `
+  -VpsPath /opt/otziv `
+  -SshKey C:\Users\Hunt\.ssh\id_rsa `
+  -RemoteEnvFile .env
+```
+
+Что делает скрипт:
+
+- собирает `APP_IMAGE` и `WEB_IMAGE` через `docker-compose.build.yaml`;
+- пушит оба образа в Docker Hub;
+- загружает на VPS `docker-compose.yaml`, `.env.prod` и prod-конфиги из `infrastructure`;
+- на VPS выполняет `docker compose down --remove-orphans`;
+- удаляет старые Docker-образы только для backend/frontend репозиториев;
+- тянет новые `app`/`nginx` образы и запускает стек через `docker compose up -d --remove-orphans`.
+
+Перед первым запуском на локальном компьютере нужен `docker login`, а на VPS должны быть Docker Engine и Docker Compose plugin. Можно добавить к команде флаг `-DockerLogin`, чтобы скрипт сам запустил локальный `docker login` перед сборкой и push. По умолчанию скрипт берет локальный `.env.prod`, обновляет в его временной копии `APP_IMAGE`/`WEB_IMAGE` на новый тег и загружает копию на VPS. Если на VPS используется файл `.env`, передай `-RemoteEnvFile .env`.
+
+Если секретный `.env.prod` уже настроен на VPS и его не нужно перезаписывать, добавь флаг:
+
+```powershell
+.\infrastructure\scripts\prod\deploy-prod.ps1 `
+  -VpsHost 203.0.113.10 `
+  -VpsUser root `
+  -VpsPath /opt/otziv `
+  -SshKey C:\Users\Hunt\.ssh\id_rsa `
+  -RemoteEnvFile .env `
+  -SkipEnvUpload
+```
+
+В этом режиме скрипт сохранит серверный env-файл и обновит в нем только `APP_IMAGE` и `WEB_IMAGE`.
+
 ## Локальный Docker запуск
 
 `compose.yaml` поднимает Angular отдельно как `frontend` на `http://localhost:4200`.

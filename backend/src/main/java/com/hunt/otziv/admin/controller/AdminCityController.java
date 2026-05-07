@@ -1,5 +1,7 @@
 package com.hunt.otziv.admin.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
 import com.hunt.otziv.r_review.services.ReviewCityService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +22,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/admin/cities")

@@ -1,5 +1,7 @@
 package com.hunt.otziv.u_users.controller;
 
+import com.hunt.otziv.config.legacy.LegacyMvc;
+
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 
 
@@ -16,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 @Controller
+@LegacyMvc
 @Slf4j
 @RequestMapping("/register")
 public class RegistrationController {

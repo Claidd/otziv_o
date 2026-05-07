@@ -3,11 +3,13 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
-import { appEnvironment } from '../../core/app-environment';
+import { AuthService } from '../../core/auth.service';
+import { CompanyCreateResult } from '../../core/company-create.api';
 import { LeadItem, LeadPage, LeadPerson } from '../../core/leads.api';
-import { OperatorApi, OperatorBoard } from '../../core/operator.api';
+import { OperatorApi, OperatorBoard, OperatorBoardSection } from '../../core/operator.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
 
@@ -24,6 +26,15 @@ type OperatorMetric = {
   value: string;
   icon: string;
   tone: 'green' | 'blue' | 'yellow' | 'pink';
+  section?: OperatorBoardSection;
+  action?: 'phones';
+};
+
+type OperatorSectionTab = {
+  key: OperatorBoardSection;
+  label: string;
+  value: string;
+  icon: string;
 };
 
 type MobileNavLink = {
@@ -34,12 +45,13 @@ type MobileNavLink = {
 
 @Component({
   selector: 'app-operator-board',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './operator-board.component.html',
   styleUrl: '../leads/leads-board.component.scss'
 })
 export class OperatorBoardComponent {
   private readonly operatorApi = inject(OperatorApi);
+  private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
   private readonly router = inject(Router);
   private readonly emptyPage: LeadPage = {
@@ -64,6 +76,7 @@ export class OperatorBoardComponent {
   ];
 
   readonly board = signal<OperatorBoard | null>(null);
+  readonly activeSection = signal<OperatorBoardSection>('queue');
   readonly keyword = signal('');
   readonly pageNumber = signal(0);
   readonly pageSize = signal(10);
@@ -77,7 +90,9 @@ export class OperatorBoardComponent {
   readonly telephoneIdDraft = signal('');
   readonly bindSaving = signal(false);
   readonly bindError = signal<string | null>(null);
+  readonly companyCreateLead = signal<LeadItem | null>(null);
 
+  readonly canManagePhones = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
   readonly currentPage = computed(() => this.board()?.leads ?? this.emptyPage);
   readonly currentLeads = computed(() => this.currentPage().content);
   readonly emptyMessage = computed(() => {
@@ -89,6 +104,14 @@ export class OperatorBoardComponent {
 
     if (board.requireDeviceId) {
       return 'Укажи ID телефона, чтобы привязать рабочее устройство.';
+    }
+
+    if (this.activeSection() === 'sent') {
+      return 'Сейчас нет отправленных лидов.';
+    }
+
+    if (this.keyword().trim()) {
+      return 'По этому номеру ничего не найдено.';
     }
 
     if (!board.timerExpired && !this.keyword().trim()) {
@@ -108,30 +131,56 @@ export class OperatorBoardComponent {
   });
   readonly metrics = computed<OperatorMetric[]>(() => {
     const board = this.board();
-    return [
+    const metrics: OperatorMetric[] = [
       {
         label: 'К выдаче',
-        value: String(board?.leads.totalElements ?? 0),
+        value: String(board?.queueTotal ?? 0),
         icon: 'support_agent',
-        tone: 'green'
+        tone: 'green',
+        section: 'queue'
       },
       {
+        label: 'Отправленные',
+        value: String(board?.sentTotal ?? 0),
+        icon: 'outgoing_mail',
+        tone: 'blue',
+        section: 'sent'
+      }
+    ];
+
+    if (this.canManagePhones()) {
+      metrics.push({
         label: 'Телефон',
         value: board?.telephoneId ? `#${board.telephoneId}` : '-',
         icon: 'phone_iphone',
-        tone: 'blue'
-      },
-      {
-        label: 'Оператор',
-        value: board?.operatorId ? `#${board.operatorId}` : '-',
-        icon: 'badge',
-        tone: 'pink'
-      },
-      {
+        tone: 'blue',
+        action: 'phones'
+      });
+    }
+
+    metrics.push({
         label: 'Таймер',
         value: this.timerState(),
         icon: 'timer',
         tone: 'yellow'
+    });
+
+    return metrics;
+  });
+  readonly sectionTabs = computed<OperatorSectionTab[]>(() => {
+    const board = this.board();
+    return [
+      {
+        key: 'queue',
+        label: 'К выдаче',
+        value: String(board?.queueTotal ?? 0),
+        icon: 'support_agent'
+      },
+      {
+        key: 'sent',
+        label: 'Отправленные',
+        value: String(board?.sentTotal ?? 0),
+        icon: 'outgoing_mail'
       }
     ];
   });
@@ -147,9 +196,11 @@ export class OperatorBoardComponent {
     this.operatorApi.getBoard({
       keyword: this.keyword(),
       pageNumber: this.pageNumber(),
-      pageSize: this.pageSize()
+      pageSize: this.pageSize(),
+      section: this.activeSection()
     }).subscribe({
       next: (board) => {
+        this.activeSection.set(board.section ?? this.activeSection());
         this.board.set(board);
         this.mergeCommentDrafts(board);
         this.bindModalOpen.set(board.requireDeviceId);
@@ -172,6 +223,16 @@ export class OperatorBoardComponent {
   clearSearch(): void {
     this.keyword.set('');
     this.search();
+  }
+
+  setSection(section: OperatorBoardSection): void {
+    if (this.activeSection() === section) {
+      return;
+    }
+
+    this.activeSection.set(section);
+    this.pageNumber.set(0);
+    this.loadBoard();
   }
 
   changePageSize(value: string | number): void {
@@ -209,7 +270,12 @@ export class OperatorBoardComponent {
   }
 
   handleMetricClick(metric: OperatorMetric): void {
-    if (metric.label === 'Телефон' || metric.label === 'Таймер') {
+    if (metric.section) {
+      this.setSection(metric.section);
+      return;
+    }
+
+    if (metric.action === 'phones') {
       this.openPhones();
       return;
     }
@@ -250,7 +316,7 @@ export class OperatorBoardComponent {
         const message = this.errorMessage(err, 'Не удалось привязать телефон');
         this.bindError.set(message);
         this.bindSaving.set(false);
-        this.toastService.error('Телефон не привязан', message);
+        this.toastService.error(this.deviceTokenErrorTitle(message), message);
       }
     });
   }
@@ -274,8 +340,18 @@ export class OperatorBoardComponent {
     return `https://wa.me/${lead.telephoneLead}`;
   }
 
-  companyUrl(lead: LeadItem): string {
-    return this.legacyUrl(`/companies/new_company_to_operator/${lead.id}`);
+  openCompanyCreate(lead: LeadItem): void {
+    this.companyCreateLead.set(lead);
+  }
+
+  closeCompanyCreate(): void {
+    this.companyCreateLead.set(null);
+  }
+
+  handleCompanyCreated(result: CompanyCreateResult): void {
+    this.companyCreateLead.set(null);
+    this.toastService.success('Компания создана', result.title || `#${result.companyId ?? ''}`);
+    this.loadBoard();
   }
 
   actionLabel(action: OperatorAction): string {
@@ -290,6 +366,10 @@ export class OperatorBoardComponent {
       send: 'send',
       toWork: 'swap_horiz'
     }[action];
+  }
+
+  actionsForLead(lead: LeadItem): OperatorAction[] {
+    return this.isSentLead(lead) ? ['toWork'] : ['send', 'toWork'];
   }
 
   runAction(lead: LeadItem, action: OperatorAction): void {
@@ -336,6 +416,10 @@ export class OperatorBoardComponent {
     return metric.label;
   }
 
+  trackSection(_index: number, tab: OperatorSectionTab): string {
+    return tab.key;
+  }
+
   trackMobileLink(_index: number, link: MobileNavLink): string {
     return link.label;
   }
@@ -368,6 +452,10 @@ export class OperatorBoardComponent {
     }
 
     return board.timerExpired ? 'готов' : 'пауза';
+  }
+
+  private isSentLead(lead: LeadItem): boolean {
+    return lead.lidStatus === 'Отправленный' || lead.lidStatus === 'К рассылке';
   }
 
   private mergeCommentDrafts(board: OperatorBoard): void {
@@ -406,11 +494,11 @@ export class OperatorBoardComponent {
     window.setTimeout(() => this.copied.set(null), 1400);
   }
 
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
-  }
-
   private errorMessage(err: unknown, fallback: string): string {
     return apiErrorMessage(err, fallback);
+  }
+
+  private deviceTokenErrorTitle(message: string): string {
+    return message.toLowerCase().includes('токен') ? 'Токен уже есть' : 'Телефон не привязан';
   }
 }

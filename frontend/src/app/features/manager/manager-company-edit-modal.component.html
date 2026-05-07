@@ -191,9 +191,9 @@
               <div class="company-edit-list">
                 @for (filial of company.filials; track filial.id) {
                   <div class="company-edit-row">
-                    <a [href]="filialEditUrl(filial.id)" target="_blank" rel="noopener">
+                    <span>
                       {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
-                    </a>
+                    </span>
                     <div class="company-edit-row-actions">
                       <button
                         type="button"

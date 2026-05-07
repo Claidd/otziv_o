@@ -195,7 +195,7 @@
         {{ workerLabel() }}
       </a>
     } @else {
-      <a [href]="orderEditUrl()" [title]="order.workerUserFio || 'Специалист не назначен'">
+      <a [routerLink]="['/manager/orders', order.companyId, order.id]" [title]="order.workerUserFio || 'Специалист не назначен'">
         {{ workerLabel() }}
       </a>
     }

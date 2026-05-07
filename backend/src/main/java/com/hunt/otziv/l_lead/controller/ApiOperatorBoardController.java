@@ -17,6 +17,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.User;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,9 @@ import java.util.List;
 @RequestMapping("/api/operator")
 public class ApiOperatorBoardController {
 
+    private static final String SECTION_QUEUE = "queue";
+    private static final String SECTION_SENT = "sent";
+
     private final LeadService leadService;
     private final PromoTextService promoTextService;
     private final DeviceTokenService deviceTokenService;
@@ -59,6 +63,7 @@ public class ApiOperatorBoardController {
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(defaultValue = SECTION_QUEUE) String section,
             Principal principal,
             Authentication authentication
     ) {
@@ -66,24 +71,36 @@ public class ApiOperatorBoardController {
             int normalizedPage = Math.max(pageNumber, 0);
             int normalizedSize = Math.max(1, Math.min(pageSize, 50));
             String normalizedKeyword = keyword == null ? "" : keyword.trim();
+            String normalizedSection = normalizeSection(section);
             LocalDateTime now = LocalDateTime.now();
 
             TelephoneIDAndTimeDTO telephone = resolveTelephone(token);
             boolean requireDeviceId = telephone == null || telephone.getTelephoneID() == null;
             boolean timerExpired = isTimerExpired(telephone, now);
-            Page<LeadDTO> leads = Page.empty(PageRequest.of(normalizedPage, normalizedSize));
+            Page<LeadDTO> queueLeads = Page.empty(PageRequest.of(normalizedPage, normalizedSize));
+            Page<LeadDTO> sentLeads = Page.empty(PageRequest.of(normalizedPage, normalizedSize));
 
             if (!requireDeviceId) {
-                leads = loadLeads(
+                queueLeads = loadQueueLeads(
                         telephone.getTelephoneID(),
+                        telephone.getOperatorID(),
                         normalizedKeyword,
-                        normalizedPage,
-                        normalizedSize,
+                        SECTION_QUEUE.equals(normalizedSection) ? normalizedPage : 0,
+                        SECTION_QUEUE.equals(normalizedSection) ? normalizedSize : 1,
                         timerExpired,
                         principal,
                         authentication
                 );
+                sentLeads = loadSentLeads(
+                        telephone.getOperatorID(),
+                        normalizedKeyword,
+                        SECTION_SENT.equals(normalizedSection) ? normalizedPage : 0,
+                        SECTION_SENT.equals(normalizedSection) ? normalizedSize : 1,
+                        principal
+                );
             }
+
+            Page<LeadDTO> leads = SECTION_SENT.equals(normalizedSection) ? sentLeads : queueLeads;
 
             return new OperatorBoardResponse(
                     toPageResponse(leads),
@@ -93,7 +110,10 @@ public class ApiOperatorBoardController {
                     telephone != null ? telephone.getTelephoneID() : null,
                     telephone != null ? telephone.getOperatorID() : null,
                     telephone != null ? telephone.getTime() : null,
-                    timerExpired
+                    timerExpired,
+                    normalizedSection,
+                    queueLeads.getTotalElements(),
+                    sentLeads.getTotalElements()
             );
         });
     }
@@ -107,7 +127,9 @@ public class ApiOperatorBoardController {
     ) {
         try {
             deviceTokenService.createDeviceToken(request.telephoneId(), response);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (EntityNotFoundException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось найти телефон", ex);
         }
     }
@@ -144,8 +166,9 @@ public class ApiOperatorBoardController {
         return telephone != null && (telephone.getTime() == null || !telephone.getTime().isAfter(now));
     }
 
-    private Page<LeadDTO> loadLeads(
+    private Page<LeadDTO> loadQueueLeads(
             Long telephoneId,
+            Long operatorId,
             String keyword,
             int pageNumber,
             int pageSize,
@@ -165,11 +188,21 @@ public class ApiOperatorBoardController {
         }
 
         if (hasAnyRole(authentication, "ROLE_OPERATOR")) {
-            if (hasKeyword || timerExpired) {
+            if (hasKeyword && operatorId != null) {
+                return leadService.searchOperatorQueueAndSentLeads(
+                        operatorId,
+                        telephoneId,
+                        keyword,
+                        principal,
+                        pageNumber,
+                        pageSize
+                );
+            }
+            if (timerExpired) {
                 return leadService.getAllLeadsToOperator(
                         telephoneId,
                         LeadStatus.NEW.title,
-                        hasKeyword ? keyword : "",
+                        "",
                         principal,
                         pageNumber,
                         pageSize
@@ -178,6 +211,26 @@ public class ApiOperatorBoardController {
         }
 
         return Page.empty(PageRequest.of(pageNumber, pageSize));
+    }
+
+    private Page<LeadDTO> loadSentLeads(
+            Long operatorId,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            Principal principal
+    ) {
+        if (operatorId == null) {
+            return Page.empty(PageRequest.of(pageNumber, pageSize));
+        }
+        return leadService.getOperatorSentLeads(operatorId, keyword, principal, pageNumber, pageSize);
+    }
+
+    private String normalizeSection(String section) {
+        if (section == null || section.isBlank()) {
+            return SECTION_QUEUE;
+        }
+        return SECTION_SENT.equals(section.trim()) ? SECTION_SENT : SECTION_QUEUE;
     }
 
     private LeadPageResponse toPageResponse(Page<LeadDTO> page) {
@@ -208,6 +261,7 @@ public class ApiOperatorBoardController {
                 lead.getDateNewTry(),
                 lead.isOffer(),
                 lead.getOperatorId(),
+                lead.getTelephoneId(),
                 toPerson(lead.getOperator()),
                 toPerson(lead.getManager()),
                 toPerson(lead.getMarketolog())

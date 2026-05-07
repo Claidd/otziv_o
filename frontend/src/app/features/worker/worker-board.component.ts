@@ -36,7 +36,8 @@ import {
   trackWorkerReview,
   trackWorkerSection,
   workerErrorMessage,
-  workerLegacyUrl,
+  workerOrderDetailsPath,
+  workerReviewDetailsPath,
   workerOrderReviewCopyText,
   workerReviewCopyLabel,
   workerSectionLabel
@@ -75,8 +76,6 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
   readonly pageSizeOptions = WORKER_PAGE_SIZE_OPTIONS;
-  readonly addBotUrl = workerLegacyUrl('/bots/bot_add');
-  readonly botListUrl = workerLegacyUrl('/worker/bot_list');
 
   readonly board = signal<WorkerBoard | null>(null);
   readonly activeSection = signal<WorkerSection>('new');
@@ -542,15 +541,15 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   orderEditUrl(order: OrderCardItem): string {
-    return workerLegacyUrl(`/ordersCompany/ordersDetails/${order.companyId}/${order.id}`);
+    return workerOrderDetailsPath(order);
   }
 
   reviewEditUrl(review: WorkerReviewItem): string {
-    return workerLegacyUrl(`/review/editReview/${review.sourceReviewId ?? review.id}`);
+    return workerReviewDetailsPath(review);
   }
 
   botEditUrl(bot: WorkerBotItem): string {
-    return workerLegacyUrl(`/bots/edit/${bot.id}`);
+    return `/admin/dictionaries?botId=${bot.id}`;
   }
 
   trackSection(_index: number, section: SectionTab): WorkerSection {

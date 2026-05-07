@@ -7,7 +7,6 @@ import {
   managerCompanyFilialUrl,
   managerCompanyOrderUrl,
   managerErrorMessage,
-  managerFilialEditUrl,
   managerHasMeaningfulNote,
   managerLayoutTitle,
   managerOptionLabel,
@@ -133,18 +132,17 @@ describe('manager-board config helpers', () => {
     ].join('\n'));
   });
 
-  it('keeps note, chat and legacy URL helpers stable', () => {
+  it('keeps note, chat and Angular URL helpers stable', () => {
     expect(managerHasMeaningfulNote('нет заметок')).toBe(false);
     expect(managerHasMeaningfulNote(' полезно ')).toBe(true);
     expect(managerCompanyChatUrl(company({ urlChat: 'https://chat' }))).toBe('https://chat');
     expect(managerCompanyChatUrl(company({ urlChat: undefined, telephone: '+7000' }))).toBe('tel:+7000');
     expect(managerOrderChatUrl(order({ companyUrlChat: undefined, companyTelephone: '+7111' }))).toBe('tel:+7111');
     expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: 'https://filial' }))).toBe('https://filial');
-    expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: undefined }))).toContain('/companies/editCompany/9');
-    expect(managerCompanyOrderUrl(company({ id: 9 }))).toContain('/ordersCompany/9');
-    expect(managerFilialEditUrl(4)).toContain('/filial/edit/4');
-    expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toContain('/ordersCompany/ordersDetails/9/4');
-    expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toContain('/ordersDetails/9/4');
+    expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: undefined }))).toBe('');
+    expect(managerCompanyOrderUrl(company({ id: 9 }))).toBe('/manager?companyId=9');
+    expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
+    expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
   });
 
   it('extracts API error messages and tracks lists by stable identifiers', () => {

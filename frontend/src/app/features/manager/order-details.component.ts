@@ -4,7 +4,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
-import { appEnvironment } from '../../core/app-environment';
 import { AuthService } from '../../core/auth.service';
 import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
@@ -797,10 +796,6 @@ export class OrderDetailsComponent {
     });
   }
 
-  reviewEditUrl(review: OrderReviewItem): string {
-    return this.legacyUrl(`/review/editReview/${review.id}`);
-  }
-
   editAllReviewsRoute(): unknown[] {
     const details = this.details();
     return details?.orderDetailsId ? ['/review/editReviews', details.orderDetailsId] : ['/manager'];
@@ -908,10 +903,6 @@ export class OrderDetailsComponent {
     } catch {
       this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
     }
-  }
-
-  private legacyUrl(path: string): string {
-    return `${appEnvironment.legacyBaseUrl}${path}`;
   }
 
   private reviewFieldKey(review: OrderReviewItem, field: ReviewEditableField): string {

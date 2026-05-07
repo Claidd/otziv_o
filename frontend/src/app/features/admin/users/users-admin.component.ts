@@ -155,7 +155,7 @@ export class UsersAdminComponent implements OnDestroy {
     }
 
     const imageId = this.selectedUser()?.imageId;
-    return imageId ? `${appEnvironment.legacyBaseUrl}/images/${imageId}` : null;
+    return imageId ? `${appEnvironment.backendBaseUrl}/images/${imageId}` : null;
   });
 
   readonly form = this.fb.nonNullable.group({
