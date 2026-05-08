@@ -48,7 +48,12 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
                     previousCounter,
                     actualPublished);
 
-            log.warn("Счетчик заказа автоматически исправлен: {}", msg);
+            if (isExpectedSingleReviewChange(previousCounter, actualPublished)) {
+                log.info("Счетчик заказа синхронизирован после изменения публикации: {}", msg);
+                return;
+            }
+
+            log.warn("Счетчик заказа автоматически исправлен после расхождения: {}", msg);
 
             try {
                 emailService.sendSimpleEmail(
@@ -60,6 +65,10 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
                 log.warn("Не удалось отправить уведомление об исправлении счетчика заказа {}", order.getId(), e);
             }
         }
+    }
+
+    private boolean isExpectedSingleReviewChange(int previousCounter, int actualPublished) {
+        return Math.abs(actualPublished - previousCounter) == 1;
     }
 
     @Override

@@ -185,11 +185,13 @@
             >
               <div class="review-text-box">
                 <textarea
+                  #reviewTextArea
                   [readonly]="!isReviewFieldEditing(review, 'text')"
                   [ngModel]="reviewFieldValue(review, 'text')"
+                  [style.border-color]="isMobileReviewTextPreview(review) ? '#f4c542' : null"
                   (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
-                  (focus)="startReviewFieldEdit(review, 'text')"
-                  (click)="startReviewFieldEdit(review, 'text')"
+                  (pointerdown)="onReviewTextPointerDown($event, review)"
+                  (focus)="onReviewTextFocus($event, review)"
                   aria-label="Текст отзыва"
                   placeholder="Текст отзыва"
                 ></textarea>
@@ -200,9 +202,9 @@
                     role="button"
                     tabindex="0"
                     [attr.aria-expanded]="isReviewTextExpanded(review)"
-                    (click)="toggleReviewText(review)"
-                    (keydown.enter)="toggleReviewText(review)"
-                    (keydown.space)="$event.preventDefault(); toggleReviewText(review)"
+                    (click)="toggleReviewText(review, reviewTextArea)"
+                    (keydown.enter)="toggleReviewText(review, reviewTextArea)"
+                    (keydown.space)="$event.preventDefault(); toggleReviewText(review, reviewTextArea)"
                   >
                     {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
                   </span>
@@ -808,7 +810,7 @@
 
             <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDeleteReviews()">
               @if (canDeleteReviews()) {
-                <button type="button" class="danger" (click)="deleteReviewEdit()" [disabled]="reviewEditBusy()">
+                <button type="button" class="danger review-delete-action" (click)="deleteReviewEdit()" [disabled]="reviewEditBusy()">
                   {{ reviewEditDeleting() ? 'Удаляю...' : 'Удалить' }}
                 </button>
               }
@@ -832,6 +834,7 @@
                 </button>
                 <button
                   type="submit"
+                  class="review-save-action"
                   [disabled]="reviewEditBusy() || reviewEditForm.invalid"
                 >
                   {{ reviewEditSaving() ? 'Сохраняю...' : 'Сохранить' }}

@@ -123,7 +123,7 @@ public class ReviewBotChangeService {
                 : Set.of();
 
         Bot selectedBot = botService.claimNewAccountForCity(city, excludedBotIds)
-                .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Сменить Имя Фамилию\" в городе 325"));
+                .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Впиши Имя Фамилию\" в городе 325"));
 
         review.setBot(selectedBot);
         review.setVigul(false);

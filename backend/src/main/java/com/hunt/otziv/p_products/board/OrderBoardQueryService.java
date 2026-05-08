@@ -242,7 +242,10 @@ public class OrderBoardQueryService {
         Sort changedSort = "asc".equalsIgnoreCase(sortDirection)
                 ? Sort.by("changed").descending()
                 : Sort.by("changed").ascending();
-        Sort sort = Sort.by("waitingForClient").ascending().and(changedSort);
+        Sort idSort = "asc".equalsIgnoreCase(sortDirection)
+                ? Sort.by("id").descending()
+                : Sort.by("id").ascending();
+        Sort sort = Sort.by("waitingForClient").ascending().and(changedSort).and(idSort);
         return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
     }
 

@@ -108,7 +108,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN FETCH o.manager m
         LEFT JOIN FETCH m.user
         WHERE o.id IN :orderId
-        ORDER BY o.changed DESC
+        ORDER BY o.changed DESC, o.id DESC
     """)
     List<Order> findAll(@Param("orderId") List<Long> orderId);
 
@@ -159,7 +159,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN w.user wu
         LEFT JOIN o.manager m
         WHERE o.id IN :orderId
-        ORDER BY o.changed DESC
+        ORDER BY o.changed DESC, o.id DESC
     """)
     List<Object[]> findOrderListRows(@Param("orderId") List<Long> orderId);
 
@@ -173,7 +173,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Object[]> countByWorkerIdsAndStatus(@Param("workerIds") List<Long> workerIds,
                                              @Param("status") String status);
 
-    @Query("SELECT o.id FROM Order o ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o ORDER BY o.changed, o.id")
     List<Long> findAllIdToAdmin();
 
     @Query(
@@ -182,7 +182,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     )
     Page<Long> findPageIdToAdmin(Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed, o.id")
     List<Long> findAllIdToManager(@Param("manager") Manager manager);
 
     @Query(
@@ -192,7 +192,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Page<Long> findPageIdToManager(@Param("manager") Manager manager,
                                    Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed, o.id")
     List<Long> findAllIdToWorker(@Param("worker") Worker worker);
 
     @Query(
@@ -200,14 +200,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 SELECT o.id
                 FROM Order o
                 WHERE o.worker = :worker
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
             """,
             countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker"
     )
     Page<Long> findPageIdToWorkerForBoard(@Param("worker") Worker worker,
                                           Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers ORDER BY o.changed, o.id")
     List<Long> findAllIdToOwner(@Param("managers") List<Manager> managers);
 
     @Query(
@@ -217,7 +217,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Page<Long> findPageIdToOwner(@Param("managers") List<Manager> managers,
                                  Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.status.title = :status ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByStatus(@Param("status") String status);
 
     @Query(
@@ -227,7 +227,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Page<Long> findPageIdByStatus(@Param("status") String status,
                                   Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.manager = :manager AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByManagerAndStatus(@Param("manager") Manager manager,
                                            @Param("status") String status);
 
@@ -239,7 +239,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                             @Param("status") String status,
                                             Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.worker = :worker AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByWorkerAndStatus(@Param("worker") Worker worker,
                                           @Param("status") String status);
 
@@ -251,7 +251,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                            @Param("status") String status,
                                            Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") List<Manager> managers,
                                          @Param("status") String status);
 
@@ -263,7 +263,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                           @Param("status") String status,
                                           Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers AND o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByOwnerAndStatus(@Param("managers") Set<Manager> managers,
                                          @Param("status") String status);
 
@@ -272,7 +272,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
            OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByKeyWord(@Param("keyword") String keyword,
                                   @Param("keyword2") String keyword2);
@@ -301,7 +301,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.manager = :manager
           AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
            OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByByManagerAndKeyWord(@Param("manager") Manager manager,
                                               @Param("keyword") String keyword,
@@ -334,7 +334,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.worker = :worker
           AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
            OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByByWorkerAndKeyWord(@Param("worker") Worker worker,
                                              @Param("keyword") String keyword,
@@ -347,7 +347,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -368,7 +368,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE (o.manager IN :managers
           AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
             OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByOwnerAndKeyWord(@Param("managers") List<Manager> managers,
                                           @Param("keyword") String keyword,
@@ -400,7 +400,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
            OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByKeyWordAndStatus(@Param("keyword") String keyword,
                                            @Param("status") String status,
@@ -433,7 +433,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.manager = :manager
           AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
            OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByManagerAndKeyWordAndStatus(@Param("manager") Manager manager,
                                                      @Param("keyword") String keyword,
@@ -470,7 +470,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.worker = :worker
           AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
            OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByWorkerAndKeyWordAndStatus(@Param("worker") Worker worker,
                                                     @Param("keyword") String keyword,
@@ -506,7 +506,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
            OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByOwnerAndKeyWordAndStatus(@Param("managers") List<Manager> managers,
                                                    @Param("keyword") String keyword,
@@ -535,7 +535,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                     @Param("status2") String status2,
                                                     Pageable pageable);
 
-    @Query("SELECT o.id FROM Order o WHERE o.company.id = :companyId ORDER BY o.changed")
+    @Query("SELECT o.id FROM Order o WHERE o.company.id = :companyId ORDER BY o.changed, o.id")
     List<Long> findAllIdByCompanyId(@Param("companyId") long companyId);
 
     @Query(
@@ -597,7 +597,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.company.id = :companyId
           AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
            OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
-        ORDER BY o.changed
+        ORDER BY o.changed, o.id
     """)
     List<Long> findAllIdByCompanyIdAndKeyWord(@Param("companyId") long companyId,
                                               @Param("keyword") String keyword,
@@ -758,6 +758,21 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByActionableStatusAndWorker(@Param("worker") Worker worker);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.worker = :worker
+          AND o.waitingForClient = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND COALESCE(s.title, '') IN :statuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndWorkerChangedOnOrBefore(@Param("worker") Worker worker,
+                                                                            @Param("statuses") Set<String> statuses,
+                                                                            @Param("cutoff") LocalDate cutoff);
 
     @Query("SELECT COUNT(o.id) FROM Order o")
     int countAllOrders();

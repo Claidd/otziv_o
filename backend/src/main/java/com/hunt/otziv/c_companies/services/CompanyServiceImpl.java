@@ -330,8 +330,8 @@ public class CompanyServiceImpl implements CompanyService{
 
     private Pageable companyPageable(int pageNumber, int pageSize, String sortDirection) {
         Sort sort = "asc".equalsIgnoreCase(sortDirection)
-                ? Sort.by("updateStatus").descending()
-                : Sort.by("updateStatus").ascending();
+                ? Sort.by("updateStatus").descending().and(Sort.by("id").descending())
+                : Sort.by("updateStatus").ascending().and(Sort.by("id").ascending());
         return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
     }
 
@@ -342,7 +342,11 @@ public class CompanyServiceImpl implements CompanyService{
 
     private Page<CompanyListDTO> getPage(List<Company> companyPage, int pageNumber, int pageSize, String sortDirection) {
         List<Company> sortedCompanies = sortCompaniesByDaysWithoutChanges(companyPage, sortDirection);
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Pageable pageable = PageRequest.of(
+                pageNumber,
+                pageSize,
+                Sort.by("updateStatus").descending().and(Sort.by("id").descending())
+        );
         int start = (int)pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), sortedCompanies.size());
         List<CompanyListDTO> companyListDTOs = sortedCompanies.subList(start, end)
@@ -359,7 +363,11 @@ public class CompanyServiceImpl implements CompanyService{
 
     private Page<CompanyListDTO> getPageIsAfter(List<Company> companyPage, int pageNumber, int pageSize, String sortDirection) {
         List<Company> sortedCompanies = sortCompaniesByDaysWithoutChanges(companyPage, sortDirection);
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("updateStatus").descending());
+        Pageable pageable = PageRequest.of(
+                pageNumber,
+                pageSize,
+                Sort.by("updateStatus").descending().and(Sort.by("id").descending())
+        );
         int start = (int)pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), sortedCompanies.size());
         List<CompanyListDTO> companyListDTOs = sortedCompanies.subList(start, end)
@@ -377,6 +385,9 @@ public class CompanyServiceImpl implements CompanyService{
 
         Comparator<Company> comparator = Comparator.comparing(
                 Company::getUpdateStatus,
+                Comparator.nullsLast(Comparator.naturalOrder())
+        ).thenComparing(
+                Company::getId,
                 Comparator.nullsLast(Comparator.naturalOrder())
         );
 

@@ -65,6 +65,12 @@ public interface OrderService {
 
     Map<String, Integer> countActionableOrdersByStatusToWorker(Worker worker);
 
+    Map<String, Integer> countActionableOrdersByStatusToWorkerChangedOnOrBefore(
+            Worker worker,
+            Set<String> statuses,
+            LocalDate cutoff
+    );
+
     int countAllOrders();
 
     int countAllOrdersToManager(Manager manager);

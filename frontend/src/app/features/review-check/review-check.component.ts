@@ -66,6 +66,7 @@ export class ReviewCheckComponent {
   readonly sideNoteDrafts = signal<Partial<Record<SideNoteField, string>>>({});
   readonly savedSideNoteField = signal<SideNoteField | null>(null);
   readonly expandedReviewId = signal<number | null>(null);
+  readonly mobilePreviewReviewTextId = signal<number | null>(null);
   readonly activeReviewSlide = signal(0);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
@@ -248,13 +249,94 @@ export class ReviewCheckComponent {
     return this.isExpanded(review) || this.isReviewFieldEditing(review, 'text');
   }
 
-  toggleReviewText(review: ReviewCheckReview): void {
+  toggleReviewText(review: ReviewCheckReview, textarea?: HTMLTextAreaElement): void {
+    if (this.isMobileReviewLayout() && !this.isReviewFieldEditing(review, 'text')) {
+      if (this.isExpanded(review)) {
+        this.collapseReviewTextPreview(review, textarea);
+        return;
+      }
+
+      this.activateMobileReviewTextPreview(review, textarea);
+      return;
+    }
+
     if (this.isExpanded(review)) {
       this.collapseReview();
       return;
     }
 
     this.expandReview(review.id);
+  }
+
+  isMobileReviewTextPreview(review: ReviewCheckReview): boolean {
+    return this.mobilePreviewReviewTextId() === review.id && !this.isReviewFieldEditing(review, 'text');
+  }
+
+  onReviewTextPointerDown(event: PointerEvent, review: ReviewCheckReview): void {
+    if (!this.isMobileReviewLayout() || this.isReviewFieldEditing(review, 'text')) {
+      return;
+    }
+
+    const textarea = event.currentTarget as HTMLTextAreaElement;
+    if (!this.isMobileReviewTextPreview(review)) {
+      event.preventDefault();
+      this.activateMobileReviewTextPreview(review, textarea);
+      textarea.blur();
+      return;
+    }
+
+    this.startReviewFieldEdit(review, 'text');
+    if (this.isReviewFieldEditing(review, 'text')) {
+      textarea.readOnly = false;
+    }
+  }
+
+  onReviewTextFocus(event: FocusEvent, review: ReviewCheckReview): void {
+    if (this.isMobileReviewLayout()) {
+      if (!this.isReviewFieldEditing(review, 'text')) {
+        (event.currentTarget as HTMLTextAreaElement).blur();
+      }
+      return;
+    }
+
+    this.startReviewFieldEdit(review, 'text');
+  }
+
+  isMobileReviewLayout(): boolean {
+    return typeof window !== 'undefined' && window.innerWidth <= 860;
+  }
+
+  private activateMobileReviewTextPreview(review: ReviewCheckReview, textarea?: HTMLTextAreaElement): void {
+    this.mobilePreviewReviewTextId.set(review.id);
+    this.expandReview(review.id);
+    this.expandReviewTextAreaToContent(textarea);
+  }
+
+  private collapseReviewTextPreview(review: ReviewCheckReview, textarea?: HTMLTextAreaElement): void {
+    if (this.mobilePreviewReviewTextId() === review.id) {
+      this.mobilePreviewReviewTextId.set(null);
+    }
+
+    this.collapseReview();
+    this.resetReviewTextAreaHeight(textarea);
+  }
+
+  private expandReviewTextAreaToContent(textarea?: HTMLTextAreaElement): void {
+    if (!textarea) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const currentHeight = textarea.getBoundingClientRect().height;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.ceil(Math.max(currentHeight, textarea.scrollHeight))}px`;
+    });
+  }
+
+  private resetReviewTextAreaHeight(textarea?: HTMLTextAreaElement): void {
+    if (textarea) {
+      textarea.style.height = '';
+    }
   }
 
   onReviewCarouselScroll(event: Event): void {
@@ -326,6 +408,9 @@ export class ReviewCheckComponent {
 
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(fieldKey);
+    if (field === 'text' && this.mobilePreviewReviewTextId() === review.id) {
+      this.mobilePreviewReviewTextId.set(null);
+    }
   }
 
   cancelReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {

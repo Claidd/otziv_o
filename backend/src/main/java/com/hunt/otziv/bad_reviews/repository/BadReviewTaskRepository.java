@@ -27,7 +27,7 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
         LEFT JOIN FETCH t.bot b
         LEFT JOIN FETCH b.status
         WHERE t.order.id = :orderId
-        ORDER BY t.created DESC
+        ORDER BY t.created DESC, t.id DESC
     """)
     List<BadReviewTask> findAllByOrderIdOrderByCreatedDesc(@Param("orderId") Long orderId);
 

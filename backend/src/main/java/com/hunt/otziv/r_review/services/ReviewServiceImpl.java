@@ -43,8 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.security.Principal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -552,7 +552,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     private Page<ReviewDTOOne> getPageReviews(List<Review> reviewPage, int pageNumber, int pageSize) {
         if (reviewPage.isEmpty()) {
-            Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
+            Pageable pageable = PageRequest.of(pageNumber, pageSize, reviewPublishedDateSortDescending());
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
@@ -566,14 +566,14 @@ public class ReviewServiceImpl implements ReviewService {
             pageNumber = 0;
         }
 
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("publishedDate").descending());
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, reviewPublishedDateSortDescending());
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), totalElements);
 
         if (start >= totalElements) {
             start = 0;
             end = Math.min(pageSize, totalElements);
-            pageable = PageRequest.of(0, pageSize, Sort.by("publishedDate").descending());
+            pageable = PageRequest.of(0, pageSize, reviewPublishedDateSortDescending());
         }
 
         List<ReviewDTOOne> reviewDTOOnes = reviewPage.subList(start, end)
@@ -602,6 +602,10 @@ public class ReviewServiceImpl implements ReviewService {
         return Comparator
                 .comparing(Review::getPublishedDate, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Review::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    private Sort reviewPublishedDateSortDescending() {
+        return Sort.by("publishedDate").descending().and(Sort.by("id").descending());
     }
 
     public boolean hasActiveNagulReviews(Principal principal) {
@@ -949,7 +953,7 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации (1–6 дней, растяжка по диапазону)");
+        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации без суббот и дублей");
 
         try {
             OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
@@ -972,43 +976,13 @@ public class ReviewServiceImpl implements ReviewService {
             int totalReviews = orderDetailsDTO.getReviews().size();
             int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
             LocalDate endDate = startDate.plusDays(monthsNeeded * 28L - 1);
-            long totalDays = ChronoUnit.DAYS.between(startDate, endDate);
 
             ThreadLocalRandom random = ThreadLocalRandom.current();
-            List<Long> offsets = new ArrayList<>();
-
-            offsets.add(random.nextLong(0, Math.min(3, totalDays + 1)));
-
-            if (totalReviews > 1) {
-                offsets.add(totalDays - random.nextLong(0, Math.min(3, totalDays + 1)));
-            }
-
-            while (offsets.size() < totalReviews) {
-                long offset = random.nextLong(0, totalDays + 1);
-                if (!offsets.contains(offset)) {
-                    offsets.add(offset);
-                }
-            }
-
-            Collections.sort(offsets);
-
-            for (int i = 1; i < offsets.size(); i++) {
-                long prev = offsets.get(i - 1);
-                long current = offsets.get(i);
-                long gap = current - prev;
-
-                if (gap < 1) {
-                    offsets.set(i, prev + 1);
-                } else if (gap > 6) {
-                    offsets.set(i, prev + 6);
-                }
-            }
-
-            Collections.sort(offsets);
+            List<LocalDate> publishDates = randomPublicationDates(startDate, endDate, totalReviews, random);
 
             for (int i = 0; i < totalReviews; i++) {
                 ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
-                LocalDate publishDate = startDate.plusDays(offsets.get(i));
+                LocalDate publishDate = publishDates.get(i);
                 checkUpdateReview(reviewDTO, publishDate);
                 log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
             }
@@ -1024,6 +998,45 @@ public class ReviewServiceImpl implements ReviewService {
             log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
             return false;
         }
+    }
+
+    private List<LocalDate> randomPublicationDates(
+            LocalDate startDate,
+            LocalDate initialEndDate,
+            int totalReviews,
+            ThreadLocalRandom random
+    ) {
+        LocalDate endDate = initialEndDate;
+        List<LocalDate> candidates = publicationDateCandidates(startDate, endDate);
+
+        while (candidates.size() < totalReviews) {
+            endDate = endDate.plusWeeks(1);
+            candidates = publicationDateCandidates(startDate, endDate);
+        }
+
+        List<LocalDate> selectedDates = new ArrayList<>();
+        for (int i = 0; i < totalReviews; i++) {
+            int fromIndex = (int) ((long) i * candidates.size() / totalReviews);
+            int toIndex = (int) (((long) (i + 1) * candidates.size() / totalReviews) - 1);
+            selectedDates.add(candidates.get(random.nextInt(fromIndex, toIndex + 1)));
+        }
+
+        Collections.sort(selectedDates);
+        return selectedDates;
+    }
+
+    private List<LocalDate> publicationDateCandidates(LocalDate startDate, LocalDate endDate) {
+        List<LocalDate> candidates = new ArrayList<>();
+        LocalDate date = startDate;
+
+        while (!date.isAfter(endDate)) {
+            if (date.getDayOfWeek() != DayOfWeek.SATURDAY) {
+                candidates.add(date);
+            }
+            date = date.plusDays(1);
+        }
+
+        return candidates;
     }
 
     private LocalDate getLocalDate(int botCounter) {
@@ -1242,7 +1255,7 @@ public class ReviewServiceImpl implements ReviewService {
         int totalElements = reviewPage.size();
 
         if (totalElements == 0) {
-            Pageable pageable = PageRequest.of(0, pageSize, Sort.by("publishedDate").descending());
+            Pageable pageable = PageRequest.of(0, pageSize, reviewPublishedDateSortDescending());
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
@@ -1259,7 +1272,7 @@ public class ReviewServiceImpl implements ReviewService {
             correctedPageNumber = 0;
         }
 
-        Pageable pageable = PageRequest.of(correctedPageNumber, pageSize, Sort.by("publishedDate").descending());
+        Pageable pageable = PageRequest.of(correctedPageNumber, pageSize, reviewPublishedDateSortDescending());
         int start = correctedPageNumber * pageSize;
         int end = Math.min(start + pageSize, totalElements);
 

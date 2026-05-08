@@ -148,7 +148,7 @@ class ReviewBotChangeServiceTest {
         City city = city(9L, "Иркутск");
         Filial filial = filial(11L, city);
         Bot currentBot = bot(5L, "Старый Бот", 0);
-        Bot selectedBot = bot(88L, "Сменить Имя Фамилию", 99);
+        Bot selectedBot = bot(88L, "Впиши Имя Фамилию", 99);
         Review review = new Review();
         review.setFilial(filial);
         review.setBot(currentBot);

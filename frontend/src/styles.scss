@@ -1113,6 +1113,23 @@ app-worker-board .bot-line--empty span {
   width: min(56rem, 100%);
 }
 
+app-order-details .review-edit-modal .review-delete-action {
+  flex: 0 0 auto;
+  min-width: 6.8rem;
+  min-height: 2.05rem;
+  padding: 0 0.75rem;
+  border-radius: 0.65rem;
+  font-size: 0.74rem;
+}
+
+app-order-details .review-edit-modal .lead-edit-actions-group {
+  flex: 1 1 auto;
+}
+
+app-order-details .review-edit-modal .review-save-action {
+  min-width: 10rem;
+}
+
 :is(app-order-details, app-worker-board) .review-edit-check {
   display: grid;
   min-height: 2.25rem;
@@ -1425,9 +1442,8 @@ app-worker-board .bot-line--empty span {
   }
 
   app-admin-layout .admin-layout .admin-sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 60;
+    position: static;
+    z-index: auto;
     height: auto;
     overflow: visible;
     isolation: isolate;
@@ -1449,12 +1465,21 @@ app-worker-board .bot-line--empty span {
     min-height: 0;
     flex-direction: row;
     margin-top: 0;
+    max-height: none;
     overflow-x: auto;
+    overflow-y: hidden;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
     border-radius: 0.8rem;
     background: var(--otziv-white);
+  }
+
+  app-admin-layout .admin-layout .sidebar-card:hover,
+  app-admin-layout .admin-layout .sidebar-card:focus-within {
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   app-admin-layout .admin-layout .sidebar-card a {
@@ -1856,6 +1881,33 @@ app-worker-board .bot-line--empty span {
 
   :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div:first-child {
     grid-template-columns: 1fr;
+  }
+
+  app-order-details .review-edit-modal .lead-edit-actions.lead-edit-actions--split {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 0.65rem;
+  }
+
+  app-order-details .review-edit-modal .review-delete-action {
+    justify-self: start;
+    width: auto;
+    min-width: 0;
+    min-height: 2.05rem;
+    padding: 0 0.72rem;
+  }
+
+  app-order-details .review-edit-modal .lead-edit-actions-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  app-order-details .review-edit-modal .review-save-action {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
 }

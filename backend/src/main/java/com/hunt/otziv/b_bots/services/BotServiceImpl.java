@@ -31,7 +31,7 @@ public class BotServiceImpl implements BotService {
     private static final List<Long> RESERVE_BOT_CITY_IDS = List.of(0L, 325L);
     private static final Set<Long> RESERVE_BOT_TARGET_CITY_DENYLIST = Set.of(320L, 326L);
     private static final long NEW_ACCOUNT_SOURCE_CITY_ID = 325L;
-    private static final String NEW_ACCOUNT_NAME = "Сменить Имя Фамилию";
+    private static final String NEW_ACCOUNT_NAME = "Впиши Имя Фамилию";
     private static final List<String> RESERVE_BOT_NAMES = List.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",

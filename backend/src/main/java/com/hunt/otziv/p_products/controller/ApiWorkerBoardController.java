@@ -20,6 +20,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -79,6 +80,14 @@ public class ApiWorkerBoardController {
     private static final String ORDER_STATUS_NEW = "Новый";
     private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
+    private static final int WORKER_FLOW_BLOCKING_UNCHANGED_DAYS = 1;
+    private static final Set<String> WORKER_FLOW_ORDER_STATUSES = Set.of(
+            ORDER_STATUS_NEW,
+            ORDER_STATUS_CORRECT
+    );
+    private static final String WORKER_FLOW_BLOCK_MESSAGE = "В разделах \"Новые\" или \"Коррекция\" есть заказы без изменений 1 день или больше. "
+            + "Публикация и раздел \"Все\" откроются, когда в \"Новых\" и \"Коррекции\" не останется активных заказов. "
+            + "Заказы, которые ждут клиента, переход не блокируют";
     private static final Set<String> CLIENT_WAITING_ORDER_STATUSES = Set.of(ORDER_STATUS_NEW, ORDER_STATUS_CORRECT);
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
@@ -109,6 +118,7 @@ public class ApiWorkerBoardController {
     private final BadReviewTaskService badReviewTaskService;
     private final UserMetricSnapshotService metricSnapshotService;
     private final AppSettingService appSettingService;
+    private final WorkerFlowLockService workerFlowLockService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -510,13 +520,7 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
-        PageRequest pageable = PageRequest.of(
-                pageNumber,
-                pageSize,
-                "asc".equals(sortDirection)
-                        ? Sort.by("scheduledDate").ascending()
-                        : Sort.by("scheduledDate").descending()
-        );
+        PageRequest pageable = PageRequest.of(pageNumber, pageSize, badReviewTaskSort(sortDirection));
         LocalDate date = LocalDate.now();
 
         if (hasRole(authentication, "ADMIN")) {
@@ -636,6 +640,7 @@ public class ApiWorkerBoardController {
         metrics.add(reviewMetric(reviewCounts, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
         metrics.add(new WorkerMetricResponse("Плохие", badTaskCount, "money_off", "gray", SECTION_BAD));
         metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
+        syncWorkerFlowLockFromMetrics(principal, authentication, orderCounts);
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
                 principal,
@@ -655,6 +660,27 @@ public class ApiWorkerBoardController {
                         0
                 )))
                 .toList();
+    }
+
+    private void syncWorkerFlowLockFromMetrics(
+            Principal principal,
+            Authentication authentication,
+            Map<String, Integer> orderCounts
+    ) {
+        if (!isWorkerFlowRestricted(authentication)) {
+            return;
+        }
+
+        Worker worker = resolveWorker(principal);
+        int flowOrders = countStatus(orderCounts, ORDER_STATUS_NEW) + countStatus(orderCounts, ORDER_STATUS_CORRECT);
+        boolean hasFlowOrders = flowOrders > 0;
+
+        workerFlowLockService.syncPublicationLock(
+                workerFlowLockKey(worker, principal),
+                workerId(worker),
+                hasFlowOrders,
+                hasFlowOrders && hasStaleWorkerFlowOrders(worker)
+        );
     }
 
     private int countBadReviewTasks(Principal principal, Authentication authentication) {
@@ -1003,36 +1029,58 @@ public class ApiWorkerBoardController {
             return null;
         }
 
-        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
-        if (SECTION_CORRECT.equals(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
-            return new WorkerFlowRedirect(
-                    SECTION_NEW,
-                    "Сначала завершите активные заказы в разделе \"Новые\". Заказы, которые ждут клиента, переход не блокируют"
-            );
+        if (!isPublishOrAll(requestedSection)) {
+            return null;
         }
 
-        if (isPublishOrAll(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
-            return new WorkerFlowRedirect(
-                    SECTION_NEW,
-                    "Сначала завершите активные заказы в разделе \"Новые\". Заказы, которые ждут клиента, переход не блокируют"
-            );
+        Worker worker = resolveWorker(principal);
+        Map<String, Integer> orderCounts = orderService.countActionableOrdersByStatusToWorker(worker);
+        int newOrders = countStatus(orderCounts, ORDER_STATUS_NEW);
+        int correctionOrders = countStatus(orderCounts, ORDER_STATUS_CORRECT);
+        String lockKey = workerFlowLockKey(worker, principal);
+        boolean hasFlowOrders = newOrders + correctionOrders > 0;
+
+        if (!hasFlowOrders) {
+            workerFlowLockService.syncPublicationLock(lockKey, workerId(worker), false, false);
+            return null;
         }
 
-        if (isPublishOrAll(requestedSection) && countStatus(orderCounts, ORDER_STATUS_CORRECT) > 0) {
-            return new WorkerFlowRedirect(
-                    SECTION_CORRECT,
-                    "Сначала завершите активные заказы в разделе \"Коррекция\". Заказы, которые ждут клиента, переход не блокируют"
-            );
+        if (!workerFlowLockService.syncPublicationLock(
+                lockKey,
+                workerId(worker),
+                true,
+                hasStaleWorkerFlowOrders(worker)
+        )) {
+            return null;
         }
 
-        if (isPublishOrAll(requestedSection) && reviewService.hasActiveNagulReviews(principal)) {
-            return new WorkerFlowRedirect(
-                    SECTION_NAGUL,
-                    "Есть не выгулянные аккаунты. Публикация и раздел \"Все\" доступны после выгула всех отзывов"
-            );
+        if (newOrders > 0) {
+            return new WorkerFlowRedirect(SECTION_NEW, WORKER_FLOW_BLOCK_MESSAGE);
         }
 
-        return null;
+        return new WorkerFlowRedirect(SECTION_CORRECT, WORKER_FLOW_BLOCK_MESSAGE);
+    }
+
+    private boolean hasStaleWorkerFlowOrders(Worker worker) {
+        Map<String, Integer> staleCounts = orderService.countActionableOrdersByStatusToWorkerChangedOnOrBefore(
+                worker,
+                WORKER_FLOW_ORDER_STATUSES,
+                LocalDate.now().minusDays(WORKER_FLOW_BLOCKING_UNCHANGED_DAYS)
+        );
+
+        return countStatus(staleCounts, ORDER_STATUS_NEW) + countStatus(staleCounts, ORDER_STATUS_CORRECT) > 0;
+    }
+
+    private Long workerId(Worker worker) {
+        return worker == null ? null : worker.getId();
+    }
+
+    private String workerFlowLockKey(Worker worker, Principal principal) {
+        if (worker != null && worker.getId() != null) {
+            return "worker:" + worker.getId();
+        }
+
+        return "principal:" + (principal == null ? "" : principal.getName());
     }
 
     private boolean isWorkerFlowRestricted(Authentication authentication) {
@@ -1093,8 +1141,14 @@ public class ApiWorkerBoardController {
 
     private Sort reviewSort(String sortDirection) {
         return "asc".equals(sortDirection)
-                ? Sort.by("publishedDate").ascending()
-                : Sort.by("publishedDate").descending();
+                ? Sort.by("publishedDate").ascending().and(Sort.by("id").ascending())
+                : Sort.by("publishedDate").descending().and(Sort.by("id").descending());
+    }
+
+    private Sort badReviewTaskSort(String sortDirection) {
+        return "asc".equals(sortDirection)
+                ? Sort.by("scheduledDate").ascending().and(Sort.by("id").ascending())
+                : Sort.by("scheduledDate").descending().and(Sort.by("id").descending());
     }
 
     private String normalizeSection(String section) {
@@ -1204,9 +1258,7 @@ public class ApiWorkerBoardController {
         int start = correctedPageNumber * pageSize;
         int end = Math.min(start + pageSize, totalElements);
         List<ReviewDTOOne> content = start >= totalElements ? List.of() : reviews.subList(start, end);
-        Sort sort = "asc".equals(sortDirection)
-                ? Sort.by("publishedDate").ascending()
-                : Sort.by("publishedDate").descending();
+        Sort sort = reviewSort(sortDirection);
 
         return new PageImpl<>(content, PageRequest.of(correctedPageNumber, pageSize, sort), totalElements);
     }

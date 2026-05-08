@@ -192,6 +192,7 @@ public class SecurityConfig {
         auth.requestMatchers(
                 HttpMethod.POST,
                 "/api/manager/orders/*/reviews/*/change-bot",
+                "/api/manager/orders/*/reviews/*/new-account",
                 "/api/manager/orders/*/reviews/*/bots/*/deactivate"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");

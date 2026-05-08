@@ -48,6 +48,7 @@ export class OrderDetailsComponent {
   readonly reviewFieldDrafts = signal<Record<string, string>>({});
   readonly savedReviewFieldKey = signal<string | null>(null);
   readonly expandedReviewTextIds = signal<Record<number, boolean>>({});
+  readonly mobilePreviewReviewTextId = signal<number | null>(null);
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly savedReviewNoteId = signal<number | null>(null);
@@ -167,6 +168,9 @@ export class OrderDetailsComponent {
 
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(key);
+    if (field === 'text' && this.mobilePreviewReviewTextId() === review.id) {
+      this.mobilePreviewReviewTextId.set(null);
+    }
     this.reviewFieldDrafts.update((drafts) => {
       if (key in drafts) {
         return drafts;
@@ -260,11 +264,98 @@ export class OrderDetailsComponent {
     return this.isReviewTextExpanded(review) || this.isReviewFieldEditing(review, 'text');
   }
 
-  toggleReviewText(review: OrderReviewItem): void {
+  toggleReviewText(review: OrderReviewItem, textarea?: HTMLTextAreaElement): void {
+    if (this.isMobileReviewLayout() && !this.isReviewFieldEditing(review, 'text')) {
+      if (this.isReviewTextExpanded(review)) {
+        this.collapseReviewTextPreview(review, textarea);
+        return;
+      }
+
+      this.activateMobileReviewTextPreview(review, textarea);
+      return;
+    }
+
     this.expandedReviewTextIds.update((items) => ({
       ...items,
       [review.id]: !items[review.id]
     }));
+  }
+
+  isMobileReviewTextPreview(review: OrderReviewItem): boolean {
+    return this.mobilePreviewReviewTextId() === review.id && !this.isReviewFieldEditing(review, 'text');
+  }
+
+  onReviewTextPointerDown(event: PointerEvent, review: OrderReviewItem): void {
+    if (!this.isMobileReviewLayout() || this.isReviewFieldEditing(review, 'text')) {
+      return;
+    }
+
+    const textarea = event.currentTarget as HTMLTextAreaElement;
+    if (!this.isMobileReviewTextPreview(review)) {
+      event.preventDefault();
+      this.activateMobileReviewTextPreview(review, textarea);
+      textarea.blur();
+      return;
+    }
+
+    this.startReviewFieldEdit(review, 'text');
+    if (this.isReviewFieldEditing(review, 'text')) {
+      textarea.readOnly = false;
+    }
+  }
+
+  onReviewTextFocus(event: FocusEvent, review: OrderReviewItem): void {
+    if (this.isMobileReviewLayout()) {
+      if (!this.isReviewFieldEditing(review, 'text')) {
+        (event.currentTarget as HTMLTextAreaElement).blur();
+      }
+      return;
+    }
+
+    this.startReviewFieldEdit(review, 'text');
+  }
+
+  isMobileReviewLayout(): boolean {
+    return typeof window !== 'undefined' && window.innerWidth <= 860;
+  }
+
+  private activateMobileReviewTextPreview(review: OrderReviewItem, textarea?: HTMLTextAreaElement): void {
+    this.mobilePreviewReviewTextId.set(review.id);
+    this.expandedReviewTextIds.update((items) => ({
+      ...items,
+      [review.id]: true
+    }));
+    this.expandReviewTextAreaToContent(textarea);
+  }
+
+  private collapseReviewTextPreview(review: OrderReviewItem, textarea?: HTMLTextAreaElement): void {
+    if (this.mobilePreviewReviewTextId() === review.id) {
+      this.mobilePreviewReviewTextId.set(null);
+    }
+
+    this.expandedReviewTextIds.update((items) => ({
+      ...items,
+      [review.id]: false
+    }));
+    this.resetReviewTextAreaHeight(textarea);
+  }
+
+  private expandReviewTextAreaToContent(textarea?: HTMLTextAreaElement): void {
+    if (!textarea) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const currentHeight = textarea.getBoundingClientRect().height;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.ceil(Math.max(currentHeight, textarea.scrollHeight))}px`;
+    });
+  }
+
+  private resetReviewTextAreaHeight(textarea?: HTMLTextAreaElement): void {
+    if (textarea) {
+      textarea.style.height = '';
+    }
   }
 
   onReviewCarouselScroll(event: Event): void {

@@ -1,0 +1,5 @@
+ARG RUNTIME_IMAGE=otziv-app:prod-local
+FROM ${RUNTIME_IMAGE}
+
+WORKDIR /app
+COPY otziv-1.jar /app/app.jar

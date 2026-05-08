@@ -76,6 +76,9 @@ class OrderStatisticsServiceTest {
         assertTrue(service.countActionableOrdersByStatusToManager(null).isEmpty());
         assertTrue(service.countActionableOrdersByStatusToOwner(Set.of()).isEmpty());
         assertTrue(service.countActionableOrdersByStatusToWorker(null).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToWorkerChangedOnOrBefore(null, Set.of("Новый"), LocalDate.now()).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToWorkerChangedOnOrBefore(new Worker(), Set.of(), LocalDate.now()).isEmpty());
+        assertTrue(service.countActionableOrdersByStatusToWorkerChangedOnOrBefore(new Worker(), Set.of("Новый"), null).isEmpty());
         assertEquals(0, service.countAllOrdersToManager(null));
         assertEquals(0, service.countAllOrdersToOwner(Set.of()));
         assertEquals(0, service.countOrdersByWorker(null));
@@ -94,6 +97,27 @@ class OrderStatisticsServiceTest {
         Map<Long, Integer> result = service.countOrdersByWorkerIdsAndStatus(workerIds, "Публикация");
 
         assertEquals(Map.of(10L, 4, 20L, 7), result);
+    }
+
+    @Test
+    void countActionableOrdersByStatusToWorkerChangedOnOrBeforeUsesScopedRepository() {
+        OrderStatisticsService service = service();
+        Worker worker = new Worker();
+        Set<String> statuses = Set.of("Новый", "Коррекция");
+        LocalDate cutoff = LocalDate.of(2026, 5, 7);
+
+        when(orderRepository.countGroupedByActionableStatusAndWorkerChangedOnOrBefore(worker, statuses, cutoff))
+                .thenReturn(List.of(new Object[]{"Новый", 2L}, new Object[]{"Коррекция", 1L}));
+
+        Map<String, Integer> result = service.countActionableOrdersByStatusToWorkerChangedOnOrBefore(
+                worker,
+                statuses,
+                cutoff
+        );
+
+        assertEquals(2, result.get("Новый"));
+        assertEquals(1, result.get("Коррекция"));
+        verify(orderRepository).countGroupedByActionableStatusAndWorkerChangedOnOrBefore(worker, statuses, cutoff);
     }
 
     @Test

@@ -302,6 +302,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Map<String, Integer> countActionableOrdersByStatusToWorkerChangedOnOrBefore(
+            Worker worker,
+            Set<String> statuses,
+            LocalDate cutoff
+    ) {
+        return orderStatisticsService.countActionableOrdersByStatusToWorkerChangedOnOrBefore(worker, statuses, cutoff);
+    }
+
+    @Override
     public int countAllOrders() {
         return orderStatisticsService.countAllOrders();
     }

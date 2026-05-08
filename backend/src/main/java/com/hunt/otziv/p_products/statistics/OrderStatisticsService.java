@@ -103,6 +103,22 @@ public class OrderStatisticsService {
         return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndWorker(worker));
     }
 
+    public Map<String, Integer> countActionableOrdersByStatusToWorkerChangedOnOrBefore(
+            Worker worker,
+            Set<String> statuses,
+            LocalDate cutoff
+    ) {
+        if (worker == null || statuses == null || statuses.isEmpty() || cutoff == null) {
+            return Map.of();
+        }
+
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndWorkerChangedOnOrBefore(
+                worker,
+                statuses,
+                cutoff
+        ));
+    }
+
     public int countAllOrders() {
         return orderRepository.countAllOrders();
     }

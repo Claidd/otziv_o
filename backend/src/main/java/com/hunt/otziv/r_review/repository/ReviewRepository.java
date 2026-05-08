@@ -346,7 +346,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         LEFT JOIN FETCH o.manager om
         LEFT JOIN FETCH om.user
         WHERE r.id IN :reviewId
-        ORDER BY r.changed
+        ORDER BY r.changed, r.id
     """)
     List<Review> findAll(@Param("reviewId") List<Long> reviewId);
 
