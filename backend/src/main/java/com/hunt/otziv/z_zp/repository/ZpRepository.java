@@ -74,18 +74,29 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 //    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);
 
 
-    @Query("""
-    SELECT 
-        u.fio, 
-        COALESCE(SUM(z.sum), 0) AS totalSum, 
-        (SELECT MIN(r.name) FROM Role r JOIN r.users ru WHERE ru.id = u.id) AS role, 
-        COUNT(DISTINCT z.id) AS totalOrders, 
-        COALESCE(SUM(z.amount), 0) AS totalAmount
-    FROM User u
-    LEFT JOIN Zp z ON u.id = z.userId AND z.created BETWEEN :startDate AND :endDate
-    GROUP BY u.fio, u.id
-    ORDER BY totalSum DESC
-""")
+    @Query(value = """
+        SELECT
+            u.fio AS fio,
+            COALESCE(z.total_sum, 0) AS totalSum,
+            MIN(r.name) AS role,
+            COALESCE(z.total_orders, 0) AS totalOrders,
+            COALESCE(z.total_amount, 0) AS totalAmount
+        FROM users u
+        LEFT JOIN (
+            SELECT
+                zp_user,
+                SUM(zp_sum) AS total_sum,
+                COUNT(DISTINCT zp_id) AS total_orders,
+                SUM(zp_amount) AS total_amount
+            FROM zp
+            WHERE zp_date BETWEEN :startDate AND :endDate
+            GROUP BY zp_user
+        ) z ON z.zp_user = u.id
+        LEFT JOIN users_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles r ON r.id = ur.role_id
+        GROUP BY u.id, u.fio, z.total_sum, z.total_orders, z.total_amount
+        ORDER BY totalSum DESC
+    """, nativeQuery = true)
     List<Object[]> findAllUsersWithZpToDate(@Param("startDate") LocalDate startDate,
                                             @Param("endDate") LocalDate endDate);
 

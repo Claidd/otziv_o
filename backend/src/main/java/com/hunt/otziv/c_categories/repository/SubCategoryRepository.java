@@ -16,5 +16,6 @@ public interface SubCategoryRepository extends CrudRepository<SubCategory, Long>
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {"category"})
     List<SubCategory> findAll();
 
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {"category"})
     List<SubCategory> findAllByCategoryId(Long categoryId);
 }

@@ -5,8 +5,10 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -27,9 +29,76 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Query("""
         SELECT DISTINCT o
         FROM Order o
+        LEFT JOIN FETCH o.details d
+        LEFT JOIN FETCH d.product
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.categoryCompany
+        LEFT JOIN FETCH c.subCategory
+        LEFT JOIN FETCH c.status
+        LEFT JOIN FETCH c.manager cm
+        LEFT JOIN FETCH cm.user
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        WHERE o.id = :orderId
+    """)
+    Optional<Order> findByIdForOrderDto(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.details d
+        LEFT JOIN FETCH d.product
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.categoryCompany
+        LEFT JOIN FETCH c.subCategory
+        LEFT JOIN FETCH c.status
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        WHERE o.id = :orderId
+    """)
+    Optional<Order> findByIdForMutation(@Param("orderId") Long orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :orderId")
+    Optional<Order> findByIdForCounterUpdate(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.workers cw
+        LEFT JOIN FETCH cw.user
+        WHERE o.id = :orderId
+    """)
+    Optional<Order> findByIdWithCompanyWorkers(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.filial cf
+        LEFT JOIN FETCH cf.city
+        WHERE o.id = :orderId
+    """)
+    Optional<Order> findByIdWithCompanyFilials(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
         LEFT JOIN FETCH o.details
         LEFT JOIN FETCH o.status
-        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
         LEFT JOIN FETCH o.company c
         LEFT JOIN FETCH c.categoryCompany
         LEFT JOIN FETCH c.subCategory
@@ -52,6 +121,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             c.commentsCompany,
             f.title,
             f.url,
+            city.title,
             s.title,
             o.sum,
             c.urlChat,
@@ -81,6 +151,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.details d
         LEFT JOIN o.status s
         LEFT JOIN o.filial f
+        LEFT JOIN f.city city
         LEFT JOIN o.company c
         LEFT JOIN c.categoryCompany cat
         LEFT JOIN c.subCategory sub
@@ -505,7 +576,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN FETCH o.status s
         LEFT JOIN FETCH o.company
-        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
         WHERE o.company.id = :companyId
           AND ((:filialId IS NULL AND o.filial IS NULL) OR (:filialId IS NOT NULL AND o.filial.id = :filialId))
           AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
@@ -559,7 +631,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByStatus();
 
@@ -568,7 +640,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.waitingForClient = false
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByActionableStatus();
 
@@ -580,7 +652,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
           AND o.changed IS NOT NULL
           AND o.changed <= :cutoff
           AND COALESCE(s.title, '') NOT IN :excludedStatuses
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> summarizeOverdueOrders(@Param("cutoff") LocalDate cutoff,
                                           @Param("excludedStatuses") Set<String> excludedStatuses);
@@ -594,7 +666,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
           AND o.changed <= :cutoff
           AND o.manager = :manager
           AND COALESCE(s.title, '') NOT IN :excludedStatuses
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> summarizeOverdueOrdersByManager(@Param("manager") Manager manager,
                                                    @Param("cutoff") LocalDate cutoff,
@@ -609,18 +681,33 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
           AND o.changed <= :cutoff
           AND o.manager IN :managers
           AND COALESCE(s.title, '') NOT IN :excludedStatuses
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> summarizeOverdueOrdersByManagers(@Param("managers") Set<Manager> managers,
                                                     @Param("cutoff") LocalDate cutoff,
                                                     @Param("excludedStatuses") Set<String> excludedStatuses);
 
     @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.worker = :worker
+          AND COALESCE(s.title, '') NOT IN :excludedStatuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> summarizeOverdueOrdersByWorker(@Param("worker") Worker worker,
+                                                  @Param("cutoff") LocalDate cutoff,
+                                                  @Param("excludedStatuses") Set<String> excludedStatuses);
+
+    @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.manager = :manager
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByStatusAndManager(@Param("manager") Manager manager);
 
@@ -630,7 +717,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.status s
         WHERE o.manager = :manager
           AND o.waitingForClient = false
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByActionableStatusAndManager(@Param("manager") Manager manager);
 
@@ -639,7 +726,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.manager IN :managers
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByStatusAndManagers(@Param("managers") Set<Manager> managers);
 
@@ -649,7 +736,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.status s
         WHERE o.manager IN :managers
           AND o.waitingForClient = false
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByActionableStatusAndManagers(@Param("managers") Set<Manager> managers);
 
@@ -658,7 +745,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.worker = :worker
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByStatusAndWorker(@Param("worker") Worker worker);
 
@@ -668,7 +755,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.status s
         WHERE o.worker = :worker
           AND o.waitingForClient = false
-        GROUP BY s.title
+        GROUP BY s.id, s.title
     """)
     List<Object[]> countGroupedByActionableStatusAndWorker(@Param("worker") Worker worker);
 

@@ -96,6 +96,7 @@ describe('WorkerReviewEditModalComponent', () => {
     let closed = false;
     let submitted = false;
     let deleted = false;
+    let newAccountRequested = false;
     component.review = review();
     component.draft = draft();
     component.canDelete = true;
@@ -108,17 +109,22 @@ describe('WorkerReviewEditModalComponent', () => {
     component.deleted.subscribe(() => {
       deleted = true;
     });
+    component.newAccountRequested.subscribe(() => {
+      newAccountRequested = true;
+    });
 
     fixture.detectChanges();
     await fixture.whenStable();
 
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLButtonElement>('.lead-edit-close')?.click();
+    element.querySelector<HTMLButtonElement>('button.review-new-account')?.click();
     element.querySelector<HTMLButtonElement>('button.danger')?.click();
     element.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     expect(closed).toBe(true);
     expect(deleted).toBe(true);
+    expect(newAccountRequested).toBe(true);
     expect(submitted).toBe(true);
   });
 
@@ -140,5 +146,33 @@ describe('WorkerReviewEditModalComponent', () => {
 
     expect(change).toEqual({ field: 'botName', value: 'Bot 2' });
     expect(selectedFile).toBe(file);
+  });
+
+  it('lets limited workers only unset vigul', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    const component = fixture.componentInstance;
+    let change: WorkerReviewEditDraftChange | null = null;
+    component.review = review({ vigul: true });
+    component.draft = draft({ vigul: true });
+    component.canEditVigul = true;
+    component.canOnlyUnsetVigul = true;
+    component.draftChange.subscribe((event) => {
+      change = event;
+    });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const input = element.querySelector<HTMLInputElement>('input[name="reviewVigul"]');
+    expect(input).not.toBeNull();
+    expect(input?.disabled).toBe(false);
+
+    component.setField('vigul', false);
+    expect(change).toEqual({ field: 'vigul', value: false });
+
+    change = null;
+    component.setField('vigul', true);
+    expect(change).toBeNull();
   });
 });

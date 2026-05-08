@@ -38,9 +38,17 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         return orderDetailsRepository.save(orderDetails);
     } // Сохранить детали заказ в БД
 
+    @Transactional(readOnly = true)
     public OrderDetails getOrderDetailById(UUID orderDetailId){ // Взять детали по Id
-        return orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
+        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
     } // Взять детали по Id
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId) {
+        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
+    }
 
     @Override
     public void deleteOrderDetailsById(UUID orderDetailId) {
@@ -69,8 +77,9 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         log.info("Удалено {} деталей заказа ID: {}", deletedCount, orderId);
     }
 
+    @Transactional(readOnly = true)
     public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
-        return convertToDetailsDTO(orderDetailsRepository.findById(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
+        return convertToDetailsDTO(orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
     } // Взять детали дто по Id
 
     private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей в дто
@@ -80,8 +89,8 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .price(orderDetails.getPrice())
                 .publishedDate(orderDetails.getPublishedDate())
                 .product(convertToProductDTO(orderDetails.getProduct()))
-                .order(convertToOrderDTO(orderDetails.getOrder()))
-                .reviews(convertToReviewsDTOList(orderDetails.getReviews()))
+                .order(convertToOrderDTO(orderDetails.getOrder(), orderDetails.getId()))
+                .reviews(convertToReviewsDTOList(orderDetails.getReviews(), orderDetails.getId()))
                 .comment(orderDetails.getComment())
                 .workerFio(orderDetails.getReviews().getFirst().getWorker().getUser().getFio())
                 .companyComments(orderDetails.getOrder().getCompany().getCommentsCompany())
@@ -97,13 +106,13 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .price(product.getPrice())
                 .build();
     } // перевод продукта в дто
-    private OrderDTO convertToOrderDTO(Order order){ // перевод заказа в дто
+    private OrderDTO convertToOrderDTO(Order order, UUID orderDetailsId){ // перевод заказа в дто
         return OrderDTO.builder()
                 .id(order.getId())
                 .company(convertToCompanyDTO(order.getCompany()))
                 .amount(order.getAmount())
                 .counter(order.getCounter())
-                .orderDetailsId(order.getDetails().getFirst().getId())
+                .orderDetailsId(orderDetailsId)
                 .filial(convertToFilialDTO(order.getFilial()))
                 .build();
     } // перевод заказа в дто
@@ -121,10 +130,10 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .title(filial.getTitle())
                 .build();
     } // перевод компании в дто
-    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews){ // перевод отзыва в дто
-        return reviews.stream().map(this::convertToReviewsDTO).collect(Collectors.toList());
+    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews, UUID orderDetailsId){ // перевод отзыва в дто
+        return reviews.stream().map(review -> convertToReviewsDTO(review, orderDetailsId)).collect(Collectors.toList());
     } // перевод отзыва в дто
-    private ReviewDTO convertToReviewsDTO(Review review) {
+    private ReviewDTO convertToReviewsDTO(Review review, UUID orderDetailsId) {
         if (review == null) {
             return ReviewDTO.builder()
                     .id(null)
@@ -140,11 +149,6 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
             botId = review.getBot().getId();
             botName = review.getBot().getFio() != null ? review.getBot().getFio() : "Без имени";
             botLogin = review.getBot().getLogin();
-        }
-
-        UUID orderDetailsId = null;
-        if (review.getOrderDetails() != null && review.getOrderDetails().getId() != null) {
-            orderDetailsId = review.getOrderDetails().getId();
         }
 
         return ReviewDTO.builder()

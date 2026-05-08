@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -18,6 +19,37 @@ import java.util.Set;
 public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Override
     List<Company> findAll();
+
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        LEFT JOIN FETCH c.status
+        LEFT JOIN FETCH c.user
+        LEFT JOIN FETCH c.categoryCompany
+        LEFT JOIN FETCH c.subCategory
+        LEFT JOIN FETCH c.manager m
+        LEFT JOIN FETCH m.user
+        WHERE c.id = :companyId
+    """)
+    Optional<Company> findByIdForCompanyDto(@Param("companyId") Long companyId);
+
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        LEFT JOIN FETCH c.workers w
+        LEFT JOIN FETCH w.user
+        WHERE c.id = :companyId
+    """)
+    Optional<Company> findByIdWithWorkers(@Param("companyId") Long companyId);
+
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        LEFT JOIN FETCH c.filial f
+        LEFT JOIN FETCH f.city
+        WHERE c.id = :companyId
+    """)
+    Optional<Company> findByIdWithFilials(@Param("companyId") Long companyId);
 
 
     @Query("SELECT c FROM Company c LEFT JOIN FETCH c.status LEFT JOIN FETCH c.user LEFT JOIN FETCH c.filial LEFT JOIN FETCH c.manager ORDER BY c.updateStatus")
@@ -148,7 +180,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
 
 
-    @Query("SELECT c FROM Company c LEFT JOIN FETCH c.status LEFT JOIN FETCH c.user LEFT JOIN FETCH c.filial LEFT JOIN FETCH c.manager m JOIN FETCH m.user WHERE c.id IN :companyId  ORDER BY c.updateStatus")
+    @Query("SELECT DISTINCT c FROM Company c LEFT JOIN FETCH c.status LEFT JOIN FETCH c.user LEFT JOIN FETCH c.filial f LEFT JOIN FETCH f.city LEFT JOIN FETCH c.manager m JOIN FETCH m.user WHERE c.id IN :companyId ORDER BY c.updateStatus")
     List<Company> findAll(List<Long> companyId);
 
 

@@ -11,6 +11,7 @@ import {
   managerLayoutTitle,
   managerOptionLabel,
   managerOrderActions,
+  managerOrderPaymentCopyText,
   managerOrderChatUrl,
   managerOrderDetailsUrl,
   managerOrderInfoUrl,
@@ -121,14 +122,31 @@ describe('manager-board config helpers', () => {
     );
 
     expect(firstText).toBe([
+      'Company',
+      '',
       'Здравствуйте, это тексты на проверку. Нажмите «РАЗРЕШИТЬ ПУБЛИКАЦИЮ».',
       '',
       'Ссылка на проверку отзывов: https://o-ogo.ru/uuid-1'
     ].join('\n'));
     expect(repeatText).toBe([
+      'Company',
+      '',
       'Повторный текст из промо',
       '',
       'Ссылка на проверку отзывов: https://o-ogo.ru/uuid-2'
+    ].join('\n'));
+  });
+
+  it('builds payment copy text with company and filial before the bill body', () => {
+    expect(managerOrderPaymentCopyText(order({
+      companyTitle: 'Бюро переводов',
+      filialTitle: 'Пушкина, 70',
+      managerPayText: 'Здравствуйте, ваш заказ выполнен, просьба оплатить.',
+      sum: 1000
+    }), 1000)).toBe([
+      'Бюро переводов - Пушкина, 70',
+      '',
+      'Здравствуйте, ваш заказ выполнен, просьба оплатить. К оплате: 1000 руб.'
     ].join('\n'));
   });
 
@@ -140,7 +158,8 @@ describe('manager-board config helpers', () => {
     expect(managerOrderChatUrl(order({ companyUrlChat: undefined, companyTelephone: '+7111' }))).toBe('tel:+7111');
     expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: 'https://filial' }))).toBe('https://filial');
     expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: undefined }))).toBe('');
-    expect(managerCompanyOrderUrl(company({ id: 9 }))).toBe('/manager?companyId=9');
+    expect(managerCompanyOrderUrl(company({ id: 9 })))
+      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5&companyId=9&companyTitle=Company');
     expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
     expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
   });

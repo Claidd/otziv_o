@@ -93,7 +93,7 @@ public class AdminController {
         }
 
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+            List<Manager> managerList = userService.findManagersByUserName(principal.getName()).stream().toList();
             List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
             // Получение списка всех маркетологов
             List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();
@@ -143,7 +143,7 @@ public class AdminController {
         }
 
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+            List<Manager> managerList = userService.findManagersByUserName(principal.getName()).stream().toList();
             List<Manager> managerList2 = personalService.findAllManagersWorkers(managerList);
             // Получение списка всех маркетологов
             List<Marketolog> allMarketologs = managerList2.stream().flatMap(manager -> manager.getUser().getMarketologs().stream()).toList();

@@ -26,6 +26,7 @@ import java.util.Optional;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.CONFLICT;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @Service
 @RequiredArgsConstructor
@@ -174,6 +175,12 @@ public class KeycloakAdminClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == NOT_FOUND.value()) {
+                throw new ResponseStatusException(NOT_FOUND, "Keycloak user not found", e);
+            }
+            if (e.getStatusCode().value() == CONFLICT.value()) {
+                throw new ResponseStatusException(CONFLICT, "Keycloak user update conflicts with existing account", e);
+            }
             throw keycloakException("Failed to update Keycloak user", e);
         }
     }

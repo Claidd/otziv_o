@@ -323,14 +323,13 @@
 
 .review-field-editor--text textarea {
   padding-bottom: 1.95rem;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .review-field-editor--text.expanded textarea {
-  height: auto;
+  height: 14rem;
   min-height: 14rem;
-  overflow: hidden;
-  field-sizing: content;
+  overflow: auto;
 }
 
 .review-text-toggle {
@@ -803,7 +802,7 @@
   }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1320px) {
   .review-check-workspace {
     --review-card-height: 23.2rem;
     --review-card-gap-x: 1rem;
@@ -920,6 +919,7 @@
   }
 
   .review-field-editor--text.expanded textarea {
+    height: 19rem;
     min-height: 19rem;
   }
 
@@ -966,6 +966,7 @@
   }
 
   .review-field-editor--text.expanded textarea {
+    height: 20rem;
     min-height: 20rem;
   }
 

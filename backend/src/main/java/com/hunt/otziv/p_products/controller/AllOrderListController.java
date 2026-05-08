@@ -133,7 +133,7 @@ public class AllOrderListController {
             model.addAttribute("on_work", createCheckNotificationToManagerCompany(manager,"В работе"));
         }
         if (ROLE_OWNER.equals(userRole)){
-            Set<Manager> managerList = userService.findByUserName(principal.getName()).orElseThrow().getManagers();
+            Set<Manager> managerList = userService.findManagersByUserName(principal.getName());
             model.addAttribute("to_check", createCheckNotificationToOwner(managerList,"В проверку"));
             model.addAttribute("on_check", createCheckNotificationToOwner(managerList,"На проверке"));
             model.addAttribute("correct", createCheckNotificationToOwner(managerList,"Коррекция"));

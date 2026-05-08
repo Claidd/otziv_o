@@ -168,6 +168,14 @@ export class WorkerOrderCardComponent {
     return this.order.status === 'Новый' || this.order.status === 'Коррекция' || !!this.order.waitingForClient;
   }
 
+  isUnchangedAlert(): boolean {
+    return this.unchangedDays() >= 2;
+  }
+
+  unchangedDays(): number {
+    return Math.max(0, this.order.dayToChangeStatusAgo ?? 0);
+  }
+
   isWaitTone(): boolean {
     return this.statusTone() === 'wait';
   }

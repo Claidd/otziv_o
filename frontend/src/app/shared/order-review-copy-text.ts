@@ -24,7 +24,18 @@ export function orderReviewCopyText(order: OrderCardItem, promoTexts: string[]):
     ? firstOrderReviewPromoText(promoTexts) || defaultFirstOrderReviewText(order)
     : repeatOrderReviewPromoText(promoTexts) || DEFAULT_REPEAT_ORDER_REVIEW_TEXT;
 
-  return appendReviewLink(promoText, reviewLink(order));
+  return buildReviewCopyText(orderHeading(order), promoText, reviewLink(order));
+}
+
+export function orderPaymentCopyText(order: OrderCardItem, sum: number): string {
+  const paymentText = [
+    (order.managerPayText ?? '').trim(),
+    `К оплате: ${sum} руб.`
+  ].filter(Boolean).join(' ');
+
+  return [orderHeading(order), paymentText]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 function reviewLink(order: OrderCardItem): string {
@@ -34,9 +45,17 @@ function reviewLink(order: OrderCardItem): string {
   return `Ссылка на проверку отзывов: ${url}`;
 }
 
-function appendReviewLink(text: string, link: string): string {
-  const body = text.trim();
-  return body ? `${body}\n\n${link}` : link;
+function buildReviewCopyText(heading: string, text: string, link: string): string {
+  return [heading, text.trim(), link]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function orderHeading(order: OrderCardItem): string {
+  return [order.companyTitle, order.filialTitle]
+    .map((value) => (value ?? '').trim())
+    .filter(Boolean)
+    .join(' - ');
 }
 
 function repeatOrderReviewPromoText(texts: string[]): string {
@@ -72,14 +91,7 @@ function promoTextAt(texts: string[], index: number): string {
 }
 
 function defaultFirstOrderReviewText(order: OrderCardItem): string {
-  const companyLine = [order.companyTitle, order.filialTitle]
-    .map((value) => (value ?? '').trim())
-    .filter(Boolean)
-    .join('. ');
-
   return [
-    companyLine,
-    '',
     'Здравствуйте, это новые тексты на проверку. Проверьте, пожалуйста, их в течение трёх дней. Если проверка не будет завершена за этот срок, публикация начнётся АВТОМАТИЧЕСКИ. Для просмотра всех карточек сделайте свайп влево.',
     '',
     '    - Если замечаний нет, нажмите кнопку «РАЗРЕШИТЬ ПУБЛИКАЦИЮ».',
@@ -87,5 +99,5 @@ function defaultFirstOrderReviewText(order: OrderCardItem): string {
     '    - Если есть небольшие замечания, и вы можете отредактировать их вручную, внесите изменения и нажмите кнопку «СОХРАНИТЬ», а затем кнопку «РАЗРЕШИТЬ ПУБЛИКАЦИЮ».',
     '',
     '    - Если замечания существенные, опишите их в разделе «замечания» и нажмите кнопку «СОХРАНИТЬ», а затем кнопку «КОРРЕКТИРОВАТЬ».'
-  ].filter((value, index) => index !== 0 || !!value).join('\n');
+  ].join('\n');
 }

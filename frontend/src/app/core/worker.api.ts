@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
-import { OrderCardItem } from './manager.api';
+import { ManagerOverdueOrders, OrderCardItem } from './manager.api';
 
 export type WorkerSection = 'new' | 'correct' | 'nagul' | 'publish' | 'bad' | 'all';
 export type WorkerBoardSectionQuery = WorkerSection | 'current';
@@ -139,6 +139,10 @@ export class WorkerApi {
       .set('sortDirection', query.sortDirection ?? 'desc');
 
     return this.http.get<WorkerBoard>(`${appEnvironment.apiBaseUrl}/api/worker/board`, { params });
+  }
+
+  getOverdueOrders(): Observable<ManagerOverdueOrders> {
+    return this.http.get<ManagerOverdueOrders>(`${appEnvironment.apiBaseUrl}/api/worker/overdue-orders`);
   }
 
   updateOrderStatus(orderId: number, status: string): Observable<void> {

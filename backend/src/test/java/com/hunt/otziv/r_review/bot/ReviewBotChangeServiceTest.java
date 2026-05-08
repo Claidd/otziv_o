@@ -22,11 +22,14 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -112,13 +115,10 @@ class ReviewBotChangeServiceTest {
         Bot templateBot = bot(31L, "Впишите Имя Фамилию", 0);
         Bot regularBot = bot(32L, "Иван Петров", 0);
         Bot usedBot = bot(33L, "Петр Иванов", 0);
-        Review existingReview = new Review();
-        existingReview.setId(99L);
-        existingReview.setBot(usedBot);
 
         when(botService.getFindAllByFilialCityId(4L))
                 .thenReturn(List.of(templateBot, regularBot, usedBot));
-        when(reviewRepository.findAllByFilial(filial)).thenReturn(List.of(existingReview));
+        when(reviewRepository.findBotIdsByFilialIdExcludingReview(11L, 100L)).thenReturn(Set.of(33L));
         when(filialService.findByCityId(4L)).thenReturn(List.of(filial));
 
         List<Bot> bots = service.findAllBotsMinusFilial(review);
@@ -140,6 +140,48 @@ class ReviewBotChangeServiceTest {
 
         assertFalse(review.isVigul());
         verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void assignNewAccountClaimsAccountAndClearsVigulForRegularFilialCity() {
+        ReviewBotChangeService service = service();
+        City city = city(9L, "Иркутск");
+        Filial filial = filial(11L, city);
+        Bot currentBot = bot(5L, "Старый Бот", 0);
+        Bot selectedBot = bot(88L, "Сменить Имя Фамилию", 99);
+        Review review = new Review();
+        review.setFilial(filial);
+        review.setBot(currentBot);
+        review.setVigul(true);
+
+        when(reviewRepository.findByIdForBotChange(44L)).thenReturn(Optional.of(review));
+        when(botService.claimNewAccountForCity(same(city), eq(Set.of(5L)))).thenReturn(Optional.of(selectedBot));
+
+        service.assignNewAccount(44L);
+
+        assertSame(selectedBot, review.getBot());
+        assertFalse(review.isVigul());
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void assignNewAccountRejectsExcludedFilialCities() {
+        ReviewBotChangeService service = service();
+
+        for (Long cityId : List.of(320L, 326L)) {
+            City city = city(cityId, "Город " + cityId);
+            Filial filial = filial(12L + cityId, city);
+            Review review = new Review();
+            review.setFilial(filial);
+            Long reviewId = 45L + cityId;
+
+            when(reviewRepository.findByIdForBotChange(reviewId)).thenReturn(Optional.of(review));
+
+            RuntimeException exception = assertThrows(RuntimeException.class, () -> service.assignNewAccount(reviewId));
+
+            assertEquals("Новый аккаунт недоступен для филиалов с городом 320 или 326", exception.getMessage());
+        }
+        verify(botService, never()).claimNewAccountForCity(any(), anyCollection());
     }
 
     private ReviewBotChangeService service() {

@@ -68,7 +68,7 @@
                                 <span>Заметка отзыва</span>
                                 <textarea
                                   [name]="'review-note-' + review.id"
-                                  [readonly]="!isReviewNoteEditing(review)"
+                                  [readonly]="!canEditNotes(details)"
                                   [ngModel]="reviewNoteValue(review)"
                                   (ngModelChange)="setReviewNoteDraft(review.id, $event)"
                                   (focus)="startReviewNoteEdit(review)"
@@ -108,7 +108,7 @@
                                 <span>Заметка заказа</span>
                                 <textarea
                                   [name]="'order-note-' + review.id"
-                                  [readonly]="!isSideNoteEditing('order')"
+                                  [readonly]="!canEditNotes(details)"
                                   [ngModel]="reviewOrderNoteValue(details, review)"
                                   (ngModelChange)="setSideNoteDraft('order', $event)"
                                   (focus)="startSideNoteEdit(details, 'order')"
@@ -138,7 +138,7 @@
                                 <span>Заметка компании</span>
                                 <textarea
                                   [name]="'company-note-' + review.id"
-                                  [readonly]="!isSideNoteEditing('company')"
+                                  [readonly]="!canEditNotes(details)"
                                   [ngModel]="reviewCompanyNoteValue(details, review)"
                                   (ngModelChange)="setSideNoteDraft('company', $event)"
                                   (focus)="startSideNoteEdit(details, 'company')"
@@ -176,7 +176,7 @@
                     <div class="review-text-box">
                       <textarea
                         [name]="'text-' + review.id"
-                        [readonly]="!isReviewFieldEditing(review, 'text')"
+                        [readonly]="!details.permissions.canSave"
                         [ngModel]="reviewFieldValue(review, 'text')"
                         (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
                         (focus)="startReviewFieldEdit(review, 'text')"
@@ -231,7 +231,7 @@
                   <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
                     <textarea
                       [name]="'answer-' + review.id"
-                      [readonly]="!isReviewFieldEditing(review, 'answer')"
+                      [readonly]="!details.permissions.canSave"
                       [ngModel]="reviewFieldValue(review, 'answer')"
                       (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
                       (focus)="startReviewFieldEdit(review, 'answer')"
@@ -278,17 +278,50 @@
 
                   <footer>
                     <span>{{ reviewDate(review) }}</span>
-                    @if (isReviewWindowApproved(details)) {
-                      <span class="review-footer-state">{{ reviewFooterStateLabel(details) }}</span>
+                    @if (shouldShowReviewFooterState(details, review)) {
+                      <span
+                        class="review-footer-state"
+                        [style.color]="isReviewFooterStatePublished(details, review) ? '#5f9f86' : null"
+                      >
+                        {{ reviewFooterStateLabel(details, review) }}
+                      </span>
                     } @else if (needsReviewPhoto(review)) {
                       <span class="review-footer-state missing-photo-text">нужно фото</span>
                     }
                   </footer>
                 </article>
               }
+
+              @if (details.permissions.canApprovePublication) {
+                <article
+                  class="review-card review-approve-card details-actions"
+                  [class.approved]="isReviewWindowApproved(details)"
+                  aria-label="Разрешить публикацию"
+                >
+                  <button
+                    type="button"
+                    class="approve-publication-button"
+                    [class.approved]="isReviewWindowApproved(details)"
+                    (click)="approveReviews()"
+                    [disabled]="busy() || isReviewWindowApproved(details)"
+                    [attr.aria-label]="isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Разрешить публикацию'"
+                  >
+                    @if (isReviewWindowApproved(details)) {
+                      <span class="approve-card-title">Разрешена</span>
+                      <span class="material-icons-sharp approve-card-icon">check_circle</span>
+                      <span class="approve-card-footer">Публикация</span>
+                    } @else {
+                      <span class="approve-card-title">{{ isAction('approve') ? 'Разрешаю' : 'Нажмите' }}</span>
+                      <span class="material-icons-sharp approve-card-icon">add_circle</span>
+                      <span class="approve-card-helper">Чтобы</span>
+                      <span class="approve-card-footer">Разрешить публикацию</span>
+                    }
+                  </button>
+                </article>
+              }
             </section>
 
-            @if (details.reviews.length > 1) {
+            @if (reviewCarouselItemCount(details) > 1) {
               <span class="mobile-swipe-hint" aria-hidden="true">
                 <span class="material-icons-sharp">chevron_right</span>
               </span>
@@ -296,6 +329,9 @@
               <div class="review-carousel-dots" aria-hidden="true">
                 @for (dotReview of details.reviews; track trackReviewDot($index, dotReview); let i = $index) {
                   <span [class.active]="activeReviewSlide() === i"></span>
+                }
+                @if (details.permissions.canApprovePublication) {
+                  <span [class.active]="activeReviewSlide() === reviewApproveSlideIndex(details)"></span>
                 }
               </div>
             }
@@ -349,12 +385,38 @@
         </form>
       }
 
+      @if (activeReviewFieldEdit(); as edit) {
+        <section
+          class="mobile-review-save-bar"
+          [style.bottom]="mobileReviewActionBottom()"
+          role="group"
+          [attr.aria-label]="edit.title + ': действия редактирования'"
+        >
+          <button
+            type="button"
+            class="cancel"
+            (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+            [disabled]="isMutating(edit.mutationKey)"
+          >
+            Отменить
+          </button>
+          <button
+            type="button"
+            class="save"
+            (click)="saveReviewField(edit.review, edit.field)"
+            [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+          >
+            Сохранить
+          </button>
+        </section>
+      }
+
       <section class="mobile-review-check-side" aria-label="Сводка проверки">
         @if (details.permissions.canSeeInternalInfo && (hasInternalNotes(details) || canEditNotes(details))) {
           <article class="side-note-card">
             <h2>Заметка заказа</h2>
             <textarea
-              [readonly]="!isSideNoteEditing('order')"
+              [readonly]="!canEditNotes(details)"
               [ngModel]="sideNoteValue(details, 'order')"
               (ngModelChange)="setSideNoteDraft('order', $event)"
               (focus)="startSideNoteEdit(details, 'order')"
@@ -379,7 +441,7 @@
           <article class="side-note-card">
             <h2>Заметка компании</h2>
             <textarea
-              [readonly]="!isSideNoteEditing('company')"
+              [readonly]="!canEditNotes(details)"
               [ngModel]="sideNoteValue(details, 'company')"
               (ngModelChange)="setSideNoteDraft('company', $event)"
               (focus)="startSideNoteEdit(details, 'company')"
@@ -398,6 +460,36 @@
                   <span class="material-icons-sharp">{{ isSideNoteSaved('company') ? 'check' : 'save' }}</span>
                 </button>
               </div>
+            }
+          </article>
+        }
+
+        @if (showStaffActions(details)) {
+          <article class="staff-actions-card review-window-status-card">
+            <h2>Действия</h2>
+            @if (details.permissions.canOpenManagerLinks) {
+              <a routerLink="/manager" [queryParams]="managerCompanyOrdersQuery(details)">
+                <span class="material-icons-sharp">business</span>
+                Компания
+              </a>
+              <a [routerLink]="managerOrderRoute(details)">
+                <span class="material-icons-sharp">inventory_2</span>
+                Заказ
+              </a>
+            }
+
+            @if (details.permissions.canSendToCheck) {
+              <button type="button" (click)="sendToCheck()" [disabled]="busy()">
+                <span class="material-icons-sharp">manage_search</span>
+                {{ isAction('send-check') ? 'Отправляю...' : 'На проверку' }}
+              </button>
+            }
+
+            @if (details.permissions.canMarkPaid) {
+              <button type="button" (click)="markPaid()" [disabled]="busy()">
+                <span class="material-icons-sharp">payments</span>
+                {{ isAction('pay-ok') ? 'Отмечаю...' : 'Оплатили' }}
+              </button>
             }
           </article>
         }
@@ -453,7 +545,7 @@
         <article class="side-note-card">
           <h2>Заметка заказа</h2>
           <textarea
-            [readonly]="!isSideNoteEditing('order')"
+            [readonly]="!canEditNotes(details)"
             [ngModel]="sideNoteValue(details, 'order')"
             (ngModelChange)="setSideNoteDraft('order', $event)"
             (focus)="startSideNoteEdit(details, 'order')"
@@ -478,7 +570,7 @@
         <article class="side-note-card">
           <h2>Заметка компании</h2>
           <textarea
-            [readonly]="!isSideNoteEditing('company')"
+            [readonly]="!canEditNotes(details)"
             [ngModel]="sideNoteValue(details, 'company')"
             (ngModelChange)="setSideNoteDraft('company', $event)"
             (focus)="startSideNoteEdit(details, 'company')"

@@ -122,15 +122,26 @@
   <a class="details-button" [routerLink]="['/manager/orders', order.companyId, order.id]">Подробнее</a>
 
   <footer>
-    <span
-      class="unchanged-age"
-      [class.unchanged-age--alert]="isUnchangedAlert()"
-      [title]="isUnchangedAlert() ? 'Заказ давно без изменений' : 'Без изменений'"
-    >
-      @if (isUnchangedAlert()) {
-        <i aria-hidden="true">!</i>
-      }
-      Без изменений: {{ unchangedDays() }} дн.
+    <span class="unchanged-age-wrap">
+      <button
+        type="button"
+        class="unchanged-age"
+        [class.unchanged-age--alert]="isUnchangedAlert()"
+        [title]="unchangedCityTitle()"
+        [attr.aria-label]="unchangedCityTitle()"
+        [attr.aria-expanded]="unchangedCityOpen"
+        (pointerenter)="showUnchangedCityFromPointer($event)"
+        (click)="toggleUnchangedCity($event)"
+        (blur)="closeUnchangedCity()"
+      >
+        @if (isUnchangedAlert()) {
+          <i aria-hidden="true">!</i>
+        }
+        Без изменений: {{ unchangedDays() }} дн.
+      </button>
+      <span class="unchanged-city-popover" [class.unchanged-city-popover--open]="unchangedCityOpen">
+        {{ unchangedCityLabel() }}
+      </span>
     </span>
     <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="order.workerUserFio || 'Специалист не назначен'">
       {{ workerLabel() }}

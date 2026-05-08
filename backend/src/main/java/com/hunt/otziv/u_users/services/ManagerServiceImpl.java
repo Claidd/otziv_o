@@ -28,7 +28,7 @@ public class ManagerServiceImpl implements ManagerService {
 
     @Override
     public Manager getManagerById(Long id) { // Взять менеджера по Id
-        return managerRepository.findById(id).orElse(null);
+        return managerRepository.findByIdWithUser(id).orElse(null);
     } // Взять менеджера по Id
 
     @Override

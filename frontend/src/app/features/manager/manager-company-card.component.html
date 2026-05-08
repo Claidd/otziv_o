@@ -91,7 +91,14 @@
   </a>
 
   <footer>
-    <span>{{ company.manager || '-' }}</span>
-    <a href="" (click)="$event.preventDefault(); editOpened.emit()">компания - {{ company.city || 'город' }}</a>
+    <a
+      [href]="companyOrdersUrl()"
+      class="company-manager-link"
+      (click)="$event.preventDefault(); ordersOpened.emit()"
+      [title]="'Показать все заказы: ' + (company.title || 'компания')"
+    >
+      {{ company.manager || '-' }}
+    </a>
+    <a class="company-edit-link" href="" (click)="$event.preventDefault(); editOpened.emit()">компания - {{ company.city || 'город' }}</a>
   </footer>
 </article>

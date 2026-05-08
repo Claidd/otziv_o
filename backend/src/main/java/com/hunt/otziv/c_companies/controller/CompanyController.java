@@ -118,7 +118,7 @@ public class CompanyController {
             model.addAttribute("on_work", createCheckNotificationToManagerCompany(manager,"В работе"));
         }
         if ("ROLE_OWNER".equals(userRole)){
-            Set<Manager> managerList = userService.findByUserName(principal.getName()).orElseThrow().getManagers();
+            Set<Manager> managerList = userService.findManagersByUserName(principal.getName());
             model.addAttribute("to_check", createCheckNotificationToOwner(managerList,"В проверку"));
             model.addAttribute("on_check", createCheckNotificationToOwner(managerList,"На проверке"));
             model.addAttribute("correct", createCheckNotificationToOwner(managerList,"Коррекция"));
@@ -154,7 +154,7 @@ public class CompanyController {
         model.addAttribute("subCategories", subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()) != null ? subCategoryService.getSubcategoriesByCategoryId(companyDTO.getCategoryCompany().getId()) : 0L);
         model.addAttribute("managers", managerService.getAllManagers());
         model.addAttribute("newWorkerDTO", new WorkerDTO());
-        model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getUser().getWorkers()));
+        model.addAttribute("allWorkers", workerService.getAllWorkersByManagerId(companyDTO.getManager().getManagerId()));
         List<CityDTO> citiesList = cityService.getAllCities().stream().sorted(Comparator.comparing(CityDTO::getCityTitle)).toList();
         model.addAttribute("cities", citiesList);
         checkTimeMethod("Время выполнения CompanyController/editCompany/{companyId} для Всех: ", startTime);

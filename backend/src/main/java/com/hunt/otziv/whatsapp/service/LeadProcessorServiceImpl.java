@@ -14,6 +14,7 @@ import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
 import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
+import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.service.fichi.MessageHumanizer;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
@@ -275,17 +276,20 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                     continue;
                 }
 
-                if (response.contains("\"status\":\"not_whatsapp\"")) {
+                WhatsAppSendResult result = WhatsAppSendResult.parse(response);
+
+                if (result.hasStatus("not_whatsapp")) {
                     log.warn("📵 [CHECK] {} → not_whatsapp", phone);
                     return "not_whatsapp";
                 }
 
-                if (response.contains("\"status\":\"ok\"")) {
+                if (result.isOk()) {
                     return "ok";
                 }
 
-                if (response.contains("\"status\":\"error\"")) {
-                    log.error("❌ [RETRY] Ошибка отправки от клиента {} (попытка {}/{}): {}", clientId, attempt, maxAttempts, response);
+                if (result.hasStatus("error")) {
+                    log.warn("❌ [RETRY] Ошибка отправки от клиента {} (попытка {}/{}): code={}, error={}",
+                            clientId, attempt, maxAttempts, result.code(), result.displayError());
                     continue;
                 }
 

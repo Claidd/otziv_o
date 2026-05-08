@@ -1,6 +1,12 @@
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ManagerApi, OrderCardItem } from '../../core/manager.api';
+import { AuthService } from '../../core/auth.service';
+import {
+  ManagerApi,
+  ManagerOverdueOrders,
+  ManagerOverdueStatus,
+  OrderCardItem
+} from '../../core/manager.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import {
   WorkerApi,
@@ -37,6 +43,7 @@ import {
   trackWorkerSection,
   workerErrorMessage,
   workerOrderDetailsPath,
+  workerOrderPaymentCopyText,
   workerReviewDetailsPath,
   workerOrderReviewCopyText,
   workerReviewCopyLabel,
@@ -72,6 +79,8 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly managerApi = inject(ManagerApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
 
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
@@ -89,6 +98,8 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
   readonly boardNoticeVisible = signal(false);
+  readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
+  readonly overdueModalOpen = signal(false);
   private boardNoticeTimer: number | null = null;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
@@ -104,6 +115,10 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly title = computed(() => `Специалист - ${this.board()?.title ?? workerSectionLabel(this.activeSection())}`);
   readonly metrics = computed(() => this.board()?.metrics ?? []);
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
+  readonly showReviewFooterCity = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasRealmRole('WORKER') && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  });
   private readonly noteFacade = new WorkerBoardNoteFacade({
     workerApi: this.workerApi,
     toastService: this.toastService,
@@ -149,6 +164,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly reviewEditSaving = this.editFacade.reviewEditSaving;
   readonly reviewEditDeleting = this.editFacade.reviewEditDeleting;
   readonly reviewEditUploading = this.editFacade.reviewEditUploading;
+  readonly reviewEditNewAccountSaving = this.editFacade.reviewEditNewAccountSaving;
   readonly reviewEditError = this.editFacade.reviewEditError;
   readonly productOptions = this.editFacade.productOptions;
   readonly reviewEditBusy = this.editFacade.reviewEditBusy;
@@ -169,6 +185,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
   constructor() {
     this.openCurrentWorkSection();
+    this.loadDailyOverdueReminder();
   }
 
   ngOnDestroy(): void {
@@ -204,7 +221,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
         if (board.message) {
           this.showBoardNotice();
-          const title = board.warning ? 'Раздел закрыт - окончите Выгул!' : 'Специалист';
+          const title = board.warning ? 'Раздел закрыт' : 'Специалист';
           board.warning ? this.toastService.error(title, board.message) : this.toastService.success(title, board.message);
         }
       },
@@ -297,6 +314,20 @@ export class WorkerBoardComponent implements OnDestroy {
     this.actionFacade.toggleOrderClientWaiting(order);
   }
 
+  closeOverdueModal(): void {
+    this.overdueModalOpen.set(false);
+  }
+
+  openOverdueStatus(status: string): void {
+    const section = this.workerSectionForOrderStatus(status);
+    this.closeOverdueModal();
+    this.activeSection.set(section);
+    this.keyword.set('');
+    this.pageNumber.set(0);
+    this.mobileMenuOpen.set(false);
+    this.loadBoardAfterMetricSeen(this.findMetric(section));
+  }
+
   changeReviewBot(review: WorkerReviewItem): void {
     this.actionFacade.changeReviewBot(review);
   }
@@ -355,6 +386,10 @@ export class WorkerBoardComponent implements OnDestroy {
 
   uploadReviewPhoto(file: File): void {
     this.editFacade.uploadReviewPhoto(file);
+  }
+
+  assignReviewNewAccount(): void {
+    this.editFacade.assignReviewNewAccount();
   }
 
   startOrderNoteEdit(order: OrderCardItem): void {
@@ -461,7 +496,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
     const sum = order.totalSumWithBadReviews ?? order.sum ?? 0;
     await this.copyText(
-      `${order.managerPayText ?? ''} К оплате: ${sum} руб. ${order.companyTitle} ${order.filialTitle ?? ''}`.trim(),
+      workerOrderPaymentCopyText(order, sum),
       `payment-${order.id}`,
       'Текст счета скопирован'
     );
@@ -540,6 +575,10 @@ export class WorkerBoardComponent implements OnDestroy {
     return this.permissions().canWorkReviews;
   }
 
+  canOnlyUnsetReviewVigul(): boolean {
+    return this.editFacade.canOnlyUnsetReviewVigul();
+  }
+
   orderEditUrl(order: OrderCardItem): string {
     return workerOrderDetailsPath(order);
   }
@@ -580,6 +619,14 @@ export class WorkerBoardComponent implements OnDestroy {
 
   trackAction(_index: number, action: StatusAction): string {
     return trackWorkerAction(_index, action);
+  }
+
+  trackOverdueStatus(_index: number, status: ManagerOverdueStatus): string {
+    return status.status;
+  }
+
+  overdueMaxDays(summary: ManagerOverdueOrders): number {
+    return summary.statuses.reduce((max, status) => Math.max(max, status.maxDays), 0);
   }
 
   private findMetric(section: WorkerSection): WorkerMetric | undefined {
@@ -657,6 +704,73 @@ export class WorkerBoardComponent implements OnDestroy {
 
   private errorMessage(err: unknown, fallback: string): string {
     return workerErrorMessage(err, fallback);
+  }
+
+  private loadDailyOverdueReminder(): void {
+    const today = this.localDateKey();
+    const storageKey = this.overdueAlertStorageKey();
+
+    if (this.readStoredDate(storageKey) === today) {
+      return;
+    }
+
+    this.workerApi.getOverdueOrders().subscribe({
+      next: (summary) => {
+        this.writeStoredDate(storageKey, today);
+        const normalizedSummary = {
+          ...summary,
+          statuses: summary.statuses ?? []
+        };
+
+        if (normalizedSummary.total > 0) {
+          this.overdueOrders.set(normalizedSummary);
+          this.overdueModalOpen.set(true);
+        }
+      },
+      error: () => {
+        // The reminder is helpful, but the board itself should not fail because of it.
+      }
+    });
+  }
+
+  private overdueAlertStorageKey(): string {
+    const token = this.auth.tokenParsed() as { preferred_username?: string; sub?: string } | undefined;
+    const userKey = token?.preferred_username || token?.sub || 'user';
+    return `${this.overdueAlertStorageKeyPrefix}:${userKey}`;
+  }
+
+  private localDateKey(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private readStoredDate(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStoredDate(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage can be blocked in private mode; the reminder will simply try again later.
+    }
+  }
+
+  private workerSectionForOrderStatus(status: string): WorkerSection {
+    switch (status) {
+      case 'Новый':
+        return 'new';
+      case 'Коррекция':
+        return 'correct';
+      default:
+        return 'all';
+    }
   }
 
   private showBoardNotice(): void {

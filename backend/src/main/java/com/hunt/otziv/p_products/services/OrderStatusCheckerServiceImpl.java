@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,19 +32,33 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
     @Override
     public void validateCounterConsistency(Order order, int actualPublished) {
+        if (order == null) {
+            return;
+        }
+
         if (order.getCounter() != actualPublished) {
-            String msg = String.format("Компания: %s. Заказ № %d. Работник: %s",
-                    order.getCompany().getTitle(),
+            int previousCounter = order.getCounter();
+            order.setCounter(actualPublished);
+            orderRepository.save(order);
+
+            String msg = String.format("Компания: %s. Заказ № %d. Работник: %s. Было: %d. Стало: %d",
+                    safeCompanyTitle(order),
                     order.getId(),
-                    order.getWorker().getUser().getFio());
+                    safeWorkerName(order),
+                    previousCounter,
+                    actualPublished);
 
-            emailService.sendSimpleEmail(
-                    "2.12nps@mail.ru",
-                    "Ошибка проверки счетчика",
-                    "Срочно проверь! Ошибка при публикации отзыва. " + msg
-            );
+            log.warn("Счетчик заказа автоматически исправлен: {}", msg);
 
-            throw new IllegalStateException("Счётчик заказов не совпадает с количеством опубликованных отзывов");
+            try {
+                emailService.sendSimpleEmail(
+                        "2.12nps@mail.ru",
+                        "Исправлен счетчик заказа",
+                        "Счетчик заказа был автоматически исправлен. " + msg
+                );
+            } catch (Exception e) {
+                log.warn("Не удалось отправить уведомление об исправлении счетчика заказа {}", order.getId(), e);
+            }
         }
     }
 
@@ -87,13 +102,15 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     }
 
     private String sentMessageToGroup(String fallbackStatus, Order order, String clientId, String groupId, String message, String successStatus) {
-        String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
+        WhatsAppSendResult result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
 
-        if (result != null && result.toLowerCase().contains("ok")) {
+        if (result.isOk()) {
             order.setStatus(orderStatusService.getOrderStatusByTitle(successStatus));
             orderRepository.save(order);
             return successStatus;
         } else {
+            log.warn("Сообщение в WhatsApp-группу не отправлено: code={}, error={}",
+                    result.code(), result.displayError());
             if (hasManagerWithTelegram(order)) {
                 String companyTitle = order.getDetails().getFirst().getOrder().getCompany().getTitle();
                 telegramService.sendMessage(
@@ -122,5 +139,18 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private String safeCompanyTitle(Order order) {
+        return Optional.ofNullable(order.getCompany())
+                .map(company -> company.getTitle())
+                .orElse("Не указана");
+    }
+
+    private String safeWorkerName(Order order) {
+        return Optional.ofNullable(order.getWorker())
+                .map(worker -> worker.getUser())
+                .map(user -> user.getFio())
+                .orElse("Не указан");
     }
 }

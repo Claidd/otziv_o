@@ -780,7 +780,7 @@ public class LeadServiceImpl implements LeadService {
     }
 
     private List<Manager> currentOwnerManagers(Principal principal) {
-        return currentUser(principal).getManagers().stream().toList();
+        return userService.findManagersByUserName(principal.getName()).stream().toList();
     }
 
     private String getRole(Principal principal){ // Берем роль пользователя

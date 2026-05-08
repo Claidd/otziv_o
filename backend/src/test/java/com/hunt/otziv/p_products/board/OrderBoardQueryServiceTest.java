@@ -106,10 +106,8 @@ class OrderBoardQueryServiceTest {
         OrderBoardQueryService service = service();
         Principal principal = () -> "owner";
         Manager manager = new Manager();
-        User user = new User();
-        user.setManagers(Set.of(manager));
 
-        when(userService.findByUserName("owner")).thenReturn(Optional.of(user));
+        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager));
         when(orderRepository.findPageIdByOwnerAndKeyWordAndStatus(
                 eq(List.of(manager)),
                 eq("needle"),

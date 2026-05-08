@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,13 +38,14 @@ public class OrderStatusNotificationService {
         log.info("🔹 Группа: {}", groupId);
         log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
 
-        String result = whatsAppService.sendMessageToGroup(clientId, groupId, message);
+        WhatsAppSendResult result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
 
-        if (result != null && result.toLowerCase().contains("ok")) {
+        if (result.isOk()) {
             order.setStatus(orderStatusService.getOrderStatusByTitle(successStatus));
             log.info("✅ Статус заказа успешно обновлён на: {}", successStatus);
         } else {
-            log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: {}", result);
+            log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: code={}, error={}",
+                    result.code(), result.displayError());
             notifyManagerAboutFallback(title, order);
             order.setStatus(orderStatusService.getOrderStatusByTitle(title));
             log.info("🔄 Статус заказа установлен вручную: {}", title);

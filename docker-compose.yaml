@@ -6,6 +6,8 @@ networks:
 
 volumes:
   mysql_data:
+    external: true
+    name: docker_mysql_data
   keycloak_pg_data:
   loki_data:
   alloy_data:
@@ -22,6 +24,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
+      - --restrict-fk-on-non-standard-key=OFF
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -39,6 +42,29 @@ services:
       retries: 30
     networks:
       - internal_net
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    profiles:
+      - db-admin
+    ports:
+      - "127.0.0.1:${PHPMYADMIN_PORT:-6571}:80"
+    environment:
+      UPLOAD_LIMIT: 512M
+      PMA_HOST: mysql
+      PMA_ARBITRARY: "0"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - internal_net
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1/ || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   keycloak-postgres:
     image: postgres:17
@@ -93,7 +119,7 @@ services:
         - CMD-SHELL
         - >
           bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9000;
-          printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          printf "GET /keycloak/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
           cat <&3 | grep -q UP'
       interval: 10s
       timeout: 5s
@@ -171,7 +197,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 90s
+      start_period: 15m
     depends_on:
       mysql:
         condition: service_healthy
@@ -217,6 +243,25 @@ services:
       - ./data/nginx/www:/var/www/certbot
     networks:
       - internal_net
+
+  dozzle:
+    image: amir20/dozzle
+    container_name: log-viewer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_LEVEL: info
+    networks:
+      - internal_net
+    healthcheck:
+      test: [ "CMD", "/dozzle", "healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:v2.55.1

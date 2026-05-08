@@ -1,6 +1,7 @@
 package com.hunt.otziv.r_review.nagul;
 
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Role;
@@ -16,11 +17,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +40,9 @@ class ReviewNagulServiceTest {
     @Mock
     private WorkerService workerService;
 
+    @Mock
+    private AppSettingService appSettingService;
+
     private ReviewNagulService service;
 
     @BeforeEach
@@ -45,9 +51,11 @@ class ReviewNagulServiceTest {
                 reviewRepository,
                 userService,
                 workerService,
-                new ReviewNagulPolicy()
+                new ReviewNagulPolicy(),
+                appSettingService
         );
-        ReflectionTestUtils.setField(service, "nagulCooldownMinutes", 10);
+        ReflectionTestUtils.setField(service, "defaultNagulCooldownMinutes", 10);
+        ReflectionTestUtils.setField(service, "defaultNagulLookaheadDays", 60);
     }
 
     @Test
@@ -59,6 +67,7 @@ class ReviewNagulServiceTest {
         when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
         when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
+        when(appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, 10)).thenReturn(10);
 
         service.performNagulWithExceptions(15L, "worker");
 
@@ -78,18 +87,20 @@ class ReviewNagulServiceTest {
     }
 
     @Test
-    void hasActiveNagulReviewsChecksWorkerReviewsUntilSixtyDaysAhead() {
+    void hasActiveNagulReviewsChecksWorkerReviewsUntilConfiguredDaysAhead() {
         Principal principal = () -> "worker";
         User user = workerUser();
         Worker worker = new Worker();
+        LocalDate expectedDate = LocalDate.now().plusDays(21);
 
         when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
+        when(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60)).thenReturn(21);
         when(reviewRepository.existsActiveNagulReviews(any(Worker.class), any())).thenReturn(true);
 
         assertTrue(service.hasActiveNagulReviews(principal));
 
-        verify(reviewRepository).existsActiveNagulReviews(any(Worker.class), any());
+        verify(reviewRepository).existsActiveNagulReviews(eq(worker), eq(expectedDate));
     }
 
     private User workerUser() {

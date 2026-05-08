@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, Output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { OrderCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
@@ -26,13 +26,15 @@ type OrderTone = 'wait' | 'walk' | 'correction' | 'publication' | 'success' | 'b
   templateUrl: './manager-order-card.component.html',
   styleUrl: './manager-card.component.scss'
 })
-export class ManagerOrderCardComponent {
+export class ManagerOrderCardComponent implements OnDestroy {
   @Input() order!: OrderCardItem;
   @Input() selectedCompany: SelectedCompany | null = null;
   @Input() actions: StatusAction[] = [];
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
   activeCategoryPopover: CategoryPopover | null = null;
+  unchangedCityOpen = false;
+  private unchangedCityTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
   @Output() readonly orderNoteSaved = new EventEmitter<string>();
@@ -41,6 +43,10 @@ export class ManagerOrderCardComponent {
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
   @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
+
+  ngOnDestroy(): void {
+    this.clearUnchangedCityTimer();
+  }
 
   orderChatUrl(): string {
     return this.cleanUrl(managerOrderChatUrl(this.order));
@@ -138,6 +144,44 @@ export class ManagerOrderCardComponent {
     return Math.max(0, this.order.dayToChangeStatusAgo ?? 0);
   }
 
+  unchangedCityLabel(): string {
+    return this.cleanLabel(this.order.filialCity) || 'Город филиала не указан';
+  }
+
+  unchangedCityTitle(): string {
+    return `Город филиала: ${this.unchangedCityLabel()}`;
+  }
+
+  toggleUnchangedCity(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.unchangedCityOpen) {
+      this.closeUnchangedCity();
+      return;
+    }
+
+    this.showUnchangedCity();
+  }
+
+  closeUnchangedCity(): void {
+    this.clearUnchangedCityTimer();
+    this.unchangedCityOpen = false;
+  }
+
+  showUnchangedCity(): void {
+    this.unchangedCityOpen = true;
+    this.scheduleUnchangedCityClose();
+  }
+
+  showUnchangedCityFromPointer(event: PointerEvent): void {
+    if (event.pointerType && event.pointerType !== 'mouse') {
+      return;
+    }
+
+    this.showUnchangedCity();
+  }
+
   isWaitTone(): boolean {
     return this.statusTone() === 'wait';
   }
@@ -199,5 +243,26 @@ export class ManagerOrderCardComponent {
 
   private cleanUrl(value?: string | null): string {
     return (value ?? '').trim();
+  }
+
+  private cleanLabel(value?: string | null): string {
+    return (value ?? '').trim();
+  }
+
+  private scheduleUnchangedCityClose(): void {
+    this.clearUnchangedCityTimer();
+    this.unchangedCityTimer = setTimeout(() => {
+      this.unchangedCityOpen = false;
+      this.unchangedCityTimer = null;
+    }, 1000);
+  }
+
+  private clearUnchangedCityTimer(): void {
+    if (!this.unchangedCityTimer) {
+      return;
+    }
+
+    clearTimeout(this.unchangedCityTimer);
+    this.unchangedCityTimer = null;
   }
 }

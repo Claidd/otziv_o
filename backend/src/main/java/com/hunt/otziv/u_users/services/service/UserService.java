@@ -33,6 +33,10 @@ public interface UserService extends UserDetailsService{
 
     Optional<User> findByUserName(String username);
 
+    Optional<User> findByUserNameWithAssignments(String username);
+
+    Set<Manager> findManagersByUserName(String username);
+
     void deleteOperator(String username, Long operatorId);
 
     void deleteManager(String username, Long managerId);

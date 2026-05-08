@@ -268,7 +268,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Page<CompanyListDTO> getAllCompaniesDtoToOwner(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection) { // Берем все заказы Владельца + поиск + статус
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Manager> managerList = userService.findManagersByUserName(principal.getName()).stream().toList();
         Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
@@ -287,7 +287,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Page<CompanyListDTO> getAllCompaniesDTOListOwner(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
-        List<Manager> managerList = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getManagers().stream().toList();
+        List<Manager> managerList = userService.findManagersByUserName(principal.getName()).stream().toList();
         Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
@@ -396,10 +396,14 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
 
+    @Transactional(readOnly = true)
     public CompanyDTO getCompaniesDTOById(Long companyId){  // Берем компанию ДТО по Id
-        return convertToDto(companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(
+        Company company = companyRepository.findByIdForCompanyDto(companyId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Компания '%d' не найден", companyId)
-        )));
+        ));
+        companyRepository.findByIdWithWorkers(companyId);
+        companyRepository.findByIdWithFilials(companyId);
+        return convertToDto(company);
     } // Берем компанию ДТО по Id
 
     @Override
@@ -443,9 +447,7 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
 
-        Set<WorkerDTO> workers = leadDTO.getManager().getUser().getWorkers().stream()
-                .map(this::convertToWorkerDto)
-                .collect(Collectors.toSet());
+        Set<WorkerDTO> workers = workerService.getAllWorkersByManagerId(leadDTO.getManager().getId());
 
         companyDTO.setWorkers(workers); // ✅ добавляем весь список работников в DTO
 
@@ -512,15 +514,13 @@ public class CompanyServiceImpl implements CompanyService{
             throw new IllegalStateException("Менеджер для операторского лида не найден");
         }
 
-        Set<Worker> managerWorkers = manager.getUser().getWorkers() == null
-                ? Set.of()
-                : manager.getUser().getWorkers();
+        Set<WorkerDTO> managerWorkers = workerService.getAllWorkersByManagerId(manager.getId());
         if (managerWorkers.isEmpty()) {
             throw new IllegalStateException("У менеджера нет доступных сотрудников");
         }
 
-        List<Worker> workers = new ArrayList<>(managerWorkers);
-        Worker randomWorker = workers.get(new SecureRandom().nextInt(workers.size()));
+        List<WorkerDTO> workers = new ArrayList<>(managerWorkers);
+        WorkerDTO randomWorker = workers.get(new SecureRandom().nextInt(workers.size()));
 
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
@@ -530,8 +530,8 @@ public class CompanyServiceImpl implements CompanyService{
         companyDTO.setManager(convertToManagerDto(manager));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
         companyDTO.setFilial(new FilialDTO());
-        companyDTO.setWorkers(convertToWorkerDTOList(managerWorkers));
-        companyDTO.setWorker(convertToWorkerDTO(randomWorker));
+        companyDTO.setWorkers(managerWorkers);
+        companyDTO.setWorker(randomWorker);
         return companyDTO;
     }
 
@@ -543,9 +543,7 @@ public class CompanyServiceImpl implements CompanyService{
         Manager manager = managerService.getManagerByUserId(userId);
 
         // Получаем и преобразуем список работников
-        Set<WorkerDTO> workers = manager.getUser().getWorkers().stream()
-                .map(this::convertToWorkerDto)
-                .collect(Collectors.toSet());
+        Set<WorkerDTO> workers = workerService.getAllWorkersByManagerId(manager.getId());
 
         WorkerDTO selectedWorker = selectRandomWorker(workers);
 
@@ -698,7 +696,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
             companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
             companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
-            companyDTO.setOrders(convertToOrderDTOSet(company.getOrderList()));
+            companyDTO.setOrders(Collections.emptySet());
             return companyDTO;
         }
         else {
@@ -903,14 +901,14 @@ public class CompanyServiceImpl implements CompanyService{
     private WorkerDTO convertToWorkerDTO(Worker worker){ // перевод работника в ДТО
         return WorkerDTO.builder()
                 .workerId(worker.getId())
-                .user(worker.getUser())
+                .user(slimUser(worker.getUser()))
                 .build();
     } // перевод работника в ДТО
 
     private ManagerDTO convertToManagerDTO(Manager manager){ // перевод менеджера в ДТО
         return ManagerDTO.builder()
                 .managerId(manager.getId())
-                .user(manager.getUser())
+                .user(slimUser(manager.getUser()))
                 .payText(manager.getPayText())
                 .build();
     } // перевод менеджера в ДТО
@@ -922,24 +920,28 @@ public class CompanyServiceImpl implements CompanyService{
         ));
         userDTO.setUsername(user.getUsername());
         userDTO.setFio(user.getFio());
-        userDTO.setWorkers(user.getWorkers());
         return userDTO;
     } // перевод юзера в ДТО
 
     private UserDTO convertToUserDto(User user) { // перевод юзера в ДТО
+        if (user == null) {
+            return null;
+        }
         UserDTO userDTO = new UserDTO();
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setEmail(user.getEmail());
         userDTO.setFio(user.getFio());
-        userDTO.setWorkers(user.getWorkers());
         return userDTO;
     } // перевод юзера в ДТО
 
     private ManagerDTO convertToManagerDto(Manager manager) { // перевод менеджера в ДТО
+        if (manager == null) {
+            return null;
+        }
         ManagerDTO managerDTO = new ManagerDTO();
         managerDTO.setManagerId(manager.getId());
-        managerDTO.setUser(manager.getUser());
+        managerDTO.setUser(slimUser(manager.getUser()));
         return managerDTO;
     } // перевод менеджера в ДТО
 
@@ -950,11 +952,30 @@ public class CompanyServiceImpl implements CompanyService{
     } // перевод менеджера в ДТО Сэт
 
     private WorkerDTO convertToWorkerDto(Worker worker) { // перевод работника в ДТО
+        if (worker == null) {
+            return null;
+        }
         WorkerDTO workerDTO = new WorkerDTO();
         workerDTO.setWorkerId(worker.getId());
-        workerDTO.setUser(worker.getUser());
+        workerDTO.setUser(slimUser(worker.getUser()));
         return workerDTO;
     } // перевод работника в ДТО
+
+    private User slimUser(User user) {
+        if (user == null) {
+            return null;
+        }
+
+        User slim = new User();
+        slim.setId(user.getId());
+        slim.setUsername(user.getUsername());
+        slim.setFio(user.getFio());
+        slim.setEmail(user.getEmail());
+        slim.setPhoneNumber(user.getPhoneNumber());
+        slim.setActive(user.isActive());
+        slim.setTelegramChatId(user.getTelegramChatId());
+        return slim;
+    }
 
     private CompanyStatusDTO convertToCompanyStatusDto(CompanyStatus status) { // перевод статуса компании в ДТО
         CompanyStatusDTO statusDTO = new CompanyStatusDTO();
@@ -1134,6 +1155,7 @@ public class CompanyServiceImpl implements CompanyService{
 
 //    =====================================================================================================
 
+    @Transactional
     public boolean deleteWorkers(Long companyId, Long workerId){ // Удаление работника
         try {
             log.info("2. Вошли в удаление работника из списка работников компании");

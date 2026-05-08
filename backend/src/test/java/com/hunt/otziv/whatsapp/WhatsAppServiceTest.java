@@ -32,7 +32,7 @@ class WhatsAppServiceTest {
     void testSendMessage_success() {
         WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
         config.setId("client1");
-        config.setUrl("http://localhost:3000/send");
+        config.setUrl("http://localhost:3000");
 
         when(properties.getClients()).thenReturn(List.of(config));
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
@@ -40,7 +40,18 @@ class WhatsAppServiceTest {
 
         String result = service.sendMessage("client1", "79086431055", "Тестовое сообщение");
 
-        assertTrue(result.contains("⏩ Ответ"));
+        assertTrue(result.contains("\"status\":\"ok\""));
+    }
+
+    @Test
+    void sendMessageToGroup_unknownClientReturnsStructuredError() {
+        when(properties.getClients()).thenReturn(List.of());
+
+        String result = service.sendMessageToGroup("whatsapp_lika", "120@g.us", "Тест");
+
+        assertTrue(result.contains("\"status\":\"error\""));
+        assertTrue(result.contains("\"code\":\"unknown_client\""));
+        assertTrue(result.contains("whatsapp_lika"));
     }
 }
 

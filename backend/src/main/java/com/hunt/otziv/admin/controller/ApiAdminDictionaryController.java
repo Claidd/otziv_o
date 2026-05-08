@@ -15,6 +15,7 @@ import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.config.cache.CacheConfig;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.model.PromoText;
 import com.hunt.otziv.l_lead.model.PromoTextAssignment;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
@@ -31,7 +32,9 @@ import com.hunt.otziv.u_users.repository.WorkerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -73,6 +76,13 @@ public class ApiAdminDictionaryController {
     private final BotImportService botImportService;
     private final PromoTextRepository promoTextRepository;
     private final PromoTextAssignmentRepository promoTextAssignmentRepository;
+    private final AppSettingService appSettingService;
+
+    @Value("${app.nagul.cooldown:60}")
+    private int defaultNagulCooldownMinutes;
+
+    @Value("${app.nagul.lookahead-days:60}")
+    private int defaultNagulLookaheadDays;
 
     @GetMapping("/categories")
     public List<CategoryResponse> getCategories(String keyword) {
@@ -85,6 +95,7 @@ public class ApiAdminDictionaryController {
 
     @PostMapping("/categories")
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     public CategoryResponse createCategory(@RequestBody TitleRequest request) {
         Category category = Category.builder()
                 .categoryTitle(requiredTitle(request.title()))
@@ -94,6 +105,7 @@ public class ApiAdminDictionaryController {
     }
 
     @PutMapping("/categories/{id}")
+    @Transactional
     public CategoryResponse updateCategory(@PathVariable Long id, @RequestBody TitleRequest request) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> notFound("Категория не найдена"));
@@ -126,6 +138,7 @@ public class ApiAdminDictionaryController {
 
     @PostMapping("/subcategories")
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     public SubCategoryResponse createSubCategory(@RequestBody SubCategoryRequest request) {
         Category category = categoryRepository.findById(requiredId(request.categoryId(), "Категория обязательна"))
                 .orElseThrow(() -> notFound("Категория не найдена"));
@@ -137,6 +150,7 @@ public class ApiAdminDictionaryController {
     }
 
     @PutMapping("/subcategories/{id}")
+    @Transactional
     public SubCategoryResponse updateSubCategory(@PathVariable Long id, @RequestBody SubCategoryRequest request) {
         SubCategory subCategory = subCategoryRepository.findById(id)
                 .orElseThrow(() -> notFound("Подкатегория не найдена"));
@@ -214,6 +228,7 @@ public class ApiAdminDictionaryController {
     @PostMapping("/products")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public ProductResponse createProduct(@RequestBody ProductRequest request) {
         ProductCategory category = productCategoryRepository
                 .findById(requiredId(request.categoryId(), "Категория продукта обязательна"))
@@ -231,6 +246,7 @@ public class ApiAdminDictionaryController {
 
     @PutMapping("/products/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public ProductResponse updateProduct(@PathVariable Long id, @RequestBody ProductRequest request) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> notFound("Продукт не найден"));
@@ -285,6 +301,7 @@ public class ApiAdminDictionaryController {
     @PostMapping("/bots")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public BotResponse createBot(@RequestBody BotRequest request) {
         String login = requiredText(request.login(), "Логин обязателен");
         assertLoginAvailable(login, null);
@@ -305,6 +322,7 @@ public class ApiAdminDictionaryController {
 
     @PutMapping("/bots/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public BotResponse updateBot(@PathVariable Long id, @RequestBody BotRequest request) {
         Bot bot = botsRepository.findByIdWithAdminDetails(id)
                 .orElseThrow(() -> notFound("Аккаунт не найден"));
@@ -477,6 +495,29 @@ public class ApiAdminDictionaryController {
                         safe(saved.getReminderText()),
                         safe(saved.getStartText())
                 ));
+    }
+
+    @GetMapping("/settings/nagul")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public NagulSettingsResponse getNagulSettings() {
+        return new NagulSettingsResponse(nagulCooldownMinutes(), nagulLookaheadDays());
+    }
+
+    @PutMapping("/settings/nagul")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public NagulSettingsResponse updateNagulSettings(@RequestBody NagulSettingsRequest request) {
+        int cooldownMinutes = requiredCooldownMinutes(request.cooldownMinutes());
+        int lookaheadDays = requiredLookaheadDays(request.lookaheadDays());
+
+        int savedCooldownMinutes = appSettingService.setInt(
+                AppSettingService.NAGUL_COOLDOWN_MINUTES,
+                cooldownMinutes
+        );
+        int savedLookaheadDays = appSettingService.setInt(
+                AppSettingService.NAGUL_LOOKAHEAD_DAYS,
+                lookaheadDays
+        );
+        return new NagulSettingsResponse(savedCooldownMinutes, savedLookaheadDays);
     }
 
     private List<Category> uniqueCategories(List<Category> categories) {
@@ -718,6 +759,34 @@ public class ApiAdminDictionaryController {
             throw badRequest("Количество публикаций не может быть меньше нуля");
         }
         return value;
+    }
+
+    private int requiredCooldownMinutes(Integer value) {
+        if (value == null) {
+            throw badRequest("Укажите время между выгулами");
+        }
+        if (value < 0 || value > 1440) {
+            throw badRequest("Время между выгулами должно быть от 0 до 1440 минут");
+        }
+        return value;
+    }
+
+    private int requiredLookaheadDays(Integer value) {
+        if (value == null) {
+            throw badRequest("Укажите горизонт выдачи выгула");
+        }
+        if (value < 0 || value > 365) {
+            throw badRequest("Горизонт выдачи выгула должен быть от 0 до 365 дней");
+        }
+        return value;
+    }
+
+    private int nagulCooldownMinutes() {
+        return appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, defaultNagulCooldownMinutes);
+    }
+
+    private int nagulLookaheadDays() {
+        return appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, defaultNagulLookaheadDays);
     }
 
     private String requiredText(String value, String message) {
@@ -1029,5 +1098,11 @@ public class ApiAdminDictionaryController {
             String reminderText,
             String startText
     ) {
+    }
+
+    public record NagulSettingsRequest(Integer cooldownMinutes, Integer lookaheadDays) {
+    }
+
+    public record NagulSettingsResponse(int cooldownMinutes, int lookaheadDays) {
     }
 }

@@ -150,7 +150,7 @@ public class ApiCabinetController {
                         }
 
                         if ("ROLE_OWNER".equals(role)) {
-                            List<Manager> managers = user.getManagers().stream().toList();
+                            List<Manager> managers = userService.findManagersByUserName(principal.getName()).stream().toList();
                             List<Manager> expandedManagers = personalService.findAllManagersWorkers(managers);
                             List<Marketolog> marketologs = expandedManagers.stream()
                                     .flatMap(manager -> manager.getUser().getMarketologs().stream())

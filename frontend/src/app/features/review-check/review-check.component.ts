@@ -13,6 +13,7 @@ import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCheckDraftReview = {
@@ -30,6 +31,12 @@ type ReviewCheckAction = 'save' | 'approve' | 'correction' | 'send-check' | 'pay
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
 type ReviewWindowStatus = 'approved' | 'paid' | 'correction' | 'not-approved';
+type ActiveReviewFieldEdit = {
+  review: ReviewCheckReview;
+  field: ReviewEditableField;
+  title: string;
+  mutationKey: string;
+};
 
 @Component({
   selector: 'app-review-check',
@@ -60,8 +67,34 @@ export class ReviewCheckComponent {
   readonly savedSideNoteField = signal<SideNoteField | null>(null);
   readonly expandedReviewId = signal<number | null>(null);
   readonly activeReviewSlide = signal(0);
+  readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   readonly busy = computed(() => this.actionKey() !== null);
+  readonly activeReviewFieldEdit = computed<ActiveReviewFieldEdit | null>(() => {
+    const key = this.editingReviewFieldKey();
+    const details = this.details();
+    if (!key || !details) {
+      return null;
+    }
+
+    const match = /^(\d+)-(text|answer)$/.exec(key);
+    if (!match) {
+      return null;
+    }
+
+    const review = details.reviews.find((item) => item.id === Number(match[1]));
+    if (!review) {
+      return null;
+    }
+
+    const field = match[2] as ReviewEditableField;
+    return {
+      review,
+      field,
+      title: field === 'text' ? 'Текст отзыва' : 'Замечание',
+      mutationKey: this.saveFieldMutationKey(review, field)
+    };
+  });
   readonly title = computed(() => {
     const details = this.details();
     if (!details) {
@@ -238,9 +271,18 @@ export class ReviewCheckComponent {
       return;
     }
 
-    const maxIndex = Math.max((this.details()?.reviews.length ?? 1) - 1, 0);
+    const details = this.details();
+    const maxIndex = Math.max((details ? this.reviewCarouselItemCount(details) : 1) - 1, 0);
     const index = Math.round(track.scrollLeft / step);
     this.activeReviewSlide.set(Math.min(maxIndex, Math.max(0, index)));
+  }
+
+  reviewCarouselItemCount(details: ReviewCheckPayload): number {
+    return details.reviews.length + (details.permissions.canApprovePublication ? 1 : 0);
+  }
+
+  reviewApproveSlideIndex(details: ReviewCheckPayload): number {
+    return Math.max(this.reviewCarouselItemCount(details) - 1, 0);
   }
 
   reviewText(review: ReviewCheckReview): string {
@@ -273,12 +315,17 @@ export class ReviewCheckComponent {
   }
 
   startReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {
-    if (this.isMutating(this.saveFieldMutationKey(review, field))) {
+    if (!this.details()?.permissions.canSave || this.isMutating(this.saveFieldMutationKey(review, field))) {
+      return;
+    }
+
+    const fieldKey = this.reviewFieldKey(review, field);
+    if (this.editingReviewFieldKey() === fieldKey) {
       return;
     }
 
     this.savedReviewFieldKey.set(null);
-    this.editingReviewFieldKey.set(this.reviewFieldKey(review, field));
+    this.editingReviewFieldKey.set(fieldKey);
   }
 
   cancelReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {
@@ -380,6 +427,10 @@ export class ReviewCheckComponent {
 
   startReviewNoteEdit(review: ReviewCheckReview): void {
     if (!this.canEditNotes() || this.isMutating(`save-note-${review.id}`)) {
+      return;
+    }
+
+    if (this.editingReviewNoteId() === review.id) {
       return;
     }
 
@@ -497,6 +548,10 @@ export class ReviewCheckComponent {
 
   startSideNoteEdit(details: ReviewCheckPayload, field: SideNoteField): void {
     if (!this.canEditNotes(details) || this.isMutating(`save-side-${field}`)) {
+      return;
+    }
+
+    if (this.editingSideNoteField() === field) {
       return;
     }
 
@@ -640,8 +695,20 @@ export class ReviewCheckComponent {
     return status === 'approved' || status === 'paid';
   }
 
-  reviewFooterStateLabel(details: ReviewCheckPayload): string {
-    return this.reviewWindowStatus(details) === 'paid' ? 'оплачено' : 'одобрено';
+  shouldShowReviewFooterState(details: ReviewCheckPayload, review: ReviewCheckReview): boolean {
+    return this.isReviewWindowApproved(details) || this.isReviewPublished(review);
+  }
+
+  reviewFooterStateLabel(details: ReviewCheckPayload, review: ReviewCheckReview): string {
+    if (this.reviewWindowStatus(details) === 'paid') {
+      return 'оплачен';
+    }
+
+    return this.isReviewPublished(review) ? 'опубликован' : 'одобрен';
+  }
+
+  isReviewFooterStatePublished(details: ReviewCheckPayload, review: ReviewCheckReview): boolean {
+    return this.reviewWindowStatus(details) !== 'paid' && this.isReviewPublished(review);
   }
 
   reviewWindowStatusLabel(details: ReviewCheckPayload): string {
@@ -687,11 +754,15 @@ export class ReviewCheckComponent {
   }
 
   reviewedCount(details: ReviewCheckPayload): number {
-    return details.reviews.filter((review) => review.publish || !!review.publishedDate).length;
+    return details.reviews.filter((review) => this.isReviewPublished(review)).length;
   }
 
   reviewDate(review: ReviewCheckReview): string {
     return review.publishedDate || (review.publish ? 'ОПУБЛИКОВАНО' : '-');
+  }
+
+  private isReviewPublished(review: ReviewCheckReview): boolean {
+    return review.publish || !!review.publishedDate;
   }
 
   managerOrderRoute(details: ReviewCheckPayload): unknown[] {

@@ -3,6 +3,7 @@ package com.hunt.otziv.whatsapp.service;
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,9 +35,11 @@ public class OfferService {
         try {
             delayBeforeSending(telephoneNumber);
 
-            String result = whatsAppService.sendMessage(clientId, telephoneNumber, offerText);
+            WhatsAppSendResult result = WhatsAppSendResult.parse(
+                    whatsAppService.sendMessage(clientId, telephoneNumber, offerText)
+            );
 
-            if (result != null && result.contains("\"status\":\"ok\"") || "ok".equalsIgnoreCase(result)) {
+            if (result.isOk()) {
                 log.info("✅ Оффер успешно отправлен клиенту {}", telephoneNumber);
 
                 // вместо: lead.setOffer(true); leadService.saveLead(lead); leadEventPublisher.publishUpdate(lead);
@@ -44,7 +47,8 @@ public class OfferService {
                 leadService.markOfferSentAndPublish(lead.getId());
 
             } else {
-                log.warn("❌ Ошибка при отправке оффера клиенту {}: {}", telephoneNumber, result);
+                log.warn("❌ Ошибка при отправке оффера клиенту {}: code={}, error={}",
+                        telephoneNumber, result.code(), result.displayError());
             }
         } finally {
             phonesInProgress.remove(telephoneNumber);

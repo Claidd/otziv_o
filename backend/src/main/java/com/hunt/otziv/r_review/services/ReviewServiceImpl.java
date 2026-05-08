@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.bot.ReviewBotChangeService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -72,6 +73,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewNagulService reviewNagulService;
     private final ReviewBotChangeService reviewBotChangeService;
     private final ReviewEditService reviewEditService;
+    private final OrderStatusCheckerService orderStatusCheckerService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -628,6 +630,17 @@ public class ReviewServiceImpl implements ReviewService {
         return review;
     }
 
+    @Override
+    @Transactional
+    public Review updateReviewPhoto(Long reviewId, String url) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
+
+        review.setUrl(url);
+        log.info("Обновляем фото отзыва {}", reviewId);
+        return reviewRepository.save(review);
+    }
+
     public boolean deleteReview(Long reviewId) {
         Review review = reviewRepository.findById(reviewId).orElse(null);
         if (review == null) {
@@ -673,6 +686,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
 
         boolean isChanged = false;
+        boolean publishChanged = false;
 
         Product dtoProduct = reviewDTO.getProduct();
         Product currentProduct = saveReview.getProduct();
@@ -771,15 +785,20 @@ public class ReviewServiceImpl implements ReviewService {
                 log.info("Обновляем публикацию отзыва");
                 saveReview.setPublish(reviewDTO.isPublish());
                 isChanged = true;
+                publishChanged = true;
             }
         }
 
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) || "ROLE_MANAGER".equals(userRole)) {
+        if (canManageReviewVigul(userRole)) {
             if (!Objects.equals(reviewDTO.isVigul(), saveReview.isVigul())) {
                 log.info("Обновляем выгул отзыва");
                 saveReview.setVigul(reviewDTO.isVigul());
                 isChanged = true;
             }
+        } else if (canWorkerUnsetReviewVigul(userRole, reviewDTO, saveReview)) {
+            log.info("Специалист снимает выгул отзыва");
+            saveReview.setVigul(false);
+            isChanged = true;
         }
 
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) || "ROLE_MANAGER".equals(userRole)) {
@@ -805,6 +824,32 @@ public class ReviewServiceImpl implements ReviewService {
         if (isChanged) {
             reviewRepository.save(saveReview);
         }
+        if (publishChanged) {
+            synchronizeOrderCounter(saveReview);
+        }
+    }
+
+    private boolean canManageReviewVigul(String userRole) {
+        return "ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) || "ROLE_MANAGER".equals(userRole);
+    }
+
+    private boolean canWorkerUnsetReviewVigul(String userRole, ReviewDTO reviewDTO, Review review) {
+        return "ROLE_WORKER".equals(userRole) && review.isVigul() && !reviewDTO.isVigul();
+    }
+
+    private void synchronizeOrderCounter(Review review) {
+        Order order = Optional.ofNullable(review)
+                .map(Review::getOrderDetails)
+                .map(OrderDetails::getOrder)
+                .orElse(null);
+        if (order == null || order.getId() == null) {
+            log.warn("Не удалось синхронизировать счетчик: у отзыва {} нет заказа",
+                    review != null ? review.getId() : null);
+            return;
+        }
+
+        int actualPublished = reviewRepository.countPublishedByOrderId(order.getId());
+        orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
     }
 
     private void recalculateOrderAndDetailsPrice(UUID orderDetailsId) {
@@ -1024,6 +1069,11 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public void assignNewAccount(Long reviewId) {
+        reviewBotChangeService.assignNewAccount(reviewId);
+    }
+
+    @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
         reviewBotChangeService.deActivateAndChangeBot(reviewId, botId);
     }
@@ -1039,7 +1089,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     public ReviewDTO getReviewDTOById(Long reviewId) {
         try {
-            Optional<Review> reviewOptional = reviewRepository.findById(reviewId);
+            Optional<Review> reviewOptional = reviewRepository.findByIdForDto(reviewId);
             if (reviewOptional.isEmpty()) {
                 log.error("Отзыв с ID {} не найден", reviewId);
                 return null;
@@ -1054,7 +1104,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Review getReviewById(Long reviewId) {
-        return reviewRepository.findById(reviewId).orElse(null);
+        return reviewRepository.findByIdForDto(reviewId).orElse(null);
     }
 
     @Override
@@ -1286,7 +1336,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (principal == null) {
             throw new UsernameNotFoundException("Principal == null");
         }
-        return userService.findByUserName(principal.getName())
+        return userService.findByUserNameWithAssignments(principal.getName())
                 .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден: " + principal.getName()));
     }
 

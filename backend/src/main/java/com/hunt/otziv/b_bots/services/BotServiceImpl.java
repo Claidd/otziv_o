@@ -15,11 +15,13 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +30,8 @@ public class BotServiceImpl implements BotService {
     private static final String READY_STATUS = "Новый";
     private static final List<Long> RESERVE_BOT_CITY_IDS = List.of(0L, 325L);
     private static final Set<Long> RESERVE_BOT_TARGET_CITY_DENYLIST = Set.of(320L, 326L);
+    private static final long NEW_ACCOUNT_SOURCE_CITY_ID = 325L;
+    private static final String NEW_ACCOUNT_NAME = "Сменить Имя Фамилию";
     private static final List<String> RESERVE_BOT_NAMES = List.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -241,6 +245,41 @@ public class BotServiceImpl implements BotService {
         return Optional.of(savedBot);
     }
 
+    @Override
+    @Transactional
+    public Optional<Bot> claimNewAccountForCity(City targetCity, Collection<Long> excludedBotIds) {
+        if (targetCity == null || targetCity.getId() == null) {
+            log.warn("Не удалось назначить новый аккаунт: целевой город не указан");
+            return Optional.empty();
+        }
+
+        Set<Long> excludedIds = excludedBotIds == null
+                ? Set.of()
+                : excludedBotIds.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<Bot> candidates = new ArrayList<>(botsRepository.findBotsByFioAndCity(
+                NEW_ACCOUNT_NAME,
+                NEW_ACCOUNT_SOURCE_CITY_ID
+        ));
+        candidates.removeIf(bot -> bot.getId() == null || excludedIds.contains(bot.getId()));
+
+        if (candidates.isEmpty()) {
+            log.warn("Нет доступных аккаунтов '{}' в городе {}", NEW_ACCOUNT_NAME, NEW_ACCOUNT_SOURCE_CITY_ID);
+            return Optional.empty();
+        }
+
+        Bot selectedBot = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        selectedBot.setBotCity(targetCity);
+        selectedBot.setActive(true);
+
+        Bot savedBot = botsRepository.save(selectedBot);
+        log.info("Новый аккаунт ID {} закреплен за городом {} ({})",
+                savedBot.getId(), targetCity.getTitle(), targetCity.getId());
+        return Optional.of(savedBot);
+    }
+
 
     @Override
     public Bot save(Bot bot) { // Сохранение ботов
@@ -264,7 +303,7 @@ public class BotServiceImpl implements BotService {
     //    =============================== ПЕРЕВОД ДТО В СУЩНОСТЬ - НАЧАЛО =========================================
     public Bot toEntity(BotDTO botDTO, Principal principal){ // Перевод дто в сущность
         log.info("Заходим в метод перевода ДТО в Бота");
-        User user = Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null));
+        User user = Objects.requireNonNull(userService.findByUserNameWithAssignments(principal.getName()).orElse(null));
         Worker worker = workerService.getWorkerByUserId(user.getId());
         Bot bot = Bot.builder()
                 .login(botDTO.getLogin())

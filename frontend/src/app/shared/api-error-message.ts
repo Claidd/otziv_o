@@ -1,22 +1,30 @@
 const DEFAULT_ERROR_DETAIL = 'Попробуйте обновить данные или повторить действие позже.';
 
 export function apiErrorMessage(err: unknown, fallback: string): string {
+  const statusDetail = statusErrorDetail(err);
+  if (isServerError(err) && statusDetail) {
+    return joinFallbackAndDetail(fallback, statusDetail);
+  }
+
   const serverMessage = extractUserMessage(err);
   if (serverMessage) {
     return serverMessage;
   }
 
-  const statusDetail = statusErrorDetail(err);
   return statusDetail ? joinFallbackAndDetail(fallback, statusDetail) : (normalizeText(fallback) ?? DEFAULT_ERROR_DETAIL);
 }
 
 export function apiErrorDetail(err: unknown, fallback = DEFAULT_ERROR_DETAIL): string {
+  const statusDetail = statusErrorDetail(err);
+  if (isServerError(err) && statusDetail) {
+    return statusDetail;
+  }
+
   const serverMessage = extractUserMessage(err);
   if (serverMessage) {
     return serverMessage;
   }
 
-  const statusDetail = statusErrorDetail(err);
   if (statusDetail) {
     return statusDetail;
   }
@@ -129,6 +137,10 @@ function httpStatus(err: unknown): number {
   }
 
   return statusFromText(err) ?? -1;
+}
+
+function isServerError(err: unknown): boolean {
+  return httpStatus(err) >= 500;
 }
 
 function statusFromText(value: unknown): number | null {

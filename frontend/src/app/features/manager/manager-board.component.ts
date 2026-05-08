@@ -42,6 +42,7 @@ import {
   managerErrorMessage,
   managerLayoutTitle,
   managerOrderActions,
+  managerOrderPaymentCopyText,
   managerOrderReviewCopyText,
   managerPayableOrderSum,
   managerPromoItems,
@@ -428,7 +429,7 @@ export class ManagerBoardComponent {
 
     const sum = this.payableOrderSum(order);
     await this.copyText(
-      `${order.managerPayText ?? ''} К оплате: ${sum} руб. ${order.companyTitle} ${order.filialTitle ?? ''}`.trim(),
+      managerOrderPaymentCopyText(order, sum),
       `payment-${order.id}`,
       'Текст счета скопирован'
     );

@@ -12,6 +12,7 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -28,6 +29,7 @@ public class ReviewBotChangeService {
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
+    private static final Set<Long> NEW_ACCOUNT_EXCLUDED_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -40,6 +42,7 @@ public class ReviewBotChangeService {
     private final BotAssignmentService botAssignmentService;
     private final FilialService filialService;
 
+    @Transactional
     public void changeBot(Long reviewId) {
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
@@ -62,9 +65,10 @@ public class ReviewBotChangeService {
         }
     }
 
+    @Transactional
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
         try {
-            Review review = reviewRepository.findById(reviewId).orElse(null);
+            Review review = findReviewForBotChange(reviewId).orElse(null);
             if (review == null) {
                 throw new RuntimeException("Отзыв не найден");
             }
@@ -95,6 +99,38 @@ public class ReviewBotChangeService {
             log.error("Что-то пошло не так и бот не деактивирован", e);
             throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage(), e);
         }
+    }
+
+    @Transactional
+    public void assignNewAccount(Long reviewId) {
+        Review review = findReviewForBotChange(reviewId)
+                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+
+        Filial filial = review.getFilial();
+        City city = filial != null ? filial.getCity() : null;
+        Long cityId = city != null ? city.getId() : null;
+
+        if (cityId == null) {
+            throw new RuntimeException("Город филиала не найден");
+        }
+
+        if (NEW_ACCOUNT_EXCLUDED_CITY_IDS.contains(cityId)) {
+            throw new RuntimeException("Новый аккаунт недоступен для филиалов с городом 320 или 326");
+        }
+
+        Set<Long> excludedBotIds = review.getBot() != null && review.getBot().getId() != null
+                ? Set.of(review.getBot().getId())
+                : Set.of();
+
+        Bot selectedBot = botService.claimNewAccountForCity(city, excludedBotIds)
+                .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Сменить Имя Фамилию\" в городе 325"));
+
+        review.setBot(selectedBot);
+        review.setVigul(false);
+        reviewRepository.save(review);
+
+        log.info("Новый аккаунт ID {} назначен отзыву ID {} для города филиала {}",
+                selectedBot.getId(), reviewId, cityId);
     }
 
     public List<Bot> findAllBotsMinusFilial(Review review) {
@@ -162,7 +198,7 @@ public class ReviewBotChangeService {
     }
 
     private Review getReviewToChangeBot(Long reviewId) {
-        Review review = reviewRepository.findById(reviewId)
+        Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
         boolean wasVigul = review.isVigul();
 
@@ -170,6 +206,11 @@ public class ReviewBotChangeService {
 
         log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
         return review;
+    }
+
+    private java.util.Optional<Review> findReviewForBotChange(Long reviewId) {
+        java.util.Optional<Review> review = reviewRepository.findByIdForBotChange(reviewId);
+        return review.isPresent() ? review : reviewRepository.findById(reviewId);
     }
 
     private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
@@ -226,18 +267,15 @@ public class ReviewBotChangeService {
         Set<Long> usedBotIds = new HashSet<>();
 
         try {
-            List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
+            if (filial == null || filial.getId() == null) {
+                return usedBotIds;
+            }
 
-            if (allReviewsInFilial != null) {
-                for (Review existingReview : allReviewsInFilial) {
-                    if (existingReview != null
-                            && existingReview.getId() != null
-                            && !existingReview.getId().equals(currentReviewId)
-                            && existingReview.getBot() != null
-                            && existingReview.getBot().getId() != null) {
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
+            Set<Long> botIds = reviewRepository.findBotIdsByFilialIdExcludingReview(filial.getId(), currentReviewId);
+            if (botIds != null) {
+                botIds.stream()
+                        .filter(Objects::nonNull)
+                        .forEach(usedBotIds::add);
             }
         } catch (Exception e) {
             log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
@@ -270,19 +308,13 @@ public class ReviewBotChangeService {
                 return usedBotIds;
             }
 
-            List<Review> activeReviewsInSameCity = reviewRepository
-                    .findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
+            Set<Long> activeBotIdsInSameCity = reviewRepository
+                    .findActiveBotIdsByUnpublishedReviewsInFilials(otherFilialIdsInCity, currentReviewId);
 
-            if (activeReviewsInSameCity != null) {
-                for (Review existingReview : activeReviewsInSameCity) {
-                    if (existingReview != null
-                            && existingReview.getId() != null
-                            && !existingReview.getId().equals(currentReviewId)
-                            && existingReview.getBot() != null
-                            && existingReview.getBot().getId() != null) {
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
+            if (activeBotIdsInSameCity != null) {
+                activeBotIdsInSameCity.stream()
+                        .filter(Objects::nonNull)
+                        .forEach(usedBotIds::add);
             }
 
         } catch (Exception e) {

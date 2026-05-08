@@ -62,6 +62,11 @@ export interface AdminManagerText {
   startText: string;
 }
 
+export interface AdminNagulSettings {
+  cooldownMinutes: number;
+  lookaheadDays: number;
+}
+
 export interface PromoButtonSlot {
   section: string;
   sectionTitle: string;
@@ -163,6 +168,11 @@ export interface ManagerTextRequest {
   offerText: string;
   reminderText: string;
   startText: string;
+}
+
+export interface NagulSettingsRequest {
+  cooldownMinutes: number;
+  lookaheadDays: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -326,6 +336,14 @@ export class AdminDictionariesApi {
 
   updateManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText> {
     return this.http.put<AdminManagerText>(`${this.baseUrl}/manager-texts/${managerId}`, request);
+  }
+
+  getNagulSettings(): Observable<AdminNagulSettings> {
+    return this.http.get<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`);
+  }
+
+  updateNagulSettings(request: NagulSettingsRequest): Observable<AdminNagulSettings> {
+    return this.http.put<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`, request);
   }
 
   private keywordParams(keyword: string): HttpParams {

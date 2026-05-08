@@ -99,6 +99,7 @@
 .meta-row span,
 .meta-row a,
 .manager-card footer span,
+.manager-card footer button,
 .manager-card footer a {
   min-width: 0;
   max-width: 100%;
@@ -120,6 +121,7 @@
 
 .manager-card header small,
 .manager-card footer span,
+.manager-card footer button,
 .manager-card footer a {
   min-width: 0;
   color: var(--otziv-info);
@@ -127,14 +129,64 @@
   font-weight: 800;
 }
 
+.manager-card footer .unchanged-age-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 auto;
+  max-width: 62%;
+  overflow: visible;
+}
+
 .manager-card footer .unchanged-age {
   display: inline-flex;
   align-items: center;
   gap: 0.24rem;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: help;
+}
+
+.manager-card footer .unchanged-age:focus-visible {
+  outline: 2px solid rgba(118, 156, 210, 0.5);
+  outline-offset: 2px;
 }
 
 .manager-card footer .unchanged-age--alert {
   color: var(--otziv-danger);
+}
+
+.manager-card footer .unchanged-city-popover {
+  position: absolute;
+  bottom: calc(100% + 0.42rem);
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: min(14rem, 72vw);
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.22);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.25rem);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.manager-card footer .unchanged-city-popover--open {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .manager-card footer .unchanged-age i {

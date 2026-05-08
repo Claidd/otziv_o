@@ -71,6 +71,18 @@
   font-weight: 800;
 }
 
+.worker-card footer span {
+  flex: 0 0 auto;
+}
+
+.worker-card footer a {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .review-actions button,
 .review-actions a,
 .publish-button {

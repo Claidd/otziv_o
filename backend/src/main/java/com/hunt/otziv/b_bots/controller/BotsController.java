@@ -78,7 +78,7 @@ public class BotsController {
     @GetMapping("/edit/{id}")
     public String editBot(@PathVariable(value = "id")  long id, Model model, BotDTO botsDto, Principal principal){
         model.addAttribute("editBotDto", botService.findById(id));
-        model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
+        model.addAttribute("workers", userService.findByUserNameWithAssignments(principal.getName()).orElseThrow().getWorkers());
         model.addAttribute("statuses", statusBotService.findAllBotsStatus());
 //        System.out.println(botService.findById(id));
 //        System.out.println(userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
@@ -94,7 +94,7 @@ public class BotsController {
         if (bindingResult.hasErrors()) {
             log.info("Сработал биндинг - есть ошибка");
             model.addAttribute("editBotDto", botsDto);
-            model.addAttribute("workers", userService.findByUserName(principal.getName()).orElseThrow().getWorkers());
+            model.addAttribute("workers", userService.findByUserNameWithAssignments(principal.getName()).orElseThrow().getWorkers());
             model.addAttribute("statuses", statusBotService.findAllBotsStatus());
             return "bots/bot_edit";
         }

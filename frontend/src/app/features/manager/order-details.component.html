@@ -21,7 +21,7 @@
     @if (details(); as details) {
       <div class="review-carousel">
         <section class="review-cards" aria-label="Отзывы заказа" (scroll)="onReviewCarouselScroll($event)">
-          @for (review of reviews(); track trackReview($index, review)) {
+          @for (review of reviews(); track trackReview($index, review); let first = $first) {
             <article
               class="review-card"
               [class.published]="review.publish"
@@ -57,9 +57,25 @@
                 }
                 <span class="review-id-text">#{{ review.id }}</span>
                 @if (hasReviewNote(review) || isReviewNoteEditing(review)) {
-                  <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle(review)" [title]="reviewNoteTitle(review)">
+                  <span
+                    class="review-note-trigger"
+                    role="button"
+                    tabindex="0"
+                    [class.open]="isReviewNotePopoverOpen(review)"
+                    [attr.aria-expanded]="isReviewNotePopoverOpen(review)"
+                    [attr.aria-label]="reviewNoteTitle(review)"
+                    [title]="reviewNoteTitle(review)"
+                    (click)="toggleReviewNotePopover(review)"
+                    (keydown.enter)="toggleReviewNotePopoverFromKeyboard($event, review)"
+                    (keydown.space)="toggleReviewNotePopoverFromKeyboard($event, review)"
+                  >
                     <span class="material-icons-sharp">priority_high</span>
-                    <span class="review-note-popover">
+                    <span
+                      class="review-note-popover"
+                      [style.right]="first ? 'auto' : null"
+                      [style.left]="first ? '0' : null"
+                      (click)="$event.stopPropagation()"
+                    >
                       @if (hasReviewOwnNote(review) || isReviewNoteEditing(review)) {
                         <label class="review-note-section">
                           <span>Заметка отзыва</span>
@@ -106,8 +122,8 @@
                             [readonly]="!isSideNoteEditing('order')"
                             [ngModel]="sideNoteValue(details, 'order')"
                             (ngModelChange)="setSideNoteDraft('order', $event)"
-                            (focus)="startSideNoteEdit(details, 'order')"
-                            (click)="startSideNoteEdit(details, 'order')"
+                            (focus)="startReviewSideNoteEdit(details, review, 'order')"
+                            (click)="startReviewSideNoteEdit(details, review, 'order')"
                             aria-label="Заметка заказа"
                           ></textarea>
 
@@ -135,8 +151,8 @@
                             [readonly]="!isSideNoteEditing('company')"
                             [ngModel]="sideNoteValue(details, 'company')"
                             (ngModelChange)="setSideNoteDraft('company', $event)"
-                            (focus)="startSideNoteEdit(details, 'company')"
-                            (click)="startSideNoteEdit(details, 'company')"
+                            (focus)="startReviewSideNoteEdit(details, review, 'company')"
+                            (click)="startReviewSideNoteEdit(details, review, 'company')"
                             aria-label="Заметка компании"
                           ></textarea>
 
@@ -289,15 +305,17 @@
               </button>
             </div>
 
-            <button
-              type="button"
-              class="publish-button"
-              [class.publish-button--published]="review.publish"
-              (click)="publishReview(review)"
-              [disabled]="review.publish || isMutating('publish-' + review.id)"
-            >
-              {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
-            </button>
+            @if (canShowPublishButton(details, review)) {
+              <button
+                type="button"
+                class="publish-button"
+                [class.publish-button--published]="review.publish"
+                (click)="publishReview(review)"
+                [disabled]="review.publish || isMutating('publish-' + review.id)"
+              >
+                {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
+              </button>
+            }
 
             <footer>
               <span>{{ review.publishedDate || review.created || '-' }}</span>
@@ -340,6 +358,32 @@
           {{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}
         </button>
       </footer>
+
+      @if (activeReviewFieldEdit(); as edit) {
+        <section
+          class="mobile-review-save-bar"
+          [style.bottom]="mobileReviewActionBottom()"
+          role="group"
+          [attr.aria-label]="edit.title + ': действия редактирования'"
+        >
+          <button
+            type="button"
+            class="cancel"
+            (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+            [disabled]="isMutating(edit.mutationKey)"
+          >
+            Отменить
+          </button>
+          <button
+            type="button"
+            class="save"
+            (click)="saveReviewField(edit.review, edit.field)"
+            [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+          >
+            Сохранить
+          </button>
+        </section>
+      }
 
       <section class="mobile-order-details-side" aria-label="Сводка заказа">
         @if ((details.badReviewSummary?.total || 0) > 0) {
@@ -724,12 +768,13 @@
                 </label>
               }
 
-              @if (canEditReviewVigul()) {
+              @if (canShowReviewVigulControl(draft)) {
                 <label class="review-edit-check">
                   <input
                     name="reviewVigul"
                     type="checkbox"
                     [ngModel]="draft.vigul"
+                    [disabled]="isReviewVigulInputDisabled(draft)"
                     (ngModelChange)="setReviewEditField('vigul', $event)"
                   >
                   <span>Выгул</span>
@@ -769,8 +814,26 @@
               }
 
               <div class="lead-edit-actions-group">
-                <button type="button" class="secondary" (click)="closeReviewEdit()" [disabled]="reviewEditBusy()">Отмена</button>
-                <button type="submit" [disabled]="reviewEditBusy() || reviewEditForm.invalid">
+                <button
+                  type="button"
+                  class="secondary review-new-account"
+                  (click)="assignReviewNewAccount()"
+                  [disabled]="reviewEditBusy()"
+                >
+                  {{ reviewEditNewAccountSaving() ? 'Назначаю...' : 'Новый аккаунт' }}
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="closeReviewEdit()"
+                  [disabled]="reviewEditBusy()"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  [disabled]="reviewEditBusy() || reviewEditForm.invalid"
+                >
                   {{ reviewEditSaving() ? 'Сохраняю...' : 'Сохранить' }}
                 </button>
               </div>

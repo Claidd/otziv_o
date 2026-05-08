@@ -335,9 +335,7 @@ public class ManagerBoardService {
     }
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {
-        return userService.findByUserName(principal.getName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"))
-                .getManagers();
+        return userService.findManagersByUserName(principal.getName());
     }
 
     private String normalizeStatus(String status) {

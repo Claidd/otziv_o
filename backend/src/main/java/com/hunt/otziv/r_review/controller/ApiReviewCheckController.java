@@ -64,7 +64,7 @@ public class ApiReviewCheckController {
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication
     ) {
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         updateReviews(orderDetails, request);
         return buildResponse(orderDetailId, authentication);
     }
@@ -80,7 +80,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для разрешения публикации");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
         OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
 
@@ -106,7 +106,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
 
         updateReviews(orderDetails, request);
@@ -128,7 +128,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на проверку");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
 
         if (!orderService.changeStatusForOrder(order.getId(), "В проверку")) {
@@ -148,7 +148,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отметки оплаты");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
 
         if (order.getAmount() > order.getCounter()) {
@@ -174,7 +174,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
         boolean belongsToOrderDetails = safeReviews(orderDetails).stream()
                 .anyMatch(review -> Objects.equals(review.getId(), reviewId));
@@ -200,7 +200,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка заказа не указана");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
         order.setZametka(request.orderComments());
         orderService.save(order);
@@ -219,7 +219,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
         }
 
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Company company = requireOrder(orderDetails).getCompany();
         if (company == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания заказа не найдена");
@@ -280,7 +280,7 @@ public class ApiReviewCheckController {
     }
 
     private ReviewCheckResponse buildResponse(UUID orderDetailId, Authentication authentication) {
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
         Company company = order.getCompany();
         Filial filial = order.getFilial();
@@ -306,15 +306,20 @@ public class ApiReviewCheckController {
                 order.getSum(),
                 approved,
                 reviews.stream()
-                        .map(review -> toReviewResponse(review, orderDetails, permissions))
+                        .map(review -> toReviewResponse(review, orderDetails, order, permissions))
                         .toList(),
                 permissions
         );
     }
 
+    private OrderDetails reviewCheckDetails(UUID orderDetailId) {
+        return orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId);
+    }
+
     private ReviewCheckReviewResponse toReviewResponse(
             Review review,
             OrderDetails orderDetails,
+            Order order,
             ReviewCheckPermissions permissions
     ) {
         Product product = review.getProduct() != null ? review.getProduct() : orderDetails.getProduct();
@@ -326,11 +331,10 @@ public class ApiReviewCheckController {
                 safe(review.getAnswer()),
                 permissions.canSeeBot() && bot != null ? safe(bot.getFio()) : "",
                 permissions.canSeeInternalInfo() ? safe(orderDetails.getComment()) : "",
-                permissions.canSeeInternalInfo() && orderDetails.getOrder() != null ? safe(orderDetails.getOrder().getZametka()) : "",
+                permissions.canSeeInternalInfo() ? safe(order.getZametka()) : "",
                 permissions.canSeeInternalInfo()
-                        && orderDetails.getOrder() != null
-                        && orderDetails.getOrder().getCompany() != null
-                        ? safe(orderDetails.getOrder().getCompany().getCommentsCompany())
+                        && order.getCompany() != null
+                        ? safe(order.getCompany().getCommentsCompany())
                         : "",
                 product != null ? safe(product.getTitle()) : "",
                 product != null && Boolean.TRUE.equals(product.getPhoto()),

@@ -4,6 +4,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -47,6 +48,7 @@ public class OrderDetailsController {
     private final ReviewService reviewService;
     private final OrderService orderService;
     private final AutoTextService autoTextService;
+    private final AppSettingService appSettingService;
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model, Principal principal){
@@ -145,15 +147,16 @@ public class OrderDetailsController {
 
         if ("Выгул".equals(pageName)) { // возврат на страницу публикации с Рабочего
             log.info("СМЕНА Бота со страницы Выгул - {}", principal != null ? principal.getName() : "Гость");
+            LocalDate nagulDateLimit = nagulLookaheadDate(localDate);
             if ("ROLE_ADMIN".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(60), pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(nagulDateLimit, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
             }
 
             if ("ROLE_MANAGER".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
@@ -161,14 +164,14 @@ public class OrderDetailsController {
 
             if ("ROLE_WORKER".equals(userRole)) {
                 log.info("Зашли список всех заказов для работника - {}", principal != null ? principal.getName() : "Гость");
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
             }
 
             if ("ROLE_OWNER".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
@@ -229,15 +232,16 @@ public class OrderDetailsController {
 
         if ("Выгул".equals(pageName)) { // возврат на страницу публикации с Рабочего
             log.info("Деактивация Бота со страницы Выгул - {}", principal != null ? principal.getName() : "Гость");
+            LocalDate nagulDateLimit = nagulLookaheadDate(localDate);
             if ("ROLE_ADMIN".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(60), pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOAndDateToAdminToVigul(nagulDateLimit, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Админ Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
             }
 
             if ("ROLE_MANAGER".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByManagerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Менеджер Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
@@ -245,14 +249,14 @@ public class OrderDetailsController {
 
             if ("ROLE_WORKER".equals(userRole)) {
                 log.info("Зашли список всех заказов для работника - {}", principal != null ? principal.getName() : "Гость");
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByWorkerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Работник Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
             }
 
             if ("ROLE_OWNER".equals(userRole)){
-                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize);
+                Page<ReviewDTOOne> updatedReviews = reviewService.getAllReviewDTOByOwnerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize);
                 model.addAttribute("reviews", updatedReviews);
                 checkTimeMethod("Владелец Время выполнения OrderDetailsController/ordersDetails/{orderId}/change_bot/{reviewId} для замены бота:  publish_orders_worker + fragments/reviews_to_worker ", startTime, principal);
                 return "fragments/nagul_to_worker :: nagul_to_worker";
@@ -374,6 +378,10 @@ public class OrderDetailsController {
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
         log.info("{}: {} сек. - {}", text, String.format("%.4f", timeElapsed), principal != null ? principal.getName() : "Гость");
+    }
+
+    private LocalDate nagulLookaheadDate(LocalDate baseDate) {
+        return baseDate.plusDays(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60));
     }
 
 }

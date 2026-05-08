@@ -460,6 +460,18 @@ tr.selected td {
   min-height: 6.25rem;
 }
 
+.settings-form {
+  align-content: start;
+}
+
+.settings-hint {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .manager-text-form label:nth-child(3) textarea {
   min-height: 8.5rem;
 }

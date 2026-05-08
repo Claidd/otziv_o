@@ -8,7 +8,7 @@
   [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
 >
   <header>
-    <a [href]="review.filialUrl || reviewEditUrl()" target="_blank" rel="noopener">{{ review.companyTitle || 'Компания' }}</a>
+    <a [href]="review.filialUrl || reviewEditUrl()" target="_blank" rel="noopener" [title]="reviewTitle()">{{ reviewTitle() }}</a>
     <div class="review-id-line">
       @if (needsReviewPhoto()) {
         @if (hasReviewPhoto()) {
@@ -239,6 +239,32 @@
     }
   </div>
 
+  @if (activeReviewField(); as field) {
+    <section
+      class="mobile-review-save-bar"
+      [style.bottom]="mobileReviewActionBottom()"
+      role="group"
+      aria-label="Действия редактирования отзыва"
+    >
+      <button
+        type="button"
+        class="cancel"
+        (click)="reviewFieldEditCanceled.emit(field)"
+        [disabled]="isMutating(reviewFieldMutationKey(field))"
+      >
+        Отменить
+      </button>
+      <button
+        type="button"
+        class="save"
+        (click)="reviewFieldSaveRequested.emit(field)"
+        [disabled]="isMutating(reviewFieldMutationKey(field)) || !isReviewFieldChanged(field) || (field === 'text' && !reviewFieldValue(field).trim())"
+      >
+        Сохранить
+      </button>
+    </section>
+  }
+
   <div class="bot-line" [class.bot-line--empty]="hasUnavailableBot()">
     <span>{{ botLabel() }}</span>
   </div>
@@ -281,9 +307,9 @@
   <footer>
     <span>{{ reviewDate() }}</span>
     @if (canOpenEditModal) {
-      <a href="" (click)="$event.preventDefault(); editOpened.emit()">{{ review.workerFio || 'специалист' }}</a>
+      <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="footerLabel()">{{ footerLabel() }}</a>
     } @else {
-      <a [href]="reviewEditUrl()">{{ review.workerFio || 'специалист' }}</a>
+      <a [href]="reviewEditUrl()" [title]="footerLabel()">{{ footerLabel() }}</a>
     }
   </footer>
 </article>

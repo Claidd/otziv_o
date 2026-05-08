@@ -72,6 +72,8 @@ public interface ReviewService {
 
     Review save(Review review);
 
+    Review updateReviewPhoto(Long reviewId, String url);
+
     boolean deleteReview(Long reviewId);
 
     List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
@@ -97,6 +99,8 @@ public interface ReviewService {
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
 
     void changeBot(Long reviewId);
+
+    void assignNewAccount(Long reviewId);
 
     void deActivateAndChangeBot(Long reviewId, Long botId);
 

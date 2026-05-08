@@ -181,6 +181,10 @@ function createFacade(config: {
         calls.push(`delete-review:${orderId}:${reviewId}`);
         return of(details);
       },
+      assignOrderReviewNewAccount: (orderId: number, reviewId: number) => {
+        calls.push(`new-account:${orderId}:${reviewId}`);
+        return of(config.updateReviewDetails ?? details);
+      },
       uploadOrderReviewPhoto: (orderId: number, reviewId: number, file: File) => {
         calls.push(`upload-review:${orderId}:${reviewId}:${file.name}`);
         return of(config.uploadDetails ?? details);
@@ -307,6 +311,46 @@ describe('WorkerBoardEditFacade', () => {
     expect(state.clearedDrafts).toEqual([7]);
     expect(state.facade.editReview()).toBeNull();
     expect(state.calls).toContain('load-board');
+  });
+
+  it('sends only vigul unsets for limited worker review edit', () => {
+    const detailsReview = orderReview({ id: 7, vigul: true });
+    const state = createFacade({
+      details: orderDetails({
+        reviews: [detailsReview],
+        canEditReviewDates: false,
+        canEditReviewPublish: false,
+        canEditReviewVigul: true,
+        canDeleteReviews: false
+      })
+    });
+
+    state.facade.openReviewEdit(workerReview({ id: 7 }));
+    expect(state.facade.canOnlyUnsetReviewVigul()).toBe(true);
+
+    state.facade.handleReviewEditDraftChange({ field: 'vigul', value: false });
+    state.facade.saveReviewEdit();
+
+    expect(state.lastReviewRequest?.vigul).toBe(false);
+  });
+
+  it('does not send vigul set for limited worker review edit', () => {
+    const detailsReview = orderReview({ id: 7, vigul: false });
+    const state = createFacade({
+      details: orderDetails({
+        reviews: [detailsReview],
+        canEditReviewDates: false,
+        canEditReviewPublish: false,
+        canEditReviewVigul: true,
+        canDeleteReviews: false
+      })
+    });
+
+    state.facade.openReviewEdit(workerReview({ id: 7 }));
+    state.facade.handleReviewEditDraftChange({ field: 'vigul', value: true });
+    state.facade.saveReviewEdit();
+
+    expect(state.lastReviewRequest?.vigul).toBe(false);
   });
 
   it('uploads review photo and refreshes draft URL from details', () => {

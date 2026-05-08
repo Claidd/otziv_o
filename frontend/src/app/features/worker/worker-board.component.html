@@ -128,6 +128,7 @@
             [copied]="copied()"
             [mutationKey]="mutationKey()"
             [canOpenEditModal]="canOpenReviewEditModal()"
+            [showFilialCityInFooter]="showReviewFooterCity()"
             [reviewFieldDrafts]="reviewFieldDrafts()"
             [editingReviewFieldKey]="editingReviewFieldKey()"
             [savedReviewFieldKey]="savedReviewFieldKey()"
@@ -237,6 +238,57 @@
     <app-personal-reminders mode="list" />
   </section>
 
+  @if (overdueModalOpen()) {
+    @if (overdueOrders(); as overdue) {
+      <div class="lead-edit-backdrop" role="presentation" (click)="closeOverdueModal()">
+        <section
+          class="lead-edit-modal lead-edit-modal--compact overdue-reminder-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="overdue-reminder-title"
+          (click)="$event.stopPropagation()"
+        >
+          <header class="lead-edit-head overdue-reminder-head">
+            <div>
+              <small>Без изменений больше {{ overdue.thresholdDays }} дн.</small>
+              <h2 id="overdue-reminder-title">Нужна рассылка</h2>
+            </div>
+            <button type="button" class="lead-edit-close" (click)="closeOverdueModal()" title="Закрыть">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          </header>
+
+          <section class="overdue-reminder-summary">
+            <span class="material-icons-sharp">notifications_active</span>
+            <div>
+              <strong>{{ overdue.total }}</strong>
+              <p>заказов давно без изменений</p>
+              <small>Максимальная просрочка: {{ overdueMaxDays(overdue) }} дн.</small>
+            </div>
+          </section>
+
+          <div class="overdue-reminder-statuses" aria-label="Просрочки по статусам заказов">
+            @for (status of overdue.statuses; track trackOverdueStatus($index, status)) {
+              <button type="button" (click)="openOverdueStatus(status.status)">
+                <span>{{ status.status }}</span>
+                <strong>{{ status.count }}</strong>
+                <small>до {{ status.maxDays }} дн.</small>
+              </button>
+            }
+          </div>
+
+          <p class="overdue-reminder-note">
+            Проверьте эти статусы и запустите рассылку по зависшим заказам.
+          </p>
+
+          <button type="button" class="overdue-reminder-dismiss" (click)="closeOverdueModal()">
+            Клянусь исправить и не допускать
+          </button>
+        </section>
+      </div>
+    }
+  }
+
   @if (orderLoading() || editOrder()) {
     <app-worker-order-edit-modal
       [loading]="orderLoading()"
@@ -260,16 +312,19 @@
       [saving]="reviewEditSaving()"
       [deleting]="reviewEditDeleting()"
       [uploading]="reviewEditUploading()"
+      [newAccountLoading]="reviewEditNewAccountSaving()"
       [busy]="reviewEditBusy()"
       [error]="reviewEditError()"
       [productOptions]="productOptions()"
       [canEditDates]="!!reviewEditDetails()?.canEditReviewDates"
       [canEditPublish]="!!reviewEditDetails()?.canEditReviewPublish"
       [canEditVigul]="!!reviewEditDetails()?.canEditReviewVigul"
+      [canOnlyUnsetVigul]="canOnlyUnsetReviewVigul()"
       [canDelete]="!!reviewEditDetails()?.canDeleteReviews"
       (closed)="closeReviewEdit()"
       (submitted)="saveReviewEdit()"
       (deleted)="deleteReviewEdit()"
+      (newAccountRequested)="assignReviewNewAccount()"
       (photoSelected)="uploadReviewPhoto($event)"
       (draftChange)="handleReviewEditDraftChange($event)"
     />

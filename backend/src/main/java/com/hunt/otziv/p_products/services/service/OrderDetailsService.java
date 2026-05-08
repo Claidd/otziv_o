@@ -13,6 +13,7 @@ public interface OrderDetailsService {
 
     OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId);
     OrderDetails getOrderDetailById(UUID orderDetailId);
+    OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId);
 
     void deleteOrderDetailsById(UUID orderDetailId);
 

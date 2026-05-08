@@ -9,12 +9,20 @@ import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, Re
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
 type ReviewEditDraft = ReviewUpdateRequest;
+type ActiveOrderReviewFieldEdit = {
+  review: OrderReviewItem;
+  field: ReviewEditableField;
+  title: string;
+  mutationKey: string;
+};
+const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
 
 @Component({
   selector: 'app-order-details',
@@ -43,6 +51,7 @@ export class OrderDetailsComponent {
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly savedReviewNoteId = signal<number | null>(null);
+  readonly openReviewNotePopoverId = signal<number | null>(null);
   readonly editingSideNoteField = signal<SideNoteField | null>(null);
   readonly sideNoteDrafts = signal<Partial<Record<SideNoteField, string>>>({});
   readonly savedSideNoteField = signal<SideNoteField | null>(null);
@@ -52,12 +61,43 @@ export class OrderDetailsComponent {
   readonly reviewEditSaving = signal(false);
   readonly reviewEditDeleting = signal(false);
   readonly reviewEditUploading = signal(false);
+  readonly reviewEditNewAccountSaving = signal(false);
   readonly reviewEditError = signal<string | null>(null);
+  readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   readonly layoutTitle = computed(() => this.details()?.title || 'Детали заказа');
   readonly reviews = computed(() => this.details()?.reviews ?? []);
   readonly productOptions = computed(() => this.details()?.products ?? []);
-  readonly reviewEditBusy = computed(() => this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading());
+  readonly reviewEditBusy = computed(() => this.reviewEditSaving()
+    || this.reviewEditDeleting()
+    || this.reviewEditUploading()
+    || this.reviewEditNewAccountSaving());
+  readonly activeReviewFieldEdit = computed<ActiveOrderReviewFieldEdit | null>(() => {
+    const key = this.editingReviewFieldKey();
+    const details = this.details();
+    if (!key || !details) {
+      return null;
+    }
+
+    const match = /^(\d+)-(text|answer)$/.exec(key);
+    if (!match) {
+      return null;
+    }
+
+    const review = details.reviews.find((item) => item.id === Number(match[1]));
+    if (!review) {
+      return null;
+    }
+
+    const field = match[2] as ReviewEditableField;
+    return {
+      review,
+      field,
+      title: field === 'text' ? 'Текст отзыва' : 'Замечание',
+      mutationKey: this.saveFieldMutationKey(review, field)
+    };
+  });
+
   constructor() {
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -121,6 +161,10 @@ export class OrderDetailsComponent {
     }
 
     const key = this.reviewFieldKey(review, field);
+    if (this.editingReviewFieldKey() === key) {
+      return;
+    }
+
     this.savedReviewFieldKey.set(null);
     this.editingReviewFieldKey.set(key);
     this.reviewFieldDrafts.update((drafts) => {
@@ -262,11 +306,33 @@ export class OrderDetailsComponent {
       || this.hasMeaningfulNote(this.details()?.companyComments);
   }
 
+  toggleReviewNotePopover(review: OrderReviewItem): void {
+    if (this.editingReviewNoteId() !== null || this.editingSideNoteField() !== null) {
+      return;
+    }
+
+    this.openReviewNotePopoverId.update((id) => id === review.id ? null : review.id);
+  }
+
+  toggleReviewNotePopoverFromKeyboard(event: Event, review: OrderReviewItem): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    this.toggleReviewNotePopover(review);
+  }
+
+  isReviewNotePopoverOpen(review: OrderReviewItem): boolean {
+    return this.openReviewNotePopoverId() === review.id || this.isReviewNoteEditing(review);
+  }
+
   startReviewNoteEdit(review: OrderReviewItem): void {
     if (this.isMutating(`save-note-${review.id}`)) {
       return;
     }
 
+    this.openReviewNotePopoverId.set(review.id);
     this.savedReviewNoteId.set(null);
     this.editingReviewNoteId.set(review.id);
     this.reviewNoteDrafts.update((drafts) => {
@@ -295,6 +361,7 @@ export class OrderDetailsComponent {
 
     this.savedReviewNoteId.set(null);
     this.editingReviewNoteId.set(null);
+    this.openReviewNotePopoverId.set(null);
     this.clearReviewNoteDraft(review.id);
   }
 
@@ -318,6 +385,10 @@ export class OrderDetailsComponent {
 
           if (this.editingReviewNoteId() === review.id) {
             this.editingReviewNoteId.set(null);
+          }
+
+          if (this.openReviewNotePopoverId() === review.id) {
+            this.openReviewNotePopoverId.set(null);
           }
 
           this.clearReviewNoteDraft(review.id);
@@ -391,6 +462,15 @@ export class OrderDetailsComponent {
     }));
   }
 
+  startReviewSideNoteEdit(details: OrderDetailsPayload, review: OrderReviewItem, field: SideNoteField): void {
+    if (this.isMutating(`save-side-${field}`)) {
+      return;
+    }
+
+    this.openReviewNotePopoverId.set(review.id);
+    this.startSideNoteEdit(details, field);
+  }
+
   setSideNoteDraft(field: SideNoteField, value: string): void {
     this.sideNoteDrafts.update((drafts) => ({
       ...drafts,
@@ -405,6 +485,7 @@ export class OrderDetailsComponent {
 
     this.savedSideNoteField.set(null);
     this.editingSideNoteField.set(null);
+    this.openReviewNotePopoverId.set(null);
     this.clearSideNoteDraft(field);
   }
 
@@ -438,6 +519,8 @@ export class OrderDetailsComponent {
           if (this.editingSideNoteField() === field) {
             this.editingSideNoteField.set(null);
           }
+
+          this.openReviewNotePopoverId.set(null);
 
           this.clearSideNoteDraft(field);
         }, 1000);
@@ -519,6 +602,47 @@ export class OrderDetailsComponent {
     });
   }
 
+  assignReviewNewAccount(): void {
+    const review = this.editReview();
+
+    if (!review || this.reviewEditNewAccountSaving()) {
+      return;
+    }
+
+    const oldBotId = review.botId ?? null;
+    this.reviewEditNewAccountSaving.set(true);
+    this.reviewEditError.set(null);
+
+    this.managerApi.assignOrderReviewNewAccount(review.orderId, review.id).subscribe({
+      next: (details) => {
+        const updatedReview = details.reviews.find((item) => item.id === review.id);
+        this.details.set(details);
+
+        if (updatedReview) {
+          this.editReview.set(updatedReview);
+          this.reviewEditDraft.update((draft) => draft ? {
+            ...draft,
+            vigul: !!updatedReview.vigul,
+            botName: updatedReview.botFio ?? '',
+            botPassword: updatedReview.botPassword ?? ''
+          } : this.toReviewEditDraft(updatedReview));
+        }
+
+        this.reviewEditNewAccountSaving.set(false);
+        this.toastService.success(
+          'Аккаунт назначен',
+          this.botChangeMessage(oldBotId, updatedReview?.botId ?? null)
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось назначить новый аккаунт');
+        this.reviewEditNewAccountSaving.set(false);
+        this.reviewEditError.set(message);
+        this.toastService.error('Аккаунт не назначен', message);
+      }
+    });
+  }
+
   deactivateBot(review: OrderReviewItem): void {
     if (!review.botId) {
       this.toastService.error('Аккаунт не заблокирован', 'У отзыва нет активного аккаунта');
@@ -539,6 +663,11 @@ export class OrderDetailsComponent {
   }
 
   publishReview(review: OrderReviewItem): void {
+    const details = this.details();
+    if (!details || !this.canShowPublishButton(details, review)) {
+      return;
+    }
+
     this.runReviewMutation(
       `publish-${review.id}`,
       this.managerApi.publishOrderReview(review.orderId, review.id),
@@ -604,6 +733,7 @@ export class OrderDetailsComponent {
     this.reviewEditSaving.set(false);
     this.reviewEditDeleting.set(false);
     this.reviewEditUploading.set(false);
+    this.reviewEditNewAccountSaving.set(false);
   }
 
   closeReviewEdit(): void {
@@ -617,6 +747,10 @@ export class OrderDetailsComponent {
   }
 
   setReviewEditField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
+    if (field === 'vigul' && this.canOnlyUnsetReviewVigul() && value === true) {
+      return;
+    }
+
     this.reviewEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
   }
 
@@ -636,7 +770,9 @@ export class OrderDetailsComponent {
     this.reviewEditSaving.set(true);
     this.reviewEditError.set(null);
 
-    this.managerApi.updateOrderReview(review.orderId, review.id, draft).subscribe({
+    const request = this.reviewEditRequest(review, draft);
+
+    this.managerApi.updateOrderReview(review.orderId, review.id, request).subscribe({
       next: (details) => {
         this.details.set(details);
         this.clearReviewFieldDraft(review, 'text');
@@ -744,8 +880,28 @@ export class OrderDetailsComponent {
     return !!this.details()?.canEditReviewVigul;
   }
 
+  canShowReviewVigulControl(draft: ReviewEditDraft): boolean {
+    if (!this.canEditReviewVigul()) {
+      return false;
+    }
+
+    return !this.canOnlyUnsetReviewVigul() || !!this.editReview()?.vigul || !!draft.vigul;
+  }
+
+  isReviewVigulInputDisabled(draft: ReviewEditDraft): boolean {
+    return this.canOnlyUnsetReviewVigul() && !draft.vigul;
+  }
+
   canDeleteReviews(): boolean {
     return !!this.details()?.canDeleteReviews;
+  }
+
+  canShowPublishButton(details: OrderDetailsPayload, review: OrderReviewItem): boolean {
+    if (review.publish) {
+      return true;
+    }
+
+    return !HIDDEN_PUBLISH_ORDER_STATUSES.has((details.status ?? '').trim());
   }
 
   productNeedsPhoto(productId: number | null): boolean {
@@ -849,6 +1005,24 @@ export class OrderDetailsComponent {
       botPassword: review.botPassword ?? '',
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
+    };
+  }
+
+  private canOnlyUnsetReviewVigul(): boolean {
+    const details = this.details();
+    return !!details?.canEditReviewVigul
+      && !details.canEditReviewDates
+      && !details.canEditReviewPublish;
+  }
+
+  private reviewEditRequest(review: OrderReviewItem, draft: ReviewEditDraft): ReviewEditDraft {
+    if (!this.canOnlyUnsetReviewVigul()) {
+      return draft;
+    }
+
+    return {
+      ...draft,
+      vigul: !!review.vigul && !!draft.vigul
     };
   }
 

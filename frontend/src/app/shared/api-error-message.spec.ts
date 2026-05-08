@@ -17,6 +17,12 @@ describe('apiErrorMessage', () => {
     );
   });
 
+  it('does not show access-denied text for server errors', () => {
+    expect(apiErrorMessage({ status: 500, error: { message: 'У вас нет доступа к этому действию.' } }, 'Менеджер не загрузился')).toBe(
+      'Менеджер не загрузился. На сервере произошла ошибка. Обновите данные через пару минут. Если ошибка повторится, сообщите администратору.'
+    );
+  });
+
   it('explains network failures without leaking implementation details', () => {
     expect(apiErrorDetail({ status: 0 })).toBe('Сервер не отвечает. Проверьте, что серверная часть запущена, и попробуйте снова.');
   });

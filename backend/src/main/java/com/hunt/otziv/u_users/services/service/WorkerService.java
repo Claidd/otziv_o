@@ -27,6 +27,8 @@ public interface WorkerService {
 
     Set<WorkerDTO> getAllWorkersByManagerId(Set<Worker> workers);
 
+    Set<WorkerDTO> getAllWorkersByManagerId(Long managerId);
+
     Worker getWorkerByUsername(String login);
     List<Worker> getAllWorkersToManager(Manager manager);
 

@@ -190,7 +190,7 @@
                             <label for="inputAddWorkers" class="form-label">Специалист</label> <br>
                             <select id="inputAddWorkers" name="workerId" th:field="*{workerId}"  class="form-control form-select form-select-lg">
                                 <option value="0">Добавить специалиста</option>
-                                <option th:each="workerAll : ${companyDTO.manager.user.workers}" th:value="${workerAll.id}" th:text="${workerAll.user.fio}"></option>
+                                <option th:each="workerAll : ${allWorkers}" th:value="${workerAll.workerId}" th:text="${workerAll.user.fio}"></option>
                             </select>
                         </div>
         <!--    ВВОД НОВЫХ ОПЕРАТОРОВ, МЕНЕДЖЕРОВ И РАБОТНИКОВ    -->

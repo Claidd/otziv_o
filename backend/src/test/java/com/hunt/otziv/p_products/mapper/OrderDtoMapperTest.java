@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.mapper;
 
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.dto.OrderDTO;
@@ -43,6 +44,7 @@ class OrderDtoMapperTest {
         assertEquals("Комментарий компании", dto.getCompanyComments());
         assertEquals("Центр", dto.getFilialTitle());
         assertEquals("https://filial.example", dto.getFilialUrl());
+        assertEquals("Иркутск", dto.getFilialCity());
         assertEquals("В работе", dto.getStatus());
         assertEquals(new BigDecimal("300.00"), dto.getSum());
         assertEquals("https://chat.example", dto.getCompanyUrlChat());
@@ -71,6 +73,7 @@ class OrderDtoMapperTest {
                 null,
                 "Центр",
                 "https://filial.example",
+                "Иркутск",
                 "В работе",
                 new BigDecimal("300.00"),
                 "https://chat.example",
@@ -97,6 +100,7 @@ class OrderDtoMapperTest {
         assertEquals("Компания", dto.getCompanyTitle());
         assertEquals("", dto.getCompanyComments());
         assertEquals("Центр", dto.getFilialTitle());
+        assertEquals("Иркутск", dto.getFilialCity());
         assertEquals("В работе", dto.getStatus());
         assertEquals(new BigDecimal("300.00"), dto.getSum());
         assertEquals(2, dto.getAmount());
@@ -192,6 +196,7 @@ class OrderDtoMapperTest {
                 .id(6L)
                 .title("Центр")
                 .url("https://filial.example")
+                .city(City.builder().id(9L).title("Иркутск").build())
                 .build();
         Company company = Company.builder()
                 .id(5L)

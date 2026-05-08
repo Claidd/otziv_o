@@ -69,6 +69,7 @@ public class OrderDtoMapper {
                 .companyComments(order.getCompany() != null ? safeString(order.getCompany().getCommentsCompany()) : "")
                 .filialTitle(order.getFilial() != null ? safeString(order.getFilial().getTitle()) : "Без филиала")
                 .filialUrl(order.getFilial() != null ? safeString(order.getFilial().getUrl()) : "")
+                .filialCity(filialCityTitle(order.getFilial()))
                 .status(safeStatusTitle(order))
                 .sum(order.getSum())
                 .companyUrlChat(order.getCompany() != null ? safeString(order.getCompany().getUrlChat()) : "")
@@ -101,7 +102,7 @@ public class OrderDtoMapper {
         }
 
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = rowLocalDate(row, 19);
+        LocalDate changedDate = rowLocalDate(row, 20);
         long daysDifference = ChronoUnit.DAYS.between(changedDate != null ? changedDate : now, now);
 
         return OrderDTOList.builder()
@@ -112,23 +113,24 @@ public class OrderDtoMapper {
                 .companyComments(rowString(row, 4, ""))
                 .filialTitle(rowString(row, 5, "Без филиала"))
                 .filialUrl(rowString(row, 6, ""))
-                .status(rowString(row, 7, ""))
-                .sum(rowBigDecimal(row, 8))
-                .companyUrlChat(rowString(row, 9, ""))
-                .companyTelephone(rowString(row, 10, ""))
-                .managerPayText(rowString(row, 11, ""))
-                .amount(rowInteger(row, 12))
-                .counter(rowInteger(row, 13))
-                .waitingForClient(rowBoolean(row, 14))
-                .workerUserFio(rowString(row, 15, ""))
-                .categoryTitle(rowString(row, 16, "Не выбрано"))
-                .subCategoryTitle(rowString(row, 17, "Не выбрано"))
-                .created(rowLocalDate(row, 18))
+                .filialCity(rowString(row, 7, ""))
+                .status(rowString(row, 8, ""))
+                .sum(rowBigDecimal(row, 9))
+                .companyUrlChat(rowString(row, 10, ""))
+                .companyTelephone(rowString(row, 11, ""))
+                .managerPayText(rowString(row, 12, ""))
+                .amount(rowInteger(row, 13))
+                .counter(rowInteger(row, 14))
+                .waitingForClient(rowBoolean(row, 15))
+                .workerUserFio(rowString(row, 16, ""))
+                .categoryTitle(rowString(row, 17, "Не выбрано"))
+                .subCategoryTitle(rowString(row, 18, "Не выбрано"))
+                .created(rowLocalDate(row, 19))
                 .changed(changedDate)
-                .payDay(rowLocalDate(row, 20))
+                .payDay(rowLocalDate(row, 21))
                 .dayToChangeStatusAgo(daysDifference)
-                .orderComments(rowString(row, 21, "нет заметок"))
-                .firstOrderForCompany(rowBoolean(row, 22))
+                .orderComments(rowString(row, 22, "нет заметок"))
+                .firstOrderForCompany(rowBoolean(row, 23))
                 .build();
     }
 
@@ -409,6 +411,10 @@ public class OrderDtoMapper {
                 .min(Long::compareTo)
                 .map(order.getId()::equals)
                 .orElse(false);
+    }
+
+    private String filialCityTitle(Filial filial) {
+        return filial != null && filial.getCity() != null ? safeString(filial.getCity().getTitle()) : "";
     }
 
     private String safeStatusTitle(Order order) {

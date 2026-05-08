@@ -279,11 +279,10 @@ public class OrderBoardQueryService {
     }
 
     private List<Manager> resolveOwnerManagersFromPrincipal(Principal principal) {
-        User user = resolveUserFromPrincipal(principal);
-        if (user == null || user.getManagers() == null) {
+        if (principal == null) {
             return Collections.emptyList();
         }
-        return user.getManagers().stream().toList();
+        return userService.findManagersByUserName(principal.getName()).stream().toList();
     }
 
     private boolean hasText(String value) {

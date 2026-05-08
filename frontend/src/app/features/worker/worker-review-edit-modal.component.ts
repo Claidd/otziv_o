@@ -26,22 +26,41 @@ export class WorkerReviewEditModalComponent {
   @Input() saving = false;
   @Input() deleting = false;
   @Input() uploading = false;
+  @Input() newAccountLoading = false;
   @Input() busy = false;
   @Input() error: string | null = null;
   @Input() productOptions: ProductOption[] = [];
   @Input() canEditDates = false;
   @Input() canEditPublish = false;
   @Input() canEditVigul = false;
+  @Input() canOnlyUnsetVigul = false;
   @Input() canDelete = false;
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly submitted = new EventEmitter<void>();
   @Output() readonly deleted = new EventEmitter<void>();
+  @Output() readonly newAccountRequested = new EventEmitter<void>();
   @Output() readonly photoSelected = new EventEmitter<File>();
   @Output() readonly draftChange = new EventEmitter<WorkerReviewEditDraftChange>();
 
   setField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
+    if (field === 'vigul' && this.canOnlyUnsetVigul && value === true) {
+      return;
+    }
+
     this.draftChange.emit({ field, value } as WorkerReviewEditDraftChange);
+  }
+
+  canShowVigulControl(draft: ReviewEditDraft): boolean {
+    if (!this.canEditVigul) {
+      return false;
+    }
+
+    return !this.canOnlyUnsetVigul || !!this.review?.vigul || !!draft.vigul;
+  }
+
+  isVigulInputDisabled(draft: ReviewEditDraft): boolean {
+    return this.canOnlyUnsetVigul && !draft.vigul;
   }
 
   productNeedsPhoto(productId: number | null): boolean {

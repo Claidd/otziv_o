@@ -16,10 +16,12 @@
       </nav>
 
       <div class="quick-links">
-        <button type="button" (click)="openActiveCreate()">
-          <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
-          {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
-        </button>
+        @if (activeTab() !== 'settings') {
+          <button type="button" (click)="openActiveCreate()">
+            <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
+            {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
+          </button>
+        }
         <button type="button" (click)="loadAll()" [disabled]="loading()">
           <span class="material-icons-sharp">refresh</span>
           {{ loading() ? 'Загрузка' : 'Обновить' }}
@@ -27,26 +29,28 @@
       </div>
     </header>
 
-    <section class="dictionary-search">
-      <label>
-        <span class="material-icons-sharp">search</span>
-        <input
-          type="text"
-          placeholder="Найти"
-          [value]="search()"
-          (input)="search.set($any($event.target).value)"
-          (keyup.enter)="searchActive()"
-        >
-      </label>
+    @if (activeTab() !== 'settings') {
+      <section class="dictionary-search">
+        <label>
+          <span class="material-icons-sharp">search</span>
+          <input
+            type="text"
+            placeholder="Найти"
+            [value]="search()"
+            (input)="search.set($any($event.target).value)"
+            (keyup.enter)="searchActive()"
+          >
+        </label>
 
-      <button type="button" class="icon-button" (click)="searchActive()" [disabled]="loading()" title="Искать">
-        <span class="material-icons-sharp">manage_search</span>
-      </button>
+        <button type="button" class="icon-button" (click)="searchActive()" [disabled]="loading()" title="Искать">
+          <span class="material-icons-sharp">manage_search</span>
+        </button>
 
-      <button type="button" class="icon-button" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
-        <span class="material-icons-sharp">filter_alt_off</span>
-      </button>
-    </section>
+        <button type="button" class="icon-button" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
+          <span class="material-icons-sharp">filter_alt_off</span>
+        </button>
+      </section>
+    }
 
     @if (error()) {
       <app-load-error-card title="Справочники не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadAll()" />
@@ -419,6 +423,39 @@
                   } @empty {
                     <tr><td colspan="3" class="no-results">Текстов менеджеров нет.</td></tr>
                   }
+                </tbody>
+              </table>
+            }
+
+            @case ('settings') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="selected">
+                    <td>
+                      <strong>Время между выгулами</strong>
+                      <span>Пауза для специалиста после кнопки «ВЫГУЛЯЛ»</span>
+                    </td>
+                    <td>
+                      <strong>{{ nagulSettings()?.cooldownMinutes ?? 0 }} мин</strong>
+                      <span>{{ nagulSettings()?.cooldownMinutes === 0 ? 'без паузы' : 'активно' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Горизонт выдачи выгула</strong>
+                      <span>На сколько дней вперёд показывать отзывы в разделе «Выгул»</span>
+                    </td>
+                    <td>
+                      <strong>{{ nagulSettings()?.lookaheadDays ?? 60 }} дн.</strong>
+                      <span>{{ nagulSettings()?.lookaheadDays === 0 ? 'только сегодня' : 'вперёд от сегодня' }}</span>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             }
@@ -842,6 +879,33 @@
                 <p>Тексты оплаты, начала, предложения, напоминания и старта откроются здесь.</p>
               </div>
             }
+          }
+
+          @case ('settings') {
+            <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
+              <label>
+                <span>Время между выгулами, минут</span>
+                <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes">
+              </label>
+
+              <label>
+                <span>Горизонт выдачи выгула, дней</span>
+                <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
+              </label>
+
+              <p class="settings-hint">
+                Значения применяются сразу после сохранения. Если поставить 0 минут, специалист сможет делать выгул без паузы.
+                Если поставить 0 дней, в «Выгул» попадут только отзывы с датой до сегодняшнего дня.
+              </p>
+
+              @if (settingsForm.invalid && settingsForm.touched) {
+                <p class="error compact">Укажите паузу от 0 до 1440 минут и горизонт от 0 до 365 дней.</p>
+              }
+
+              <div class="actions">
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
           }
         }
       </article>

@@ -18,7 +18,18 @@ import java.util.List;
 @Repository
 public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, Long> {
 
-    List<BadReviewTask> findAllByOrderIdOrderByCreatedDesc(Long orderId);
+    @Query("""
+        SELECT DISTINCT t
+        FROM BadReviewTask t
+        LEFT JOIN FETCH t.sourceReview
+        LEFT JOIN FETCH t.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH t.bot b
+        LEFT JOIN FETCH b.status
+        WHERE t.order.id = :orderId
+        ORDER BY t.created DESC
+    """)
+    List<BadReviewTask> findAllByOrderIdOrderByCreatedDesc(@Param("orderId") Long orderId);
 
     List<BadReviewTask> findAllByOrderIdAndStatus(Long orderId, BadReviewTaskStatus status);
 
@@ -54,10 +65,25 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
                 LEFT JOIN FETCH o.manager om
                 LEFT JOIN FETCH om.user
                 LEFT JOIN FETCH t.sourceReview r
+                LEFT JOIN FETCH r.category
+                LEFT JOIN FETCH r.subCategory
+                LEFT JOIN FETCH r.product rp
+                LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
+                LEFT JOIN FETCH rb.status
+                LEFT JOIN FETCH r.worker rw
+                LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
                 LEFT JOIN FETCH f.city city
+                LEFT JOIN FETCH f.company
                 LEFT JOIN FETCH r.orderDetails d
-                LEFT JOIN FETCH d.product
+                LEFT JOIN FETCH d.product dp
+                LEFT JOIN FETCH dp.productCategory
+                LEFT JOIN FETCH d.order ro
+                LEFT JOIN FETCH ro.company
+                LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -113,10 +139,25 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
                 LEFT JOIN FETCH o.manager om
                 LEFT JOIN FETCH om.user
                 LEFT JOIN FETCH t.sourceReview r
+                LEFT JOIN FETCH r.category
+                LEFT JOIN FETCH r.subCategory
+                LEFT JOIN FETCH r.product rp
+                LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
+                LEFT JOIN FETCH rb.status
+                LEFT JOIN FETCH r.worker rw
+                LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
                 LEFT JOIN FETCH f.city city
+                LEFT JOIN FETCH f.company
                 LEFT JOIN FETCH r.orderDetails d
-                LEFT JOIN FETCH d.product
+                LEFT JOIN FETCH d.product dp
+                LEFT JOIN FETCH dp.productCategory
+                LEFT JOIN FETCH d.order ro
+                LEFT JOIN FETCH ro.company
+                LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -175,10 +216,25 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
                 LEFT JOIN FETCH o.manager om
                 LEFT JOIN FETCH om.user
                 LEFT JOIN FETCH t.sourceReview r
+                LEFT JOIN FETCH r.category
+                LEFT JOIN FETCH r.subCategory
+                LEFT JOIN FETCH r.product rp
+                LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
+                LEFT JOIN FETCH rb.status
+                LEFT JOIN FETCH r.worker rw
+                LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
                 LEFT JOIN FETCH f.city city
+                LEFT JOIN FETCH f.company
                 LEFT JOIN FETCH r.orderDetails d
-                LEFT JOIN FETCH d.product
+                LEFT JOIN FETCH d.product dp
+                LEFT JOIN FETCH dp.productCategory
+                LEFT JOIN FETCH d.order ro
+                LEFT JOIN FETCH ro.company
+                LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -237,10 +293,25 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
                 LEFT JOIN FETCH o.manager om
                 LEFT JOIN FETCH om.user
                 LEFT JOIN FETCH t.sourceReview r
+                LEFT JOIN FETCH r.category
+                LEFT JOIN FETCH r.subCategory
+                LEFT JOIN FETCH r.product rp
+                LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
+                LEFT JOIN FETCH rb.status
+                LEFT JOIN FETCH r.worker rw
+                LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
                 LEFT JOIN FETCH f.city city
+                LEFT JOIN FETCH f.company
                 LEFT JOIN FETCH r.orderDetails d
-                LEFT JOIN FETCH d.product
+                LEFT JOIN FETCH d.product dp
+                LEFT JOIN FETCH dp.productCategory
+                LEFT JOIN FETCH d.order ro
+                LEFT JOIN FETCH ro.company
+                LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b

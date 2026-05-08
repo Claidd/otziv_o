@@ -68,6 +68,17 @@ public class WorkerServiceImpl implements WorkerService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Set<WorkerDTO> getAllWorkersByManagerId(Long managerId) {
+        if (managerId == null) {
+            return Collections.emptySet();
+        }
+        return workerRepository.findAllByManagerIdWithUser(managerId).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toSet());
+    }
+
+    @Override
     public Worker getWorkerByUsername(String login) {
         return workerRepository.findByUsername(login);
     }

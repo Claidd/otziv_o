@@ -27,10 +27,25 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     List<Manager> findAllManagers();
 
     @Query("""
-    SELECT m
+    SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u
     LEFT JOIN FETCH u.image
+    WHERE m.id = :id
+""")
+    Optional<Manager> findByIdWithUser(@Param("id") Long id);
+
+    @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    LEFT JOIN FETCH u.image
+    LEFT JOIN FETCH u.workers w
+    LEFT JOIN FETCH w.user
+    LEFT JOIN FETCH u.operators o
+    LEFT JOIN FETCH o.user
+    LEFT JOIN FETCH u.marketologs mk
+    LEFT JOIN FETCH mk.user
     WHERE u.id = :id
 """)
     Optional<Manager> findByUserId(Long id);
@@ -46,6 +61,12 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     FROM Manager m
     JOIN FETCH m.user u
     LEFT JOIN FETCH u.image
+    LEFT JOIN FETCH u.workers w
+    LEFT JOIN FETCH w.user
+    LEFT JOIN FETCH u.operators o
+    LEFT JOIN FETCH o.user
+    LEFT JOIN FETCH u.marketologs mk
+    LEFT JOIN FETCH mk.user
     WHERE m IN :managers
 """)
     List<Manager> findAllManagersWorkers(List<Manager> managers);

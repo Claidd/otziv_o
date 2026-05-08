@@ -146,6 +146,35 @@ class ManagerBoardEditAssemblerTest {
         assertTrue(response.canEditReviewPublish());
     }
 
+    @Test
+    void buildOrderDetailsResponseLetsWorkerDeleteReviewsAndOnlyEditReviewVigul() {
+        Authentication worker = authentication("ROLE_WORKER");
+        ReviewDTOOne review = ReviewDTOOne.builder()
+                .id(51L)
+                .orderId(12L)
+                .companyTitle("Review Company")
+                .productTitle("Review Product")
+                .build();
+        OrderDTO order = OrderDTO.builder()
+                .id(12L)
+                .sum(BigDecimal.ZERO)
+                .status(OrderStatusDTO.builder().title("Публикация").build())
+                .build();
+
+        when(orderService.getOrderDTO(12L)).thenReturn(order);
+        when(reviewService.getReviewsAllByOrderId(12L)).thenReturn(List.of(review));
+        when(badReviewTaskService.getSummaryForOrder(12L)).thenReturn(BadReviewTaskSummary.empty());
+        when(badReviewTaskService.getTasksByOrderId(12L)).thenReturn(List.of());
+        when(productService.findAll()).thenReturn(List.of());
+
+        OrderDetailsResponse response = assembler.buildOrderDetailsResponse(12L, worker);
+
+        assertTrue(response.canEditReviewVigul());
+        assertFalse(response.canEditReviewDates());
+        assertFalse(response.canEditReviewPublish());
+        assertTrue(response.canDeleteReviews());
+    }
+
     private Authentication authentication(String authority) {
         return new UsernamePasswordAuthenticationToken(
                 "user",

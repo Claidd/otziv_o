@@ -4,6 +4,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -36,6 +37,7 @@ public class WorkerOrderController {
     private final OrderService orderService;
     private final ReviewService reviewService;
     private final BotService botService;
+    private final AppSettingService appSettingService;
 
 
     int pageSize = 10; // желаемый размер страницы
@@ -179,13 +181,14 @@ public class WorkerOrderController {
         String userRole = gerRole(principal);
         System.out.println(userRole);
         LocalDate localDate = LocalDate.now();
+        LocalDate nagulDateLimit = nagulLookaheadDate(localDate);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех отзывов к нагулу для админа");
 //            model.addAttribute("reviews", reviewService.getReviewsAllByOrderId(1L));
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(localDate.plusDays(60), pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOAndDateToAdminToVigul(nagulDateLimit, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Админа: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -193,7 +196,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Менеджера");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByManagerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Менеджера: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -201,7 +204,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByWorkerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Работника: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -209,7 +212,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех отзывов к нагулу для Владельца");
             model.addAttribute("TitleName", "Выгул");
             model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(localDate.plusDays(60), principal, pageNumber, pageSize));
+            model.addAttribute("reviews", reviewService.getAllReviewDTOByOwnerByPublishToVigul(nagulDateLimit, principal, pageNumber, pageSize));
             checkTimeMethod("Время выполнения WorkerOrderController/worker/nagul для Владельца: ", startTime, principal);
             return "products/orders/nagul_orders_worker";
         }
@@ -334,5 +337,9 @@ public class WorkerOrderController {
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
         log.info("{}: {} сек. - {}", text, String.format("%.4f", timeElapsed), principal != null ? principal.getName() : "Гость");
+    }
+
+    private LocalDate nagulLookaheadDate(LocalDate baseDate) {
+        return baseDate.plusDays(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60));
     }
 }

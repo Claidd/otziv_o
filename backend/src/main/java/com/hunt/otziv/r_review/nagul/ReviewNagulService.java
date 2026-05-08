@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.nagul;
 
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -26,9 +27,13 @@ public class ReviewNagulService {
     private final UserService userService;
     private final WorkerService workerService;
     private final ReviewNagulPolicy reviewNagulPolicy;
+    private final AppSettingService appSettingService;
 
-    @Value("${app.nagul.cooldown}")
-    private int nagulCooldownMinutes;
+    @Value("${app.nagul.cooldown:60}")
+    private int defaultNagulCooldownMinutes;
+
+    @Value("${app.nagul.lookahead-days:60}")
+    private int defaultNagulLookaheadDays;
 
     public boolean hasActiveNagulReviews(Principal principal) {
         if (principal == null) {
@@ -46,7 +51,7 @@ public class ReviewNagulService {
         }
 
         LocalDate today = LocalDate.now();
-        return reviewRepository.existsActiveNagulReviews(worker, today.plusDays(60));
+        return reviewRepository.existsActiveNagulReviews(worker, today.plusDays(nagulLookaheadDays()));
     }
 
     @Transactional
@@ -78,7 +83,7 @@ public class ReviewNagulService {
                 throw new RuntimeException("Ошибка: не найдена информация о работнике");
             }
 
-            reviewNagulPolicy.validateWorkerCooldown(worker, nagulCooldownMinutes);
+            reviewNagulPolicy.validateWorkerCooldown(worker, nagulCooldownMinutes());
         }
 
         Review review = reviewRepository.findById(reviewId)
@@ -94,5 +99,13 @@ public class ReviewNagulService {
         }
 
         reviewRepository.save(review);
+    }
+
+    private int nagulCooldownMinutes() {
+        return appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, defaultNagulCooldownMinutes);
+    }
+
+    private int nagulLookaheadDays() {
+        return appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, defaultNagulLookaheadDays);
     }
 }

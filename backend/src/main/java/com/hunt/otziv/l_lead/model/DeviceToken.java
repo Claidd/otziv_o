@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import jakarta.persistence.Id;
 
 import java.time.LocalDateTime;
@@ -15,9 +17,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class DeviceToken {
 
     @Id
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private String token; // UUID
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -9,6 +9,7 @@ import {
   AdminCity,
   AdminDictionariesApi,
   AdminManagerText,
+  AdminNagulSettings,
   AdminProduct,
   AdminPromoText,
   AdminSubCategory,
@@ -17,6 +18,7 @@ import {
   BotsResponse,
   DictionaryOption,
   ManagerTextRequest,
+  NagulSettingsRequest,
   PromoButtonSlot,
   PromoTextAssignment,
   PromoTextAssignmentRequest,
@@ -41,7 +43,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -91,7 +93,8 @@ export class AdminDictionariesComponent {
     { key: 'phones', label: 'Телефоны', icon: 'phone_iphone' },
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
-    { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' }
+    { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
+    { key: 'settings', label: 'Настройки', icon: 'tune' }
   ];
   private readonly managerTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' }
@@ -129,6 +132,7 @@ export class AdminDictionariesComponent {
   readonly promoAssignments = signal<PromoTextAssignment[]>([]);
   readonly promoButtons = signal<PromoButtonSlot[]>([]);
   readonly selectedPromoManagerId = signal<number | null>(null);
+  readonly nagulSettings = signal<AdminNagulSettings | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -201,6 +205,11 @@ export class AdminDictionariesComponent {
     startText: ['']
   });
 
+  readonly settingsForm = this.fb.nonNullable.group({
+    nagulCooldownMinutes: [60, [Validators.required, Validators.min(0), Validators.max(1440)]],
+    nagulLookaheadDays: [60, [Validators.required, Validators.min(0), Validators.max(365)]]
+  });
+
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
   readonly activeCategory = computed(() => {
     const id = this.activeCategoryId();
@@ -247,6 +256,8 @@ export class AdminDictionariesComponent {
         return this.promoTexts().length;
       case 'managerTexts':
         return this.managerTexts().length;
+      case 'settings':
+        return this.nagulSettings() ? 1 : 0;
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => {
@@ -267,7 +278,9 @@ export class AdminDictionariesComponent {
       { label: 'Токены', value: this.phoneDeviceTokenTotal(), icon: 'devices', tone: 'yellow' },
       { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' },
       { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
-      { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' }
+      { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
+      { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
+      { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' }
     ];
   });
 
@@ -302,9 +315,10 @@ export class AdminDictionariesComponent {
         phones: this.phonesApi.getPhones(),
         bots: this.dictionariesApi.getBots(),
         promoTexts: this.dictionariesApi.getPromoTextManagement(),
-        managerTexts: this.dictionariesApi.getManagerTexts()
+        managerTexts: this.dictionariesApi.getManagerTexts(),
+        nagulSettings: this.dictionariesApi.getNagulSettings()
       }).subscribe({
-        next: ({ categories, subCategories, cities, products, phones, bots, promoTexts, managerTexts }) => {
+        next: ({ categories, subCategories, cities, products, phones, bots, promoTexts, managerTexts, nagulSettings }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
           this.cities.set(cities);
@@ -314,6 +328,7 @@ export class AdminDictionariesComponent {
           this.applyBotsResponse(bots);
           this.applyPromoManagement(promoTexts);
           this.managerTexts.set(managerTexts);
+          this.applyNagulSettings(nagulSettings);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -342,6 +357,7 @@ export class AdminDictionariesComponent {
         this.promoAssignments.set([]);
         this.promoButtons.set([]);
         this.selectedPromoManagerId.set(null);
+        this.nagulSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -371,6 +387,11 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'phones') {
       this.startNewPhone();
+      return;
+    }
+
+    if (this.activeTab() === 'settings') {
+      this.applyNagulSettings(this.nagulSettings() ?? { cooldownMinutes: 60, lookaheadDays: 60 });
       return;
     }
 
@@ -595,6 +616,10 @@ export class AdminDictionariesComponent {
       reminderText: '',
       startText: ''
     });
+    this.settingsForm.reset({
+      nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
+      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60
+    });
   }
 
   startNewCategory(): void {
@@ -711,12 +736,15 @@ export class AdminDictionariesComponent {
       case 'managerTexts':
         this.saveManagerText();
         return;
+      case 'settings':
+        this.saveNagulSettings();
+        return;
     }
   }
 
   deleteSelected(): void {
     const activeTab = this.activeTab();
-    if (activeTab === 'promo' || activeTab === 'managerTexts') {
+    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'settings') {
       return;
     }
 
@@ -800,7 +828,8 @@ export class AdminDictionariesComponent {
       phones: this.phones().length,
       accounts: this.bots().length,
       promo: this.promoTexts().length,
-      managerTexts: this.managerTexts().length
+      managerTexts: this.managerTexts().length,
+      settings: this.nagulSettings() ? 1 : 0
     }[tab];
   }
 
@@ -839,6 +868,10 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'phones') {
       return this.selectedPhone() ? `Телефон #${this.selectedPhone()!.id}` : 'Новый телефон';
+    }
+
+    if (this.activeTab() === 'settings') {
+      return 'Выгул';
     }
 
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
@@ -1084,7 +1117,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -1110,10 +1143,13 @@ export class AdminDictionariesComponent {
       case 'managerTexts':
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
+      case 'settings':
+        request = this.dictionariesApi.getNagulSettings();
+        break;
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[]) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -1143,6 +1179,9 @@ export class AdminDictionariesComponent {
             break;
           case 'managerTexts':
             this.managerTexts.set(response as AdminManagerText[]);
+            break;
+          case 'settings':
+            this.applyNagulSettings(response as AdminNagulSettings);
             break;
         }
 
@@ -1386,6 +1425,34 @@ export class AdminDictionariesComponent {
     });
   }
 
+  private saveNagulSettings(): void {
+    if (this.settingsForm.invalid) {
+      this.settingsForm.markAllAsTouched();
+      return;
+    }
+
+    const cooldownMinutes = Number(this.settingsForm.controls.nagulCooldownMinutes.value ?? 0);
+    const lookaheadDays = Number(this.settingsForm.controls.nagulLookaheadDays.value ?? 60);
+    const request: NagulSettingsRequest = { cooldownMinutes, lookaheadDays };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.updateNagulSettings(request).subscribe({
+      next: (saved) => {
+        this.saving.set(false);
+        this.applyNagulSettings(saved);
+        this.toastService.success('Настройки сохранены', `${saved.cooldownMinutes} мин, ${saved.lookaheadDays} дн. в выдаче`);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить настройки');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Настройки не сохранены', message);
+      }
+    });
+  }
+
   private runSave<T extends { id: number }>(
     request: Observable<T>,
     title: string,
@@ -1560,6 +1627,14 @@ export class AdminDictionariesComponent {
     }
   }
 
+  private applyNagulSettings(response: AdminNagulSettings): void {
+    this.nagulSettings.set(response);
+    this.settingsForm.setValue({
+      nagulCooldownMinutes: response.cooldownMinutes,
+      nagulLookaheadDays: response.lookaheadDays
+    });
+  }
+
   private reloadPromoManagement(): void {
     this.dictionariesApi.getPromoTextManagement(this.search()).subscribe({
       next: (response) => this.applyPromoManagement(response),
@@ -1605,7 +1680,8 @@ export class AdminDictionariesComponent {
       'phones',
       'accounts',
       'promo',
-      'managerTexts'
+      'managerTexts',
+      'settings'
     ].includes(String(value));
   }
 

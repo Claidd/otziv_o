@@ -33,6 +33,8 @@ public class OrderDTOList {
 
     private String filialUrl;
 
+    private String filialCity;
+
     private String status;
 
     private BigDecimal sum;

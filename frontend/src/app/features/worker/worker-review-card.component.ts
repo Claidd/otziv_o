@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, DestroyRef, EventEmitter, inject, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { WorkerReviewItem, WorkerSection } from '../../core/worker.api';
+import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import {
   ReviewCopyKind,
   ReviewEditableField,
@@ -41,11 +42,14 @@ export type SideNoteValueChange = {
   styleUrl: './worker-review-card.component.scss'
 })
 export class WorkerReviewCardComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   @Input() review!: WorkerReviewItem;
   @Input() activeSection: WorkerSection = 'publish';
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
   @Input() canOpenEditModal = false;
+  @Input() showFilialCityInFooter = false;
   @Input() reviewFieldDrafts: Record<string, string> = {};
   @Input() editingReviewFieldKey: string | null = null;
   @Input() savedReviewFieldKey: string | null = null;
@@ -56,6 +60,7 @@ export class WorkerReviewCardComponent {
   @Input() editingSideNoteKey: string | null = null;
   @Input() sideNoteDrafts: Record<string, string> = {};
   @Input() savedSideNoteKey: string | null = null;
+  readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   @Output() readonly reviewFieldEditStarted = new EventEmitter<ReviewEditableField>();
   @Output() readonly reviewFieldDraftChanged = new EventEmitter<ReviewFieldValueChange>();
@@ -102,6 +107,29 @@ export class WorkerReviewCardComponent {
 
   reviewEditUrl(): string {
     return workerReviewDetailsPath(this.review);
+  }
+
+  reviewTitle(): string {
+    const companyTitle = this.review.companyTitle?.trim() || 'Компания';
+
+    if (!this.shouldShowFilialTitle()) {
+      return companyTitle;
+    }
+
+    const filialTitle = this.review.filialTitle?.trim();
+    return filialTitle ? `${companyTitle} - ${filialTitle}` : companyTitle;
+  }
+
+  footerLabel(): string {
+    if (this.showFilialCityInFooter) {
+      return this.review.filialCity?.trim() || 'город';
+    }
+
+    return this.review.workerFio?.trim() || 'специалист';
+  }
+
+  private shouldShowFilialTitle(): boolean {
+    return this.activeSection === 'nagul' || this.activeSection === 'publish';
   }
 
   botBrowserUrl(): string {
@@ -155,6 +183,18 @@ export class WorkerReviewCardComponent {
 
   isReviewFieldSaved(field: ReviewEditableField): boolean {
     return this.savedReviewFieldKey === workerReviewFieldKey(this.review, field);
+  }
+
+  activeReviewField(): ReviewEditableField | null {
+    if (this.isReviewFieldEditing('text')) {
+      return 'text';
+    }
+
+    if (this.isReviewFieldEditing('answer')) {
+      return 'answer';
+    }
+
+    return null;
   }
 
   reviewFieldMutationKey(field: ReviewEditableField): string {

@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.editing.OrderEditService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.repository.OrderDetailsRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.OrderReviewMutationService;
 import com.hunt.otziv.p_products.services.service.*;
@@ -19,6 +20,7 @@ import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -27,9 +29,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 
 import java.security.Principal;
@@ -37,17 +41,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
-
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
+    private final OrderDetailsRepository orderDetailsRepository;
     private final CompanyService companyService;
     private final ReviewService reviewService;
+    private final ReviewRepository reviewRepository;
     private final OrderStatusService orderStatusService;
     private final ReviewArchiveService reviewArchiveService;
     private final CompanyStatusService companyStatusService;
@@ -180,13 +183,19 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Order getOrder(Long orderId) {
-        return orderRepository.findById(orderId)
+        return orderRepository.findByIdForMutation(orderId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public OrderDTO getOrderDTO(Long orderId) {
-        return orderDtoMapper.toOrderDTO(orderRepository.findById(orderId).orElseThrow());
+        Order order = orderRepository.findByIdForOrderDto(orderId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Заказ № '%d' не найден", orderId)));
+        orderRepository.findByIdWithCompanyWorkers(orderId);
+        orderRepository.findByIdWithCompanyFilials(orderId);
+        orderDetailsRepository.findAllByOrderIdForOrderDto(orderId);
+        return orderDtoMapper.toOrderDTO(order);
     }
 
     // =========================================================================================================
@@ -382,11 +391,19 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
         try {
-            Review review = reviewService.getReviewById(reviewId);
-            Order order = validateAndRetrieveOrder(review, reviewId);
+            ReviewPublicationTarget target = validateAndRetrievePublicationTarget(reviewId);
+            Review review = target.review();
+            Order order = target.order();
 
             log.info("Достали отзыв id={} для компании: {}", reviewId,
                     order.getCompany() != null ? order.getCompany().getTitle() : "null");
+
+            if (reviewRepository.existsPublishedByTextExcludingReviewId(review.getText(), review.getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией."
+                );
+            }
 
             if (review.getBot() != null) {
                 orderBotLifecycleService.updateBotCounterAndStatus(review.getBot());
@@ -396,17 +413,14 @@ public class OrderServiceImpl implements OrderService {
             }
 
             review.setPublish(true);
-            reviewService.save(review);
+            reviewRepository.save(review);
             log.info("Сохранили отзыв, публикация установлена в true");
-
-            order.setCounter(order.getCounter() + 1);
-            orderRepository.save(order);
-            log.info("Обновили счётчик заказа: {}", order.getCounter());
 
             int actualPublished = countPublishedReviews(order);
             log.info("Фактическое количество опубликованных отзывов: {}", actualPublished);
 
             orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
+            log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
             orderStatusCheckerService.checkAndMarkOrderCompleted(order);
 
             return true;
@@ -416,28 +430,37 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private Order validateAndRetrieveOrder(Review review, Long reviewId) {
+    private ReviewPublicationTarget validateAndRetrievePublicationTarget(Long reviewId) {
+        Long orderId = reviewRepository.findOrderIdByReviewId(reviewId)
+                .orElseThrow(() -> new IllegalStateException("Отзыв или заказ не найден: id=" + reviewId));
+
+        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+        Review review = reviewRepository.findByIdForPublication(reviewId).orElse(null);
+
         if (review == null) {
             throw new IllegalStateException("Отзыв не найден: id=" + reviewId);
         }
 
         OrderDetails details = review.getOrderDetails();
-        if (details == null || details.getOrder() == null) {
+        if (details == null || details.getOrder() == null || !Objects.equals(details.getOrder().getId(), orderId)) {
             throw new IllegalStateException("OrderDetails или Order отсутствуют у отзыва id=" + reviewId);
         }
 
-        Order order = orderRepository.findById(details.getOrder().getId()).orElse(null);
         if (order == null || review.isPublish()) {
             throw new IllegalStateException("Заказ не найден или отзыв уже опубликован. id=" + reviewId);
         }
 
-        return order;
+        return new ReviewPublicationTarget(review, order);
     }
 
     protected int countPublishedReviews(Order order) {
-        return (int) getAllReviews(order).stream()
-                .filter(Review::isPublish)
-                .count();
+        if (order == null || order.getId() == null) {
+            return 0;
+        }
+        return reviewRepository.countPublishedByOrderId(order.getId());
+    }
+
+    private record ReviewPublicationTarget(Review review, Order order) {
     }
 
     @Override

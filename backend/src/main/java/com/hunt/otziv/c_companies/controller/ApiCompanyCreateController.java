@@ -28,6 +28,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -69,6 +70,7 @@ public class ApiCompanyCreateController {
     private final FilialService filialService;
     private final ManagerService managerService;
     private final UserService userService;
+    private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -159,9 +161,7 @@ public class ApiCompanyCreateController {
 
     private CompanyDTO manualCompanyDto(Manager manager) {
         User user = manager.getUser();
-        Set<WorkerDTO> workers = user.getWorkers() == null
-                ? Set.of()
-                : user.getWorkers().stream().map(this::workerDto).collect(Collectors.toSet());
+        Set<WorkerDTO> workers = workerService.getAllWorkersByManagerId(manager.getId());
 
         return CompanyDTO.builder()
                 .telephone("")
@@ -185,7 +185,7 @@ public class ApiCompanyCreateController {
         }
 
         if (hasAnyRole(authentication, "ROLE_OWNER")) {
-            List<Manager> managers = new ArrayList<>(currentUser(principal).getManagers());
+            List<Manager> managers = new ArrayList<>(userService.findManagersByUserName(principal.getName()));
             if (managerId != null) {
                 return managers.stream()
                         .filter(manager -> Objects.equals(manager.getId(), managerId))
@@ -334,7 +334,7 @@ public class ApiCompanyCreateController {
         if (hasAnyRole(authentication, "ROLE_ADMIN")) {
             managers = managerService.getAllManagers();
         } else if (hasAnyRole(authentication, "ROLE_OWNER")) {
-            managers = new ArrayList<>(currentUser(principal).getManagers());
+            managers = new ArrayList<>(userService.findManagersByUserName(principal.getName()));
         } else {
             Manager manager = managerService.getManagerByUserId(currentUser(principal).getId());
             managers = manager == null ? List.of() : List.of(manager);

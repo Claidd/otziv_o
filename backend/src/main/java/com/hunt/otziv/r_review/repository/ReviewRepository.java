@@ -6,8 +6,10 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -353,6 +355,48 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         FROM Review r
         LEFT JOIN FETCH r.category
         LEFT JOIN FETCH r.subCategory
+        LEFT JOIN FETCH r.bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH r.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN FETCH f.company
+        LEFT JOIN FETCH r.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH r.product
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.product p
+        LEFT JOIN FETCH p.productCategory
+        LEFT JOIN FETCH d.order o
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.worker ow
+        LEFT JOIN FETCH ow.user
+        LEFT JOIN FETCH o.manager om
+        LEFT JOIN FETCH om.user
+        WHERE r.id = :reviewId
+    """)
+    Optional<Review> findByIdForDto(@Param("reviewId") Long reviewId);
+
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        LEFT JOIN FETCH r.bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH r.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN FETCH f.company
+        WHERE r.id = :reviewId
+    """)
+    Optional<Review> findByIdForBotChange(@Param("reviewId") Long reviewId);
+
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        LEFT JOIN FETCH r.product rp
+        LEFT JOIN FETCH rp.productCategory
+        LEFT JOIN FETCH r.category
+        LEFT JOIN FETCH r.subCategory
         LEFT JOIN FETCH r.bot
         LEFT JOIN FETCH r.filial f
         LEFT JOIN FETCH f.city
@@ -390,6 +434,18 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     """)
     List<Review> findByPublishFalseAndBotIsNotNullAndFilialIdIn(@Param("filialIds") List<Long> filialIds);
 
+    @Query("""
+        SELECT DISTINCT r.bot.id
+        FROM Review r
+        WHERE r.publish = false
+          AND r.bot IS NOT NULL
+          AND r.bot.active = true
+          AND r.filial.id IN :filialIds
+          AND (:excludedReviewId IS NULL OR r.id <> :excludedReviewId)
+    """)
+    Set<Long> findActiveBotIdsByUnpublishedReviewsInFilials(@Param("filialIds") Collection<Long> filialIds,
+                                                            @Param("excludedReviewId") Long excludedReviewId);
+
     Page<Review> findByWorkerAndPublishedDateAndPublishFalse(Worker worker, LocalDate publishedDate, Pageable pageable);
 
     @Query("""
@@ -416,10 +472,69 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("DELETE FROM Review r WHERE r.id = :reviewId")
     void deleteReviewByReviewId(@Param("reviewId") Long reviewId);
 
-    boolean existsByText(String text);
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM (
+            SELECT 1
+            FROM reviews r
+            WHERE r.review_text_hash = UNHEX(SHA2(COALESCE(:text, ''), 256))
+              AND ((:text IS NULL AND r.review_text IS NULL) OR r.review_text = :text)
+            LIMIT 1
+        ) matched_review
+    """, nativeQuery = true)
+    long countExistingText(@Param("text") String text);
+
+    default boolean existsByText(String text) {
+        return countExistingText(text) > 0;
+    }
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM (
+            SELECT 1
+            FROM reviews r
+            WHERE r.review_text_hash = UNHEX(SHA2(COALESCE(:text, ''), 256))
+              AND ((:text IS NULL AND r.review_text IS NULL) OR r.review_text = :text)
+              AND r.review_publish = 1
+              AND (:reviewId IS NULL OR r.review_id <> :reviewId)
+            LIMIT 1
+        ) matched_published_review
+    """, nativeQuery = true)
+    long countPublishedTextExcludingReviewId(@Param("text") String text, @Param("reviewId") Long reviewId);
+
+    default boolean existsPublishedByTextExcludingReviewId(String text, Long reviewId) {
+        return countPublishedTextExcludingReviewId(text, reviewId) > 0;
+    }
 
     @Query("SELECT r FROM Review r WHERE r.filial = :filial")
     List<Review> findAllByFilial(@Param("filial") Filial filial);
+
+    @Query("SELECT r.orderDetails.order.id FROM Review r WHERE r.id = :reviewId")
+    Optional<Long> findOrderIdByReviewId(@Param("reviewId") Long reviewId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        LEFT JOIN FETCH r.bot
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.order
+        WHERE r.id = :reviewId
+    """)
+    Optional<Review> findByIdForPublication(@Param("reviewId") Long reviewId);
+
+    @Query("SELECT COUNT(r.id) FROM Review r WHERE r.orderDetails.order.id = :orderId AND r.publish = true")
+    int countPublishedByOrderId(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT DISTINCT r.bot.id
+        FROM Review r
+        WHERE r.bot IS NOT NULL
+          AND r.filial.id = :filialId
+          AND (:excludedReviewId IS NULL OR r.id <> :excludedReviewId)
+    """)
+    Set<Long> findBotIdsByFilialIdExcludingReview(@Param("filialId") Long filialId,
+                                                  @Param("excludedReviewId") Long excludedReviewId);
 
     @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
     List<Review> findAllByFilials(@Param("filials") Set<Filial> filials);

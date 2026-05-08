@@ -24,15 +24,27 @@ import java.time.LocalDateTime;
 @NamedEntityGraph(
         name = "Lead.detail",
         attributeNodes = {
-                @NamedAttributeNode("manager"),
-                @NamedAttributeNode("operator"),
-                @NamedAttributeNode("marketolog"),
+                @NamedAttributeNode(value = "manager", subgraph = "manager.detail"),
+                @NamedAttributeNode(value = "operator", subgraph = "operator.detail"),
+                @NamedAttributeNode(value = "marketolog", subgraph = "marketolog.detail"),
                 @NamedAttributeNode(value = "telephone", subgraph = "telephone.detail")
         },
         subgraphs = {
                 @NamedSubgraph(
+                        name = "manager.detail",
+                        attributeNodes = @NamedAttributeNode("user")
+                ),
+                @NamedSubgraph(
+                        name = "operator.detail",
+                        attributeNodes = @NamedAttributeNode("user")
+                ),
+                @NamedSubgraph(
+                        name = "marketolog.detail",
+                        attributeNodes = @NamedAttributeNode("user")
+                ),
+                @NamedSubgraph(
                         name = "telephone.detail",
-                        attributeNodes = @NamedAttributeNode("telephoneOperator")
+                        attributeNodes = @NamedAttributeNode(value = "telephoneOperator", subgraph = "operator.detail")
                 )
         }
 )

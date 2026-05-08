@@ -30,9 +30,11 @@ backend/.idea
 .env.*
 !backend/.env.local.example
 !.env.prod.example
+!.env.prod-local.example
 !docker-compose.yaml
 !docker-compose.build.yaml
 !compose.prod.yaml
+!compose.prod-local.yaml
 !infrastructure/loki/*.yaml
 !infrastructure/grafana/provisioning/datasources/*.yaml
 ### NetBeans ###

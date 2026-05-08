@@ -1,9 +1,11 @@
 package com.hunt.otziv.whatsapp.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
+import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
+import com.hunt.otziv.whatsapp.exception.WhatsAppConfigurationException;
 import com.hunt.otziv.whatsapp.service.fichi.LastSeenParser;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
@@ -14,14 +16,15 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -29,24 +32,42 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class WhatsAppServiceImpl implements WhatsAppService {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final WhatsAppProperties properties;
     private final RestTemplate restTemplate;
 
     // ==== Helpers ====
 
     private String baseUrl(String clientId) {
-        Optional<WhatsAppProperties.ClientConfig> clientOpt = properties.getClients()
+        if (!hasText(clientId)) {
+            throw new WhatsAppConfigurationException("missing_client", "WhatsApp-клиент не указан");
+        }
+
+        List<WhatsAppProperties.ClientConfig> clients = properties.getClients() != null
+                ? properties.getClients()
+                : List.of();
+
+        Optional<WhatsAppProperties.ClientConfig> clientOpt = clients
                 .stream()
-                .filter(c -> c.getId().equals(clientId))
+                .filter(c -> clientId.equals(c.getId()))
                 .findFirst();
 
         if (clientOpt.isEmpty()) {
-            throw new IllegalArgumentException("Неизвестный клиент: " + clientId);
+            String availableClients = clients.stream()
+                    .map(WhatsAppProperties.ClientConfig::getId)
+                    .filter(id -> id != null && !id.isBlank())
+                    .collect(Collectors.joining(", "));
+            String suffix = availableClients.isBlank() ? "" : ". Доступные клиенты: " + availableClients;
+            throw new WhatsAppConfigurationException(
+                    "unknown_client",
+                    "Неизвестный WhatsApp-клиент: " + clientId + suffix
+            );
         }
 
         String url = clientOpt.get().getUrl();
         if (url == null || url.isBlank()) {
-            throw new IllegalStateException("Пустой URL у клиента: " + clientId);
+            throw new WhatsAppConfigurationException("empty_client_url", "Пустой URL у WhatsApp-клиента: " + clientId);
         }
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
@@ -61,9 +82,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         return digits;
     }
 
-    private HttpEntity<String> jsonEntity(Map<String, Object> payload) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
-        String jsonBody = mapper.writeValueAsString(payload);
+    private HttpEntity<String> jsonEntity(Map<String, Object> payload) throws JsonProcessingException {
+        String jsonBody = MAPPER.writeValueAsString(payload);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         return new HttpEntity<>(jsonBody, headers);
@@ -76,8 +96,12 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         log.info("🚀 Попытка отправить сообщение в группу через {} на {}", clientId, groupId);
 
         if (groupId == null || groupId.isBlank()) {
-            log.error("❌ groupId пустой. Сообщение не будет отправлено.");
-            return "❌ Ошибка: groupId не должен быть пустым";
+            log.warn("WhatsApp-сообщение в группу не отправлено: groupId пустой");
+            return WhatsAppSendResult.error("missing_group_id", "groupId не должен быть пустым").toJson();
+        }
+        if (!hasText(message)) {
+            log.warn("WhatsApp-сообщение в группу не отправлено: текст сообщения пустой");
+            return WhatsAppSendResult.error("missing_message", "Сообщение не должно быть пустым").toJson();
         }
 
         try {
@@ -91,55 +115,74 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
             log.info("✅ Ответ от {}: {}", clientId, response.getBody());
             return response.getBody() != null ? response.getBody() : "ok";
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp-сообщение в группу не отправлено: {}", e.getMessage());
+            return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
+        } catch (RestClientResponseException e) {
+            String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
+            log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
+            return WhatsAppSendResult.error("http_error", error).toJson();
+        } catch (ResourceAccessException e) {
+            String error = "WhatsApp-клиент недоступен: " + e.getMessage();
+            log.warn("{} ({})", error, clientId);
+            return WhatsAppSendResult.error("client_unavailable", error).toJson();
+        } catch (JsonProcessingException e) {
+            log.error("Не удалось собрать JSON для WhatsApp-сообщения в группу через {}", clientId, e);
+            return WhatsAppSendResult.error("invalid_payload", "Не удалось собрать JSON для WhatsApp").toJson();
         } catch (Exception e) {
             log.error("❌ Ошибка при отправке в группу через {}: {}", clientId, e.getMessage(), e);
-            return "{\"status\":\"error\",\"error\":\"" + e.getMessage() + "\"}";
+            return WhatsAppSendResult.error("unexpected_error", e.getMessage()).toJson();
         }
     }
 
     public String sendMessage(String clientId, String phone, String message) {
         log.info("🚀 Попытка отправить сообщение через {} на {}", clientId, phone);
 
-        Optional<WhatsAppProperties.ClientConfig> clientOpt = properties.getClients()
-                .stream()
-                .filter(c -> c.getId().equals(clientId))
-                .findFirst();
-
-        if (clientOpt.isEmpty()) {
-            log.warn("❌ Неизвестный клиент: {}", clientId);
-            return "❌ Неизвестный клиент: " + clientId;
+        String normalized = normalizePhone(phone);
+        if (!hasText(normalized)) {
+            log.warn("WhatsApp-сообщение не отправлено: телефон пустой");
+            return WhatsAppSendResult.error("missing_phone", "Телефон не должен быть пустым").toJson();
+        }
+        if (!hasText(message)) {
+            log.warn("WhatsApp-сообщение не отправлено: текст сообщения пустой");
+            return WhatsAppSendResult.error("missing_message", "Сообщение не должно быть пустым").toJson();
         }
 
-        String url = clientOpt.get().getUrl();
-        log.info("➡️ URL: {}", url + "/send");
-
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            String jsonBody = mapper.writeValueAsString(Map.of(
+            String url = baseUrl(clientId) + "/send";
+            HttpEntity<String> request = jsonEntity(Map.of(
                     "client", clientId,
-                    "phone", phone,
+                    "phone", normalized,
                     "message", message
             ));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<String> request = new HttpEntity<>(jsonBody, headers);
-
-            log.info("📦 Отправляем запрос на {}, payload: {}", url, jsonBody);
-
-//            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    url + "/send", request, String.class
-            );
-
+            log.info("📦 POST {} payload: {}", url, request.getBody());
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
             log.info("✅ Ответ от {}: {}", clientId, response.getBody());
-            return "⏩ Ответ: " + response.getBody();
+            return response.getBody() != null ? response.getBody() : "ok";
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp-сообщение не отправлено: {}", e.getMessage());
+            return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
+        } catch (RestClientResponseException e) {
+            String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
+            log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
+            return WhatsAppSendResult.error("http_error", error).toJson();
+        } catch (ResourceAccessException e) {
+            String error = "WhatsApp-клиент недоступен: " + e.getMessage();
+            log.warn("{} ({})", error, clientId);
+            return WhatsAppSendResult.error("client_unavailable", error).toJson();
+        } catch (JsonProcessingException e) {
+            log.error("Не удалось собрать JSON для WhatsApp-сообщения через {}", clientId, e);
+            return WhatsAppSendResult.error("invalid_payload", "Не удалось собрать JSON для WhatsApp").toJson();
         } catch (Exception e) {
             log.error("❌ Ошибка при отправке сообщения через {}: {}", clientId, e.getMessage(), e);
-            return "❌ Ошибка: " + e.getMessage();
+            return WhatsAppSendResult.error("unexpected_error", e.getMessage()).toJson();
         }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
 //    @Override

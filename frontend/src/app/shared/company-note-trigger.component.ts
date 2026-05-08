@@ -3,7 +3,18 @@ import { Component, input, output, signal } from '@angular/core';
 @Component({
   selector: 'app-company-note-trigger',
   template: `
-    <span class="t" [class.e]="open()" (click)="toggle()">
+    <span
+      class="t"
+      role="button"
+      tabindex="0"
+      [class.e]="open()"
+      [attr.aria-expanded]="open()"
+      aria-label="Показать заметку"
+      title="Показать заметку"
+      (click)="toggle()"
+      (keydown.enter)="toggleFromKeyboard($event)"
+      (keydown.space)="toggleFromKeyboard($event)"
+    >
       <span class="material-icons-sharp">priority_high</span>
       <span class="p" (click)="$event.stopPropagation()">
         @if (has(note())) {
@@ -84,10 +95,13 @@ import { Component, input, output, signal } from '@angular/core';
       box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.24);
     }
 
-    .t.e .p,
-    .t:hover .p,
-    .t:focus-within .p {
+    .t.e .p {
       display: grid;
+    }
+
+    .t:focus-visible {
+      outline: 2px solid rgba(108, 155, 207, 0.5);
+      outline-offset: 2px;
     }
 
     .s {
@@ -158,6 +172,15 @@ export class CompanyNoteTriggerComponent {
     if (!this.editing()) {
       this.open.update((open) => !open);
     }
+  }
+
+  toggleFromKeyboard(event: Event): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    this.toggle();
   }
 
   startEdit(field: 'company' | 'order', source?: string | null): void {

@@ -45,4 +45,6 @@ public interface BotService {
     List<Bot> getFindAllByFilialCityId(Long cityId);
 
     Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds);
+
+    Optional<Bot> claimNewAccountForCity(City targetCity, Collection<Long> excludedBotIds);
 }

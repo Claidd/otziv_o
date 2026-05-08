@@ -6,6 +6,7 @@ import {
   StatusAction,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
+  managerCompanyOrderUrl,
   managerHasMeaningfulNote,
   trackManagerAction
 } from './manager-board.config';
@@ -35,6 +36,10 @@ export class ManagerCompanyCardComponent {
 
   companyFilialUrl(): string {
     return managerCompanyFilialUrl(this.company);
+  }
+
+  companyOrdersUrl(): string {
+    return managerCompanyOrderUrl(this.company);
   }
 
   hasCompanyFilialUrl(): boolean {

@@ -17,7 +17,6 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
-import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
@@ -148,21 +147,15 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл не выбран");
         }
 
-        requireReviewForOrder(orderId, reviewId);
-        Review review = reviewService.getReviewById(reviewId);
-        if (review == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
-        }
-
-        String newUrl = s3UploadService.uploadFile(file, "reviews", review.getUrl(), review.getId());
-        review.setUrl(newUrl);
-        reviewService.save(review);
+        ReviewDTO current = requireReviewForOrder(orderId, reviewId);
+        String newUrl = s3UploadService.uploadFile(file, "reviews", current.getUrl(), reviewId);
+        reviewService.updateReviewPhoto(reviewId, newUrl);
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 
     @DeleteMapping("/orders/{orderId}/reviews/{reviewId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse deleteOrderReview(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
@@ -282,6 +275,24 @@ public class ApiManagerReviewController {
             Authentication authentication
     ) {
         reviewService.changeBot(reviewId);
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/new-account")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse assignOrderReviewNewAccount(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Authentication authentication
+    ) {
+        requireReviewForOrder(orderId, reviewId);
+
+        try {
+            reviewService.assignNewAccount(reviewId);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Новый аккаунт не назначен: " + exception.getMessage(), exception);
+        }
+
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 

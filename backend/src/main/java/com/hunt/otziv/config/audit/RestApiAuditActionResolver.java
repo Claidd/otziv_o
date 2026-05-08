@@ -246,6 +246,8 @@ public class RestApiAuditActionResolver {
         put(actions, "DELETE", "/api/admin/users/{id}", "удаление пользователя {id}");
         put(actions, "GET", "/api/admin/users/{id}/assignments", "загрузка назначений пользователя {id}");
         put(actions, "PUT", "/api/admin/users/{id}/assignments", "редактирование назначений пользователя {id}");
+        put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
+        put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
 
         put(actions, "GET", "/api/companies/create-payload", "загрузка формы создания компании");
         put(actions, "GET", "/api/companies/categories/{categoryId}/subcategories", "загрузка подкатегорий компании для категории {categoryId}");

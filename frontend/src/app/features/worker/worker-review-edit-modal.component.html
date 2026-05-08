@@ -137,12 +137,13 @@
               </label>
             }
 
-            @if (canEditVigul) {
+            @if (canShowVigulControl(draft)) {
               <label class="review-edit-check">
                 <input
                   name="reviewVigul"
                   type="checkbox"
                   [ngModel]="draft.vigul"
+                  [disabled]="isVigulInputDisabled(draft)"
                   (ngModelChange)="setField('vigul', $event)"
                 >
                 <span>Выгул</span>
@@ -182,8 +183,26 @@
             }
 
             <div class="lead-edit-actions-group">
-              <button type="button" class="secondary" (click)="closed.emit()" [disabled]="busy">Отмена</button>
-              <button type="submit" [disabled]="busy || reviewEditForm.invalid">
+              <button
+                type="button"
+                class="secondary review-new-account"
+                (click)="newAccountRequested.emit()"
+                [disabled]="busy"
+              >
+                {{ newAccountLoading ? 'Назначаю...' : 'Новый аккаунт' }}
+              </button>
+              <button
+                type="button"
+                class="secondary"
+                (click)="closed.emit()"
+                [disabled]="busy"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                [disabled]="busy || reviewEditForm.invalid"
+              >
                 {{ saving ? 'Сохраняю...' : 'Сохранить' }}
               </button>
             </div>

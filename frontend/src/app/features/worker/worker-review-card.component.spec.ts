@@ -91,6 +91,33 @@ describe('WorkerReviewCardComponent', () => {
     expect(article.classList.contains('card-tone--publication')).toBe(false);
   });
 
+  it('shows filial title in walk and publication titles', () => {
+    const renderTitle = (activeSection: WorkerReviewCardComponent['activeSection']): string | undefined => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      fixture.componentInstance.review = review();
+      fixture.componentInstance.activeSection = activeSection;
+
+      fixture.detectChanges();
+
+      const element = fixture.nativeElement as HTMLElement;
+      return element.querySelector('header a')?.textContent?.trim();
+    };
+
+    expect(renderTitle('nagul')).toBe('Company - Filial');
+    expect(renderTitle('publish')).toBe('Company - Filial');
+  });
+
+  it('can show filial city in footer for worker role view', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review();
+    fixture.componentInstance.showFilialCityInFooter = true;
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('footer a')?.textContent?.trim()).toBe('City');
+  });
+
   it('emits review action events without owning mutations', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

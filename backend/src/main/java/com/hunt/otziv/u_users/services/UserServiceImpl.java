@@ -45,7 +45,13 @@ public class UserServiceImpl implements UserService {
         return userRepository.findByUsername(username);
     }
 
-    private User findByUserNameWithAssignments(String username) {
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<User> findByUserNameWithAssignments(String username) {
+        return userRepository.findByUsernameWithAssignments(username);
+    }
+
+    private User requireUserWithAssignments(String username) {
         return userRepository.findByUsernameWithAssignments(username)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         String.format("Пользователь '%s' не найден", username)
@@ -53,6 +59,13 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Set<Manager> findManagersByUserName(String username) {
+        return userRepository.findManagersWithTeamByUsername(username);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<User> getAllOwners(String roleName) {
         return userRepository.findAllOwners(roleName);
     }
@@ -153,6 +166,7 @@ public class UserServiceImpl implements UserService {
     // ===================================== CREATE USERS =====================================
 
     @Override
+    @Transactional(readOnly = true)
     public List<RegistrationUserDTO> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::toDto)
@@ -160,6 +174,19 @@ public class UserServiceImpl implements UserService {
     }
 
     private RegistrationUserDTO toDto(User user) {
+        Collection<Role> roles = user.getRoles() == null ? List.of() : user.getRoles();
+        roles.forEach(Role::getName);
+
+        Image image = user.getImage();
+        if (image != null) {
+            image.getId();
+        }
+
+        Set<Operator> operators = initializedOperators(user.getOperators());
+        Set<Manager> managers = initializedManagers(user.getManagers());
+        Set<Worker> workers = initializedWorkers(user.getWorkers());
+        Set<Marketolog> marketologs = initializedMarketologs(user.getMarketologs());
+
         return RegistrationUserDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -167,17 +194,66 @@ public class UserServiceImpl implements UserService {
                 .fio(user.getFio())
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
-                .roles(user.getRoles())
+                .roles(roles)
                 .active(user.isActive())
                 .createTime(user.getCreateTime())
-                .operators(user.getOperators() == null ? new HashSet<>() : user.getOperators())
-                .managers(user.getManagers() == null ? new HashSet<>() : user.getManagers())
-                .workers(user.getWorkers() == null ? new HashSet<>() : user.getWorkers())
-                .marketologs(user.getMarketologs() == null ? new HashSet<>() : user.getMarketologs())
+                .operators(operators)
+                .managers(managers)
+                .workers(workers)
+                .marketologs(marketologs)
                 .manager(new Manager())
                 .coefficient(user.getCoefficient())
-                .image(user.getImage())
+                .image(image)
                 .build();
+    }
+
+    private Set<Operator> initializedOperators(Set<Operator> operators) {
+        if (operators == null) {
+            return new HashSet<>();
+        }
+        operators.forEach(operator -> touchUser(operator.getUser()));
+        return new HashSet<>(operators);
+    }
+
+    private Set<Manager> initializedManagers(Set<Manager> managers) {
+        if (managers == null) {
+            return new HashSet<>();
+        }
+        managers.forEach(manager -> {
+            touchUser(manager.getUser());
+            if (manager.getUser() != null && manager.getUser().getWorkers() != null) {
+                manager.getUser().getWorkers().forEach(worker -> touchUser(worker.getUser()));
+            }
+        });
+        return new HashSet<>(managers);
+    }
+
+    private Set<Worker> initializedWorkers(Set<Worker> workers) {
+        if (workers == null) {
+            return new HashSet<>();
+        }
+        workers.forEach(worker -> touchUser(worker.getUser()));
+        return new HashSet<>(workers);
+    }
+
+    private Set<Marketolog> initializedMarketologs(Set<Marketolog> marketologs) {
+        if (marketologs == null) {
+            return new HashSet<>();
+        }
+        marketologs.forEach(marketolog -> touchUser(marketolog.getUser()));
+        return new HashSet<>(marketologs);
+    }
+
+    private void touchUser(User user) {
+        if (user == null) {
+            return;
+        }
+        user.getId();
+        user.getUsername();
+        user.getFio();
+        if (user.getImage() != null) {
+            user.getImage().getId();
+        }
     }
 
     @Override
@@ -222,9 +298,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RegistrationUserDTO findById(Long id) {
         log.info("Начинается поиск пользователя по id - начало");
-        User user = userRepository.findById(id).orElseThrow();
+        User user = userRepository.findByIdWithAssignments(id).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
         return toDto(user);
     }
@@ -269,7 +346,7 @@ public class UserServiceImpl implements UserService {
             userDTO.setMarketologs(new HashSet<>());
         }
 
-        User saveUser = findByUserNameWithAssignments(userDTO.getUsername());
+        User saveUser = requireUserWithAssignments(userDTO.getUsername());
         log.info("Достали юзера по имени из дто");
 
         boolean isChanged = false;
@@ -441,7 +518,7 @@ public class UserServiceImpl implements UserService {
     public void deleteOperator(String username, Long operatorId) {
         log.info("1. Вошли в удаление оператора");
 
-        User user = findByUserNameWithAssignments(username);
+        User user = requireUserWithAssignments(username);
         log.info("2. Нашли юзера");
 
         Set<Operator> operators = user.getOperators();
@@ -467,7 +544,7 @@ public class UserServiceImpl implements UserService {
     public void deleteManager(String username, Long managerId) {
         log.info("1. Вошли в удаление менеджера");
 
-        User user = findByUserNameWithAssignments(username);
+        User user = requireUserWithAssignments(username);
         log.info("2. Нашли юзера");
 
         Set<Manager> managers = user.getManagers();
@@ -493,7 +570,7 @@ public class UserServiceImpl implements UserService {
     public void deleteWorker(String username, Long workerId) {
         log.info("1. Вошли в удаление работника");
 
-        User user = findByUserNameWithAssignments(username);
+        User user = requireUserWithAssignments(username);
         log.info("2. Нашли юзера");
 
         Set<Worker> workers = user.getWorkers();
@@ -519,7 +596,7 @@ public class UserServiceImpl implements UserService {
     public void deleteMarketolog(String username, Long marketologId) {
         log.info("1. Вошли в удаление маркетолога из списка юзера");
 
-        User user = findByUserNameWithAssignments(username);
+        User user = requireUserWithAssignments(username);
         log.info("2. Нашли юзера");
 
         Set<Marketolog> marketologs = user.getMarketologs();

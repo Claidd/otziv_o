@@ -134,6 +134,18 @@ describe('WorkerOrderCardComponent', () => {
     expect(article.classList.contains('card-tone--correction')).toBe(false);
   });
 
+  it('marks orders without changes for two or more days', () => {
+    const render = (days: number): HTMLElement => {
+      const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+      fixture.componentInstance.order = order({ dayToChangeStatusAgo: days });
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    };
+
+    expect(render(1).querySelector('.unchanged-age--alert')).toBeNull();
+    expect(render(2).querySelector('.unchanged-age--alert')?.textContent).toContain('!');
+  });
+
   it('keeps full category names available from compact category chips', () => {
     const fixture = TestBed.createComponent(WorkerOrderCardComponent);
     fixture.componentInstance.order = order({

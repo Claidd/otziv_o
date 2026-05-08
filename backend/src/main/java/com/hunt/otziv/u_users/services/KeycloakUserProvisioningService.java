@@ -60,6 +60,7 @@ public class KeycloakUserProvisioningService {
 
     private static final BigDecimal DEFAULT_COEFFICIENT = new BigDecimal("0.05");
     private static final String KEYCLOAK_AUTH_PROVIDER = "KEYCLOAK";
+    private static final String LOCAL_AUTH_PROVIDER = "LOCAL";
     private static final String CLIENT_ROLE = "CLIENT";
     private static final String ADMIN_ROLE = "ROLE_ADMIN";
     private static final String ADMIN_KEYCLOAK_ROLE = "ADMIN";
@@ -168,8 +169,10 @@ public class KeycloakUserProvisioningService {
             }
         }
 
-        keycloakAdminClient.updateUser(user.getKeycloakId(), user.getUsername(), request);
-        replaceKeycloakRealmRoles(user.getKeycloakId(), oldKeycloakRoles, newKeycloakRoles);
+        String keycloakId = updateKeycloakUserAndRepairIdIfNeeded(user, request);
+        if (hasText(keycloakId)) {
+            replaceKeycloakRealmRoles(keycloakId, oldKeycloakRoles, newKeycloakRoles);
+        }
 
         Set<String> oldLocalRoleNames = user.getRoles() == null ? Set.of() : user.getRoles().stream()
                 .map(Role::getName)
@@ -181,7 +184,7 @@ public class KeycloakUserProvisioningService {
         user.setCoefficient(request.getCoefficient() == null ? DEFAULT_COEFFICIENT : request.getCoefficient());
         user.setActive(request.isEnabled());
         replaceLocalRoles(user, newLocalRoles);
-        user.setAuthProvider(KEYCLOAK_AUTH_PROVIDER);
+        user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
         userRepository.flush();
@@ -729,6 +732,36 @@ public class KeycloakUserProvisioningService {
 
         keycloakAdminClient.removeRealmRoles(keycloakUserId, rolesToRemove);
         keycloakAdminClient.assignRealmRoles(keycloakUserId, rolesToAdd);
+    }
+
+    private String updateKeycloakUserAndRepairIdIfNeeded(User user, UpdateKeycloakUserRequest request) {
+        try {
+            keycloakAdminClient.updateUser(user.getKeycloakId(), user.getUsername(), request);
+            return user.getKeycloakId();
+        } catch (ResponseStatusException e) {
+            if (!isKeycloakUserNotFound(e)) {
+                throw e;
+            }
+
+            String repairedKeycloakId = keycloakAdminClient.findUserIdByUsername(user.getUsername())
+                    .orElse(null);
+            if (!hasText(repairedKeycloakId)) {
+                user.setKeycloakId(null);
+                user.setAuthProvider(LOCAL_AUTH_PROVIDER);
+                return null;
+            }
+            user.setKeycloakId(repairedKeycloakId);
+            keycloakAdminClient.updateUser(repairedKeycloakId, user.getUsername(), request);
+            return repairedKeycloakId;
+        }
+    }
+
+    private boolean isKeycloakUserNotFound(ResponseStatusException e) {
+        String reason = e.getReason();
+        return e.getStatusCode().value() == NOT_FOUND.value()
+                || (e.getStatusCode().value() == BAD_GATEWAY.value()
+                && reason != null
+                && reason.toLowerCase(Locale.ROOT).contains("not found"));
     }
 
     private Set<String> toKeycloakRoles(Collection<Role> localRoles) {

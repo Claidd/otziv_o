@@ -8,12 +8,16 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -50,6 +54,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -75,6 +80,12 @@ public class ApiWorkerBoardController {
     private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
     private static final Set<String> CLIENT_WAITING_ORDER_STATUSES = Set.of(ORDER_STATUS_NEW, ORDER_STATUS_CORRECT);
+    private static final int OVERDUE_NOTIFICATION_DAYS = 4;
+    private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
+            "Оплачено",
+            "Архив",
+            "Публикация"
+    );
     private static final List<String> CURRENT_WORK_SECTIONS = List.of(
             SECTION_NEW,
             SECTION_CORRECT,
@@ -85,6 +96,7 @@ public class ApiWorkerBoardController {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final OrderService orderService;
+    private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
     private final PromoTextService promoTextService;
@@ -96,6 +108,7 @@ public class ApiWorkerBoardController {
     private final PerformanceMetrics performanceMetrics;
     private final BadReviewTaskService badReviewTaskService;
     private final UserMetricSnapshotService metricSnapshotService;
+    private final AppSettingService appSettingService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -150,6 +163,51 @@ public class ApiWorkerBoardController {
                     buildPermissions(authentication),
                     message,
                     warning
+            );
+        });
+    }
+
+    @GetMapping("/overdue-orders")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public ManagerOverdueOrdersResponse getOverdueOrders(
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint("worker.overdue-orders", () -> {
+            LocalDate today = LocalDate.now();
+            LocalDate cutoff = today.minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
+            List<Object[]> summaryRows;
+
+            if (hasRole(authentication, "ADMIN")) {
+                summaryRows = orderRepository.summarizeOverdueOrders(cutoff, OVERDUE_IGNORED_STATUSES);
+            } else if (hasRole(authentication, "OWNER")) {
+                Set<Manager> managers = resolveOwnerManagers(principal);
+                summaryRows = managers.isEmpty()
+                        ? List.of()
+                        : orderRepository.summarizeOverdueOrdersByManagers(managers, cutoff, OVERDUE_IGNORED_STATUSES);
+            } else if (hasRole(authentication, "MANAGER")) {
+                summaryRows = orderRepository.summarizeOverdueOrdersByManager(
+                        resolveManager(principal),
+                        cutoff,
+                        OVERDUE_IGNORED_STATUSES
+                );
+            } else {
+                summaryRows = orderRepository.summarizeOverdueOrdersByWorker(
+                        resolveWorker(principal),
+                        cutoff,
+                        OVERDUE_IGNORED_STATUSES
+                );
+            }
+
+            List<ManagerOverdueStatusResponse> statuses = toOverdueStatuses(summaryRows, today);
+            long total = statuses.stream()
+                    .mapToLong(ManagerOverdueStatusResponse::count)
+                    .sum();
+
+            return new ManagerOverdueOrdersResponse(
+                    OVERDUE_NOTIFICATION_DAYS,
+                    total,
+                    statuses
             );
         });
     }
@@ -503,7 +561,7 @@ public class ApiWorkerBoardController {
             String sortDirection,
             String keyword
     ) {
-        LocalDate date = SECTION_NAGUL.equals(section) ? LocalDate.now().plusDays(60) : LocalDate.now();
+        LocalDate date = SECTION_NAGUL.equals(section) ? nagulLookaheadDate() : LocalDate.now();
 
         if (SECTION_BAD.equals(section)) {
             if (hasRole(authentication, "ADMIN")) {
@@ -565,7 +623,7 @@ public class ApiWorkerBoardController {
         Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
         Map<String, Integer> reviewCounts = reviewService.countBoardReviewMetrics(
                 LocalDate.now(),
-                LocalDate.now().plusDays(60),
+                nagulLookaheadDate(),
                 ORDER_STATUS_UNPAID,
                 principal,
                 primaryBoardRole(authentication)
@@ -858,9 +916,55 @@ public class ApiWorkerBoardController {
     }
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {
-        return userService.findByUserName(principal.getName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"))
-                .getManagers();
+        return userService.findManagersByUserName(principal.getName());
+    }
+
+    private List<ManagerOverdueStatusResponse> toOverdueStatuses(List<Object[]> rows, LocalDate today) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+
+        return rows.stream()
+                .map(row -> new ManagerOverdueStatusResponse(
+                        rowString(row, 0, "Без статуса"),
+                        rowLong(row, 1),
+                        daysSince(rowDate(row, 2), today)
+                ))
+                .filter(status -> status.count() > 0)
+                .sorted(Comparator.comparingLong(ManagerOverdueStatusResponse::maxDays).reversed())
+                .toList();
+    }
+
+    private long daysSince(LocalDate date, LocalDate today) {
+        if (date == null) {
+            return 0;
+        }
+
+        return ChronoUnit.DAYS.between(date, today);
+    }
+
+    private long rowLong(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof Number number ? number.longValue() : 0;
+    }
+
+    private LocalDate rowDate(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        return value instanceof LocalDate localDate ? localDate : null;
+    }
+
+    private String rowString(Object[] row, int index, String fallback) {
+        Object value = rowValue(row, index);
+        if (value == null) {
+            return fallback;
+        }
+
+        String text = value.toString();
+        return text.isBlank() ? fallback : text;
+    }
+
+    private Object rowValue(Object[] row, int index) {
+        return row != null && index >= 0 && index < row.length ? row[index] : null;
     }
 
     private boolean isOrderSection(String section) {
@@ -900,24 +1004,31 @@ public class ApiWorkerBoardController {
         }
 
         Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
-        if (!SECTION_NEW.equals(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
+        if (SECTION_CORRECT.equals(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
             return new WorkerFlowRedirect(
                     SECTION_NEW,
                     "Сначала завершите активные заказы в разделе \"Новые\". Заказы, которые ждут клиента, переход не блокируют"
             );
         }
 
-        if (isAfterCorrection(requestedSection) && countStatus(orderCounts, ORDER_STATUS_CORRECT) > 0) {
+        if (isPublishOrAll(requestedSection) && countStatus(orderCounts, ORDER_STATUS_NEW) > 0) {
+            return new WorkerFlowRedirect(
+                    SECTION_NEW,
+                    "Сначала завершите активные заказы в разделе \"Новые\". Заказы, которые ждут клиента, переход не блокируют"
+            );
+        }
+
+        if (isPublishOrAll(requestedSection) && countStatus(orderCounts, ORDER_STATUS_CORRECT) > 0) {
             return new WorkerFlowRedirect(
                     SECTION_CORRECT,
                     "Сначала завершите активные заказы в разделе \"Коррекция\". Заказы, которые ждут клиента, переход не блокируют"
             );
         }
 
-        if (isAfterNagul(requestedSection) && reviewService.hasActiveNagulReviews(principal)) {
+        if (isPublishOrAll(requestedSection) && reviewService.hasActiveNagulReviews(principal)) {
             return new WorkerFlowRedirect(
                     SECTION_NAGUL,
-                    "Есть не выгулянные аккаунты. Публикация и плохие задачи доступны после выгула всех отзывов"
+                    "Есть не выгулянные аккаунты. Публикация и раздел \"Все\" доступны после выгула всех отзывов"
             );
         }
 
@@ -931,16 +1042,8 @@ public class ApiWorkerBoardController {
                 && !hasRole(authentication, "MANAGER");
     }
 
-    private boolean isAfterCorrection(String section) {
-        return SECTION_NAGUL.equals(section)
-                || SECTION_PUBLISH.equals(section)
-                || SECTION_BAD.equals(section)
-                || SECTION_ALL.equals(section);
-    }
-
-    private boolean isAfterNagul(String section) {
+    private boolean isPublishOrAll(String section) {
         return SECTION_PUBLISH.equals(section)
-                || SECTION_BAD.equals(section)
                 || SECTION_ALL.equals(section);
     }
 
@@ -1004,6 +1107,14 @@ public class ApiWorkerBoardController {
 
     private String normalizeSortDirection(String sortDirection) {
         return "asc".equalsIgnoreCase(sortDirection) ? "asc" : "desc";
+    }
+
+    private LocalDate nagulLookaheadDate() {
+        return LocalDate.now().plusDays(nagulLookaheadDays());
+    }
+
+    private int nagulLookaheadDays() {
+        return appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60);
     }
 
     private String title(String section) {

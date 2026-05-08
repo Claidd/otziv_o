@@ -1,6 +1,7 @@
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
   absoluteAppUrl,
+  orderPaymentCopyText,
   orderReviewCopyText,
   reviewCheckPath
 } from '../../shared/order-review-copy-text';
@@ -190,6 +191,10 @@ export function managerPayableOrderSum(order: OrderCardItem): number {
   return order.totalSumWithBadReviews ?? order.sum ?? 0;
 }
 
+export function managerOrderPaymentCopyText(order: OrderCardItem, sum: number): string {
+  return orderPaymentCopyText(order, sum);
+}
+
 export function managerShowBadReviewSummary(order: OrderCardItem): boolean {
   return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
 }
@@ -220,7 +225,15 @@ export function managerCompanyFilialUrl(company: CompanyCardItem): string {
 }
 
 export function managerCompanyOrderUrl(company: CompanyCardItem): string {
-  return `/manager?companyId=${company.id}`;
+  const title = (company.title || '').trim() || `Компания #${company.id}`;
+  const params = new URLSearchParams({
+    section: 'orders',
+    status: 'Все',
+    companyId: String(company.id),
+    companyTitle: title
+  });
+
+  return `/manager?${params.toString()}`;
 }
 
 export function managerOrderDetailsUrl(order: OrderCardItem): string {

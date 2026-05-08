@@ -1,5 +1,5 @@
 import { provideRouter } from '@angular/router';
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import type { OrderCardItem } from '../../core/manager.api';
 import { MANAGER_ORDER_ACTIONS } from './manager-board.config';
 import { ManagerOrderCardComponent } from './manager-order-card.component';
@@ -11,6 +11,7 @@ function order(overrides: Partial<OrderCardItem> = {}): OrderCardItem {
     orderDetailsId: 'uuid-1',
     companyTitle: 'Company',
     filialTitle: 'Filial',
+    filialCity: 'Иркутск',
     status: 'На проверке',
     sum: 1000,
     totalSumWithBadReviews: 1300,
@@ -51,6 +52,7 @@ describe('ManagerOrderCardComponent', () => {
     expect(element.textContent).toMatch(/1[\s,]300 руб\./);
     expect(element.textContent).toContain('Плохие: 1/2');
     expect(element.textContent).toContain('Worker');
+    expect(element.querySelector<HTMLButtonElement>('.unchanged-age')?.title).toBe('Город филиала: Иркутск');
   });
 
   it('keeps full category names available from compact category chips', () => {
@@ -142,6 +144,37 @@ describe('ManagerOrderCardComponent', () => {
     expect(render(1).querySelector('.unchanged-age--alert')).toBeNull();
     expect(render(2).querySelector('.unchanged-age--alert')?.textContent).toContain('!');
   });
+
+  it('shows filial city from unchanged age and closes it again', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    fixture.componentInstance.order = order({ filialCity: 'Новосибирск' });
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const trigger = element.querySelector<HTMLButtonElement>('.unchanged-age');
+    expect(trigger).not.toBeNull();
+
+    trigger!.dispatchEvent(new Event('pointerenter'));
+    fixture.detectChanges();
+
+    expect(element.querySelector('.unchanged-city-popover')?.textContent?.trim()).toBe('Новосибирск');
+    expect(element.querySelector('.unchanged-city-popover--open')).not.toBeNull();
+
+    tick(1000);
+    fixture.detectChanges();
+
+    expect(element.querySelector('.unchanged-city-popover--open')).toBeNull();
+
+    trigger!.click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.unchanged-city-popover--open')).not.toBeNull();
+
+    trigger!.click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.unchanged-city-popover--open')).toBeNull();
+  }));
 
   it('adds soft status tones to order cards without overriding client waiting', () => {
     const render = (overrides: Partial<OrderCardItem>): HTMLElement => {

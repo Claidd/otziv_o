@@ -20,6 +20,7 @@ type WorkerBoardEditApi = Pick<
   | 'deleteOrder'
   | 'getOrderDetails'
   | 'updateOrderReview'
+  | 'assignOrderReviewNewAccount'
   | 'deleteOrderReview'
   | 'uploadOrderReviewPhoto'
 >;
@@ -54,10 +55,14 @@ export class WorkerBoardEditFacade {
   readonly reviewEditSaving = signal(false);
   readonly reviewEditDeleting = signal(false);
   readonly reviewEditUploading = signal(false);
+  readonly reviewEditNewAccountSaving = signal(false);
   readonly reviewEditError = signal<string | null>(null);
 
   readonly productOptions = computed(() => this.reviewEditDetails()?.products ?? []);
-  readonly reviewEditBusy = computed(() => this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading());
+  readonly reviewEditBusy = computed(() => this.reviewEditSaving()
+    || this.reviewEditDeleting()
+    || this.reviewEditUploading()
+    || this.reviewEditNewAccountSaving());
 
   constructor(private readonly deps: WorkerBoardEditFacadeDeps) {}
 
@@ -170,6 +175,7 @@ export class WorkerBoardEditFacade {
     this.reviewEditSaving.set(false);
     this.reviewEditDeleting.set(false);
     this.reviewEditUploading.set(false);
+    this.reviewEditNewAccountSaving.set(false);
     this.editReview.set(null);
     this.reviewEditDraft.set(null);
     this.reviewEditDetails.set(null);
@@ -203,7 +209,18 @@ export class WorkerBoardEditFacade {
   }
 
   handleReviewEditDraftChange(change: WorkerReviewEditDraftChange): void {
+    if (change.field === 'vigul' && this.canOnlyUnsetReviewVigul() && change.value === true) {
+      return;
+    }
+
     this.reviewEditDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+  }
+
+  canOnlyUnsetReviewVigul(): boolean {
+    const details = this.reviewEditDetails();
+    return !!details?.canEditReviewVigul
+      && !details.canEditReviewDates
+      && !details.canEditReviewPublish;
   }
 
   saveReviewEdit(): void {
@@ -222,7 +239,9 @@ export class WorkerBoardEditFacade {
     this.reviewEditSaving.set(true);
     this.reviewEditError.set(null);
 
-    this.deps.managerApi.updateOrderReview(review.orderId, review.id, draft).subscribe({
+    const request = this.reviewEditRequest(review, draft);
+
+    this.deps.managerApi.updateOrderReview(review.orderId, review.id, request).subscribe({
       next: (details) => {
         this.reviewEditDetails.set(details);
         this.patchReviewsFromDetails(details);
@@ -313,6 +332,49 @@ export class WorkerBoardEditFacade {
     });
   }
 
+  assignReviewNewAccount(): void {
+    const review = this.editReview();
+
+    if (!review || this.reviewEditNewAccountSaving()) {
+      return;
+    }
+
+    const oldBotId = review.botId ?? null;
+    this.reviewEditNewAccountSaving.set(true);
+    this.reviewEditError.set(null);
+
+    this.deps.managerApi.assignOrderReviewNewAccount(review.orderId, review.id).subscribe({
+      next: (details) => {
+        const updatedReview = details.reviews.find((item) => item.id === review.id);
+        this.reviewEditDetails.set(details);
+        this.patchReviewsFromDetails(details);
+
+        if (updatedReview) {
+          this.editReview.set(updatedReview);
+          this.reviewEditDraft.update((draft) => draft ? {
+            ...draft,
+            vigul: !!updatedReview.vigul,
+            botName: updatedReview.botFio ?? '',
+            botPassword: updatedReview.botPassword ?? ''
+          } : this.toReviewEditDraft(updatedReview));
+        }
+
+        this.reviewEditNewAccountSaving.set(false);
+        this.deps.toastService.success(
+          'Аккаунт назначен',
+          `Аккаунт изменен с ID ${oldBotId || 'не назначен'} на ID ${updatedReview?.botId || 'не назначен'}`
+        );
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось назначить новый аккаунт');
+        this.reviewEditNewAccountSaving.set(false);
+        this.reviewEditError.set(message);
+        this.deps.toastService.error('Аккаунт не назначен', message);
+      }
+    });
+  }
+
   private applyOrderEditPayload(payload: OrderEditPayload): void {
     this.editOrder.set(payload);
     this.orderDraft.set({
@@ -340,6 +402,17 @@ export class WorkerBoardEditFacade {
       botPassword: review.botPassword ?? '',
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
+    };
+  }
+
+  private reviewEditRequest(review: ReviewEditItem, draft: ReviewEditDraft): ReviewEditDraft {
+    if (!this.canOnlyUnsetReviewVigul()) {
+      return draft;
+    }
+
+    return {
+      ...draft,
+      vigul: !!review.vigul && !!draft.vigul
     };
   }
 

@@ -37,6 +37,8 @@ describe('ManagerCompanyCardComponent', () => {
     expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company');
     expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Филиалов:');
+    expect(element.querySelector<HTMLAnchorElement>('.company-manager-link')?.getAttribute('href'))
+      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5&companyId=10&companyTitle=Company');
     expect(element.querySelector<HTMLButtonElement>('.card-actions button')?.disabled).toBe(true);
   });
 
@@ -46,7 +48,7 @@ describe('ManagerCompanyCardComponent', () => {
     let copiedPhone = '';
     let orderOpened = false;
     let status = '';
-    let ordersOpened = false;
+    let ordersOpened = 0;
     let editOpened = false;
     component.company = company();
     component.actions = MANAGER_COMPANY_ACTIONS.slice(0, 1);
@@ -60,7 +62,7 @@ describe('ManagerCompanyCardComponent', () => {
       status = action.status;
     });
     component.ordersOpened.subscribe(() => {
-      ordersOpened = true;
+      ordersOpened += 1;
     });
     component.editOpened.subscribe(() => {
       editOpened = true;
@@ -73,12 +75,13 @@ describe('ManagerCompanyCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.order-create-trigger')?.click();
     element.querySelector<HTMLButtonElement>('.card-actions button')?.click();
     element.querySelector<HTMLAnchorElement>('.details-button')?.click();
-    element.querySelector<HTMLAnchorElement>('footer a')?.click();
+    element.querySelector<HTMLAnchorElement>('.company-manager-link')?.click();
+    element.querySelector<HTMLAnchorElement>('.company-edit-link')?.click();
 
     expect(copiedPhone).toBe('79086431055');
     expect(orderOpened).toBe(true);
     expect(status).toBe('Ожидание');
-    expect(ordersOpened).toBe(true);
+    expect(ordersOpened).toBe(2);
     expect(editOpened).toBe(true);
   });
 

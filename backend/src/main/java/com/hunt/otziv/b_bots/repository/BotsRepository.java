@@ -158,6 +158,19 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
             @Param("status") String status
     );
 
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        WHERE b.fio = :fio
+          AND b.botCity.id = :cityId
+    """)
+    List<Bot> findBotsByFioAndCity(
+            @Param("fio") String fio,
+            @Param("cityId") Long cityId
+    );
+
     Optional<Bot> findById(Long id);
 
     List<Bot> findAll();

@@ -443,24 +443,18 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 return usedBotIds;
             }
 
-            // Находим активные отзывы в этих филиалах
-            List<Review> activeReviewsInSameCity = reviewRepository
-                    .findByPublishFalseAndBotIsNotNullAndFilialIdIn(otherFilialIdsInCity);
+            Set<Long> activeBotIdsInSameCity = reviewRepository
+                    .findActiveBotIdsByUnpublishedReviewsInFilials(otherFilialIdsInCity, null);
 
-            if (activeReviewsInSameCity != null) {
-                for (Review existingReview : activeReviewsInSameCity) {
-                    if (existingReview != null &&
-                            existingReview.getBot() != null &&
-                            existingReview.getBot().getId() != null &&
-                            !STUB_BOT_ID.equals(existingReview.getBot().getId())) {
-
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
+            if (activeBotIdsInSameCity != null) {
+                activeBotIdsInSameCity.stream()
+                        .filter(Objects::nonNull)
+                        .filter(botId -> !STUB_BOT_ID.equals(botId))
+                        .forEach(usedBotIds::add);
             }
 
             log.debug("Найдено активных отзывов с ботами в других филиалах того же города: {}",
-                    activeReviewsInSameCity != null ? activeReviewsInSameCity.size() : 0);
+                    activeBotIdsInSameCity != null ? activeBotIdsInSameCity.size() : 0);
 
         } catch (Exception e) {
             log.error("Ошибка при получении глобально использованных ботов", e);

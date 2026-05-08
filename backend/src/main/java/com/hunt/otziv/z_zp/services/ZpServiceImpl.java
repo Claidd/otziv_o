@@ -79,11 +79,11 @@ public class ZpServiceImpl implements ZpService{
                                     String role = (String) obj[2];
                                     return rolePriority(role); // Сортируем сначала по приоритету роли
                                 })
-                                .thenComparing(obj -> ((BigDecimal) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
+                                .thenComparing(obj -> ((Number) obj[1]).longValue(), Comparator.reverseOrder()) // Затем по сумме
                 )
                 .collect(Collectors.toMap(
                         obj -> (String) obj[0],   // ФИО
-                        obj -> Pair.of((String) obj[2], ((BigDecimal) obj[1]).longValue()), // Роль + Сумма
+                        obj -> Pair.of((String) obj[2], ((Number) obj[1]).longValue()), // Роль + Сумма
                         (e1, e2) -> e1,
                         LinkedHashMap::new // Сохраняем порядок сортировки
                 ));
@@ -105,7 +105,7 @@ public class ZpServiceImpl implements ZpService{
                                 (String) obj[2], // Роль
                                 ((Number) obj[1]).longValue(), // Сумма зарплаты
                                 ((Number) obj[3]).longValue(), // Сумма выплат (amount)
-                                ((Long) obj[4]) // Количество отзывов
+                                ((Number) obj[4]).longValue() // Количество отзывов
                         ),
                         (e1, e2) -> e1,
                         LinkedHashMap::new // Сохранение порядка сортировки

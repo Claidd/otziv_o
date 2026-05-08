@@ -32,6 +32,9 @@ public class S3UploadServiceImpl implements S3UploadService {
     @Value("${s3.projectId}")
     private String projectId;
 
+    @Value("${s3.public-base-url:}")
+    private String publicBaseUrl;
+
     private final S3Client s3Client;
 
     @Override
@@ -58,7 +61,7 @@ public class S3UploadServiceImpl implements S3UploadService {
 
         s3Client.putObject(putRequest, RequestBody.fromBytes(processedImage));
 
-        String url = String.format("https://%s.selstorage.ru/%s", projectId, key);
+        String url = publicObjectBaseUrl() + "/" + key;
         log.info("Новое фото загружено: {}", url);
         return url;
     }
@@ -66,20 +69,20 @@ public class S3UploadServiceImpl implements S3UploadService {
     private void deleteOldFile(@Nullable String oldUrl) {
         if (oldUrl == null) return;
 
-        String expectedPrefix = "https://" + projectId + ".selstorage.ru/";
-        if (oldUrl.startsWith(expectedPrefix)) {
-            String oldKey = oldUrl.substring(expectedPrefix.length());
-            log.info("Удаление старого файла: {}", oldKey);
-
-            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(oldKey)
-                    .build();
-
-            s3Client.deleteObject(deleteRequest);
-        } else {
+        String oldKey = extractObjectKey(oldUrl);
+        if (oldKey == null) {
             log.warn("Пропущено удаление: старый URL не из нашего хранилища: {}", oldUrl);
+            return;
         }
+
+        log.info("Удаление старого файла: {}", oldKey);
+
+        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(oldKey)
+                .build();
+
+        s3Client.deleteObject(deleteRequest);
     }
 
     private byte[] processImage(MultipartFile file) {
@@ -99,5 +102,37 @@ public class S3UploadServiceImpl implements S3UploadService {
         }
     }
 
+    private String extractObjectKey(String oldUrl) {
+        String normalizedUrl = oldUrl.trim();
+        String publicPrefix = publicObjectBaseUrl() + "/";
+        if (normalizedUrl.startsWith(publicPrefix)) {
+            return normalizedUrl.substring(publicPrefix.length());
+        }
+
+        String legacyPrefix = legacyObjectBaseUrl() + "/";
+        if (normalizedUrl.startsWith(legacyPrefix)) {
+            return normalizedUrl.substring(legacyPrefix.length());
+        }
+
+        return null;
+    }
+
+    private String publicObjectBaseUrl() {
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+            return trimTrailingSlash(publicBaseUrl.trim());
+        }
+        return legacyObjectBaseUrl();
+    }
+
+    private String legacyObjectBaseUrl() {
+        return "https://" + projectId + ".selstorage.ru";
+    }
+
+    private String trimTrailingSlash(String value) {
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value;
+    }
 }
 

@@ -2,6 +2,7 @@ import type { ManagerOption, OrderCardItem, OrderReviewItem, ReviewUpdateRequest
 import { apiErrorMessage } from '../../shared/api-error-message';
 import {
   absoluteAppUrl,
+  orderPaymentCopyText,
   orderReviewCopyText,
   reviewCheckPath
 } from '../../shared/order-review-copy-text';
@@ -133,6 +134,10 @@ export function workerReviewCheckPath(orderDetailsId: string): string {
 
 export function workerOrderReviewCopyText(order: OrderCardItem, promoTexts: string[]): string {
   return orderReviewCopyText(order, promoTexts);
+}
+
+export function workerOrderPaymentCopyText(order: OrderCardItem, sum: number): string {
+  return orderPaymentCopyText(order, sum);
 }
 
 export function workerErrorMessage(err: unknown, fallback: string): string {

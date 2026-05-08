@@ -10,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,12 +30,14 @@ public class TelephoneServiceImpl implements TelephoneService {
         return telephoneRepository.findById(telephoneId).orElse(null);
     }
 
+    @Transactional(readOnly = true)
     public TelephoneDTO getTelephoneDTOById(Long telephoneId){
         return toDTO(telephoneRepository.findByIdWithOperator(telephoneId)
                 .orElseThrow(() -> new EntityNotFoundException("Телефон не найден")));
     }
 
     @Override
+    @Transactional
     public void updatePhone(Long id, TelephoneDTO dto) {
         Telephone existing = telephoneRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Телефон не найден"));
@@ -135,12 +138,12 @@ public class TelephoneServiceImpl implements TelephoneService {
 
         if (changed) {
             existing.setUpdateStatus(LocalDateTime.now());
-            telephoneRepository.save(existing);
         }
     }
 
 
     @Override
+    @Transactional(readOnly = true)
     public List<TelephoneDTO> getAllTelephones() {
         List<Telephone> telephones = telephoneRepository.findAllWithOperator();
         return telephones.stream()
@@ -183,6 +186,7 @@ public class TelephoneServiceImpl implements TelephoneService {
 
 
 
+    @Transactional
     public void createTelephone(TelephoneDTO dto) {
         Operator operator = null;
         if (dto.getOperator() != null && dto.getOperator().getId() != null) {
@@ -218,6 +222,7 @@ public class TelephoneServiceImpl implements TelephoneService {
         return telephoneRepository.save(telephone);
     }
     @Override
+    @Transactional
     public void deletePhone(Long phoneId) {
         telephoneRepository.deleteById(phoneId);
     }

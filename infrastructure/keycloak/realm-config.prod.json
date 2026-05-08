@@ -22,8 +22,8 @@
   ],
   "defaultLocale": "ru",
   "accessTokenLifespan": 600,
-  "ssoSessionIdleTimeout": 1800,
-  "ssoSessionMaxLifespan": 28800,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 86400,
   "roles": {
     "realm": [
       {

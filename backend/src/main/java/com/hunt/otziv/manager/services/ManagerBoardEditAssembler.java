@@ -267,9 +267,14 @@ public class ManagerBoardEditAssembler {
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"),
-                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
-                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER")
+                canEditReviewVigul(authentication),
+                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER")
         );
+    }
+
+    private boolean canEditReviewVigul(Authentication authentication) {
+        return managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER")
+                || managerPermissionService.hasOnlyWorkerRole(authentication);
     }
 
     public List<OptionResponse> subCategoryOptions(Long categoryId) {
@@ -431,11 +436,11 @@ public class ManagerBoardEditAssembler {
     }
 
     private List<OptionResponse> workerOptions(CompanyDTO company) {
-        if (company.getManager() == null || company.getManager().getUser() == null || company.getManager().getUser().getWorkers() == null) {
+        if (company.getManager() == null || company.getManager().getManagerId() == null) {
             return List.of();
         }
 
-        return workerService.getAllWorkersByManagerId(company.getManager().getUser().getWorkers()).stream()
+        return workerService.getAllWorkersByManagerId(company.getManager().getManagerId()).stream()
                 .sorted(Comparator.comparing(worker -> safe(worker.getUser() != null ? worker.getUser().getFio() : "")))
                 .map(worker -> new OptionResponse(worker.getWorkerId(), safe(worker.getUser() != null ? worker.getUser().getFio() : "Специалист #" + worker.getWorkerId())))
                 .toList();
@@ -549,9 +554,7 @@ public class ManagerBoardEditAssembler {
     }
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {
-        return userService.findByUserName(principal.getName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"))
-                .getManagers();
+        return userService.findManagersByUserName(principal.getName());
     }
 
     private String safe(String value) {

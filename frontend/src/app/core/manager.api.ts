@@ -41,6 +41,7 @@ export interface OrderCardItem {
   companyTitle: string;
   filialTitle?: string;
   filialUrl?: string;
+  filialCity?: string;
   status: string;
   sum?: number;
   totalSumWithBadReviews?: number;
@@ -486,6 +487,13 @@ export class ManagerApi {
   changeOrderReviewBot(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`,
+      {}
+    );
+  }
+
+  assignOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`,
       {}
     );
   }

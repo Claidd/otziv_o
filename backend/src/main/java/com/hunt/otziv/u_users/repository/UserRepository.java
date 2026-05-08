@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.repository;
 
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -45,22 +47,46 @@ public interface UserRepository extends JpaRepository<User, Long> {
         FROM User u
         LEFT JOIN FETCH u.roles
         LEFT JOIN FETCH u.image
-        LEFT JOIN FETCH u.operators
-        LEFT JOIN FETCH u.managers
-        LEFT JOIN FETCH u.workers
-        LEFT JOIN FETCH u.marketologs
+        LEFT JOIN FETCH u.operators o
+        LEFT JOIN FETCH o.user
+        LEFT JOIN FETCH u.managers m
+        LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH u.workers w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH u.marketologs mk
+        LEFT JOIN FETCH mk.user
         WHERE u.username = :username
     """)
     Optional<User> findByUsernameWithAssignments(@Param("username") String username);
 
     @Query("""
+        SELECT DISTINCT m
+        FROM User u
+        JOIN u.managers m
+        LEFT JOIN FETCH m.user mu
+        LEFT JOIN FETCH mu.image
+        LEFT JOIN FETCH mu.workers w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH mu.operators o
+        LEFT JOIN FETCH o.user
+        LEFT JOIN FETCH mu.marketologs mk
+        LEFT JOIN FETCH mk.user
+        WHERE u.username = :username
+    """)
+    Set<Manager> findManagersWithTeamByUsername(@Param("username") String username);
+
+    @Query("""
         SELECT DISTINCT u
         FROM User u
         LEFT JOIN FETCH u.roles
-        LEFT JOIN FETCH u.managers
-        LEFT JOIN FETCH u.workers
-        LEFT JOIN FETCH u.operators
-        LEFT JOIN FETCH u.marketologs
+        LEFT JOIN FETCH u.managers m
+        LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH u.workers w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH u.operators o
+        LEFT JOIN FETCH o.user
+        LEFT JOIN FETCH u.marketologs mk
+        LEFT JOIN FETCH mk.user
         WHERE u.id = :id
     """)
     Optional<User> findByIdWithAssignments(@Param("id") Long id);
@@ -104,7 +130,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         LEFT JOIN FETCH u.image
         LEFT JOIN FETCH u.managers m
         LEFT JOIN FETCH m.user mu
-        LEFT JOIN FETCH mu.workers
+        LEFT JOIN FETCH mu.workers w
+        LEFT JOIN FETCH w.user
         JOIN u.roles r
         WHERE r.name = :roleName
           AND u.active = true

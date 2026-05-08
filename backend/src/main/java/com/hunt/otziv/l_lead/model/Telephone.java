@@ -6,7 +6,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,6 +20,8 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 @JsonIgnoreProperties({"hibernateLazyInitializer"})
 @Table(name = "telephones")
 public class Telephone {
@@ -26,6 +30,8 @@ public class Telephone {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "telephone_id")
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Long id; // ID телефона
 
     @Column(name = "telephone_number")

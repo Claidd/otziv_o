@@ -82,6 +82,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     List<String> findExistingTelephoneLeads(@Param("telephoneLeads") Collection<String> telephoneLeads);
 
     @Query("select l from Lead l where l.lidStatus = :status")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
     long countByLidStatus(String status);
 
@@ -89,10 +90,12 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 //    Page<Lead> findAllByLidStatusByTelephoneId(Long telephoneId, String status, Pageable pageable);
 
     @Query("SELECT l FROM Lead l WHERE l.telephone.id = :telephoneId AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) ORDER BY l.createDate DESC LIMIT 1")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Optional<Lead> findTopByLidStatusAndTelephoneIdAndKeywordOrderByCreateDateDesc(Long telephoneId,
                                                                                    String keyword);
 
     @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND l.telephone.id = :telephoneId ORDER BY l.createDate DESC LIMIT 1")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Optional<Lead> findTopByLidStatusAndTelephoneIdOrderByCreateDateDesc(Long telephoneId, String status);
 
 
@@ -183,52 +186,71 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     Page<Lead> findAllByLidStatusAndManager(String status, Manager manager, Pageable pageable);
     long countByLidStatusAndManager(String status, Manager manager);
     @Query("select l from Lead l where  l.lidStatus = :status and l.marketolog = :marketolog")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatusAndMarketolog(String status, Marketolog marketolog, Pageable pageable);
     long countByLidStatusAndMarketolog(String status, Marketolog marketolog);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAll(Pageable pageable);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByManager(Manager manager, Pageable pageable);
     long countByManager(Manager manager);
+    @Override
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Optional<Lead> findById(Long leadId);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCase(String status, String keyword);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCase(String keyword, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCase(String keyword);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(String status, String keyword, Marketolog marketolog);
 
 
 
     @Query("SELECT l FROM Lead l WHERE l.manager IN :managers")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByManagerToOwner(List<Manager> managers, Pageable pageable);
     long countByManagerIn(Collection<Manager> managers);
 
 
 
     @Query("SELECT l FROM Lead l WHERE LOWER(l.telephoneLead) LIKE %:keyword% AND l.manager IN :managers")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String keyword, List<Manager> managers, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndManagerIn(String keyword, Collection<Manager> managers);
 
 
     @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) AND l.manager IN :managers")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String status, String keyword, List<Manager> managers, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerIn(String status, String keyword, Collection<Manager> managers);
 
 
     @Query("select l from Lead l where l.lidStatus = :status and l.manager IN :managers")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatusAndManagerToOwner(String status, List<Manager> managers, Pageable pageable);
     long countByLidStatusAndManagerIn(String status, Collection<Manager> managers);
 
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry, Pageable pageable);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
             String status, String keyword, LocalDate dateNewTry, Pageable pageable);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndManagerAndDateNewTryLessThanEqual(
             String status, Manager manager, LocalDate dateNewTry, Pageable pageable);
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
             String status, String keyword, Manager manager, LocalDate dateNewTry, Pageable pageable);
     long countByLidStatusAndDateNewTryLessThanEqual(String status, LocalDate dateNewTry);
@@ -296,6 +318,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("SELECT l FROM Lead l WHERE l.operator = :operator AND " +
             "(LOWER(l.telephoneLead) LIKE LOWER(:keyword)) AND " +
             "(l.lidStatus = 'Новый' OR l.lidStatus = 'Отправленный' OR l.lidStatus = 'В работу')")
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> getAllLeadsToOperatorAll(
             @Param("operator") Operator operator,
             @Param("keyword") String keyword,
@@ -308,6 +331,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
           AND l.lidStatus IN :statuses
           AND LOWER(l.telephoneLead) LIKE LOWER(:keyword)
     """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> getSentLeadsByOperator(
             @Param("operator") Operator operator,
             @Param("statuses") Collection<String> statuses,
@@ -323,6 +347,7 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
             OR ((l.operator = :operator OR t.telephoneOperator = :operator) AND l.lidStatus IN :sentStatuses)
           )
     """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> searchOperatorQueueAndSentLeads(
             @Param("operator") Operator operator,
             @Param("telephoneId") Long telephoneId,
