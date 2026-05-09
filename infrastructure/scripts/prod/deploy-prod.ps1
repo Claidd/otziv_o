@@ -336,13 +336,14 @@ set_env KEYCLOAK_ADMIN_SERVER_URL "http://keycloak:8080/keycloak"
 set_env KC_PROXY_TRUSTED_ADDRESSES "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
 
 ensure_nginx_certs
+find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 compose down --remove-orphans
 remove_repo_images "`$app_repo"
 remove_repo_images "`$web_repo"
 compose pull app nginx
 compose up -d --remove-orphans
-infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
+sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"

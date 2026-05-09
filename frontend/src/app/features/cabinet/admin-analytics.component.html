@@ -9,6 +9,25 @@
       <label>
         <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectDate($event)">
       </label>
+      <div class="period-control" role="group" aria-label="Период графика">
+        <button type="button" [class.active]="periodMode() === 'lastTwoYears'" (click)="selectPeriodMode('lastTwoYears')">
+          2 года
+        </button>
+        <button type="button" [class.active]="periodMode() === 'allTime'" (click)="selectPeriodMode('allTime')">
+          Все время
+        </button>
+        <button type="button" [class.active]="periodMode() === 'custom'" (click)="selectPeriodMode('custom')">
+          Период
+        </button>
+      </div>
+      @if (periodMode() === 'custom') {
+        <label>
+          <input type="date" aria-label="Начало периода" [ngModel]="periodFrom()" (ngModelChange)="setPeriodFrom($event)">
+        </label>
+        <label>
+          <input type="date" aria-label="Конец периода" [ngModel]="periodTo()" (ngModelChange)="setPeriodTo($event)">
+        </label>
+      }
       <button type="button" (click)="refresh()" [disabled]="loading()">
         <span class="material-icons-sharp">refresh</span>
         {{ loading() ? 'Обновляю' : 'Обновить' }}
@@ -29,17 +48,26 @@
 
       <div class="metric-grid">
         @for (metric of payMetrics(); track metricId($index, metric)) {
-          <article class="metric-card" [class]="tone(metric.percent)">
+          <article class="metric-card" [class]="metricTone(metric)">
             <div>
               <h3>{{ metric.label }}</h3>
               <strong>{{ metric.value }}</strong>
             </div>
-            <div class="percent-ring">
-              <span>{{ metric.percent }}%</span>
-            </div>
+            @if (metric.percent !== null) {
+              <div class="percent-ring">
+                <span>{{ metric.percent }}%</span>
+              </div>
+            }
           </article>
         }
       </div>
+
+      <app-cabinet-line-chart
+        heading="Оборот по месяцам"
+        [subtitle]="periodSubtitle()"
+        ariaLabel="Оборот по месяцам"
+        [chart]="yearlyLineChartFrom(stats()?.orderPayMapMonth)"
+      />
 
       <app-cabinet-bar-chart
         heading="Оборот по дням"
@@ -49,24 +77,19 @@
 
       <div class="metric-grid">
         @for (metric of payOrderMetrics(); track metricId($index, metric)) {
-          <article class="metric-card" [class]="tone(metric.percent)">
+          <article class="metric-card" [class]="metricTone(metric)">
             <div>
               <h3>{{ metric.label }}</h3>
               <strong>{{ metric.value }}</strong>
             </div>
-            <div class="percent-ring">
-              <span>{{ metric.percent }}%</span>
-            </div>
+            @if (metric.percent !== null) {
+              <div class="percent-ring">
+                <span>{{ metric.percent }}%</span>
+              </div>
+            }
           </article>
         }
       </div>
-
-      <app-cabinet-line-chart
-        heading="Оборот по месяцам"
-        subtitle="все годы"
-        ariaLabel="Оборот по месяцам"
-        [chart]="yearlyLineChartFrom(stats()?.orderPayMapMonth)"
-      />
     </section>
 
     <section class="analytics-section">
@@ -77,17 +100,26 @@
 
       <div class="metric-grid">
         @for (metric of salaryMetrics(); track metricId($index, metric)) {
-          <article class="metric-card" [class]="tone(metric.percent)">
+          <article class="metric-card" [class]="metricTone(metric)">
             <div>
               <h3>{{ metric.label }}</h3>
               <strong>{{ metric.value }}</strong>
             </div>
-            <div class="percent-ring">
-              <span>{{ metric.percent }}%</span>
-            </div>
+            @if (metric.percent !== null) {
+              <div class="percent-ring">
+                <span>{{ metric.percent }}%</span>
+              </div>
+            }
           </article>
         }
       </div>
+
+      <app-cabinet-line-chart
+        heading="Зарплаты по месяцам"
+        [subtitle]="periodSubtitle()"
+        ariaLabel="Зарплаты по месяцам"
+        [chart]="yearlyLineChartFrom(stats()?.zpPayMapMonth)"
+      />
 
       <app-cabinet-bar-chart
         heading="Зарплаты по дням"
@@ -98,24 +130,19 @@
 
       <div class="metric-grid">
         @for (metric of salaryOrderMetrics(); track metricId($index, metric)) {
-          <article class="metric-card" [class]="tone(metric.percent)">
+          <article class="metric-card" [class]="metricTone(metric)">
             <div>
               <h3>{{ metric.label }}</h3>
               <strong>{{ metric.value }}</strong>
             </div>
-            <div class="percent-ring">
-              <span>{{ metric.percent }}%</span>
-            </div>
+            @if (metric.percent !== null) {
+              <div class="percent-ring">
+                <span>{{ metric.percent }}%</span>
+              </div>
+            }
           </article>
         }
       </div>
-
-      <app-cabinet-line-chart
-        heading="Зарплаты по месяцам"
-        subtitle="все годы"
-        ariaLabel="Зарплаты по месяцам"
-        [chart]="yearlyLineChartFrom(stats()?.zpPayMapMonth)"
-      />
     </section>
   } @else if (loading()) {
     <section class="empty-state">

@@ -42,10 +42,13 @@ KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-$(env_value KEYCLOAK_PUBLIC_URL)}"
 REALM="${KEYCLOAK_ADMIN_REALM:-$(env_value KEYCLOAK_ADMIN_REALM)}"
 ADMIN_USER="${KEYCLOAK_ADMIN:-$(env_value KEYCLOAK_ADMIN)}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-$(env_value KEYCLOAK_ADMIN_PASSWORD)}"
+BACKEND_CLIENT_ID="${KEYCLOAK_ADMIN_CLIENT_ID:-$(env_value KEYCLOAK_ADMIN_CLIENT_ID)}"
+BACKEND_CLIENT_SECRET="${KEYCLOAK_ADMIN_CLIENT_SECRET:-$(env_value KEYCLOAK_ADMIN_CLIENT_SECRET)}"
 
 APP_BASE_URL="${APP_BASE_URL:-https://o-ogo.ru}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-https://o-ogo.ru/keycloak}"
 REALM="${REALM:-otziv}"
+BACKEND_CLIENT_ID="${BACKEND_CLIENT_ID:-otziv-backend}"
 
 if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASSWORD" ]; then
   echo "KEYCLOAK_ADMIN and KEYCLOAK_ADMIN_PASSWORD must be set in $ENV_FILE." >&2
@@ -97,6 +100,68 @@ if [ -n "$frontend_client_uuid" ] && [ "$frontend_client_uuid" != "id" ]; then
     || echo "Warning: could not update optional frontend client attributes." >&2
 else
   echo "Warning: frontend Keycloak client otziv-frontend was not found." >&2
+fi
+
+backend_client_uuid="$(
+  kc get clients -r "$REALM" -q clientId="$BACKEND_CLIENT_ID" --fields id --format csv --noquotes \
+    | tr -d '\r' \
+    | tail -n 1
+)"
+
+if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
+  backend_update_args="
+    -s enabled=true
+    -s publicClient=false
+    -s serviceAccountsEnabled=true
+    -s standardFlowEnabled=false
+    -s directAccessGrantsEnabled=false
+    -s clientAuthenticatorType=client-secret
+  "
+
+  if [ -n "$BACKEND_CLIENT_SECRET" ]; then
+    kc update "clients/$backend_client_uuid" -r "$REALM" \
+      -s enabled=true \
+      -s publicClient=false \
+      -s serviceAccountsEnabled=true \
+      -s standardFlowEnabled=false \
+      -s directAccessGrantsEnabled=false \
+      -s clientAuthenticatorType=client-secret \
+      -s "secret=$BACKEND_CLIENT_SECRET"
+  else
+    echo "Warning: KEYCLOAK_ADMIN_CLIENT_SECRET is empty; backend client secret was not changed." >&2
+    kc update "clients/$backend_client_uuid" -r "$REALM" \
+      $backend_update_args
+  fi
+
+  kc add-roles -r "$REALM" --uusername "service-account-$BACKEND_CLIENT_ID" --rolename ADMIN \
+    || echo "Warning: could not add ADMIN role to backend service account." >&2
+
+  backend_audience_mapper_id="$(
+    kc get "clients/$backend_client_uuid/protocol-mappers/models" -r "$REALM" \
+      --fields id,name --format csv --noquotes \
+      | tr -d '\r' \
+      | awk -F, '$2 == "otziv-backend-audience" { print $1; exit }'
+  )"
+
+  if [ -n "$backend_audience_mapper_id" ]; then
+    kc update "clients/$backend_client_uuid/protocol-mappers/models/$backend_audience_mapper_id" -r "$REALM" \
+      -s name=otziv-backend-audience \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-audience-mapper \
+      -s "config.\"included.client.audience\"=$BACKEND_CLIENT_ID" \
+      -s "config.\"id.token.claim\"=false" \
+      -s "config.\"access.token.claim\"=true"
+  else
+    kc create "clients/$backend_client_uuid/protocol-mappers/models" -r "$REALM" \
+      -s name=otziv-backend-audience \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-audience-mapper \
+      -s "config.\"included.client.audience\"=$BACKEND_CLIENT_ID" \
+      -s "config.\"id.token.claim\"=false" \
+      -s "config.\"access.token.claim\"=true"
+  fi
+else
+  echo "Warning: backend Keycloak client $BACKEND_CLIENT_ID was not found." >&2
 fi
 
 echo "Keycloak production settings applied."

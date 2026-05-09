@@ -1,5 +1,6 @@
 import {
   cabinetDailyBarChartFrom,
+  cabinetPeriodTotalFrom,
   cabinetYearlyLineChartFrom
 } from './cabinet-chart.helpers';
 
@@ -31,6 +32,25 @@ describe('cabinet chart helpers', () => {
     expect(chart.series[1].pointsData[0]).toMatchObject({ label: 'Янв', value: 500 });
     expect(chart.months).toHaveLength(12);
     expect(chart.gridLines.length).toBeGreaterThan(0);
+  });
+
+  it('limits yearly line chart series to the selected period', () => {
+    const chart = cabinetYearlyLineChartFrom('{"2024":{"12":100},"2025":{"1":200},"2026":{"5":300,"6":400}}', {
+      from: '2025-01-01',
+      to: '2026-05-09'
+    });
+
+    expect(chart.series.map((series) => series.label)).toEqual(['Год: 2025', 'Год: 2026']);
+    expect(chart.series[0].pointsData[0]).toMatchObject({ label: 'Янв', value: 200 });
+    expect(chart.series[1].pointsData[4]).toMatchObject({ label: 'Май', value: 300 });
+    expect(chart.series[1].pointsData[5]).toMatchObject({ label: 'Июн', value: 0 });
+  });
+
+  it('sums monthly values for the selected period', () => {
+    const map = '{"2024":{"12":100},"2025":{"1":200},"2026":{"5":300,"6":400}}';
+
+    expect(cabinetPeriodTotalFrom(map, { from: '2025-01-01', to: '2026-05-09' })).toBe(500);
+    expect(cabinetPeriodTotalFrom(map, { allTime: true })).toBe(1000);
   });
 
   it('keeps home profile support for flat monthly maps with fallback year', () => {
