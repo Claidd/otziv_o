@@ -9,6 +9,10 @@ import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateScoreService;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateStatsService;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.u_users.model.Manager;
@@ -19,6 +23,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -53,6 +58,13 @@ public class ApiCabinetController {
     private final ManagerService managerService;
     private final PerformanceMetrics performanceMetrics;
     private final CacheManager cacheManager;
+    private final AnalyticsAggregateStatsService analyticsAggregateStatsService;
+    private final AnalyticsAggregateScoreService analyticsAggregateScoreService;
+    private final AnalyticsAggregateUserStatsService analyticsAggregateUserStatsService;
+    private final AnalyticsAggregateTeamService analyticsAggregateTeamService;
+
+    @Value("${otziv.analytics.aggregates.read-enabled:false}")
+    private boolean aggregateAnalyticsReadEnabled;
 
     @GetMapping("/profile")
     @PreAuthorize("isAuthenticated()")
@@ -67,14 +79,14 @@ public class ApiCabinetController {
 
             return cached(
                     CacheConfig.CABINET_PROFILE,
-                    cabinetKey("profile", principal.getName(), selectedDate),
+                    cabinetKey("profile", principal.getName(), selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
                         User user = currentUser(principal);
                         return new CabinetProfileResponse(
                                 selectedDate,
                                 personalService.getUserLK(principal),
-                                personalService.getWorkerReviews(user, selectedDate)
+                                workerStats(selectedDate, user)
                         );
                     }
             );
@@ -95,7 +107,7 @@ public class ApiCabinetController {
 
             return cached(
                     CacheConfig.CABINET_USER_INFO,
-                    cabinetKey("user-info", principal.getName(), userId, selectedDate),
+                    cabinetKey("user-info", principal.getName(), userId, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
                         User user = userService.findByIdToUserInfo(userId);
@@ -106,7 +118,7 @@ public class ApiCabinetController {
                         return new CabinetUserInfoResponse(
                                 selectedDate,
                                 personalService.getUserLK(principal),
-                                personalService.getWorkerReviews(user, selectedDate)
+                                workerStats(selectedDate, user)
                         );
                     }
             );
@@ -128,7 +140,7 @@ public class ApiCabinetController {
 
             return cached(
                     CacheConfig.CABINET_TEAM,
-                    cabinetKey("team", principal.getName(), role, selectedDate),
+                    cabinetKey("team", principal.getName(), role, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
                         User user = currentUser(principal);
@@ -162,16 +174,13 @@ public class ApiCabinetController {
                                     .flatMap(manager -> manager.getUser().getWorkers().stream())
                                     .toList();
 
-                            return new TeamResponse(
+                            return ownerTeamResponse(
                                     selectedDate,
-                                    shortRole(role),
-                                    true,
-                                    true,
-                                    true,
-                                    managersToOwner(managers, selectedDate),
-                                    marketologsToOwner(marketologs, selectedDate),
-                                    workersToOwner(workers, selectedDate),
-                                    operatorsToOwner(operators, selectedDate)
+                                    role,
+                                    managers,
+                                    marketologs,
+                                    workers,
+                                    operators
                             );
                         }
 
@@ -206,10 +215,10 @@ public class ApiCabinetController {
 
             return cached(
                     CacheConfig.CABINET_SCORE,
-                    cabinetKey("score", principal.getName(), financeVisible, selectedDate),
+                    cabinetKey("score", principal.getName(), financeVisible, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
-                        Map<String, List<ScoreUserResponse>> groupedUsers = personalService.getPersonalsAndCountToScore(selectedDate).stream()
+                        Map<String, List<ScoreUserResponse>> groupedUsers = scoreRows(selectedDate).stream()
                                 .sorted(scoreComparator(financeVisible))
                                 .map(user -> ScoreUserResponse.from(user, financeVisible))
                                 .collect(Collectors.groupingBy(
@@ -249,7 +258,7 @@ public class ApiCabinetController {
 
             return cached(
                     CacheConfig.CABINET_ANALYTICS,
-                    cabinetKey("analytics", principal.getName(), role, selectedDate),
+                    cabinetKey("analytics", principal.getName(), role, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
                         User user = currentUser(principal);
@@ -260,7 +269,7 @@ public class ApiCabinetController {
                         return new AnalyticsResponse(
                                 selectedDate,
                                 personalService.getUserLK(principal),
-                                personalService.getStats(selectedDate, user, role)
+                                stats(selectedDate, user, role)
                         );
                     }
             );
@@ -299,6 +308,78 @@ public class ApiCabinetController {
 
     private String statsKey(LocalDate selectedDate, User user, String role) {
         return cabinetKey(selectedDate, user.getId(), role);
+    }
+
+    private StatDTO stats(LocalDate selectedDate, User user, String role) {
+        if (!aggregateAnalyticsReadEnabled) {
+            return personalService.getStats(selectedDate, user, role);
+        }
+        return analyticsAggregateStatsService.buildStats(selectedDate, user, role)
+                .orElseGet(() -> personalService.getStats(selectedDate, user, role));
+    }
+
+    private List<UserData> scoreRows(LocalDate selectedDate) {
+        if (!aggregateAnalyticsReadEnabled) {
+            return personalService.getPersonalsAndCountToScore(selectedDate);
+        }
+        return analyticsAggregateScoreService.buildScore(selectedDate)
+                .orElseGet(() -> personalService.getPersonalsAndCountToScore(selectedDate));
+    }
+
+    private TeamResponse ownerTeamResponse(
+            LocalDate selectedDate,
+            String role,
+            List<Manager> managers,
+            List<Marketolog> marketologs,
+            List<Worker> workers,
+            List<Operator> operators
+    ) {
+        if (aggregateAnalyticsReadEnabled) {
+            return analyticsAggregateTeamService.buildTeam(selectedDate, managers, marketologs, workers, operators)
+                    .map(team -> new TeamResponse(
+                            selectedDate,
+                            shortRole(role),
+                            true,
+                            true,
+                            true,
+                            team.managers(),
+                            team.marketologs(),
+                            team.workers(),
+                            team.operators()
+                    ))
+                    .orElseGet(() -> ownerLegacyTeamResponse(selectedDate, role, managers, marketologs, workers, operators));
+        }
+
+        return ownerLegacyTeamResponse(selectedDate, role, managers, marketologs, workers, operators);
+    }
+
+    private TeamResponse ownerLegacyTeamResponse(
+            LocalDate selectedDate,
+            String role,
+            List<Manager> managers,
+            List<Marketolog> marketologs,
+            List<Worker> workers,
+            List<Operator> operators
+    ) {
+        return new TeamResponse(
+                selectedDate,
+                shortRole(role),
+                true,
+                true,
+                true,
+                managersToOwner(managers, selectedDate),
+                marketologsToOwner(marketologs, selectedDate),
+                workersToOwner(workers, selectedDate),
+                operatorsToOwner(operators, selectedDate)
+        );
+    }
+
+    private UserStatDTO workerStats(LocalDate selectedDate, User user) {
+        if (!aggregateAnalyticsReadEnabled) {
+            return personalService.getWorkerReviews(user, selectedDate);
+        }
+        return analyticsAggregateUserStatsService.buildUserStats(selectedDate, user)
+                .orElseGet(() -> personalService.getWorkerReviews(user, selectedDate));
     }
 
     private User currentUser(Principal principal) {
