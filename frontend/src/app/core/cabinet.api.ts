@@ -148,12 +148,25 @@ export interface ScoreResponse {
 
 export interface AnalyticsResponse {
   date: string;
+  period?: AnalyticsPeriod;
   user: UserLk;
   stats: StatDto;
 }
 
 export type CacheOptions = {
   forceRefresh?: boolean;
+};
+
+export type AnalyticsPeriod = {
+  from: string;
+  to: string;
+  allTime: boolean;
+};
+
+export type AnalyticsOptions = CacheOptions & {
+  from?: string;
+  to?: string;
+  allTime?: boolean;
 };
 
 type CacheEntry<T> = {
@@ -215,12 +228,18 @@ export class CabinetApi {
     );
   }
 
-  getAnalytics(date?: string, options: CacheOptions = {}): Observable<AnalyticsResponse> {
-    const cacheKey = this.cacheKey('analytics', date ?? 'current');
+  getAnalytics(date?: string, options: AnalyticsOptions = {}): Observable<AnalyticsResponse> {
+    const cacheKey = this.cacheKey(
+      'analytics',
+      date ?? 'current',
+      options.allTime ? 'all-time' : 'bounded',
+      options.from ?? 'auto-from',
+      options.to ?? 'auto-to'
+    );
 
     return this.cached(this.analyticsCache, cacheKey, options, () =>
       this.http.get<AnalyticsResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/analyse`, {
-        params: this.paramsWithDate(date, options)
+        params: this.paramsWithAnalyticsPeriod(date, options)
       })
     );
   }
@@ -235,6 +254,23 @@ export class CabinetApi {
 
     if (options.forceRefresh) {
       params = params.set('refresh', 'true');
+    }
+
+    return params;
+  }
+
+  private paramsWithAnalyticsPeriod(date?: string, options: AnalyticsOptions = {}): HttpParams {
+    let params = this.paramsWithDate(date, options);
+
+    if (options.allTime) {
+      params = params.set('allTime', 'true');
+    } else {
+      if (options.from) {
+        params = params.set('from', options.from);
+      }
+      if (options.to) {
+        params = params.set('to', options.to);
+      }
     }
 
     return params;

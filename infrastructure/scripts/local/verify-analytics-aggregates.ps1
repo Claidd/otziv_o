@@ -291,9 +291,29 @@ function Invoke-RebuildWindow {
     )
 
     if ([string]::IsNullOrWhiteSpace($StartMonth)) {
-        $start = [DateTime]::new($SelectedDate.Year - 1, 1, 1)
+        $sourceRange = Invoke-JsonGet -Url "$RootUrl/api/admin/analytics/aggregates/source-range" -Headers $Headers
+        $detectedFirstMonth = [string](Get-PropertyValue -InputObject $sourceRange -Name "firstMonth")
+        if ([string]::IsNullOrWhiteSpace($detectedFirstMonth)) {
+            $json = $sourceRange | ConvertTo-Json -Depth 8
+            throw "Could not detect analytics source first month. Result: $json"
+        }
+
+        $startMonthText = $detectedFirstMonth.Substring(0, 7)
+        Write-Host "Detected analytics source start month: $startMonthText"
+        $start = [DateTime]::ParseExact("$startMonthText-01", "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
     } else {
         $start = [DateTime]::ParseExact("$StartMonth-01", "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+        Write-Host "Using manual analytics rebuild start month: $($start.ToString("yyyy-MM"))"
+    }
+
+    $minimumStart = [DateTime]::new(2023, 1, 1)
+    if ($start -lt $minimumStart) {
+        throw "Rebuild start month $($start.ToString("yyyy-MM")) is before the supported analytics minimum 2023-01."
+    }
+
+    $maximumStart = [DateTime]::new(2027, 12, 1)
+    if ($start -gt $maximumStart) {
+        throw "Rebuild start month $($start.ToString("yyyy-MM")) is after the supported analytics maximum 2027-12."
     }
 
     $end = [DateTime]::new($SelectedDate.Year, $SelectedDate.Month, 1)

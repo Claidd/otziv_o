@@ -38,9 +38,20 @@ public class AnalyticsAggregateStatsService {
     private final ObjectMapper objectMapper;
 
     public Optional<StatDTO> buildStats(LocalDate selectedDate, User user, String role) {
+        return buildStats(selectedDate, user, role, allTimeChartFrom(), selectedDate);
+    }
+
+    public Optional<StatDTO> buildStats(
+            LocalDate selectedDate,
+            User user,
+            String role,
+            LocalDate chartFromInclusive,
+            LocalDate chartToInclusive
+    ) {
         if (selectedDate == null || user == null) {
             return Optional.empty();
         }
+        DateRange chartPeriod = chartPeriod(selectedDate, chartFromInclusive, chartToInclusive);
 
         String scopeKey = scopeKey(user, role);
         if (scopeKey == null) {
@@ -70,7 +81,13 @@ public class AnalyticsAggregateStatsService {
                 selectedDate.lengthOfMonth(),
                 AnalyticsMetricAggregate::getPaymentSum
         )));
-        stats.setOrderPayMapMonth(toJson(monthlyMetricMap(scopeKey, selectedDate, AnalyticsMetricAggregate::getPaymentSum)));
+        stats.setOrderPayMapMonth(toJson(monthlyMetricMap(
+                scopeKey,
+                chartPeriod.fromInclusive(),
+                chartPeriod.toInclusive(),
+                selectedDate,
+                AnalyticsMetricAggregate::getPaymentSum
+        )));
         stats.setZpPayMap(toJson(dailyMetricMap(
                 scopeKey,
                 firstDayOfMonth,
@@ -78,7 +95,13 @@ public class AnalyticsAggregateStatsService {
                 selectedDate.lengthOfMonth(),
                 AnalyticsMetricAggregate::getSalarySum
         )));
-        stats.setZpPayMapMonth(toJson(monthlyMetricMap(scopeKey, selectedDate, AnalyticsMetricAggregate::getSalarySum)));
+        stats.setZpPayMapMonth(toJson(monthlyMetricMap(
+                scopeKey,
+                chartPeriod.fromInclusive(),
+                chartPeriod.toInclusive(),
+                selectedDate,
+                AnalyticsMetricAggregate::getSalarySum
+        )));
 
         BigDecimal payment1Day = sumDecimal(scopeKey, selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsMetricAggregate::getPaymentSum);
         BigDecimal payment2Day = sumDecimal(scopeKey, selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsMetricAggregate::getPaymentSum);
@@ -218,10 +241,12 @@ public class AnalyticsAggregateStatsService {
 
     private Map<Integer, Map<Integer, BigDecimal>> monthlyMetricMap(
             String scopeKey,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
             LocalDate selectedDate,
             Function<AnalyticsMetricAggregate, BigDecimal> metric
     ) {
-        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(ANALYTICS_START, selectedDate, selectedDate);
+        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(fromInclusive, toInclusive, selectedDate);
         Map<Integer, Map<Integer, BigDecimal>> result = new TreeMap<>();
 
         period.monthlyRanges().stream()
@@ -232,6 +257,32 @@ public class AnalyticsAggregateStatsService {
                 .forEach(total -> addMonthlyValue(result, total.getMetricDate(), metric.apply(total)));
 
         return result;
+    }
+
+    public static LocalDate defaultChartFrom(LocalDate selectedDate) {
+        if (selectedDate == null) {
+            return null;
+        }
+        return selectedDate.minusYears(1).withDayOfYear(1);
+    }
+
+    public static LocalDate allTimeChartFrom() {
+        return ANALYTICS_START;
+    }
+
+    private DateRange chartPeriod(LocalDate selectedDate, LocalDate fromInclusive, LocalDate toInclusive) {
+        LocalDate from = fromInclusive == null ? defaultChartFrom(selectedDate) : fromInclusive;
+        LocalDate to = toInclusive == null ? selectedDate : toInclusive;
+        if (from == null || to == null) {
+            throw new IllegalArgumentException("chart period dates must not be null");
+        }
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException("chart period from must be before or equal to to");
+        }
+        if (to.isAfter(selectedDate)) {
+            throw new IllegalArgumentException("chart period to must not be after selected date");
+        }
+        return new DateRange(from, to);
     }
 
     private void addMonthlyValue(Map<Integer, Map<Integer, BigDecimal>> result, LocalDate date, BigDecimal value) {
@@ -289,5 +340,8 @@ public class AnalyticsAggregateStatsService {
 
     private int toInt(long value) {
         return Math.toIntExact(value);
+    }
+
+    private record DateRange(LocalDate fromInclusive, LocalDate toInclusive) {
     }
 }

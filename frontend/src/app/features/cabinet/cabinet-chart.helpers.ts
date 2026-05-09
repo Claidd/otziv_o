@@ -39,8 +39,11 @@ type ChartScale = {
   tickValues: number[];
 };
 
-type YearlyLineChartOptions = {
+export type YearlyLineChartOptions = {
   fallbackYear?: number;
+  from?: string;
+  to?: string;
+  allTime?: boolean;
 };
 
 const MONTH_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
@@ -87,7 +90,7 @@ export function cabinetYearlyLineChartFrom(
 
   try {
     const parsed = JSON.parse(map) as Record<string, Record<string, number | string> | number | string>;
-    const yearlyData = yearlyDataFrom(parsed, options.fallbackYear);
+    const yearlyData = filterYearlyData(yearlyDataFrom(parsed, options.fallbackYear), options);
     const years = Object.keys(yearlyData).sort();
     const allValues = years.flatMap((year) => {
       const monthlyData = yearlyData[year] ?? {};
@@ -130,6 +133,59 @@ export function cabinetYearlyLineChartFrom(
   } catch {
     return emptyCabinetLineChart();
   }
+}
+
+export function cabinetPeriodTotalFrom(
+  map: string | null | undefined,
+  options: YearlyLineChartOptions = {}
+): number {
+  if (!map) {
+    return 0;
+  }
+
+  try {
+    const parsed = JSON.parse(map) as Record<string, Record<string, number | string> | number | string>;
+    const yearlyData = filterYearlyData(yearlyDataFrom(parsed, options.fallbackYear), options);
+    return Object.values(yearlyData)
+      .flatMap((monthlyData) => Object.values(monthlyData))
+      .reduce<number>((sum, value) => sum + numberValue(value), 0);
+  } catch {
+    return 0;
+  }
+}
+
+function filterYearlyData(
+  yearlyData: Record<string, Record<string, number | string>>,
+  options: YearlyLineChartOptions
+): Record<string, Record<string, number | string>> {
+  if (options.allTime || (!options.from && !options.to)) {
+    return yearlyData;
+  }
+
+  const fromMonth = monthKeyFromIso(options.from ?? '0001-01-01');
+  const toMonth = monthKeyFromIso(options.to ?? '9999-12-31');
+
+  return Object.fromEntries(
+    Object.entries(yearlyData)
+      .map(([year, monthlyData]) => {
+        const months = Object.fromEntries(
+          Object.entries(monthlyData).filter(([month]) => {
+            const key = monthKey(year, Number(month));
+            return key >= fromMonth && key <= toMonth;
+          })
+        );
+        return [year, months] as const;
+      })
+      .filter(([, monthlyData]) => Object.keys(monthlyData).length > 0)
+  );
+}
+
+function monthKeyFromIso(dateIso: string): string {
+  return dateIso.slice(0, 7);
+}
+
+function monthKey(year: string, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
 }
 
 function yearlyDataFrom(

@@ -53,6 +53,15 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/cabinet")
 public class ApiCabinetController {
 
+    private static final List<String> BUSINESS_ROLE_PRIORITY = List.of(
+            "ROLE_ADMIN",
+            "ROLE_OWNER",
+            "ROLE_MANAGER",
+            "ROLE_WORKER",
+            "ROLE_OPERATOR",
+            "ROLE_MARKETOLOG"
+    );
+
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -250,15 +259,30 @@ public class ApiCabinetController {
             Authentication authentication,
             @RequestParam(value = "date", required = false)
             @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate to,
+            @RequestParam(value = "allTime", defaultValue = "false") boolean allTime,
             @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
         return performanceMetrics.recordEndpoint("cabinet.analyse", () -> {
             LocalDate selectedDate = selectedDate(date);
             String role = primaryRole(authentication);
+            AnalyticsPeriod period = analyticsPeriod(selectedDate, from, to, allTime);
 
             return cached(
                     CacheConfig.CABINET_ANALYTICS,
-                    cabinetKey("analytics", principal.getName(), role, selectedDate, aggregateAnalyticsReadEnabled),
+                    cabinetKey(
+                            "analytics",
+                            principal.getName(),
+                            role,
+                            selectedDate,
+                            period.from(),
+                            period.to(),
+                            period.allTime(),
+                            aggregateAnalyticsReadEnabled
+                    ),
                     refresh,
                     () -> {
                         User user = currentUser(principal);
@@ -268,8 +292,9 @@ public class ApiCabinetController {
 
                         return new AnalyticsResponse(
                                 selectedDate,
+                                new AnalyticsPeriodResponse(period.from(), period.to(), period.allTime()),
                                 personalService.getUserLK(principal),
-                                stats(selectedDate, user, role)
+                                stats(selectedDate, user, role, period)
                         );
                     }
             );
@@ -310,11 +335,29 @@ public class ApiCabinetController {
         return cabinetKey(selectedDate, user.getId(), role);
     }
 
-    private StatDTO stats(LocalDate selectedDate, User user, String role) {
+    private AnalyticsPeriod analyticsPeriod(LocalDate selectedDate, LocalDate from, LocalDate to, boolean allTime) {
+        LocalDate resolvedFrom = allTime ? AnalyticsAggregateStatsService.allTimeChartFrom() : from;
+        LocalDate resolvedTo = allTime ? selectedDate : to;
+        if (resolvedFrom == null) {
+            resolvedFrom = AnalyticsAggregateStatsService.defaultChartFrom(selectedDate);
+        }
+        if (resolvedTo == null) {
+            resolvedTo = selectedDate;
+        }
+        if (resolvedFrom.isAfter(resolvedTo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be before or equal to to");
+        }
+        if (resolvedTo.isAfter(selectedDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "to must not be after date");
+        }
+        return new AnalyticsPeriod(resolvedFrom, resolvedTo, allTime);
+    }
+
+    private StatDTO stats(LocalDate selectedDate, User user, String role, AnalyticsPeriod period) {
         if (!aggregateAnalyticsReadEnabled) {
             return personalService.getStats(selectedDate, user, role);
         }
-        return analyticsAggregateStatsService.buildStats(selectedDate, user, role)
+        return analyticsAggregateStatsService.buildStats(selectedDate, user, role, period.from(), period.to())
                 .orElseGet(() -> personalService.getStats(selectedDate, user, role));
     }
 
@@ -388,11 +431,17 @@ public class ApiCabinetController {
     }
 
     private String primaryRole(Authentication authentication) {
-        return authentication.getAuthorities().stream()
+        List<String> authorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .filter(authority -> authority.startsWith("ROLE_"))
+                .toList();
+
+        return BUSINESS_ROLE_PRIORITY.stream()
+                .filter(authorities::contains)
                 .findFirst()
-                .orElse("ROLE_USER");
+                .orElseGet(() -> authorities.stream()
+                        .filter(authority -> authority.startsWith("ROLE_"))
+                        .findFirst()
+                        .orElse("ROLE_USER"));
     }
 
     private String shortRole(String role) {
@@ -543,8 +592,23 @@ public class ApiCabinetController {
 
     public record AnalyticsResponse(
             LocalDate date,
+            AnalyticsPeriodResponse period,
             UserLKDTO user,
             StatDTO stats
+    ) {
+    }
+
+    public record AnalyticsPeriodResponse(
+            LocalDate from,
+            LocalDate to,
+            boolean allTime
+    ) {
+    }
+
+    private record AnalyticsPeriod(
+            LocalDate from,
+            LocalDate to,
+            boolean allTime
     ) {
     }
 }

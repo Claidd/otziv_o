@@ -45,7 +45,13 @@ public class AnalyticsAggregateStatsComparisonService {
         String role = resolveRole(user, requestedRole);
 
         StatDTO legacy = personalService.getStats(selectedDate, user, role);
-        Optional<StatDTO> aggregate = aggregateStatsService.buildStats(selectedDate, user, role);
+        Optional<StatDTO> aggregate = aggregateStatsService.buildStats(
+                selectedDate,
+                user,
+                role,
+                AnalyticsAggregateStatsService.defaultChartFrom(selectedDate),
+                selectedDate
+        );
         if (aggregate.isEmpty()) {
             return new AnalyticsStatsComparison(
                     selectedDate,

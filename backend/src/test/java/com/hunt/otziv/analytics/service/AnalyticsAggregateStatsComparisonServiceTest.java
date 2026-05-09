@@ -63,7 +63,8 @@ class AnalyticsAggregateStatsComparisonServiceTest {
         StatDTO aggregate = stats(125, "{\"1\":100}");
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user));
         when(personalService.getStats(DATE, user, "ROLE_ADMIN")).thenReturn(legacy);
-        when(aggregateStatsService.buildStats(DATE, user, "ROLE_ADMIN")).thenReturn(Optional.of(aggregate));
+        when(aggregateStatsService.buildStats(DATE, user, "ROLE_ADMIN", LocalDate.of(2025, 1, 1), DATE))
+                .thenReturn(Optional.of(aggregate));
 
         AnalyticsStatsComparison comparison = service.compare("admin", DATE, null);
 
@@ -87,7 +88,8 @@ class AnalyticsAggregateStatsComparisonServiceTest {
         StatDTO legacy = stats(100, "{\"1\":100}");
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user));
         when(personalService.getStats(DATE, user, "ROLE_ADMIN")).thenReturn(legacy);
-        when(aggregateStatsService.buildStats(DATE, user, "ROLE_ADMIN")).thenReturn(Optional.empty());
+        when(aggregateStatsService.buildStats(DATE, user, "ROLE_ADMIN", LocalDate.of(2025, 1, 1), DATE))
+                .thenReturn(Optional.empty());
 
         AnalyticsStatsComparison comparison = service.compare("admin", DATE, "ADMIN");
 

@@ -4,6 +4,8 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateRebuildService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateRebuildService.AnalyticsAggregateRebuildResult;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateScoreComparisonService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateScoreComparisonService.AnalyticsScoreComparison;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateSourceRangeService;
+import com.hunt.otziv.analytics.service.AnalyticsAggregateSourceRangeService.AnalyticsSourceRange;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateStatsComparisonService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateStatsComparisonService.AnalyticsStatsComparison;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamComparisonService;
@@ -27,6 +29,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequiredArgsConstructor
@@ -41,6 +44,7 @@ public class ApiAdminAnalyticsAggregateController {
     private final AnalyticsAggregateScoreComparisonService scoreComparisonService;
     private final AnalyticsAggregateTeamComparisonService teamComparisonService;
     private final AnalyticsAggregateUserStatsComparisonService userStatsComparisonService;
+    private final AnalyticsAggregateSourceRangeService sourceRangeService;
 
     @PostMapping("/rebuild-month")
     public RebuildMonthResponse rebuildMonth(
@@ -51,6 +55,12 @@ public class ApiAdminAnalyticsAggregateController {
         AnalyticsAggregateRebuildResult rebuild = rebuildService.rebuildMonth(monthStart, closed);
         AnalyticsAdminMonthComparison adminComparison = verificationService.compareAdminMonth(monthStart);
         return new RebuildMonthResponse(monthStart, closed, rebuild, adminComparison);
+    }
+
+    @GetMapping("/source-range")
+    public AnalyticsSourceRange sourceRange() {
+        return sourceRangeService.findSourceRange()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "No source analytics data found"));
     }
 
     @GetMapping("/compare-admin-month")
@@ -101,14 +111,25 @@ public class ApiAdminAnalyticsAggregateController {
         }
 
         String normalized = value.trim();
+        LocalDate monthStart;
         try {
             if (normalized.length() == 7) {
-                return YearMonth.parse(normalized).atDay(1);
+                monthStart = YearMonth.parse(normalized).atDay(1);
+            } else {
+                monthStart = LocalDate.parse(normalized).withDayOfMonth(1);
             }
-            return LocalDate.parse(normalized).withDayOfMonth(1);
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(BAD_REQUEST, "month must be yyyy-MM or yyyy-MM-dd", ex);
         }
+
+        if (monthStart.isBefore(AnalyticsAggregateSourceRangeService.MINIMUM_SOURCE_DATE)) {
+            throw new ResponseStatusException(BAD_REQUEST, "month must not be before 2023-01");
+        }
+        if (monthStart.isAfter(AnalyticsAggregateSourceRangeService.MAXIMUM_SOURCE_DATE.withDayOfMonth(1))) {
+            throw new ResponseStatusException(BAD_REQUEST, "month must not be after 2027-12");
+        }
+
+        return monthStart;
     }
 
     public record RebuildMonthResponse(

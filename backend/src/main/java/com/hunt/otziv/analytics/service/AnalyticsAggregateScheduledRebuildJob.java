@@ -3,6 +3,7 @@ package com.hunt.otziv.analytics.service;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateRebuildService.AnalyticsAggregateRebuildResult;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateVerificationService.AnalyticsAdminMonthComparison;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,6 +32,7 @@ public class AnalyticsAggregateScheduledRebuildJob {
     @Value("${otziv.analytics.rebuild.schedule.verify-admin-month:true}")
     private boolean verifyAdminMonth;
 
+    @Autowired
     public AnalyticsAggregateScheduledRebuildJob(
             AnalyticsAggregateRebuildService rebuildService,
             AnalyticsAggregateVerificationService verificationService

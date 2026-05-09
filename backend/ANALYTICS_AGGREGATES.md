@@ -118,6 +118,15 @@ Production-порядок backfill, compare, включения флага и о
 выбранного периода еще нет, эти endpoint автоматически возвращаются к старому `PersonalService`.
 `ADMIN` и `MANAGER` ветки `/team` пока оставлены на текущем поведении.
 
+`/api/cabinet/analyse` поддерживает период месячных графиков:
+
+- без параметров - текущий и предыдущий календарный год;
+- `allTime=true` - вся история агрегатов;
+- `from=yyyy-MM-dd&to=yyyy-MM-dd` - ручной диапазон, где `to` не позже выбранной `date`.
+
+Оперативные карточки "за день/неделю/месяц/год" по-прежнему считаются относительно `date`, а
+период управляет именно месячными графиками.
+
 ## Пересчет
 
 `AnalyticsAggregateRebuildService` пока пересчитывает только те метрики, которые можно безопасно
@@ -137,6 +146,7 @@ snapshot-шагом, который будет фиксировать состо
 Для ручной локальной проверки есть закрытый API:
 
 - `POST /api/admin/analytics/aggregates/rebuild-month?month=2026-05&closed=false`
+- `GET /api/admin/analytics/aggregates/source-range`
 - `GET /api/admin/analytics/aggregates/compare-admin-month?month=2026-05`
 - `GET /api/admin/analytics/aggregates/compare-cabinet-analyse?username=admin&date=2026-05-09`
 - `GET /api/admin/analytics/aggregates/compare-score?date=2026-05-09`
@@ -155,10 +165,13 @@ snapshot-шагом, который будет фиксировать состо
 
 Скрипт не меняет `.env`: он временно поднимает prod-like окружение с
 `OTZIV_ANALYTICS_AGGREGATES_READ_ENABLED=true` и
-`OTZIV_ANALYTICS_REBUILD_API_ENABLED=true`, пересобирает агрегаты с января прошлого года до
-выбранного месяца, прогоняет compare-проверки и реальные `/api/cabinet/*` endpoint'ы через
-Keycloak impersonation, а затем возвращает окружение в безопасный режим с выключенными флагами.
-Для быстрого повтора без пересборки можно передать `-SkipRebuild`.
+`OTZIV_ANALYTICS_REBUILD_API_ENABLED=true`, определяет первый месяц сырьевых данных через
+`source-range`, пересобирает агрегаты до выбранного месяца, прогоняет compare-проверки и реальные
+`/api/cabinet/*` endpoint'ы через Keycloak impersonation, а затем возвращает окружение в безопасный
+режим с выключенными флагами. Auto-detect учитывает только окно `2023-01-01..2027-12-31`, чтобы
+битые старые или слишком будущие значения не расширяли backfill. Для быстрого повтора без пересборки
+можно передать `-SkipRebuild`.
+Если нужно временно ограничить окно проверки, можно передать `-RebuildStartMonth yyyy-MM`.
 
 `compare-score` сверяет только поля рейтинга, которые уже есть в агрегатах:
 

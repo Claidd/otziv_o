@@ -138,17 +138,28 @@ test -n "$TOKEN"
 
 ## 5. Backfill агрегатов
 
-Указать первый месяц работы базы и текущий месяц. Текущий месяц должен пересобираться как
-незакрытый (`closed=false`), прошлые месяцы как закрытые (`closed=true`).
+Определить первый месяц данных автоматически по сырьевым таблицам `zp`, `payment_check`,
+`companies`, `leads`, `reviews`. Backfill идет до последнего найденного месяца данных. Прошлые
+месяцы до текущего пересобираются как закрытые (`closed=true`), текущий и будущие найденные месяцы
+как незакрытые (`closed=false`). Auto-detect отсекает даты раньше
+`2023-01-01` и позже `2027-12-31`, чтобы случайные битые исторические или слишком будущие даты не
+запускали бессмысленный backfill.
 
 ```bash
-START_MONTH=2024-01
+SOURCE_RANGE="$(
+  curl -fsS "$BASE_URL/api/admin/analytics/aggregates/source-range" \
+    -H "Authorization: Bearer $TOKEN"
+)"
+START_MONTH="$(printf '%s' "$SOURCE_RANGE" | sed -n 's/.*"firstMonth":"\([0-9]\{4\}-[0-9]\{2\}\)-[0-9]\{2\}".*/\1/p')"
+END_MONTH="$(printf '%s' "$SOURCE_RANGE" | sed -n 's/.*"lastMonth":"\([0-9]\{4\}-[0-9]\{2\}\)-[0-9]\{2\}".*/\1/p')"
 CURRENT_MONTH="$(date +%Y-%m)"
+test -n "$START_MONTH"
+test -n "$END_MONTH"
 
 month="$START_MONTH"
 while :; do
   closed=true
-  if [ "$month" = "$CURRENT_MONTH" ]; then
+  if [ "$(printf '%s\n%s\n' "$CURRENT_MONTH" "$month" | sort | head -n1)" = "$CURRENT_MONTH" ]; then
     closed=false
   fi
 
@@ -164,7 +175,7 @@ while :; do
     exit 1
   }
 
-  [ "$month" = "$CURRENT_MONTH" ] && break
+  [ "$month" = "$END_MONTH" ] && break
   month="$(date -d "$month-01 +1 month" +%Y-%m)"
 done
 ```

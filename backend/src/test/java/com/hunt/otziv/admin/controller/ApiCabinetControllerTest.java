@@ -1,7 +1,8 @@
 package com.hunt.otziv.admin.controller;
 
-import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
+import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
+import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.services.PersonalService;
@@ -288,6 +289,43 @@ class ApiCabinetControllerTest {
         assertNull(worker.totalSum());
         assertNull(worker.zpTotal());
         assertNull(worker.newCompanies());
+    }
+
+    @Test
+    void analysePrefersBusinessRoleWhenTechnicalRoleComesFirst() {
+        User user = user(1L, "Admin One");
+        StatDTO aggregateStats = new StatDTO();
+        aggregateStats.setSum1MonthPay(200);
+        authentication = new UsernamePasswordAuthenticationToken(
+                "alex",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_DEFAULT-ROLES-OTZIV"),
+                        new SimpleGrantedAuthority("ROLE_ADMIN")
+                )
+        );
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", true);
+        when(userService.findByUserName("alex")).thenReturn(Optional.of(user));
+        when(analyticsAggregateStatsService.buildStats(
+                DATE,
+                user,
+                "ROLE_ADMIN",
+                AnalyticsAggregateStatsService.allTimeChartFrom(),
+                DATE
+        )).thenReturn(Optional.of(aggregateStats));
+
+        ApiCabinetController.AnalyticsResponse response = controller.analyse(
+                principal,
+                authentication,
+                DATE,
+                null,
+                null,
+                true,
+                true
+        );
+
+        assertEquals(200, response.stats().getSum1MonthPay());
+        verify(personalService, never()).getStats(DATE, user, "ROLE_DEFAULT-ROLES-OTZIV");
     }
 
     private UserData scoreUser(String fio, Long salary) {

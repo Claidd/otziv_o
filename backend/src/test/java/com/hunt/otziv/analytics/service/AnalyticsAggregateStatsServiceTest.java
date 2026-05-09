@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -98,6 +99,31 @@ class AnalyticsAggregateStatsServiceTest {
         User worker = User.builder().id(7L).build();
 
         assertTrue(service.buildStats(SELECTED_DATE, worker, "ROLE_WORKER").isEmpty());
+    }
+
+    @Test
+    void limitsMonthlyChartsToRequestedPeriod() throws Exception {
+        stubDailyRows(List.of(daily(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1, 0, 0)));
+        stubMonthlyRows(List.of(
+                monthly(LocalDate.of(2024, 1, 1), "100.00", "50.00", 1, 1, 0, 0),
+                monthly(LocalDate.of(2025, 6, 1), "200.00", "75.00", 2, 2, 0, 0),
+                monthly(LocalDate.of(2026, 4, 1), "300.00", "125.00", 3, 3, 0, 0)
+        ));
+
+        User admin = User.builder().id(1L).build();
+        Optional<StatDTO> result = service.buildStats(
+                SELECTED_DATE,
+                admin,
+                "ROLE_ADMIN",
+                LocalDate.of(2025, 1, 1),
+                SELECTED_DATE
+        );
+
+        assertTrue(result.isPresent());
+        JsonNode monthlyPaymentMap = objectMapper.readTree(result.get().getOrderPayMapMonth());
+        assertNull(monthlyPaymentMap.get("2024"));
+        assertEquals(200, monthlyPaymentMap.get("2025").get("6").asInt());
+        assertEquals(300, monthlyPaymentMap.get("2026").get("4").asInt());
     }
 
     private void stubDailyRows(List<AnalyticsDailyTotal> rows) {
