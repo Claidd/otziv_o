@@ -111,7 +111,7 @@ export class AdminAnalyticsComponent {
 
   selectDate(date: string): void {
     this.selectedDate.set(date);
-    this.load(true);
+    this.load();
   }
 
   tone(percent: number): MetricTone {

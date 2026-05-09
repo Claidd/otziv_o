@@ -5,6 +5,7 @@ import type {
   OrderCardItem,
   OrderDetailsPayload,
   OrderEditPayload,
+  OrderReviewItem,
   OrderUpdateRequest
 } from '../../core/manager.api';
 import type { WorkerBoard, WorkerReviewItem } from '../../core/worker.api';
@@ -242,9 +243,9 @@ export class WorkerBoardEditFacade {
     const request = this.reviewEditRequest(review, draft);
 
     this.deps.managerApi.updateOrderReview(review.orderId, review.id, request).subscribe({
-      next: (details) => {
-        this.reviewEditDetails.set(details);
-        this.patchReviewsFromDetails(details);
+      next: (updatedReview) => {
+        this.patchReviewEditDetails(updatedReview);
+        this.patchReviewCard(updatedReview);
         this.deps.clearReviewEditDrafts(review.id);
         this.reviewEditSaving.set(false);
         this.editReview.set(null);
@@ -306,19 +307,16 @@ export class WorkerBoardEditFacade {
     this.reviewEditError.set(null);
 
     this.deps.managerApi.uploadOrderReviewPhoto(review.orderId, review.id, file).subscribe({
-      next: (details) => {
-        this.reviewEditDetails.set(details);
-        this.patchReviewsFromDetails(details);
+      next: (updatedReview) => {
+        this.patchReviewEditDetails(updatedReview);
+        this.patchReviewCard(updatedReview);
         this.reviewEditUploading.set(false);
 
-        const updatedReview = details.reviews.find((item) => item.id === review.id);
-        if (updatedReview) {
-          this.editReview.set(updatedReview);
-          this.reviewEditDraft.update((draft) => draft ? {
-            ...draft,
-            url: updatedReview.url || updatedReview.urlPhoto || ''
-          } : this.toReviewEditDraft(updatedReview));
-        }
+        this.editReview.set(updatedReview);
+        this.reviewEditDraft.update((draft) => draft ? {
+          ...draft,
+          url: updatedReview.url || updatedReview.urlPhoto || ''
+        } : this.toReviewEditDraft(updatedReview));
 
         this.deps.toastService.success('Фото загружено', `Отзыв #${review.id} обновлен`);
         this.deps.loadBoard();
@@ -344,20 +342,16 @@ export class WorkerBoardEditFacade {
     this.reviewEditError.set(null);
 
     this.deps.managerApi.assignOrderReviewNewAccount(review.orderId, review.id).subscribe({
-      next: (details) => {
-        const updatedReview = details.reviews.find((item) => item.id === review.id);
-        this.reviewEditDetails.set(details);
-        this.patchReviewsFromDetails(details);
-
-        if (updatedReview) {
-          this.editReview.set(updatedReview);
-          this.reviewEditDraft.update((draft) => draft ? {
-            ...draft,
-            vigul: !!updatedReview.vigul,
-            botName: updatedReview.botFio ?? '',
-            botPassword: updatedReview.botPassword ?? ''
-          } : this.toReviewEditDraft(updatedReview));
-        }
+      next: (updatedReview) => {
+        this.patchReviewEditDetails(updatedReview);
+        this.patchReviewCard(updatedReview);
+        this.editReview.set(updatedReview);
+        this.reviewEditDraft.update((draft) => draft ? {
+          ...draft,
+          vigul: !!updatedReview.vigul,
+          botName: updatedReview.botFio ?? '',
+          botPassword: updatedReview.botPassword ?? ''
+        } : this.toReviewEditDraft(updatedReview));
 
         this.reviewEditNewAccountSaving.set(false);
         this.deps.toastService.success(
@@ -462,6 +456,27 @@ export class WorkerBoardEditFacade {
           const updatedReview = updatedReviews.get(review.id);
           return updatedReview ? { ...review, ...updatedReview } : review;
         })
+      }
+    }));
+  }
+
+  private patchReviewEditDetails(updatedReview: OrderReviewItem): void {
+    this.reviewEditDetails.update((details) => details ? {
+      ...details,
+      reviews: details.reviews.map((review) => review.id === updatedReview.id
+        ? { ...review, ...updatedReview }
+        : review)
+    } : details);
+  }
+
+  private patchReviewCard(updatedReview: OrderReviewItem): void {
+    this.patchBoard((board) => ({
+      ...board,
+      reviews: {
+        ...board.reviews,
+        content: board.reviews.content.map((review) => review.id === updatedReview.id
+          ? { ...review, ...updatedReview }
+          : review)
       }
     }));
   }

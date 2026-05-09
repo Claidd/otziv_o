@@ -168,7 +168,7 @@ export class CabinetApi {
   private readonly teamCache = new Map<string, CacheEntry<TeamResponse>>();
   private readonly scoreCache = new Map<string, CacheEntry<ScoreResponse>>();
   private readonly analyticsCache = new Map<string, CacheEntry<AnalyticsResponse>>();
-  private readonly cabinetCacheTtlMs = 60_000;
+  private readonly cabinetCacheTtlMs = 3 * 60 * 60_000;
 
   constructor(
     private readonly http: HttpClient,

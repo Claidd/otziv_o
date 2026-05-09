@@ -689,6 +689,14 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.publish = false")
     long countUnpublished();
 
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        WHERE r.publish = false
+          AND r.publishedDate >= :date
+    """)
+    long countUnpublishedScheduledFrom(@Param("date") LocalDate date);
+
     @Query(value = """
         SELECT COUNT(r.review_id)
         FROM reviews r

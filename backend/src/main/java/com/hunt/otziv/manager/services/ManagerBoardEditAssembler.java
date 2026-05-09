@@ -272,6 +272,16 @@ public class ManagerBoardEditAssembler {
         );
     }
 
+    public ReviewDetailsResponse buildReviewDetailsResponse(Long orderId, Long reviewId) {
+        Review review = reviewService.getReviewById(reviewId);
+        if (review == null || review.getOrderDetails() == null || review.getOrderDetails().getOrder() == null
+                || !Objects.equals(orderId, review.getOrderDetails().getOrder().getId())) {
+            throw new IllegalArgumentException("Отзыв не найден в этом заказе");
+        }
+
+        return toReviewDetailsResponse(reviewService.toReviewDTOOne(review));
+    }
+
     private boolean canEditReviewVigul(Authentication authentication) {
         return managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER")
                 || managerPermissionService.hasOnlyWorkerRole(authentication);

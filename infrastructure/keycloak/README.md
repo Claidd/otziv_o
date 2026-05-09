@@ -40,6 +40,10 @@ OTZIV_APP_BASE_URL=https://your-domain.example
 KEYCLOAK_ISSUER_URI=https://your-domain.example/keycloak/realms/otziv
 KEYCLOAK_JWK_SET_URI=http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs
 KEYCLOAK_ADMIN_SERVER_URL=http://keycloak:8080/keycloak
+KEYCLOAK_PUBLIC_URL=https://your-domain.example/keycloak
+KC_PROXY_TRUSTED_ADDRESSES=172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8
 ```
 
-and expose Keycloak through nginx at `/keycloak/`.
+and expose Keycloak through nginx at `/keycloak/`. The production deploy scripts also run
+`infrastructure/scripts/prod/apply-keycloak-prod-settings.sh` after the stack starts, because
+Keycloak skips realm imports when the realm already exists.

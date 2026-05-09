@@ -64,6 +64,11 @@ export interface ReviewCheckUpdateRequest {
   reviews: ReviewCheckReviewUpdate[];
 }
 
+export interface ReviewCheckNotes {
+  orderComments: string;
+  companyComments: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReviewCheckApi {
   constructor(private readonly http: HttpClient) {}
@@ -74,6 +79,20 @@ export class ReviewCheckApi {
 
   saveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
     return this.http.put<ReviewCheckPayload>(`${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}`, request);
+  }
+
+  updateReviewText(orderDetailId: string, reviewId: number, text: string): Observable<ReviewCheckReview> {
+    return this.http.put<ReviewCheckReview>(
+      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/reviews/${reviewId}/text`,
+      { text }
+    );
+  }
+
+  updateReviewAnswer(orderDetailId: string, reviewId: number, answer: string): Observable<ReviewCheckReview> {
+    return this.http.put<ReviewCheckReview>(
+      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/reviews/${reviewId}/answer`,
+      { answer }
+    );
   }
 
   approveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
@@ -104,22 +123,22 @@ export class ReviewCheckApi {
     );
   }
 
-  updateReviewNote(orderDetailId: string, reviewId: number, comment: string): Observable<ReviewCheckPayload> {
-    return this.http.put<ReviewCheckPayload>(
+  updateReviewNote(orderDetailId: string, reviewId: number, comment: string): Observable<ReviewCheckReview> {
+    return this.http.put<ReviewCheckReview>(
       `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/reviews/${reviewId}/note`,
       { comment }
     );
   }
 
-  updateOrderNote(orderDetailId: string, orderComments: string): Observable<ReviewCheckPayload> {
-    return this.http.put<ReviewCheckPayload>(
+  updateOrderNote(orderDetailId: string, orderComments: string): Observable<ReviewCheckNotes> {
+    return this.http.put<ReviewCheckNotes>(
       `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/order-note`,
       { orderComments }
     );
   }
 
-  updateCompanyNote(orderDetailId: string, companyComments: string): Observable<ReviewCheckPayload> {
-    return this.http.put<ReviewCheckPayload>(
+  updateCompanyNote(orderDetailId: string, companyComments: string): Observable<ReviewCheckNotes> {
+    return this.http.put<ReviewCheckNotes>(
       `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/company-note`,
       { companyComments }
     );

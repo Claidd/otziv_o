@@ -818,6 +818,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.worker w
         LEFT JOIN w.user wu
         WHERE wu.fio IS NOT NULL
+          AND o.status.title IN :statuses
         GROUP BY wu.fio
 
         UNION ALL
@@ -831,10 +832,12 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN o.manager m
         LEFT JOIN m.user mu
         WHERE mu.fio IS NOT NULL
+          AND o.status.title IN :statuses
         GROUP BY mu.fio
     """)
     List<Object[]> findAllIdByNewOrderAllStatus(@Param("statusNew") String statusNew,
-                                                @Param("statusCorrect") String statusCorrect);
+                                                @Param("statusCorrect") String statusCorrect,
+                                                @Param("statuses") Collection<String> statuses);
 
     @Query("""
         SELECT

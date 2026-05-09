@@ -59,7 +59,7 @@ export class TeamComponent {
 
   selectDate(date: string): void {
     this.selectedDate.set(date);
-    this.load(true);
+    this.load();
   }
 
   members(section: TeamSection): TeamMember[] {

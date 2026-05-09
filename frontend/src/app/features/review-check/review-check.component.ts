@@ -1,10 +1,11 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import {
   ReviewCheckApi,
+  ReviewCheckNotes,
   ReviewCheckPayload,
   ReviewCheckReview,
   ReviewCheckUpdateRequest
@@ -14,6 +15,11 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import {
+  readSessionDraft,
+  removeSessionDraft,
+  writeSessionDraft
+} from '../../shared/session-draft-storage';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCheckDraftReview = {
@@ -27,10 +33,17 @@ type ReviewCheckDraft = {
   reviews: ReviewCheckDraftReview[];
 };
 
+type ReviewCheckSessionDraft = {
+  draft?: ReviewCheckDraft;
+  reviewNotes?: Record<number, string>;
+  sideNotes?: Partial<Record<SideNoteField, string>>;
+};
+
 type ReviewCheckAction = 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
 type ReviewWindowStatus = 'approved' | 'paid' | 'correction' | 'not-approved';
+type ReviewQuickFilter = 'all' | 'unpublished' | 'missing-photo' | 'with-note';
 type ActiveReviewFieldEdit = {
   review: ReviewCheckReview;
   field: ReviewEditableField;
@@ -68,6 +81,9 @@ export class ReviewCheckComponent {
   readonly expandedReviewId = signal<number | null>(null);
   readonly mobilePreviewReviewTextId = signal<number | null>(null);
   readonly activeReviewSlide = signal(0);
+  readonly reviewJumpValue = signal('1');
+  readonly reviewQuickFilter = signal<ReviewQuickFilter>('all');
+  readonly mobileReviewLayout = signal(false);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   readonly busy = computed(() => this.actionKey() !== null);
@@ -104,8 +120,28 @@ export class ReviewCheckComponent {
 
     return `${details.companyTitle || 'Компания'}${details.filialTitle ? ' - ' + details.filialTitle : ''}`;
   });
+  readonly reviewCheckReviews = computed(() => this.details()?.reviews ?? []);
+  readonly visibleReviewStartIndex = computed(() => this.compactReviewRenderEnabled()
+    ? Math.max(0, Math.min(this.activeReviewSlide() - 1, Math.max(this.reviewCheckReviews().length - 3, 0)))
+    : 0);
+  readonly visibleReviews = computed(() => {
+    const reviews = this.reviewCheckReviews();
+    if (!this.compactReviewRenderEnabled()) {
+      return reviews;
+    }
+
+    const start = this.visibleReviewStartIndex();
+    return reviews.slice(start, Math.min(start + 3, reviews.length));
+  });
+  readonly showReviewFastSelect = computed(() => this.reviewCheckReviews().length > 20);
+  readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviewCheckReviews().length > 1);
+  readonly reviewQuickFilterIndexes = computed(() => this.reviewCheckReviews()
+    .map((review, index) => ({ review, index }))
+    .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
+    .map(({ index }) => index));
 
   constructor() {
+    this.updateMobileReviewLayout();
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
@@ -118,6 +154,11 @@ export class ReviewCheckComponent {
         this.orderDetailId.set(id);
         this.loadReviewCheck();
       });
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.updateMobileReviewLayout();
   }
 
   loadReviewCheck(): void {
@@ -133,6 +174,7 @@ export class ReviewCheckComponent {
       next: (details) => {
         this.applyDetails(details);
         this.activeReviewSlide.set(0);
+        this.syncReviewJumpValue(0);
         this.loading.set(false);
       },
       error: (err) => {
@@ -303,7 +345,7 @@ export class ReviewCheckComponent {
   }
 
   isMobileReviewLayout(): boolean {
-    return typeof window !== 'undefined' && window.innerWidth <= 860;
+    return this.mobileReviewLayout();
   }
 
   private activateMobileReviewTextPreview(review: ReviewCheckReview, textarea?: HTMLTextAreaElement): void {
@@ -353,10 +395,90 @@ export class ReviewCheckComponent {
       return;
     }
 
-    const details = this.details();
-    const maxIndex = Math.max((details ? this.reviewCarouselItemCount(details) : 1) - 1, 0);
-    const index = Math.round(track.scrollLeft / step);
-    this.activeReviewSlide.set(Math.min(maxIndex, Math.max(0, index)));
+    const maxIndex = Math.max(this.reviewCheckReviews().length - 1, 0);
+    const index = this.visibleReviewStartIndex() + Math.round(track.scrollLeft / step);
+    this.setActiveReviewIndex(Math.min(maxIndex, Math.max(0, index)), false);
+  }
+
+  previousReview(): void {
+    this.setActiveReviewIndex(this.activeReviewSlide() - 1);
+  }
+
+  nextReview(): void {
+    this.setActiveReviewIndex(this.activeReviewSlide() + 1);
+  }
+
+  setReviewJumpValue(value: string): void {
+    this.reviewJumpValue.set(value);
+  }
+
+  jumpToReview(): void {
+    const value = this.reviewJumpValue().trim();
+    if (!value) {
+      this.syncReviewJumpValue(this.activeReviewSlide());
+      return;
+    }
+
+    const numericValue = Number(value);
+    const reviews = this.reviewCheckReviews();
+    if (Number.isInteger(numericValue)) {
+      const byPosition = numericValue - 1;
+      if (byPosition >= 0 && byPosition < reviews.length) {
+        this.setActiveReviewIndex(byPosition);
+        return;
+      }
+
+      const byId = reviews.findIndex((review) => review.id === numericValue);
+      if (byId >= 0) {
+        this.setActiveReviewIndex(byId);
+        return;
+      }
+    }
+
+    this.toastService.error('Отзыв не найден', 'Введите номер в списке или ID отзыва');
+    this.syncReviewJumpValue(this.activeReviewSlide());
+  }
+
+  goToReviewIndex(index: number): void {
+    this.setActiveReviewIndex(index);
+  }
+
+  setReviewQuickFilter(value: string): void {
+    const filter = this.isReviewQuickFilter(value) ? value : 'all';
+    this.reviewQuickFilter.set(filter);
+
+    const indexes = this.reviewQuickFilterIndexes();
+    if (!indexes.length) {
+      this.reviewQuickFilter.set('all');
+      this.toastService.error('Отзывы не найдены', 'В выбранном фильтре нет отзывов');
+      return;
+    }
+
+    if (!indexes.includes(this.activeReviewSlide())) {
+      this.setActiveReviewIndex(indexes[0]);
+    }
+  }
+
+  setActiveReviewFromQuickSelect(value: string): void {
+    const index = Number(value);
+    if (!Number.isInteger(index)) {
+      return;
+    }
+
+    this.setActiveReviewIndex(index);
+  }
+
+  reviewQuickOptionLabel(index: number): string {
+    const review = this.reviewCheckReviews()[index];
+    if (!review) {
+      return '';
+    }
+
+    return `${index + 1} из ${this.reviewCheckReviews().length} - #${review.id}`;
+  }
+
+  isActiveReview(review: ReviewCheckReview): boolean {
+    return this.showReviewNavigation() && this.reviewCheckReviews()[this.activeReviewSlide()]?.id === review.id;
   }
 
   reviewCarouselItemCount(details: ReviewCheckPayload): number {
@@ -390,6 +512,7 @@ export class ReviewCheckComponent {
         reviews: draft.reviews.map((item) => item.id === review.id ? { ...item, [field]: value } : item)
       };
     });
+    this.writeReviewCheckSessionDraft();
   }
 
   setReviewFieldDraft(review: ReviewCheckReview, field: ReviewEditableField, value: string): void {
@@ -440,11 +563,16 @@ export class ReviewCheckComponent {
     this.actionKey.set(key);
     this.error.set(null);
 
-    this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest()).subscribe({
-      next: (details) => {
-        this.applyDetails(details);
+    const request = field === 'text'
+      ? this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value)
+      : this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value);
+
+    request.subscribe({
+      next: (updatedReview) => {
+        this.applyUpdatedReview(updatedReview);
         this.actionKey.set(null);
         this.savedReviewFieldKey.set(fieldKey);
+        this.writeReviewCheckSessionDraft();
         this.toastService.success(
           field === 'text' ? 'Текст сохранен' : 'Замечание сохранено',
           `Отзыв #${review.id} обновлен`
@@ -538,6 +666,7 @@ export class ReviewCheckComponent {
       ...drafts,
       [reviewId]: value
     }));
+    this.writeReviewCheckSessionDraft();
   }
 
   cancelReviewNoteEdit(review: ReviewCheckReview): void {
@@ -562,8 +691,8 @@ export class ReviewCheckComponent {
     this.error.set(null);
 
     this.reviewCheckApi.updateReviewNote(orderDetailId, review.id, value).subscribe({
-      next: (details) => {
-        this.applyDetails(details);
+      next: (updatedReview) => {
+        this.applyUpdatedReviewNote(updatedReview);
         this.actionKey.set(null);
         this.savedReviewNoteId.set(review.id);
         this.toastService.success('Заметка сохранена', `Отзыв #${review.id} обновлен`);
@@ -653,6 +782,7 @@ export class ReviewCheckComponent {
       ...drafts,
       [field]: value
     }));
+    this.writeReviewCheckSessionDraft();
   }
 
   cancelSideNoteEdit(field: SideNoteField): void {
@@ -681,8 +811,8 @@ export class ReviewCheckComponent {
       : this.reviewCheckApi.updateCompanyNote(orderDetailId, value);
 
     request.subscribe({
-      next: (updatedDetails) => {
-        this.applyDetails(updatedDetails);
+      next: (notes) => {
+        this.applyReviewCheckNotes(notes);
         this.actionKey.set(null);
         this.savedSideNoteField.set(field);
         this.toastService.success(field === 'order' ? 'Заметка заказа сохранена' : 'Заметка компании сохранена');
@@ -726,6 +856,7 @@ export class ReviewCheckComponent {
 
   setComment(value: string): void {
     this.draft.update((draft) => draft ? { ...draft, comment: value } : draft);
+    this.writeReviewCheckSessionDraft();
   }
 
   commentValue(details: ReviewCheckPayload): string {
@@ -894,7 +1025,12 @@ export class ReviewCheckComponent {
 
     request.subscribe({
       next: (details) => {
+        const activeReviewId = this.currentActiveReviewId();
+        if (action === 'save' || action === 'approve' || action === 'correction') {
+          this.clearReviewCheckMainSessionDraft();
+        }
         this.applyDetails(details);
+        this.restoreActiveReview(activeReviewId);
         this.actionKey.set(null);
         this.toastService.success(toastTitle, toastMessage);
       },
@@ -907,16 +1043,133 @@ export class ReviewCheckComponent {
     });
   }
 
-  private applyDetails(details: ReviewCheckPayload): void {
-    this.details.set(details);
-    this.draft.set({
-      comment: details.comment ?? '',
-      reviews: details.reviews.map((review) => ({
-        id: review.id,
-        text: review.text ?? '',
-        answer: review.answer ?? ''
-      }))
+  private setActiveReviewIndex(index: number, scroll = true): void {
+    const reviews = this.reviewCheckReviews();
+    if (!reviews.length) {
+      this.activeReviewSlide.set(0);
+      this.syncReviewJumpValue(0);
+      return;
+    }
+
+    const nextIndex = Math.max(0, Math.min(index, reviews.length - 1));
+    this.activeReviewSlide.set(nextIndex);
+    this.syncReviewJumpValue(nextIndex);
+
+    if (scroll) {
+      this.scrollReviewIntoView(reviews[nextIndex]?.id);
+    }
+  }
+
+  private scrollReviewIntoView(reviewId?: number): void {
+    if (!reviewId || typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`.review-card[data-review-id="${reviewId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     });
+  }
+
+  private syncReviewJumpValue(index: number): void {
+    this.reviewJumpValue.set(String(index + 1));
+  }
+
+  private updateMobileReviewLayout(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.mobileReviewLayout.set(window.innerWidth <= 860);
+  }
+
+  private compactReviewRenderEnabled(): boolean {
+    return this.mobileReviewLayout() && this.reviewCheckReviews().length > 12;
+  }
+
+  private isReviewQuickFilter(value: string): value is ReviewQuickFilter {
+    return value === 'all'
+      || value === 'unpublished'
+      || value === 'missing-photo'
+      || value === 'with-note';
+  }
+
+  private reviewMatchesQuickFilter(review: ReviewCheckReview, filter: ReviewQuickFilter): boolean {
+    switch (filter) {
+      case 'unpublished':
+        return !this.isReviewPublished(review);
+      case 'missing-photo':
+        return this.needsReviewPhoto(review);
+      case 'with-note':
+        return this.hasReviewNote(review);
+      default:
+        return true;
+    }
+  }
+
+  private applyDetails(details: ReviewCheckPayload): void {
+    const sessionDraft = this.readReviewCheckSessionDraft(details.orderDetailId);
+    const baseDraft = this.reviewCheckDraftSource(details);
+
+    this.details.set(details);
+    this.draft.set(this.mergeReviewCheckDraft(baseDraft, sessionDraft?.draft));
+    this.reviewNoteDrafts.set(this.filterReviewNoteDrafts(details, sessionDraft?.reviewNotes));
+    this.sideNoteDrafts.set(this.filterSideNoteDrafts(sessionDraft?.sideNotes));
+  }
+
+  private applyUpdatedReview(updatedReview: ReviewCheckReview): void {
+    this.details.update((details) => details ? {
+      ...details,
+      reviews: details.reviews.map((review) => review.id === updatedReview.id
+        ? { ...review, ...updatedReview }
+        : review)
+    } : details);
+
+    this.draft.update((draft) => draft ? {
+      ...draft,
+      reviews: draft.reviews.map((review) => review.id === updatedReview.id
+        ? { ...review, text: updatedReview.text ?? '', answer: updatedReview.answer ?? '' }
+        : review)
+    } : draft);
+  }
+
+  private applyUpdatedReviewNote(updatedReview: ReviewCheckReview): void {
+    this.details.update((details) => details ? {
+      ...details,
+      reviews: details.reviews.map((review) => review.id === updatedReview.id
+        ? { ...review, ...updatedReview }
+        : review)
+    } : details);
+  }
+
+  private applyReviewCheckNotes(notes: ReviewCheckNotes): void {
+    this.details.update((details) => details ? {
+      ...details,
+      orderComments: notes.orderComments,
+      companyComments: notes.companyComments,
+      reviews: details.reviews.map((review) => ({
+        ...review,
+        orderComments: notes.orderComments,
+        commentCompany: notes.companyComments
+      }))
+    } : details);
+  }
+
+  private currentActiveReviewId(): number | null {
+    return this.reviewCheckReviews()[this.activeReviewSlide()]?.id ?? null;
+  }
+
+  private restoreActiveReview(reviewId: number | null): void {
+    const reviews = this.reviewCheckReviews();
+    if (!reviews.length) {
+      this.activeReviewSlide.set(0);
+      this.syncReviewJumpValue(0);
+      return;
+    }
+
+    const indexById = reviewId == null ? -1 : reviews.findIndex((review) => review.id === reviewId);
+    const fallbackIndex = Math.min(this.activeReviewSlide(), reviews.length - 1);
+    this.setActiveReviewIndex(indexById >= 0 ? indexById : fallbackIndex, false);
   }
 
   private buildRequest(): ReviewCheckUpdateRequest {
@@ -965,6 +1218,7 @@ export class ReviewCheckComponent {
       delete next[reviewId];
       return next;
     });
+    this.clearReviewNoteSessionDraft(reviewId);
   }
 
   private clearSideNoteDraft(field: SideNoteField): void {
@@ -973,6 +1227,152 @@ export class ReviewCheckComponent {
       delete next[field];
       return next;
     });
+    this.clearSideNoteSessionDraft(field);
+  }
+
+  private reviewCheckSessionDraftKey(orderDetailId = this.orderDetailId()): string | null {
+    return orderDetailId ? `review-check:${orderDetailId}` : null;
+  }
+
+  private readReviewCheckSessionDraft(orderDetailId = this.orderDetailId()): ReviewCheckSessionDraft | null {
+    const key = this.reviewCheckSessionDraftKey(orderDetailId);
+    return key ? readSessionDraft<ReviewCheckSessionDraft>(key) : null;
+  }
+
+  private writeReviewCheckSessionDraft(): void {
+    const key = this.reviewCheckSessionDraftKey();
+    if (!key) {
+      return;
+    }
+
+    this.writeReviewCheckSessionDraftValue(key, {
+      draft: this.changedReviewCheckDraft(),
+      reviewNotes: this.reviewNoteDrafts(),
+      sideNotes: this.sideNoteDrafts()
+    });
+  }
+
+  private writeReviewCheckSessionDraftValue(key: string, value: ReviewCheckSessionDraft): void {
+    const hasDraft = !!value.draft;
+    const hasReviewNotes = Object.keys(value.reviewNotes ?? {}).length > 0;
+    const hasSideNotes = Object.keys(value.sideNotes ?? {}).length > 0;
+
+    if (!hasDraft && !hasReviewNotes && !hasSideNotes) {
+      removeSessionDraft(key);
+      return;
+    }
+
+    writeSessionDraft(key, value);
+  }
+
+  private clearReviewCheckMainSessionDraft(): void {
+    this.updateReviewCheckSessionDraft((draft) => ({
+      ...draft,
+      draft: undefined
+    }));
+  }
+
+  private clearReviewNoteSessionDraft(reviewId: number): void {
+    this.updateReviewCheckSessionDraft((draft) => {
+      const reviewNotes = { ...(draft.reviewNotes ?? {}) };
+      delete reviewNotes[reviewId];
+      return {
+        ...draft,
+        reviewNotes
+      };
+    });
+  }
+
+  private clearSideNoteSessionDraft(field: SideNoteField): void {
+    this.updateReviewCheckSessionDraft((draft) => {
+      const sideNotes = { ...(draft.sideNotes ?? {}) };
+      delete sideNotes[field];
+      return {
+        ...draft,
+        sideNotes
+      };
+    });
+  }
+
+  private updateReviewCheckSessionDraft(updater: (draft: ReviewCheckSessionDraft) => ReviewCheckSessionDraft): void {
+    const key = this.reviewCheckSessionDraftKey();
+    if (!key) {
+      return;
+    }
+
+    this.writeReviewCheckSessionDraftValue(key, updater(readSessionDraft<ReviewCheckSessionDraft>(key) ?? {}));
+  }
+
+  private mergeReviewCheckDraft(base: ReviewCheckDraft, stored?: ReviewCheckDraft): ReviewCheckDraft {
+    if (!stored) {
+      return base;
+    }
+
+    return {
+      comment: stored.comment ?? base.comment,
+      reviews: base.reviews.map((review) => {
+        const storedReview = stored.reviews.find((item) => item.id === review.id);
+        return storedReview ? { ...review, ...storedReview } : review;
+      })
+    };
+  }
+
+  private changedReviewCheckDraft(): ReviewCheckDraft | undefined {
+    const details = this.details();
+    const draft = this.draft();
+    if (!details || !draft) {
+      return draft ?? undefined;
+    }
+
+    const source = this.reviewCheckDraftSource(details);
+    return this.isReviewCheckDraftChanged(source, draft) ? draft : undefined;
+  }
+
+  private reviewCheckDraftSource(details: ReviewCheckPayload): ReviewCheckDraft {
+    return {
+      comment: details.comment ?? '',
+      reviews: details.reviews.map((review) => ({
+        id: review.id,
+        text: review.text ?? '',
+        answer: review.answer ?? ''
+      }))
+    };
+  }
+
+  private isReviewCheckDraftChanged(source: ReviewCheckDraft, draft: ReviewCheckDraft): boolean {
+    if (source.comment !== draft.comment || source.reviews.length !== draft.reviews.length) {
+      return true;
+    }
+
+    return source.reviews.some((review) => {
+      const draftReview = draft.reviews.find((item) => item.id === review.id);
+      return !draftReview || draftReview.text !== review.text || draftReview.answer !== review.answer;
+    });
+  }
+
+  private filterReviewNoteDrafts(
+    details: ReviewCheckPayload,
+    stored?: Record<number, string>
+  ): Record<number, string> {
+    if (!stored) {
+      return {};
+    }
+
+    const reviewIds = new Set(details.reviews.map((review) => String(review.id)));
+    const next: Record<number, string> = {};
+    for (const [reviewId, value] of Object.entries(stored)) {
+      if (reviewIds.has(reviewId) && typeof value === 'string') {
+        next[Number(reviewId)] = value;
+      }
+    }
+    return next;
+  }
+
+  private filterSideNoteDrafts(stored?: Partial<Record<SideNoteField, string>>): Partial<Record<SideNoteField, string>> {
+    return {
+      ...(typeof stored?.order === 'string' ? { order: stored.order } : {}),
+      ...(typeof stored?.company === 'string' ? { company: stored.company } : {})
+    };
   }
 
   private hasMeaningfulNote(value: string | null | undefined): boolean {

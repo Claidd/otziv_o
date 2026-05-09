@@ -224,13 +224,10 @@ export function managerCompanyFilialUrl(company: CompanyCardItem): string {
   return company.urlFilial || '';
 }
 
-export function managerCompanyOrderUrl(company: CompanyCardItem): string {
-  const title = (company.title || '').trim() || `Компания #${company.id}`;
+export function managerCompanyOrderUrl(_company: CompanyCardItem): string {
   const params = new URLSearchParams({
     section: 'orders',
-    status: 'Все',
-    companyId: String(company.id),
-    companyTitle: title
+    status: 'Все'
   });
 
   return `/manager?${params.toString()}`;

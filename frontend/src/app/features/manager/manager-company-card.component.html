@@ -94,8 +94,8 @@
     <a
       [href]="companyOrdersUrl()"
       class="company-manager-link"
-      (click)="$event.preventDefault(); ordersOpened.emit()"
-      [title]="'Показать все заказы: ' + (company.title || 'компания')"
+      (click)="$event.preventDefault(); allOrdersOpened.emit()"
+      title="Показать все заказы менеджера"
     >
       {{ company.manager || '-' }}
     </a>

@@ -5,17 +5,39 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
-import { BadReviewTaskItem, ManagerApi, OrderDetailsPayload, OrderReviewItem, ReviewUpdateRequest } from '../../core/manager.api';
+import {
+  BadReviewTaskItem,
+  ManagerApi,
+  OrderDetailsPayload,
+  OrderNotesUpdate,
+  OrderReviewItem,
+  ReviewUpdateRequest
+} from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import {
+  readSessionDraft,
+  removeSessionDraft,
+  writeSessionDraft
+} from '../../shared/session-draft-storage';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
+type ReviewQuickFilter = 'all' | 'unpublished' | 'missing-photo' | 'with-note';
 type ReviewEditDraft = ReviewUpdateRequest;
+type OrderDetailsSessionDraft = {
+  reviewFields?: Record<string, string>;
+  reviewNotes?: Record<number, string>;
+  sideNotes?: Partial<Record<SideNoteField, string>>;
+  reviewEdit?: {
+    reviewId: number;
+    draft: ReviewEditDraft;
+  };
+};
 type ActiveOrderReviewFieldEdit = {
   review: OrderReviewItem;
   field: ReviewEditableField;
@@ -57,6 +79,9 @@ export class OrderDetailsComponent {
   readonly sideNoteDrafts = signal<Partial<Record<SideNoteField, string>>>({});
   readonly savedSideNoteField = signal<SideNoteField | null>(null);
   readonly activeReviewSlide = signal(0);
+  readonly reviewJumpValue = signal('1');
+  readonly reviewQuickFilter = signal<ReviewQuickFilter>('all');
+  readonly mobileReviewLayout = signal(false);
   readonly editReview = signal<OrderReviewItem | null>(null);
   readonly reviewEditDraft = signal<ReviewEditDraft | null>(null);
   readonly reviewEditSaving = signal(false);
@@ -68,6 +93,24 @@ export class OrderDetailsComponent {
 
   readonly layoutTitle = computed(() => this.details()?.title || 'Детали заказа');
   readonly reviews = computed(() => this.details()?.reviews ?? []);
+  readonly visibleReviewStartIndex = computed(() => this.compactReviewRenderEnabled()
+    ? Math.max(0, Math.min(this.activeReviewSlide() - 1, Math.max(this.reviews().length - 3, 0)))
+    : 0);
+  readonly visibleReviews = computed(() => {
+    const reviews = this.reviews();
+    if (!this.compactReviewRenderEnabled()) {
+      return reviews;
+    }
+
+    const start = this.visibleReviewStartIndex();
+    return reviews.slice(start, Math.min(start + 3, reviews.length));
+  });
+  readonly showReviewFastSelect = computed(() => this.reviews().length > 20);
+  readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviews().length > 1);
+  readonly reviewQuickFilterIndexes = computed(() => this.reviews()
+    .map((review, index) => ({ review, index }))
+    .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
+    .map(({ index }) => index));
   readonly productOptions = computed(() => this.details()?.products ?? []);
   readonly reviewEditBusy = computed(() => this.reviewEditSaving()
     || this.reviewEditDeleting()
@@ -100,6 +143,7 @@ export class OrderDetailsComponent {
   });
 
   constructor() {
+    this.updateMobileReviewLayout();
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
@@ -119,6 +163,11 @@ export class OrderDetailsComponent {
     this.closeReviewEdit();
   }
 
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.updateMobileReviewLayout();
+  }
+
   loadDetails(): void {
     const orderId = this.orderId();
     if (!orderId) {
@@ -131,7 +180,9 @@ export class OrderDetailsComponent {
     this.managerApi.getOrderDetails(orderId).subscribe({
       next: (details) => {
         this.details.set(details);
+        this.restoreOrderDetailsSessionDraft(details);
         this.activeReviewSlide.set(0);
+        this.syncReviewJumpValue(0);
         this.loading.set(false);
       },
       error: (err) => {
@@ -189,6 +240,7 @@ export class OrderDetailsComponent {
       ...drafts,
       [key]: value
     }));
+    this.writeOrderDetailsSessionDraft();
   }
 
   cancelReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -218,8 +270,8 @@ export class OrderDetailsComponent {
       : this.managerApi.updateOrderReviewAnswer(review.orderId, review.id, value);
 
     request.subscribe({
-      next: (details) => {
-        this.details.set(details);
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
         this.savedReviewFieldKey.set(fieldKey);
         this.toastService.success(
@@ -316,7 +368,7 @@ export class OrderDetailsComponent {
   }
 
   isMobileReviewLayout(): boolean {
-    return typeof window !== 'undefined' && window.innerWidth <= 860;
+    return this.mobileReviewLayout();
   }
 
   private activateMobileReviewTextPreview(review: OrderReviewItem, textarea?: HTMLTextAreaElement): void {
@@ -373,8 +425,153 @@ export class OrderDetailsComponent {
     }
 
     const maxIndex = Math.max(this.reviews().length - 1, 0);
-    const index = Math.round(track.scrollLeft / step);
-    this.activeReviewSlide.set(Math.min(maxIndex, Math.max(0, index)));
+    const index = this.visibleReviewStartIndex() + Math.round(track.scrollLeft / step);
+    this.setActiveReviewIndex(Math.min(maxIndex, Math.max(0, index)), false);
+  }
+
+  previousReview(): void {
+    this.setActiveReviewIndex(this.activeReviewSlide() - 1);
+  }
+
+  nextReview(): void {
+    this.setActiveReviewIndex(this.activeReviewSlide() + 1);
+  }
+
+  setReviewJumpValue(value: string): void {
+    this.reviewJumpValue.set(value);
+  }
+
+  jumpToReview(): void {
+    const value = this.reviewJumpValue().trim();
+    if (!value) {
+      this.syncReviewJumpValue(this.activeReviewSlide());
+      return;
+    }
+
+    const numericValue = Number(value);
+    const reviews = this.reviews();
+    if (Number.isInteger(numericValue)) {
+      const byPosition = numericValue - 1;
+      if (byPosition >= 0 && byPosition < reviews.length) {
+        this.setActiveReviewIndex(byPosition);
+        return;
+      }
+
+      const byId = reviews.findIndex((review) => review.id === numericValue);
+      if (byId >= 0) {
+        this.setActiveReviewIndex(byId);
+        return;
+      }
+    }
+
+    this.toastService.error('Отзыв не найден', 'Введите номер в списке или ID отзыва');
+    this.syncReviewJumpValue(this.activeReviewSlide());
+  }
+
+  goToReviewIndex(index: number): void {
+    this.setActiveReviewIndex(index);
+  }
+
+  setReviewQuickFilter(value: string): void {
+    const filter = this.isReviewQuickFilter(value) ? value : 'all';
+    this.reviewQuickFilter.set(filter);
+
+    const indexes = this.reviewQuickFilterIndexes();
+    if (!indexes.length) {
+      this.reviewQuickFilter.set('all');
+      this.toastService.error('Отзывы не найдены', 'В выбранном фильтре нет отзывов');
+      return;
+    }
+
+    if (!indexes.includes(this.activeReviewSlide())) {
+      this.setActiveReviewIndex(indexes[0]);
+    }
+  }
+
+  setActiveReviewFromQuickSelect(value: string): void {
+    const index = Number(value);
+    if (!Number.isInteger(index)) {
+      return;
+    }
+
+    this.setActiveReviewIndex(index);
+  }
+
+  reviewQuickOptionLabel(index: number): string {
+    const review = this.reviews()[index];
+    if (!review) {
+      return '';
+    }
+
+    return `${index + 1} из ${this.reviews().length} - #${review.id}`;
+  }
+
+  isActiveReview(review: OrderReviewItem): boolean {
+    return this.showReviewNavigation() && this.reviews()[this.activeReviewSlide()]?.id === review.id;
+  }
+
+  private setActiveReviewIndex(index: number, scroll = true): void {
+    const reviews = this.reviews();
+    if (!reviews.length) {
+      this.activeReviewSlide.set(0);
+      this.syncReviewJumpValue(0);
+      return;
+    }
+
+    const nextIndex = Math.max(0, Math.min(index, reviews.length - 1));
+    this.activeReviewSlide.set(nextIndex);
+    this.syncReviewJumpValue(nextIndex);
+
+    if (scroll) {
+      this.scrollReviewIntoView(reviews[nextIndex]?.id);
+    }
+  }
+
+  private scrollReviewIntoView(reviewId?: number): void {
+    if (!reviewId || typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`.review-card[data-review-id="${reviewId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    });
+  }
+
+  private syncReviewJumpValue(index: number): void {
+    this.reviewJumpValue.set(String(index + 1));
+  }
+
+  private updateMobileReviewLayout(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.mobileReviewLayout.set(window.innerWidth <= 860);
+  }
+
+  private compactReviewRenderEnabled(): boolean {
+    return this.mobileReviewLayout() && this.reviews().length > 12;
+  }
+
+  private isReviewQuickFilter(value: string): value is ReviewQuickFilter {
+    return value === 'all'
+      || value === 'unpublished'
+      || value === 'missing-photo'
+      || value === 'with-note';
+  }
+
+  private reviewMatchesQuickFilter(review: OrderReviewItem, filter: ReviewQuickFilter): boolean {
+    switch (filter) {
+      case 'unpublished':
+        return !review.publish && !review.publishedDate;
+      case 'missing-photo':
+        return this.needsReviewPhoto(review);
+      case 'with-note':
+        return this.hasReviewNote(review);
+      default:
+        return true;
+    }
   }
 
   hasReviewNote(review: OrderReviewItem): boolean {
@@ -443,6 +640,7 @@ export class OrderDetailsComponent {
       ...drafts,
       [reviewId]: value
     }));
+    this.writeOrderDetailsSessionDraft();
   }
 
   cancelReviewNoteEdit(review: OrderReviewItem): void {
@@ -463,8 +661,8 @@ export class OrderDetailsComponent {
     this.error.set(null);
 
     this.managerApi.updateOrderReviewNote(review.orderId, review.id, value).subscribe({
-      next: (details) => {
-        this.details.set(details);
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
         this.savedReviewNoteId.set(review.id);
         this.toastService.success('Заметка сохранена', `Отзыв #${review.id} обновлен`);
@@ -567,6 +765,7 @@ export class OrderDetailsComponent {
       ...drafts,
       [field]: value
     }));
+    this.writeOrderDetailsSessionDraft();
   }
 
   cancelSideNoteEdit(field: SideNoteField): void {
@@ -596,8 +795,8 @@ export class OrderDetailsComponent {
       : this.managerApi.updateOrderCompanyNote(orderId, value);
 
     request.subscribe({
-      next: (updatedDetails) => {
-        this.details.set(updatedDetails);
+      next: (notes) => {
+        this.applyOrderNotes(notes);
         this.mutationKey.set(null);
         this.savedSideNoteField.set(field);
         this.toastService.success(field === 'order' ? 'Заметка заказа сохранена' : 'Заметка компании сохранена');
@@ -675,13 +874,12 @@ export class OrderDetailsComponent {
     this.error.set(null);
 
     this.managerApi.changeOrderReviewBot(review.orderId, review.id).subscribe({
-      next: (details) => {
-        const updatedReview = details.reviews.find((item) => item.id === review.id);
-        this.details.set(details);
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
         this.toastService.success(
           'Аккаунт изменен',
-          this.botChangeMessage(oldBotId, updatedReview?.botId ?? null)
+          this.botChangeMessage(oldBotId, updatedReview.botId ?? null)
         );
       },
       error: (err) => {
@@ -705,24 +903,20 @@ export class OrderDetailsComponent {
     this.reviewEditError.set(null);
 
     this.managerApi.assignOrderReviewNewAccount(review.orderId, review.id).subscribe({
-      next: (details) => {
-        const updatedReview = details.reviews.find((item) => item.id === review.id);
-        this.details.set(details);
-
-        if (updatedReview) {
-          this.editReview.set(updatedReview);
-          this.reviewEditDraft.update((draft) => draft ? {
-            ...draft,
-            vigul: !!updatedReview.vigul,
-            botName: updatedReview.botFio ?? '',
-            botPassword: updatedReview.botPassword ?? ''
-          } : this.toReviewEditDraft(updatedReview));
-        }
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
+        this.editReview.set(updatedReview);
+        this.reviewEditDraft.update((draft) => draft ? {
+          ...draft,
+          vigul: !!updatedReview.vigul,
+          botName: updatedReview.botFio ?? '',
+          botPassword: updatedReview.botPassword ?? ''
+        } : this.toReviewEditDraft(updatedReview));
 
         this.reviewEditNewAccountSaving.set(false);
         this.toastService.success(
           'Аккаунт назначен',
-          this.botChangeMessage(oldBotId, updatedReview?.botId ?? null)
+          this.botChangeMessage(oldBotId, updatedReview.botId ?? null)
         );
       },
       error: (err) => {
@@ -759,7 +953,7 @@ export class OrderDetailsComponent {
       return;
     }
 
-    this.runReviewMutation(
+    this.runDetailsMutation(
       `publish-${review.id}`,
       this.managerApi.publishOrderReview(review.orderId, review.id),
       'Отзыв опубликован',
@@ -818,8 +1012,12 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const storedEdit = this.readOrderDetailsSessionDraft()?.reviewEdit;
     this.editReview.set(review);
-    this.reviewEditDraft.set(this.toReviewEditDraft(review));
+    this.reviewEditDraft.set(storedEdit?.reviewId === review.id
+      ? storedEdit.draft
+      : this.toReviewEditDraft(review)
+    );
     this.reviewEditError.set(null);
     this.reviewEditSaving.set(false);
     this.reviewEditDeleting.set(false);
@@ -835,6 +1033,7 @@ export class OrderDetailsComponent {
     this.editReview.set(null);
     this.reviewEditDraft.set(null);
     this.reviewEditError.set(null);
+    this.clearReviewEditSessionDraft();
   }
 
   setReviewEditField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
@@ -843,6 +1042,7 @@ export class OrderDetailsComponent {
     }
 
     this.reviewEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+    this.writeOrderDetailsSessionDraft();
   }
 
   saveReviewEdit(): void {
@@ -864,14 +1064,15 @@ export class OrderDetailsComponent {
     const request = this.reviewEditRequest(review, draft);
 
     this.managerApi.updateOrderReview(review.orderId, review.id, request).subscribe({
-      next: (details) => {
-        this.details.set(details);
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
         this.clearReviewFieldDraft(review, 'text');
         this.clearReviewFieldDraft(review, 'answer');
         this.clearReviewNoteDraft(review.id);
         this.reviewEditSaving.set(false);
         this.editReview.set(null);
         this.reviewEditDraft.set(null);
+        this.clearReviewEditSessionDraft();
         this.toastService.success('Отзыв сохранен', `Изменения по отзыву #${review.id} применены`);
       },
       error: (err) => {
@@ -900,10 +1101,13 @@ export class OrderDetailsComponent {
 
     this.managerApi.deleteOrderReview(review.orderId, review.id).subscribe({
       next: (details) => {
+        const activeReviewId = this.currentActiveReviewId();
         this.details.set(details);
+        this.restoreActiveReview(activeReviewId);
         this.reviewEditDeleting.set(false);
         this.editReview.set(null);
         this.reviewEditDraft.set(null);
+        this.clearReviewEditSessionDraft();
         this.toastService.success('Отзыв удален', `Отзыв #${review.id} удален из заказа`);
       },
       error: (err) => {
@@ -928,18 +1132,16 @@ export class OrderDetailsComponent {
     this.reviewEditError.set(null);
 
     this.managerApi.uploadOrderReviewPhoto(review.orderId, review.id, file).subscribe({
-      next: (details) => {
-        this.details.set(details);
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
         this.reviewEditUploading.set(false);
 
-        const updatedReview = details.reviews.find((item) => item.id === review.id);
-        if (updatedReview) {
-          this.editReview.set(updatedReview);
-          this.reviewEditDraft.update((draft) => draft ? {
-            ...draft,
-            url: updatedReview.url || updatedReview.urlPhoto || ''
-          } : this.toReviewEditDraft(updatedReview));
-        }
+        this.editReview.set(updatedReview);
+        this.reviewEditDraft.update((draft) => draft ? {
+          ...draft,
+          url: updatedReview.url || updatedReview.urlPhoto || ''
+        } : this.toReviewEditDraft(updatedReview));
+        this.writeOrderDetailsSessionDraft();
 
         if (input) {
           input.value = '';
@@ -1119,11 +1321,26 @@ export class OrderDetailsComponent {
 
   private runReviewMutation(
     key: string,
-    request: Observable<OrderDetailsPayload>,
+    request: Observable<OrderReviewItem>,
     toastTitle: string,
     toastMessage: string
   ): void {
-    this.runDetailsMutation(key, request, toastTitle, toastMessage);
+    this.mutationKey.set(key);
+    this.error.set(null);
+
+    request.subscribe({
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
+        this.mutationKey.set(null);
+        this.toastService.success(toastTitle, toastMessage);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Действие не выполнено');
+        this.mutationKey.set(null);
+        this.error.set(message);
+        this.toastService.error('Действие не выполнено', message);
+      }
+    });
   }
 
   private runDetailsMutation(
@@ -1137,7 +1354,9 @@ export class OrderDetailsComponent {
 
     request.subscribe({
       next: (details) => {
+        const activeReviewId = this.currentActiveReviewId();
         this.details.set(details);
+        this.restoreActiveReview(activeReviewId);
         this.mutationKey.set(null);
         this.toastService.success(toastTitle, toastMessage);
       },
@@ -1170,6 +1389,223 @@ export class OrderDetailsComponent {
     }
   }
 
+  private applyUpdatedOrderReview(updatedReview: OrderReviewItem): void {
+    this.details.update((details) => details ? {
+      ...details,
+      reviews: details.reviews.map((review) => {
+        if (review.id === updatedReview.id) {
+          return { ...review, ...updatedReview };
+        }
+
+        if (updatedReview.orderDetailsId && review.orderDetailsId === updatedReview.orderDetailsId) {
+          return {
+            ...review,
+            comment: updatedReview.comment,
+            orderComments: updatedReview.orderComments,
+            commentCompany: updatedReview.commentCompany
+          };
+        }
+
+        return review;
+      })
+    } : details);
+    this.writeOrderDetailsSessionDraft();
+  }
+
+  private applyOrderNotes(notes: OrderNotesUpdate): void {
+    this.details.update((details) => details ? {
+      ...details,
+      orderComments: notes.orderComments,
+      companyComments: notes.companyComments,
+      reviews: details.reviews.map((review) => ({
+        ...review,
+        orderComments: notes.orderComments,
+        commentCompany: notes.companyComments
+      }))
+    } : details);
+  }
+
+  private currentActiveReviewId(): number | null {
+    return this.reviews()[this.activeReviewSlide()]?.id ?? null;
+  }
+
+  private restoreActiveReview(reviewId: number | null): void {
+    const reviews = this.reviews();
+    if (!reviews.length) {
+      this.activeReviewSlide.set(0);
+      this.syncReviewJumpValue(0);
+      return;
+    }
+
+    const indexById = reviewId == null ? -1 : reviews.findIndex((review) => review.id === reviewId);
+    const fallbackIndex = Math.min(this.activeReviewSlide(), reviews.length - 1);
+    this.setActiveReviewIndex(indexById >= 0 ? indexById : fallbackIndex, false);
+  }
+
+  private orderDetailsSessionDraftKey(orderId = this.orderId()): string | null {
+    return orderId ? `order-details:${orderId}` : null;
+  }
+
+  private readOrderDetailsSessionDraft(orderId = this.orderId()): OrderDetailsSessionDraft | null {
+    const key = this.orderDetailsSessionDraftKey(orderId);
+    return key ? readSessionDraft<OrderDetailsSessionDraft>(key) : null;
+  }
+
+  private restoreOrderDetailsSessionDraft(details: OrderDetailsPayload): void {
+    const sessionDraft = this.readOrderDetailsSessionDraft(details.orderId);
+
+    this.reviewFieldDrafts.set(this.filterReviewFieldDrafts(details, sessionDraft?.reviewFields));
+    this.reviewNoteDrafts.set(this.filterReviewNoteDrafts(details, sessionDraft?.reviewNotes));
+    this.sideNoteDrafts.set(this.filterSideNoteDrafts(details, sessionDraft?.sideNotes));
+  }
+
+  private writeOrderDetailsSessionDraft(): void {
+    const key = this.orderDetailsSessionDraftKey();
+    const details = this.details();
+    if (!key || !details) {
+      return;
+    }
+
+    this.writeOrderDetailsSessionDraftValue(key, {
+      reviewFields: this.changedReviewFieldDrafts(details, this.reviewFieldDrafts()),
+      reviewNotes: this.changedReviewNoteDrafts(details, this.reviewNoteDrafts()),
+      sideNotes: this.changedSideNoteDrafts(details, this.sideNoteDrafts()),
+      reviewEdit: this.changedReviewEditDraft()
+    });
+  }
+
+  private writeOrderDetailsSessionDraftValue(key: string, value: OrderDetailsSessionDraft): void {
+    const hasReviewFields = Object.keys(value.reviewFields ?? {}).length > 0;
+    const hasReviewNotes = Object.keys(value.reviewNotes ?? {}).length > 0;
+    const hasSideNotes = Object.keys(value.sideNotes ?? {}).length > 0;
+
+    if (!hasReviewFields && !hasReviewNotes && !hasSideNotes && !value.reviewEdit) {
+      removeSessionDraft(key);
+      return;
+    }
+
+    writeSessionDraft(key, value);
+  }
+
+  private clearReviewEditSessionDraft(): void {
+    const key = this.orderDetailsSessionDraftKey();
+    if (!key) {
+      return;
+    }
+
+    const draft = readSessionDraft<OrderDetailsSessionDraft>(key);
+    if (!draft?.reviewEdit) {
+      this.writeOrderDetailsSessionDraft();
+      return;
+    }
+
+    this.writeOrderDetailsSessionDraftValue(key, {
+      ...draft,
+      reviewEdit: undefined
+    });
+  }
+
+  private changedReviewFieldDrafts(
+    details: OrderDetailsPayload,
+    drafts: Record<string, string>
+  ): Record<string, string> {
+    const reviewMap = new Map(details.reviews.map((review) => [review.id, review]));
+    const next: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(drafts)) {
+      const match = /^(\d+)-(text|answer)$/.exec(key);
+      const review = match ? reviewMap.get(Number(match[1])) : null;
+      const field = match?.[2] as ReviewEditableField | undefined;
+      if (review && field && value !== this.reviewFieldSourceValue(review, field)) {
+        next[key] = value;
+      }
+    }
+
+    return next;
+  }
+
+  private changedReviewNoteDrafts(
+    details: OrderDetailsPayload,
+    drafts: Record<number, string>
+  ): Record<number, string> {
+    const reviewMap = new Map(details.reviews.map((review) => [review.id, review]));
+    const next: Record<number, string> = {};
+
+    for (const [reviewId, value] of Object.entries(drafts)) {
+      const review = reviewMap.get(Number(reviewId));
+      if (review && value !== (review.comment ?? '')) {
+        next[Number(reviewId)] = value;
+      }
+    }
+
+    return next;
+  }
+
+  private changedSideNoteDrafts(
+    details: OrderDetailsPayload,
+    drafts: Partial<Record<SideNoteField, string>>
+  ): Partial<Record<SideNoteField, string>> {
+    return {
+      ...(typeof drafts.order === 'string' && drafts.order !== this.sideNoteSourceValue(details, 'order')
+        ? { order: drafts.order }
+        : {}),
+      ...(typeof drafts.company === 'string' && drafts.company !== this.sideNoteSourceValue(details, 'company')
+        ? { company: drafts.company }
+        : {})
+    };
+  }
+
+  private changedReviewEditDraft(): OrderDetailsSessionDraft['reviewEdit'] {
+    const review = this.editReview();
+    const draft = this.reviewEditDraft();
+    if (!review || !draft || !this.isReviewEditDraftChanged(review, draft)) {
+      return undefined;
+    }
+
+    return {
+      reviewId: review.id,
+      draft
+    };
+  }
+
+  private isReviewEditDraftChanged(review: OrderReviewItem, draft: ReviewEditDraft): boolean {
+    const source = this.toReviewEditDraft(review);
+    return (Object.keys(source) as (keyof ReviewEditDraft)[]).some((field) => source[field] !== draft[field]);
+  }
+
+  private filterReviewFieldDrafts(
+    details: OrderDetailsPayload,
+    stored?: Record<string, string>
+  ): Record<string, string> {
+    if (!stored) {
+      return {};
+    }
+
+    return this.changedReviewFieldDrafts(details, stored);
+  }
+
+  private filterReviewNoteDrafts(
+    details: OrderDetailsPayload,
+    stored?: Record<number, string>
+  ): Record<number, string> {
+    if (!stored) {
+      return {};
+    }
+
+    return this.changedReviewNoteDrafts(details, stored);
+  }
+
+  private filterSideNoteDrafts(
+    details: OrderDetailsPayload,
+    stored?: Partial<Record<SideNoteField, string>>
+  ): Partial<Record<SideNoteField, string>> {
+    if (!stored) {
+      return {};
+    }
+
+    return this.changedSideNoteDrafts(details, stored);
+  }
+
   private reviewFieldKey(review: OrderReviewItem, field: ReviewEditableField): string {
     return `${review.id}-${field}`;
   }
@@ -1189,6 +1625,7 @@ export class OrderDetailsComponent {
       delete next[key];
       return next;
     });
+    this.writeOrderDetailsSessionDraft();
   }
 
   private clearReviewNoteDraft(reviewId: number): void {
@@ -1197,6 +1634,7 @@ export class OrderDetailsComponent {
       delete next[reviewId];
       return next;
     });
+    this.writeOrderDetailsSessionDraft();
   }
 
   private sideNoteSourceValue(details: OrderDetailsPayload, field: SideNoteField): string {
@@ -1214,6 +1652,7 @@ export class OrderDetailsComponent {
       delete next[field];
       return next;
     });
+    this.writeOrderDetailsSessionDraft();
   }
 
   private errorMessage(err: unknown, fallback: string): string {

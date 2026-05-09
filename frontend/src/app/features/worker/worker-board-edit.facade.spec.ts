@@ -143,8 +143,8 @@ function orderDetails(overrides: Partial<OrderDetailsPayload> = {}): OrderDetail
 function createFacade(config: {
   orderPayload?: OrderEditPayload;
   details?: OrderDetailsPayload;
-  uploadDetails?: OrderDetailsPayload;
-  updateReviewDetails?: OrderDetailsPayload;
+  uploadReview?: OrderReviewItem;
+  updateReview?: OrderReviewItem;
 } = {}) {
   const calls: string[] = [];
   const toastMessages: string[] = [];
@@ -175,7 +175,7 @@ function createFacade(config: {
       updateOrderReview: (orderId: number, reviewId: number, request: ReviewEditDraft) => {
         calls.push(`update-review:${orderId}:${reviewId}`);
         lastReviewRequest = request;
-        return of(config.updateReviewDetails ?? details);
+        return of(config.updateReview ?? details.reviews[0]);
       },
       deleteOrderReview: (orderId: number, reviewId: number) => {
         calls.push(`delete-review:${orderId}:${reviewId}`);
@@ -183,11 +183,11 @@ function createFacade(config: {
       },
       assignOrderReviewNewAccount: (orderId: number, reviewId: number) => {
         calls.push(`new-account:${orderId}:${reviewId}`);
-        return of(config.updateReviewDetails ?? details);
+        return of(config.updateReview ?? details.reviews[0]);
       },
       uploadOrderReviewPhoto: (orderId: number, reviewId: number, file: File) => {
         calls.push(`upload-review:${orderId}:${reviewId}:${file.name}`);
-        return of(config.uploadDetails ?? details);
+        return of(config.uploadReview ?? details.reviews[0]);
       }
     },
     toastService: {
@@ -356,7 +356,7 @@ describe('WorkerBoardEditFacade', () => {
   it('uploads review photo and refreshes draft URL from details', () => {
     const uploadedReview = orderReview({ id: 7, url: 'new-photo.jpg', urlPhoto: 'ignored-old-photo.jpg' });
     const state = createFacade({
-      uploadDetails: orderDetails({ reviews: [uploadedReview] })
+      uploadReview: uploadedReview
     });
 
     state.facade.openReviewEdit(workerReview());

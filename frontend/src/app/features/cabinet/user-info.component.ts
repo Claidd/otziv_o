@@ -101,7 +101,7 @@ export class UserInfoComponent {
 
   selectDate(date: string): void {
     this.selectedDate.set(date);
-    this.load(true);
+    this.load();
   }
 
   imageUrl(stat?: UserStat | null): string {

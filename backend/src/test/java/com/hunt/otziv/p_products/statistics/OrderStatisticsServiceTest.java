@@ -123,7 +123,7 @@ class OrderStatisticsServiceTest {
     @Test
     void getNewOrderAllCombinesWorkerAndManagerStats() {
         OrderStatisticsService service = service();
-        when(orderRepository.findAllIdByNewOrderAllStatus("Новый", "Коррекция"))
+        when(orderRepository.findAllIdByNewOrderAllStatus("Новый", "Коррекция", List.of("Новый", "Коррекция")))
                 .thenReturn(List.of(
                         new Object[]{"operator", "Оператор", 3L, 1L},
                         new Object[]{"manager", "Менеджер", 5L, 2L}
@@ -133,6 +133,7 @@ class OrderStatisticsServiceTest {
 
         assertEquals(Pair.of(3L, 1L), result.get("Оператор"));
         assertEquals(Pair.of(5L, 2L), result.get("Менеджер"));
+        verify(orderRepository).findAllIdByNewOrderAllStatus("Новый", "Коррекция", List.of("Новый", "Коррекция"));
     }
 
     @Test

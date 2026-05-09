@@ -11,6 +11,7 @@ export class AuthService {
   private initialized = false;
   private refreshTimerId: ReturnType<typeof setInterval> | undefined;
   private refreshPromise: Promise<boolean> | null = null;
+  private redirectingToLogin = false;
 
   readonly status = signal<AuthStatus>('initializing');
   readonly error = signal<string | null>(null);
@@ -116,6 +117,19 @@ export class AuthService {
     return this.refreshPromise;
   }
 
+  handleUnauthorized(targetUrl = this.currentBrowserPath()): void {
+    if (this.redirectingToLogin) {
+      return;
+    }
+
+    this.redirectingToLogin = true;
+    this.stopRefreshLoop();
+    this.keycloak.clearToken();
+    this.clearSession('expired');
+    this.error.set('Сессия закончилась. Войдите снова.');
+    void this.login(targetUrl);
+  }
+
   private registerKeycloakCallbacks(): void {
     this.keycloak.onAuthSuccess = () => {
       void this.setAuthenticatedState();
@@ -167,6 +181,7 @@ export class AuthService {
     this.keycloak.clearToken();
     this.clearSession('expired');
     this.error.set(error ? this.getErrorMessage(error) : 'Сессия закончилась. Войдите снова.');
+    this.handleUnauthorized();
   }
 
   private clearSession(status: AuthStatus): void {
@@ -198,5 +213,9 @@ export class AuthService {
 
   private getErrorMessage(error: unknown): string {
     return apiErrorMessage(error, 'Ошибка авторизации');
+  }
+
+  private currentBrowserPath(): string {
+    return `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
   }
 }

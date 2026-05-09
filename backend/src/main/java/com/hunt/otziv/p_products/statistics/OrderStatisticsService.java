@@ -157,7 +157,11 @@ public class OrderStatisticsService {
     }
 
     public Map<String, Pair<Long, Long>> getNewOrderAll(String statusNew, String statusCorrect) {
-        List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(statusNew, statusCorrect);
+        List<Object[]> results = orderRepository.findAllIdByNewOrderAllStatus(
+                statusNew,
+                statusCorrect,
+                List.of(statusNew, statusCorrect)
+        );
 
         Map<String, Pair<Long, Long>> workerStats = new HashMap<>();
         Map<String, Pair<Long, Long>> managerStats = new HashMap<>();

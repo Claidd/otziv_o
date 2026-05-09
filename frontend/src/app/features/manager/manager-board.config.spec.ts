@@ -159,7 +159,7 @@ describe('manager-board config helpers', () => {
     expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: 'https://filial' }))).toBe('https://filial');
     expect(managerCompanyFilialUrl(company({ id: 9, urlFilial: undefined }))).toBe('');
     expect(managerCompanyOrderUrl(company({ id: 9 })))
-      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5&companyId=9&companyTitle=Company');
+      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5');
     expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
     expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
   });

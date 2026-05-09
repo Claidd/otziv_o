@@ -38,7 +38,7 @@ describe('ManagerCompanyCardComponent', () => {
     expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Филиалов:');
     expect(element.querySelector<HTMLAnchorElement>('.company-manager-link')?.getAttribute('href'))
-      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5&companyId=10&companyTitle=Company');
+      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5');
     expect(element.querySelector<HTMLButtonElement>('.card-actions button')?.disabled).toBe(true);
   });
 
@@ -49,6 +49,7 @@ describe('ManagerCompanyCardComponent', () => {
     let orderOpened = false;
     let status = '';
     let ordersOpened = 0;
+    let allOrdersOpened = false;
     let editOpened = false;
     component.company = company();
     component.actions = MANAGER_COMPANY_ACTIONS.slice(0, 1);
@@ -63,6 +64,9 @@ describe('ManagerCompanyCardComponent', () => {
     });
     component.ordersOpened.subscribe(() => {
       ordersOpened += 1;
+    });
+    component.allOrdersOpened.subscribe(() => {
+      allOrdersOpened = true;
     });
     component.editOpened.subscribe(() => {
       editOpened = true;
@@ -81,7 +85,8 @@ describe('ManagerCompanyCardComponent', () => {
     expect(copiedPhone).toBe('79086431055');
     expect(orderOpened).toBe(true);
     expect(status).toBe('Ожидание');
-    expect(ordersOpened).toBe(2);
+    expect(ordersOpened).toBe(1);
+    expect(allOrdersOpened).toBe(true);
     expect(editOpened).toBe(true);
   });
 

@@ -12,6 +12,11 @@ import type {
 } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
 import {
+  readSessionDraft,
+  removeSessionDraft,
+  writeSessionDraft
+} from '../../shared/session-draft-storage';
+import {
   managerCreateOrderDraft,
   managerCreateOrderTotal,
   managerCreateOrderValidationError,
@@ -89,6 +94,7 @@ export class ManagerBoardOrderFacade {
       return;
     }
 
+    this.removeCreateOrderSessionDraft();
     this.createOrderPayload.set(null);
     this.createOrderDraft.set(null);
     this.createOrderError.set(null);
@@ -96,6 +102,7 @@ export class ManagerBoardOrderFacade {
 
   handleCreateOrderDraftChange(change: ManagerCreateOrderDraftChange): void {
     this.createOrderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+    this.writeCreateOrderSessionDraft();
   }
 
   createCompanyOrder(): void {
@@ -155,6 +162,7 @@ export class ManagerBoardOrderFacade {
       return;
     }
 
+    this.removeOrderEditSessionDraft();
     this.editOrder.set(null);
     this.orderDraft.set(null);
     this.orderError.set(null);
@@ -162,6 +170,7 @@ export class ManagerBoardOrderFacade {
 
   handleOrderEditDraftChange(change: ManagerOrderEditDraftChange): void {
     this.orderDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+    this.writeOrderEditSessionDraft();
   }
 
   saveOrderEdit(): void {
@@ -224,13 +233,84 @@ export class ManagerBoardOrderFacade {
   }
 
   private applyOrderEditPayload(payload: OrderEditPayload): void {
+    const sourceDraft = managerOrderEditDraft(payload);
+    const storedDraft = readSessionDraft<OrderUpdateRequest>(this.orderEditSessionDraftKey(payload.id));
     this.editOrder.set(payload);
-    this.orderDraft.set(managerOrderEditDraft(payload));
+    this.orderDraft.set(storedDraft ?? sourceDraft);
+    this.writeOrderEditSessionDraft();
   }
 
   private applyCompanyOrderCreatePayload(payload: CompanyOrderCreatePayload): void {
+    const sourceDraft = managerCreateOrderDraft(payload);
+    const storedDraft = readSessionDraft<CompanyOrderCreateRequest>(this.createOrderSessionDraftKey(payload.companyId));
     this.createOrderPayload.set(payload);
-    this.createOrderDraft.set(managerCreateOrderDraft(payload));
+    this.createOrderDraft.set(storedDraft ?? sourceDraft);
+    this.writeCreateOrderSessionDraft();
+  }
+
+  private writeOrderEditSessionDraft(): void {
+    const order = this.editOrder();
+    const draft = this.orderDraft();
+    if (!order || !draft) {
+      return;
+    }
+
+    const key = this.orderEditSessionDraftKey(order.id);
+    if (!this.isOrderEditDraftChanged(order, draft)) {
+      removeSessionDraft(key);
+      return;
+    }
+
+    writeSessionDraft(key, draft);
+  }
+
+  private writeCreateOrderSessionDraft(): void {
+    const payload = this.createOrderPayload();
+    const draft = this.createOrderDraft();
+    if (!payload || !draft) {
+      return;
+    }
+
+    const key = this.createOrderSessionDraftKey(payload.companyId);
+    if (!this.isCreateOrderDraftChanged(payload, draft)) {
+      removeSessionDraft(key);
+      return;
+    }
+
+    writeSessionDraft(key, draft);
+  }
+
+  private removeOrderEditSessionDraft(orderId = this.editOrder()?.id): void {
+    if (orderId) {
+      removeSessionDraft(this.orderEditSessionDraftKey(orderId));
+    }
+  }
+
+  private removeCreateOrderSessionDraft(companyId = this.createOrderPayload()?.companyId): void {
+    if (companyId) {
+      removeSessionDraft(this.createOrderSessionDraftKey(companyId));
+    }
+  }
+
+  private orderEditSessionDraftKey(orderId: number): string {
+    return `manager-order-edit:${orderId}`;
+  }
+
+  private createOrderSessionDraftKey(companyId: number): string {
+    return `manager-order-create:${companyId}`;
+  }
+
+  private isOrderEditDraftChanged(order: OrderEditPayload, draft: OrderUpdateRequest): boolean {
+    const source = managerOrderEditDraft(order);
+    return (Object.keys(source) as (keyof OrderUpdateRequest)[]).some((field) => source[field] !== draft[field]);
+  }
+
+  private isCreateOrderDraftChanged(
+    payload: CompanyOrderCreatePayload,
+    draft: CompanyOrderCreateRequest
+  ): boolean {
+    const source = managerCreateOrderDraft(payload);
+    return (Object.keys(source) as (keyof CompanyOrderCreateRequest)[]).some((field) => source[field] !== draft[field]);
   }
 
   private applyOrderCardPatch(payload: OrderEditPayload): void {

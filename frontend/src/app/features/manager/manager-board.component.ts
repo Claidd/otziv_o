@@ -454,6 +454,18 @@ export class ManagerBoardComponent {
     this.loadBoard();
   }
 
+  openAllOrders(): void {
+    this.replaceCurrentHistoryState();
+    this.activeSection.set('orders');
+    this.orderStatus.set('Все');
+    this.selectedCompany.set(null);
+    this.keyword.set('');
+    this.pageNumber.set(0);
+    this.mobileMenuOpen.set(false);
+    this.pushCurrentHistoryState();
+    this.loadBoardAfterMetricSeen(this.findMetric('orders', 'Все'));
+  }
+
   openCompanyEdit(company: CompanyCardItem): void {
     this.companyFacade.openCompanyEdit(company);
   }

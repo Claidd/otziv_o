@@ -21,10 +21,12 @@
     @if (details(); as details) {
       <div class="review-carousel">
         <section class="review-cards" aria-label="Отзывы заказа" (scroll)="onReviewCarouselScroll($event)">
-          @for (review of reviews(); track trackReview($index, review); let first = $first) {
+          @for (review of visibleReviews(); track trackReview($index, review); let first = $first) {
             <article
               class="review-card"
+              [attr.data-review-id]="review.id"
               [class.published]="review.publish"
+              [class.active]="isActiveReview(review)"
               [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
             >
             <header>
@@ -336,16 +338,65 @@
           }
         </section>
 
-        @if (reviews().length > 1) {
+        @if (showReviewNavigation()) {
+          <nav class="review-navigation" aria-label="Навигация по отзывам">
+            <button type="button" (click)="previousReview()" [disabled]="activeReviewSlide() === 0" title="Предыдущий отзыв">
+              <span class="material-icons-sharp">chevron_left</span>
+            </button>
+            <label>
+              <span>Отзыв</span>
+              <input
+                type="text"
+                inputmode="numeric"
+                [ngModel]="reviewJumpValue()"
+                (ngModelChange)="setReviewJumpValue($event)"
+                (keydown.enter)="jumpToReview()"
+                (blur)="jumpToReview()"
+                aria-label="Номер или ID отзыва"
+              >
+            </label>
+            <span>{{ activeReviewSlide() + 1 }} из {{ reviews().length }}</span>
+            <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviews().length - 1" title="Следующий отзыв">
+              <span class="material-icons-sharp">chevron_right</span>
+            </button>
+          </nav>
+
           <span class="mobile-swipe-hint" aria-hidden="true">
             <span class="material-icons-sharp">chevron_right</span>
           </span>
 
-          <div class="review-carousel-dots" aria-hidden="true">
-            @for (dotReview of reviews(); track trackReview($index, dotReview); let i = $index) {
-              <span [class.active]="activeReviewSlide() === i"></span>
-            }
-          </div>
+          @if (showReviewFastSelect()) {
+            <div class="review-fast-select" aria-label="Быстрый переход по отзывам">
+              <label>
+                <span>Фильтр</span>
+                <select [ngModel]="reviewQuickFilter()" (ngModelChange)="setReviewQuickFilter($event)">
+                  <option value="all">Все отзывы</option>
+                  <option value="unpublished">Неопубликованные</option>
+                  <option value="missing-photo">Без фото</option>
+                  <option value="with-note">С заметкой</option>
+                </select>
+              </label>
+              <label>
+                <span>Перейти</span>
+                <select [ngModel]="activeReviewSlide()" (ngModelChange)="setActiveReviewFromQuickSelect($event)">
+                  @for (reviewIndex of reviewQuickFilterIndexes(); track reviewIndex) {
+                    <option [ngValue]="reviewIndex">{{ reviewQuickOptionLabel(reviewIndex) }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+          } @else {
+            <div class="review-carousel-dots">
+              @for (dotReview of reviews(); track trackReview($index, dotReview); let i = $index) {
+                <button
+                  type="button"
+                  [class.active]="activeReviewSlide() === i"
+                  (click)="goToReviewIndex(i)"
+                  [attr.aria-label]="'Перейти к отзыву ' + (i + 1)"
+                ></button>
+              }
+            </div>
+          }
         }
       </div>
 

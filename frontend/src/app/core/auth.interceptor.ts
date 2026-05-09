@@ -1,6 +1,6 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { from, switchMap } from 'rxjs';
+import { catchError, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
@@ -22,6 +22,25 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           Authorization: `Bearer ${token}`
         }
       }));
+    }),
+    catchError((error) => {
+      if (isUnauthorized(error) || isExpiredForbidden(error, auth)) {
+        auth.handleUnauthorized(currentBrowserPath());
+      }
+
+      return throwError(() => error);
     })
   );
 };
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && error.status === 401;
+}
+
+function isExpiredForbidden(error: unknown, auth: AuthService): boolean {
+  return error instanceof HttpErrorResponse && error.status === 403 && !auth.isAuthenticated();
+}
+
+function currentBrowserPath(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
+}

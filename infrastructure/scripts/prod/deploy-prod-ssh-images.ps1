@@ -165,6 +165,7 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\loki"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\alloy"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\grafana"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\init-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\renew-letsencrypt.sh"
 
@@ -173,6 +174,12 @@ try {
         Copy-Item -LiteralPath $envFilePath -Destination $stageEnv -Force
         Set-EnvFileValue -Path $stageEnv -Name "APP_IMAGE" -Value $appImage
         Set-EnvFileValue -Path $stageEnv -Name "WEB_IMAGE" -Value $webImage
+        Set-EnvFileValue -Path $stageEnv -Name "OTZIV_APP_BASE_URL" -Value "https://o-ogo.ru"
+        Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_PUBLIC_URL" -Value "https://o-ogo.ru/keycloak"
+        Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ISSUER_URI" -Value "https://o-ogo.ru/keycloak/realms/otziv"
+        Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_JWK_SET_URI" -Value "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
+        Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ADMIN_SERVER_URL" -Value "http://keycloak:8080/keycloak"
+        Set-EnvFileValue -Path $stageEnv -Name "KC_PROXY_TRUSTED_ADDRESSES" -Value "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
     }
 
     if (Test-Path -LiteralPath $bundlePath) {
@@ -292,12 +299,21 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env WEB_IMAGE "`$web_image"
 fi
 
+set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env KEYCLOAK_PUBLIC_URL "https://o-ogo.ru/keycloak"
+set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
+set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
+set_env KEYCLOAK_ADMIN_SERVER_URL "http://keycloak:8080/keycloak"
+set_env KC_PROXY_TRUSTED_ADDRESSES "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
+
 ensure_nginx_certs
+chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 docker load -i "`$images_tar"
 rm -f "`$images_tar"
 
 compose down --remove-orphans || true
 compose up -d --remove-orphans
+infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"

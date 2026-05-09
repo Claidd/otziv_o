@@ -345,6 +345,11 @@ export interface ReviewUpdateRequest {
   url: string;
 }
 
+export interface OrderNotesUpdate {
+  orderComments: string;
+  companyComments: string;
+}
+
 export interface ManagerBoardQuery {
   section: ManagerSection;
   status?: string;
@@ -477,29 +482,29 @@ export class ManagerApi {
     return this.http.post<OrderDetailsPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews`, {});
   }
 
-  changeOrderReviewText(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
+  changeOrderReviewText(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/change-text`,
       {}
     );
   }
 
-  changeOrderReviewBot(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
+  changeOrderReviewBot(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`,
       {}
     );
   }
 
-  assignOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
+  assignOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`,
       {}
     );
   }
 
-  deactivateOrderReviewBot(orderId: number, reviewId: number, botId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
+  deactivateOrderReviewBot(orderId: number, reviewId: number, botId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/bots/${botId}/deactivate`,
       {}
     );
@@ -519,18 +524,18 @@ export class ManagerApi {
     );
   }
 
-  updateOrderReview(orderId: number, reviewId: number, request: ReviewUpdateRequest): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderReview(orderId: number, reviewId: number, request: ReviewUpdateRequest): Observable<OrderReviewItem> {
+    return this.http.put<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}`,
       request
     );
   }
 
-  uploadOrderReviewPhoto(orderId: number, reviewId: number, file: File): Observable<OrderDetailsPayload> {
+  uploadOrderReviewPhoto(orderId: number, reviewId: number, file: File): Observable<OrderReviewItem> {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.http.post<OrderDetailsPayload>(
+    return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/photo`,
       formData
     );
@@ -542,36 +547,36 @@ export class ManagerApi {
     );
   }
 
-  updateOrderReviewText(orderId: number, reviewId: number, text: string): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderReviewText(orderId: number, reviewId: number, text: string): Observable<OrderReviewItem> {
+    return this.http.put<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/text`,
       { text }
     );
   }
 
-  updateOrderReviewAnswer(orderId: number, reviewId: number, answer: string): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderReviewAnswer(orderId: number, reviewId: number, answer: string): Observable<OrderReviewItem> {
+    return this.http.put<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/answer`,
       { answer }
     );
   }
 
-  updateOrderReviewNote(orderId: number, reviewId: number, comment: string): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderReviewNote(orderId: number, reviewId: number, comment: string): Observable<OrderReviewItem> {
+    return this.http.put<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/note`,
       { comment }
     );
   }
 
-  updateOrderNote(orderId: number, orderComments: string): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderNote(orderId: number, orderComments: string): Observable<OrderNotesUpdate> {
+    return this.http.put<OrderNotesUpdate>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/note`,
       { orderComments }
     );
   }
 
-  updateOrderCompanyNote(orderId: number, companyComments: string): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
+  updateOrderCompanyNote(orderId: number, companyComments: string): Observable<OrderNotesUpdate> {
+    return this.http.put<OrderNotesUpdate>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/company-note`,
       { companyComments }
     );

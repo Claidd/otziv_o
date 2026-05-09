@@ -5,8 +5,10 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.OrderDetailsResponse;
+import com.hunt.otziv.manager.dto.api.OrderNotesResponse;
 import com.hunt.otziv.manager.dto.api.OrderNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewAnswerUpdateRequest;
+import com.hunt.otziv.manager.dto.api.ReviewDetailsResponse;
 import com.hunt.otziv.manager.dto.api.ReviewEditorUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest;
@@ -77,21 +79,22 @@ public class ApiManagerReviewController {
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/change-text")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public OrderDetailsResponse changeOrderReviewText(
+    public ReviewDetailsResponse changeOrderReviewText(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        requireReviewForOrder(orderId, reviewId);
         if (!autoTextService.changeReviewText(reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не изменен");
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderReview(
+    public ReviewDetailsResponse updateOrderReview(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @RequestBody ReviewEditorUpdateRequest request,
@@ -132,12 +135,12 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не сохранен: " + exception.getMessage(), exception);
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/photo")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse uploadOrderReviewPhoto(
+    public ReviewDetailsResponse uploadOrderReviewPhoto(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @RequestParam("file") MultipartFile file,
@@ -151,7 +154,7 @@ public class ApiManagerReviewController {
         String newUrl = s3UploadService.uploadFile(file, "reviews", current.getUrl(), reviewId);
         reviewService.updateReviewPhoto(reviewId, newUrl);
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @DeleteMapping("/orders/{orderId}/reviews/{reviewId}")
@@ -171,7 +174,7 @@ public class ApiManagerReviewController {
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/text")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderReviewText(
+    public ReviewDetailsResponse updateOrderReviewText(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @RequestBody ReviewTextUpdateRequest request,
@@ -185,12 +188,12 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/answer")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderReviewAnswer(
+    public ReviewDetailsResponse updateOrderReviewAnswer(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @RequestBody ReviewAnswerUpdateRequest request,
@@ -204,12 +207,12 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PutMapping("/orders/{orderId}/reviews/{reviewId}/note")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderReviewNote(
+    public ReviewDetailsResponse updateOrderReviewNote(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @RequestBody ReviewNoteUpdateRequest request,
@@ -223,12 +226,12 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PutMapping("/orders/{orderId}/note")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderNote(
+    public OrderNotesResponse updateOrderNote(
             @PathVariable Long orderId,
             @RequestBody OrderNoteUpdateRequest request,
             Authentication authentication
@@ -241,12 +244,15 @@ public class ApiManagerReviewController {
         order.setZametka(request.orderComments());
         orderService.save(order);
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return new OrderNotesResponse(
+                normalize(order.getZametka()),
+                order.getCompany() != null ? normalize(order.getCompany().getCommentsCompany()) : ""
+        );
     }
 
     @PutMapping("/orders/{orderId}/company-note")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse updateOrderCompanyNote(
+    public OrderNotesResponse updateOrderCompanyNote(
             @PathVariable Long orderId,
             @RequestBody CompanyNoteUpdateRequest request,
             Authentication authentication
@@ -264,23 +270,24 @@ public class ApiManagerReviewController {
         company.setCommentsCompany(request.companyComments());
         companyService.save(company);
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return new OrderNotesResponse(normalize(order.getZametka()), normalize(company.getCommentsCompany()));
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/change-bot")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse changeOrderReviewBot(
+    public ReviewDetailsResponse changeOrderReviewBot(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        requireReviewForOrder(orderId, reviewId);
         reviewService.changeBot(reviewId);
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/new-account")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse assignOrderReviewNewAccount(
+    public ReviewDetailsResponse assignOrderReviewNewAccount(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             Authentication authentication
@@ -293,19 +300,20 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Новый аккаунт не назначен: " + exception.getMessage(), exception);
         }
 
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/bots/{botId}/deactivate")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public OrderDetailsResponse deactivateOrderReviewBot(
+    public ReviewDetailsResponse deactivateOrderReviewBot(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @PathVariable Long botId,
             Authentication authentication
     ) {
+        requireReviewForOrder(orderId, reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId);
-        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/publish")

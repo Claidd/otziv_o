@@ -8,6 +8,7 @@ import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.model.Quadruple;
 import com.hunt.otziv.config.cache.CacheConfig;
+import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -59,6 +60,7 @@ public class PersonalServiceImpl implements PersonalService {
     private final OrderService orderService;
     private final CompanyService companyService;
     private final ImageService imageService;
+    private final PerformanceMetrics performanceMetrics;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_OWNER = "ROLE_OWNER";
@@ -82,22 +84,40 @@ public class PersonalServiceImpl implements PersonalService {
     @Cacheable(cacheNames = CacheConfig.CABINET_STATS, key = "#p0.toString() + ':' + #p1.id + ':' + #p2", sync = true)
     public StatDTO getStats(LocalDate localDate, User user, String role) {
 //        User user = userService.findByUserName(principal.getName()).orElseThrow();
-        User user1 = userService.findByUserName(user.getUsername()).orElseThrow();
+        User user1 = recordAnalyseSegment("user", () -> userService.findByUserName(user.getUsername()).orElseThrow());
         Set<Manager> managerList = user1.getManagers();
 //        System.out.println(managerList);
 
         //      СТАТИСТИКА берем все чеки и зп
-        List<PaymentCheckStatView> pcs = getPaymentCheckStats(localDate, role, managerList);
-        List<ZpStatView> zps = getZarplataStats(localDate, role, managerList);
+        List<PaymentCheckStatView> pcs = recordAnalyseSegment(
+                "payment_check",
+                () -> getPaymentCheckStats(localDate, role, managerList)
+        );
+        List<ZpStatView> zps = recordAnalyseSegment(
+                "zp",
+                () -> getZarplataStats(localDate, role, managerList)
+        );
         List<PaymentCheckStatView> pcsHistory = pcs;
         List<ZpStatView> zpsHistory = zps;
 
 
         //      СТАТИСТИКА новых лидов и тех, что поступили в работу
-        List<Long> newleadList = getNewLeadList(role, localDate, managerList); // берем всех лидов за текущий месяц
-        List<Long> inWorkleadList = getInWorkLeadList(role, localDate, managerList);// берем всех лидов за текущий месяц + статус
-        List<Long> newleadList2Month = getNewLeadList(role, localDate.minusMonths(1), managerList);// берем всех лидов за текущий месяц
-        List<Long> inWorkleadList2Month = getInWorkLeadList(role, localDate.minusMonths(1), managerList); // берем всех лидов за текущий месяц + статус;
+        List<Long> newleadList = recordAnalyseSegment(
+                "leads_new_current",
+                () -> getNewLeadList(role, localDate, managerList)
+        ); // берем всех лидов за текущий месяц
+        List<Long> inWorkleadList = recordAnalyseSegment(
+                "leads_in_work_current",
+                () -> getInWorkLeadList(role, localDate, managerList)
+        );// берем всех лидов за текущий месяц + статус
+        List<Long> newleadList2Month = recordAnalyseSegment(
+                "leads_new_previous_month",
+                () -> getNewLeadList(role, localDate.minusMonths(1), managerList)
+        );// берем всех лидов за текущий месяц
+        List<Long> inWorkleadList2Month = recordAnalyseSegment(
+                "leads_in_work_previous_month",
+                () -> getInWorkLeadList(role, localDate.minusMonths(1), managerList)
+        ); // берем всех лидов за текущий месяц + статус;
 
         //        выбираем даты месяца
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
@@ -939,64 +959,85 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Quadruple<String, Long, Long, Long>> zps = zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Quadruple<String, Long, Long, Long>> zps = recordScoreSegment(
+                "zp",
+                () -> zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth)
+        );
         // Получаем данные о платежах
-        Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<Long, Long>> pcs = recordScoreSegment(
+                "payment_check",
+                () -> paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth)
+        );
         // Получаем данные о новых компаниях
-        Map<String, Long> newCompanies = companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Long> newCompanies = recordScoreSegment(
+                "companies",
+                () -> companyService.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth)
+        );
         // Получаем данные о новых заказах
-        Map<String, Pair<Long, Long>> newOrders = orderService.getNewOrderAll("Новый", "Коррекция");
+        Map<String, Pair<Long, Long>> newOrders = recordScoreSegment(
+                "orders",
+                () -> orderService.getNewOrderAll("Новый", "Коррекция")
+        );
         // Получаем данные о заказах в публикации
-        Map<String, Pair<Long, Long>> inPublishAndVigul = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+        Map<String, Pair<Long, Long>> inPublishAndVigul = recordScoreSegment(
+                "reviews",
+                () -> reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate)
+        );
         // Получаем данные о заказах
 //        Map<String, Long> orders = orderService.getAllOrdersToMonth("Оплачено", firstDayOfMonth, lastDayOfMonth);
         // Получаем данные об отзывах
 //        Map<String, Long> reviews = reviewService.getAllReviewsToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о аватарках
-        Map<String, Pair<Long, Long>> imagesIds = imageService.getAllImages();
+        Map<String, Pair<Long, Long>> imagesIds = recordScoreSegment("images", imageService::getAllImages);
         // Получаем данные о лидах
-        Map<String, Pair<Long, Long>> leadsNewAndInWork = leadService.getAllLeadsToMonth("В работе", firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<Long, Long>> leadsNewAndInWork = recordScoreSegment(
+                "leads",
+                () -> leadService.getAllLeadsToMonth("В работе", firstDayOfMonth, lastDayOfMonth)
+        );
+        Long zpTotal = zps.values().stream()
+                .mapToLong(Quadruple::getSecond)
+                .sum();
 
-        // Создаем карту для результатов
-        List<UserData> result = new ArrayList<>();
-
-        // Параллельная обработка данных и сохранение в карту
-        zps.entrySet().parallelStream().forEach(entry -> {
+        return recordScoreSegment("dto", () -> zps.entrySet().stream().map(entry -> {
             String fio = entry.getKey();
             Quadruple<String, Long, Long, Long> pair = entry.getValue();
 
             Long totalSum = pcs.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
-            Long zpTotal = zps.values().stream()
-                    .mapToLong(Quadruple::getSecond) // Извлекаем сумму зарплаты
-                    .sum();
             Long newCompanyCount = newCompanies.getOrDefault(fio, 0L);
-            Long newOrderCount = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
-            Long correctOrders = newOrders.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
-            Long inVigul = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getFirst();
-            Long inPublishCount = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L)).getSecond();
-            Long imageId = imagesIds.getOrDefault(fio,  Pair.of(1L, 0L)).getFirst();
-            Long userId = imagesIds.getOrDefault(fio,  Pair.of(1L, 0L)).getSecond();
+            Pair<Long, Long> orderStats = newOrders.getOrDefault(fio, Pair.of(0L, 0L));
+            Long newOrderCount = orderStats.getFirst();
+            Long correctOrders = orderStats.getSecond();
+            Pair<Long, Long> reviewStats = inPublishAndVigul.getOrDefault(fio, Pair.of(0L, 0L));
+            Long inVigul = reviewStats.getFirst();
+            Long inPublishCount = reviewStats.getSecond();
+            Pair<Long, Long> imageStats = imagesIds.getOrDefault(fio, Pair.of(1L, 0L));
+            Long imageId = imageStats.getFirst();
+            Long userId = imageStats.getSecond();
 //            Long ordersCount = orders.getOrDefault(fio, 0L);
             Long ordersCount = pair.getThird();
             Long reviewsCount = pair.getFourth();
 //            Long reviewsCount = reviews.getOrDefault(fio, 0L);
-            Long leadsNew = leadsNewAndInWork.getOrDefault(fio,  Pair.of(0L, 0L)).getFirst();
-            Long leadsInWork = leadsNewAndInWork.getOrDefault(fio,  Pair.of(0L, 0L)).getSecond();
+            Pair<Long, Long> leadStats = leadsNewAndInWork.getOrDefault(fio, Pair.of(0L, 0L));
+            Long leadsNew = leadStats.getFirst();
+            Long leadsInWork = leadStats.getSecond();
             Long percentInWork = 0L;
-            if (leadsNew != 0 || leadsInWork != 0){
+            if (leadsNew != 0) {
                 percentInWork = (leadsInWork * 100) / leadsNew;
-            };
+            }
             String role = pair.getFirst();
 
-            // Сохраняем все данные в карту
-            result.add(new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, newOrderCount, correctOrders,
+            return new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, newOrderCount, correctOrders,
                     inVigul, inPublishCount, imageId, userId, ordersCount, reviewsCount, leadsNew, leadsInWork, percentInWork,
-                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
-        });
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+        }).toList());
+    }
 
-        // Возвращаем результат
-//        System.out.println(displayResult(result));
-        return result;
+    private <T> T recordScoreSegment(String segment, Supplier<T> supplier) {
+        return performanceMetrics.recordSegment("cabinet.score", segment, supplier);
+    }
+
+    private <T> T recordAnalyseSegment(String segment, Supplier<T> supplier) {
+        return performanceMetrics.recordSegment("cabinet.analyse", segment, supplier);
     }
 
 

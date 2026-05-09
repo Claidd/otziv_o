@@ -9,6 +9,11 @@ import type {
 } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
 import {
+  readSessionDraft,
+  removeSessionDraft,
+  writeSessionDraft
+} from '../../shared/session-draft-storage';
+import {
   managerCompanyEditDraft,
   managerCompanyFilialDeletedLabel,
   managerCompanyFilialDeleteConfirm,
@@ -75,6 +80,7 @@ export class ManagerBoardCompanyFacade {
       return;
     }
 
+    this.removeCompanyEditSessionDraft();
     this.editCompany.set(null);
     this.editDraft.set(null);
     this.editError.set(null);
@@ -96,6 +102,7 @@ export class ManagerBoardCompanyFacade {
       next: (subCategories) => {
         this.editCompany.update((company) => company ? { ...company, subCategories } : company);
         this.editDraft.update((draft) => draft ? { ...draft, subCategoryId: subCategories[0]?.id ?? null } : draft);
+        this.writeCompanyEditSessionDraft();
       },
       error: (err) => {
         const message = this.deps.errorMessage(err, 'Не удалось загрузить подкатегории');
@@ -235,11 +242,46 @@ export class ManagerBoardCompanyFacade {
 
   private setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
     this.editDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+    this.writeCompanyEditSessionDraft();
   }
 
   private applyCompanyEditPayload(payload: CompanyEditPayload): void {
+    const sourceDraft = managerCompanyEditDraft(payload);
+    const storedDraft = readSessionDraft<CompanyUpdateRequest>(this.companyEditSessionDraftKey(payload.id));
     this.editCompany.set(payload);
-    this.editDraft.set(managerCompanyEditDraft(payload));
+    this.editDraft.set(storedDraft ?? sourceDraft);
+    this.writeCompanyEditSessionDraft();
+  }
+
+  private writeCompanyEditSessionDraft(): void {
+    const company = this.editCompany();
+    const draft = this.editDraft();
+    if (!company || !draft) {
+      return;
+    }
+
+    const key = this.companyEditSessionDraftKey(company.id);
+    if (!this.isCompanyEditDraftChanged(company, draft)) {
+      removeSessionDraft(key);
+      return;
+    }
+
+    writeSessionDraft(key, draft);
+  }
+
+  private removeCompanyEditSessionDraft(companyId = this.editCompany()?.id): void {
+    if (companyId) {
+      removeSessionDraft(this.companyEditSessionDraftKey(companyId));
+    }
+  }
+
+  private companyEditSessionDraftKey(companyId: number): string {
+    return `manager-company-edit:${companyId}`;
+  }
+
+  private isCompanyEditDraftChanged(company: CompanyEditPayload, draft: CompanyUpdateRequest): boolean {
+    const source = managerCompanyEditDraft(company);
+    return (Object.keys(source) as (keyof CompanyUpdateRequest)[]).some((field) => source[field] !== draft[field]);
   }
 
   private applyCompanyCardPatch(payload: CompanyEditPayload): void {

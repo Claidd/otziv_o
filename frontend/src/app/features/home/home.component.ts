@@ -294,7 +294,7 @@ export class HomeComponent {
 
   selectCabinetDate(date: string): void {
     this.cabinetDate.set(date);
-    this.loadCabinet(true);
+    this.loadCabinet();
   }
 
   hasActionLink(action: DashboardAction): boolean {

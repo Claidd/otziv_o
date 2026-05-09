@@ -148,6 +148,85 @@
   position: relative;
 }
 
+.review-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  font-family: var(--otziv-font-family);
+}
+
+.review-navigation label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+.review-navigation input {
+  width: 4.8rem;
+  min-height: 2.15rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.65rem;
+  background: var(--otziv-field-background);
+  color: var(--otziv-dark);
+  font: inherit;
+  font-weight: 800;
+  text-align: center;
+}
+
+.review-navigation button {
+  display: inline-grid;
+  width: 2.15rem;
+  min-height: 2.15rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  padding: 0;
+}
+
+.review-navigation > span {
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.review-fast-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+  font-family: var(--otziv-font-family);
+}
+
+.review-fast-select label {
+  display: inline-flex;
+  min-width: min(100%, 12rem);
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+.review-fast-select select {
+  min-width: 0;
+  min-height: 2.15rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.65rem;
+  background: var(--otziv-field-background);
+  color: var(--otziv-dark);
+  font: inherit;
+  font-weight: 800;
+}
+
+.review-card.active {
+  border-color: rgba(244, 197, 66, 0.72);
+  box-shadow: 0 0 0 0.14rem rgba(244, 197, 66, 0.18);
+}
+
 .mobile-swipe-hint,
 .review-carousel-dots {
   display: none;
@@ -911,14 +990,19 @@
     gap: 0.3rem;
   }
 
-  .review-carousel-dots span {
+  .review-carousel-dots span,
+  .review-carousel-dots button {
     width: 0.38rem;
     height: 0.38rem;
+    border: 0;
     border-radius: 999px;
+    padding: 0;
     background: #ccd;
+    cursor: pointer;
   }
 
-  .review-carousel-dots span.active {
+  .review-carousel-dots span.active,
+  .review-carousel-dots button.active {
     width: 1.05rem;
     background: var(--otziv-primary);
   }

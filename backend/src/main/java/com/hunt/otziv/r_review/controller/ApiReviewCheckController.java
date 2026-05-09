@@ -69,6 +69,52 @@ public class ApiReviewCheckController {
         return buildResponse(orderDetailId, authentication);
     }
 
+    @PutMapping("/{orderDetailId}/reviews/{reviewId}/text")
+    public ReviewCheckReviewResponse updateReviewText(
+            @PathVariable UUID orderDetailId,
+            @PathVariable Long reviewId,
+            @RequestBody ReviewCheckReviewTextUpdateRequest request,
+            Authentication authentication
+    ) {
+        requireCanSave(authentication);
+        if (request == null || isBlank(request.text())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
+        }
+
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        Order order = requireOrder(orderDetails);
+        requireReviewInDetails(orderDetails, reviewId);
+
+        if (!reviewService.updateReviewText(order.getId(), reviewId, request.text())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
+        }
+
+        return buildReviewResponse(orderDetailId, reviewId, authentication);
+    }
+
+    @PutMapping("/{orderDetailId}/reviews/{reviewId}/answer")
+    public ReviewCheckReviewResponse updateReviewAnswer(
+            @PathVariable UUID orderDetailId,
+            @PathVariable Long reviewId,
+            @RequestBody ReviewCheckReviewAnswerUpdateRequest request,
+            Authentication authentication
+    ) {
+        requireCanSave(authentication);
+        if (request == null || request.answer() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Замечание к отзыву не указано");
+        }
+
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        Order order = requireOrder(orderDetails);
+        requireReviewInDetails(orderDetails, reviewId);
+
+        if (!reviewService.updateReviewAnswer(order.getId(), reviewId, request.answer())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
+        }
+
+        return buildReviewResponse(orderDetailId, reviewId, authentication);
+    }
+
     @PostMapping("/{orderDetailId}/approve")
     public ReviewCheckResponse approveReviews(
             @PathVariable UUID orderDetailId,
@@ -163,7 +209,7 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/reviews/{reviewId}/note")
-    public ReviewCheckResponse updateReviewNote(
+    public ReviewCheckReviewResponse updateReviewNote(
             @PathVariable UUID orderDetailId,
             @PathVariable Long reviewId,
             @RequestBody ReviewCheckReviewNoteUpdateRequest request,
@@ -176,21 +222,17 @@ public class ApiReviewCheckController {
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
-        boolean belongsToOrderDetails = safeReviews(orderDetails).stream()
-                .anyMatch(review -> Objects.equals(review.getId(), reviewId));
-        if (!belongsToOrderDetails) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этой проверке");
-        }
+        requireReviewInDetails(orderDetails, reviewId);
 
         if (!reviewService.updateReviewNote(order.getId(), reviewId, request.comment())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 
-        return buildResponse(orderDetailId, authentication);
+        return buildReviewResponse(orderDetailId, reviewId, authentication);
     }
 
     @PutMapping("/{orderDetailId}/order-note")
-    public ReviewCheckResponse updateOrderNote(
+    public ReviewCheckNotesResponse updateOrderNote(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckOrderNoteUpdateRequest request,
             Authentication authentication
@@ -205,11 +247,14 @@ public class ApiReviewCheckController {
         order.setZametka(request.orderComments());
         orderService.save(order);
 
-        return buildResponse(orderDetailId, authentication);
+        return new ReviewCheckNotesResponse(
+                safe(order.getZametka()),
+                order.getCompany() != null ? safe(order.getCompany().getCommentsCompany()) : ""
+        );
     }
 
     @PutMapping("/{orderDetailId}/company-note")
-    public ReviewCheckResponse updateCompanyNote(
+    public ReviewCheckNotesResponse updateCompanyNote(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckCompanyNoteUpdateRequest request,
             Authentication authentication
@@ -220,7 +265,8 @@ public class ApiReviewCheckController {
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
-        Company company = requireOrder(orderDetails).getCompany();
+        Order order = requireOrder(orderDetails);
+        Company company = order.getCompany();
         if (company == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания заказа не найдена");
         }
@@ -228,7 +274,7 @@ public class ApiReviewCheckController {
         company.setCommentsCompany(request.companyComments());
         companyService.save(company);
 
-        return buildResponse(orderDetailId, authentication);
+        return new ReviewCheckNotesResponse(safe(order.getZametka()), safe(company.getCommentsCompany()));
     }
 
     private void updateReviews(OrderDetails orderDetails, ReviewCheckUpdateRequest request) {
@@ -312,6 +358,13 @@ public class ApiReviewCheckController {
         );
     }
 
+    private ReviewCheckReviewResponse buildReviewResponse(UUID orderDetailId, Long reviewId, Authentication authentication) {
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        Order order = requireOrder(orderDetails);
+        Review review = requireReviewInDetails(orderDetails, reviewId);
+        return toReviewResponse(review, orderDetails, order, permissions(authentication));
+    }
+
     private OrderDetails reviewCheckDetails(UUID orderDetailId) {
         return orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId);
     }
@@ -369,6 +422,19 @@ public class ApiReviewCheckController {
         if (!permissions(authentication).canEditNotes()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для редактирования заметок");
         }
+    }
+
+    private void requireCanSave(Authentication authentication) {
+        if (!permissions(authentication).canSave()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для сохранения отзывов");
+        }
+    }
+
+    private Review requireReviewInDetails(OrderDetails orderDetails, Long reviewId) {
+        return safeReviews(orderDetails).stream()
+                .filter(review -> Objects.equals(review.getId(), reviewId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этой проверке"));
     }
 
     private List<Review> safeReviews(OrderDetails orderDetails) {
@@ -542,9 +608,21 @@ public class ApiReviewCheckController {
     public record ReviewCheckReviewNoteUpdateRequest(String comment) {
     }
 
+    public record ReviewCheckReviewTextUpdateRequest(String text) {
+    }
+
+    public record ReviewCheckReviewAnswerUpdateRequest(String answer) {
+    }
+
     public record ReviewCheckOrderNoteUpdateRequest(String orderComments) {
     }
 
     public record ReviewCheckCompanyNoteUpdateRequest(String companyComments) {
+    }
+
+    public record ReviewCheckNotesResponse(
+            String orderComments,
+            String companyComments
+    ) {
     }
 }

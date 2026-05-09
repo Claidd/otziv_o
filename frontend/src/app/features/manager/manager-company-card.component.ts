@@ -28,6 +28,7 @@ export class ManagerCompanyCardComponent {
   @Output() readonly orderCreateOpened = new EventEmitter<void>();
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
   @Output() readonly ordersOpened = new EventEmitter<void>();
+  @Output() readonly allOrdersOpened = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
 
   companyChatUrl(): string {

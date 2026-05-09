@@ -21,6 +21,7 @@ public class BusinessHealthMetrics {
 
     private static final String STATUS_ALL = "Все";
     private static final String BOT_READY_STATUS = "Новый";
+    private static final LocalDate FAR_FUTURE_REVIEW_DATE = LocalDate.of(2030, 1, 1);
     private static final Duration BUSINESS_METRICS_CACHE_TTL = Duration.ofHours(3);
     private static final List<String> ORDER_STATUSES = List.of(
             "Новый",
@@ -59,6 +60,8 @@ public class BusinessHealthMetrics {
         registerGauge("otziv.business.reviews", "Review operational count by state", "state", "all", reviewRepository::count);
         registerGauge("otziv.business.reviews", "Review operational count by state", "state", "unpublished", reviewRepository::countUnpublished);
         registerGauge("otziv.business.reviews", "Review operational count by state", "state", "unpublished_not_archive", reviewRepository::countUnpublishedNotArchive);
+        registerGauge("otziv.business.reviews", "Review operational count by state", "state", "unpublished_after_2030",
+                () -> reviewRepository.countUnpublishedScheduledFrom(FAR_FUTURE_REVIEW_DATE));
         registerGauge("otziv.business.reviews", "Review operational count by state", "state", "due_to_publish",
                 () -> reviewRepository.countDueToPublish(LocalDate.now()));
         registerGauge("otziv.business.reviews", "Review operational count by state", "state", "due_to_walk",

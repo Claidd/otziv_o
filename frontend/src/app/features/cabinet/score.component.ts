@@ -59,7 +59,7 @@ export class ScoreComponent {
 
   selectDate(date: string): void {
     this.selectedDate.set(date);
-    this.load(true);
+    this.load();
   }
 
   users(section: ScoreSection): ScoreUser[] {
