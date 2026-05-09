@@ -103,8 +103,15 @@ function Invoke-DockerComposeUp {
         [Parameter(Mandatory = $true)][string[]]$UpArguments
     )
 
-    $output = & docker @($ComposeArguments + $UpArguments) 2>&1
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & docker @($ComposeArguments + $UpArguments) 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
     if (-not [string]::IsNullOrWhiteSpace($text)) {
         Write-Host $text

@@ -287,6 +287,45 @@ select {
   display: none;
 }
 
+.worker-filter-card {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(103, 116, 131, 0.16);
+  border-radius: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.worker-filter-card span {
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.worker-filter-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-family: var(--otziv-font-family);
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-filter-card select {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.15rem;
+  padding: 0 0.55rem;
+}
+
 .worker-stats button.stat-card.stat-card,
 .mobile-worker-stats button.stat-card.stat-card {
   display: flex;
@@ -635,6 +674,10 @@ select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
     margin-top: 1rem;
+  }
+
+  .mobile-worker-filter {
+    grid-column: 1 / -1;
   }
 
   .mobile-personal-reminders {

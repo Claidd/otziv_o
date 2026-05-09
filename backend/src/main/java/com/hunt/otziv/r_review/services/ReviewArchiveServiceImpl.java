@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 @Service
 @Slf4j
@@ -22,6 +22,10 @@ public class ReviewArchiveServiceImpl implements ReviewArchiveService{
     public void saveNewReviewArchive(Long reviewId){
         Review review = reviewService.getReviewById(reviewId);
         if (review != null) {
+            if (isBlankOrPlaceholder(review.getText())) {
+                log.info("4. Пустой или шаблонный отзыв в архив не сохранен");
+                return;
+            }
             if (!reviewArchiveRepository.existsByText(review.getText())) {
                 ReviewArchive reviewArchive = new ReviewArchive();
                 reviewArchive.setText(review.getText());

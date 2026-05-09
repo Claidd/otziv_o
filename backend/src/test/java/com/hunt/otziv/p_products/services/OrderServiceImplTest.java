@@ -120,6 +120,7 @@ class OrderServiceImplTest {
 
         assertTrue(reviewToPublish.isPublish());
         verify(reviewRepository).save(reviewToPublish);
+        verify(reviewArchiveService).saveNewReviewArchive(2L);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);

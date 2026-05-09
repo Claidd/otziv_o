@@ -177,6 +177,10 @@ public class OrderBoardQueryService {
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
         Worker worker = resolveWorkerFromPrincipal(principal);
+        return getAllOrderDTOAndKeywordByWorkerAll(worker, keyword, pageNumber, pageSize);
+    }
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Worker worker, String keyword, int pageNumber, int pageSize) {
         if (worker == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
@@ -195,11 +199,22 @@ public class OrderBoardQueryService {
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize) {
         Worker worker = resolveWorkerFromPrincipal(principal);
+        return getAllOrderDTOAndKeywordByWorker(worker, keyword, status, pageNumber, pageSize, "desc");
+    }
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(
+            Worker worker,
+            String keyword,
+            String status,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
         if (worker == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
-        Pageable pageable = orderPageable(pageNumber, pageSize, "desc");
+        Pageable pageable = orderPageable(pageNumber, pageSize, sortDirection);
         Page<Long> orderIds;
 
         if (hasText(keyword)) {

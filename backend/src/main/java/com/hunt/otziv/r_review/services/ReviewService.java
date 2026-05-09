@@ -32,6 +32,8 @@ public interface ReviewService {
 
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
 
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(Worker worker, LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword);
+
     Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize);
 
     Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
@@ -55,6 +57,8 @@ public interface ReviewService {
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
 
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(Worker worker, String status, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     Page<ReviewDTOOne> getAllReviewDTOByManagerByOrderStatus(String status, java.security.Principal principal, int pageNumber, int pageSize);
 
@@ -137,6 +141,8 @@ public interface ReviewService {
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection);
 
     Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(LocalDate localDate, java.security.Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword);
+
+    Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(Worker worker, LocalDate localDate, int pageNumber, int pageSize, String sortDirection, String keyword);
 
     void changeNagulReview(Long reviewId);
 

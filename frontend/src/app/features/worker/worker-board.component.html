@@ -178,6 +178,19 @@
     </footer>
 
     <section class="mobile-lead-stats mobile-worker-stats" aria-label="Статистика специалиста">
+      @if (workerFilterAvailable()) {
+        <label class="worker-filter-card mobile-worker-filter">
+          <span>Работник</span>
+          <strong>{{ selectedWorkerLabel() }}</strong>
+          <select [ngModel]="selectedWorkerId()" (ngModelChange)="changeWorkerFilter($event)" aria-label="Фильтр по работнику">
+            <option [ngValue]="null">Все работники</option>
+            @for (worker of workerOptions(); track trackWorkerOption($index, worker)) {
+              <option [ngValue]="worker.id">{{ worker.label }}</option>
+            }
+          </select>
+        </label>
+      }
+
       @for (metric of metrics(); track trackMetric($index, metric)) {
         <button
           type="button"
@@ -209,6 +222,19 @@
 
   <section admin-right-content class="lead-stats worker-stats">
     <app-personal-reminders mode="alert" />
+
+    @if (workerFilterAvailable()) {
+      <label class="worker-filter-card">
+        <span>Работник</span>
+        <strong>{{ selectedWorkerLabel() }}</strong>
+        <select [ngModel]="selectedWorkerId()" (ngModelChange)="changeWorkerFilter($event)" aria-label="Фильтр по работнику">
+          <option [ngValue]="null">Все работники</option>
+          @for (worker of workerOptions(); track trackWorkerOption($index, worker)) {
+            <option [ngValue]="worker.id">{{ worker.label }}</option>
+          }
+        </select>
+      </label>
+    }
 
     @for (metric of metrics(); track trackMetric($index, metric)) {
       <button

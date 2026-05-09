@@ -8,20 +8,25 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeFilialTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeString;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 @Service
 @Slf4j
@@ -47,6 +52,7 @@ public class OrderStatusTransitionService {
     private final OrderCompanyStatusService orderCompanyStatusService;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderBotLifecycleService orderBotLifecycleService;
+    private final ReviewArchiveService reviewArchiveService;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -69,6 +75,9 @@ public class OrderStatusTransitionService {
                 }
             };
 
+        } catch (ResponseStatusException e) {
+            log.warn("Смена статуса заказа отклонена: {}", e.getReason());
+            throw e;
         } catch (Exception e) {
             log.error("При смене статуса произошли какие-то проблемы", e);
             throw e;
@@ -129,6 +138,10 @@ public class OrderStatusTransitionService {
     private boolean handleArchiveStatus(Order order) {
         log.info("=== АРХИВАЦИЯ ЗАКАЗА ID: {} ===", order.getId());
 
+        validateReviewsReadyForArchive(order);
+
+        saveReviewsToArchive(order);
+
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_ARCHIVE);
 
@@ -138,6 +151,44 @@ public class OrderStatusTransitionService {
 
         log.info("=== ЗАКАЗ ID {} УСПЕШНО АРХИВИРОВАН ===", order.getId());
         return true;
+    }
+
+    private void saveReviewsToArchive(Order order) {
+        List<Review> reviews = getAllReviews(order);
+        if (reviews.isEmpty()) {
+            return;
+        }
+
+        for (Review review : reviews) {
+            if (review.getId() != null) {
+                reviewArchiveService.saveNewReviewArchive(review.getId());
+            }
+        }
+    }
+
+    private void validateReviewsReadyForArchive(Order order) {
+        List<Review> invalidReviews = getAllReviews(order).stream()
+                .filter(this::hasInvalidArchiveText)
+                .toList();
+
+        if (invalidReviews.isEmpty()) {
+            return;
+        }
+
+        String reviewIds = invalidReviews.stream()
+                .map(review -> review.getId() == null ? "без id" : review.getId().toString())
+                .collect(Collectors.joining(", "));
+        log.warn("Архивация заказа ID {} отменена: пустые или шаблонные тексты у отзывов {}",
+                order.getId(), reviewIds);
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Нельзя отправить заказ в архив: заполните текст всех отзывов"
+        );
+    }
+
+    private boolean hasInvalidArchiveText(Review review) {
+        return isBlankOrPlaceholder(review.getText());
     }
 
     private boolean handleToCheckStatus(Order order) {

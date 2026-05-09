@@ -424,6 +424,8 @@ public class OrderServiceImpl implements OrderService {
             review.setPublish(true);
             reviewRepository.save(review);
             log.info("Сохранили отзыв, публикация установлена в true");
+            reviewArchiveService.saveNewReviewArchive(review.getId());
+            log.info("Сохранили опубликованный отзыв в архив текстов");
 
             int actualPublished = countPublishedReviews(order);
             log.info("Фактическое количество опубликованных отзывов: {}", actualPublished);

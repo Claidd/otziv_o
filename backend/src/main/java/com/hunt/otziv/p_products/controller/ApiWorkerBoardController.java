@@ -15,6 +15,7 @@ import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
+import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -105,6 +106,7 @@ public class ApiWorkerBoardController {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final OrderService orderService;
+    private final OrderBoardQueryService orderBoardQueryService;
     private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
@@ -128,6 +130,7 @@ public class ApiWorkerBoardController {
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "desc") String sortDirection,
+            @RequestParam(required = false) Long workerId,
             Principal principal,
             Authentication authentication
     ) {
@@ -136,9 +139,11 @@ public class ApiWorkerBoardController {
             String message = "";
             boolean warning = false;
             List<WorkerMetricResponse> metrics = null;
+            WorkerSelection workerSelection = resolveWorkerSelection(principal, authentication, workerId);
+            Worker selectedWorker = workerSelection.selectedWorker();
 
             if (isCurrentSectionRequest(section)) {
-                metrics = buildMetrics(principal, authentication);
+                metrics = buildMetrics(principal, authentication, selectedWorker);
                 normalizedSection = currentWorkSection(metrics);
             } else {
                 WorkerFlowRedirect redirect = workerFlowRedirect(principal, authentication, normalizedSection);
@@ -155,11 +160,11 @@ public class ApiWorkerBoardController {
             String trimmedKeyword = keyword == null ? "" : keyword.trim();
 
             Page<OrderDTOList> orders = isOrderSection(normalizedSection)
-                    ? loadOrders(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+                    ? loadOrders(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
                     : emptyPage(safePageNumber, safePageSize);
 
             PageResponse<WorkerReviewResponse> reviews = isReviewSection(normalizedSection)
-                    ? loadReviewResponses(principal, authentication, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
+                    ? loadReviewResponses(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
                     : emptyReviewResponsePage(safePageNumber, safePageSize);
 
             return new WorkerBoardResponse(
@@ -168,9 +173,12 @@ public class ApiWorkerBoardController {
                     toPageResponse(orders),
                     reviews,
                     List.of(),
-                    metrics != null ? metrics : buildMetrics(principal, authentication),
+                    metrics != null ? metrics : buildMetrics(principal, authentication, selectedWorker),
                     promoTextService.getAllPromoTexts(),
                     buildPermissions(authentication),
+                    workerSelection.options(),
+                    workerId(selectedWorker),
+                    workerSelection.available(),
                     message,
                     warning
             );
@@ -457,6 +465,7 @@ public class ApiWorkerBoardController {
     private Page<OrderDTOList> loadOrders(
             Principal principal,
             Authentication authentication,
+            Worker selectedWorker,
             String section,
             String keyword,
             int pageNumber,
@@ -464,6 +473,12 @@ public class ApiWorkerBoardController {
             String sortDirection
     ) {
         String status = SECTION_CORRECT.equals(section) ? "Коррекция" : SECTION_NEW.equals(section) ? "Новый" : "Все";
+
+        if (selectedWorker != null) {
+            return "Все".equals(status)
+                    ? orderBoardQueryService.getAllOrderDTOAndKeywordByWorkerAll(selectedWorker, keyword, pageNumber, pageSize)
+                    : orderBoardQueryService.getAllOrderDTOAndKeywordByWorker(selectedWorker, keyword, status, pageNumber, pageSize, sortDirection);
+        }
 
         if (hasRole(authentication, "ADMIN")) {
             return "Все".equals(status)
@@ -491,6 +506,7 @@ public class ApiWorkerBoardController {
     private PageResponse<WorkerReviewResponse> loadReviewResponses(
             Principal principal,
             Authentication authentication,
+            Worker selectedWorker,
             String section,
             String keyword,
             int pageNumber,
@@ -501,6 +517,7 @@ public class ApiWorkerBoardController {
             Page<BadReviewTask> tasks = loadBadReviewTasks(
                     principal,
                     authentication,
+                    selectedWorker,
                     keyword,
                     pageNumber,
                     pageSize,
@@ -509,12 +526,13 @@ public class ApiWorkerBoardController {
             return toBadTaskPageResponse(tasks);
         }
 
-        return toReviewPageResponse(loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, keyword));
+        return toReviewPageResponse(loadReviewPage(principal, authentication, selectedWorker, section, pageNumber, pageSize, sortDirection, keyword));
     }
 
     private Page<BadReviewTask> loadBadReviewTasks(
             Principal principal,
             Authentication authentication,
+            Worker selectedWorker,
             String keyword,
             int pageNumber,
             int pageSize,
@@ -522,6 +540,10 @@ public class ApiWorkerBoardController {
     ) {
         PageRequest pageable = PageRequest.of(pageNumber, pageSize, badReviewTaskSort(sortDirection));
         LocalDate date = LocalDate.now();
+
+        if (selectedWorker != null) {
+            return badReviewTaskService.getDueTasksToWorker(selectedWorker, date, keyword, pageable);
+        }
 
         if (hasRole(authentication, "ADMIN")) {
             return badReviewTaskService.getDueTasksToAdmin(date, keyword, pageable);
@@ -553,12 +575,13 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
-        return loadReviewPage(principal, authentication, section, pageNumber, pageSize, sortDirection, "");
+        return loadReviewPage(principal, authentication, null, section, pageNumber, pageSize, sortDirection, "");
     }
 
     private Page<ReviewDTOOne> loadReviewPage(
             Principal principal,
             Authentication authentication,
+            Worker selectedWorker,
             String section,
             int pageNumber,
             int pageSize,
@@ -566,6 +589,16 @@ public class ApiWorkerBoardController {
             String keyword
     ) {
         LocalDate date = SECTION_NAGUL.equals(section) ? nagulLookaheadDate() : LocalDate.now();
+
+        if (selectedWorker != null) {
+            if (SECTION_BAD.equals(section)) {
+                return reviewService.getAllReviewDTOByWorkerByOrderStatus(selectedWorker, ORDER_STATUS_UNPAID, pageNumber, pageSize, sortDirection, keyword);
+            }
+            if (SECTION_NAGUL.equals(section)) {
+                return reviewService.getAllReviewDTOByWorkerByPublishToVigul(selectedWorker, date, pageNumber, pageSize, sortDirection, keyword);
+            }
+            return reviewService.getAllReviewDTOByWorkerByPublish(selectedWorker, date, pageNumber, pageSize, sortDirection, keyword);
+        }
 
         if (SECTION_BAD.equals(section)) {
             if (hasRole(authentication, "ADMIN")) {
@@ -623,16 +656,29 @@ public class ApiWorkerBoardController {
     }
 
     private List<WorkerMetricResponse> buildMetrics(Principal principal, Authentication authentication) {
+        return buildMetrics(principal, authentication, null);
+    }
+
+    private List<WorkerMetricResponse> buildMetrics(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker
+    ) {
         List<WorkerMetricResponse> metrics = new ArrayList<>();
-        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
-        Map<String, Integer> reviewCounts = reviewService.countBoardReviewMetrics(
-                LocalDate.now(),
-                nagulLookaheadDate(),
-                ORDER_STATUS_UNPAID,
-                principal,
-                primaryBoardRole(authentication)
-        );
-        int badTaskCount = countBadReviewTasks(principal, authentication);
+        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication, selectedWorker);
+        Map<String, Integer> reviewCounts = selectedWorker != null
+                ? Map.of(
+                        SECTION_PUBLISH, reviewService.countOrdersByWorkerAndStatusPublish(selectedWorker, LocalDate.now()),
+                        SECTION_NAGUL, reviewService.countOrdersByWorkerAndStatusVigul(selectedWorker, nagulLookaheadDate())
+                )
+                : reviewService.countBoardReviewMetrics(
+                        LocalDate.now(),
+                        nagulLookaheadDate(),
+                        ORDER_STATUS_UNPAID,
+                        principal,
+                        primaryBoardRole(authentication)
+                );
+        int badTaskCount = countBadReviewTasks(principal, authentication, selectedWorker);
 
         metrics.add(orderMetric(orderCounts, "Новые", SECTION_NEW, "fiber_new", "yellow"));
         metrics.add(orderMetric(orderCounts, "Коррекция", SECTION_CORRECT, "build_circle", "pink"));
@@ -641,6 +687,10 @@ public class ApiWorkerBoardController {
         metrics.add(new WorkerMetricResponse("Плохие", badTaskCount, "money_off", "gray", SECTION_BAD));
         metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
         syncWorkerFlowLockFromMetrics(principal, authentication, orderCounts);
+
+        if (selectedWorker != null) {
+            return metrics;
+        }
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
                 principal,
@@ -684,7 +734,14 @@ public class ApiWorkerBoardController {
     }
 
     private int countBadReviewTasks(Principal principal, Authentication authentication) {
+        return countBadReviewTasks(principal, authentication, null);
+    }
+
+    private int countBadReviewTasks(Principal principal, Authentication authentication, Worker selectedWorker) {
         LocalDate date = LocalDate.now();
+        if (selectedWorker != null) {
+            return badReviewTaskService.countDueTasksToWorker(selectedWorker, date);
+        }
         if (hasRole(authentication, "ADMIN")) {
             return badReviewTaskService.countDueTasksToAdmin(date);
         }
@@ -709,6 +766,17 @@ public class ApiWorkerBoardController {
     }
 
     private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
+        return countOrderMetrics(principal, authentication, null);
+    }
+
+    private Map<String, Integer> countOrderMetrics(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker
+    ) {
+        if (selectedWorker != null) {
+            return orderService.countActionableOrdersByStatusToWorker(selectedWorker);
+        }
         if (hasRole(authentication, "ADMIN")) {
             return orderService.countActionableOrdersByStatus();
         }
@@ -923,6 +991,80 @@ public class ApiWorkerBoardController {
 
         order.setWaitingForClient(false);
         orderService.save(order);
+    }
+
+    private WorkerSelection resolveWorkerSelection(
+            Principal principal,
+            Authentication authentication,
+            Long requestedWorkerId
+    ) {
+        boolean available = canSelectWorkerFilter(authentication);
+        if (!available) {
+            if (requestedWorkerId != null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Выбор специалиста недоступен");
+            }
+            return new WorkerSelection(List.of(), null, false);
+        }
+
+        List<Worker> workers = workerFilterWorkers(principal, authentication);
+        List<WorkerOptionResponse> options = workers.stream()
+                .map(worker -> new WorkerOptionResponse(worker.getId(), workerOptionLabel(worker)))
+                .toList();
+
+        if (requestedWorkerId == null) {
+            return new WorkerSelection(options, null, true);
+        }
+
+        Worker selectedWorker = workers.stream()
+                .filter(worker -> Objects.equals(worker.getId(), requestedWorkerId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Этот специалист недоступен"));
+
+        return new WorkerSelection(options, selectedWorker, true);
+    }
+
+    private boolean canSelectWorkerFilter(Authentication authentication) {
+        return hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER");
+    }
+
+    private List<Worker> workerFilterWorkers(Principal principal, Authentication authentication) {
+        if (hasRole(authentication, "ADMIN")) {
+            return sortWorkerOptions(workerService.getAllWorkers());
+        }
+        if (hasRole(authentication, "OWNER")) {
+            List<Manager> managers = resolveOwnerManagers(principal).stream().toList();
+            return managers.isEmpty()
+                    ? List.of()
+                    : sortWorkerOptions(workerService.getAllWorkersToManagerList(managers).stream().toList());
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            Manager manager = resolveManager(principal);
+            return manager == null ? List.of() : sortWorkerOptions(workerService.getAllWorkersToManager(manager));
+        }
+        return List.of();
+    }
+
+    private List<Worker> sortWorkerOptions(List<Worker> workers) {
+        if (workers == null || workers.isEmpty()) {
+            return List.of();
+        }
+
+        return workers.stream()
+                .filter(worker -> worker != null && worker.getId() != null)
+                .distinct()
+                .sorted(Comparator.comparing(this::workerOptionLabel, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    private String workerOptionLabel(Worker worker) {
+        User user = worker == null ? null : worker.getUser();
+        if (user != null && !safe(user.getFio()).isBlank()) {
+            return user.getFio().trim();
+        }
+        if (user != null && !safe(user.getUsername()).isBlank()) {
+            return user.getUsername().trim();
+        }
+        return worker != null && worker.getId() != null ? "Специалист #" + worker.getId() : "Специалист";
     }
 
     private Manager resolveManager(Principal principal) {
@@ -1322,6 +1464,9 @@ public class ApiWorkerBoardController {
             List<WorkerMetricResponse> metrics,
             List<String> promoTexts,
             WorkerPermissionsResponse permissions,
+            List<WorkerOptionResponse> workerOptions,
+            Long selectedWorkerId,
+            boolean workerFilterAvailable,
             String message,
             boolean warning
     ) {
@@ -1377,6 +1522,19 @@ public class ApiWorkerBoardController {
             boolean canSeeMoney,
             boolean canWorkReviews,
             boolean canEditNotes
+    ) {
+    }
+
+    private record WorkerSelection(
+            List<WorkerOptionResponse> options,
+            Worker selectedWorker,
+            boolean available
+    ) {
+    }
+
+    public record WorkerOptionResponse(
+            Long id,
+            String label
     ) {
     }
 

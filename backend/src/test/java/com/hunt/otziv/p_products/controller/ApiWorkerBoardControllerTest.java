@@ -8,6 +8,7 @@ import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
+import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
@@ -15,6 +16,7 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -35,15 +37,18 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -60,6 +65,9 @@ class ApiWorkerBoardControllerTest {
 
     @Mock
     private OrderService orderService;
+
+    @Mock
+    private OrderBoardQueryService orderBoardQueryService;
 
     @Mock
     private OrderRepository orderRepository;
@@ -121,6 +129,7 @@ class ApiWorkerBoardControllerTest {
 
         controller = new ApiWorkerBoardController(
                 orderService,
+                orderBoardQueryService,
                 orderRepository,
                 orderDetailsService,
                 reviewService,
@@ -173,6 +182,14 @@ class ApiWorkerBoardControllerTest {
                 eq(0),
                 eq(10)
         )).thenReturn(emptyOrderPage());
+        lenient().when(orderBoardQueryService.getAllOrderDTOAndKeywordByWorker(
+                any(Worker.class),
+                eq(""),
+                anyString(),
+                eq(0),
+                eq(10),
+                eq("desc")
+        )).thenReturn(emptyOrderPage());
         lenient().when(reviewService.getAllReviewDTOByWorkerByPublishToVigul(
                 any(LocalDate.class),
                 eq(principal),
@@ -195,6 +212,78 @@ class ApiWorkerBoardControllerTest {
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(emptyBadTaskPage());
+    }
+
+    @Test
+    void managerWorkerFilterShowsOnlyManagerWorkersAndRejectsOthers() {
+        Principal managerPrincipal = () -> "manager";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(11L);
+        Manager manager = new Manager();
+        manager.setId(22L);
+        manager.setUser(managerUser);
+        Worker ownWorker = workerOption(101L, "Анна Специалист");
+
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(11L)).thenReturn(manager);
+        when(workerService.getAllWorkersToManager(manager)).thenReturn(List.of(ownWorker));
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "new", "", 0, 10, "desc", 101L, managerPrincipal, managerAuth);
+
+        assertEquals(101L, response.selectedWorkerId());
+        assertTrue(response.workerFilterAvailable());
+        assertEquals(1, response.workerOptions().size());
+        assertEquals("Анна Специалист", response.workerOptions().getFirst().label());
+
+        assertThrows(ResponseStatusException.class, () -> controller.getBoard(
+                "new", "", 0, 10, "desc", 202L, managerPrincipal, managerAuth));
+    }
+
+    @Test
+    void ownerWorkerFilterUsesWorkersFromOwnerManagers() {
+        Principal ownerPrincipal = () -> "owner";
+        Authentication ownerAuth = auth("ROLE_OWNER");
+        Manager manager = new Manager();
+        manager.setId(33L);
+        Worker worker = workerOption(303L, "Олег Специалист");
+
+        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager));
+        when(workerService.getAllWorkersToManagerList(anyList())).thenReturn(Set.of(worker));
+        when(orderService.getAllOrderDTOAndKeywordByOwner(
+                eq(ownerPrincipal),
+                eq(""),
+                eq("Новый"),
+                eq(0),
+                eq(10),
+                eq("desc")
+        )).thenReturn(emptyOrderPage());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "new", "", 0, 10, "desc", null, ownerPrincipal, ownerAuth);
+
+        assertTrue(response.workerFilterAvailable());
+        assertEquals(1, response.workerOptions().size());
+        assertEquals(303L, response.workerOptions().getFirst().id());
+    }
+
+    @Test
+    void adminWorkerFilterUsesAllWorkers() {
+        Principal adminPrincipal = () -> "admin";
+        Authentication adminAuth = auth("ROLE_ADMIN");
+        when(workerService.getAllWorkers()).thenReturn(List.of(
+                workerOption(401L, "Яна Специалист"),
+                workerOption(402L, "Борис Специалист")
+        ));
+        when(orderService.getAllOrderDTOAndKeywordAndStatus("", "Новый", 0, 10, "desc"))
+                .thenReturn(emptyOrderPage());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "new", "", 0, 10, "desc", null, adminPrincipal, adminAuth);
+
+        assertTrue(response.workerFilterAvailable());
+        assertEquals(2, response.workerOptions().size());
     }
 
     @Test
@@ -422,7 +511,20 @@ class ApiWorkerBoardControllerTest {
     }
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {
-        return controller.getBoard(section, "", 0, 10, "desc", principal, workerAuth);
+        return controller.getBoard(section, "", 0, 10, "desc", null, principal, workerAuth);
+    }
+
+    private Authentication auth(String role) {
+        return new UsernamePasswordAuthenticationToken("user", "password", List.of(new SimpleGrantedAuthority(role)));
+    }
+
+    private Worker workerOption(Long id, String fio) {
+        User user = new User();
+        user.setFio(fio);
+        Worker option = new Worker();
+        option.setId(id);
+        option.setUser(user);
+        return option;
     }
 
     private Page<OrderDTOList> emptyOrderPage() {

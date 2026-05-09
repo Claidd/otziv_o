@@ -11,12 +11,15 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,7 +29,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
@@ -67,6 +72,9 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private OrderBotLifecycleService orderBotLifecycleService;
+
+    @Mock
+    private ReviewArchiveService reviewArchiveService;
 
     @Test
     void paymentStatusDelegatesToTransactionService() throws Exception {
@@ -127,8 +135,66 @@ class OrderStatusTransitionServiceTest {
 
         assertSame(archive, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Архив");
+        verify(reviewArchiveService, never()).saveNewReviewArchive(org.mockito.ArgumentMatchers.anyLong());
         verify(orderBotLifecycleService).detachBots(order);
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void archiveStatusSavesValidReviewsToArchiveBeforeDetachingBots() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(42L, "Публикация", 420L, "Готовый текст отзыва");
+        OrderStatus archive = status("Архив");
+
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
+
+        assertTrue(service.changeStatusForOrder(42L, "Архив"));
+
+        InOrder inOrder = inOrder(reviewArchiveService, orderBotLifecycleService, orderRepository);
+        inOrder.verify(reviewArchiveService).saveNewReviewArchive(420L);
+        inOrder.verify(orderBotLifecycleService).detachBots(order);
+        inOrder.verify(orderRepository).save(order);
+    }
+
+    @Test
+    void archiveStatusRejectsBlankReviewTextWithoutSideEffects() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(40L, "Публикация", 400L, " ");
+        OrderStatus originalStatus = order.getStatus();
+
+        when(orderRepository.findById(40L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(40L, "Архив")
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Нельзя отправить заказ в архив: заполните текст всех отзывов", exception.getReason());
+        assertSame(originalStatus, order.getStatus());
+        verify(orderStatusService, never()).getOrderStatusByTitle("Архив");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, reviewArchiveService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void archiveStatusRejectsPlaceholderReviewTextIgnoringCase() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(41L, "Публикация", 410L, "  текст отзыва  ");
+
+        when(orderRepository.findById(41L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(41L, "Архив")
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Нельзя отправить заказ в архив: заполните текст всех отзывов", exception.getReason());
+        verify(orderStatusService, never()).getOrderStatusByTitle("Архив");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, reviewArchiveService);
+        verify(orderRepository, never()).save(order);
     }
 
     @Test
@@ -239,7 +305,8 @@ class OrderStatusTransitionServiceTest {
                 telegramService,
                 orderCompanyStatusService,
                 orderStatusNotificationService,
-                orderBotLifecycleService
+                orderBotLifecycleService,
+                reviewArchiveService
         );
     }
 
@@ -270,6 +337,15 @@ class OrderStatusTransitionServiceTest {
         Worker worker = new Worker();
         worker.setUser(user(chatId));
         order.setWorker(worker);
+        return order;
+    }
+
+    private Order orderWithReview(Long id, String statusTitle, Long reviewId, String reviewText) {
+        Order order = orderWithCompanyManagerAndDetail(id, statusTitle, "Компания", "group");
+        Review review = new Review();
+        review.setId(reviewId);
+        review.setText(reviewText);
+        order.getDetails().getFirst().setReviews(List.of(review));
         return order;
     }
 

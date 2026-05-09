@@ -14,6 +14,7 @@ import {
   WorkerBoardSectionQuery,
   WorkerBotItem,
   WorkerMetric,
+  WorkerOption,
   WorkerPage,
   WorkerReviewItem,
   WorkerSection
@@ -100,6 +101,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly boardNoticeVisible = signal(false);
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
+  readonly selectedWorkerId = signal<number | null>(null);
   private boardNoticeTimer: number | null = null;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
@@ -114,6 +116,21 @@ export class WorkerBoardComponent implements OnDestroy {
   });
   readonly title = computed(() => `Специалист - ${this.board()?.title ?? workerSectionLabel(this.activeSection())}`);
   readonly metrics = computed(() => this.board()?.metrics ?? []);
+  readonly workerOptions = computed(() => this.board()?.workerOptions ?? []);
+  readonly workerFilterAvailable = computed(() => {
+    this.auth.tokenParsed();
+    return (this.board()?.workerFilterAvailable ?? false)
+      && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER'])
+      && this.workerOptions().length > 0;
+  });
+  readonly selectedWorkerLabel = computed(() => {
+    const selectedId = this.selectedWorkerId();
+    if (!selectedId) {
+      return 'Все работники';
+    }
+
+    return this.workerOptions().find((worker) => worker.id === selectedId)?.label ?? 'Все работники';
+  });
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
   readonly showReviewFooterCity = computed(() => {
     this.auth.tokenParsed();
@@ -208,10 +225,12 @@ export class WorkerBoardComponent implements OnDestroy {
       keyword: this.keyword(),
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
-      sortDirection: this.sortDirection()
+      sortDirection: this.sortDirection(),
+      workerId: this.selectedWorkerId()
     }).subscribe({
       next: (board) => {
         this.board.set(board);
+        this.selectedWorkerId.set(board.selectedWorkerId ?? null);
         this.loading.set(false);
 
         if (board.section !== this.activeSection()) {
@@ -270,6 +289,13 @@ export class WorkerBoardComponent implements OnDestroy {
 
   changePageSize(value: string | number): void {
     this.pageSize.set(Number(value));
+    this.pageNumber.set(0);
+    this.loadBoard();
+  }
+
+  changeWorkerFilter(value: string | number | null): void {
+    const workerId = value === null || value === '' ? null : Number(value);
+    this.selectedWorkerId.set(Number.isFinite(workerId as number) && (workerId as number) > 0 ? workerId as number : null);
     this.pageNumber.set(0);
     this.loadBoard();
   }
@@ -617,6 +643,10 @@ export class WorkerBoardComponent implements OnDestroy {
     return trackWorkerMetric(_index, metric);
   }
 
+  trackWorkerOption(_index: number, option: WorkerOption): number {
+    return option.id;
+  }
+
   trackAction(_index: number, action: StatusAction): string {
     return trackWorkerAction(_index, action);
   }
@@ -642,7 +672,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   private loadBoardAfterMetricSeen(metric?: WorkerMetric): void {
-    if (!metric) {
+    if (!metric || this.selectedWorkerId()) {
       this.loadBoard();
       return;
     }

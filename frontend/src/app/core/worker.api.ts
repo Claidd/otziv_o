@@ -84,6 +84,11 @@ export interface WorkerMetric {
   section: WorkerSection;
 }
 
+export interface WorkerOption {
+  id: number;
+  label: string;
+}
+
 export interface WorkerPermissions {
   canManageOrderStatuses: boolean;
   canManageClientWaiting: boolean;
@@ -104,6 +109,9 @@ export interface WorkerBoard {
   metrics: WorkerMetric[];
   promoTexts: string[];
   permissions: WorkerPermissions;
+  workerOptions?: WorkerOption[];
+  selectedWorkerId?: number | null;
+  workerFilterAvailable?: boolean;
   message: string;
   warning: boolean;
 }
@@ -124,6 +132,7 @@ export interface WorkerBoardQuery {
   pageNumber?: number;
   pageSize?: number;
   sortDirection?: 'desc' | 'asc';
+  workerId?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -138,7 +147,9 @@ export class WorkerApi {
       .set('pageSize', String(query.pageSize ?? 10))
       .set('sortDirection', query.sortDirection ?? 'desc');
 
-    return this.http.get<WorkerBoard>(`${appEnvironment.apiBaseUrl}/api/worker/board`, { params });
+    const requestParams = query.workerId ? params.set('workerId', String(query.workerId)) : params;
+
+    return this.http.get<WorkerBoard>(`${appEnvironment.apiBaseUrl}/api/worker/board`, { params: requestParams });
   }
 
   getOverdueOrders(): Observable<ManagerOverdueOrders> {

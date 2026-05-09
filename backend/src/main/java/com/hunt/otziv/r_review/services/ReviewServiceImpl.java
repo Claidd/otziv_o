@@ -320,6 +320,26 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(
+            Worker worker,
+            LocalDate localDate,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            String keyword
+    ) {
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        if (!hasText(keyword)) {
+            Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
+            return getReviewDTOPage(reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublish(worker, localDate, pageable));
+        }
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize, String sortDirection, String keyword) {
         if (!hasText(keyword)) {
             return getAllReviewDTOByManagerByPublish(localDate, principal, pageNumber, pageSize, sortDirection);
@@ -366,6 +386,26 @@ public class ReviewServiceImpl implements ReviewService {
         Worker worker = workerService.getWorkerByUserId(user.getId());
         if (worker == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.WORKER,
+                null, status, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByOrderStatus(
+            Worker worker,
+            String status,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            String keyword
+    ) {
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        if (!hasText(keyword)) {
+            Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
+            return getReviewDTOPage(reviewRepository.findPageIdsByWorkerAndOrderStatus(worker, status, pageable));
         }
         return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.ORDER_STATUS, ReviewBoardScope.WORKER,
                 null, status, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
@@ -1246,6 +1286,26 @@ public class ReviewServiceImpl implements ReviewService {
         Worker worker = workerService.getWorkerByUserId(user.getId());
         if (worker == null) {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
+    }
+
+    @Override
+    public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublishToVigul(
+            Worker worker,
+            LocalDate localDate,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            String keyword
+    ) {
+        if (worker == null) {
+            return emptyReviewPage(pageNumber, pageSize, sortDirection);
+        }
+        if (!hasText(keyword)) {
+            Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
+            return getReviewDTOPage(reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublishToVigul(worker, localDate, pageable));
         }
         return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
                 localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
