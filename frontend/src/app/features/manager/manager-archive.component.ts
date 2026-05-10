@@ -28,6 +28,17 @@ type ArchiveSideMetric = {
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'gray';
 };
 
+type LiveArchiveStatusAction = {
+  label: string;
+  status: string;
+};
+
+const LIVE_ARCHIVE_STATUS_ACTIONS: LiveArchiveStatusAction[] = [
+  { label: 'новый', status: 'Новый' },
+  { label: 'коррекция', status: 'Коррекция' },
+  { label: 'на проверке', status: 'На проверке' }
+];
+
 const EMPTY_ARCHIVE_PAGE: ManagerPage<ArchiveOrderListItem> = {
   content: [],
   number: 0,
@@ -68,6 +79,8 @@ export class ManagerArchiveComponent {
   readonly restoreLoading = signal(false);
   readonly restoring = signal(false);
   readonly restoreTargetStatus = signal('Архив');
+  readonly liveStatusMutationKey = signal<string | null>(null);
+  readonly liveStatusActions = LIVE_ARCHIVE_STATUS_ACTIONS;
 
   readonly orders = computed(() => this.ordersPage().content ?? []);
   readonly rightMetrics = computed<ArchiveSideMetric[]>(() => {
@@ -146,6 +159,10 @@ export class ManagerArchiveComponent {
     return metric.label;
   }
 
+  trackLiveStatusAction(_index: number, action: LiveArchiveStatusAction): string {
+    return action.status;
+  }
+
   orderDetailsLink(order: ArchiveOrderListItem): Array<string | number> | null {
     return order.source === 'live' && order.companyId
       ? ['/manager/orders', order.companyId, order.id]
@@ -154,6 +171,34 @@ export class ManagerArchiveComponent {
 
   canRestore(order: ArchiveOrderListItem): boolean {
     return order.source === 'archive' && !order.restoredAt;
+  }
+
+  canChangeLiveStatus(order: ArchiveOrderListItem): boolean {
+    return order.source === 'live' && order.status === 'Архив';
+  }
+
+  isLiveStatusMutating(order: ArchiveOrderListItem, action: LiveArchiveStatusAction): boolean {
+    return this.liveStatusMutationKey() === this.liveStatusKey(order, action.status);
+  }
+
+  changeLiveStatus(order: ArchiveOrderListItem, action: LiveArchiveStatusAction): void {
+    if (!this.canChangeLiveStatus(order) || this.liveStatusMutationKey()) {
+      return;
+    }
+
+    this.liveStatusMutationKey.set(this.liveStatusKey(order, action.status));
+    this.managerApi.updateOrderStatus(order.id, action.status).subscribe({
+      next: () => {
+        this.liveStatusMutationKey.set(null);
+        this.toastService.success('Заказ вернулся в работу', `#${order.id}: ${action.status}`);
+        this.loadOrders();
+      },
+      error: (err) => {
+        const message = apiErrorMessage(err, 'Не удалось изменить статус заказа');
+        this.liveStatusMutationKey.set(null);
+        this.toastService.error('Статус не изменен', message);
+      }
+    });
   }
 
   openRestore(order: ArchiveOrderListItem): void {
@@ -285,5 +330,9 @@ export class ManagerArchiveComponent {
         this.toastService.error('Архив не загрузился', message);
       }
     });
+  }
+
+  private liveStatusKey(order: ArchiveOrderListItem, status: string): string {
+    return `archive-live-${order.id}-${status}`;
   }
 }

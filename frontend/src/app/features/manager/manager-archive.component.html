@@ -102,6 +102,21 @@
           </div>
 
           <div class="archive-card-actions">
+            @if (canChangeLiveStatus(order)) {
+              <div class="live-status-actions" aria-label="Вернуть архивный live-заказ в работу">
+                @for (action of liveStatusActions; track trackLiveStatusAction($index, action)) {
+                  <button
+                    type="button"
+                    (click)="changeLiveStatus(order, action)"
+                    [disabled]="!!liveStatusMutationKey()"
+                    [title]="'Вернуть заказ в статус ' + action.status"
+                  >
+                    {{ isLiveStatusMutating(order, action) ? '...' : action.label }}
+                  </button>
+                }
+              </div>
+            }
+
             @if (orderDetailsLink(order); as detailsLink) {
               <a class="details-button" [routerLink]="detailsLink">Подробнее</a>
             } @else if (canRestore(order)) {

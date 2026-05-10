@@ -329,6 +329,7 @@
 
 .archive-card-actions {
   display: grid;
+  gap: 0.5rem;
 }
 
 .details-button {
@@ -342,6 +343,36 @@
   font-size: 0.74rem;
   font-weight: 900;
   text-decoration: none;
+}
+
+.live-status-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.live-status-actions button {
+  min-width: 0;
+  min-height: 1.95rem;
+  border: 1px solid rgba(115, 128, 236, 0.24);
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.live-status-actions button:not(:disabled):hover {
+  color: var(--otziv-white);
+  background: var(--otziv-primary);
+}
+
+.live-status-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 button.details-button:disabled {

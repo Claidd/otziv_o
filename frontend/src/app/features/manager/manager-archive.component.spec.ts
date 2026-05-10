@@ -145,6 +145,7 @@ describe('ManagerArchiveComponent', () => {
     getArchiveOrders: ReturnType<typeof vi.fn>;
     getArchiveOrder: ReturnType<typeof vi.fn>;
     restoreArchiveOrder: ReturnType<typeof vi.fn>;
+    updateOrderStatus: ReturnType<typeof vi.fn>;
   };
   let toastService: {
     success: ReturnType<typeof vi.fn>;
@@ -155,7 +156,8 @@ describe('ManagerArchiveComponent', () => {
     managerApi = {
       getArchiveOrders: vi.fn(() => of(page([storedOrder, liveOrder]))),
       getArchiveOrder: vi.fn((orderId: number) => of(details(archiveOrder({ id: orderId })))),
-      restoreArchiveOrder: vi.fn((orderId: number, targetStatus: string) => of(restoreResult(orderId, targetStatus)))
+      restoreArchiveOrder: vi.fn((orderId: number, targetStatus: string) => of(restoreResult(orderId, targetStatus))),
+      updateOrderStatus: vi.fn(() => of(void 0))
     };
     toastService = {
       success: vi.fn(),
@@ -195,8 +197,10 @@ describe('ManagerArchiveComponent', () => {
     expect(element.textContent).toContain('Архивная компания');
     expect(element.textContent).toContain('Live компания');
     expect(element.querySelectorAll('.restore-button')).toHaveLength(1);
+    expect(element.querySelectorAll('.live-status-actions button')).toHaveLength(3);
     expect(fixture.componentInstance.canRestore(storedOrder)).toBe(true);
     expect(fixture.componentInstance.canRestore(liveOrder)).toBe(false);
+    expect(fixture.componentInstance.canChangeLiveStatus(liveOrder)).toBe(true);
     expect(fixture.componentInstance.orderDetailsLink(liveOrder)).toEqual(['/manager/orders', 7, 4]);
   });
 
@@ -213,6 +217,19 @@ describe('ManagerArchiveComponent', () => {
     expect(managerApi.restoreArchiveOrder).toHaveBeenCalledWith(3, 'Новый');
     expect(component.restoreResult()?.batchId).toBe(4);
     expect(toastService.success).toHaveBeenCalledWith('Заказ восстановлен', '#3 вернулся в live со статусом Новый');
+    expect(managerApi.getArchiveOrders).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a live archive order to a working status from the card', () => {
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.changeLiveStatus(liveOrder, { label: 'коррекция', status: 'Коррекция' });
+
+    expect(managerApi.updateOrderStatus).toHaveBeenCalledWith(4, 'Коррекция');
+    expect(toastService.success).toHaveBeenCalledWith('Заказ вернулся в работу', '#4: Коррекция');
+    expect(component.liveStatusMutationKey()).toBeNull();
     expect(managerApi.getArchiveOrders).toHaveBeenCalledTimes(2);
   });
 });
