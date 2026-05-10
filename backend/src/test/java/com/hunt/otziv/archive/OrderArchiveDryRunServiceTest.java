@@ -40,11 +40,11 @@ class OrderArchiveDryRunServiceTest {
         ZoneId zone = ZoneId.of("Asia/Irkutsk");
         Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
         OrderArchiveDryRunService service = new OrderArchiveDryRunService(repository, clock);
-        service.setDefaultRetentionDays(60);
+        service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
 
-        LocalDate cutoffDate = LocalDate.of(2026, 3, 11);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(10, 12, 18, 2, 1, 20, 9);
         when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(42L);
@@ -54,7 +54,7 @@ class OrderArchiveDryRunServiceTest {
                 any(LocalDateTime.class),
                 any(LocalDateTime.class),
                 eq("manual-check"),
-                eq(60),
+                eq(90),
                 eq(42L),
                 eq(counts),
                 contains("missingClosedAnalyticsMonths=1")
@@ -65,7 +65,7 @@ class OrderArchiveDryRunServiceTest {
         assertEquals(77L, result.batchId());
         assertTrue(result.dryRun());
         assertEquals(cutoffDate, result.cutoffDate());
-        assertEquals(60, result.retentionDays());
+        assertEquals(90, result.retentionDays());
         assertEquals(200, result.batchLimit());
         assertEquals(42L, result.eligibleOrders());
         assertEquals(counts, result.selected());
@@ -121,7 +121,7 @@ class OrderArchiveDryRunServiceTest {
     void previewCandidatesDoesNotWriteBatchLog() {
         OrderArchiveDryRunService service = serviceWithFixedClock();
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(4, 5, 6, 0, 0, 2, 1);
-        LocalDate cutoffDate = LocalDate.of(2026, 3, 11);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(12L);
         when(repository.countSelected(cutoffDate, 100)).thenReturn(counts);
         when(repository.countMissingClosedAnalyticsMonths(cutoffDate, 100, LocalDate.of(2026, 5, 1))).thenReturn(0L);
@@ -130,7 +130,7 @@ class OrderArchiveDryRunServiceTest {
         ArchiveCandidatesPreview preview = service.previewCandidates(null, 100, null);
 
         assertEquals(cutoffDate, preview.cutoffDate());
-        assertEquals(60, preview.retentionDays());
+        assertEquals(90, preview.retentionDays());
         assertEquals(100, preview.batchLimit());
         assertEquals(12L, preview.eligibleOrders());
         assertEquals(counts, preview.selected());
@@ -169,17 +169,17 @@ class OrderArchiveDryRunServiceTest {
     void liveArchiveCopiesVerifiesDeletesAndCompletesBatch() {
         OrderArchiveDryRunService service = serviceWithFixedClock();
         service.setApplyEnabled(true);
-        service.setDefaultRetentionDays(60);
+        service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
 
-        LocalDate cutoffDate = LocalDate.of(2026, 3, 11);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(3, 4, 5, 1, 1, 6, 2);
         when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(9L);
         when(repository.countPreparedCandidates()).thenReturn(counts);
         when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1))).thenReturn(0L);
-        when(repository.insertStartedArchiveBatch(any(LocalDateTime.class), eq("small-batch"), eq(60), eq(counts), any()))
+        when(repository.insertStartedArchiveBatch(any(LocalDateTime.class), eq("small-batch"), eq(90), eq(counts), any()))
                 .thenReturn(11L);
         when(repository.countArchivedPreparedCandidates()).thenReturn(counts);
         when(repository.deletePreparedCandidatesFromLive()).thenReturn(counts);
@@ -202,7 +202,7 @@ class OrderArchiveDryRunServiceTest {
         OrderArchiveDryRunService service = serviceWithFixedClock();
         service.setApplyEnabled(true);
 
-        LocalDate cutoffDate = LocalDate.of(2026, 3, 11);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 1, 1, 0, 0, 1, 1);
         when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
@@ -221,10 +221,10 @@ class OrderArchiveDryRunServiceTest {
     @Test
     void settingsReadRuntimeArchivePreferences() {
         OrderArchiveDryRunService service = serviceWithSettings();
-        service.setDefaultRetentionDays(60);
+        service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
-        when(appSettingService.getInt(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, 60)).thenReturn(75);
+        when(appSettingService.getInt(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, 90)).thenReturn(75);
         when(appSettingService.getInt(AppSettingService.ARCHIVE_ORDERS_BATCH_SIZE, 500)).thenReturn(300);
         when(appSettingService.getBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ENABLED, false)).thenReturn(true);
         when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_RUN_MODE, "dry-run")).thenReturn("dry-run");
@@ -258,7 +258,7 @@ class OrderArchiveDryRunServiceTest {
     void updateSettingsPersistsSafeRuntimePreferences() {
         OrderArchiveDryRunService service = serviceWithSettings();
         service.setApplyEnabled(true);
-        service.setDefaultRetentionDays(60);
+        service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
 
@@ -289,7 +289,7 @@ class OrderArchiveDryRunServiceTest {
         ZoneId zone = ZoneId.of("Asia/Irkutsk");
         Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
         OrderArchiveDryRunService service = new OrderArchiveDryRunService(repository, clock);
-        service.setDefaultRetentionDays(60);
+        service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
         return service;

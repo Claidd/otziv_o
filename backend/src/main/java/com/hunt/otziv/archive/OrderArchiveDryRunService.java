@@ -28,7 +28,7 @@ public class OrderArchiveDryRunService {
     private final AppSettingService appSettingService;
     private final Clock clock;
 
-    @Value("${otziv.archive.orders.retention-days:60}")
+    @Value("${otziv.archive.orders.retention-days:90}")
     private int defaultRetentionDays;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
@@ -78,7 +78,7 @@ public class OrderArchiveDryRunService {
     }
 
     private ArchiveDryRunResult runDryRunLocked(Integer retentionDays, Integer batchLimit, String reason) {
-        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 60);
+        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 90);
         int resolvedBatchLimit = batchLimit(batchLimit);
         LocalDate today = LocalDate.now(clock);
         LocalDate cutoffDate = today.minusDays(resolvedRetentionDays);
@@ -141,7 +141,7 @@ public class OrderArchiveDryRunService {
     }
 
     private ArchiveRunResult runArchiveLocked(Integer retentionDays, Integer batchLimit, String reason) {
-        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 60);
+        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 90);
         int resolvedBatchLimit = batchLimit(batchLimit);
         LocalDate today = LocalDate.now(clock);
         LocalDate cutoffDate = today.minusDays(resolvedRetentionDays);
@@ -229,7 +229,7 @@ public class OrderArchiveDryRunService {
 
     @Transactional(readOnly = true)
     public ArchiveCandidatesPreview previewCandidates(Integer retentionDays, Integer batchLimit, Integer previewLimit) {
-        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 60);
+        int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 90);
         int resolvedBatchLimit = batchLimit(batchLimit);
         int resolvedPreviewLimit = Math.min(Math.max(positiveOrDefault(previewLimit, 8, 8), 1), 30);
         LocalDate today = LocalDate.now(clock);
@@ -281,7 +281,7 @@ public class OrderArchiveDryRunService {
                 ? new ArchiveOrdersSettingsRequest(null, null, null, null, null)
                 : request;
 
-        int resolvedRetentionDays = positiveOrDefault(value.archiveRetentionDays(), defaultRetentionDays, 60);
+        int resolvedRetentionDays = positiveOrDefault(value.archiveRetentionDays(), defaultRetentionDays, 90);
         int resolvedBatchSize = batchLimit(value.batchSize());
         boolean resolvedScheduleEnabled = Boolean.TRUE.equals(value.scheduleEnabled());
         String resolvedRunMode = normalizeRunMode(value.runMode());
@@ -374,10 +374,10 @@ public class OrderArchiveDryRunService {
 
     private RuntimeSettings runtimeSettings() {
         int retentionDays = appSettingService == null
-                ? positiveOrDefault(null, defaultRetentionDays, 60)
+                ? positiveOrDefault(null, defaultRetentionDays, 90)
                 : appSettingService.getInt(
                         AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS,
-                        positiveOrDefault(null, defaultRetentionDays, 60)
+                        positiveOrDefault(null, defaultRetentionDays, 90)
                 );
         int batchSize = appSettingService == null
                 ? positiveOrDefault(null, defaultBatchLimit, 500)
@@ -397,7 +397,7 @@ public class OrderArchiveDryRunService {
                 : appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_REASON, DEFAULT_REASON);
 
         return new RuntimeSettings(
-                positiveOrDefault(retentionDays, defaultRetentionDays, 60),
+                positiveOrDefault(retentionDays, defaultRetentionDays, 90),
                 batchLimit(batchSize),
                 runtimeScheduleEnabled,
                 normalizeRunMode(runMode),

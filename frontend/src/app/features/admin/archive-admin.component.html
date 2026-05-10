@@ -2,17 +2,19 @@
   <section class="archive-admin-workspace">
     <header class="archive-admin-toolbar">
       <div class="mode-tabs" role="group" aria-label="Режим запуска архиватора">
-        <button type="button" [class.active]="mode() === 'dry-run'" (click)="setMode('dry-run')">
+        <button type="button" [class.active]="mode() === 'dry-run'" (click)="setMode('dry-run')" [title]="help('dryRun')">
           <span class="material-icons-sharp">fact_check</span>
           Dry-run
+          <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('dryRun')" [attr.aria-label]="help('dryRun')">?</span>
         </button>
-        <button type="button" [class.active]="mode() === 'live'" [disabled]="!settings()?.applyEnabled" (click)="setMode('live')">
+        <button type="button" [class.active]="mode() === 'live'" [disabled]="!settings()?.applyEnabled" (click)="setMode('live')" [title]="help('live')">
           <span class="material-icons-sharp">move_down</span>
           Live
+          <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('live')" [attr.aria-label]="help('live')">?</span>
         </button>
       </div>
 
-      <button type="button" class="refresh-button" [disabled]="loading()" (click)="load()">
+      <button type="button" class="refresh-button" [disabled]="loading()" (click)="load()" [title]="help('refresh')">
         <span class="material-icons-sharp">refresh</span>
         {{ loading() ? 'Обновляю' : 'Обновить' }}
       </button>
@@ -25,11 +27,11 @@
     @if (settings()) {
       <section class="metric-grid">
         @for (metric of settingsMetrics(); track metricId($index, metric)) {
-          <article class="metric-card" [class]="metric.tone">
+          <article class="metric-card help-anchor" [class]="metric.tone" tabindex="0" [attr.data-help]="help(metric.helpKey)" [attr.title]="help(metric.helpKey)">
             <span class="material-icons-sharp">{{ metric.icon }}</span>
             <div>
               <strong>{{ metric.value }}</strong>
-              <small>{{ metric.label }}</small>
+              <small>{{ metric.label }} <i>?</i></small>
             </div>
           </article>
         }
@@ -39,26 +41,35 @@
         <form class="run-panel" (ngSubmit)="run()">
           <div class="panel-title">
             <span class="material-icons-sharp">settings</span>
-            <h2>Настройки</h2>
+            <h2 class="help-title">
+              Настройки
+              <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('settingsPanel')" [attr.aria-label]="help('settingsPanel')">?</span>
+            </h2>
           </div>
 
           <label>
-            <span>Возраст заказов, дней</span>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('retentionDays')" [attr.title]="help('retentionDays')">
+              Возраст заказов, дней <i>?</i>
+            </span>
             <input type="number" min="1" name="retentionDays" [(ngModel)]="retentionDays">
           </label>
 
           <label>
-            <span>Размер пачки</span>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('batchLimit')" [attr.title]="help('batchLimit')">
+              Размер пачки <i>?</i>
+            </span>
             <input type="number" min="1" [max]="settings()?.maxBatchSize ?? 5000" name="batchLimit" [(ngModel)]="batchLimit">
           </label>
 
-          <label class="check-row">
+          <label class="check-row help-anchor" tabindex="0" [attr.data-help]="help('scheduleEnabled')" [attr.title]="help('scheduleEnabled')">
             <input type="checkbox" name="scheduleEnabled" [(ngModel)]="scheduleEnabled">
-            <span>Ежедневный запуск</span>
+            <span>Ежедневный запуск <i>?</i></span>
           </label>
 
           <label>
-            <span>Режим ежедневного запуска</span>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('scheduledMode')" [attr.title]="help('scheduledMode')">
+              Режим ежедневного запуска <i>?</i>
+            </span>
             <select name="scheduledMode" [(ngModel)]="scheduledMode">
               <option value="dry-run">dry-run</option>
               <option value="live" [disabled]="!settings()?.applyEnabled">live</option>
@@ -66,16 +77,20 @@
           </label>
 
           <label>
-            <span>Причина для расписания</span>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('scheduledReason')" [attr.title]="help('scheduledReason')">
+              Причина для расписания <i>?</i>
+            </span>
             <input type="text" maxlength="100" name="scheduledReason" [(ngModel)]="scheduledReason">
           </label>
 
           <label>
-            <span>Причина ручного запуска</span>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('manualReason')" [attr.title]="help('manualReason')">
+              Причина ручного запуска <i>?</i>
+            </span>
             <input type="text" maxlength="100" name="reason" [(ngModel)]="reason">
           </label>
 
-          <div class="schedule-strip">
+          <div class="schedule-strip help-anchor" tabindex="0" [attr.data-help]="help('scheduleStrip')" [attr.title]="help('scheduleStrip')">
             <span class="material-icons-sharp">{{ settings()?.scheduleWorkerEnabled ? 'event_available' : 'event_busy' }}</span>
             <div>
               <strong>
@@ -89,12 +104,12 @@
             </div>
           </div>
 
-          <button type="button" class="save-settings" [disabled]="saving()" (click)="saveSettings()">
+          <button type="button" class="save-settings" [disabled]="saving()" (click)="saveSettings()" [title]="help('saveSettings')">
             <span class="material-icons-sharp">save</span>
             {{ saving() ? 'Сохраняю' : 'Сохранить настройки' }}
           </button>
 
-          <button type="submit" [class.live]="mode() === 'live'" [disabled]="running()">
+          <button type="submit" [class.live]="mode() === 'live'" [disabled]="running()" [title]="help('runButton')">
             <span class="material-icons-sharp">{{ mode() === 'live' ? 'move_down' : 'fact_check' }}</span>
             {{ running() ? 'Выполняю' : (mode() === 'live' ? 'Запустить live' : 'Проверить dry-run') }}
           </button>
@@ -103,7 +118,10 @@
         <section class="result-panel">
           <div class="panel-title">
             <span class="material-icons-sharp">insights</span>
-            <h2>Последний результат</h2>
+            <h2 class="help-title">
+              Последний результат
+              <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('resultPanel')" [attr.aria-label]="help('resultPanel')">?</span>
+            </h2>
           </div>
 
           @if (result()) {
@@ -114,11 +132,11 @@
 
             <div class="metric-grid compact">
               @for (metric of resultMetrics(); track metricId($index, metric)) {
-                <article class="metric-card" [class]="metric.tone">
+                <article class="metric-card help-anchor" [class]="metric.tone" tabindex="0" [attr.data-help]="help(metric.helpKey)" [attr.title]="help(metric.helpKey)">
                   <span class="material-icons-sharp">{{ metric.icon }}</span>
                   <div>
                     <strong>{{ metric.value }}</strong>
-                    <small>{{ metric.label }}</small>
+                    <small>{{ metric.label }} <i>?</i></small>
                   </div>
                 </article>
               }
@@ -137,15 +155,18 @@
       <section class="candidate-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">preview</span>
-          <h2>Ближайшие кандидаты</h2>
-          <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()">
+          <h2 class="help-title">
+            Ближайшие кандидаты
+            <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('candidatesPanel')" [attr.aria-label]="help('candidatesPanel')">?</span>
+          </h2>
+          <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()" [title]="help('refresh')">
             <span class="material-icons-sharp">refresh</span>
           </button>
         </div>
 
         @if (candidatePreview(); as preview) {
           <div class="candidate-note">
-            <strong>cutoff {{ preview.cutoffDate }}</strong>
+            <strong class="help-anchor" tabindex="0" [attr.data-help]="help('cutoff')" [attr.title]="help('cutoff')">cutoff {{ preview.cutoffDate }} <i>?</i></strong>
             <span>{{ preview.selected.orders }} из {{ preview.eligibleOrders }} заказов попадут в пачку</span>
           </div>
 
@@ -157,14 +178,14 @@
                   <small>#{{ candidate.id }}</small>
                 </header>
                 <div class="candidate-meta">
-                  <span>{{ candidate.status }}</span>
-                  <span>{{ candidate.sum | number:'1.0-0' }} руб.</span>
-                  <span>{{ candidate.orderDetailsCount }} деталей</span>
-                  <span>{{ candidate.reviewsCount }} отзывов</span>
+                  <span class="help-anchor" tabindex="0" [attr.data-help]="help('candidateStatus')" [attr.title]="help('candidateStatus')">{{ candidate.status }}</span>
+                  <span class="help-anchor" tabindex="0" [attr.data-help]="help('candidateSum')" [attr.title]="help('candidateSum')">{{ candidate.sum | number:'1.0-0' }} руб.</span>
+                  <span class="help-anchor" tabindex="0" [attr.data-help]="help('candidateDetails')" [attr.title]="help('candidateDetails')">{{ candidate.orderDetailsCount }} деталей</span>
+                  <span class="help-anchor" tabindex="0" [attr.data-help]="help('candidateReviews')" [attr.title]="help('candidateReviews')">{{ candidate.reviewsCount }} отзывов</span>
                 </div>
                 <footer>
                   <span>{{ candidate.companyCity || candidate.filialTitle || '-' }}</span>
-                  <span>{{ candidateAgeDays(candidate.candidateDate) }} дн.</span>
+                  <span class="help-anchor" tabindex="0" [attr.data-help]="help('candidateAge')" [attr.title]="help('candidateAge')">{{ candidateAgeDays(candidate.candidateDate) }} дн.</span>
                   <span>{{ candidate.managerName || '-' }}</span>
                 </footer>
               </article>
@@ -180,22 +201,25 @@
       <section class="journal-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">receipt_long</span>
-          <h2>Журнал запусков</h2>
+          <h2 class="help-title">
+            Журнал запусков
+            <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('journalPanel')" [attr.aria-label]="help('journalPanel')">?</span>
+          </h2>
         </div>
 
         <div class="journal-table-scroll">
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Режим</th>
-                <th>Статус</th>
-                <th>Старт</th>
-                <th>Retention</th>
-                <th>Заказы</th>
-                <th>Связанные строки</th>
-                <th>Причина</th>
-                <th>Детали</th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchId')">ID ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchMode')">Режим ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchStatus')">Статус ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchStart')">Старт ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchRetention')">Retention ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchOrders')">Заказы ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchRows')">Связанные строки ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchReason')">Причина ?</span></th>
+                <th><span class="help-anchor" tabindex="0" [attr.data-help]="help('batchDetails')">Детали ?</span></th>
               </tr>
             </thead>
             <tbody>
@@ -216,7 +240,7 @@
                   </td>
                   <td>{{ batch.archiveReason || '-' }}</td>
                   <td>
-                    <button type="button" class="details-link" [disabled]="batchDetailsLoading()" (click)="openBatchDetails(batch)">
+                    <button type="button" class="details-link" [disabled]="batchDetailsLoading()" (click)="openBatchDetails(batch)" [title]="help('batchDetails')">
                       <span class="material-icons-sharp">manage_search</span>
                     </button>
                   </td>
@@ -241,23 +265,23 @@
           </div>
 
           <div class="batch-detail-grid">
-            <article>
+            <article class="help-anchor" tabindex="0" [attr.data-help]="help('detailMode')" [attr.title]="help('detailMode')">
               <span>Режим</span>
               <strong>{{ batchMode(details.summary) }}</strong>
             </article>
-            <article>
+            <article class="help-anchor" tabindex="0" [attr.data-help]="help('detailStatus')" [attr.title]="help('detailStatus')">
               <span>Статус</span>
               <strong>{{ details.summary.status }}</strong>
             </article>
-            <article>
+            <article class="help-anchor" tabindex="0" [attr.data-help]="help('detailOrders')" [attr.title]="help('detailOrders')">
               <span>Заказы</span>
               <strong>{{ details.totals.orders }}</strong>
             </article>
-            <article>
+            <article class="help-anchor" tabindex="0" [attr.data-help]="help('detailReviews')" [attr.title]="help('detailReviews')">
               <span>Отзывы</span>
               <strong>{{ details.totals.reviews }}</strong>
             </article>
-            <article>
+            <article class="help-anchor" tabindex="0" [attr.data-help]="help('detailPayments')" [attr.title]="help('detailPayments')">
               <span>Оплаты</span>
               <strong>{{ details.totals.paymentCheck }}</strong>
             </article>
@@ -291,6 +315,52 @@
           </div>
         </section>
       }
+
+      <section class="archive-manual-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">menu_book</span>
+          <h2 class="help-title">
+            Как работает архивация
+            <span class="help-dot help-anchor" tabindex="0" [attr.data-help]="help('manual')" [attr.aria-label]="help('manual')">?</span>
+          </h2>
+        </div>
+
+        <div class="archive-manual-flow">
+          <article>
+            <strong>Live-доски</strong>
+            <span>Активные заказы остаются в orders/reviews и видны в рабочих разделах.</span>
+          </article>
+          <article>
+            <strong>Закрытый live</strong>
+            <span>Архив и Оплачено уходят из рабочих досок, но ещё видны в /manager/archive.</span>
+          </article>
+          <article>
+            <strong>Dry-run</strong>
+            <span>Проверяет будущую пачку и пишет журнал без удаления данных.</span>
+          </article>
+          <article>
+            <strong>Live archive</strong>
+            <span>Копирует строки в archive_* и удаляет их из live после backend-разрешения.</span>
+          </article>
+          <article>
+            <strong>Restore</strong>
+            <span>Возвращает физически перенесённый заказ из archive_* обратно в live.</span>
+          </article>
+        </div>
+
+        <div class="archive-manual-sections">
+          @for (section of manualSections; track trackManualSection($index, section)) {
+            <article>
+              <h3>{{ section.title }}</h3>
+              <ul>
+                @for (point of section.points; track trackManualPoint($index, point)) {
+                  <li>{{ point }}</li>
+                }
+              </ul>
+            </article>
+          }
+        </div>
+      </section>
     } @else if (loading()) {
       <section class="empty-state">
         <span class="material-icons-sharp">hourglass_top</span>
@@ -301,33 +371,33 @@
 
   <section admin-right-content class="archive-admin-side">
     @for (metric of rightMetrics(); track metricId($index, metric)) {
-      <article class="archive-side-card" [class]="metric.tone">
+      <article class="archive-side-card help-anchor" [class]="metric.tone" tabindex="0" [attr.data-help]="help(metric.helpKey)" [attr.title]="help(metric.helpKey)">
         <div>
-          <span>{{ metric.label }}</span>
+          <span>{{ metric.label }} <i>?</i></span>
           <strong>{{ metric.value }}</strong>
         </div>
         <i class="material-icons-sharp">{{ metric.icon }}</i>
       </article>
     }
 
-    <article class="archive-side-panel">
-      <h2>План запуска</h2>
+    <article class="archive-side-panel help-anchor" tabindex="0" [attr.data-help]="help('schedulePlan')" [attr.title]="help('schedulePlan')">
+      <h2>План запуска <i>?</i></h2>
       <p>{{ settings()?.scheduleEnabled ? 'Ежедневный запуск включён' : 'Ежедневный запуск выключен' }}</p>
       <strong>{{ settings()?.runMode || 'dry-run' }}</strong>
       <small>{{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
     </article>
 
-    <article class="archive-side-panel">
-      <h2>Безопасность</h2>
+    <article class="archive-side-panel help-anchor" tabindex="0" [attr.data-help]="help('safety')" [attr.title]="help('safety')">
+      <h2>Безопасность <i>?</i></h2>
       <p>{{ settings()?.applyEnabled ? 'Live доступен, ручной запуск требует подтверждение.' : 'Live закрыт backend-флагом.' }}</p>
       <strong>{{ lockStatus()?.locked ? 'Lock занят' : 'Lock свободен' }}</strong>
       <small>{{ lockStatus()?.ownerConnectionId ? 'connection ' + lockStatus()?.ownerConnectionId : 'параллельного запуска нет' }}</small>
       <div class="side-actions">
-        <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()">
+        <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()" [title]="help('candidatesPanel')">
           <span class="material-icons-sharp">manage_search</span>
           Кандидаты
         </button>
-        <button type="button" [disabled]="lockLoading()" (click)="loadLockStatus()">
+        <button type="button" [disabled]="lockLoading()" (click)="loadLockStatus()" [title]="help('lock')">
           <span class="material-icons-sharp">lock_reset</span>
           Lock
         </button>
@@ -335,8 +405,8 @@
     </article>
 
     @if (batches()[0]; as latest) {
-      <article class="archive-side-panel">
-        <h2>Последний запуск</h2>
+      <article class="archive-side-panel help-anchor" tabindex="0" [attr.data-help]="help('latestRun')" [attr.title]="help('latestRun')">
+        <h2>Последний запуск <i>?</i></h2>
         <strong>#{{ latest.batchId }} · {{ batchMode(latest) }}</strong>
         <p>{{ latest.status }}</p>
         <small>{{ latest.startedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
