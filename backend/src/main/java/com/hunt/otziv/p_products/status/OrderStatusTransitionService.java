@@ -142,6 +142,8 @@ public class OrderStatusTransitionService {
 
         saveReviewsToArchive(order);
 
+        clearPublicationDatesForUnpublishedReviews(order);
+
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_ARCHIVE));
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_ARCHIVE);
 
@@ -274,6 +276,8 @@ public class OrderStatusTransitionService {
                 log.info("Уведомление о коррекции отправлено в Telegram");
             }
 
+            clearPublicationDatesForUnpublishedReviews(order);
+
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
             orderRepository.save(order);
 
@@ -283,6 +287,7 @@ public class OrderStatusTransitionService {
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===", e);
             try {
+                clearPublicationDatesForUnpublishedReviews(order);
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
                 orderRepository.save(order);
                 log.warn("Статус заказа ID {} изменен на 'Коррекция' без дополнительных действий из-за ошибки",
@@ -291,6 +296,21 @@ public class OrderStatusTransitionService {
                 log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
             }
             return false;
+        }
+    }
+
+    private void clearPublicationDatesForUnpublishedReviews(Order order) {
+        int clearedCount = 0;
+        for (Review review : getAllReviews(order)) {
+            if (!review.isPublish() && review.getPublishedDate() != null) {
+                review.setPublishedDate(null);
+                clearedCount++;
+            }
+        }
+
+        if (clearedCount > 0) {
+            log.info("Очищены даты публикации у {} неопубликованных отзывов заказа ID {}",
+                    clearedCount, order.getId());
         }
     }
 

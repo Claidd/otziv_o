@@ -25,11 +25,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -158,6 +160,24 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void archiveStatusClearsPublicationDatesOnlyForUnpublishedReviews() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithPublicationReviews(43L, "Публикация");
+        List<Review> reviews = order.getDetails().getFirst().getReviews();
+        OrderStatus archive = status("Архив");
+
+        when(orderRepository.findById(43L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
+
+        assertTrue(service.changeStatusForOrder(43L, "Архив"));
+
+        assertNull(reviews.get(0).getPublishedDate());
+        assertEquals(LocalDate.of(2026, 1, 11), reviews.get(1).getPublishedDate());
+        assertSame(archive, order.getStatus());
+        verify(orderRepository).save(order);
+    }
+
+    @Test
     void archiveStatusRejectsBlankReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(40L, "Публикация", 400L, " ");
@@ -269,6 +289,24 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void correctionStatusClearsPublicationDatesOnlyForUnpublishedReviews() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithPublicationReviews(71L, "Публикация");
+        List<Review> reviews = order.getDetails().getFirst().getReviews();
+        OrderStatus correction = status("Коррекция");
+
+        when(orderRepository.findById(71L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Коррекция")).thenReturn(correction);
+
+        assertTrue(service.changeStatusForOrder(71L, "Коррекция"));
+
+        assertNull(reviews.get(0).getPublishedDate());
+        assertEquals(LocalDate.of(2026, 1, 11), reviews.get(1).getPublishedDate());
+        assertSame(correction, order.getStatus());
+        verify(orderRepository).save(order);
+    }
+
+    @Test
     void toPublishFromArchiveNotifiesWorkerAndChecksStubBots() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithWorker(8L, "Архив", 800L);
@@ -347,6 +385,23 @@ class OrderStatusTransitionServiceTest {
         review.setText(reviewText);
         order.getDetails().getFirst().setReviews(List.of(review));
         return order;
+    }
+
+    private Order orderWithPublicationReviews(Long id, String statusTitle) {
+        Order order = orderWithCompanyManagerAndDetail(id, statusTitle, "Компания", "group");
+        Review unpublished = review(431L, "Готовый текст отзыва 1", false, LocalDate.of(2026, 1, 10));
+        Review published = review(432L, "Готовый текст отзыва 2", true, LocalDate.of(2026, 1, 11));
+        order.getDetails().getFirst().setReviews(List.of(unpublished, published));
+        return order;
+    }
+
+    private Review review(Long id, String text, boolean publish, LocalDate publishedDate) {
+        Review review = new Review();
+        review.setId(id);
+        review.setText(text);
+        review.setPublish(publish);
+        review.setPublishedDate(publishedDate);
+        return review;
     }
 
     private Company company(String title, String groupId) {

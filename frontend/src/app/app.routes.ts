@@ -93,6 +93,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'training',
+    loadComponent: () => import('./features/training/training.component')
+      .then((m) => m.TrainingComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
+    }
+  },
+  {
     path: 'admin/team',
     loadComponent: () => import('./features/cabinet/team.component')
       .then((m) => m.TeamComponent),

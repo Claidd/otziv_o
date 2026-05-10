@@ -33,6 +33,7 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -68,6 +69,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @RequestMapping("/api/worker")
 public class ApiWorkerBoardController {
 
@@ -96,6 +98,7 @@ public class ApiWorkerBoardController {
             "Архив",
             "Публикация"
     );
+    private static final Set<String> REVIEW_CREDENTIAL_COPY_FIELDS = Set.of("login", "password");
     private static final List<String> CURRENT_WORK_SECTIONS = List.of(
             SECTION_NEW,
             SECTION_CORRECT,
@@ -335,6 +338,35 @@ public class ApiWorkerBoardController {
             @PathVariable Long botId
     ) {
         reviewService.deActivateAndChangeBot(reviewId, botId);
+    }
+
+    @PostMapping("/reviews/{reviewId}/copy-click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void logReviewCredentialCopyClick(
+            @PathVariable Long reviewId,
+            @RequestBody ReviewCopyClickRequest request,
+            Principal principal
+    ) {
+        String field = normalizeReviewCopyField(request);
+        Review review = reviewService.getReviewById(reviewId);
+        if (review == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
+        }
+
+        Order order = review.getOrderDetails() != null ? review.getOrderDetails().getOrder() : null;
+        Company company = order != null ? order.getCompany() : null;
+        Bot bot = review.getBot();
+
+        log.info(
+                "Выгул: специалист {} нажал кнопку \"{}\" для отзыва ID {}, заказа ID {}, компании \"{}\", бота ID {}",
+                principalName(principal),
+                copyFieldLabel(field),
+                review.getId(),
+                order != null ? order.getId() : null,
+                company != null ? safe(company.getTitle()) : "",
+                bot != null ? bot.getId() : null
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/publish")
@@ -1375,6 +1407,22 @@ public class ApiWorkerBoardController {
         return value == null ? "" : value;
     }
 
+    private String normalizeReviewCopyField(ReviewCopyClickRequest request) {
+        String field = request == null ? "" : safe(request.field()).trim().toLowerCase(Locale.ROOT);
+        if (!REVIEW_CREDENTIAL_COPY_FIELDS.contains(field)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Кнопка для логирования не поддерживается");
+        }
+        return field;
+    }
+
+    private String copyFieldLabel(String field) {
+        return "password".equals(field) ? "пароль" : "логин";
+    }
+
+    private String principalName(Principal principal) {
+        return principal == null ? "unknown" : safe(principal.getName());
+    }
+
     private String dateValue(Object value) {
         return value == null ? "" : value.toString();
     }
@@ -1602,6 +1650,9 @@ public class ApiWorkerBoardController {
     }
 
     public record ClientWaitingRequest(Boolean waitingForClient) {
+    }
+
+    public record ReviewCopyClickRequest(String field) {
     }
 
     public record OrderNoteUpdateRequest(String orderComments) {

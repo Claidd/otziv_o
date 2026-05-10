@@ -529,6 +529,8 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
+    this.logNagulCredentialCopyClick(review, kind);
+
     const value = {
       url: review.filialUrl,
       login: review.botLogin,
@@ -539,6 +541,18 @@ export class WorkerBoardComponent implements OnDestroy {
     }[kind] ?? '';
 
     await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`);
+  }
+
+  private logNagulCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): void {
+    if (this.activeSection() !== 'nagul' || (kind !== 'login' && kind !== 'password')) {
+      return;
+    }
+
+    this.workerApi.logReviewCopyClick(review.id, kind).subscribe({
+      error: () => {
+        // Копирование не блокируем: лог клика полезен, но не должен мешать работе специалиста.
+      }
+    });
   }
 
   async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {

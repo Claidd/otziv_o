@@ -203,6 +203,10 @@ export class WorkerApi {
     return this.http.post<WorkerActionResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/nagul`, {});
   }
 
+  logReviewCopyClick(reviewId: number, field: 'login' | 'password'): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`, { field });
+  }
+
   deleteBot(botId: number): Observable<void> {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/worker/bots/${botId}`);
   }

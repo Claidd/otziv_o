@@ -15,6 +15,7 @@ import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -508,6 +509,36 @@ class ApiWorkerBoardControllerTest {
                 eq(principal),
                 eq("WORKER")
         );
+    }
+
+    @Test
+    void logReviewCredentialCopyClickAcceptsLoginAndLoadsReview() {
+        Review review = new Review();
+        review.setId(15L);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.logReviewCredentialCopyClick(
+                15L,
+                new ApiWorkerBoardController.ReviewCopyClickRequest("login"),
+                principal
+        );
+
+        verify(reviewService).getReviewById(15L);
+    }
+
+    @Test
+    void logReviewCredentialCopyClickRejectsUnsupportedField() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.logReviewCredentialCopyClick(
+                        15L,
+                        new ApiWorkerBoardController.ReviewCopyClickRequest("text"),
+                        principal
+                )
+        );
+
+        assertEquals("Кнопка для логирования не поддерживается", exception.getReason());
+        verify(reviewService, never()).getReviewById(15L);
     }
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {

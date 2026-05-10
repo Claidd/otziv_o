@@ -4,7 +4,25 @@
 @font-face {
     font-family: 'laptev_brush';
     src:
-         url('../font/laptev_brush.otf');
+         url('../font/borders.ttf') format('truetype');
+    unicode-range: U+0041-005A, U+0061-007A;
+}
+
+@font-face {
+    font-family: 'laptev_brush';
+    src:
+         url('../font/laptev_brush.otf') format('opentype');
+    unicode-range:
+         U+0020-0040,
+         U+005B-0060,
+         U+007B-007E,
+         U+00A0-00BF,
+         U+0400-052F,
+         U+2DE0-2DFF,
+         U+A640-A69F,
+         U+2100-214F,
+         U+2010-205E,
+         U+20A0-20CF;
 }
 
 
