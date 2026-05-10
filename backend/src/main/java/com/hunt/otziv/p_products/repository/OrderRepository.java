@@ -182,6 +182,21 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     )
     Page<Long> findPageIdToAdmin(Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.status.title IN :liveStatuses
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.status.title IN :liveStatuses
+            """
+    )
+    Page<Long> findPageIdToAdminLive(@Param("liveStatuses") Collection<String> liveStatuses,
+                                     Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.manager = :manager ORDER BY o.changed, o.id")
     List<Long> findAllIdToManager(@Param("manager") Manager manager);
 
@@ -191,6 +206,24 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     )
     Page<Long> findPageIdToManager(@Param("manager") Manager manager,
                                    Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND o.status.title IN :liveStatuses
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND o.status.title IN :liveStatuses
+            """
+    )
+    Page<Long> findPageIdToManagerLive(@Param("manager") Manager manager,
+                                       @Param("liveStatuses") Collection<String> liveStatuses,
+                                       Pageable pageable);
 
     @Query("SELECT o.id FROM Order o WHERE o.worker = :worker ORDER BY o.changed, o.id")
     List<Long> findAllIdToWorker(@Param("worker") Worker worker);
@@ -207,6 +240,25 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Page<Long> findPageIdToWorkerForBoard(@Param("worker") Worker worker,
                                           Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND o.status.title IN :liveStatuses
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND o.status.title IN :liveStatuses
+            """
+    )
+    Page<Long> findPageIdToWorkerForBoardLive(@Param("worker") Worker worker,
+                                              @Param("liveStatuses") Collection<String> liveStatuses,
+                                              Pageable pageable);
+
     @Query("SELECT o.id FROM Order o WHERE o.manager IN :managers ORDER BY o.changed, o.id")
     List<Long> findAllIdToOwner(@Param("managers") List<Manager> managers);
 
@@ -216,6 +268,24 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     )
     Page<Long> findPageIdToOwner(@Param("managers") List<Manager> managers,
                                  Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager IN :managers
+                  AND o.status.title IN :liveStatuses
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager IN :managers
+                  AND o.status.title IN :liveStatuses
+            """
+    )
+    Page<Long> findPageIdToOwnerLive(@Param("managers") List<Manager> managers,
+                                     @Param("liveStatuses") Collection<String> liveStatuses,
+                                     Pageable pageable);
 
     @Query("SELECT o.id FROM Order o WHERE o.status.title = :status ORDER BY o.changed, o.id")
     List<Long> findAllIdByStatus(@Param("status") String status);
@@ -295,6 +365,27 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                    @Param("keyword2") String keyword2,
                                    Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByKeyWordLive(@Param("keyword") String keyword,
+                                       @Param("keyword2") String keyword2,
+                                       @Param("liveStatuses") Collection<String> liveStatuses,
+                                       Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
@@ -327,6 +418,30 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                @Param("keyword") String keyword,
                                                @Param("keyword2") String keyword2,
                                                Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager = :manager
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByByManagerAndKeyWordLive(@Param("manager") Manager manager,
+                                                   @Param("keyword") String keyword,
+                                                   @Param("keyword2") String keyword2,
+                                                   @Param("liveStatuses") Collection<String> liveStatuses,
+                                                   Pageable pageable);
 
     @Query("""
         SELECT o.id
@@ -362,6 +477,31 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                       @Param("keyword2") String keyword2,
                                                       Pageable pageable);
 
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.worker = :worker
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByByWorkerAndKeyWordForBoardLive(@Param("worker") Worker worker,
+                                                          @Param("keyword") String keyword,
+                                                          @Param("keyword2") String keyword2,
+                                                          @Param("liveStatuses") Collection<String> liveStatuses,
+                                                          Pageable pageable);
+
     @Query("""
         SELECT o.id
         FROM Order o
@@ -394,6 +534,30 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                            @Param("keyword") String keyword,
                                            @Param("keyword2") String keyword2,
                                            Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                WHERE o.manager IN :managers
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                WHERE o.manager IN :managers
+                  AND o.status.title IN :liveStatuses
+                  AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+            """
+    )
+    Page<Long> findPageIdByOwnerAndKeyWordLive(@Param("managers") List<Manager> managers,
+                                               @Param("keyword") String keyword,
+                                               @Param("keyword2") String keyword2,
+                                               @Param("liveStatuses") Collection<String> liveStatuses,
+                                               Pageable pageable);
 
     @Query("""
         SELECT o.id
@@ -639,10 +803,20 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT COALESCE(s.title, ''), COUNT(o.id)
         FROM Order o
         LEFT JOIN o.status s
-        WHERE o.waitingForClient = false
+        WHERE s.title IN :liveStatuses
         GROUP BY s.id, s.title
     """)
-    List<Object[]> countGroupedByActionableStatus();
+    List<Object[]> countGroupedByStatusLive(@Param("liveStatuses") Collection<String> liveStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.waitingForClient = false
+          AND s.title IN :liveStatuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countGroupedByActionableStatus(@Param("liveStatuses") Collection<String> liveStatuses);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
@@ -716,10 +890,23 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.manager = :manager
-          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
         GROUP BY s.id, s.title
     """)
-    List<Object[]> countGroupedByActionableStatusAndManager(@Param("manager") Manager manager);
+    List<Object[]> countGroupedByStatusAndManagerLive(@Param("manager") Manager manager,
+                                                      @Param("liveStatuses") Collection<String> liveStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.manager = :manager
+          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndManager(@Param("manager") Manager manager,
+                                                            @Param("liveStatuses") Collection<String> liveStatuses);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)
@@ -735,10 +922,23 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.manager IN :managers
-          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
         GROUP BY s.id, s.title
     """)
-    List<Object[]> countGroupedByActionableStatusAndManagers(@Param("managers") Set<Manager> managers);
+    List<Object[]> countGroupedByStatusAndManagersLive(@Param("managers") Set<Manager> managers,
+                                                       @Param("liveStatuses") Collection<String> liveStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.manager IN :managers
+          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndManagers(@Param("managers") Set<Manager> managers,
+                                                             @Param("liveStatuses") Collection<String> liveStatuses);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)
@@ -754,10 +954,23 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN o.status s
         WHERE o.worker = :worker
-          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
         GROUP BY s.id, s.title
     """)
-    List<Object[]> countGroupedByActionableStatusAndWorker(@Param("worker") Worker worker);
+    List<Object[]> countGroupedByStatusAndWorkerLive(@Param("worker") Worker worker,
+                                                     @Param("liveStatuses") Collection<String> liveStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.worker = :worker
+          AND o.waitingForClient = false
+          AND s.title IN :liveStatuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countGroupedByActionableStatusAndWorker(@Param("worker") Worker worker,
+                                                           @Param("liveStatuses") Collection<String> liveStatuses);
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id)

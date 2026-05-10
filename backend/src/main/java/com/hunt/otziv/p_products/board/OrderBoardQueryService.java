@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.board;
 
+import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -62,9 +63,17 @@ public class OrderBoardQueryService {
         Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findPageIdByKeyWord(keyword, keyword, pageable);
+            orderIds = orderRepository.findPageIdByKeyWordLive(
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         } else {
-            orderIds = orderRepository.findPageIdToAdmin(pageable);
+            orderIds = orderRepository.findPageIdToAdminLive(
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         }
 
         return getOrderDTOPage(orderIds);
@@ -101,9 +110,19 @@ public class OrderBoardQueryService {
         Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findPageIdByByManagerAndKeyWord(manager, keyword, keyword, pageable);
+            orderIds = orderRepository.findPageIdByByManagerAndKeyWordLive(
+                    manager,
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         } else {
-            orderIds = orderRepository.findPageIdToManager(manager, pageable);
+            orderIds = orderRepository.findPageIdToManagerLive(
+                    manager,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         }
 
         return getOrderDTOPage(orderIds);
@@ -145,9 +164,19 @@ public class OrderBoardQueryService {
         Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findPageIdByOwnerAndKeyWord(managerList, keyword, keyword, pageable);
+            orderIds = orderRepository.findPageIdByOwnerAndKeyWordLive(
+                    managerList,
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         } else {
-            orderIds = orderRepository.findPageIdToOwner(managerList, pageable);
+            orderIds = orderRepository.findPageIdToOwnerLive(
+                    managerList,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         }
 
         return getOrderDTOPage(orderIds);
@@ -189,9 +218,19 @@ public class OrderBoardQueryService {
         Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findPageIdByByWorkerAndKeyWordForBoard(worker, keyword, keyword, pageable);
+            orderIds = orderRepository.findPageIdByByWorkerAndKeyWordForBoardLive(
+                    worker,
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         } else {
-            orderIds = orderRepository.findPageIdToWorkerForBoard(worker, pageable);
+            orderIds = orderRepository.findPageIdToWorkerForBoardLive(
+                    worker,
+                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    pageable
+            );
         }
 
         return getOrderDTOPage(orderIds);
@@ -306,4 +345,5 @@ public class OrderBoardQueryService {
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
+
 }

@@ -25,9 +25,7 @@ public final class ManagerBoardStatusCatalog {
             "Опубликовано",
             "Выставлен счет",
             "Напоминание",
-            "Не оплачено",
-            "Архив",
-            "Оплачено"
+            "Не оплачено"
     );
 
     private ManagerBoardStatusCatalog() {

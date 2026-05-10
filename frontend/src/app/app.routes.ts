@@ -66,6 +66,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'manager/archive',
+    loadComponent: () => import('./features/manager/manager-archive.component')
+      .then((m) => m.ManagerArchiveComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
+    }
+  },
+  {
     path: 'manager/orders/:companyId/:orderId',
     loadComponent: () => import('./features/manager/order-details.component')
       .then((m) => m.OrderDetailsComponent),
@@ -105,6 +114,15 @@ export const routes: Routes = [
     path: 'admin/analyse',
     loadComponent: () => import('./features/cabinet/admin-analytics.component')
       .then((m) => m.AdminAnalyticsComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/archive',
+    loadComponent: () => import('./features/admin/archive-admin.component')
+      .then((m) => m.ArchiveAdminComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']

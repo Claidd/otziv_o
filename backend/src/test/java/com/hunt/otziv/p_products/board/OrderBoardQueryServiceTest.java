@@ -56,8 +56,8 @@ class OrderBoardQueryServiceTest {
         Object[] firstRow = new Object[]{"first"};
         Object[] secondRow = new Object[]{"second"};
 
-        when(orderRepository.findPageIdByKeyWord(eq("needle"), eq("needle"), any(Pageable.class)))
-                .thenAnswer(invocation -> page(List.of(2L, 1L), invocation.getArgument(2), 2));
+        when(orderRepository.findPageIdByKeyWordLive(eq("needle"), eq("needle"), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> page(List.of(2L, 1L), invocation.getArgument(3), 2));
         when(orderRepository.findOrderListRows(List.of(2L, 1L)))
                 .thenReturn(List.of(firstRow, secondRow));
         when(orderDtoMapper.toBoardDTO(firstRow)).thenReturn(orderDto(1L));
@@ -74,8 +74,8 @@ class OrderBoardQueryServiceTest {
         OrderBoardQueryService service = service();
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
 
-        when(orderRepository.findPageIdToAdmin(pageableCaptor.capture()))
-                .thenAnswer(invocation -> page(List.of(), invocation.getArgument(0), 0));
+        when(orderRepository.findPageIdToAdminLive(any(), pageableCaptor.capture()))
+                .thenAnswer(invocation -> page(List.of(), invocation.getArgument(1), 0));
 
         Page<OrderDTOList> result = service.getAllOrderDTOAndKeyword("   ", -5, 0, "asc");
 
@@ -87,6 +87,7 @@ class OrderBoardQueryServiceTest {
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("changed").getDirection());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
         verify(orderRepository, never()).findPageIdByKeyWord(any(), any(), any());
+        verify(orderRepository, never()).findPageIdByKeyWordLive(any(), any(), any(), any());
     }
 
     @Test

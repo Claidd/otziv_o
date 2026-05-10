@@ -1,10 +1,12 @@
 package com.hunt.otziv.r_review.board;
 
+import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +31,9 @@ import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.parseKeywordUuid;
 public class ReviewBoardQueryService {
 
     private final EntityManager entityManager;
+
+    @Value("${otziv.board.live-slice.retention-days:90}")
+    private int liveSliceRetentionDays;
 
     public Pageable reviewPageable(int pageNumber, int pageSize, String sortDirection) {
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDirection)
@@ -80,7 +85,10 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
             }
-            case ORDER_STATUS -> conditions.add("os.title = :status");
+            case ORDER_STATUS -> {
+                conditions.add("os.title = :status");
+                conditions.add("(os.title IN :liveStatuses OR o.changed >= :liveCutoff OR r.publish = false)");
+            }
             case VIGUL -> {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
@@ -147,7 +155,10 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
             }
-            case ORDER_STATUS -> conditions.add("os.title = :status");
+            case ORDER_STATUS -> {
+                conditions.add("os.title = :status");
+                conditions.add("(os.title IN :liveStatuses OR o.changed >= :liveCutoff OR r.publish = false)");
+            }
             case VIGUL -> {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
@@ -206,6 +217,8 @@ public class ReviewBoardQueryService {
         }
         if (mode == ReviewBoardMode.ORDER_STATUS) {
             query.setParameter("status", status);
+            query.setParameter("liveStatuses", BoardLiveSlice.ACTIVE_ORDER_STATUSES);
+            query.setParameter("liveCutoff", liveCutoff());
         }
         if (scope == ReviewBoardScope.WORKER) {
             query.setParameter("worker", worker);
@@ -236,6 +249,8 @@ public class ReviewBoardQueryService {
         }
         if (mode == ReviewBoardMode.ORDER_STATUS) {
             query.setParameter("status", status);
+            query.setParameter("liveStatuses", BoardLiveSlice.ACTIVE_ORDER_STATUSES);
+            query.setParameter("liveCutoff", liveCutoff());
         }
         if (scope == ReviewBoardScope.WORKER) {
             query.setParameter("worker", worker);
@@ -254,5 +269,9 @@ public class ReviewBoardQueryService {
         if (keywordUuid != null) {
             query.setParameter("keywordUuid", keywordUuid);
         }
+    }
+
+    private LocalDate liveCutoff() {
+        return BoardLiveSlice.cutoff(liveSliceRetentionDays);
     }
 }

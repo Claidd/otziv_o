@@ -208,7 +208,7 @@ public class ManagerBoardService {
         metrics.add(companyMetric(companyCounts, "Ожидание", "Ожидание", "hourglass_top", "pink"));
         metrics.add(companyMetric(companyCounts, "На стопе", "На стопе", "pause_circle", "gray"));
         metrics.add(companyMetric(companyCounts, "Бан", "Бан", "block", "gray"));
-        metrics.add(companyMetric(companyCounts, "Всего", "Все", "dashboard", "blue"));
+        metrics.add(companyMetric(companyCounts, "Рабочие", "Все", "dashboard", "blue"));
 
         metrics.add(orderMetric(orderCounts, "Новые", "Новый", "fiber_new", "yellow"));
         metrics.add(orderMetric(orderCounts, "В проверку", "В проверку", "fact_check", "blue"));
@@ -219,9 +219,7 @@ public class ManagerBoardService {
         metrics.add(orderMetric(orderCounts, "Выставлен счет", "Выставлен счет", "receipt_long", "blue"));
         metrics.add(orderMetric(orderCounts, "Напоминание", "Напоминание", "notifications_active", "pink"));
         metrics.add(orderMetric(orderCounts, "Не оплачено", "Не оплачено", "money_off", "gray"));
-        metrics.add(orderMetric(orderCounts, "Архив", "Архив", "archive", "gray"));
-        metrics.add(orderMetric(orderCounts, "Оплачено", "Оплачено", "payments", "teal"));
-        metrics.add(orderMetric(orderCounts, "Всего", "Все", "dashboard", "blue"));
+        metrics.add(orderMetric(orderCounts, "Рабочие", "Все", "dashboard", "blue"));
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
                 principal,

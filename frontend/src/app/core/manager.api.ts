@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 
 export type ManagerSection = 'companies' | 'orders';
+export type ArchiveOrderMode = 'all' | 'archive' | 'paid';
 
 export interface ManagerPage<T> {
   content: T[];
@@ -13,6 +14,152 @@ export interface ManagerPage<T> {
   totalPages: number;
   first: boolean;
   last: boolean;
+}
+
+export interface ArchiveOrderListItem {
+  id: number;
+  companyId?: number | null;
+  companyTitle: string;
+  companyTelephone: string;
+  companyCity: string;
+  filialTitle: string;
+  status: string;
+  sum?: number;
+  amount?: number;
+  counter?: number;
+  waitingForClient: boolean;
+  managerName: string;
+  workerName: string;
+  created?: string;
+  changed?: string;
+  payDay?: string;
+  archivedAt?: string;
+  archiveReason: string;
+  archiveBatchId?: number;
+  restoredAt?: string;
+  restoredBy: string;
+  restoreBatchId?: number;
+  orderDetailsCount: number;
+  reviewsCount: number;
+  paymentCheckSum?: number;
+  zpSum?: number;
+  source?: 'archive' | 'live';
+}
+
+export interface ArchiveOrderDetailItem {
+  id: string;
+  productId?: number | null;
+  productTitle: string;
+  amount?: number;
+  price?: number;
+  comment: string;
+  publishedDate?: string;
+}
+
+export interface ArchiveReviewItem {
+  id: number;
+  orderDetailsId?: string | null;
+  text: string;
+  answer: string;
+  category: string;
+  subCategory: string;
+  botId?: number | null;
+  botFio: string;
+  botLogin: string;
+  productId?: number | null;
+  productTitle: string;
+  workerFio: string;
+  filialTitle: string;
+  created?: string;
+  changed?: string;
+  publishedDate?: string;
+  publish: boolean;
+  vigul: boolean;
+  price?: number;
+  url: string;
+}
+
+export interface ArchiveBadReviewTaskItem {
+  id: number;
+  sourceReviewId?: number | null;
+  status: string;
+  originalRating?: number | null;
+  targetRating?: number | null;
+  price?: number;
+  scheduledDate?: string;
+  completedDate?: string;
+  workerFio: string;
+  botFio: string;
+  comment: string;
+}
+
+export interface ArchiveNextOrderRequestItem {
+  id: number;
+  companyId?: number | null;
+  filialId?: number | null;
+  sourceOrderId?: number | null;
+  createdOrderId?: number | null;
+  status: string;
+  attempts: number;
+  errorMessage: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ArchiveZpItem {
+  id: number;
+  fio: string;
+  sum?: number;
+  userId?: number | null;
+  professionId?: number | null;
+  orderId?: number | null;
+  amount: number;
+  created?: string;
+  active: boolean;
+}
+
+export interface ArchivePaymentCheckItem {
+  id: number;
+  title: string;
+  sum?: number;
+  companyId?: number | null;
+  orderId?: number | null;
+  managerId?: number | null;
+  workerId?: number | null;
+  created?: string;
+  active: boolean;
+}
+
+export interface ArchiveOrderDetailsPayload {
+  order: ArchiveOrderListItem;
+  orderComments: string;
+  details: ArchiveOrderDetailItem[];
+  reviews: ArchiveReviewItem[];
+  badReviewTasks: ArchiveBadReviewTaskItem[];
+  nextOrderRequests: ArchiveNextOrderRequestItem[];
+  zp: ArchiveZpItem[];
+  paymentChecks: ArchivePaymentCheckItem[];
+}
+
+export interface ArchiveCandidateCounts {
+  orders: number;
+  orderDetails: number;
+  reviews: number;
+  badReviewTasks: number;
+  nextOrderRequests: number;
+  zp: number;
+  paymentCheck: number;
+}
+
+export interface ArchiveRestoreResult {
+  batchId: number;
+  orderId: number;
+  restoredAt: string;
+  restoredBy: string;
+  targetStatus: string;
+  selected: ArchiveCandidateCounts;
+  restored: ArchiveCandidateCounts;
+  message: string;
 }
 
 export interface CompanyCardItem {
@@ -360,6 +507,13 @@ export interface ManagerBoardQuery {
   sortDirection?: 'desc' | 'asc';
 }
 
+export interface ManagerArchiveOrdersQuery {
+  keyword?: string;
+  mode?: ArchiveOrderMode;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ManagerApi {
   constructor(private readonly http: HttpClient) {}
@@ -382,6 +536,37 @@ export class ManagerApi {
 
   getOverdueOrders(): Observable<ManagerOverdueOrders> {
     return this.http.get<ManagerOverdueOrders>(`${appEnvironment.apiBaseUrl}/api/manager/overdue-orders`);
+  }
+
+  getArchiveOrders(query: ManagerArchiveOrdersQuery): Observable<ManagerPage<ArchiveOrderListItem>> {
+    const params = new HttpParams()
+      .set('keyword', query.keyword?.trim() ?? '')
+      .set('mode', query.mode ?? 'all')
+      .set('pageNumber', String(query.pageNumber ?? 0))
+      .set('pageSize', String(query.pageSize ?? 10));
+
+    return this.http.get<ManagerPage<ArchiveOrderListItem>>(
+      `${appEnvironment.apiBaseUrl}/api/manager/archive/orders`,
+      { params }
+    );
+  }
+
+  getArchiveOrder(orderId: number): Observable<ArchiveOrderDetailsPayload> {
+    return this.http.get<ArchiveOrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}`
+    );
+  }
+
+  restoreArchiveOrder(orderId: number, targetStatus = 'Архив'): Observable<ArchiveRestoreResult> {
+    const params = new HttpParams()
+      .set('targetStatus', targetStatus)
+      .set('confirm', 'true');
+
+    return this.http.post<ArchiveRestoreResult>(
+      `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}/restore`,
+      {},
+      { params }
+    );
   }
 
   getCompanyEdit(companyId: number): Observable<CompanyEditPayload> {

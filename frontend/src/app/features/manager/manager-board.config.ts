@@ -81,6 +81,8 @@ export const MANAGER_ORDER_ACTIONS: StatusAction[] = [
 ];
 
 export const MANAGER_PAGE_SIZE_OPTIONS = [5, 10, 15];
+const ALL_STATUS = 'Все';
+const WORKING_STATUS_LABEL = 'Рабочие';
 
 export const EMPTY_MANAGER_COMPANY_PAGE: ManagerPage<CompanyCardItem> = {
   content: [],
@@ -123,9 +125,7 @@ export const DEFAULT_MANAGER_ORDER_STATUSES = [
   'Опубликовано',
   'Выставлен счет',
   'Напоминание',
-  'Не оплачено',
-  'Архив',
-  'Оплачено'
+  'Не оплачено'
 ];
 
 export const MANAGER_MOBILE_NAV_LINKS: MobileNavLink[] = [
@@ -155,7 +155,7 @@ export function managerBoardTitle(section: ManagerSection, status: string, selec
   }
 
   const sectionLabel = managerSectionLabel(section);
-  return status === 'Все' ? sectionLabel : status;
+  return status === ALL_STATUS ? `${sectionLabel} - ${WORKING_STATUS_LABEL}` : status;
 }
 
 export function managerLayoutTitle(section: ManagerSection, status: string, selectedCompany: SelectedCompany | null): string {
@@ -163,7 +163,7 @@ export function managerLayoutTitle(section: ManagerSection, status: string, sele
     return `Заказы - ${selectedCompany.title}`;
   }
 
-  return `${managerSectionLabel(section)} - ${status}`;
+  return `${managerSectionLabel(section)} - ${managerStatusDisplayLabel(status)}`;
 }
 
 export function managerPromoItems(section: ManagerSection, texts: string[]): PromoItem[] {
@@ -183,8 +183,13 @@ export function managerPromoItems(section: ManagerSection, texts: string[]): Pro
 }
 
 export function managerStatusOptionLabel(status: string, count: number | null, delta = 0): string {
-  const label = count === null ? status : `${status}: ${count}`;
+  const displayStatus = managerStatusDisplayLabel(status);
+  const label = count === null ? displayStatus : `${displayStatus}: ${count}`;
   return delta > 0 ? `${label} +${delta}` : label;
+}
+
+export function managerStatusDisplayLabel(status: string): string {
+  return status === ALL_STATUS ? WORKING_STATUS_LABEL : status;
 }
 
 export function managerPayableOrderSum(order: OrderCardItem): number {

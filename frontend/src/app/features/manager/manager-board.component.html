@@ -57,6 +57,7 @@
 
           <select [ngModel]="''" (ngModelChange)="handleTopMenu($event)" aria-label="Прочее">
             <option value="">Прочее</option>
+            <option value="route:/manager/archive">Архив</option>
             <option value="route:/admin/dictionaries">Категории</option>
             <option [value]="'route:' + workersRoute">Специалисты</option>
           </select>
@@ -64,6 +65,7 @@
 
         <div class="quick-links">
           <button type="button" (click)="openManualCompanyCreate()">Новая компания</button>
+          <a routerLink="/manager/archive">Архив</a>
           <a routerLink="/admin/dictionaries">Категории</a>
           <a [routerLink]="workersRoute">Специалисты</a>
         </div>

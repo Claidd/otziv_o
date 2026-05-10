@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.statistics;
 
+import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
@@ -54,53 +55,75 @@ public class OrderStatisticsService {
     }
 
     public Map<String, Integer> countOrdersByStatus() {
-        return toStatusCountMap(orderRepository.countGroupedByStatus());
+        return toStatusCountMap(orderRepository.countGroupedByStatusLive(
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countActionableOrdersByStatus() {
-        return toStatusCountMap(orderRepository.countGroupedByActionableStatus());
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatus(
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countOrdersByStatusToManager(Manager manager) {
         if (manager == null) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByStatusAndManager(manager));
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndManagerLive(
+                manager,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countActionableOrdersByStatusToManager(Manager manager) {
         if (manager == null) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManager(manager));
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManager(
+                manager,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countOrdersByStatusToOwner(Set<Manager> managerList) {
         if (managerList == null || managerList.isEmpty()) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByStatusAndManagers(managerList));
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndManagersLive(
+                managerList,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countActionableOrdersByStatusToOwner(Set<Manager> managerList) {
         if (managerList == null || managerList.isEmpty()) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManagers(managerList));
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndManagers(
+                managerList,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countOrdersByStatusToWorker(Worker worker) {
         if (worker == null) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByStatusAndWorker(worker));
+        return toStatusCountMap(orderRepository.countGroupedByStatusAndWorkerLive(
+                worker,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countActionableOrdersByStatusToWorker(Worker worker) {
         if (worker == null) {
             return Map.of();
         }
-        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndWorker(worker));
+        return toStatusCountMap(orderRepository.countGroupedByActionableStatusAndWorker(
+                worker,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        ));
     }
 
     public Map<String, Integer> countActionableOrdersByStatusToWorkerChangedOnOrBefore(
@@ -284,4 +307,5 @@ public class OrderStatisticsService {
         }
         return result;
     }
+
 }

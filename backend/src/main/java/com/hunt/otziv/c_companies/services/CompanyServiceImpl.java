@@ -14,6 +14,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
@@ -41,6 +42,7 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -79,6 +81,9 @@ public class CompanyServiceImpl implements CompanyService{
     private final OperatorService operatorService;
     private final TelegramService telegramService;
     private final NextOrderRequestRepository nextOrderRequestRepository;
+
+    @Value("${otziv.board.live-slice.retention-days:90}")
+    private int liveSliceRetentionDays;
 
     @Transactional
     public void save(Company company){
@@ -202,10 +207,20 @@ public class CompanyServiceImpl implements CompanyService{
         Page<Long> companyIds;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyIds = companyRepository.findPageToAdminWithFetchWithKeyWord(keywords,keywords, pageable);
+            companyIds = companyRepository.findPageToAdminWithFetchWithKeyWordLive(
+                    keywords,
+                    keywords,
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         else {
-            companyIds = companyRepository.findPageIdToAdmin(pageable);
+            companyIds = companyRepository.findPageIdToAdminLive(
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         return getCompanyDTOPage(companyIds);
     }
@@ -222,10 +237,22 @@ public class CompanyServiceImpl implements CompanyService{
         Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyIds = companyRepository.findPageByManagerAndKeyWord(manager,keyword,  manager, keyword, pageable);
+            companyIds = companyRepository.findPageByManagerAndKeyWordLive(
+                    manager,
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         else {
-            companyIds = companyRepository.findPageByManager(manager, pageable);
+            companyIds = companyRepository.findPageByManagerLive(
+                    manager,
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         return getCompanyDTOPage(companyIds);
     } // Берем все заказы  Менеджера + поиск
@@ -292,10 +319,22 @@ public class CompanyServiceImpl implements CompanyService{
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyIds = companyRepository.findPageByOwnerAndKeyWord(managerList, keyword,keyword, pageable);
+            companyIds = companyRepository.findPageByOwnerAndKeyWordLive(
+                    managerList,
+                    keyword,
+                    keyword,
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         else {
-            companyIds = companyRepository.findPageIdToOwner(managerList, pageable);
+            companyIds = companyRepository.findPageIdToOwnerLive(
+                    managerList,
+                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                    liveCutoff(),
+                    pageable
+            );
         }
         return getCompanyDTOPage(companyIds);
     }
@@ -333,6 +372,10 @@ public class CompanyServiceImpl implements CompanyService{
                 ? Sort.by("updateStatus").descending().and(Sort.by("id").descending())
                 : Sort.by("updateStatus").ascending().and(Sort.by("id").ascending());
         return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
+    }
+
+    private LocalDate liveCutoff() {
+        return BoardLiveSlice.cutoff(liveSliceRetentionDays);
     }
 
 
@@ -593,7 +636,10 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Map<String, Integer> countCompaniesByStatus() {
-        return toStatusCountMap(companyRepository.countGroupedByStatus());
+        return toStatusCountMap(companyRepository.countGroupedByStatusLive(
+                BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                liveCutoff()
+        ));
     }
 
     @Override
@@ -601,7 +647,11 @@ public class CompanyServiceImpl implements CompanyService{
         if (manager == null) {
             return Map.of();
         }
-        return toStatusCountMap(companyRepository.countGroupedByStatusAndManager(manager));
+        return toStatusCountMap(companyRepository.countGroupedByStatusAndManagerLive(
+                manager,
+                BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                liveCutoff()
+        ));
     }
 
     @Override
@@ -609,7 +659,11 @@ public class CompanyServiceImpl implements CompanyService{
         if (managerList == null || managerList.isEmpty()) {
             return Map.of();
         }
-        return toStatusCountMap(companyRepository.countGroupedByStatusAndManagers(managerList));
+        return toStatusCountMap(companyRepository.countGroupedByStatusAndManagersLive(
+                managerList,
+                BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
+                liveCutoff()
+        ));
     }
 
     private Map<String, Integer> toStatusCountMap(List<Object[]> rows) {

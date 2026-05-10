@@ -1,0 +1,281 @@
+<app-admin-layout title="Архив" active="manager-archive" rightPanelMode="custom">
+  <section class="archive-workspace">
+    <header class="archive-toolbar">
+      <nav class="archive-tabs" aria-label="Разделы архива">
+        @for (tab of modeTabs; track trackMode($index, tab)) {
+          <button type="button" [class.active]="mode() === tab.key" (click)="setMode(tab.key)">
+            <span class="material-icons-sharp">{{ tab.icon }}</span>
+            {{ tab.label }}
+          </button>
+        }
+      </nav>
+
+      <div class="archive-actions">
+        <a routerLink="/manager">Менеджер</a>
+        <button type="button" (click)="refresh()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Загрузка' : 'Обновить' }}
+        </button>
+      </div>
+    </header>
+
+    <section class="archive-search">
+      <label>
+        <span class="material-icons-sharp">search</span>
+        <input
+          type="text"
+          placeholder="Компания, телефон, заказ, отзыв"
+          [ngModel]="keyword()"
+          (ngModelChange)="keyword.set($event)"
+          (keyup.enter)="search()"
+        >
+      </label>
+
+      <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+        @for (size of pageSizeOptions; track size) {
+          <option [value]="size">{{ size }}</option>
+        }
+      </select>
+
+      <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Найти">
+        <span class="material-icons-sharp">manage_search</span>
+      </button>
+
+      @if (keyword()) {
+        <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить">
+          <span class="material-icons-sharp">close</span>
+        </button>
+      }
+    </section>
+
+    @if (error()) {
+      <app-load-error-card
+        title="Архив не загрузился"
+        [message]="error()!"
+        actionLabel="Повторить"
+        [loading]="loading()"
+        (retry)="refresh()"
+      />
+    }
+
+    <section class="archive-summary">
+      <strong>{{ ordersPage().totalElements }}</strong>
+      <span>закрытых заказов</span>
+    </section>
+
+    <section class="archive-cards">
+      @for (order of orders(); track trackOrder($index, order)) {
+        <article
+          class="archive-order-card"
+          [class.archive-order-card--paid]="order.status === 'Оплачено'"
+          [class.archive-order-card--stored]="isArchiveSource(order)"
+        >
+          <header>
+            <strong>{{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}</strong>
+            <small>#{{ order.id }}</small>
+          </header>
+
+          <div class="meta-row">
+            <span>{{ order.status || '-' }}</span>
+            <span>{{ order.sum ?? 0 | number:'1.0-0' }} руб.</span>
+          </div>
+
+          <div class="phone-row">
+            <a [href]="'tel:' + (order.companyTelephone || '')">{{ order.companyTelephone || '-' }}</a>
+            <span>{{ order.source === 'archive' ? 'архив' : 'live' }}</span>
+          </div>
+
+          <div class="progress">
+            <div class="progress-bar" [style.width.%]="order.amount ? ((order.counter || 0) / order.amount) * 100 : 0">
+              <span>{{ order.counter || 0 }}</span>
+            </div>
+          </div>
+
+          <div class="archive-card-facts">
+            <span>{{ order.orderDetailsCount }} деталей</span>
+            <span>{{ order.reviewsCount }} отзывов</span>
+          </div>
+
+          <div class="meta-row category-row">
+            <span>{{ order.companyCity || 'Город' }}</span>
+            <span>{{ order.managerName || 'Менеджер' }}</span>
+          </div>
+
+          <div class="archive-card-actions">
+            @if (orderDetailsLink(order); as detailsLink) {
+              <a class="details-button" [routerLink]="detailsLink">Подробнее</a>
+            } @else if (canRestore(order)) {
+              <button type="button" class="details-button restore-button" (click)="openRestore(order)" [disabled]="restoreLoading() || restoring()">
+                Восстановить
+              </button>
+            } @else {
+              <button type="button" class="details-button" disabled>
+                {{ order.restoredAt ? 'Уже восстановлен' : 'В архивной таблице' }}
+              </button>
+            }
+          </div>
+
+          <footer>
+            <span class="unchanged-age" [class.unchanged-age--alert]="orderAgeDays(order) >= 2">
+              @if (orderAgeDays(order) >= 2) {
+                <i aria-hidden="true">!</i>
+              }
+              Без изменений: {{ orderAgeDays(order) }} дн.
+            </span>
+            <span>{{ order.workerName || '-' }}</span>
+          </footer>
+        </article>
+      } @empty {
+        <div class="archive-empty">
+          <span class="material-icons-sharp">inventory_2</span>
+          <h2>Заказов нет</h2>
+        </div>
+      }
+    </section>
+
+    <footer class="archive-pager">
+      <button type="button" class="icon-button" (click)="previousPage()" [disabled]="ordersPage().first || loading()" title="Предыдущая">
+        <span class="material-icons-sharp">chevron_left</span>
+      </button>
+      <span>{{ ordersPage().number + 1 }} / {{ ordersPage().totalPages || 1 }}</span>
+      <button type="button" class="icon-button" (click)="nextPage()" [disabled]="ordersPage().last || loading()" title="Следующая">
+        <span class="material-icons-sharp">chevron_right</span>
+      </button>
+    </footer>
+
+    <section class="archive-mobile-stats" aria-label="Статистика архива">
+      @for (metric of rightMetrics(); track trackMetric($index, metric)) {
+        <article class="archive-stat-card" [class]="metric.tone">
+          <div>
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+          </div>
+          <i class="material-icons-sharp">{{ metric.icon }}</i>
+        </article>
+      }
+    </section>
+  </section>
+
+  <section admin-right-content class="archive-right">
+    @for (metric of rightMetrics(); track trackMetric($index, metric)) {
+      <article class="archive-stat-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+
+    <article class="archive-side-note">
+      <h2>{{ mode() === 'paid' ? 'Оплаченные' : mode() === 'archive' ? 'Архивные' : 'Все закрытые' }}</h2>
+      <p>Здесь видны live-закрытые заказы и уже физически перенесённые записи.</p>
+      <button type="button" (click)="refresh()" [disabled]="loading()">
+        <span class="material-icons-sharp">refresh</span>
+        Обновить
+      </button>
+    </article>
+  </section>
+
+  @if (restoreOrder(); as order) {
+    <section class="archive-restore-backdrop" role="presentation" (click)="closeRestore()">
+      <article
+        class="archive-restore-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Восстановление заказа"
+        (click)="$event.stopPropagation()"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">Восстановление</p>
+            <h2>{{ order.companyTitle || 'Без компании' }} - #{{ order.id }}</h2>
+          </div>
+          <button type="button" class="restore-close" (click)="closeRestore()" [disabled]="restoring()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (restoreError()) {
+          <div class="restore-error">
+            <span class="material-icons-sharp">error</span>
+            <p>{{ restoreError() }}</p>
+          </div>
+        }
+
+        @if (restoreLoading()) {
+          <div class="restore-loading">
+            <span class="material-icons-sharp">hourglass_top</span>
+            <p>Загружаю состав заказа</p>
+          </div>
+        } @else if (restoreDetails(); as details) {
+          <section class="restore-summary-grid" aria-label="Состав архивного заказа">
+            <article>
+              <span>Строк всего</span>
+              <strong>{{ restoreRowsTotal(details) }}</strong>
+            </article>
+            <article>
+              <span>Детали</span>
+              <strong>{{ details.details.length }}</strong>
+            </article>
+            <article>
+              <span>Отзывы</span>
+              <strong>{{ details.reviews.length }}</strong>
+            </article>
+            <article>
+              <span>Оплаты</span>
+              <strong>{{ restorePaymentTotal(details) | number:'1.0-0' }}</strong>
+            </article>
+            <article>
+              <span>ЗП</span>
+              <strong>{{ restoreZpTotal(details) | number:'1.0-0' }}</strong>
+            </article>
+          </section>
+
+          <section class="restore-target">
+            <label>
+              <span>Статус после восстановления</span>
+              <select [ngModel]="restoreTargetStatus()" (ngModelChange)="restoreTargetStatus.set($event)">
+                @for (status of restoreStatusOptions(order); track status) {
+                  <option [value]="status">{{ status }}</option>
+                }
+              </select>
+            </label>
+
+            <div class="restore-note">
+              <span class="material-icons-sharp">info</span>
+              <p>Заказ вернётся в live-таблицы с выбранным статусом. Архивная запись останется как журнал восстановления.</p>
+            </div>
+          </section>
+
+          @if (details.orderComments) {
+            <section class="restore-comments">
+              <strong>Заметка заказа</strong>
+              <p>{{ details.orderComments }}</p>
+            </section>
+          }
+        }
+
+        @if (restoreResult(); as result) {
+          <section class="restore-result">
+            <span class="material-icons-sharp">task_alt</span>
+            <div>
+              <strong>Batch #{{ result.batchId }}</strong>
+              <p>{{ result.restored.orders }} заказ, {{ result.restored.orderDetails }} деталей, {{ result.restored.reviews }} отзывов восстановлены.</p>
+            </div>
+          </section>
+        }
+
+        <footer class="restore-actions">
+          <button type="button" class="secondary" (click)="closeRestore()" [disabled]="restoring()">Закрыть</button>
+          @if (!restoreResult()) {
+            <button type="button" class="primary" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !restoreDetails()">
+              <span class="material-icons-sharp">settings_backup_restore</span>
+              {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
+            </button>
+          }
+        </footer>
+      </article>
+    </section>
+  }
+</app-admin-layout>

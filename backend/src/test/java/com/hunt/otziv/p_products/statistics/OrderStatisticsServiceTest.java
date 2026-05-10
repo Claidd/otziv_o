@@ -33,7 +33,7 @@ class OrderStatisticsServiceTest {
     @Test
     void countOrdersByStatusConvertsRowsSafely() {
         OrderStatisticsService service = service();
-        when(orderRepository.countGroupedByStatus()).thenReturn(Arrays.asList(
+        when(orderRepository.countGroupedByStatusLive(org.mockito.ArgumentMatchers.any())).thenReturn(Arrays.asList(
                 new Object[]{"Новый", 2L},
                 new Object[]{null, 3},
                 new Object[]{"Много", (long) Integer.MAX_VALUE + 100L},
@@ -52,7 +52,7 @@ class OrderStatisticsServiceTest {
     @Test
     void countActionableOrdersByStatusUsesWaitingFilteredRepository() {
         OrderStatisticsService service = service();
-        when(orderRepository.countGroupedByActionableStatus()).thenReturn(List.of(
+        when(orderRepository.countGroupedByActionableStatus(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(
                 new Object[]{"Новый", 2L},
                 new Object[]{"Коррекция", 1L}
         ));

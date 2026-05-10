@@ -1,0 +1,346 @@
+<app-admin-layout title="Архиватор" active="archive-admin" rightPanelMode="custom">
+  <section class="archive-admin-workspace">
+    <header class="archive-admin-toolbar">
+      <div class="mode-tabs" role="group" aria-label="Режим запуска архиватора">
+        <button type="button" [class.active]="mode() === 'dry-run'" (click)="setMode('dry-run')">
+          <span class="material-icons-sharp">fact_check</span>
+          Dry-run
+        </button>
+        <button type="button" [class.active]="mode() === 'live'" [disabled]="!settings()?.applyEnabled" (click)="setMode('live')">
+          <span class="material-icons-sharp">move_down</span>
+          Live
+        </button>
+      </div>
+
+      <button type="button" class="refresh-button" [disabled]="loading()" (click)="load()">
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading() ? 'Обновляю' : 'Обновить' }}
+      </button>
+    </header>
+
+    @if (error()) {
+      <app-load-error-card title="Архиватор" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
+    }
+
+    @if (settings()) {
+      <section class="metric-grid">
+        @for (metric of settingsMetrics(); track metricId($index, metric)) {
+          <article class="metric-card" [class]="metric.tone">
+            <span class="material-icons-sharp">{{ metric.icon }}</span>
+            <div>
+              <strong>{{ metric.value }}</strong>
+              <small>{{ metric.label }}</small>
+            </div>
+          </article>
+        }
+      </section>
+
+      <section class="archive-admin-grid">
+        <form class="run-panel" (ngSubmit)="run()">
+          <div class="panel-title">
+            <span class="material-icons-sharp">settings</span>
+            <h2>Настройки</h2>
+          </div>
+
+          <label>
+            <span>Возраст заказов, дней</span>
+            <input type="number" min="1" name="retentionDays" [(ngModel)]="retentionDays">
+          </label>
+
+          <label>
+            <span>Размер пачки</span>
+            <input type="number" min="1" [max]="settings()?.maxBatchSize ?? 5000" name="batchLimit" [(ngModel)]="batchLimit">
+          </label>
+
+          <label class="check-row">
+            <input type="checkbox" name="scheduleEnabled" [(ngModel)]="scheduleEnabled">
+            <span>Ежедневный запуск</span>
+          </label>
+
+          <label>
+            <span>Режим ежедневного запуска</span>
+            <select name="scheduledMode" [(ngModel)]="scheduledMode">
+              <option value="dry-run">dry-run</option>
+              <option value="live" [disabled]="!settings()?.applyEnabled">live</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Причина для расписания</span>
+            <input type="text" maxlength="100" name="scheduledReason" [(ngModel)]="scheduledReason">
+          </label>
+
+          <label>
+            <span>Причина ручного запуска</span>
+            <input type="text" maxlength="100" name="reason" [(ngModel)]="reason">
+          </label>
+
+          <div class="schedule-strip">
+            <span class="material-icons-sharp">{{ settings()?.scheduleWorkerEnabled ? 'event_available' : 'event_busy' }}</span>
+            <div>
+              <strong>
+                @if (settings()?.scheduleWorkerEnabled) {
+                  {{ settings()?.scheduleEnabled ? 'Расписание активно' : 'Расписание на паузе' }}
+                } @else {
+                  Планировщик выключен
+                }
+              </strong>
+              <small>{{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
+            </div>
+          </div>
+
+          <button type="button" class="save-settings" [disabled]="saving()" (click)="saveSettings()">
+            <span class="material-icons-sharp">save</span>
+            {{ saving() ? 'Сохраняю' : 'Сохранить настройки' }}
+          </button>
+
+          <button type="submit" [class.live]="mode() === 'live'" [disabled]="running()">
+            <span class="material-icons-sharp">{{ mode() === 'live' ? 'move_down' : 'fact_check' }}</span>
+            {{ running() ? 'Выполняю' : (mode() === 'live' ? 'Запустить live' : 'Проверить dry-run') }}
+          </button>
+        </form>
+
+        <section class="result-panel">
+          <div class="panel-title">
+            <span class="material-icons-sharp">insights</span>
+            <h2>Последний результат</h2>
+          </div>
+
+          @if (result()) {
+            <div class="result-head">
+              <strong>#{{ result()?.batchId }} · {{ result()?.dryRun ? 'dry-run' : 'live' }}</strong>
+              <span>cutoff {{ result()?.cutoffDate }}</span>
+            </div>
+
+            <div class="metric-grid compact">
+              @for (metric of resultMetrics(); track metricId($index, metric)) {
+                <article class="metric-card" [class]="metric.tone">
+                  <span class="material-icons-sharp">{{ metric.icon }}</span>
+                  <div>
+                    <strong>{{ metric.value }}</strong>
+                    <small>{{ metric.label }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+
+            <p class="result-message">{{ result()?.message }}</p>
+          } @else {
+            <div class="empty-state">
+              <span class="material-icons-sharp">history</span>
+              <p>Запусти dry-run, чтобы увидеть кандидатов без удаления live-данных.</p>
+            </div>
+          }
+        </section>
+      </section>
+
+      <section class="candidate-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">preview</span>
+          <h2>Ближайшие кандидаты</h2>
+          <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+        </div>
+
+        @if (candidatePreview(); as preview) {
+          <div class="candidate-note">
+            <strong>cutoff {{ preview.cutoffDate }}</strong>
+            <span>{{ preview.selected.orders }} из {{ preview.eligibleOrders }} заказов попадут в пачку</span>
+          </div>
+
+          <div class="candidate-list">
+            @for (candidate of previewItems(); track trackCandidate($index, candidate)) {
+              <article class="candidate-card">
+                <header>
+                  <strong>{{ candidate.companyTitle || 'Без компании' }}</strong>
+                  <small>#{{ candidate.id }}</small>
+                </header>
+                <div class="candidate-meta">
+                  <span>{{ candidate.status }}</span>
+                  <span>{{ candidate.sum | number:'1.0-0' }} руб.</span>
+                  <span>{{ candidate.orderDetailsCount }} деталей</span>
+                  <span>{{ candidate.reviewsCount }} отзывов</span>
+                </div>
+                <footer>
+                  <span>{{ candidate.companyCity || candidate.filialTitle || '-' }}</span>
+                  <span>{{ candidateAgeDays(candidate.candidateDate) }} дн.</span>
+                  <span>{{ candidate.managerName || '-' }}</span>
+                </footer>
+              </article>
+            } @empty {
+              <div class="empty-row">Подходящих кандидатов нет</div>
+            }
+          </div>
+        } @else {
+          <div class="empty-row">Кандидаты ещё не загружены</div>
+        }
+      </section>
+
+      <section class="journal-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">receipt_long</span>
+          <h2>Журнал запусков</h2>
+        </div>
+
+        <div class="journal-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Режим</th>
+                <th>Статус</th>
+                <th>Старт</th>
+                <th>Retention</th>
+                <th>Заказы</th>
+                <th>Связанные строки</th>
+                <th>Причина</th>
+                <th>Детали</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (batch of batches(); track trackBatch($index, batch)) {
+                <tr>
+                  <td>#{{ batch.batchId }}</td>
+                  <td><span class="mode-pill" [class.live]="!batch.dryRun">{{ batchMode(batch) }}</span></td>
+                  <td><span class="status-pill">{{ batch.status }}</span></td>
+                  <td>{{ batch.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                  <td>{{ batch.retentionDays }} дн.</td>
+                  <td>
+                    <strong>{{ batch.ordersSelected }}</strong>
+                    <span>{{ batch.ordersArchived }} перенесено</span>
+                  </td>
+                  <td>
+                    <strong>{{ batch.orderDetailsArchived + batch.reviewsArchived + batch.badReviewTasksArchived + batch.nextOrderRequestsArchived + batch.zpArchived + batch.paymentCheckArchived }}</strong>
+                    <span>детали/отзывы/оплаты</span>
+                  </td>
+                  <td>{{ batch.archiveReason || '-' }}</td>
+                  <td>
+                    <button type="button" class="details-link" [disabled]="batchDetailsLoading()" (click)="openBatchDetails(batch)">
+                      <span class="material-icons-sharp">manage_search</span>
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="9">
+                    <div class="empty-row">Запусков ещё нет</div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      @if (selectedBatch(); as details) {
+        <section class="batch-details-panel">
+          <div class="panel-title">
+            <span class="material-icons-sharp">fact_check</span>
+            <h2>Batch #{{ details.summary.batchId }}</h2>
+          </div>
+
+          <div class="batch-detail-grid">
+            <article>
+              <span>Режим</span>
+              <strong>{{ batchMode(details.summary) }}</strong>
+            </article>
+            <article>
+              <span>Статус</span>
+              <strong>{{ details.summary.status }}</strong>
+            </article>
+            <article>
+              <span>Заказы</span>
+              <strong>{{ details.totals.orders }}</strong>
+            </article>
+            <article>
+              <span>Отзывы</span>
+              <strong>{{ details.totals.reviews }}</strong>
+            </article>
+            <article>
+              <span>Оплаты</span>
+              <strong>{{ details.totals.paymentCheck }}</strong>
+            </article>
+          </div>
+
+          <p class="batch-message">{{ details.summary.message || 'Сообщения нет' }}</p>
+
+          <div class="candidate-list batch-orders">
+            @for (order of details.orders; track trackCandidate($index, order)) {
+              <article class="candidate-card">
+                <header>
+                  <strong>{{ order.companyTitle || 'Без компании' }}</strong>
+                  <small>#{{ order.id }}</small>
+                </header>
+                <div class="candidate-meta">
+                  <span>{{ order.status }}</span>
+                  <span>{{ order.sum | number:'1.0-0' }} руб.</span>
+                  <span>{{ order.orderDetailsCount }} деталей</span>
+                  <span>{{ order.reviewsCount }} отзывов</span>
+                </div>
+                <footer>
+                  <span>{{ order.companyCity || order.filialTitle || '-' }}</span>
+                  <span>{{ order.managerName || '-' }}</span>
+                </footer>
+              </article>
+            } @empty {
+              <div class="empty-row">
+                {{ details.summary.dryRun ? 'Dry-run хранит counts без списка заказов.' : 'В batch нет перенесённых заказов.' }}
+              </div>
+            }
+          </div>
+        </section>
+      }
+    } @else if (loading()) {
+      <section class="empty-state">
+        <span class="material-icons-sharp">hourglass_top</span>
+        <p>Загружаю архиватор</p>
+      </section>
+    }
+  </section>
+
+  <section admin-right-content class="archive-admin-side">
+    @for (metric of rightMetrics(); track metricId($index, metric)) {
+      <article class="archive-side-card" [class]="metric.tone">
+        <div>
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+        </div>
+        <i class="material-icons-sharp">{{ metric.icon }}</i>
+      </article>
+    }
+
+    <article class="archive-side-panel">
+      <h2>План запуска</h2>
+      <p>{{ settings()?.scheduleEnabled ? 'Ежедневный запуск включён' : 'Ежедневный запуск выключен' }}</p>
+      <strong>{{ settings()?.runMode || 'dry-run' }}</strong>
+      <small>{{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
+    </article>
+
+    <article class="archive-side-panel">
+      <h2>Безопасность</h2>
+      <p>{{ settings()?.applyEnabled ? 'Live доступен, ручной запуск требует подтверждение.' : 'Live закрыт backend-флагом.' }}</p>
+      <strong>{{ lockStatus()?.locked ? 'Lock занят' : 'Lock свободен' }}</strong>
+      <small>{{ lockStatus()?.ownerConnectionId ? 'connection ' + lockStatus()?.ownerConnectionId : 'параллельного запуска нет' }}</small>
+      <div class="side-actions">
+        <button type="button" [disabled]="candidatesLoading()" (click)="loadCandidatePreview()">
+          <span class="material-icons-sharp">manage_search</span>
+          Кандидаты
+        </button>
+        <button type="button" [disabled]="lockLoading()" (click)="loadLockStatus()">
+          <span class="material-icons-sharp">lock_reset</span>
+          Lock
+        </button>
+      </div>
+    </article>
+
+    @if (batches()[0]; as latest) {
+      <article class="archive-side-panel">
+        <h2>Последний запуск</h2>
+        <strong>#{{ latest.batchId }} · {{ batchMode(latest) }}</strong>
+        <p>{{ latest.status }}</p>
+        <small>{{ latest.startedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+      </article>
+    }
+  </section>
+</app-admin-layout>

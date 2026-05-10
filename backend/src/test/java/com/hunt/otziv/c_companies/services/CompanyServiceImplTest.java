@@ -78,8 +78,8 @@ class CompanyServiceImplTest {
         CompanyServiceImpl service = service();
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
 
-        when(companyRepository.findPageIdToAdmin(pageableCaptor.capture()))
-                .thenAnswer(invocation -> new PageImpl<Long>(List.of(), invocation.getArgument(0), 0));
+        when(companyRepository.findPageIdToAdminLive(any(), any(), pageableCaptor.capture()))
+                .thenAnswer(invocation -> new PageImpl<Long>(List.of(), invocation.getArgument(2), 0));
 
         Page<CompanyListDTO> result = service.getAllCompaniesDTOList("", -5, 0, "asc");
 
@@ -90,6 +90,7 @@ class CompanyServiceImplTest {
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("updateStatus").getDirection());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
         verify(companyRepository, never()).findPageToAdminWithFetchWithKeyWord(any(), any(), any());
+        verify(companyRepository, never()).findPageToAdminWithFetchWithKeyWordLive(any(), any(), any(), any(), any());
     }
 
     private CompanyServiceImpl service() {

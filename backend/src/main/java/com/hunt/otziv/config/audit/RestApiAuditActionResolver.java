@@ -248,6 +248,11 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/admin/users/{id}/assignments", "редактирование назначений пользователя {id}");
         put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
+        put(actions, "GET", "/api/admin/archive/orders/settings", "загрузка настроек архиватора заказов");
+        put(actions, "PUT", "/api/admin/archive/orders/settings", "редактирование настроек архиватора заказов");
+        put(actions, "POST", "/api/admin/archive/orders/dry-run", "проверка кандидатов архиватора заказов");
+        put(actions, "POST", "/api/admin/archive/orders/run", "запуск архиватора заказов");
+        put(actions, "GET", "/api/admin/archive/batches", "загрузка журнала архиватора");
 
         put(actions, "GET", "/api/companies/create-payload", "загрузка формы создания компании");
         put(actions, "GET", "/api/companies/categories/{categoryId}/subcategories", "загрузка подкатегорий компании для категории {categoryId}");
@@ -280,6 +285,9 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/cancel", "отмена плохого отзыва {taskId}");
+        put(actions, "GET", "/api/manager/archive/orders", "загрузка архива заказов");
+        put(actions, "GET", "/api/manager/archive/orders/{orderId}", "загрузка архивного заказа {orderId}");
+        put(actions, "POST", "/api/manager/archive/orders/{orderId}/restore", "восстановление архивного заказа {orderId}");
 
         put(actions, "POST", "/api/worker/orders/{orderId}/status", "смена статуса заказа на \"{status}\"");
         put(actions, "POST", "/api/worker/orders/{orderId}/client-waiting", "изменение ожидания клиента у заказа {orderId}");

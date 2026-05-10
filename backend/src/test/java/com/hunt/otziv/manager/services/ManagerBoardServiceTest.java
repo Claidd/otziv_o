@@ -113,7 +113,12 @@ class ManagerBoardServiceTest {
         assertEquals(List.of(order), response.orders().content());
         assertEquals(1, response.orders().totalElements());
         assertEquals(List.of("promo"), response.promoTexts());
-        assertEquals(20, response.metrics().size());
+        assertEquals(18, response.metrics().size());
+        assertEquals("Рабочие", response.metrics().stream()
+                .filter(metric -> "orders".equals(metric.section()) && "Все".equals(metric.status()))
+                .findFirst()
+                .orElseThrow()
+                .label());
         verify(badReviewTaskService).enrichOrderList(List.of(order));
     }
 

@@ -57,11 +57,13 @@ function order(overrides: Partial<OrderCardItem> = {}): OrderCardItem {
 
 describe('manager-board config helpers', () => {
   it('keeps titles and status labels stable', () => {
-    expect(managerBoardTitle('companies', 'Все', null)).toBe('Компании');
+    expect(managerBoardTitle('companies', 'Все', null)).toBe('Компании - Рабочие');
     expect(managerBoardTitle('companies', 'Бан', null)).toBe('Бан');
     expect(managerBoardTitle('orders', 'Все', { id: 2, title: 'Acme' })).toBe('Заказы - Acme');
+    expect(managerLayoutTitle('companies', 'Все', null)).toBe('Компании - Рабочие');
     expect(managerLayoutTitle('orders', 'Оплачено', null)).toBe('Заказы - Оплачено');
-    expect(managerStatusOptionLabel('Все', null)).toBe('Все');
+    expect(managerStatusOptionLabel('Все', null)).toBe('Рабочие');
+    expect(managerStatusOptionLabel('Все', 5)).toBe('Рабочие: 5');
     expect(managerStatusOptionLabel('Оплачено', 3)).toBe('Оплачено: 3');
   });
 
