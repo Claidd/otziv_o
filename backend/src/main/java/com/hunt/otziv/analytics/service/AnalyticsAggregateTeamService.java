@@ -236,7 +236,13 @@ public class AnalyticsAggregateTeamService {
     }
 
     private static Long imageId(User user) {
-        Image image = user == null ? null : user.getImage();
+        if (user == null) {
+            return DEFAULT_IMAGE_ID;
+        }
+        if (user.getImageId() != null) {
+            return user.getImageId();
+        }
+        Image image = user.getImage();
         return image == null || image.getId() == null ? DEFAULT_IMAGE_ID : image.getId();
     }
 

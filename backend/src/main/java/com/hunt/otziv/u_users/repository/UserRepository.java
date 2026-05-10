@@ -27,13 +27,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * Легкий вариант:
      * нужен для security, шапки, статистики и большинства обычных сценариев.
-     * Не тянем managers/workers/operators/marketologs.
+     * Не тянем managers/workers/operators/marketologs и bytes аватарки.
      */
     @Query("""
         SELECT DISTINCT u
         FROM User u
         LEFT JOIN FETCH u.roles
-        LEFT JOIN FETCH u.image
         WHERE u.username = :username
     """)
     Optional<User> findByUsername(@Param("username") String username);
@@ -111,7 +110,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
         SELECT DISTINCT u
         FROM User u
         LEFT JOIN FETCH u.roles
-        LEFT JOIN FETCH u.image
         WHERE u.telegramChatId = :telegramId
     """)
     Optional<User> findByTelegramChatId(@Param("telegramId") long telegramId);

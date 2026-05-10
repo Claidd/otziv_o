@@ -81,6 +81,9 @@ public class User {
     @JoinColumn(name = "image")
     private Image image;
 
+    @Column(name = "image", insertable = false, updatable = false)
+    private Long imageId;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "operators_users",

@@ -69,7 +69,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     public UserLKDTO getUserLK(Principal principal){
         User user = userService.findByUserName(principal.getName()).orElseThrow();
-        Long imageId = user.getImage() != null ? user.getImage().getId() : 1L;
+        Long imageId = imageId(user);
         UserLKDTO userLKDTO = new UserLKDTO();
         userLKDTO.setUsername(user.getUsername());
         userLKDTO.setRole(user.getRoles().iterator().next().getAuthority().substring("ROLE_".length()));
@@ -77,6 +77,13 @@ public class PersonalServiceImpl implements PersonalService {
         userLKDTO.setLeadCount(leadService.findAllByLidListStatus(principal.getName()).size());
         userLKDTO.setReviewCount(reviewService.findAllByReviewListStatus(principal.getName()));
         return userLKDTO;
+    }
+
+    private Long imageId(User user) {
+        if (user.getImageId() != null) {
+            return user.getImageId();
+        }
+        return user.getImage() == null || user.getImage().getId() == null ? 1L : user.getImage().getId();
     }
 
     //    ========================================== PERSONAL STAT START ==================================================

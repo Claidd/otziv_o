@@ -46,14 +46,23 @@ class ManagerArchiveRepository {
                 .addValue("offset", Math.max(pageNumber, 0) * pageSize);
 
         return jdbc.query("""
+                WITH archive_page AS (
+                    SELECT *
+                    FROM (
+                """ + archiveOrderPageKeysSelect(scope, mode, keyword) + """
+                        UNION ALL
+                """ + liveClosedOrderPageKeysSelect(scope, mode, keyword) + """
+                    ) archive_keys
+                    ORDER BY sort_at DESC, order_id DESC
+                    LIMIT :limit OFFSET :offset
+                )
                 SELECT *
                 FROM (
-                """ + archiveOrdersSelect(scope, mode, keyword) + """
+                """ + archiveOrdersSelectFromPage() + """
                     UNION ALL
-                """ + liveClosedOrdersSelect(scope, mode, keyword) + """
+                """ + liveClosedOrdersSelectFromPage() + """
                 ) archive_union
                 ORDER BY sort_at DESC, order_id DESC
-                LIMIT :limit OFFSET :offset
                 """, params, (rs, rowNum) -> orderListItem(rs));
     }
 
@@ -361,7 +370,25 @@ class ManagerArchiveRepository {
                 """ + liveClosedOrdersFromWhere(scope, mode, keyword);
     }
 
-    private String archiveOrdersSelect(ArchiveAccessScope scope, String mode, String keyword) {
+    private String archiveOrderPageKeysSelect(ArchiveAccessScope scope, String mode, String keyword) {
+        return """
+                    SELECT
+                        ao.order_id,
+                        'archive' AS source,
+                        COALESCE(ao.archived_at, TIMESTAMP(ao.order_changed)) AS sort_at
+                """ + archiveOrdersFromWhere(scope, mode, keyword);
+    }
+
+    private String liveClosedOrderPageKeysSelect(ArchiveAccessScope scope, String mode, String keyword) {
+        return """
+                    SELECT
+                        o.order_id,
+                        'live' AS source,
+                        TIMESTAMP(o.order_changed) AS sort_at
+                """ + liveClosedOrdersFromWhere(scope, mode, keyword);
+    }
+
+    private String archiveOrdersSelectFromPage() {
         return """
                     SELECT
                         ao.order_id,
@@ -408,11 +435,21 @@ class ManagerArchiveRepository {
                             WHERE az.zp_order = ao.order_id
                         ), 0) AS zp_sum,
                         'archive' AS source,
-                        COALESCE(ao.archived_at, TIMESTAMP(ao.order_changed)) AS sort_at
-                """ + archiveOrdersFromWhere(scope, mode, keyword);
+                        page.sort_at AS sort_at
+                FROM archive_page page
+                JOIN archive_orders ao ON ao.order_id = page.order_id
+                LEFT JOIN companies c ON c.company_id = ao.order_company
+                LEFT JOIN filial f ON f.filial_id = ao.order_filial
+                LEFT JOIN order_statuses os ON os.order_status_id = ao.order_status
+                LEFT JOIN managers m ON m.manager_id = ao.order_manager
+                LEFT JOIN users mu ON mu.id = m.user_id
+                LEFT JOIN workers w ON w.worker_id = ao.order_worker
+                LEFT JOIN users wu ON wu.id = w.user_id
+                WHERE page.source = 'archive'
+                """;
     }
 
-    private String liveClosedOrdersSelect(ArchiveAccessScope scope, String mode, String keyword) {
+    private String liveClosedOrdersSelectFromPage() {
         return """
                     SELECT
                         o.order_id,
@@ -459,8 +496,18 @@ class ManagerArchiveRepository {
                             WHERE z.zp_order = o.order_id
                         ), 0) AS zp_sum,
                         'live' AS source,
-                        TIMESTAMP(o.order_changed) AS sort_at
-                """ + liveClosedOrdersFromWhere(scope, mode, keyword);
+                        page.sort_at AS sort_at
+                FROM archive_page page
+                JOIN orders o ON o.order_id = page.order_id
+                LEFT JOIN companies c ON c.company_id = o.order_company
+                LEFT JOIN filial f ON f.filial_id = o.order_filial
+                LEFT JOIN order_statuses os ON os.order_status_id = o.order_status
+                LEFT JOIN managers m ON m.manager_id = o.order_manager
+                LEFT JOIN users mu ON mu.id = m.user_id
+                LEFT JOIN workers w ON w.worker_id = o.order_worker
+                LEFT JOIN users wu ON wu.id = w.user_id
+                WHERE page.source = 'live'
+                """;
     }
 
     private String liveClosedOrdersFromWhere(ArchiveAccessScope scope, String mode, String keyword) {
