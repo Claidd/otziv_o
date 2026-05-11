@@ -469,12 +469,15 @@
 
 .review-field-editor--text :is(textarea, .review-display-field--text) {
   padding-bottom: 1.95rem;
-  overflow: hidden;
+}
+
+.review-field-editor--text textarea,
+.review-field-editor--answer textarea {
+  overflow: auto;
 }
 
 .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
   height: 14rem;
-  overflow: auto;
 }
 
 .review-text-toggle {
@@ -502,7 +505,6 @@
   height: 3.5rem;
   font-weight: 400;
   text-align: center;
-  overflow: auto;
 }
 
 .review-field-editor--answer .review-display-field--answer {
