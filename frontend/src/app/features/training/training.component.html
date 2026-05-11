@@ -1,0 +1,91 @@
+<app-admin-layout title="Обучение" active="training">
+  <section class="training-shell">
+    <header class="training-hero">
+      <div class="training-hero__icon">
+        <span class="material-icons-sharp">{{ activeTab().icon }}</span>
+      </div>
+      <div>
+        <p class="eyebrow">{{ activeTab().eyebrow }}</p>
+        <h2>{{ activeTab().title }}</h2>
+        <p>{{ activeTab().summary }}</p>
+      </div>
+    </header>
+
+    @if (visibleTabs().length > 1) {
+      <nav class="training-tabs" aria-label="Вкладки обучения">
+        @for (tabKey of visibleTabs(); track trackTab($index, tabKey)) {
+          <button
+            type="button"
+            [class.active]="activeTabKey() === tabKey"
+            (click)="selectTab(tabKey)"
+          >
+            <span class="material-icons-sharp">{{
+              tabKey === 'manager' ? 'groups' : 'engineering'
+            }}</span>
+            {{ tabKey === 'manager' ? 'Для менеджера' : 'Для специалиста' }}
+          </button>
+        }
+      </nav>
+    }
+
+    @if (visibleTabs().length === 0) {
+      <section class="training-empty">
+        <span class="material-icons-sharp">lock</span>
+        <h2>Нет доступного обучения</h2>
+        <p>Для вашего профиля пока нет отдельной инструкции.</p>
+      </section>
+    } @else {
+      @let tab = activeTab();
+
+      <section class="training-shortcuts" aria-label="Быстрые переходы">
+        @for (shortcut of tab.shortcuts; track trackShortcut($index, shortcut)) {
+          <a [routerLink]="shortcut.routerLink">
+            <span class="material-icons-sharp">{{ shortcut.icon }}</span>
+            {{ shortcut.label }}
+          </a>
+        }
+      </section>
+
+      <section class="training-flow" aria-label="Порядок работы">
+        <div class="training-section-title">
+          <span class="material-icons-sharp">route</span>
+          <div>
+            <p class="eyebrow">FLOW</p>
+            <h2>Порядок работы</h2>
+          </div>
+        </div>
+
+        <ol>
+          @for (step of tab.flow; track trackFlowStep($index, step)) {
+            <li>
+              <strong>{{ step.title }}</strong>
+              <p>{{ step.text }}</p>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <section class="training-grid" aria-label="Подробное обучение">
+        @for (block of tab.blocks; track trackBlock($index, block)) {
+          <article class="training-card">
+            <div class="training-card__title">
+              <span class="material-icons-sharp">{{ block.icon }}</span>
+              <h2>{{ block.title }}</h2>
+            </div>
+
+            <ul>
+              @for (item of block.items; track trackItem($index, item)) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          </article>
+        }
+      </section>
+
+      <section class="training-completion" aria-label="Когда работа выполнена">
+        <span class="material-icons-sharp">verified</span>
+        <p>{{ tab.completionNote }}</p>
+      </section>
+    }
+  </section>
+</app-admin-layout>

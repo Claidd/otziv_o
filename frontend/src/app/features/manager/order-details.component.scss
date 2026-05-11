@@ -434,7 +434,8 @@
   line-height: 0;
 }
 
-.review-field-editor textarea {
+.review-field-editor textarea,
+.review-display-field {
   box-sizing: border-box;
   display: block;
   width: 100%;
@@ -456,12 +457,22 @@
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.review-field-editor--text textarea {
+.review-display-field {
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.review-display-field--empty {
+  color: var(--otziv-info);
+  font-weight: 500;
+}
+
+.review-field-editor--text :is(textarea, .review-display-field--text) {
   padding-bottom: 1.95rem;
   overflow: hidden;
 }
 
-.review-field-editor--text.expanded textarea {
+.review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
   height: 14rem;
   overflow: auto;
 }
@@ -487,16 +498,26 @@
   outline-offset: 0.16rem;
 }
 
-.review-field-editor--answer textarea {
+.review-field-editor--answer :is(textarea, .review-display-field--answer) {
   height: 3.5rem;
   font-weight: 400;
   text-align: center;
   overflow: auto;
 }
 
+.review-field-editor--answer .review-display-field--answer {
+  display: grid;
+  align-content: center;
+}
+
+.review-field-editor textarea:focus,
+.review-display-field:focus-visible,
 .review-field-editor.editing textarea {
   border-color: #f4c542;
   box-shadow: 0 0 0 0.16rem rgba(244, 197, 66, 0.22);
+}
+
+.review-field-editor.editing textarea {
   cursor: text;
 }
 
@@ -967,6 +988,7 @@
     height: auto;
     min-height: 0;
     scroll-snap-align: center;
+    scroll-snap-stop: always;
   }
 
   .mobile-swipe-hint {
@@ -1012,11 +1034,11 @@
     font-size: 0.82rem;
   }
 
-  .review-field-editor--text textarea {
+  .review-field-editor--text :is(textarea, .review-display-field--text) {
     height: 19rem;
   }
 
-  .review-field-editor--text.expanded textarea {
+  .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
     height: 19rem;
   }
 

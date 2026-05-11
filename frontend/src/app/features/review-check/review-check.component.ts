@@ -121,18 +121,7 @@ export class ReviewCheckComponent {
     return `${details.companyTitle || 'Компания'}${details.filialTitle ? ' - ' + details.filialTitle : ''}`;
   });
   readonly reviewCheckReviews = computed(() => this.details()?.reviews ?? []);
-  readonly visibleReviewStartIndex = computed(() => this.compactReviewRenderEnabled()
-    ? Math.max(0, Math.min(this.activeReviewSlide() - 1, Math.max(this.reviewCheckReviews().length - 3, 0)))
-    : 0);
-  readonly visibleReviews = computed(() => {
-    const reviews = this.reviewCheckReviews();
-    if (!this.compactReviewRenderEnabled()) {
-      return reviews;
-    }
-
-    const start = this.visibleReviewStartIndex();
-    return reviews.slice(start, Math.min(start + 3, reviews.length));
-  });
+  readonly visibleReviews = computed(() => this.reviewCheckReviews());
   readonly showReviewFastSelect = computed(() => this.reviewCheckReviews().length > 20);
   readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviewCheckReviews().length > 1);
   readonly reviewQuickFilterIndexes = computed(() => this.reviewCheckReviews()
@@ -348,6 +337,29 @@ export class ReviewCheckComponent {
     return this.mobileReviewLayout();
   }
 
+  onReviewTextDisplayClick(review: ReviewCheckReview): void {
+    if (this.isMobileReviewLayout()) {
+      if (!this.isMobileReviewTextPreview(review)) {
+        this.activateMobileReviewTextPreview(review);
+        return;
+      }
+
+      this.startReviewFieldEdit(review, 'text');
+      return;
+    }
+
+    if (this.details()?.permissions.canSave) {
+      this.startReviewFieldEdit(review, 'text');
+      return;
+    }
+
+    this.toggleReviewText(review);
+  }
+
+  onReviewAnswerDisplayClick(review: ReviewCheckReview): void {
+    this.startReviewFieldEdit(review, 'answer');
+  }
+
   private activateMobileReviewTextPreview(review: ReviewCheckReview, textarea?: HTMLTextAreaElement): void {
     this.mobilePreviewReviewTextId.set(review.id);
     this.expandReview(review.id);
@@ -381,6 +393,18 @@ export class ReviewCheckComponent {
     }
   }
 
+  private focusReviewFieldInput(review: ReviewCheckReview, field: ReviewEditableField): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLTextAreaElement>(`.review-card[data-review-id="${review.id}"] textarea[name="${field}-${review.id}"]`)
+        ?.focus({ preventScroll: true });
+    });
+  }
+
   onReviewCarouselScroll(event: Event): void {
     const track = event.currentTarget as HTMLElement | null;
     const firstCard = track?.querySelector<HTMLElement>('.review-card');
@@ -396,7 +420,7 @@ export class ReviewCheckComponent {
     }
 
     const maxIndex = Math.max(this.reviewCheckReviews().length - 1, 0);
-    const index = this.visibleReviewStartIndex() + Math.round(track.scrollLeft / step);
+    const index = Math.round(track.scrollLeft / step);
     this.setActiveReviewIndex(Math.min(maxIndex, Math.max(0, index)), false);
   }
 
@@ -534,6 +558,7 @@ export class ReviewCheckComponent {
     if (field === 'text' && this.mobilePreviewReviewTextId() === review.id) {
       this.mobilePreviewReviewTextId.set(null);
     }
+    this.focusReviewFieldInput(review, field);
   }
 
   cancelReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {
@@ -1051,23 +1076,24 @@ export class ReviewCheckComponent {
       return;
     }
 
+    const previousIndex = this.activeReviewSlide();
     const nextIndex = Math.max(0, Math.min(index, reviews.length - 1));
     this.activeReviewSlide.set(nextIndex);
     this.syncReviewJumpValue(nextIndex);
 
     if (scroll) {
-      this.scrollReviewIntoView(reviews[nextIndex]?.id);
+      this.scrollReviewIntoView(reviews[nextIndex]?.id, Math.abs(nextIndex - previousIndex) <= 2);
     }
   }
 
-  private scrollReviewIntoView(reviewId?: number): void {
+  private scrollReviewIntoView(reviewId?: number, smooth = true): void {
     if (!reviewId || typeof window === 'undefined') {
       return;
     }
 
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`.review-card[data-review-id="${reviewId}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        ?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'center' });
     });
   }
 
@@ -1081,10 +1107,6 @@ export class ReviewCheckComponent {
     }
 
     this.mobileReviewLayout.set(window.innerWidth <= 860);
-  }
-
-  private compactReviewRenderEnabled(): boolean {
-    return this.mobileReviewLayout() && this.reviewCheckReviews().length > 12;
   }
 
   private isReviewQuickFilter(value: string): value is ReviewQuickFilter {

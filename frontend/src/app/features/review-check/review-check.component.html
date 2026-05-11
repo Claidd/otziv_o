@@ -176,18 +176,30 @@
                     [class.expanded]="isReviewTextOpen(review)"
                   >
                     <div class="review-text-box">
-                      <textarea
-                        #reviewTextArea
-                        [name]="'text-' + review.id"
-                        [readonly]="!details.permissions.canSave || (isMobileReviewLayout() && !isReviewFieldEditing(review, 'text'))"
-                        [ngModel]="reviewFieldValue(review, 'text')"
-                        [style.border-color]="isMobileReviewTextPreview(review) ? '#f4c542' : null"
-                        (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
-                        (pointerdown)="onReviewTextPointerDown($event, review)"
-                        (focus)="onReviewTextFocus($event, review)"
-                        aria-label="Текст отзыва"
-                        placeholder="Текст отзыва"
-                      ></textarea>
+                      @if (isReviewFieldEditing(review, 'text')) {
+                        <textarea
+                          [name]="'text-' + review.id"
+                          [ngModel]="reviewFieldValue(review, 'text')"
+                          (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
+                          (focus)="onReviewTextFocus($event, review)"
+                          aria-label="Текст отзыва"
+                          placeholder="Текст отзыва"
+                        ></textarea>
+                      } @else {
+                        <div
+                          class="review-display-field review-display-field--text"
+                          role="button"
+                          tabindex="0"
+                          [class.review-display-field--empty]="!reviewFieldValue(review, 'text').trim()"
+                          [style.border-color]="isMobileReviewTextPreview(review) ? '#f4c542' : null"
+                          (click)="onReviewTextDisplayClick(review)"
+                          (keydown.enter)="onReviewTextDisplayClick(review)"
+                          (keydown.space)="$event.preventDefault(); onReviewTextDisplayClick(review)"
+                          aria-label="Текст отзыва"
+                        >
+                          {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
+                        </div>
+                      }
 
                       @if (shouldShowReviewTextToggle(review)) {
                         <span
@@ -195,9 +207,9 @@
                           role="button"
                           tabindex="0"
                           [attr.aria-expanded]="isReviewTextExpanded(review)"
-                          (click)="toggleReviewText(review, reviewTextArea)"
-                          (keydown.enter)="toggleReviewText(review, reviewTextArea)"
-                          (keydown.space)="$event.preventDefault(); toggleReviewText(review, reviewTextArea)"
+                          (click)="toggleReviewText(review)"
+                          (keydown.enter)="toggleReviewText(review)"
+                          (keydown.space)="$event.preventDefault(); toggleReviewText(review)"
                         >
                           {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
                         </span>
@@ -233,16 +245,29 @@
                   </div>
 
                   <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
-                    <textarea
-                      [name]="'answer-' + review.id"
-                      [readonly]="!details.permissions.canSave"
-                      [ngModel]="reviewFieldValue(review, 'answer')"
-                      (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
-                      (focus)="startReviewFieldEdit(review, 'answer')"
-                      (click)="startReviewFieldEdit(review, 'answer')"
-                      aria-label="Замечания к отзыву"
-                      placeholder="Впишите сюда замечания к отзыву, если есть"
-                    ></textarea>
+                    @if (isReviewFieldEditing(review, 'answer')) {
+                      <textarea
+                        [name]="'answer-' + review.id"
+                        [ngModel]="reviewFieldValue(review, 'answer')"
+                        (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
+                        (focus)="startReviewFieldEdit(review, 'answer')"
+                        aria-label="Замечания к отзыву"
+                        placeholder="Впишите сюда замечания к отзыву, если есть"
+                      ></textarea>
+                    } @else {
+                      <div
+                        class="review-display-field review-display-field--answer"
+                        role="button"
+                        tabindex="0"
+                        [class.review-display-field--empty]="!reviewFieldValue(review, 'answer').trim()"
+                        (click)="onReviewAnswerDisplayClick(review)"
+                        (keydown.enter)="onReviewAnswerDisplayClick(review)"
+                        (keydown.space)="$event.preventDefault(); onReviewAnswerDisplayClick(review)"
+                        aria-label="Замечания к отзыву"
+                      >
+                        {{ reviewFieldValue(review, 'answer').trim() || 'Впишите сюда замечания к отзыву, если есть' }}
+                      </div>
+                    }
 
                     @if (isReviewFieldEditing(review, 'answer')) {
                       <div class="review-field-edit-actions">

@@ -1,0 +1,258 @@
+:host {
+  display: block;
+}
+
+.training-shell {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.training-hero,
+.training-flow,
+.training-card,
+.training-completion,
+.training-empty {
+  border-radius: var(--otziv-card-radius);
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.training-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.1rem;
+  padding: var(--otziv-card-padding);
+}
+
+.training-hero__icon {
+  display: grid;
+  width: 4.1rem;
+  height: 4.1rem;
+  place-items: center;
+  border-radius: 1.2rem;
+  color: var(--otziv-primary);
+  background: var(--otziv-light);
+}
+
+.training-hero__icon span {
+  font-size: 2.3rem;
+}
+
+h2,
+p,
+ol,
+ul {
+  margin: 0;
+}
+
+.training-hero h2,
+.training-section-title h2,
+.training-card h2,
+.training-empty h2 {
+  font-family: 'laptev_brush', var(--otziv-font-family);
+  line-height: 1.05;
+}
+
+.training-hero h2 {
+  margin-top: 0.2rem;
+  font-size: clamp(1.75rem, 2.2vw, 2.45rem);
+}
+
+.training-hero p:not(.eyebrow),
+.training-card li,
+.training-flow li p,
+.training-empty p {
+  color: var(--otziv-info);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.training-tabs,
+.training-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.training-tabs button,
+.training-shortcuts a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 1rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 0.55rem 1.1rem rgba(132, 139, 200, 0.1);
+  font: inherit;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.training-tabs button.active,
+.training-tabs button:hover,
+.training-shortcuts a:hover {
+  color: white;
+  border-color: transparent;
+  background: var(--otziv-primary);
+}
+
+.training-tabs span,
+.training-shortcuts span {
+  font-size: 1.2rem;
+}
+
+.training-flow {
+  display: grid;
+  gap: 1rem;
+  padding: var(--otziv-card-padding);
+}
+
+.training-section-title,
+.training-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.training-section-title > span,
+.training-card__title > span {
+  color: var(--otziv-primary);
+  font-size: 1.8rem;
+}
+
+.training-flow ol {
+  display: grid;
+  gap: 0.85rem;
+  padding-left: 1.3rem;
+}
+
+.training-flow li {
+  padding-left: 0.25rem;
+}
+
+.training-flow li::marker {
+  color: var(--otziv-primary);
+  font-weight: 900;
+}
+
+.training-flow strong {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: var(--otziv-dark);
+  font-weight: 900;
+}
+
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.training-card {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  padding: 1.25rem;
+}
+
+.training-card ul {
+  display: grid;
+  gap: 0.62rem;
+  padding-left: 1.15rem;
+}
+
+.training-card li::marker {
+  color: var(--otziv-primary);
+}
+
+.training-completion {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: var(--otziv-card-padding);
+  color: var(--otziv-dark);
+}
+
+.training-completion > span {
+  color: var(--otziv-primary);
+  font-size: 2.4rem;
+}
+
+.training-completion p {
+  font-family: 'laptev_brush', var(--otziv-font-family);
+  font-size: clamp(1.85rem, 3vw, 3rem);
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+.training-empty {
+  display: grid;
+  min-height: 16rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  padding: var(--otziv-card-padding);
+  text-align: center;
+}
+
+.training-empty > span {
+  color: var(--otziv-primary);
+  font-size: 3rem;
+}
+
+@media (max-width: 980px) {
+  .training-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .training-shell {
+    gap: 0.8rem;
+  }
+
+  .training-hero {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding: 1.1rem;
+  }
+
+  .training-hero__icon {
+    width: 3.35rem;
+    height: 3.35rem;
+  }
+
+  .training-hero__icon span {
+    font-size: 1.85rem;
+  }
+
+  .training-tabs,
+  .training-shortcuts {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .training-tabs button,
+  .training-shortcuts a {
+    width: 100%;
+  }
+
+  .training-flow,
+  .training-card,
+  .training-completion {
+    border-radius: 1.2rem;
+    padding: 1rem;
+  }
+
+  .training-completion {
+    grid-template-columns: 1fr;
+  }
+}
