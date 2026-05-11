@@ -615,6 +615,11 @@ export class WorkerBoardComponent implements OnDestroy {
     return this.permissions().canWorkReviews;
   }
 
+  canOpenReviewTitleLink(): boolean {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
   canOnlyUnsetReviewVigul(): boolean {
     return this.editFacade.canOnlyUnsetReviewVigul();
   }

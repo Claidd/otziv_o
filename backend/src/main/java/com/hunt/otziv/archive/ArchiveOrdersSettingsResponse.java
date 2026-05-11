@@ -10,6 +10,7 @@ public record ArchiveOrdersSettingsResponse(
         boolean scheduleEnabled,
         String runMode,
         String reason,
+        String scheduleTime,
         String scheduleCron,
         String scheduleZone
 ) {

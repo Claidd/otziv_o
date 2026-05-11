@@ -564,9 +564,14 @@ class ManagerArchiveRepository {
 
         return """
                 AND (
-                    CAST(ao.order_id AS CHAR) LIKE :keywordLike
+                    (:keywordNumber IS NOT NULL AND ao.order_id = :keywordNumber)
+                    OR CAST(ao.order_id AS CHAR) LIKE :keywordLike
                     OR COALESCE(ao.company_title_snapshot, c.company_title, '') LIKE :keywordLike
                     OR COALESCE(ao.company_phone_snapshot, c.company_phone, '') LIKE :keywordLike
+                    OR (
+                        :keywordDigitsLike IS NOT NULL
+                        AND REGEXP_REPLACE(COALESCE(ao.company_phone_snapshot, c.company_phone, ''), '[^0-9]', '') LIKE :keywordDigitsLike
+                    )
                     OR COALESCE(ao.company_city_snapshot, c.company_city, '') LIKE :keywordLike
                     OR COALESCE(ao.filial_title_snapshot, f.filial_title, '') LIKE :keywordLike
                     OR COALESCE(ao.manager_name_snapshot, mu.fio, mu.username, '') LIKE :keywordLike
@@ -575,14 +580,34 @@ class ManagerArchiveRepository {
                     OR EXISTS (
                         SELECT 1
                         FROM archive_order_details aod_search
+                        LEFT JOIN products p_search ON p_search.product_id = aod_search.order_detail_product
+                        WHERE aod_search.order_detail_order = ao.order_id
+                          AND (
+                              COALESCE(p_search.product_title, '') LIKE :keywordLike
+                              OR COALESCE(aod_search.order_detail_comments, '') LIKE :keywordLike
+                          )
+                    )
+                """ + archiveReviewTextKeywordFilter(keyword) + """
+                )
+                """;
+    }
+
+    private String archiveReviewTextKeywordFilter(String keyword) {
+        if (!shouldSearchReviewText(keyword)) {
+            return "";
+        }
+
+        return """
+                    OR EXISTS (
+                        SELECT 1
+                        FROM archive_order_details aod_search
                         JOIN archive_reviews ar_search ON ar_search.review_order_details = aod_search.order_detail_id
                         WHERE aod_search.order_detail_order = ao.order_id
                           AND (
-                              ar_search.review_text LIKE :keywordLike
-                              OR ar_search.review_answer LIKE :keywordLike
+                              ar_search.review_text LIKE :reviewKeywordLike
+                              OR ar_search.review_answer LIKE :reviewKeywordLike
                           )
                     )
-                )
                 """;
     }
 
@@ -593,9 +618,14 @@ class ManagerArchiveRepository {
 
         return """
                 AND (
-                    CAST(o.order_id AS CHAR) LIKE :keywordLike
+                    (:keywordNumber IS NOT NULL AND o.order_id = :keywordNumber)
+                    OR CAST(o.order_id AS CHAR) LIKE :keywordLike
                     OR COALESCE(c.company_title, '') LIKE :keywordLike
                     OR COALESCE(c.company_phone, '') LIKE :keywordLike
+                    OR (
+                        :keywordDigitsLike IS NOT NULL
+                        AND REGEXP_REPLACE(COALESCE(c.company_phone, ''), '[^0-9]', '') LIKE :keywordDigitsLike
+                    )
                     OR COALESCE(c.company_city, '') LIKE :keywordLike
                     OR COALESCE(f.filial_title, '') LIKE :keywordLike
                     OR COALESCE(mu.fio, mu.username, '') LIKE :keywordLike
@@ -604,23 +634,74 @@ class ManagerArchiveRepository {
                     OR EXISTS (
                         SELECT 1
                         FROM order_details od_search
+                        LEFT JOIN products p_search ON p_search.product_id = od_search.order_detail_product
+                        WHERE od_search.order_detail_order = o.order_id
+                          AND (
+                              COALESCE(p_search.product_title, '') LIKE :keywordLike
+                              OR COALESCE(od_search.order_detail_comments, '') LIKE :keywordLike
+                          )
+                    )
+                """ + liveReviewTextKeywordFilter(keyword) + """
+                )
+                """;
+    }
+
+    private String liveReviewTextKeywordFilter(String keyword) {
+        if (!shouldSearchReviewText(keyword)) {
+            return "";
+        }
+
+        return """
+                    OR EXISTS (
+                        SELECT 1
+                        FROM order_details od_search
                         JOIN reviews r_search ON r_search.review_order_details = od_search.order_detail_id
                         WHERE od_search.order_detail_order = o.order_id
                           AND (
-                              r_search.review_text LIKE :keywordLike
-                              OR r_search.review_answer LIKE :keywordLike
+                              r_search.review_text LIKE :reviewKeywordLike
+                              OR r_search.review_answer LIKE :reviewKeywordLike
                           )
                     )
-                )
                 """;
     }
 
     private MapSqlParameterSource orderParams(ArchiveAccessScope scope, String mode, String keyword) {
         MapSqlParameterSource params = scopeParams(scope).addValue("mode", normalizeMode(mode));
         if (keyword != null && !keyword.isBlank()) {
-            params.addValue("keywordLike", "%" + keyword.trim() + "%");
+            String trimmed = keyword.trim();
+            params.addValue("keywordLike", "%" + trimmed + "%");
+            params.addValue("keywordNumber", parseOrderIdKeyword(trimmed));
+            params.addValue("keywordDigitsLike", phoneDigitsLike(trimmed));
+            if (shouldSearchReviewText(trimmed)) {
+                params.addValue("reviewKeywordLike", "%" + trimmed + "%");
+            }
         }
         return params;
+    }
+
+    private Long parseOrderIdKeyword(String keyword) {
+        String candidate = keyword.startsWith("#") ? keyword.substring(1) : keyword;
+        if (!candidate.matches("\\d+")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(candidate);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private String phoneDigitsLike(String keyword) {
+        String digits = keyword.replaceAll("\\D+", "");
+        return digits.length() >= 4 ? "%" + digits + "%" : null;
+    }
+
+    private boolean shouldSearchReviewText(String keyword) {
+        if (keyword == null) {
+            return false;
+        }
+        String trimmed = keyword.trim();
+        return trimmed.length() >= 5 && !trimmed.matches("#?\\d+");
     }
 
     private MapSqlParameterSource scopeParams(ArchiveAccessScope scope) {

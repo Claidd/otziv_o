@@ -61,9 +61,33 @@
             <input type="number" min="1" [max]="settings()?.maxBatchSize ?? 5000" name="batchLimit" [(ngModel)]="batchLimit">
           </label>
 
+          <label class="check-row help-anchor" tabindex="0" [attr.data-help]="help('applyEnabled')" [attr.title]="help('applyEnabled')">
+            <input type="checkbox" name="applyEnabled" [(ngModel)]="applyEnabled" (ngModelChange)="onApplyEnabledChange()">
+            <span>Разрешить live перенос <i>?</i></span>
+          </label>
+
+          <label class="check-row help-anchor" tabindex="0" [attr.data-help]="help('scheduleWorkerEnabled')" [attr.title]="help('scheduleWorkerEnabled')">
+            <input type="checkbox" name="scheduleWorkerEnabled" [(ngModel)]="scheduleWorkerEnabled">
+            <span>Планировщик архиватора <i>?</i></span>
+          </label>
+
           <label class="check-row help-anchor" tabindex="0" [attr.data-help]="help('scheduleEnabled')" [attr.title]="help('scheduleEnabled')">
             <input type="checkbox" name="scheduleEnabled" [(ngModel)]="scheduleEnabled">
             <span>Ежедневный запуск <i>?</i></span>
+          </label>
+
+          <label>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('scheduleTime')" [attr.title]="help('scheduleTime')">
+              Время запуска <i>?</i>
+            </span>
+            <input type="time" name="scheduleTime" [(ngModel)]="scheduleTime">
+          </label>
+
+          <label>
+            <span class="field-label help-anchor" tabindex="0" [attr.data-help]="help('scheduleZone')" [attr.title]="help('scheduleZone')">
+              Таймзона запуска <i>?</i>
+            </span>
+            <input type="text" name="scheduleZone" [(ngModel)]="scheduleZone">
           </label>
 
           <label>
@@ -72,7 +96,7 @@
             </span>
             <select name="scheduledMode" [(ngModel)]="scheduledMode">
               <option value="dry-run">dry-run</option>
-              <option value="live" [disabled]="!settings()?.applyEnabled">live</option>
+              <option value="live" [disabled]="!applyEnabled">live</option>
             </select>
           </label>
 
@@ -100,7 +124,7 @@
                   Планировщик выключен
                 }
               </strong>
-              <small>{{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
+              <small>{{ settings()?.scheduleTime || '-' }} / {{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
             </div>
           </div>
 
@@ -382,14 +406,14 @@
 
     <article class="archive-side-panel help-anchor" tabindex="0" [attr.data-help]="help('schedulePlan')" [attr.title]="help('schedulePlan')">
       <h2>План запуска <i>?</i></h2>
-      <p>{{ settings()?.scheduleEnabled ? 'Ежедневный запуск включён' : 'Ежедневный запуск выключен' }}</p>
+      <p>{{ settings()?.scheduleWorkerEnabled ? (settings()?.scheduleEnabled ? 'Ежедневный запуск включён' : 'Ежедневный запуск на паузе') : 'Планировщик выключен' }}</p>
       <strong>{{ settings()?.runMode || 'dry-run' }}</strong>
-      <small>{{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
+      <small>{{ settings()?.scheduleTime || '-' }} / {{ settings()?.scheduleCron }} / {{ settings()?.scheduleZone }}</small>
     </article>
 
     <article class="archive-side-panel help-anchor" tabindex="0" [attr.data-help]="help('safety')" [attr.title]="help('safety')">
       <h2>Безопасность <i>?</i></h2>
-      <p>{{ settings()?.applyEnabled ? 'Live доступен, ручной запуск требует подтверждение.' : 'Live закрыт backend-флагом.' }}</p>
+      <p>{{ settings()?.applyEnabled ? 'Live доступен, ручной запуск требует подтверждение.' : 'Live закрыт runtime-предохранителем.' }}</p>
       <strong>{{ lockStatus()?.locked ? 'Lock занят' : 'Lock свободен' }}</strong>
       <small>{{ lockStatus()?.ownerConnectionId ? 'connection ' + lockStatus()?.ownerConnectionId : 'параллельного запуска нет' }}</small>
       <div class="side-actions">

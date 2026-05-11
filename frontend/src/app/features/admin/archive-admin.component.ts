@@ -27,23 +27,26 @@ type ArchiveMetric = {
 
 const ARCHIVE_HELP = {
   dryRun: 'Безопасная проверка. Архиватор находит кандидатов и пишет batch-журнал, но не копирует и не удаляет live-строки.',
-  live: 'Физический перенос. Заказы и связанные строки копируются в archive_* и удаляются из live-таблиц. Доступен только при backend-флаге apply=true.',
+  live: 'Физический перенос. Заказы и связанные строки копируются в archive_* и удаляются из live-таблиц. Доступен только когда включён live-перенос.',
   refresh: 'Перезагружает настройки, кандидатов, lock и журнал запусков с backend.',
   workingSlice: 'Сколько дней старые закрытые данные ещё учитываются как рабочий срез досок. Это не удаление и не перенос.',
   retentionMetric: 'Минимальный возраст закрытого заказа для физической архивации. При 90 днях cutoff сегодня минус 90 дней.',
   batchMetric: 'Сколько заказов архиватор возьмёт за один запуск. Связанные строки считаются отдельно и могут быть больше числа заказов.',
-  applyEnabled: 'Жёсткий backend-предохранитель OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED. Если выключен, live-перенос невозможен даже из админки.',
-  scheduleMetric: 'Runtime-настройка ежедневного запуска. Работает только если отдельно включён scheduled worker на backend.',
+  applyEnabled: 'Runtime-предохранитель live-переноса. Если выключен, live-перенос и live-режим расписания недоступны.',
+  scheduleWorkerEnabled: 'Включает сам backend-планировщик архиватора. Когда выключен, расписание не стартует независимо от ежедневной галочки.',
+  scheduleMetric: 'Runtime-настройка ежедневного запуска. Работает только если включён планировщик архиватора.',
   settingsPanel: 'Здесь задаются параметры ручного запуска и сохраняются runtime-настройки расписания.',
   retentionDays: 'Заказ становится кандидатом, если он закрыт и старше этого числа дней относительно даты cutoff. Сейчас держим 90 дней как осторожный запас.',
   batchLimit: 'Максимум заказов в одной пачке. Для production лучше повышать постепенно: 10, 50, 100, 200.',
-  scheduleEnabled: 'Включает или ставит на паузу runtime-расписание. Сам worker всё равно должен быть разрешён backend-флагом.',
-  scheduledMode: 'dry-run по расписанию только проверяет, live по расписанию переносит физически. Live требует apply=true.',
+  scheduleEnabled: 'Включает или ставит на паузу ежедневный запуск. Сам планировщик тоже должен быть включён.',
+  scheduleTime: 'Время ежедневного запуска в выбранной таймзоне. Backend сохраняет его как cron-выражение.',
+  scheduleZone: 'Таймзона ежедневного запуска. Для текущего production обычно используется Asia/Irkutsk.',
+  scheduledMode: 'dry-run по расписанию только проверяет, live по расписанию переносит физически. Live требует включённого live-переноса.',
   scheduledReason: 'Текст причины, который попадёт в batch-журнал для автоматического запуска.',
   manualReason: 'Текст причины, который попадёт в batch-журнал для ручного запуска.',
-  scheduleStrip: 'Показывает состояние scheduled worker, cron-выражение и таймзону. Если worker выключен, расписание не стартует.',
-  saveSettings: 'Сохраняет retention, batch size, режим и причину расписания в app_settings. Live-флаг через UI не включается.',
-  runButton: 'Запускает текущий выбранный режим вручную. Dry-run безопасен, live требует backend apply=true и подтверждение.',
+  scheduleStrip: 'Показывает состояние планировщика, runtime-паузы, cron-выражение и таймзону.',
+  saveSettings: 'Сохраняет retention, batch size, live-предохранитель, планировщик, время, режим и причину расписания в app_settings.',
+  runButton: 'Запускает текущий выбранный режим вручную. Dry-run безопасен, live требует включённого live-переноса и подтверждение.',
   resultPanel: 'Показывает результат последнего запуска в текущей сессии страницы. После перезагрузки историю смотри в журнале.',
   eligibleOrders: 'Все закрытые live-заказы, которые старше cutoff и подходят под правила архивации.',
   selectedOrders: 'Сколько заказов реально взято в текущую пачку с учётом размера batch.',
@@ -124,7 +127,7 @@ const ARCHIVE_MANUAL_SECTIONS: ArchiveManualSection[] = [
       'Dry-run создаёт запись в archive_batches, чтобы можно было сверить расчёт и историю запуска.',
       'Live берёт кандидатов, копирует orders в archive_orders, а связанные строки — в archive_order_details, archive_reviews, archive_zp, archive_payment_check и другие archive_*-таблицы.',
       'После копирования live-режим проверяет, что в архив попало ровно столько строк, сколько было выбрано, и только потом удаляет эти строки из live-таблиц.',
-      'Live защищён backend-флагом OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true и ручным confirm. Когда флаг false, UI не сможет выполнить перенос.'
+      'Live защищён runtime-предохранителем live-переноса и ручным confirm. Когда предохранитель выключен, UI не сможет выполнить перенос.'
     ]
   },
   {
@@ -132,8 +135,8 @@ const ARCHIVE_MANUAL_SECTIONS: ArchiveManualSection[] = [
     points: [
       'Команду на перенос может дать человек через кнопку запуска на этой странице или scheduled worker по cron-расписанию.',
       'Ежедневный запуск в UI — это runtime-переключатель в app_settings. Он говорит worker: можно ли запускаться и в каком режиме, dry-run или live.',
-      'Scheduled worker включается отдельно флагом OTZIV_ARCHIVE_ORDERS_SCHEDULE_ENABLED=true. Если backend-флаг выключен, расписание не стартует даже при включённом переключателе в UI.',
-      'Если расписание включено и режим dry-run, worker только создаёт проверочный batch. Если выбран live, worker попытается перенести данные физически, но только при OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true.',
+      'Планировщик архиватора включается отдельной runtime-настройкой на этой странице. Если он выключен, расписание не стартует даже при включённом ежедневном запуске.',
+      'Если расписание включено и режим dry-run, worker только создаёт проверочный batch. Если выбран live, worker попытается перенести данные физически, но только при включённом live-переносе.',
       'Lock защищает от параллельных запусков: второй архиватор не начнёт перенос, пока первый держит lock.'
     ]
   },
@@ -184,7 +187,11 @@ export class ArchiveAdminComponent {
   retentionDays = 90;
   batchLimit = 500;
   reason = 'manual-orders-retention-dry-run';
+  applyEnabled = false;
+  scheduleWorkerEnabled = false;
   scheduleEnabled = false;
+  scheduleTime = '04:15';
+  scheduleZone = 'Asia/Irkutsk';
   scheduledMode: ArchiveRunMode = 'dry-run';
   scheduledReason = 'scheduled-orders-retention-dry-run';
 
@@ -199,6 +206,7 @@ export class ArchiveAdminComponent {
       { label: 'Кандидаты старше', value: `${settings.archiveRetentionDays} дн.`, icon: 'event_repeat', tone: 'yellow', helpKey: 'retentionMetric' },
       { label: 'Размер пачки', value: settings.batchSize, icon: 'inventory_2', tone: 'green', helpKey: 'batchMetric' },
       { label: 'Live перенос', value: settings.applyEnabled ? 'разрешён' : 'выключен', icon: 'lock', tone: settings.applyEnabled ? 'red' : 'gray', helpKey: 'applyEnabled' },
+      { label: 'Планировщик', value: settings.scheduleWorkerEnabled ? 'включён' : 'выключен', icon: 'event_available', tone: settings.scheduleWorkerEnabled ? 'green' : 'gray', helpKey: 'scheduleWorkerEnabled' },
       { label: 'Ежедневный запуск', value: settings.scheduleEnabled ? settings.runMode : 'выключен', icon: 'event_available', tone: settings.scheduleEnabled ? 'green' : 'gray', helpKey: 'scheduleMetric' }
     ];
   });
@@ -294,7 +302,7 @@ export class ArchiveAdminComponent {
     const mode = this.mode();
     const settings = this.settings();
     if (mode === 'live' && !settings?.applyEnabled) {
-      this.error.set('Live перенос выключен на backend. Включается только через OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true.');
+      this.error.set('Live перенос выключен. Сначала включи live-перенос в настройках и сохрани изменения.');
       return;
     }
 
@@ -332,8 +340,8 @@ export class ArchiveAdminComponent {
   }
 
   saveSettings(): void {
-    if (this.scheduledMode === 'live' && !this.settings()?.applyEnabled) {
-      this.error.set('Live режим можно сохранить только после включения OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true.');
+    if (this.scheduledMode === 'live' && !this.applyEnabled) {
+      this.error.set('Live режим можно сохранить только после включения live-переноса.');
       return;
     }
 
@@ -343,9 +351,13 @@ export class ArchiveAdminComponent {
     this.archiveApi.updateOrderSettings({
       archiveRetentionDays: this.positiveOrFallback(this.retentionDays, 90),
       batchSize: this.positiveOrFallback(this.batchLimit, 500),
+      applyEnabled: this.applyEnabled,
+      scheduleWorkerEnabled: this.scheduleWorkerEnabled,
       scheduleEnabled: this.scheduleEnabled,
       runMode: this.scheduledMode,
-      reason: this.scheduledReason
+      reason: this.scheduledReason,
+      scheduleTime: this.scheduleTime || '04:15',
+      scheduleZone: this.scheduleZone || 'Asia/Irkutsk'
     }).subscribe({
       next: (settings) => {
         this.settings.set(settings);
@@ -363,6 +375,13 @@ export class ArchiveAdminComponent {
 
   setMode(mode: ArchiveRunMode): void {
     this.mode.set(mode);
+  }
+
+  onApplyEnabledChange(): void {
+    if (!this.applyEnabled) {
+      this.scheduledMode = 'dry-run';
+      this.mode.set('dry-run');
+    }
   }
 
   countTotal(counts: ArchiveCandidateCounts | null | undefined): number {
@@ -476,7 +495,11 @@ export class ArchiveAdminComponent {
   private applySettings(settings: ArchiveOrdersSettings): void {
     this.retentionDays = settings.archiveRetentionDays;
     this.batchLimit = settings.batchSize;
+    this.applyEnabled = settings.applyEnabled;
+    this.scheduleWorkerEnabled = settings.scheduleWorkerEnabled;
     this.scheduleEnabled = settings.scheduleEnabled;
+    this.scheduleTime = settings.scheduleTime || '04:15';
+    this.scheduleZone = settings.scheduleZone || 'Asia/Irkutsk';
     this.scheduledMode = settings.runMode;
     this.scheduledReason = settings.reason;
     this.mode.set(settings.applyEnabled ? settings.runMode : 'dry-run');

@@ -7,7 +7,7 @@ import {
   ReviewEditableField,
   SideNoteField,
   workerBotBrowserPath,
-  workerReviewDetailsPath
+  workerReviewDetailsPath,
 } from './worker-board.config';
 import {
   workerHasReviewCompanyNote,
@@ -22,7 +22,7 @@ import {
   workerSaveReviewFieldMutationKey,
   workerSideNoteKey,
   workerSideNoteMutationKey,
-  workerSideNoteSourceValue
+  workerSideNoteSourceValue,
 } from './worker-board-note.helpers';
 
 export type ReviewFieldValueChange = {
@@ -39,7 +39,7 @@ export type SideNoteValueChange = {
   selector: 'app-worker-review-card',
   imports: [FormsModule],
   templateUrl: './worker-review-card.component.html',
-  styleUrl: './worker-review-card.component.scss'
+  styleUrl: './worker-review-card.component.scss',
 })
 export class WorkerReviewCardComponent {
   private readonly destroyRef = inject(DestroyRef);
@@ -49,6 +49,7 @@ export class WorkerReviewCardComponent {
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
   @Input() canOpenEditModal = false;
+  @Input() canOpenTitleLink = true;
   @Input() showFilialCityInFooter = false;
   @Input() reviewFieldDrafts: Record<string, string> = {};
   @Input() editingReviewFieldKey: string | null = null;
@@ -107,6 +108,13 @@ export class WorkerReviewCardComponent {
 
   reviewEditUrl(): string {
     return workerReviewDetailsPath(this.review);
+  }
+
+  isReviewTitleLinkEnabled(): boolean {
+    return (
+      this.canOpenTitleLink ||
+      (this.activeSection !== 'nagul' && this.activeSection !== 'publish')
+    );
   }
 
   reviewTitle(): string {
@@ -234,7 +242,10 @@ export class WorkerReviewCardComponent {
   }
 
   sideNoteValue(field: SideNoteField): string {
-    return this.sideNoteDrafts[workerSideNoteKey(this.review, field)] ?? workerSideNoteSourceValue(this.review, field);
+    return (
+      this.sideNoteDrafts[workerSideNoteKey(this.review, field)] ??
+      workerSideNoteSourceValue(this.review, field)
+    );
   }
 
   isSideNoteEditing(field: SideNoteField): boolean {
@@ -266,11 +277,15 @@ export class WorkerReviewCardComponent {
   }
 
   hasUnavailableBot(): boolean {
-    return (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
+    return (
+      (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов'
+    );
   }
 
   reviewDate(): string {
-    return this.review.badTaskScheduledDate || this.review.publishedDate || this.review.created || '-';
+    return (
+      this.review.badTaskScheduledDate || this.review.publishedDate || this.review.created || '-'
+    );
   }
 
   doneLabel(): string {

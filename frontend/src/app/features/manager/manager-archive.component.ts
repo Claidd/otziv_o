@@ -1,15 +1,21 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import {
   ArchiveOrderDetailsPayload,
+  ArchiveOrderDetailItem,
   ArchiveOrderListItem,
   ArchiveOrderMode,
+  ArchivePaymentCheckItem,
+  ArchiveReviewItem,
   ArchiveRestoreResult,
+  ArchiveZpItem,
   ManagerApi,
   ManagerPage
 } from '../../core/manager.api';
+import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -39,6 +45,8 @@ const LIVE_ARCHIVE_STATUS_ACTIONS: LiveArchiveStatusAction[] = [
   { label: 'на проверке', status: 'На проверке' }
 ];
 
+const RESTORE_STATUS_OPTIONS = ['Новый', 'Коррекция', 'На проверке'] as const;
+
 const EMPTY_ARCHIVE_PAGE: ManagerPage<ArchiveOrderListItem> = {
   content: [],
   number: 0,
@@ -49,15 +57,30 @@ const EMPTY_ARCHIVE_PAGE: ManagerPage<ArchiveOrderListItem> = {
   last: true
 };
 
+type ArchiveRouteState = {
+  mode: ArchiveOrderMode;
+  keyword: string;
+  pageNumber: number;
+  pageSize: number;
+  archiveOrderId: number | null;
+};
+
 @Component({
   selector: 'app-manager-archive',
   imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './manager-archive.component.html',
   styleUrl: './manager-archive.component.scss'
 })
-export class ManagerArchiveComponent {
+export class ManagerArchiveComponent implements OnDestroy {
+  private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
+  private searchDebounceId: ReturnType<typeof setTimeout> | null = null;
+  private loadingArchiveOrderId: number | null = null;
+  private lastListQueryKey = '';
+  private readonly routeSubscription: Subscription;
 
   readonly modeTabs: ArchiveModeTab[] = [
     { key: 'all', label: 'Все закрытые', icon: 'inventory_2' },
@@ -79,8 +102,10 @@ export class ManagerArchiveComponent {
   readonly restoreLoading = signal(false);
   readonly restoring = signal(false);
   readonly restoreTargetStatus = signal('Архив');
+  readonly activeArchiveOrderId = signal<number | null>(null);
   readonly liveStatusMutationKey = signal<string | null>(null);
   readonly liveStatusActions = LIVE_ARCHIVE_STATUS_ACTIONS;
+  readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
 
   readonly orders = computed(() => this.ordersPage().content ?? []);
   readonly rightMetrics = computed<ArchiveSideMetric[]>(() => {
@@ -96,7 +121,12 @@ export class ManagerArchiveComponent {
   });
 
   constructor() {
-    this.loadOrders();
+    this.routeSubscription = this.route.queryParamMap.subscribe((params) => this.applyRouteState(params));
+  }
+
+  ngOnDestroy(): void {
+    this.clearSearchDebounce();
+    this.routeSubscription.unsubscribe();
   }
 
   setMode(mode: ArchiveOrderMode): void {
@@ -104,14 +134,21 @@ export class ManagerArchiveComponent {
       return;
     }
 
-    this.mode.set(mode);
-    this.pageNumber.set(0);
-    this.loadOrders();
+    this.navigateArchiveState({ mode, pageNumber: 0, archiveOrderId: null });
   }
 
   search(): void {
-    this.pageNumber.set(0);
-    this.loadOrders();
+    this.clearSearchDebounce();
+    this.navigateArchiveState({ keyword: this.keyword(), pageNumber: 0, archiveOrderId: null });
+  }
+
+  updateKeyword(value: string): void {
+    this.keyword.set(value);
+    this.clearSearchDebounce();
+    this.searchDebounceId = setTimeout(() => {
+      this.navigateArchiveState({ keyword: this.keyword(), pageNumber: 0, archiveOrderId: null }, true);
+      this.searchDebounceId = null;
+    }, 450);
   }
 
   clearSearch(): void {
@@ -120,9 +157,7 @@ export class ManagerArchiveComponent {
   }
 
   changePageSize(value: string | number): void {
-    this.pageSize.set(Number(value));
-    this.pageNumber.set(0);
-    this.loadOrders();
+    this.navigateArchiveState({ pageSize: Number(value), pageNumber: 0, archiveOrderId: null });
   }
 
   previousPage(): void {
@@ -130,8 +165,7 @@ export class ManagerArchiveComponent {
       return;
     }
 
-    this.pageNumber.update((page) => Math.max(0, page - 1));
-    this.loadOrders();
+    this.navigateArchiveState({ pageNumber: Math.max(0, this.pageNumber() - 1), archiveOrderId: null });
   }
 
   nextPage(): void {
@@ -139,8 +173,7 @@ export class ManagerArchiveComponent {
       return;
     }
 
-    this.pageNumber.update((page) => page + 1);
-    this.loadOrders();
+    this.navigateArchiveState({ pageNumber: this.pageNumber() + 1, archiveOrderId: null });
   }
 
   refresh(): void {
@@ -163,6 +196,22 @@ export class ManagerArchiveComponent {
     return action.status;
   }
 
+  trackDetail(_index: number, detail: ArchiveOrderDetailItem): string {
+    return detail.id;
+  }
+
+  trackReview(_index: number, review: ArchiveReviewItem): number {
+    return review.id;
+  }
+
+  trackPayment(_index: number, payment: ArchivePaymentCheckItem): number {
+    return payment.id;
+  }
+
+  trackZp(_index: number, zp: ArchiveZpItem): number {
+    return zp.id;
+  }
+
   orderDetailsLink(order: ArchiveOrderListItem): Array<string | number> | null {
     return order.source === 'live' && order.companyId
       ? ['/manager/orders', order.companyId, order.id]
@@ -170,7 +219,23 @@ export class ManagerArchiveComponent {
   }
 
   canRestore(order: ArchiveOrderListItem): boolean {
-    return order.source === 'archive' && !order.restoredAt;
+    if (order.source !== 'archive' || order.restoredAt) {
+      return false;
+    }
+
+    return order.status !== 'Оплачено' || this.canManagePaidRestore();
+  }
+
+  canOpenArchiveDetails(order: ArchiveOrderListItem): boolean {
+    return order.source === 'archive';
+  }
+
+  paidRestoreRestricted(order: ArchiveOrderListItem): boolean {
+    return order.source === 'archive' && order.status === 'Оплачено' && !this.canManagePaidRestore();
+  }
+
+  canSeeArchiveFinance(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   }
 
   canChangeLiveStatus(order: ArchiveOrderListItem): boolean {
@@ -202,29 +267,12 @@ export class ManagerArchiveComponent {
   }
 
   openRestore(order: ArchiveOrderListItem): void {
-    if (!this.canRestore(order)) {
+    if (!this.canOpenArchiveDetails(order)) {
       return;
     }
 
-    this.restoreOrder.set(order);
-    this.restoreDetails.set(null);
-    this.restoreResult.set(null);
-    this.restoreError.set(null);
-    this.restoreTargetStatus.set(order.status || 'Архив');
-    this.restoreLoading.set(true);
-
-    this.managerApi.getArchiveOrder(order.id).subscribe({
-      next: (details) => {
-        this.restoreDetails.set(details);
-        this.restoreLoading.set(false);
-      },
-      error: (err) => {
-        const message = apiErrorMessage(err, 'Не удалось загрузить состав архивного заказа');
-        this.restoreError.set(message);
-        this.restoreLoading.set(false);
-        this.toastService.error('Восстановление недоступно', message);
-      }
-    });
+    this.openArchiveDetails(order.id, order);
+    this.navigateArchiveState({ archiveOrderId: order.id });
   }
 
   closeRestore(): void {
@@ -232,10 +280,10 @@ export class ManagerArchiveComponent {
       return;
     }
 
-    this.restoreOrder.set(null);
-    this.restoreDetails.set(null);
-    this.restoreResult.set(null);
-    this.restoreError.set(null);
+    if (this.activeArchiveOrderId()) {
+      this.navigateArchiveState({ archiveOrderId: null }, true);
+    }
+    this.clearRestoreState();
   }
 
   confirmRestore(): void {
@@ -263,10 +311,8 @@ export class ManagerArchiveComponent {
     });
   }
 
-  restoreStatusOptions(order: ArchiveOrderListItem): string[] {
-    return [order.status, 'Архив', 'Оплачено', 'Новый', 'Не оплачено', 'В проверку']
-      .filter((status): status is string => Boolean(status && status.trim()))
-      .filter((status, index, statuses) => statuses.indexOf(status) === index);
+  restoreStatusOptions(_order: ArchiveOrderListItem): string[] {
+    return [...this.restoreStatuses];
   }
 
   restoreRowsTotal(details: ArchiveOrderDetailsPayload | null): number {
@@ -334,5 +380,161 @@ export class ManagerArchiveComponent {
 
   private liveStatusKey(order: ArchiveOrderListItem, status: string): string {
     return `archive-live-${order.id}-${status}`;
+  }
+
+  private applyRouteState(params: ParamMap): void {
+    const nextState = this.readRouteState(params);
+    const listKey = this.listQueryKey(nextState);
+
+    this.mode.set(nextState.mode);
+    this.keyword.set(nextState.keyword);
+    this.pageNumber.set(nextState.pageNumber);
+    this.pageSize.set(nextState.pageSize);
+    this.activeArchiveOrderId.set(nextState.archiveOrderId);
+
+    if (listKey !== this.lastListQueryKey) {
+      this.lastListQueryKey = listKey;
+      this.loadOrders();
+    }
+
+    if (nextState.archiveOrderId) {
+      this.openArchiveDetails(nextState.archiveOrderId, this.orders().find((order) => order.id === nextState.archiveOrderId));
+    } else if (!this.restoring()) {
+      this.clearRestoreState();
+    }
+  }
+
+  private openArchiveDetails(orderId: number, fallbackOrder?: ArchiveOrderListItem): void {
+    if (
+      this.restoreOrder()?.id === orderId
+      && (this.restoreLoading() || this.restoreDetails() || this.restoreError())
+    ) {
+      return;
+    }
+
+    this.activeArchiveOrderId.set(orderId);
+    this.loadingArchiveOrderId = orderId;
+    this.restoreOrder.set(fallbackOrder ?? null);
+    this.restoreDetails.set(null);
+    this.restoreResult.set(null);
+    this.restoreError.set(null);
+    this.restoreTargetStatus.set(this.restoreStatuses[0]);
+    this.restoreLoading.set(true);
+
+    this.managerApi.getArchiveOrder(orderId).subscribe({
+      next: (details) => {
+        if (this.loadingArchiveOrderId !== orderId) {
+          return;
+        }
+        this.restoreOrder.set(details.order);
+        this.restoreDetails.set(details);
+        this.restoreLoading.set(false);
+      },
+      error: (err) => {
+        if (this.loadingArchiveOrderId !== orderId) {
+          return;
+        }
+        const message = apiErrorMessage(err, 'Не удалось загрузить состав архивного заказа');
+        this.restoreError.set(message);
+        this.restoreLoading.set(false);
+        this.toastService.error('Восстановление недоступно', message);
+      }
+    });
+  }
+
+  private clearRestoreState(): void {
+    this.loadingArchiveOrderId = null;
+    this.activeArchiveOrderId.set(null);
+    this.restoreOrder.set(null);
+    this.restoreDetails.set(null);
+    this.restoreResult.set(null);
+    this.restoreError.set(null);
+    this.restoreLoading.set(false);
+  }
+
+  private navigateArchiveState(patch: Partial<ArchiveRouteState>, replaceUrl = false): void {
+    const state: ArchiveRouteState = {
+      mode: this.mode(),
+      keyword: this.keyword(),
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      archiveOrderId: this.activeArchiveOrderId(),
+      ...patch
+    };
+
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: this.routeQueryParams(state),
+      replaceUrl
+    });
+  }
+
+  private readRouteState(params: ParamMap): ArchiveRouteState {
+    return {
+      mode: this.normalizeMode(params.get('mode')),
+      keyword: params.get('keyword')?.trim() ?? '',
+      pageNumber: this.readNonNegativeInt(params.get('pageNumber'), 0),
+      pageSize: this.readPageSize(params.get('pageSize')),
+      archiveOrderId: this.readPositiveInt(params.get('archiveOrderId'))
+    };
+  }
+
+  private routeQueryParams(state: ArchiveRouteState): Record<string, string | number> {
+    const queryParams: Record<string, string | number> = {};
+    if (state.mode !== 'all') {
+      queryParams['mode'] = state.mode;
+    }
+    if (state.keyword.trim()) {
+      queryParams['keyword'] = state.keyword.trim();
+    }
+    if (state.pageNumber > 0) {
+      queryParams['pageNumber'] = state.pageNumber;
+    }
+    if (state.pageSize !== 10) {
+      queryParams['pageSize'] = state.pageSize;
+    }
+    if (state.archiveOrderId) {
+      queryParams['archiveOrderId'] = state.archiveOrderId;
+    }
+    return queryParams;
+  }
+
+  private listQueryKey(state: ArchiveRouteState): string {
+    return [state.mode, state.keyword, state.pageNumber, state.pageSize].join('|');
+  }
+
+  private normalizeMode(mode: string | null): ArchiveOrderMode {
+    return mode === 'archive' || mode === 'paid' || mode === 'all' ? mode : 'all';
+  }
+
+  private readPageSize(value: string | null): number {
+    const parsed = this.readNonNegativeInt(value, 10);
+    return this.pageSizeOptions.includes(parsed) ? parsed : 10;
+  }
+
+  private readNonNegativeInt(value: string | null, fallback: number): number {
+    if (!value) {
+      return fallback;
+    }
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
+  private readPositiveInt(value: string | null): number | null {
+    const parsed = this.readNonNegativeInt(value, 0);
+    return parsed > 0 ? parsed : null;
+  }
+
+  private canManagePaidRestore(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  private clearSearchDebounce(): void {
+    if (!this.searchDebounceId) {
+      return;
+    }
+
+    clearTimeout(this.searchDebounceId);
+    this.searchDebounceId = null;
   }
 }

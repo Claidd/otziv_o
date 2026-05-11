@@ -45,6 +45,11 @@ public class ManagerArchiveService {
         String safeKeyword = keyword == null ? "" : keyword.trim();
         long total = repository.countOrders(scope, mode, safeKeyword);
         List<ManagerArchiveOrderListItem> orders = repository.findOrders(scope, mode, safeKeyword, safePageNumber, safePageSize);
+        if (!canSeeArchiveFinance(authentication)) {
+            orders = orders.stream()
+                    .map(this::withoutFinance)
+                    .toList();
+        }
 
         return new PageResponse<>(
                 orders,
@@ -70,16 +75,18 @@ public class ManagerArchiveService {
         ArchiveAccessScope scope = resolveScope(principal, authentication);
         ManagerArchiveOrderListItem order = repository.findOrder(scope, orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный заказ не найден"));
+        boolean financeVisible = canSeeArchiveFinance(authentication);
+        ManagerArchiveOrderListItem visibleOrder = financeVisible ? order : withoutFinance(order);
 
         return new ManagerArchiveOrderDetailsResponse(
-                order,
+                visibleOrder,
                 repository.findOrderComments(orderId),
                 repository.findOrderDetails(orderId),
                 repository.findReviews(orderId),
                 repository.findBadReviewTasks(orderId),
                 repository.findNextOrderRequests(orderId),
-                repository.findZp(orderId),
-                repository.findPaymentChecks(orderId)
+                financeVisible ? repository.findZp(orderId) : List.of(),
+                financeVisible ? repository.findPaymentChecks(orderId) : List.of()
         );
     }
 
@@ -96,8 +103,11 @@ public class ManagerArchiveService {
         }
 
         ArchiveAccessScope scope = resolveScope(principal, authentication);
-        repository.findOrder(scope, orderId)
+        ManagerArchiveOrderListItem order = repository.findOrder(scope, orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный заказ не найден"));
+        if ("Оплачено".equals(order.status()) && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Оплаченный архивный заказ может восстановить только администратор или владелец");
+        }
 
         String restoredBy = principal == null ? null : principal.getName();
         return restoreService.restoreOrder(orderId, targetStatus, restoredBy, confirm);
@@ -137,5 +147,41 @@ public class ManagerArchiveService {
             return 0;
         }
         return (int) Math.ceil((double) total / pageSize);
+    }
+
+    private boolean canSeeArchiveFinance(Authentication authentication) {
+        return managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER");
+    }
+
+    private ManagerArchiveOrderListItem withoutFinance(ManagerArchiveOrderListItem order) {
+        return new ManagerArchiveOrderListItem(
+                order.id(),
+                order.companyId(),
+                order.companyTitle(),
+                order.companyTelephone(),
+                order.companyCity(),
+                order.filialTitle(),
+                order.status(),
+                order.sum(),
+                order.amount(),
+                order.counter(),
+                order.waitingForClient(),
+                order.managerName(),
+                order.workerName(),
+                order.created(),
+                order.changed(),
+                order.payDay(),
+                order.archivedAt(),
+                order.archiveReason(),
+                order.archiveBatchId(),
+                order.restoredAt(),
+                order.restoredBy(),
+                order.restoreBatchId(),
+                order.orderDetailsCount(),
+                order.reviewsCount(),
+                null,
+                null,
+                order.source()
+        );
     }
 }

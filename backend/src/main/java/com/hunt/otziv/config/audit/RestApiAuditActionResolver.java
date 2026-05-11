@@ -220,6 +220,12 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/cabinet/team", "загрузка команды");
         put(actions, "GET", "/api/cabinet/score", "загрузка рейтинга");
         put(actions, "GET", "/api/cabinet/analyse", "загрузка аналитики");
+        put(actions, "POST", "/api/metric-snapshots/seen", "отметка счетчика \"{section}\" на странице \"{page}\" как просмотренного, значение {value}");
+        put(actions, "GET", "/api/personal-reminders", "загрузка личных заметок и напоминаний");
+        put(actions, "POST", "/api/personal-reminders", "создание личной заметки или напоминания \"{title}\"");
+        put(actions, "PUT", "/api/personal-reminders/{reminderId}", "редактирование личной заметки или напоминания {reminderId}");
+        put(actions, "POST", "/api/personal-reminders/{reminderId}/complete", "отметка личной заметки или напоминания {reminderId} выполненным");
+        put(actions, "DELETE", "/api/personal-reminders/{reminderId}", "удаление личной заметки или напоминания {reminderId}");
 
         put(actions, "GET", "/api/admin/categories", "загрузка категорий");
         put(actions, "POST", "/api/admin/categories", "создание категории \"{title}\"");
@@ -246,13 +252,43 @@ public class RestApiAuditActionResolver {
         put(actions, "DELETE", "/api/admin/users/{id}", "удаление пользователя {id}");
         put(actions, "GET", "/api/admin/users/{id}/assignments", "загрузка назначений пользователя {id}");
         put(actions, "PUT", "/api/admin/users/{id}/assignments", "редактирование назначений пользователя {id}");
+        put(actions, "POST", "/api/admin/users/{id}/photo", "обновление фото пользователя {id}");
+        put(actions, "PUT", "/api/admin/users/{id}/password", "смена пароля пользователя {id}");
+        put(actions, "GET", "/api/admin/bots", "загрузка аккаунтов");
+        put(actions, "GET", "/api/admin/bots/{id}", "загрузка аккаунта {id}");
+        put(actions, "POST", "/api/admin/bots/import", "импорт аккаунтов из файла");
+        put(actions, "POST", "/api/admin/bots", "создание аккаунта \"{login}\"");
+        put(actions, "PUT", "/api/admin/bots/{id}", "редактирование аккаунта {id}");
+        put(actions, "DELETE", "/api/admin/bots/{id}", "удаление аккаунта {id}");
+        put(actions, "GET", "/api/admin/promo-texts", "загрузка промо-текстов");
+        put(actions, "GET", "/api/admin/promo-texts/management", "загрузка управления промо-текстами");
+        put(actions, "POST", "/api/admin/promo-texts", "создание промо-текста");
+        put(actions, "PUT", "/api/admin/promo-texts/{id}", "редактирование промо-текста {id}");
+        put(actions, "PUT", "/api/admin/promo-text-assignments", "назначение промо-текста менеджеру");
+        put(actions, "DELETE", "/api/admin/promo-text-assignments/{managerId}/{section}/{buttonKey}", "сброс промо-текста менеджера {managerId}");
+        put(actions, "GET", "/api/admin/manager-texts", "загрузка шаблонов сообщений менеджеров");
+        put(actions, "PUT", "/api/admin/manager-texts/{managerId}", "редактирование шаблонов сообщений менеджера {managerId}");
+        put(actions, "GET", "/api/admin/phones", "загрузка телефонов операторов");
+        put(actions, "POST", "/api/admin/phones", "создание телефона оператора \"{number}\"");
+        put(actions, "PUT", "/api/admin/phones/{id}", "редактирование телефона оператора {id}");
+        put(actions, "DELETE", "/api/admin/phones/{id}", "удаление телефона оператора {id}");
         put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
+        put(actions, "POST", "/api/admin/analytics/aggregates/rebuild-month", "пересчет аналитики за месяц {month}");
+        put(actions, "GET", "/api/admin/analytics/aggregates/source-range", "проверка доступного периода данных для аналитики");
+        put(actions, "GET", "/api/admin/analytics/aggregates/compare-admin-month", "сверка аналитики за месяц {month}");
+        put(actions, "GET", "/api/admin/analytics/aggregates/compare-cabinet-analyse", "сверка аналитики кабинета пользователя \"{username}\"");
+        put(actions, "GET", "/api/admin/analytics/aggregates/compare-score", "сверка рейтинга пользователей за дату {date}");
+        put(actions, "GET", "/api/admin/analytics/aggregates/compare-team", "сверка команды пользователя \"{username}\"");
+        put(actions, "GET", "/api/admin/analytics/aggregates/compare-user-stats", "сверка статистики пользователя {userId}");
         put(actions, "GET", "/api/admin/archive/orders/settings", "загрузка настроек архиватора заказов");
         put(actions, "PUT", "/api/admin/archive/orders/settings", "редактирование настроек архиватора заказов");
+        put(actions, "GET", "/api/admin/archive/orders/candidates", "предпросмотр заказов для архива");
+        put(actions, "GET", "/api/admin/archive/orders/lock", "проверка блокировки архиватора заказов");
         put(actions, "POST", "/api/admin/archive/orders/dry-run", "проверка кандидатов архиватора заказов");
         put(actions, "POST", "/api/admin/archive/orders/run", "запуск архиватора заказов");
         put(actions, "GET", "/api/admin/archive/batches", "загрузка журнала архиватора");
+        put(actions, "GET", "/api/admin/archive/batches/{batchId}", "загрузка запуска архиватора {batchId}");
 
         put(actions, "GET", "/api/companies/create-payload", "загрузка формы создания компании");
         put(actions, "GET", "/api/companies/categories/{categoryId}/subcategories", "загрузка подкатегорий компании для категории {categoryId}");
@@ -263,9 +299,12 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/manager/companies/{companyId}/order-create", "загрузка создания заказа для компании {companyId}");
         put(actions, "POST", "/api/manager/companies/{companyId}/orders", "создание заказа для компании {companyId}");
         put(actions, "PUT", "/api/manager/companies/{companyId}", "редактирование компании {companyId}");
+        put(actions, "PUT", "/api/manager/companies/{companyId}/note", "редактирование заметки компании {companyId}");
         put(actions, "DELETE", "/api/manager/companies/{companyId}/workers/{workerId}", "удаление специалиста {workerId} из компании {companyId}");
         put(actions, "DELETE", "/api/manager/companies/{companyId}/filials/{filialId}", "удаление филиала {filialId} из компании {companyId}");
+        put(actions, "PUT", "/api/manager/companies/{companyId}/filials/{filialId}", "редактирование филиала {filialId} компании {companyId}");
         put(actions, "GET", "/api/manager/categories/{categoryId}/subcategories", "загрузка подкатегорий менеджера для категории {categoryId}");
+        put(actions, "GET", "/api/manager/overdue-orders", "проверка заказов, которые давно не менялись");
         put(actions, "POST", "/api/manager/orders/{orderId}/status", "смена статуса заказа на \"{status}\"");
         put(actions, "GET", "/api/manager/orders/{orderId}/edit", "загрузка редактирования заказа {orderId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}", "редактирование заказа {orderId}");
@@ -282,6 +321,7 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/manager/orders/{orderId}/note", "редактирование заметки заказа {orderId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}/company-note", "редактирование заметки компании в заказе {orderId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/new-account", "назначение нового аккаунта отзыву {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/cancel", "отмена плохого отзыва {taskId}");
@@ -295,6 +335,7 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/worker/orders/{orderId}/company-note", "редактирование заметки компании в заказе {orderId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
+        put(actions, "POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве {reviewId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/change-bot", "смена аккаунта плохого отзыва {taskId}");
@@ -303,10 +344,12 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/worker/reviews/{reviewId}/text", "редактирование текста отзыва {reviewId}");
         put(actions, "PUT", "/api/worker/reviews/{reviewId}/answer", "редактирование ответа отзыва {reviewId}");
         put(actions, "PUT", "/api/worker/reviews/{reviewId}/note", "редактирование заметки отзыва {reviewId}");
+        put(actions, "GET", "/api/worker/overdue-orders", "проверка заказов специалиста, которые давно не менялись");
         put(actions, "DELETE", "/api/worker/bots/{botId}", "удаление аккаунта {botId}");
 
         put(actions, "GET", "/api/leads/edit-options", "загрузка справочников для редактирования лидов");
         put(actions, "POST", "/api/leads", "создание лида");
+        put(actions, "POST", "/api/leads/file-import", "импорт лидов из файла");
         put(actions, "PUT", "/api/leads/{id}", "редактирование лида {id}");
         put(actions, "DELETE", "/api/leads/{id}", "удаление лида {id}");
         put(actions, "POST", "/api/leads/{id}/status/send", "смена статуса лида {id} на \"Отправлен\"");
@@ -327,6 +370,8 @@ public class RestApiAuditActionResolver {
 
         put(actions, "GET", "/api/review-check/{orderDetailId}", "загрузка проверки отзывов {orderDetailId}");
         put(actions, "PUT", "/api/review-check/{orderDetailId}", "сохранение проверки отзывов {orderDetailId}");
+        put(actions, "PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text", "редактирование текста отзыва {reviewId} при проверке");
+        put(actions, "PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/answer", "редактирование ответа отзыва {reviewId} при проверке");
         put(actions, "POST", "/api/review-check/{orderDetailId}/approve", "подтверждение отзывов {orderDetailId}");
         put(actions, "POST", "/api/review-check/{orderDetailId}/correction", "отправка отзывов {orderDetailId} на коррекцию");
         put(actions, "POST", "/api/review-check/{orderDetailId}/send-to-check", "отправка отзывов {orderDetailId} на проверку");
@@ -353,6 +398,11 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/admin/dispatch/start", "тестовый запуск рассылки");
         put(actions, "GET", "/admin/dispatch/startLastSeen", "ручной запуск last-seen рассылки");
         put(actions, "POST", "/telephone/device-token", "создание токена телефона {telephoneId}");
+        put(actions, "GET", "/logs", "просмотр логов системы");
+        put(actions, "GET", "/logs/tail", "загрузка новых строк лога");
+        put(actions, "POST", "/logs/clear", "очистка текущего файла лога");
+        put(actions, "POST", "/logs/clear/all", "очистка основных файлов логов");
+        put(actions, "GET", "/logs/ui", "открытие страницы живых логов");
 
         return Map.copyOf(actions);
     }

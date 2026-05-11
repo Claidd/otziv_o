@@ -4,14 +4,19 @@ import com.hunt.otziv.config.settings.AppSettingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Slf4j
@@ -23,6 +28,9 @@ public class OrderArchiveDryRunService {
     private static final String RUN_MODE_DRY_RUN = "dry-run";
     private static final String RUN_MODE_LIVE = "live";
     private static final String DEFAULT_REASON = "scheduled-orders-retention-dry-run";
+    private static final String DEFAULT_SCHEDULE_CRON = "0 15 4 * * *";
+    private static final DateTimeFormatter SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter LENIENT_SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("H:mm");
 
     private final OrderArchiveDryRunRepository repository;
     private final AppSettingService appSettingService;
@@ -41,16 +49,16 @@ public class OrderArchiveDryRunService {
     private int maxBatchLimit;
 
     @Value("${otziv.archive.orders.apply-enabled:false}")
-    private boolean applyEnabled;
+    private boolean defaultApplyEnabled;
 
     @Value("${otziv.archive.orders.schedule.enabled:false}")
-    private boolean scheduleEnabled;
+    private boolean defaultScheduleWorkerEnabled;
 
-    @Value("${otziv.archive.orders.schedule.cron:0 15 4 * * *}")
-    private String scheduleCron;
+    @Value("${otziv.archive.orders.schedule.cron:" + DEFAULT_SCHEDULE_CRON + "}")
+    private String defaultScheduleCron;
 
     @Value("${otziv.archive.orders.schedule.zone:Asia/Irkutsk}")
-    private String scheduleZone;
+    private String defaultScheduleZone;
 
     @Autowired
     public OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, AppSettingService appSettingService) {
@@ -128,7 +136,7 @@ public class OrderArchiveDryRunService {
         if (!confirm) {
             throw new IllegalArgumentException("Archive run requires confirm=true");
         }
-        if (!applyEnabled) {
+        if (!runtimeSettings().applyEnabled()) {
             throw new IllegalStateException("Order archive apply is disabled");
         }
 
@@ -262,13 +270,14 @@ public class OrderArchiveDryRunService {
                 settings.retentionDays(),
                 settings.batchSize(),
                 Math.max(maxBatchLimit, 1),
-                applyEnabled,
-                scheduleEnabled,
+                settings.applyEnabled(),
+                settings.scheduleWorkerEnabled(),
                 settings.scheduleEnabled(),
                 settings.runMode(),
                 settings.reason(),
-                scheduleCron,
-                scheduleZone
+                settings.scheduleTime(),
+                settings.scheduleCron(),
+                settings.scheduleZone()
         );
     }
 
@@ -278,23 +287,42 @@ public class OrderArchiveDryRunService {
             throw new IllegalStateException("Archive settings storage is not available");
         }
         ArchiveOrdersSettingsRequest value = request == null
-                ? new ArchiveOrdersSettingsRequest(null, null, null, null, null)
+                ? new ArchiveOrdersSettingsRequest(null, null, null, null, null, null, null, null, null, null)
                 : request;
+        RuntimeSettings currentSettings = runtimeSettings();
 
         int resolvedRetentionDays = positiveOrDefault(value.archiveRetentionDays(), defaultRetentionDays, 90);
         int resolvedBatchSize = batchLimit(value.batchSize());
-        boolean resolvedScheduleEnabled = Boolean.TRUE.equals(value.scheduleEnabled());
+        boolean resolvedApplyEnabled = value.applyEnabled() == null
+                ? currentSettings.applyEnabled()
+                : Boolean.TRUE.equals(value.applyEnabled());
+        boolean resolvedScheduleWorkerEnabled = value.scheduleWorkerEnabled() == null
+                ? currentSettings.scheduleWorkerEnabled()
+                : Boolean.TRUE.equals(value.scheduleWorkerEnabled());
+        boolean resolvedScheduleEnabled = value.scheduleEnabled() == null
+                ? currentSettings.scheduleEnabled()
+                : Boolean.TRUE.equals(value.scheduleEnabled());
         String resolvedRunMode = normalizeRunMode(value.runMode());
-        if (RUN_MODE_LIVE.equals(resolvedRunMode) && !applyEnabled) {
-            throw new IllegalArgumentException("Live archive mode requires OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true");
+        if (RUN_MODE_LIVE.equals(resolvedRunMode) && !resolvedApplyEnabled) {
+            throw new IllegalArgumentException("Live archive mode requires archive apply enabled");
         }
         String resolvedReason = normalizeReason(StringUtils.hasText(value.reason()) ? value.reason() : DEFAULT_REASON);
+        String resolvedScheduleZone = normalizeRequestZone(value.scheduleZone(), currentSettings.scheduleZone());
+        String resolvedScheduleCron = normalizeRequestCron(
+                value.scheduleCron(),
+                value.scheduleTime(),
+                currentSettings.scheduleCron()
+        );
 
         appSettingService.setInt(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, resolvedRetentionDays);
         appSettingService.setInt(AppSettingService.ARCHIVE_ORDERS_BATCH_SIZE, resolvedBatchSize);
+        appSettingService.setBoolean(AppSettingService.ARCHIVE_ORDERS_APPLY_ENABLED, resolvedApplyEnabled);
+        appSettingService.setBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_WORKER_ENABLED, resolvedScheduleWorkerEnabled);
         appSettingService.setBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ENABLED, resolvedScheduleEnabled);
         appSettingService.setString(AppSettingService.ARCHIVE_ORDERS_RUN_MODE, resolvedRunMode);
         appSettingService.setString(AppSettingService.ARCHIVE_ORDERS_REASON, resolvedReason);
+        appSettingService.setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_CRON, resolvedScheduleCron);
+        appSettingService.setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ZONE, resolvedScheduleZone);
 
         return settings();
     }
@@ -302,8 +330,12 @@ public class OrderArchiveDryRunService {
     @Transactional
     public Object runScheduledConfiguredArchive() {
         RuntimeSettings settings = runtimeSettings();
+        if (!settings.scheduleWorkerEnabled()) {
+            log.debug("Scheduled order archive skipped: worker is disabled");
+            return null;
+        }
         if (!settings.scheduleEnabled()) {
-            log.info("Scheduled order archive skipped: runtime schedule is disabled");
+            log.debug("Scheduled order archive skipped: runtime schedule is disabled");
             return null;
         }
 
@@ -312,6 +344,28 @@ public class OrderArchiveDryRunService {
         }
 
         return runDryRun(settings.retentionDays(), settings.batchSize(), settings.reason());
+    }
+
+    @Transactional
+    public boolean claimScheduledArchiveRun(String runKey) {
+        if (!StringUtils.hasText(runKey)) {
+            throw new IllegalArgumentException("Scheduled archive run key is required");
+        }
+        if (appSettingService == null) {
+            return true;
+        }
+
+        String normalizedRunKey = runKey.trim();
+        String lastRunKey = appSettingService.getString(
+                AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY,
+                ""
+        );
+        if (normalizedRunKey.equals(lastRunKey)) {
+            return false;
+        }
+
+        appSettingService.setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY, normalizedRunKey);
+        return true;
     }
 
     void setDefaultRetentionDays(int defaultRetentionDays) {
@@ -327,7 +381,19 @@ public class OrderArchiveDryRunService {
     }
 
     void setApplyEnabled(boolean applyEnabled) {
-        this.applyEnabled = applyEnabled;
+        this.defaultApplyEnabled = applyEnabled;
+    }
+
+    void setDefaultScheduleWorkerEnabled(boolean defaultScheduleWorkerEnabled) {
+        this.defaultScheduleWorkerEnabled = defaultScheduleWorkerEnabled;
+    }
+
+    void setDefaultScheduleCron(String defaultScheduleCron) {
+        this.defaultScheduleCron = defaultScheduleCron;
+    }
+
+    void setDefaultScheduleZone(String defaultScheduleZone) {
+        this.defaultScheduleZone = defaultScheduleZone;
     }
 
     private void verifyArchiveComplete(ArchiveCandidateCounts selected, ArchiveCandidateCounts archived) {
@@ -389,19 +455,55 @@ public class OrderArchiveDryRunService {
                 AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ENABLED,
                 false
         );
+        boolean applyEnabled = appSettingService == null
+                ? defaultApplyEnabled
+                : appSettingService.getBoolean(AppSettingService.ARCHIVE_ORDERS_APPLY_ENABLED, defaultApplyEnabled);
+        boolean scheduleWorkerEnabled = appSettingService == null
+                ? defaultScheduleWorkerEnabled
+                : appSettingService.getBoolean(
+                        AppSettingService.ARCHIVE_ORDERS_SCHEDULE_WORKER_ENABLED,
+                        defaultScheduleWorkerEnabled
+                );
         String runMode = appSettingService == null
                 ? RUN_MODE_DRY_RUN
                 : appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_RUN_MODE, RUN_MODE_DRY_RUN);
         String reason = appSettingService == null
                 ? DEFAULT_REASON
                 : appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_REASON, DEFAULT_REASON);
+        String scheduleCron = appSettingService == null
+                ? normalizeConfiguredCron(defaultScheduleCron, DEFAULT_SCHEDULE_CRON)
+                : normalizeConfiguredCron(
+                        appSettingService.getString(
+                                AppSettingService.ARCHIVE_ORDERS_SCHEDULE_CRON,
+                                normalizeConfiguredCron(defaultScheduleCron, DEFAULT_SCHEDULE_CRON)
+                        ),
+                        DEFAULT_SCHEDULE_CRON
+                );
+        String scheduleZone = appSettingService == null
+                ? normalizeConfiguredZone(defaultScheduleZone, DEFAULT_ZONE.getId())
+                : normalizeConfiguredZone(
+                        appSettingService.getString(
+                                AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ZONE,
+                                normalizeConfiguredZone(defaultScheduleZone, DEFAULT_ZONE.getId())
+                        ),
+                        DEFAULT_ZONE.getId()
+                );
+        String normalizedRunMode = normalizeRunMode(runMode);
+        if (RUN_MODE_LIVE.equals(normalizedRunMode) && !applyEnabled) {
+            normalizedRunMode = RUN_MODE_DRY_RUN;
+        }
 
         return new RuntimeSettings(
                 positiveOrDefault(retentionDays, defaultRetentionDays, 90),
                 batchLimit(batchSize),
+                applyEnabled,
+                scheduleWorkerEnabled,
                 runtimeScheduleEnabled,
-                normalizeRunMode(runMode),
-                normalizeReason(reason)
+                normalizedRunMode,
+                normalizeReason(reason),
+                scheduleTimeFromCron(scheduleCron),
+                scheduleCron,
+                scheduleZone
         );
     }
 
@@ -413,12 +515,94 @@ public class OrderArchiveDryRunService {
         throw new IllegalArgumentException("Archive run mode must be dry-run or live");
     }
 
+    private String normalizeRequestCron(String scheduleCron, String scheduleTime, String fallback) {
+        String value = StringUtils.hasText(scheduleTime)
+                ? dailyCronFromTime(scheduleTime)
+                : (StringUtils.hasText(scheduleCron) ? scheduleCron.trim() : fallback);
+        if (!CronExpression.isValidExpression(value)) {
+            throw new IllegalArgumentException("Archive schedule cron is invalid");
+        }
+        return value;
+    }
+
+    private String normalizeConfiguredCron(String scheduleCron, String fallback) {
+        String value = StringUtils.hasText(scheduleCron) ? scheduleCron.trim() : fallback;
+        if (CronExpression.isValidExpression(value)) {
+            return value;
+        }
+        if (CronExpression.isValidExpression(fallback)) {
+            return fallback;
+        }
+        return DEFAULT_SCHEDULE_CRON;
+    }
+
+    private String normalizeRequestZone(String scheduleZone, String fallback) {
+        String value = StringUtils.hasText(scheduleZone) ? scheduleZone.trim() : fallback;
+        try {
+            return ZoneId.of(value).getId();
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException("Archive schedule zone is invalid", exception);
+        }
+    }
+
+    private String normalizeConfiguredZone(String scheduleZone, String fallback) {
+        String value = StringUtils.hasText(scheduleZone) ? scheduleZone.trim() : fallback;
+        try {
+            return ZoneId.of(value).getId();
+        } catch (DateTimeException exception) {
+            return fallback;
+        }
+    }
+
+    private String dailyCronFromTime(String scheduleTime) {
+        LocalTime time = parseScheduleTime(scheduleTime);
+        return "0 " + time.getMinute() + " " + time.getHour() + " * * *";
+    }
+
+    private LocalTime parseScheduleTime(String scheduleTime) {
+        String value = scheduleTime == null ? "" : scheduleTime.trim();
+        try {
+            return LocalTime.parse(value, LENIENT_SCHEDULE_TIME_FORMATTER).withSecond(0).withNano(0);
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException("Archive schedule time must be HH:mm", exception);
+        }
+    }
+
+    private String scheduleTimeFromCron(String scheduleCron) {
+        String[] fields = scheduleCron == null ? new String[0] : scheduleCron.trim().split("\\s+");
+        if (fields.length != 6) {
+            return "";
+        }
+        if (!"0".equals(fields[0]) || !dailyCronWildcard(fields[3]) || !"*".equals(fields[4]) || !dailyCronWildcard(fields[5])) {
+            return "";
+        }
+        try {
+            int minute = Integer.parseInt(fields[1]);
+            int hour = Integer.parseInt(fields[2]);
+            if (minute < 0 || minute > 59 || hour < 0 || hour > 23) {
+                return "";
+            }
+            return LocalTime.of(hour, minute).format(SCHEDULE_TIME_FORMATTER);
+        } catch (NumberFormatException exception) {
+            return "";
+        }
+    }
+
+    private boolean dailyCronWildcard(String field) {
+        return "*".equals(field) || "?".equals(field);
+    }
+
     private record RuntimeSettings(
             int retentionDays,
             int batchSize,
+            boolean applyEnabled,
+            boolean scheduleWorkerEnabled,
             boolean scheduleEnabled,
             String runMode,
-            String reason
+            String reason,
+            String scheduleTime,
+            String scheduleCron,
+            String scheduleZone
     ) {
     }
 }

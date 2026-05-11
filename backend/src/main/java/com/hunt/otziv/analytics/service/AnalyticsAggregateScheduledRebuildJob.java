@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component
@@ -25,6 +26,7 @@ public class AnalyticsAggregateScheduledRebuildJob {
     private final AnalyticsAggregateRebuildService rebuildService;
     private final AnalyticsAggregateVerificationService verificationService;
     private final Clock clock;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Value("${otziv.analytics.rebuild.schedule.previous-month-window-days:7}")
     private int previousMonthWindowDays;
@@ -56,6 +58,11 @@ public class AnalyticsAggregateScheduledRebuildJob {
     )
     public void runScheduledRebuild() {
         LocalDate today = LocalDate.now(clock);
+        if (!running.compareAndSet(false, true)) {
+            log.warn("Analytics aggregate scheduled rebuild skipped for date {}: previous run is still running", today);
+            return;
+        }
+
         try {
             AnalyticsScheduledRebuildRun run = rebuildRecentMonths(today);
             log.info("Analytics aggregate scheduled rebuild completed: {}", run);
@@ -64,6 +71,8 @@ public class AnalyticsAggregateScheduledRebuildJob {
             }
         } catch (RuntimeException exception) {
             log.error("Analytics aggregate scheduled rebuild failed for date {}", today, exception);
+        } finally {
+            running.set(false);
         }
     }
 

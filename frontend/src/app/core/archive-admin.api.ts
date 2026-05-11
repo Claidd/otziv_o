@@ -16,6 +16,7 @@ export interface ArchiveOrdersSettings {
   scheduleEnabled: boolean;
   runMode: ArchiveRunMode;
   reason: string;
+  scheduleTime: string;
   scheduleCron: string;
   scheduleZone: string;
 }
@@ -126,9 +127,13 @@ export interface ArchiveCandidatePreviewRequest {
 export interface ArchiveOrdersSettingsRequest {
   archiveRetentionDays: number;
   batchSize: number;
+  applyEnabled: boolean;
+  scheduleWorkerEnabled: boolean;
   scheduleEnabled: boolean;
   runMode: ArchiveRunMode;
   reason: string;
+  scheduleTime: string;
+  scheduleZone: string;
 }
 
 @Injectable({ providedIn: 'root' })

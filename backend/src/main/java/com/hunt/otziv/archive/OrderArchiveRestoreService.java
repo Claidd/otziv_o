@@ -6,13 +6,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderArchiveRestoreService {
 
-    private static final String DEFAULT_TARGET_STATUS = "Архив";
+    private static final String DEFAULT_TARGET_STATUS = "Новый";
+    private static final Set<String> ALLOWED_TARGET_STATUSES = Set.of("Новый", "Коррекция", "На проверке");
 
     private final OrderArchiveRestoreRepository repository;
 
@@ -31,6 +33,10 @@ public class OrderArchiveRestoreService {
         }
 
         String resolvedStatus = normalizeStatus(targetStatus);
+        if (!ALLOWED_TARGET_STATUSES.contains(resolvedStatus)) {
+            throw new IllegalArgumentException("Unsupported archive restore target status: " + resolvedStatus);
+        }
+
         Long targetStatusId = repository.findStatusId(resolvedStatus);
         if (targetStatusId == null) {
             throw new IllegalArgumentException("Target order status not found: " + resolvedStatus);

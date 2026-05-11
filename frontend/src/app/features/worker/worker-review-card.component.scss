@@ -13,7 +13,9 @@
   padding: 0.66rem;
   background: var(--otziv-white);
   box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
-  transition: box-shadow 1.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 1.2s ease;
+  transition:
+    box-shadow 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 1.2s ease;
 }
 
 .worker-card:hover {
@@ -28,7 +30,11 @@
 
 .worker-card.card-tone--publication {
   border-color: var(--otziv-tone-publication-border);
-  background: linear-gradient(180deg, var(--otziv-tone-publication-surface) 0%, var(--otziv-white) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--otziv-tone-publication-surface) 0%,
+    var(--otziv-white) 100%
+  );
 }
 
 .worker-card.card-tone--bad {
@@ -43,7 +49,7 @@
   gap: 0.45rem;
 }
 
-.worker-card header a {
+.worker-card header .review-title {
   min-width: 0;
   overflow: hidden;
   color: var(--otziv-dark);
@@ -54,6 +60,18 @@
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.worker-card header a.review-title {
+  cursor: pointer;
+}
+
+.worker-card.card-tone--walk header .review-title,
+.worker-card.card-tone--publication header .review-title {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .worker-card footer {
@@ -99,7 +117,11 @@
   font-size: 0.74rem;
   font-weight: 800;
   text-decoration: none;
-  transition: background .55s ease, border-color .55s ease, color .55s ease, box-shadow .65s ease;
+  transition:
+    background 0.55s ease,
+    border-color 0.55s ease,
+    color 0.55s ease,
+    box-shadow 0.65s ease;
 }
 
 .review-actions button:not(:disabled):hover,

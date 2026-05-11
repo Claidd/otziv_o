@@ -8,7 +8,19 @@
   [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
 >
   <header>
-    <a [href]="review.filialUrl || reviewEditUrl()" target="_blank" rel="noopener" [title]="reviewTitle()">{{ reviewTitle() }}</a>
+    @if (isReviewTitleLinkEnabled()) {
+      <a
+        class="review-title"
+        [href]="review.filialUrl || reviewEditUrl()"
+        target="_blank"
+        rel="noopener"
+        [title]="reviewTitle()"
+      >
+        {{ reviewTitle() }}
+      </a>
+    } @else {
+      <span class="review-title" [title]="reviewTitle()">{{ reviewTitle() }}</span>
+    }
     <div class="review-id-line">
       @if (needsReviewPhoto()) {
         @if (hasReviewPhoto()) {
@@ -23,17 +35,28 @@
             <span class="material-icons-sharp">photo_camera</span>
           </a>
         } @else {
-          <span class="review-photo-link review-photo-link--missing" title="Фото требуется" aria-label="Фото требуется">
+          <span
+            class="review-photo-link review-photo-link--missing"
+            title="Фото требуется"
+            aria-label="Фото требуется"
+          >
             <span class="material-icons-sharp">photo_camera</span>
           </span>
         }
       }
       <span class="review-id-text">#{{ review.id }}</span>
       @if (isBadTask()) {
-        <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{ ratingTaskLabel() }}</span>
+        <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{
+          ratingTaskLabel()
+        }}</span>
       }
       @if (hasReviewNote() || isReviewNoteEditing()) {
-        <span class="review-note-trigger" tabindex="0" [attr.aria-label]="reviewNoteTitle()" [title]="reviewNoteTitle()">
+        <span
+          class="review-note-trigger"
+          tabindex="0"
+          [attr.aria-label]="reviewNoteTitle()"
+          [title]="reviewNoteTitle()"
+        >
           <span class="material-icons-sharp">priority_high</span>
           <span class="review-note-popover">
             @if (hasReviewOwnNote() || isReviewNoteEditing()) {
@@ -91,15 +114,26 @@
 
                 @if (isSideNoteEditing('order')) {
                   <span class="note-edit-actions">
-                    <button type="button" class="cancel" (click)="sideNoteEditCanceled.emit('order')" [disabled]="isMutating(sideNoteMutationKey('order'))">X</button>
+                    <button
+                      type="button"
+                      class="cancel"
+                      (click)="sideNoteEditCanceled.emit('order')"
+                      [disabled]="isMutating(sideNoteMutationKey('order'))"
+                    >
+                      X
+                    </button>
                     <button
                       type="button"
                       class="save"
                       (click)="sideNoteSaveRequested.emit('order')"
-                      [disabled]="isMutating(sideNoteMutationKey('order')) || !isSideNoteChanged('order')"
+                      [disabled]="
+                        isMutating(sideNoteMutationKey('order')) || !isSideNoteChanged('order')
+                      "
                       title="Сохранить заметку заказа"
                     >
-                      <span class="material-icons-sharp">{{ isSideNoteSaved('order') ? 'check' : 'save' }}</span>
+                      <span class="material-icons-sharp">{{
+                        isSideNoteSaved('order') ? 'check' : 'save'
+                      }}</span>
                     </button>
                   </span>
                 }
@@ -121,15 +155,26 @@
 
                 @if (isSideNoteEditing('company')) {
                   <span class="note-edit-actions">
-                    <button type="button" class="cancel" (click)="sideNoteEditCanceled.emit('company')" [disabled]="isMutating(sideNoteMutationKey('company'))">X</button>
+                    <button
+                      type="button"
+                      class="cancel"
+                      (click)="sideNoteEditCanceled.emit('company')"
+                      [disabled]="isMutating(sideNoteMutationKey('company'))"
+                    >
+                      X
+                    </button>
                     <button
                       type="button"
                       class="save"
                       (click)="sideNoteSaveRequested.emit('company')"
-                      [disabled]="isMutating(sideNoteMutationKey('company')) || !isSideNoteChanged('company')"
+                      [disabled]="
+                        isMutating(sideNoteMutationKey('company')) || !isSideNoteChanged('company')
+                      "
                       title="Сохранить заметку компании"
                     >
-                      <span class="material-icons-sharp">{{ isSideNoteSaved('company') ? 'check' : 'save' }}</span>
+                      <span class="material-icons-sharp">{{
+                        isSideNoteSaved('company') ? 'check' : 'save'
+                      }}</span>
                     </button>
                   </span>
                 }
@@ -189,7 +234,11 @@
             type="button"
             class="save"
             (click)="reviewFieldSaveRequested.emit('text')"
-            [disabled]="isMutating(reviewFieldMutationKey('text')) || !isReviewFieldChanged('text') || !reviewFieldValue('text').trim()"
+            [disabled]="
+              isMutating(reviewFieldMutationKey('text')) ||
+              !isReviewFieldChanged('text') ||
+              !reviewFieldValue('text').trim()
+            "
             title="Сохранить текст"
           >
             <span class="material-icons-sharp">
@@ -201,7 +250,10 @@
     }
   </div>
 
-  <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing('answer')">
+  <div
+    class="review-field-editor review-field-editor--answer"
+    [class.editing]="isReviewFieldEditing('answer')"
+  >
     <textarea
       [name]="'review-answer-' + review.id"
       [readonly]="!isReviewFieldEditing('answer')"
@@ -228,7 +280,9 @@
           type="button"
           class="save"
           (click)="reviewFieldSaveRequested.emit('answer')"
-          [disabled]="isMutating(reviewFieldMutationKey('answer')) || !isReviewFieldChanged('answer')"
+          [disabled]="
+            isMutating(reviewFieldMutationKey('answer')) || !isReviewFieldChanged('answer')
+          "
           title="Сохранить замечание"
         >
           <span class="material-icons-sharp">
@@ -258,7 +312,11 @@
         type="button"
         class="save"
         (click)="reviewFieldSaveRequested.emit(field)"
-        [disabled]="isMutating(reviewFieldMutationKey(field)) || !isReviewFieldChanged(field) || (field === 'text' && !reviewFieldValue(field).trim())"
+        [disabled]="
+          isMutating(reviewFieldMutationKey(field)) ||
+          !isReviewFieldChanged(field) ||
+          (field === 'text' && !reviewFieldValue(field).trim())
+        "
       >
         Сохранить
       </button>
@@ -286,10 +344,18 @@
     <button type="button" (click)="copyRequested.emit('answer')">
       {{ copied === 'answer-' + review.id ? 'готово' : 'ответ' }}
     </button>
-    <button type="button" (click)="botChangeRequested.emit()" [disabled]="isMutating('review-' + review.id + '-change-bot')">
+    <button
+      type="button"
+      (click)="botChangeRequested.emit()"
+      [disabled]="isMutating('review-' + review.id + '-change-bot')"
+    >
       {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
     </button>
-    <button type="button" (click)="botDeactivateRequested.emit()" [disabled]="!review.botId || isMutating('review-' + review.id + '-block-bot')">
+    <button
+      type="button"
+      (click)="botDeactivateRequested.emit()"
+      [disabled]="!review.botId || isMutating('review-' + review.id + '-block-bot')"
+    >
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}
     </button>
   </div>
@@ -299,7 +365,11 @@
     class="publish-button"
     [class.publish-button--published]="isPublishedPublishAction()"
     (click)="doneRequested.emit()"
-    [disabled]="isPublishedPublishAction() || isMutating('review-' + review.id + '-publish') || isMutating('review-' + review.id + '-nagul')"
+    [disabled]="
+      isPublishedPublishAction() ||
+      isMutating('review-' + review.id + '-publish') ||
+      isMutating('review-' + review.id + '-nagul')
+    "
   >
     {{ doneLabel() }}
   </button>
@@ -307,7 +377,9 @@
   <footer>
     <span>{{ reviewDate() }}</span>
     @if (canOpenEditModal) {
-      <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="footerLabel()">{{ footerLabel() }}</a>
+      <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="footerLabel()">{{
+        footerLabel()
+      }}</a>
     } @else {
       <a [href]="reviewEditUrl()" [title]="footerLabel()">{{ footerLabel() }}</a>
     }

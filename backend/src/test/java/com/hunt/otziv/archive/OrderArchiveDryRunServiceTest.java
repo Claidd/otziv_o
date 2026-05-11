@@ -15,6 +15,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -226,9 +228,15 @@ class OrderArchiveDryRunServiceTest {
         service.setMaxBatchLimit(1000);
         when(appSettingService.getInt(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, 90)).thenReturn(75);
         when(appSettingService.getInt(AppSettingService.ARCHIVE_ORDERS_BATCH_SIZE, 500)).thenReturn(300);
+        when(appSettingService.getBoolean(AppSettingService.ARCHIVE_ORDERS_APPLY_ENABLED, false)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_WORKER_ENABLED, false)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ENABLED, false)).thenReturn(true);
         when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_RUN_MODE, "dry-run")).thenReturn("dry-run");
         when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_REASON, "scheduled-orders-retention-dry-run")).thenReturn("nightly-check");
+        when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_CRON, "0 15 4 * * *"))
+                .thenReturn("0 54 1 * * *");
+        when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ZONE, "Asia/Irkutsk"))
+                .thenReturn("Asia/Irkutsk");
 
         ArchiveOrdersSettingsResponse settings = service.settings();
 
@@ -236,22 +244,37 @@ class OrderArchiveDryRunServiceTest {
         assertEquals(75, settings.archiveRetentionDays());
         assertEquals(300, settings.batchSize());
         assertEquals(1000, settings.maxBatchSize());
+        assertTrue(settings.applyEnabled());
+        assertTrue(settings.scheduleWorkerEnabled());
         assertTrue(settings.scheduleEnabled());
         assertEquals("dry-run", settings.runMode());
         assertEquals("nightly-check", settings.reason());
+        assertEquals("01:54", settings.scheduleTime());
+        assertEquals("0 54 1 * * *", settings.scheduleCron());
+        assertEquals("Asia/Irkutsk", settings.scheduleZone());
     }
 
     @Test
-    void updateSettingsRejectsLiveModeWhenApplyIsDisabled() {
+    void updateSettingsRejectsLiveModeWhenApplyIsDisabledInRequest() {
         OrderArchiveDryRunService service = serviceWithSettings();
-        service.setApplyEnabled(false);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.updateSettings(new ArchiveOrdersSettingsRequest(60, 500, true, "live", "nightly-live"))
+                () -> service.updateSettings(new ArchiveOrdersSettingsRequest(
+                        60,
+                        500,
+                        false,
+                        true,
+                        true,
+                        "live",
+                        "nightly-live",
+                        "01:54",
+                        null,
+                        "Asia/Irkutsk"
+                ))
         );
 
-        assertEquals("Live archive mode requires OTZIV_ARCHIVE_ORDERS_APPLY_ENABLED=true", exception.getMessage());
+        assertEquals("Live archive mode requires archive apply enabled", exception.getMessage());
     }
 
     @Test
@@ -262,13 +285,54 @@ class OrderArchiveDryRunServiceTest {
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
 
-        service.updateSettings(new ArchiveOrdersSettingsRequest(70, 10_000, true, "live", " nightly-live "));
+        service.updateSettings(new ArchiveOrdersSettingsRequest(
+                70,
+                10_000,
+                true,
+                true,
+                true,
+                "live",
+                " nightly-live ",
+                "01:54",
+                null,
+                "Asia/Irkutsk"
+        ));
 
         verify(appSettingService).setInt(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, 70);
         verify(appSettingService).setInt(AppSettingService.ARCHIVE_ORDERS_BATCH_SIZE, 1000);
+        verify(appSettingService).setBoolean(AppSettingService.ARCHIVE_ORDERS_APPLY_ENABLED, true);
+        verify(appSettingService).setBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_WORKER_ENABLED, true);
         verify(appSettingService).setBoolean(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ENABLED, true);
         verify(appSettingService).setString(AppSettingService.ARCHIVE_ORDERS_RUN_MODE, "live");
         verify(appSettingService).setString(AppSettingService.ARCHIVE_ORDERS_REASON, "nightly-live");
+        verify(appSettingService).setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_CRON, "0 54 1 * * *");
+        verify(appSettingService).setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_ZONE, "Asia/Irkutsk");
+    }
+
+    @Test
+    void claimScheduledArchiveRunPersistsNewRunKey() {
+        OrderArchiveDryRunService service = serviceWithSettings();
+        String runKey = "2026-05-11 04:15 Asia/Irkutsk";
+        when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY, ""))
+                .thenReturn("2026-05-10 04:15 Asia/Irkutsk");
+
+        boolean claimed = service.claimScheduledArchiveRun(" " + runKey + " ");
+
+        assertTrue(claimed);
+        verify(appSettingService).setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY, runKey);
+    }
+
+    @Test
+    void claimScheduledArchiveRunSkipsAlreadyClaimedRunKey() {
+        OrderArchiveDryRunService service = serviceWithSettings();
+        String runKey = "2026-05-11 04:15 Asia/Irkutsk";
+        when(appSettingService.getString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY, ""))
+                .thenReturn(runKey);
+
+        boolean claimed = service.claimScheduledArchiveRun(runKey);
+
+        assertFalse(claimed);
+        verify(appSettingService, never()).setString(AppSettingService.ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY, runKey);
     }
 
     private String captureArchiveReason() {

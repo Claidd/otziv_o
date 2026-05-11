@@ -34,14 +34,14 @@ function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
     comment: 'Review note',
     url: 'https://example.test/review',
     urlPhoto: 'https://example.test/photo.jpg',
-    ...overrides
+    ...overrides,
   };
 }
 
 describe('WorkerReviewCardComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [WorkerReviewCardComponent]
+      imports: [WorkerReviewCardComponent],
     }).compileComponents();
   });
 
@@ -51,24 +51,26 @@ describe('WorkerReviewCardComponent', () => {
       badTask: true,
       badTaskId: 99,
       originalRating: 5,
-      targetRating: 2
+      targetRating: 2,
     });
     fixture.componentInstance.activeSection = 'bad';
 
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company');
+    expect(element.querySelector('.review-title')?.textContent?.trim()).toBe('Company');
     expect(element.textContent).toContain('5 -> 2');
     expect(element.textContent).toContain('Bot Name 2');
-    expect(element.querySelector('.review-photo-link')?.getAttribute('href')).toBe('https://example.test/photo.jpg');
+    expect(element.querySelector('.review-photo-link')?.getAttribute('href')).toBe(
+      'https://example.test/photo.jpg',
+    );
     expect(element.querySelector('.publish-button')?.textContent?.trim()).toBe('Сменил');
   });
 
   it('adds soft section tones for review work cards', () => {
     const render = (
       activeSection: WorkerReviewCardComponent['activeSection'],
-      overrides: Partial<WorkerReviewItem> = {}
+      overrides: Partial<WorkerReviewItem> = {},
     ): HTMLElement => {
       const fixture = TestBed.createComponent(WorkerReviewCardComponent);
       fixture.componentInstance.review = review(overrides);
@@ -91,8 +93,10 @@ describe('WorkerReviewCardComponent', () => {
     expect(article.classList.contains('card-tone--publication')).toBe(false);
   });
 
-  it('shows filial title in walk and publication titles', () => {
-    const renderTitle = (activeSection: WorkerReviewCardComponent['activeSection']): string | undefined => {
+  it('keeps filial title link in walk and publication titles when title links are allowed', () => {
+    const renderTitle = (
+      activeSection: WorkerReviewCardComponent['activeSection'],
+    ): { text?: string; tagName?: string; href?: string | null } => {
       const fixture = TestBed.createComponent(WorkerReviewCardComponent);
       fixture.componentInstance.review = review();
       fixture.componentInstance.activeSection = activeSection;
@@ -100,11 +104,62 @@ describe('WorkerReviewCardComponent', () => {
       fixture.detectChanges();
 
       const element = fixture.nativeElement as HTMLElement;
-      return element.querySelector('header a')?.textContent?.trim();
+      const title = element.querySelector<HTMLElement>('.review-title');
+      return {
+        text: title?.textContent?.trim(),
+        tagName: title?.tagName,
+        href: title instanceof HTMLAnchorElement ? title.getAttribute('href') : null,
+      };
     };
 
-    expect(renderTitle('nagul')).toBe('Company - Filial');
-    expect(renderTitle('publish')).toBe('Company - Filial');
+    expect(renderTitle('nagul')).toEqual({
+      text: 'Company - Filial',
+      tagName: 'A',
+      href: 'https://example.test/filial',
+    });
+    expect(renderTitle('publish')).toEqual({
+      text: 'Company - Filial',
+      tagName: 'A',
+      href: 'https://example.test/filial',
+    });
+    expect(renderTitle('bad')).toEqual({
+      text: 'Company',
+      tagName: 'A',
+      href: 'https://example.test/filial',
+    });
+  });
+
+  it('shows filial title without direct title link in walk and publication titles for worker role view', () => {
+    const renderTitle = (
+      activeSection: WorkerReviewCardComponent['activeSection'],
+    ): { text?: string; tagName?: string; href?: string | null } => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      fixture.componentInstance.review = review();
+      fixture.componentInstance.activeSection = activeSection;
+      fixture.componentInstance.canOpenTitleLink = false;
+
+      fixture.detectChanges();
+
+      const element = fixture.nativeElement as HTMLElement;
+      const title = element.querySelector<HTMLElement>('.review-title');
+      return {
+        text: title?.textContent?.trim(),
+        tagName: title?.tagName,
+        href: title instanceof HTMLAnchorElement ? title.getAttribute('href') : null,
+      };
+    };
+
+    expect(renderTitle('nagul')).toEqual({ text: 'Company - Filial', tagName: 'SPAN', href: null });
+    expect(renderTitle('publish')).toEqual({
+      text: 'Company - Filial',
+      tagName: 'SPAN',
+      href: null,
+    });
+    expect(renderTitle('bad')).toEqual({
+      text: 'Company',
+      tagName: 'A',
+      href: 'https://example.test/filial',
+    });
   });
 
   it('can show filial city in footer for worker role view', () => {
@@ -187,16 +242,24 @@ describe('WorkerReviewCardComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    const textField = element.querySelector<HTMLTextAreaElement>('.review-field-editor--text textarea');
+    const textField = element.querySelector<HTMLTextAreaElement>(
+      '.review-field-editor--text textarea',
+    );
     textField!.value = 'New text';
     textField!.dispatchEvent(new Event('input', { bubbles: true }));
 
-    const noteFields = Array.from(element.querySelectorAll<HTMLTextAreaElement>('.review-note-popover textarea'));
-    const noteField = noteFields.find((item) => item.getAttribute('aria-label') === 'Заметка отзыва');
+    const noteFields = Array.from(
+      element.querySelectorAll<HTMLTextAreaElement>('.review-note-popover textarea'),
+    );
+    const noteField = noteFields.find(
+      (item) => item.getAttribute('aria-label') === 'Заметка отзыва',
+    );
     noteField!.value = 'New note';
     noteField!.dispatchEvent(new Event('input', { bubbles: true }));
 
-    const sideField = noteFields.find((item) => item.getAttribute('aria-label') === 'Заметка заказа');
+    const sideField = noteFields.find(
+      (item) => item.getAttribute('aria-label') === 'Заметка заказа',
+    );
     sideField!.value = 'New side note';
     sideField!.dispatchEvent(new Event('input', { bubbles: true }));
 

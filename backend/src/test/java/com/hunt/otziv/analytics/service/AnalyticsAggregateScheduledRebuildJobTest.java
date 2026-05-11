@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -112,6 +113,21 @@ class AnalyticsAggregateScheduledRebuildJobTest {
         assertFalse(run.matches());
         assertEquals(1, run.months().size());
         assertFalse(run.months().getFirst().matches());
+    }
+
+    @Test
+    void skipsScheduledRunWhenPreviousRunIsStillRunning() {
+        LocalDate currentMonth = LocalDate.of(2026, 5, 1);
+        when(rebuildService.rebuildMonth(currentMonth, false)).thenAnswer(invocation -> {
+            job.runScheduledRebuild();
+            return rebuild(currentMonth, false);
+        });
+        when(verificationService.compareAdminMonth(currentMonth)).thenReturn(comparison(currentMonth, true));
+
+        job.runScheduledRebuild();
+
+        verify(rebuildService, times(1)).rebuildMonth(currentMonth, false);
+        verify(verificationService, times(1)).compareAdminMonth(currentMonth);
     }
 
     private AnalyticsAggregateRebuildResult rebuild(LocalDate monthStart, boolean closed) {

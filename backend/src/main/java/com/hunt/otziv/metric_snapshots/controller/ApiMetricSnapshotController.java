@@ -2,6 +2,7 @@ package com.hunt.otziv.metric_snapshots.controller;
 
 import com.hunt.otziv.metric_snapshots.dto.MetricSnapshotSeenRequest;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,9 +26,13 @@ public class ApiMetricSnapshotController {
     @PostMapping("/seen")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void markSeen(
+            HttpServletRequest servletRequest,
             Principal principal,
             @Valid @RequestBody MetricSnapshotSeenRequest request
     ) {
+        servletRequest.setAttribute("page", request.page());
+        servletRequest.setAttribute("section", request.section());
+        servletRequest.setAttribute("value", request.value());
         snapshotService.markSeen(principal, request);
     }
 }

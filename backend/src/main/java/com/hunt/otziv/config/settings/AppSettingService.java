@@ -12,7 +12,12 @@ public class AppSettingService {
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";
     public static final String ARCHIVE_ORDERS_RETENTION_DAYS = "archive.orders.retention.days";
     public static final String ARCHIVE_ORDERS_BATCH_SIZE = "archive.orders.batch.size";
+    public static final String ARCHIVE_ORDERS_APPLY_ENABLED = "archive.orders.apply.enabled";
+    public static final String ARCHIVE_ORDERS_SCHEDULE_WORKER_ENABLED = "archive.orders.schedule.worker.enabled";
     public static final String ARCHIVE_ORDERS_SCHEDULE_ENABLED = "archive.orders.schedule.enabled";
+    public static final String ARCHIVE_ORDERS_SCHEDULE_CRON = "archive.orders.schedule.cron";
+    public static final String ARCHIVE_ORDERS_SCHEDULE_ZONE = "archive.orders.schedule.zone";
+    public static final String ARCHIVE_ORDERS_SCHEDULE_LAST_RUN_KEY = "archive.orders.schedule.last-run-key";
     public static final String ARCHIVE_ORDERS_RUN_MODE = "archive.orders.run.mode";
     public static final String ARCHIVE_ORDERS_REASON = "archive.orders.reason";
 

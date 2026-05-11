@@ -26,7 +26,7 @@
           type="text"
           placeholder="Компания, телефон, заказ, отзыв"
           [ngModel]="keyword()"
-          (ngModelChange)="keyword.set($event)"
+          (ngModelChange)="updateKeyword($event)"
           (keyup.enter)="search()"
         >
       </label>
@@ -119,9 +119,9 @@
 
             @if (orderDetailsLink(order); as detailsLink) {
               <a class="details-button" [routerLink]="detailsLink">Подробнее</a>
-            } @else if (canRestore(order)) {
+            } @else if (canOpenArchiveDetails(order)) {
               <button type="button" class="details-button restore-button" (click)="openRestore(order)" [disabled]="restoreLoading() || restoring()">
-                Восстановить
+                Подробнее
               </button>
             } @else {
               <button type="button" class="details-button" disabled>
@@ -198,12 +198,12 @@
         class="archive-restore-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Восстановление заказа"
+        aria-label="Подробности архивного заказа"
         (click)="$event.stopPropagation()"
       >
         <header>
           <div>
-            <p class="eyebrow">Восстановление</p>
+            <p class="eyebrow">Архивный заказ</p>
             <h2>{{ order.companyTitle || 'Без компании' }} - #{{ order.id }}</h2>
           </div>
           <button type="button" class="restore-close" (click)="closeRestore()" [disabled]="restoring()" title="Закрыть">
@@ -224,6 +224,115 @@
             <p>Загружаю состав заказа</p>
           </div>
         } @else if (restoreDetails(); as details) {
+          @if (canRestore(order) && !restoreResult()) {
+            <section class="restore-target">
+              <header>
+                <span class="material-icons-sharp">settings_backup_restore</span>
+                <div>
+                  <h3>Восстановление</h3>
+                  <p>Заказ вернётся в live-таблицы с выбранным рабочим статусом.</p>
+                </div>
+              </header>
+
+              <div class="restore-status-segment" role="radiogroup" aria-label="Статус после восстановления">
+                @for (status of restoreStatusOptions(order); track status) {
+                  <button
+                    type="button"
+                    role="radio"
+                    [attr.aria-checked]="restoreTargetStatus() === status"
+                    [class.active]="restoreTargetStatus() === status"
+                    (click)="restoreTargetStatus.set(status)"
+                  >
+                    {{ status }}
+                  </button>
+                }
+              </div>
+
+              <button type="button" class="restore-confirm-inline" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !restoreDetails()">
+                <span class="material-icons-sharp">settings_backup_restore</span>
+                {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
+              </button>
+            </section>
+          } @else if (paidRestoreRestricted(order)) {
+            <section class="restore-readonly-note">
+              <span class="material-icons-sharp">lock</span>
+              <div>
+                <strong>Только просмотр</strong>
+                <p>Оплаченный заказ может вернуть в live только администратор или владелец.</p>
+              </div>
+            </section>
+          }
+
+          <section class="restore-detail-section" aria-label="Детали заказа">
+            <header>
+              <h3>Детали заказа</h3>
+              <span>{{ details.details.length }}</span>
+            </header>
+            <div class="restore-detail-list">
+              @for (detail of details.details; track trackDetail($index, detail)) {
+                <article>
+                  <strong>{{ detail.productTitle || 'Без продукта' }}</strong>
+                  <span>{{ detail.amount || 0 }} шт.</span>
+                  <span>{{ (detail.price || 0) | number:'1.0-0' }} руб.</span>
+                  @if (detail.publishedDate) {
+                    <span>{{ detail.publishedDate }}</span>
+                  }
+                  @if (detail.comment) {
+                    <p>{{ detail.comment }}</p>
+                  }
+                </article>
+              } @empty {
+                <p class="restore-empty-line">Деталей нет</p>
+              }
+            </div>
+          </section>
+
+          <section class="restore-detail-section" aria-label="Отзывы заказа">
+            <header>
+              <h3>Отзывы</h3>
+              <span>{{ details.reviews.length }}</span>
+            </header>
+            <div class="restore-review-list">
+              @for (review of details.reviews; track trackReview($index, review)) {
+                <article>
+                  <div>
+                    <strong>{{ review.productTitle || review.category || 'Отзыв' }}</strong>
+                    <span>{{ review.workerFio || order.workerName || '-' }}</span>
+                  </div>
+                  <p>{{ review.text || 'Текст отзыва пустой' }}</p>
+                  @if (review.answer) {
+                    <p class="review-answer">{{ review.answer }}</p>
+                  }
+                  <footer>
+                    <span>{{ review.publishedDate || review.changed || review.created || '-' }}</span>
+                    <span>{{ review.publish ? 'опубликован' : 'не опубликован' }}</span>
+                  </footer>
+                </article>
+              } @empty {
+                <p class="restore-empty-line">Отзывов нет</p>
+              }
+            </div>
+          </section>
+
+          <section class="restore-order-meta" aria-label="Основные данные заказа">
+            <article>
+              <span>Статус</span>
+              <strong>{{ order.status || '-' }}</strong>
+            </article>
+            <article>
+              <span>Источник</span>
+              <strong>{{ order.source === 'archive' ? 'archive_*' : 'live' }}</strong>
+            </article>
+            <article>
+              <span>Менеджер</span>
+              <strong>{{ order.managerName || '-' }}</strong>
+            </article>
+            <article>
+              <span>Специалист</span>
+              <strong>{{ order.workerName || '-' }}</strong>
+            </article>
+          </section>
+
           <section class="restore-summary-grid" aria-label="Состав архивного заказа">
             <article>
               <span>Строк всего</span>
@@ -237,31 +346,50 @@
               <span>Отзывы</span>
               <strong>{{ details.reviews.length }}</strong>
             </article>
-            <article>
-              <span>Оплаты</span>
-              <strong>{{ restorePaymentTotal(details) | number:'1.0-0' }}</strong>
-            </article>
-            <article>
-              <span>ЗП</span>
-              <strong>{{ restoreZpTotal(details) | number:'1.0-0' }}</strong>
-            </article>
+            @if (canSeeArchiveFinance()) {
+              <article>
+                <span>Оплаты</span>
+                <strong>{{ restorePaymentTotal(details) | number:'1.0-0' }}</strong>
+              </article>
+              <article>
+                <span>ЗП</span>
+                <strong>{{ restoreZpTotal(details) | number:'1.0-0' }}</strong>
+              </article>
+            }
           </section>
 
-          <section class="restore-target">
-            <label>
-              <span>Статус после восстановления</span>
-              <select [ngModel]="restoreTargetStatus()" (ngModelChange)="restoreTargetStatus.set($event)">
-                @for (status of restoreStatusOptions(order); track status) {
-                  <option [value]="status">{{ status }}</option>
+          @if (canSeeArchiveFinance()) {
+            <section class="restore-finance-grid" aria-label="Оплаты и ЗП">
+              <article>
+                <header>
+                  <h3>Оплаты</h3>
+                  <span>{{ details.paymentChecks.length }}</span>
+                </header>
+                @for (payment of details.paymentChecks; track trackPayment($index, payment)) {
+                  <p>
+                    <strong>{{ payment.title || 'Оплата' }}</strong>
+                    <span>{{ (payment.sum || 0) | number:'1.0-0' }} руб.</span>
+                  </p>
+                } @empty {
+                  <p class="restore-empty-line">Оплат нет</p>
                 }
-              </select>
-            </label>
-
-            <div class="restore-note">
-              <span class="material-icons-sharp">info</span>
-              <p>Заказ вернётся в live-таблицы с выбранным статусом. Архивная запись останется как журнал восстановления.</p>
-            </div>
-          </section>
+              </article>
+              <article>
+                <header>
+                  <h3>ЗП</h3>
+                  <span>{{ details.zp.length }}</span>
+                </header>
+                @for (zp of details.zp; track trackZp($index, zp)) {
+                  <p>
+                    <strong>{{ zp.fio || 'Сотрудник' }}</strong>
+                    <span>{{ (zp.sum || 0) | number:'1.0-0' }} руб.</span>
+                  </p>
+                } @empty {
+                  <p class="restore-empty-line">ЗП нет</p>
+                }
+              </article>
+            </section>
+          }
 
           @if (details.orderComments) {
             <section class="restore-comments">
@@ -283,12 +411,6 @@
 
         <footer class="restore-actions">
           <button type="button" class="secondary" (click)="closeRestore()" [disabled]="restoring()">Закрыть</button>
-          @if (!restoreResult()) {
-            <button type="button" class="primary" (click)="confirmRestore()" [disabled]="restoreLoading() || restoring() || !restoreDetails()">
-              <span class="material-icons-sharp">settings_backup_restore</span>
-              {{ restoring() ? 'Восстанавливаю' : 'Восстановить' }}
-            </button>
-          }
         </footer>
       </article>
     </section>

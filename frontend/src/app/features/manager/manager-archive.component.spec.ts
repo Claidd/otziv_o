@@ -8,6 +8,7 @@ import type {
   ArchiveRestoreResult,
   ManagerPage
 } from '../../core/manager.api';
+import { AuthService } from '../../core/auth.service';
 import { ManagerApi } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
@@ -151,6 +152,9 @@ describe('ManagerArchiveComponent', () => {
     success: ReturnType<typeof vi.fn>;
     error: ReturnType<typeof vi.fn>;
   };
+  let authService: {
+    hasAnyRealmRole: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     managerApi = {
@@ -163,12 +167,16 @@ describe('ManagerArchiveComponent', () => {
       success: vi.fn(),
       error: vi.fn()
     };
+    authService = {
+      hasAnyRealmRole: vi.fn((roles: readonly string[]) => roles.includes('ADMIN'))
+    };
 
     await TestBed.configureTestingModule({
       imports: [ManagerArchiveComponent],
       providers: [
         provideRouter([]),
         { provide: ManagerApi, useValue: managerApi },
+        { provide: AuthService, useValue: authService },
         { provide: ToastService, useValue: toastService }
       ]
     })
@@ -218,6 +226,22 @@ describe('ManagerArchiveComponent', () => {
     expect(component.restoreResult()?.batchId).toBe(4);
     expect(toastService.success).toHaveBeenCalledWith('Заказ восстановлен', '#3 вернулся в live со статусом Новый');
     expect(managerApi.getArchiveOrders).toHaveBeenCalledTimes(2);
+  });
+
+  it('hides archive finance blocks from managers', () => {
+    authService.hasAnyRealmRole.mockReturnValue(false);
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openRestore(storedOrder);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(component.canSeeArchiveFinance()).toBe(false);
+    expect(element.querySelector('.restore-finance-grid')).toBeNull();
+    expect(element.textContent).not.toContain('ЗП');
+    expect(element.textContent).not.toContain('Оплаты');
   });
 
   it('returns a live archive order to a working status from the card', () => {
