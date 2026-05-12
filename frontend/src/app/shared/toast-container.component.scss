@@ -82,6 +82,14 @@
   overflow-wrap: anywhere;
 }
 
+.toast-action {
+  display: inline-flex;
+  margin-top: 0.35rem;
+  color: var(--toast-ink);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
 .toast button {
   display: grid;
   width: 1.75rem;

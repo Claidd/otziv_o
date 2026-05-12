@@ -6,6 +6,7 @@ import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.analytics.model.AnalyticsUserMetricAggregate;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.z_zp.services.ZpService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ public class AnalyticsAggregateUserStatsService {
 
     private final AnalyticsAggregateReadService readService;
     private final ObjectMapper objectMapper;
+    private final ZpService zpService;
 
     public Optional<UserStatDTO> buildUserStats(LocalDate selectedDate, User user) {
         if (selectedDate == null || user == null || user.getId() == null) {
@@ -64,8 +66,8 @@ public class AnalyticsAggregateUserStatsService {
         stats.setZpPayMap(toJson(dailySalaryMap(user.getId(), firstDayOfMonth, selectedDate, selectedDate.lengthOfMonth())));
         stats.setZpPayMapMonth(toJson(monthlySalaryMap(user.getId(), historyStart, selectedDate)));
 
-        BigDecimal salary1Day = sumDecimal(user.getId(), selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsUserMetricAggregate::getSalarySum);
-        BigDecimal salary2Day = sumDecimal(user.getId(), selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsUserMetricAggregate::getSalarySum);
+        BigDecimal salary1Day = liveSalaryForDay(user.getId(), selectedDate);
+        BigDecimal salary2Day = liveSalaryForDay(user.getId(), selectedDate.minusDays(1));
         BigDecimal salary7Day = sumDecimal(user.getId(), selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalarySum);
         BigDecimal salary14Day = sumDecimal(user.getId(), selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsUserMetricAggregate::getSalarySum);
         BigDecimal salaryCurrentMonth = sumDecimal(user.getId(), firstDayOfMonth, selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalarySum);
@@ -91,6 +93,10 @@ public class AnalyticsAggregateUserStatsService {
         stats.setPercent2MonthOrders(calculatePercentageDifference(salaryPreviousMonthCount, salaryTwoMonthsAgoCount));
 
         return Optional.of(stats);
+    }
+
+    private BigDecimal liveSalaryForDay(Long userId, LocalDate date) {
+        return zpService.sumByUserAndCreated(userId, date);
     }
 
     private BigDecimal sumDecimal(

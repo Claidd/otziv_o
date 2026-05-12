@@ -70,6 +70,23 @@ class OrderDeletionServiceTest {
     }
 
     @Test
+    void adminCanDeleteWhenKeycloakDefaultRoleComesFirst() {
+        OrderDeletionService service = service();
+        Order order = order(13L, "В проверку");
+
+        authenticateWithRoles("ROLE_default-roles-otziv", "ROLE_ADMIN");
+        when(orderRepository.findById(13L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(13L)).thenReturn(List.of());
+
+        boolean result = service.deleteOrder(13L, () -> "admin");
+
+        assertTrue(result);
+        verify(orderDetailsService).deleteAllByOrderId(13L);
+        verify(orderRepository).delete(order);
+        verifyNoInteractions(reviewService);
+    }
+
+    @Test
     void managerCannotDeleteNonNewOrder() {
         OrderDeletionService service = service();
         Order order = order(11L, "Публикация");
@@ -119,11 +136,17 @@ class OrderDeletionServiceTest {
     }
 
     private void authenticateWithRole(String role) {
+        authenticateWithRoles(role);
+    }
+
+    private void authenticateWithRoles(String... roles) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         "user",
                         "password",
-                        List.of(new SimpleGrantedAuthority(role))
+                        List.of(roles).stream()
+                                .map(SimpleGrantedAuthority::new)
+                                .toList()
                 )
         );
     }

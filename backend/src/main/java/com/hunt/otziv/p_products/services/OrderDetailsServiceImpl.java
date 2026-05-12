@@ -40,14 +40,14 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
 
     @Transactional(readOnly = true)
     public OrderDetails getOrderDetailById(UUID orderDetailId){ // Взять детали по Id
-        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
+        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId)));
     } // Взять детали по Id
 
     @Override
     @Transactional(readOnly = true)
     public OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId) {
         return orderDetailsRepository.findByIdForReviewCheck(orderDetailId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId)));
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId)));
     }
 
     @Override
@@ -79,7 +79,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
 
     @Transactional(readOnly = true)
     public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
-        return convertToDetailsDTO(orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderDetailId))));
+        return convertToDetailsDTO(orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId))));
     } // Взять детали дто по Id
 
     private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей в дто

@@ -72,8 +72,16 @@ class ManagerArchiveRepository {
                 SELECT
                     ao.order_id,
                     ao.order_company,
+                    (
+                        SELECT BIN_TO_UUID(aod.order_detail_id)
+                        FROM archive_order_details aod
+                        WHERE aod.order_detail_order = ao.order_id
+                        ORDER BY aod.order_detail_date_published, aod.order_detail_id
+                        LIMIT 1
+                    ) AS order_detail_uuid,
                     COALESCE(ao.company_title_snapshot, c.company_title, '') AS company_title,
                     COALESCE(ao.company_phone_snapshot, c.company_phone, '') AS company_phone,
+                    COALESCE(c.company_url_chat, '') AS company_url_chat,
                     COALESCE(ao.company_city_snapshot, c.company_city, '') AS company_city,
                     COALESCE(ao.filial_title_snapshot, f.filial_title, '') AS filial_title,
                     COALESCE(os.order_status_title, '') AS order_status_title,
@@ -393,8 +401,16 @@ class ManagerArchiveRepository {
                     SELECT
                         ao.order_id,
                         ao.order_company,
+                        (
+                            SELECT BIN_TO_UUID(aod.order_detail_id)
+                            FROM archive_order_details aod
+                            WHERE aod.order_detail_order = ao.order_id
+                            ORDER BY aod.order_detail_date_published, aod.order_detail_id
+                            LIMIT 1
+                        ) AS order_detail_uuid,
                         COALESCE(ao.company_title_snapshot, c.company_title, '') AS company_title,
                         COALESCE(ao.company_phone_snapshot, c.company_phone, '') AS company_phone,
+                        COALESCE(c.company_url_chat, '') AS company_url_chat,
                         COALESCE(ao.company_city_snapshot, c.company_city, '') AS company_city,
                         COALESCE(ao.filial_title_snapshot, f.filial_title, '') AS filial_title,
                         COALESCE(os.order_status_title, '') AS order_status_title,
@@ -454,8 +470,16 @@ class ManagerArchiveRepository {
                     SELECT
                         o.order_id,
                         o.order_company,
+                        (
+                            SELECT BIN_TO_UUID(od.order_detail_id)
+                            FROM order_details od
+                            WHERE od.order_detail_order = o.order_id
+                            ORDER BY od.order_detail_date_published, od.order_detail_id
+                            LIMIT 1
+                        ) AS order_detail_uuid,
                         COALESCE(c.company_title, '') AS company_title,
                         COALESCE(c.company_phone, '') AS company_phone,
+                        COALESCE(c.company_url_chat, '') AS company_url_chat,
                         COALESCE(c.company_city, '') AS company_city,
                         COALESCE(f.filial_title, '') AS filial_title,
                         COALESCE(os.order_status_title, '') AS order_status_title,
@@ -724,8 +748,10 @@ class ManagerArchiveRepository {
         return new ManagerArchiveOrderListItem(
                 rowLong(rs, "order_id"),
                 rowLong(rs, "order_company"),
+                rowUuid(rs, "order_detail_uuid"),
                 safeString(rs.getString("company_title")),
                 safeString(rs.getString("company_phone")),
+                safeString(rs.getString("company_url_chat")),
                 safeString(rs.getString("company_city")),
                 safeString(rs.getString("filial_title")),
                 safeString(rs.getString("order_status_title")),

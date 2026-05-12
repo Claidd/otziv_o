@@ -102,6 +102,20 @@
           </div>
 
           <div class="archive-card-actions">
+            <div class="archive-link-actions" aria-label="Ссылки для проверки отзывов">
+              <button
+                type="button"
+                (click)="copyArchiveReviewText(order)"
+                [disabled]="!hasArchiveReviewLink(order)"
+                title="Скопировать текст проверки отзывов"
+              >
+                {{ copied() === 'archive-review-' + order.id ? '✓' : 'текст' }}
+              </button>
+              <a [href]="archiveOrderChatUrl(order)" target="_blank" rel="noopener">
+                перейти в чат
+              </a>
+            </div>
+
             @if (canChangeLiveStatus(order)) {
               <div class="live-status-actions" aria-label="Вернуть архивный live-заказ в работу">
                 @for (action of liveStatusActions; track trackLiveStatusAction($index, action)) {
@@ -224,6 +238,20 @@
             <p>Загружаю состав заказа</p>
           </div>
         } @else if (restoreDetails(); as details) {
+          <section class="restore-link-actions" aria-label="Ссылки для проверки отзывов">
+            <button
+              type="button"
+              (click)="copyArchiveReviewText(order, details)"
+              [disabled]="!hasArchiveReviewLink(order, details)"
+              title="Скопировать текст проверки отзывов"
+            >
+              {{ copied() === 'archive-review-' + order.id ? '✓' : 'текст' }}
+            </button>
+            <a [href]="archiveOrderChatUrl(order)" target="_blank" rel="noopener">
+              перейти в чат
+            </a>
+          </section>
+
           @if (canRestore(order) && !restoreResult()) {
             <section class="restore-target">
               <header>

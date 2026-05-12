@@ -159,6 +159,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/cabinet/score").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG");
+        auth.requestMatchers("/api/ai/reputation/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
         auth.requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.GET, "/api/admin/bots/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OWNER");

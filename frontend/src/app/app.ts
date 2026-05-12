@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { ReputationDeepReportMonitorService } from './core/reputation-deep-report-monitor.service';
 import { ToastContainerComponent } from './shared/toast-container.component';
 
 @Component({
@@ -8,4 +9,8 @@ import { ToastContainerComponent } from './shared/toast-container.component';
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
-export class App {}
+export class App {
+  constructor(private readonly deepReportMonitor: ReputationDeepReportMonitorService) {
+    this.deepReportMonitor.restore();
+  }
+}

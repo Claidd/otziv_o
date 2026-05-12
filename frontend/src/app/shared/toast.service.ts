@@ -8,6 +8,12 @@ export type ToastMessage = {
   type: ToastType;
   title: string;
   message?: string;
+  action?: ToastAction;
+};
+
+export type ToastAction = {
+  label: string;
+  routerLink: string;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -17,8 +23,8 @@ export class ToastService {
   private nextId = 1;
   private readonly timers = new Map<number, number>();
 
-  success(title: string, message?: string): number {
-    return this.show({ type: 'success', title, message }, 2000);
+  success(title: string, message?: string, action?: ToastAction): number {
+    return this.show({ type: 'success', title, message, action }, action ? 0 : 2000);
   }
 
   error(title: string, message?: string): number {
@@ -46,7 +52,9 @@ export class ToastService {
   private show(toast: Omit<ToastMessage, 'id'>, duration: number): number {
     const id = this.nextId++;
     this.toasts.update((toasts) => [...toasts, { ...toast, id }]);
-    this.timers.set(id, window.setTimeout(() => this.dismiss(id), duration));
+    if (duration > 0) {
+      this.timers.set(id, window.setTimeout(() => this.dismiss(id), duration));
+    }
     return id;
   }
 }

@@ -207,13 +207,7 @@ public class CompanyServiceImpl implements CompanyService{
         Page<Long> companyIds;
         if (!keywords.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyIds = companyRepository.findPageToAdminWithFetchWithKeyWordLive(
-                    keywords,
-                    keywords,
-                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
-                    liveCutoff(),
-                    pageable
-            );
+            companyIds = companyRepository.findPageToAdminWithFetchWithKeyWord(keywords, keywords, pageable);
         }
         else {
             companyIds = companyRepository.findPageIdToAdminLive(
@@ -237,14 +231,7 @@ public class CompanyServiceImpl implements CompanyService{
         Pageable pageable = companyPageable(pageNumber, pageSize, sortDirection);
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
-            companyIds = companyRepository.findPageByManagerAndKeyWordLive(
-                    manager,
-                    keyword,
-                    keyword,
-                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
-                    liveCutoff(),
-                    pageable
-            );
+            companyIds = companyRepository.findPageByManagerAndKeyWord(manager, keyword, manager, keyword, pageable);
         }
         else {
             companyIds = companyRepository.findPageByManagerLive(
@@ -319,14 +306,7 @@ public class CompanyServiceImpl implements CompanyService{
         Page<Long> companyIds;
         if (!keyword.isEmpty()){
             log.info("Отработал метод с keywords");
-            companyIds = companyRepository.findPageByOwnerAndKeyWordLive(
-                    managerList,
-                    keyword,
-                    keyword,
-                    BoardLiveSlice.HIDDEN_COMPANY_STATUSES,
-                    liveCutoff(),
-                    pageable
-            );
+            companyIds = companyRepository.findPageByOwnerAndKeyWord(managerList, keyword, keyword, pageable);
         }
         else {
             companyIds = companyRepository.findPageIdToOwnerLive(

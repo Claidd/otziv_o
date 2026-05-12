@@ -14,7 +14,13 @@ import java.util.Set;
 public class OrderArchiveRestoreService {
 
     private static final String DEFAULT_TARGET_STATUS = "Новый";
-    private static final Set<String> ALLOWED_TARGET_STATUSES = Set.of("Новый", "Коррекция", "На проверке");
+    private static final Set<String> ALLOWED_TARGET_STATUSES = Set.of(
+            "Новый",
+            "В проверку",
+            "На проверке",
+            "Коррекция",
+            "Публикация"
+    );
 
     private final OrderArchiveRestoreRepository repository;
 

@@ -64,6 +64,7 @@ export class AdminLayoutComponent {
     { label: 'Архив', icon: 'archive', active: 'manager-archive', routerLink: '/manager/archive', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Города', icon: 'location_city', active: 'city-stats', routerLink: '/admin/cities', roles: ['ADMIN', 'OWNER'] },
     { label: 'Архиватор', icon: 'inventory_2', active: 'archive-admin', routerLink: '/admin/archive', roles: ['ADMIN', 'OWNER'] },
+    { label: 'AI-помощник', icon: 'auto_awesome', active: 'reputation-ai', routerLink: '/admin/reputation-ai', roles: ['ADMIN', 'OWNER'] },
     { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
     { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
     { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },

@@ -13,6 +13,11 @@
         @if (toast.message) {
           <p>{{ toast.message }}</p>
         }
+        @if (toast.action) {
+          <a class="toast-action" [routerLink]="toast.action.routerLink" (click)="toastService.dismiss(toast.id)">
+            {{ toast.action.label }}
+          </a>
+        }
       </div>
       <button type="button" (click)="toastService.dismiss(toast.id)" title="Закрыть">
         <span class="material-icons-sharp">close</span>

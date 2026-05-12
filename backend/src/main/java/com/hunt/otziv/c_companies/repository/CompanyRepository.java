@@ -52,6 +52,17 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     """)
     Optional<Company> findByIdWithFilials(@Param("companyId") Long companyId);
 
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        LEFT JOIN FETCH c.categoryCompany
+        LEFT JOIN FETCH c.subCategory
+        LEFT JOIN FETCH c.filial f
+        LEFT JOIN FETCH f.city
+        WHERE c.id = :companyId
+    """)
+    Optional<Company> findByIdForReputationAi(@Param("companyId") Long companyId);
+
 
     @Query("SELECT c FROM Company c LEFT JOIN FETCH c.status LEFT JOIN FETCH c.user LEFT JOIN FETCH c.filial LEFT JOIN FETCH c.manager ORDER BY c.updateStatus, c.id")
     Page<Company> findAllToAdmin(Pageable pageable);

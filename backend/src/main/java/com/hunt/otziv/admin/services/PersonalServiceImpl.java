@@ -502,8 +502,8 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOf1YearAgo = localDate.minusYears(1).withMonth(12).withDayOfMonth(31);
 
         //        ЗП Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
-        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
-        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(2))).toList();
+        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate)).toList();
+        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
         List<Zp> zpPay7Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(7)) || z.getCreated().isAfter(localDate.minusDays(7))).toList();
         List<Zp> zpPay14Day = zps.stream().filter(z -> (z.getCreated().isEqual(localDate.minusDays(14)) || z.getCreated().isAfter(localDate.minusDays(14))) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
         List<Zp> zpPay30Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonth) || z.getCreated().isAfter(firstDayOfMonth)) && (z.getCreated().isEqual(lastDayOfMonth) || z.getCreated().isBefore(lastDayOfMonth))).toList();

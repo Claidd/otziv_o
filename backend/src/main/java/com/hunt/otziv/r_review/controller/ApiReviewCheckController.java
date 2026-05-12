@@ -1,5 +1,9 @@
 package com.hunt.otziv.r_review.controller;
 
+import com.hunt.otziv.archive.ArchiveRestoreConflictException;
+import com.hunt.otziv.archive.ReviewCheckArchiveService;
+import com.hunt.otziv.archive.ReviewCheckArchiveService.ArchivedReviewCheck;
+import com.hunt.otziv.archive.ReviewCheckArchiveService.ArchivedReviewCheckReview;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -21,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +41,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,6 +55,7 @@ public class ApiReviewCheckController {
     private final OrderService orderService;
     private final ReviewService reviewService;
     private final CompanyService companyService;
+    private final ReviewCheckArchiveService reviewCheckArchiveService;
 
     @GetMapping("/{orderDetailId}")
     public ReviewCheckResponse getReviewCheck(
@@ -126,7 +133,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для разрешения публикации");
         }
 
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Публикация", authentication);
         Order order = requireOrder(orderDetails);
         OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
 
@@ -152,7 +159,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
         }
 
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         Order order = requireOrder(orderDetails);
 
         updateReviews(orderDetails, request);
@@ -326,7 +333,12 @@ public class ApiReviewCheckController {
     }
 
     private ReviewCheckResponse buildResponse(UUID orderDetailId, Authentication authentication) {
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        return findLiveReviewCheckDetails(orderDetailId)
+                .map(orderDetails -> buildLiveResponse(orderDetails, authentication))
+                .orElseGet(() -> buildArchivedResponse(orderDetailId, authentication));
+    }
+
+    private ReviewCheckResponse buildLiveResponse(OrderDetails orderDetails, Authentication authentication) {
         Order order = requireOrder(orderDetails);
         Company company = order.getCompany();
         Filial filial = order.getFilial();
@@ -358,6 +370,34 @@ public class ApiReviewCheckController {
         );
     }
 
+    private ReviewCheckResponse buildArchivedResponse(UUID orderDetailId, Authentication authentication) {
+        ArchivedReviewCheck archived = reviewCheckArchiveService.findByOrderDetailId(orderDetailId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
+        ReviewCheckPermissions permissions = archivedPermissions(authentication);
+        boolean approved = !archived.reviews().isEmpty() && archived.reviews().get(0).publishedDate() != null;
+
+        return new ReviewCheckResponse(
+                archived.orderDetailId(),
+                archived.orderId(),
+                archived.companyId(),
+                archived.companyTitle(),
+                archived.filialTitle(),
+                archived.status(),
+                archived.workerFio(),
+                permissions.canSeeInternalInfo() ? archived.orderComments() : "",
+                permissions.canSeeInternalInfo() ? archived.companyComments() : "",
+                archived.comment(),
+                archived.amount(),
+                archived.counter(),
+                archived.sum(),
+                approved,
+                archived.reviews().stream()
+                        .map(review -> toArchivedReviewResponse(review, archived, permissions))
+                        .toList(),
+                permissions
+        );
+    }
+
     private ReviewCheckReviewResponse buildReviewResponse(UUID orderDetailId, Long reviewId, Authentication authentication) {
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
@@ -366,7 +406,48 @@ public class ApiReviewCheckController {
     }
 
     private OrderDetails reviewCheckDetails(UUID orderDetailId) {
-        return orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId);
+        return findLiveReviewCheckDetails(orderDetailId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
+    }
+
+    private OrderDetails reviewCheckDetailsForAction(
+            UUID orderDetailId,
+            String restoreTargetStatus,
+            Authentication authentication
+    ) {
+        return findLiveReviewCheckDetails(orderDetailId)
+                .orElseGet(() -> restoreArchivedReviewCheck(orderDetailId, restoreTargetStatus, authentication));
+    }
+
+    private Optional<OrderDetails> findLiveReviewCheckDetails(UUID orderDetailId) {
+        try {
+            return Optional.of(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId));
+        } catch (UsernameNotFoundException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private OrderDetails restoreArchivedReviewCheck(
+            UUID orderDetailId,
+            String restoreTargetStatus,
+            Authentication authentication
+    ) {
+        try {
+            reviewCheckArchiveService.restoreByOrderDetailId(orderDetailId, restoreTargetStatus, restoredBy(authentication));
+        } catch (ArchiveRestoreConflictException exception) {
+            return findLiveReviewCheckDetails(orderDetailId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage(), exception));
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивная проверка отзывов не найдена", exception);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, exception.getMessage(), exception);
+        }
+
+        return findLiveReviewCheckDetails(orderDetailId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Заказ восстановлен из архива, но проверка отзывов не найдена"
+                ));
     }
 
     private ReviewCheckReviewResponse toReviewResponse(
@@ -397,6 +478,27 @@ public class ApiReviewCheckController {
         );
     }
 
+    private ReviewCheckReviewResponse toArchivedReviewResponse(
+            ArchivedReviewCheckReview review,
+            ArchivedReviewCheck archived,
+            ReviewCheckPermissions permissions
+    ) {
+        return new ReviewCheckReviewResponse(
+                review.id(),
+                safe(review.text()),
+                safe(review.answer()),
+                permissions.canSeeBot() ? safe(review.botName()) : "",
+                permissions.canSeeInternalInfo() ? safe(archived.comment()) : "",
+                permissions.canSeeInternalInfo() ? safe(archived.orderComments()) : "",
+                permissions.canSeeInternalInfo() ? safe(archived.companyComments()) : "",
+                safe(review.productTitle()),
+                review.productPhoto(),
+                safe(review.url()),
+                dateValue(review.publishedDate()),
+                review.publish()
+        );
+    }
+
     private ReviewCheckPermissions permissions(Authentication authentication) {
         boolean authenticated = isAuthenticated(authentication);
         boolean canSeeInternal = hasAnyRole(authentication, "WORKER", "MANAGER", "ADMIN", "OWNER");
@@ -416,6 +518,26 @@ public class ApiReviewCheckController {
                 canManage,
                 canEditNotes
         );
+    }
+
+    private ReviewCheckPermissions archivedPermissions(Authentication authentication) {
+        ReviewCheckPermissions base = permissions(authentication);
+        return new ReviewCheckPermissions(
+                base.authenticated(),
+                base.canSeeInternalInfo(),
+                base.canSeeBot(),
+                base.canApprovePublication(),
+                false,
+                base.canSendCorrection(),
+                false,
+                false,
+                false,
+                false
+        );
+    }
+
+    private String restoredBy(Authentication authentication) {
+        return isAuthenticated(authentication) ? authentication.getName() : "anonymous-review-check";
     }
 
     private void requireCanEditNotes(Authentication authentication) {

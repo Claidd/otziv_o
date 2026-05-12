@@ -10,6 +10,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,10 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     List<Zp> findAllToDateByUser(@Param("startDate") LocalDate startDate,
                                  @Param("endDate") LocalDate endDate,
                                  @Param("userId") Long userId);
+
+    @Query("SELECT SUM(z.sum) FROM Zp z WHERE z.userId = :userId AND z.created = :created")
+    BigDecimal sumByUserAndCreated(@Param("userId") Long userId,
+                                   @Param("created") LocalDate created);
 
 
 //    @Query("SELECT z.fio, SUM(z.sum) as totalSum FROM Zp z WHERE z.created BETWEEN :startDate AND :endDate GROUP BY z.fio ORDER BY totalSum DESC")

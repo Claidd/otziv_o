@@ -5,7 +5,7 @@
             <div th:class="${workerZp.percent1Day > 25} ? 'green' : (${workerZp.percent1Day >= 0} ?  'blue' : (${workerZp.percent1Day > -25} ? 'yellow' : 'red'))">
                 <div class="status">
                     <div class="info" th:object="${workerZp}">
-                        <h3>За вчера</h3>
+                        <h3>За сегодня</h3>
                         <h1 th:text="'$ ' + ${workerZp.sum1Day}">$ 550,024</h1>
                     </div>
                     <div class="progresss">

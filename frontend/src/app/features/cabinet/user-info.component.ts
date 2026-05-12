@@ -57,7 +57,7 @@ export class UserInfoComponent {
     }
 
     return [
-      { label: 'За вчера', value: this.money(stat.sum1Day), percent: stat.percent1Day },
+      { label: 'За сегодня', value: this.money(stat.sum1Day), percent: stat.percent1Day },
       { label: 'За неделю', value: this.money(stat.sum1Week), percent: stat.percent1Week },
       { label: 'За месяц', value: this.money(stat.sum1Month), percent: stat.percent1Month },
       { label: 'За год', value: this.money(stat.sum1Year), percent: stat.percent1Year },

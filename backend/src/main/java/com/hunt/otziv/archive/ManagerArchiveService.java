@@ -157,8 +157,10 @@ public class ManagerArchiveService {
         return new ManagerArchiveOrderListItem(
                 order.id(),
                 order.companyId(),
+                order.orderDetailsId(),
                 order.companyTitle(),
                 order.companyTelephone(),
+                order.companyUrlChat(),
                 order.companyCity(),
                 order.filialTitle(),
                 order.status(),

@@ -9,6 +9,7 @@ import com.hunt.otziv.analytics.repository.AnalyticsDailyUserRepository;
 import com.hunt.otziv.analytics.repository.AnalyticsMonthlyUserRepository;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.z_zp.services.ZpService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,9 @@ class AnalyticsAggregateUserStatsServiceTest {
     @Mock
     private AnalyticsMonthlyUserRepository monthlyUserRepository;
 
+    @Mock
+    private ZpService zpService;
+
     private AnalyticsAggregateUserStatsService service;
     private ObjectMapper objectMapper;
 
@@ -49,7 +53,7 @@ class AnalyticsAggregateUserStatsServiceTest {
                 monthlyUserRepository,
                 null
         );
-        service = new AnalyticsAggregateUserStatsService(readService, objectMapper);
+        service = new AnalyticsAggregateUserStatsService(readService, objectMapper, zpService);
     }
 
     @Test
@@ -69,6 +73,8 @@ class AnalyticsAggregateUserStatsServiceTest {
         );
         stubMonthlyRows(monthlyRows);
         stubDailyRows(dailyRows);
+        when(zpService.sumByUserAndCreated(10L, DATE)).thenReturn(new BigDecimal("40.00"));
+        when(zpService.sumByUserAndCreated(10L, DATE.minusDays(1))).thenReturn(new BigDecimal("100.00"));
 
         Optional<UserStatDTO> result = service.buildUserStats(DATE, user);
 
@@ -78,13 +84,13 @@ class AnalyticsAggregateUserStatsServiceTest {
         assertEquals("Worker One", stats.getFio());
         assertEquals(77L, stats.getImageId());
         assertEquals(new BigDecimal("1.25"), stats.getCoefficient());
-        assertEquals(100, stats.getSum1Day());
+        assertEquals(40, stats.getSum1Day());
         assertEquals(125, stats.getSum1Week());
         assertEquals(175, stats.getSum1Month());
         assertEquals(875, stats.getSum1Year());
         assertEquals(4, stats.getSumOrders1Month());
         assertEquals(2, stats.getSumOrders2Month());
-        assertEquals(75, stats.getPercent1Day());
+        assertEquals(-60, stats.getPercent1Day());
         assertEquals(-13, stats.getPercent1Month());
 
         JsonNode dailyMap = objectMapper.readTree(stats.getZpPayMap());

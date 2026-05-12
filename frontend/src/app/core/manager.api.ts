@@ -19,8 +19,10 @@ export interface ManagerPage<T> {
 export interface ArchiveOrderListItem {
   id: number;
   companyId?: number | null;
+  orderDetailsId?: string | null;
   companyTitle: string;
   companyTelephone: string;
+  companyUrlChat?: string;
   companyCity: string;
   filialTitle: string;
   status: string;

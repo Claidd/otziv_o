@@ -352,6 +352,7 @@ public class KeycloakUserProvisioningService {
             keycloakId = createOrFindKeycloakUser(createRequest);
         }
 
+        keycloakAdminClient.resetPassword(keycloakId, request.getPassword(), false);
         keycloakAdminClient.assignRealmRoles(keycloakId, keycloakRoles);
         user.setKeycloakId(keycloakId);
         user.setAuthProvider(KEYCLOAK_AUTH_PROVIDER);

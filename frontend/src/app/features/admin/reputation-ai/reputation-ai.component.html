@@ -1,0 +1,587 @@
+<app-admin-layout title="AI-помощник репутации" active="reputation-ai" rightPanelMode="custom">
+  <section class="reputation-ai-workspace">
+    <header class="workspace-toolbar">
+      <div class="company-control">
+        <span class="material-icons-sharp">business</span>
+        <label>
+          <span>Компания</span>
+          <input type="number" min="1" name="companyId" [(ngModel)]="companyId">
+        </label>
+      </div>
+
+      <div class="toolbar-actions">
+        <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
+          <span class="material-icons-sharp">article</span>
+          Последний отчёт
+        </button>
+        <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
+          <span class="material-icons-sharp">psychology</span>
+          {{ isLoading('deepResearch') ? 'Запускаю' : hasActiveDeepResearch() ? 'Отчёт собирается' : 'Обновить отчёт' }}
+        </button>
+        <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack()">
+          <span class="material-icons-sharp">auto_awesome</span>
+          {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Создать AI-пакет' }}
+        </button>
+      </div>
+    </header>
+
+    @if (error()) {
+      <section class="alert error">
+        <span class="material-icons-sharp">error</span>
+        <p>{{ error() }}</p>
+      </section>
+    }
+
+    @if (notice()) {
+      <section class="alert success">
+        <span class="material-icons-sharp">check_circle</span>
+        <p>{{ notice() }}</p>
+      </section>
+    }
+
+    @if (deepResearchJob(); as job) {
+      @if (job.status === 'QUEUED' || job.status === 'RUNNING') {
+        <section class="alert info">
+          <span class="material-icons-sharp">hourglass_top</span>
+          <p>
+            Глубокий отчёт {{ deepResearchStatusLabel(job) }}. Можно перейти в другой раздел: результат сохранится в базе и появится в уведомлении.
+          </p>
+        </section>
+      }
+      @if (job.status === 'FAILED') {
+        <section class="alert error">
+          <span class="material-icons-sharp">error</span>
+          <p>{{ job.errorMessage || 'Глубокий GPT-отчёт завершился ошибкой.' }}</p>
+        </section>
+      }
+    }
+
+    @if (contentPackJob(); as job) {
+      @if (job.status === 'QUEUED' || job.status === 'RUNNING') {
+        <section class="alert info">
+          <span class="material-icons-sharp">hourglass_top</span>
+          <p>AI-пакет {{ job.status === 'QUEUED' ? 'в очереди' : 'собирается' }} через OpenAI. Страница обновляет статус автоматически.</p>
+        </section>
+      }
+      @if (job.status === 'FAILED') {
+        <section class="alert error">
+          <span class="material-icons-sharp">error</span>
+          <p>{{ job.errorMessage || 'AI-пакет завершился ошибкой.' }}</p>
+        </section>
+      }
+    }
+
+    <section class="metric-grid" aria-label="Паспорт глубокого отчёта">
+      @for (metric of reportPassportMetrics(); track trackMetric($index, metric)) {
+        <article class="metric-card" [class]="metric.tone">
+          <span class="material-icons-sharp">{{ metric.icon }}</span>
+          <div>
+            <strong>{{ metric.value }}</strong>
+            <small>{{ metric.label }}</small>
+          </div>
+        </article>
+      }
+    </section>
+
+    <section class="main-grid">
+      <form class="panel setup-panel" (ngSubmit)="createContentPack()">
+        <div class="panel-title">
+          <span class="material-icons-sharp">tune</span>
+          <h2>Параметры</h2>
+        </div>
+
+        <div class="compact-hint">
+          <span class="material-icons-sharp">info</span>
+          <p>AI-пакет собирает OpenAI по последнему глубокому отчёту. Поля ниже можно оставить пустыми или использовать как ручное усиление.</p>
+        </div>
+
+        <label>
+          <span>Товар или услуга</span>
+          <input type="text" name="productOrService" [(ngModel)]="productOrService" placeholder="Например, декоративная штукатурка">
+        </label>
+
+        <label>
+          <span>Модель глубокого отчёта</span>
+          <select
+            name="deepResearchProfile"
+            [ngModel]="deepResearchProfile()"
+            (ngModelChange)="deepResearchProfile.set($event)"
+          >
+            @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
+              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+            }
+          </select>
+        </label>
+
+        @if (selectedDeepResearchProfile(); as profile) {
+          <div class="profile-mode-card">
+            <strong>{{ profile.label }} · {{ profile.model }}</strong>
+            <span>{{ profile.description }}</span>
+            <small>
+              search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }}
+              · tools {{ profile.maxToolCalls }} · output {{ profile.maxOutputTokens }}
+            </small>
+          </div>
+        }
+
+        <label>
+          <span>Модель AI-пакета</span>
+          <select
+            name="contentPackProfile"
+            [ngModel]="contentPackProfile()"
+            (ngModelChange)="contentPackProfile.set($event)"
+          >
+            @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
+              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+            }
+          </select>
+        </label>
+
+        @if (selectedContentPackProfile(); as profile) {
+          <div class="profile-mode-card">
+            <strong>{{ profile.label }} · {{ profile.model }}</strong>
+            <span>{{ profile.description }}</span>
+            <small>
+              reasoning {{ profile.reasoningEffort || 'off' }} · search {{ profile.searchContextSize }}
+              · output {{ profile.maxOutputTokens }}
+            </small>
+          </div>
+        }
+
+        <label>
+          <span>Описание вручную</span>
+          <textarea rows="4" name="manualDescription" [(ngModel)]="manualDescription" placeholder="Факты о компании, которые уже известны"></textarea>
+        </label>
+
+        <label>
+          <span>Товары и услуги</span>
+          <textarea rows="4" name="productsOrServicesText" [(ngModel)]="productsOrServicesText" placeholder="Каждый пункт с новой строки"></textarea>
+        </label>
+
+        <label>
+          <span>Публичные страницы</span>
+          <textarea rows="4" name="publicUrlsText" [(ngModel)]="publicUrlsText" placeholder="Сайт, карточки, справочники, отзовики"></textarea>
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="includeCompanyWebsite" [(ngModel)]="includeCompanyWebsite">
+          <span>Собирать сайт из карточки компании</span>
+        </label>
+
+        <div class="count-grid">
+          <label>
+            <span>Реклама</span>
+            <input type="number" min="1" max="30" name="adTextsCount" [(ngModel)]="adTextsCount">
+          </label>
+          <label>
+            <span>Посты</span>
+            <input type="number" min="1" max="30" name="socialPostsCount" [(ngModel)]="socialPostsCount">
+          </label>
+          <label>
+            <span>Позитив</span>
+            <input type="number" min="1" max="30" name="positiveReplyCount" [(ngModel)]="positiveReplyCount">
+          </label>
+          <label>
+            <span>Негатив</span>
+            <input type="number" min="1" max="30" name="negativeReplyCount" [(ngModel)]="negativeReplyCount">
+          </label>
+        </div>
+
+        <button type="submit" [disabled]="busy() || hasActiveContentPackJob()">
+          <span class="material-icons-sharp">bolt</span>
+          {{ isLoading('contentPack') ? 'Запускаю пакет' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Сгенерировать пакет' }}
+        </button>
+      </form>
+
+      <section class="panel report-control-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">psychology</span>
+          <h2>Глубокий отчёт</h2>
+        </div>
+
+        @if (deepResearch(); as report) {
+          <div class="report-control-summary">
+            <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
+            <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
+            <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} тематических блоков</small>
+          </div>
+        } @else {
+          <div class="empty-state">
+            <span class="material-icons-sharp">article</span>
+            <p>Загрузи последний отчёт или запусти новый фоновый сбор.</p>
+          </div>
+        }
+
+        @if (selectedDeepResearchProfile(); as profile) {
+          <div class="profile-mode-card compact">
+            <strong>Новый запуск: {{ profile.label }}</strong>
+            <span>{{ profile.model }} · search {{ profile.searchContextSize }} · output {{ profile.maxOutputTokens }}</span>
+          </div>
+        }
+
+        <div class="report-actions">
+          <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
+            <span class="material-icons-sharp">history</span>
+            Последний отчёт
+          </button>
+          <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
+            <span class="material-icons-sharp">refresh</span>
+            {{ hasActiveDeepResearch() ? 'Собирается' : 'Обновить' }}
+          </button>
+          @if (deepResearch(); as report) {
+            <button type="button" class="secondary" (click)="copyText(report.reportMarkdown)">
+              <span class="material-icons-sharp">content_copy</span>
+              Копировать
+            </button>
+            <button type="button" class="secondary" (click)="downloadDeepReport(report)">
+              <span class="material-icons-sharp">download</span>
+              Markdown
+            </button>
+          }
+        </div>
+      </section>
+    </section>
+
+    @if (deepResearch(); as report) {
+      <section class="panel deep-research-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">psychology</span>
+          <h2>Глубокий GPT-отчёт</h2>
+        </div>
+
+        <section class="report-passport">
+          <div class="profile-head">
+            <div>
+              <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
+              <span>
+                {{ report.provider }} · {{ report.model }}
+                @if (deepResearchJob(); as job) {
+                  · {{ deepResearchStatusLabel(job) }}
+                }
+              </span>
+            </div>
+            <small>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+          </div>
+
+          <div class="report-actions">
+            <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
+              <span class="material-icons-sharp">history</span>
+              Последний
+            </button>
+            <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
+              <span class="material-icons-sharp">refresh</span>
+              {{ hasActiveDeepResearch() ? 'Собирается' : 'Обновить' }}
+            </button>
+            <button type="button" class="secondary" (click)="copyText(report.reportMarkdown)">
+              <span class="material-icons-sharp">content_copy</span>
+              Копировать
+            </button>
+            <button type="button" class="secondary" (click)="downloadDeepReport(report)">
+              <span class="material-icons-sharp">download</span>
+              Markdown
+            </button>
+          </div>
+        </section>
+
+        @if (report.warnings.length > 0) {
+          <div class="warning-list">
+            @for (warning of report.warnings; track trackText($index, warning)) {
+              <p>
+                <span class="material-icons-sharp">warning</span>
+                {{ warning }}
+              </p>
+            }
+          </div>
+        }
+
+        @if (deepReportBlocks().length > 0) {
+          <div class="deep-report-outline" aria-label="Темы отчёта">
+            @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
+              <span>{{ block.title }}</span>
+            }
+          </div>
+        }
+
+        <div class="deep-report-topic-grid">
+          @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
+            <article class="deep-report-topic">
+              <header>
+                <span class="material-icons-sharp">{{ block.icon }}</span>
+                <h3>{{ block.title }}</h3>
+              </header>
+              <div class="deep-report-markdown" [innerHTML]="block.html"></div>
+            </article>
+          }
+        </div>
+
+        @if (report.sources.length > 0) {
+          <div class="deep-report-sources">
+            <strong>Источники</strong>
+            @for (source of report.sources; track trackText($index, source.url || source.title)) {
+              <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (contentPack(); as pack) {
+      <section class="panel content-pack-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">inventory_2</span>
+          <h2>AI-пакет компании</h2>
+        </div>
+
+        <section class="company-profile">
+          <strong>{{ pack.companyProfile.shortDescription }}</strong>
+          <div class="tag-block">
+            @for (warning of pack.companyProfile.factualWarnings; track trackText($index, warning)) {
+              <span class="warning">{{ warning }}</span>
+            }
+          </div>
+        </section>
+
+        <div class="pack-grid">
+          @for (block of packBlocks(); track trackBlock($index, block)) {
+            <article class="pack-block">
+              <header>
+                <span class="material-icons-sharp">{{ block.icon }}</span>
+                <h3>{{ block.title }}</h3>
+              </header>
+              <ol>
+                @for (item of block.items; track trackText($index, item)) {
+                  <li>
+                    <p>{{ item }}</p>
+                    <button type="button" class="icon-button" (click)="copyText(item)" title="Скопировать">
+                      <span class="material-icons-sharp">content_copy</span>
+                    </button>
+                  </li>
+                }
+              </ol>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="tools-grid">
+      <section class="panel tool-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">rate_review</span>
+          <h2>Черновик отзыва</h2>
+        </div>
+
+        <label>
+          <span>Реальный опыт клиента</span>
+          <textarea rows="5" name="realExperiencePointsText" [(ngModel)]="realExperiencePointsText"></textarea>
+        </label>
+
+        <div class="inline-fields">
+          <label>
+            <span>Тон</span>
+            <input type="text" name="draftTone" [(ngModel)]="draftTone">
+          </label>
+          <label>
+            <span>Длина</span>
+            <select name="draftLength" [(ngModel)]="draftLength">
+              <option value="short">Короткий</option>
+              <option value="medium">Средний</option>
+              <option value="long">Подробный</option>
+            </select>
+          </label>
+        </div>
+
+        <button type="button" [disabled]="busy()" (click)="createDraft()">
+          <span class="material-icons-sharp">edit_note</span>
+          {{ isLoading('draft') ? 'Пишу' : 'Создать черновик' }}
+        </button>
+
+        @if (draftResult(); as draft) {
+          <article class="result-box">
+            <p>{{ draft.draft }}</p>
+            <button type="button" class="copy-button" (click)="copyText(draft.draft)">
+              <span class="material-icons-sharp">content_copy</span>
+              Скопировать
+            </button>
+            @if (draft.warning) {
+              <small>{{ draft.warning }}</small>
+            }
+          </article>
+        }
+      </section>
+
+      <section class="panel tool-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">policy</span>
+          <h2>Проверка текста</h2>
+        </div>
+
+        <label>
+          <span>Текст</span>
+          <textarea rows="5" name="checkText" [(ngModel)]="checkText"></textarea>
+        </label>
+
+        <label>
+          <span>Разрешенные факты</span>
+          <textarea rows="3" name="allowedFactsText" [(ngModel)]="allowedFactsText" placeholder="Каждый факт с новой строки"></textarea>
+        </label>
+
+        <div class="inline-actions">
+          <button type="button" [disabled]="busy()" (click)="checkReview()">
+            <span class="material-icons-sharp">fact_check</span>
+            {{ isLoading('check') ? 'Проверяю' : 'Проверить' }}
+          </button>
+          <button type="button" class="secondary" [disabled]="busy()" (click)="rewriteReview()">
+            <span class="material-icons-sharp">auto_fix_high</span>
+            {{ isLoading('rewrite') ? 'Улучшаю' : 'Улучшить' }}
+          </button>
+        </div>
+
+        @if (checkReport(); as report) {
+          <article class="safety-box" [class]="safetyTone(report)">
+            <strong>{{ report.safeToUseAsDraft ? 'Можно использовать как черновик' : 'Нужна правка' }}</strong>
+            <span>Риск {{ report.riskScore }}%</span>
+            <ul>
+              @for (warning of report.warnings; track trackText($index, warning)) {
+                <li>{{ warning }}</li>
+              }
+              @for (suggestion of report.suggestions; track trackText($index, suggestion)) {
+                <li>{{ suggestion }}</li>
+              }
+            </ul>
+          </article>
+        }
+
+        @if (rewriteResult(); as rewrite) {
+          <article class="result-box">
+            <p>{{ rewrite.rewrittenText }}</p>
+            <button type="button" class="copy-button" (click)="copyText(rewrite.rewrittenText)">
+              <span class="material-icons-sharp">content_copy</span>
+              Скопировать
+            </button>
+          </article>
+        }
+      </section>
+
+      <section class="panel tool-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">support_agent</span>
+          <h2>Ответы компании</h2>
+        </div>
+
+        <label>
+          <span>Текст отзыва</span>
+          <textarea rows="5" name="replyReviewText" [(ngModel)]="replyReviewText"></textarea>
+        </label>
+
+        <div class="inline-fields">
+          <label>
+            <span>Тон</span>
+            <input type="text" name="replyTone" [(ngModel)]="replyTone">
+          </label>
+          <label>
+            <span>Варианты</span>
+            <input type="number" min="1" max="10" name="replyCount" [(ngModel)]="replyCount">
+          </label>
+        </div>
+
+        <div class="inline-actions">
+          <button type="button" [disabled]="busy()" (click)="createReply('positive')">
+            <span class="material-icons-sharp">thumb_up</span>
+            {{ isLoading('positiveReply') ? 'Готовлю' : 'Позитив' }}
+          </button>
+          <button type="button" class="secondary" [disabled]="busy()" (click)="createReply('negative')">
+            <span class="material-icons-sharp">report</span>
+            {{ isLoading('negativeReply') ? 'Готовлю' : 'Негатив' }}
+          </button>
+        </div>
+
+        @if (replyResult(); as result) {
+          <div class="reply-list">
+            @for (reply of result.replies; track trackText($index, reply)) {
+              <article class="result-box">
+                <p>{{ reply }}</p>
+                <button type="button" class="copy-button" (click)="copyText(reply)">
+                  <span class="material-icons-sharp">content_copy</span>
+                  Скопировать
+                </button>
+              </article>
+            }
+            @if (result.warning) {
+              <small>{{ result.warning }}</small>
+            }
+          </div>
+        }
+      </section>
+    </section>
+  </section>
+
+  <section admin-right-content class="reputation-ai-side">
+    <article class="side-panel">
+      <span class="material-icons-sharp">key</span>
+      <div>
+        <h2>Провайдеры</h2>
+        @if (status(); as providerStatus) {
+          <p>
+            AI: {{ providerStatus.aiProvider }} · {{ providerStatus.aiAvailable ? 'доступен' : 'не доступен' }}
+            <br>
+            Search: {{ providerStatus.searchProvider }} · {{ providerStatus.searchAvailable ? 'доступен' : 'не доступен' }}
+            <br>
+            OpenAI: {{ providerStatus.openAiConfigured ? providerStatus.openAiModel : 'не настроен' }}
+            @if (providerStatus.openAiProxyEnabled) {
+              <span> · proxy</span>
+            }
+            @if (providerStatus.openAiConfigured) {
+              <br>
+              Отчёт: {{ providerStatus.openAiResearchReportModel || providerStatus.openAiModel }}
+            }
+          </p>
+        } @else {
+          <p>Ключи берутся backend из `.env`, фронт их не хранит.</p>
+        }
+      </div>
+    </article>
+
+    @if (status()?.warnings?.length) {
+      <article class="side-panel yellow">
+        <span class="material-icons-sharp">settings_alert</span>
+        <div>
+          <h2>Настройка</h2>
+          @for (warning of status()?.warnings ?? []; track trackText($index, warning)) {
+            <p>{{ warning }}</p>
+          }
+        </div>
+      </article>
+    }
+
+    @if (deepResearch(); as report) {
+      <article class="side-panel">
+        <span class="material-icons-sharp">article</span>
+        <div>
+          <h2>{{ report.companyName || 'Компания #' + report.companyId }}</h2>
+          <p>{{ report.sources.length }} источников · {{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }}</p>
+        </div>
+      </article>
+    }
+
+    @if (contentPack(); as pack) {
+      <article class="side-panel">
+        <span class="material-icons-sharp">inventory</span>
+        <div>
+          <h2>{{ packBlocks().length }} блоков</h2>
+          <p>{{ pack.sourceUrls.length }} ссылок-источников</p>
+        </div>
+      </article>
+    }
+
+    @if (checkReport(); as report) {
+      <article class="side-panel" [class]="safetyTone(report)">
+        <span class="material-icons-sharp">policy</span>
+        <div>
+          <h2>Риск {{ report.riskScore }}%</h2>
+          <p>{{ report.safeToUseAsDraft ? 'Черновик безопасен' : 'Требуется редактура' }}</p>
+        </div>
+      </article>
+    }
+  </section>
+</app-admin-layout>

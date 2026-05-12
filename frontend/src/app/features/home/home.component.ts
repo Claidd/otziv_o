@@ -169,7 +169,7 @@ export class HomeComponent {
     }
 
     return [
-      { label: 'За вчера', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За сегодня', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
       { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
       { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month },
       { label: 'За год', value: this.money(workerZp.sum1Year), percent: workerZp.percent1Year },

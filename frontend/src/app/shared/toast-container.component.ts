@@ -1,8 +1,10 @@
 import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { ToastService, ToastType } from './toast.service';
 
 @Component({
   selector: 'app-toast-container',
+  imports: [RouterLink],
   templateUrl: './toast-container.component.html',
   styleUrl: './toast-container.component.scss'
 })

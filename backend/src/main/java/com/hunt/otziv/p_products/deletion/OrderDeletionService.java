@@ -9,6 +9,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -16,10 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.Principal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
@@ -28,6 +31,20 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 @Slf4j
 @RequiredArgsConstructor
 public class OrderDeletionService {
+
+    private static final List<String> ROLE_PRIORITY = List.of(
+            "ROLE_ADMIN",
+            "ROLE_OWNER",
+            "ROLE_MANAGER",
+            "ROLE_WORKER",
+            "ROLE_OPERATOR",
+            "ROLE_MARKETOLOG"
+    );
+    private static final Set<String> IGNORED_AUTHORITIES = Set.of(
+            "ROLE_default-roles-otziv",
+            "ROLE_offline_access",
+            "ROLE_uma_authorization"
+    );
 
     private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
@@ -108,15 +125,32 @@ public class OrderDeletionService {
 
         Object authPrincipal = authentication.getPrincipal();
         if (authPrincipal instanceof UserDetails userDetails) {
-            return userDetails.getAuthorities().stream()
-                    .findFirst()
-                    .map(Object::toString)
-                    .orElse("");
+            return primaryRole(userDetails.getAuthorities());
         }
 
-        return authentication.getAuthorities().stream()
+        return primaryRole(authentication.getAuthorities());
+    }
+
+    private String primaryRole(Collection<? extends GrantedAuthority> authorities) {
+        if (authorities == null || authorities.isEmpty()) {
+            return "";
+        }
+
+        List<String> authorityNames = authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .toList();
+
+        for (String role : ROLE_PRIORITY) {
+            if (authorityNames.contains(role)) {
+                return role;
+            }
+        }
+
+        return authorityNames.stream()
+                .filter(authority -> !IGNORED_AUTHORITIES.contains(authority))
                 .findFirst()
-                .map(Object::toString)
+                .or(() -> authorityNames.stream().findFirst())
                 .orElse("");
     }
 }

@@ -65,6 +65,15 @@ public class ZpServiceImpl implements ZpService{
         return zpRepository.findAllToDateByUser(period.getFirst(), period.getSecond(), userId);
     } // Берем все ЗП для Работника
 
+    @Override
+    public BigDecimal sumByUserAndCreated(Long userId, LocalDate created) {
+        if (userId == null || created == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal sum = zpRepository.sumByUserAndCreated(userId, created);
+        return sum == null ? BigDecimal.ZERO : sum;
+    }
+
     /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
     @Override
     public Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {

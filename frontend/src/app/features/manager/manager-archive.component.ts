@@ -13,12 +13,14 @@ import {
   ArchiveRestoreResult,
   ArchiveZpItem,
   ManagerApi,
-  ManagerPage
+  ManagerPage,
+  OrderCardItem
 } from '../../core/manager.api';
 import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { orderReviewCopyText, reviewCheckPath } from '../../shared/order-review-copy-text';
 import { ToastService } from '../../shared/toast.service';
 
 type ArchiveModeTab = {
@@ -104,6 +106,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly restoreTargetStatus = signal('Архив');
   readonly activeArchiveOrderId = signal<number | null>(null);
   readonly liveStatusMutationKey = signal<string | null>(null);
+  readonly copied = signal<string | null>(null);
   readonly liveStatusActions = LIVE_ARCHIVE_STATUS_ACTIONS;
   readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
 
@@ -246,6 +249,33 @@ export class ManagerArchiveComponent implements OnDestroy {
     return this.liveStatusMutationKey() === this.liveStatusKey(order, action.status);
   }
 
+  archiveOrderChatUrl(order: ArchiveOrderListItem): string {
+    return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+  }
+
+  archiveOrderReviewUrl(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): string {
+    const orderDetailsId = this.archiveOrderDetailsId(order, details);
+    return orderDetailsId ? reviewCheckPath(orderDetailsId) : '';
+  }
+
+  hasArchiveReviewLink(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): boolean {
+    return Boolean(this.archiveOrderDetailsId(order, details));
+  }
+
+  async copyArchiveReviewText(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): Promise<void> {
+    const orderDetailsId = this.archiveOrderDetailsId(order, details);
+    if (!orderDetailsId) {
+      this.toastService.error('Не скопировано', 'У заказа нет детали для ссылки на проверку отзывов');
+      return;
+    }
+
+    await this.copyText(
+      orderReviewCopyText(this.archiveOrderForReviewText(order, orderDetailsId), []),
+      `archive-review-${order.id}`,
+      'Текст проверки скопирован'
+    );
+  }
+
   changeLiveStatus(order: ArchiveOrderListItem, action: LiveArchiveStatusAction): void {
     if (!this.canChangeLiveStatus(order) || this.liveStatusMutationKey()) {
       return;
@@ -380,6 +410,50 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   private liveStatusKey(order: ArchiveOrderListItem, status: string): string {
     return `archive-live-${order.id}-${status}`;
+  }
+
+  private archiveOrderDetailsId(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): string {
+    return order.orderDetailsId
+      || details?.details[0]?.id
+      || details?.reviews.find((review) => review.orderDetailsId)?.orderDetailsId
+      || '';
+  }
+
+  private archiveOrderForReviewText(order: ArchiveOrderListItem, orderDetailsId: string): OrderCardItem {
+    return {
+      id: order.id,
+      companyId: order.companyId ?? 0,
+      orderDetailsId,
+      companyTitle: order.companyTitle,
+      filialTitle: order.filialTitle,
+      status: order.status,
+      sum: order.sum,
+      amount: order.amount,
+      counter: order.counter,
+      companyUrlChat: order.companyUrlChat,
+      companyTelephone: order.companyTelephone,
+      firstOrderForCompany: true
+    };
+  }
+
+  private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
+    const value = text.trim();
+    if (!value) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      this.copied.set(copiedKey);
+      this.toastService.success('Скопировано', toast);
+      window.setTimeout(() => {
+        if (this.copied() === copiedKey) {
+          this.copied.set(null);
+        }
+      }, 1200);
+    } catch {
+      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    }
   }
 
   private applyRouteState(params: ParamMap): void {

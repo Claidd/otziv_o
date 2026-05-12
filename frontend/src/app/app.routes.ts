@@ -138,6 +138,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/reputation-ai',
+    loadComponent: () => import('./features/admin/reputation-ai/reputation-ai.component')
+      .then((m) => m.ReputationAiComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/user-info/:userId',
     loadComponent: () => import('./features/cabinet/user-info.component')
       .then((m) => m.UserInfoComponent),

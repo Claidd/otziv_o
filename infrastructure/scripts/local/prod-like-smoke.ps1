@@ -8,6 +8,7 @@ param(
     [switch]$NoBuild,
     [switch]$NoUp,
     [switch]$NoLogs,
+    [switch]$SkipOpenAiProxyIpSync,
     [switch]$WithDbAdmin
 )
 
@@ -42,6 +43,7 @@ function Get-EnvValue {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
+    $found = $null
     foreach ($line in Get-Content -LiteralPath $Path) {
         $trimmed = $line.Trim()
         if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) {
@@ -54,11 +56,14 @@ function Get-EnvValue {
         }
 
         if ($trimmed.Substring(0, $separator).Trim() -eq $Name) {
-            return $trimmed.Substring($separator + 1).Trim()
+            $value = $trimmed.Substring($separator + 1).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $found = $value
+            }
         }
     }
 
-    return $null
+    return $found
 }
 
 function Wait-HttpOk {
@@ -189,6 +194,22 @@ if (-not (Test-Path -LiteralPath $envPath)) {
 
     Copy-Item -LiteralPath $envExamplePath -Destination $envPath
     Write-Host "Created $envPath from .env.prod-local.example."
+}
+
+$openAiProxyEnabled = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_ENABLED"
+$openAiProxySyncLocalIp = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_SYNC_LOCAL_IP"
+if (
+    -not $SkipOpenAiProxyIpSync `
+    -and $openAiProxyEnabled `
+    -and $openAiProxyEnabled.Equals("true", [System.StringComparison]::OrdinalIgnoreCase) `
+    -and -not ($openAiProxySyncLocalIp -and $openAiProxySyncLocalIp.Equals("false", [System.StringComparison]::OrdinalIgnoreCase))
+) {
+    $proxyIpSyncScript = Join-Path $scriptRoot "update-openai-proxy-local-ip.ps1"
+    if (-not (Test-Path -LiteralPath $proxyIpSyncScript)) {
+        throw "OpenAI proxy IP sync script not found: $proxyIpSyncScript"
+    }
+
+    & $proxyIpSyncScript -EnvFile $envPath
 }
 
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
