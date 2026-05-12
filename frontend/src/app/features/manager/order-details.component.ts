@@ -101,6 +101,7 @@ export class OrderDetailsComponent {
     .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
     .map(({ index }) => index));
   readonly productOptions = computed(() => this.details()?.products ?? []);
+  readonly busy = computed(() => this.mutationKey() !== null);
   readonly reviewEditBusy = computed(() => this.reviewEditSaving()
     || this.reviewEditDeleting()
     || this.reviewEditUploading()
@@ -1242,6 +1243,16 @@ export class OrderDetailsComponent {
       return;
     }
 
+    if (this.busy()) {
+      this.toastService.info('Сохранение еще идет', 'Дождитесь завершения текущего действия');
+      return;
+    }
+
+    if (this.hasPendingReviewFieldChanges()) {
+      this.toastService.error('Есть несохраненные тексты', 'Сначала сохраните изменения по дискетке');
+      return;
+    }
+
     this.mutationKey.set('send-check');
     this.managerApi.updateOrderStatus(orderId, 'В проверку').subscribe({
       next: () => {
@@ -1299,6 +1310,20 @@ export class OrderDetailsComponent {
 
   isMutating(key: string): boolean {
     return this.mutationKey() === key;
+  }
+
+  hasPendingReviewFieldChanges(): boolean {
+    const details = this.details();
+    if (!details) {
+      return false;
+    }
+
+    return Object.entries(this.reviewFieldDrafts()).some(([key, value]) => {
+      const match = /^(\d+)-(text|answer)$/.exec(key);
+      const review = match ? details.reviews.find((item) => item.id === Number(match[1])) : null;
+      const field = match?.[2] as ReviewEditableField | undefined;
+      return !!review && !!field && value !== this.reviewFieldSourceValue(review, field);
+    });
   }
 
   private toReviewEditDraft(review: OrderReviewItem): ReviewEditDraft {

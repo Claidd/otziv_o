@@ -226,7 +226,7 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'send-check',
-      this.reviewCheckApi.sendToCheck(orderDetailId),
+      this.reviewCheckApi.sendToCheck(orderDetailId, this.buildRequest()),
       'Отправлено на проверку',
       'Статус заказа обновлен'
     );

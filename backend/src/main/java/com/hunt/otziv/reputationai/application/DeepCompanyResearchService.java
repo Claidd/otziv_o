@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -74,7 +75,8 @@ public class DeepCompanyResearchService {
                 .replace("{{companyFacts}}", companyFacts(company))
                 .replace("{{manualDescription}}", blankToDash(request.manualDescription()))
                 .replace("{{productsOrServices}}", listToText(request.productsOrServices()))
-                .replace("{{publicUrls}}", listToText(request.publicUrls()));
+                .replace("{{publicUrls}}", listToText(request.publicUrls()))
+                .replace("{{crmPriorityUrls}}", crmPriorityUrls(company, request));
     }
 
     private String readPrompt(Resource resource) {
@@ -107,12 +109,46 @@ public class DeepCompanyResearchService {
                 add(facts, "Филиал CRM: " + String.join(" ",
                         List.of(
                                 blankToDash(filial.getTitle()),
+                                filial.getCity() == null ? "город: -" : "город: " + blankToDash(filial.getCity().getTitle()),
                                 blankToDash(filial.getUrl())
                         )));
             }
         }
 
         return facts.isEmpty() ? "-" : String.join("\n", facts);
+    }
+
+    private String crmPriorityUrls(Company company, ReputationResearchRequest request) {
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        if (request.publicUrls() != null) {
+            request.publicUrls().stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::trim)
+                    .forEach(urls::add);
+        }
+        addUrl(urls, company.getUrlSite(), "Официальный сайт из CRM");
+
+        Set<Filial> filials = company.getFilial();
+        if (filials != null) {
+            for (Filial filial : filials) {
+                if (filial == null || filial.getUrl() == null || filial.getUrl().isBlank()) {
+                    continue;
+                }
+                String title = blankToDash(filial.getTitle());
+                String city = filial.getCity() == null ? "-" : blankToDash(filial.getCity().getTitle());
+                addUrl(urls, filial.getUrl(), "CRM-филиал: " + title + ", " + city);
+            }
+        }
+
+        return urls.isEmpty() ? "-" : String.join("\n", urls);
+    }
+
+    private void addUrl(LinkedHashSet<String> urls, String url, String label) {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        String cleanUrl = url.trim();
+        urls.add(label + " - " + cleanUrl);
     }
 
     private DeepCompanyResearchReport parseReport(Company company, OpenAiResponseResult response) {

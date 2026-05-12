@@ -36,6 +36,9 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod) || !isRestEndpoint(handlerMethod)) {
             return;
         }
+        if (isBackgroundStatusPoll(request)) {
+            return;
+        }
 
         String action = actionResolver.resolve(request, handlerMethod);
         String login = currentLogin(request);
@@ -63,6 +66,17 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
         return AnnotationUtils.findAnnotation(handlerMethod.getBeanType(), RestController.class) != null
                 || AnnotationUtils.findAnnotation(handlerMethod.getMethod(), ResponseBody.class) != null
                 || ResponseEntity.class.isAssignableFrom(handlerMethod.getMethod().getReturnType());
+    }
+
+    private boolean isBackgroundStatusPoll(HttpServletRequest request) {
+        if (!"GET".equals(request.getMethod())) {
+            return false;
+        }
+
+        String path = request.getRequestURI();
+        return path.startsWith("/api/ai/reputation/companies/")
+                && (path.endsWith("/deep-research/jobs/latest")
+                || path.endsWith("/content-pack/jobs/latest"));
     }
 
     private String currentLogin(HttpServletRequest request) {

@@ -66,10 +66,10 @@ export class ReputationAiComponent implements OnDestroy {
   includeCompanyWebsite = true;
   readonly deepResearchProfile = signal('economy');
   readonly contentPackProfile = signal('quality');
-  adTextsCount = 10;
-  socialPostsCount = 10;
-  positiveReplyCount = 10;
-  negativeReplyCount = 5;
+  adTextsCount = 6;
+  socialPostsCount = 4;
+  positiveReplyCount = 6;
+  negativeReplyCount = 4;
   realExperiencePointsText = 'помогли с выбором\nбыстро доставили\nтовар подошел';
   draftTone = 'естественный';
   draftLength = 'medium';
@@ -239,10 +239,10 @@ export class ReputationAiComponent implements OnDestroy {
     this.reputationAiApi.startContentPackJob(companyId, {
       ...this.researchRequest(),
       productOrService: this.cleanText(this.productOrService),
-      adTextsCount: this.positiveOrNull(this.adTextsCount),
-      socialPostsCount: this.positiveOrNull(this.socialPostsCount),
-      positiveReplyCount: this.positiveOrNull(this.positiveReplyCount),
-      negativeReplyCount: this.positiveOrNull(this.negativeReplyCount),
+      adTextsCount: this.positiveOrNull(this.adTextsCount, 8),
+      socialPostsCount: this.positiveOrNull(this.socialPostsCount, 5),
+      positiveReplyCount: this.positiveOrNull(this.positiveReplyCount, 8),
+      negativeReplyCount: this.positiveOrNull(this.negativeReplyCount, 6),
       contentPackProfile: this.cleanText(this.contentPackProfile())
     }).subscribe({
       next: (job) => {
@@ -362,6 +362,31 @@ export class ReputationAiComponent implements OnDestroy {
     this.notice.set('Текст скопирован.');
   }
 
+  contentPackText(pack: ReputationContentPack): string {
+    const lines: string[] = [
+      'AI-пакет компании',
+      pack.companyProfile.shortDescription,
+      ''
+    ];
+
+    const warnings = pack.companyProfile.factualWarnings ?? [];
+    if (warnings.length > 0) {
+      lines.push('Предупреждения');
+      warnings.forEach((warning) => lines.push(`- ${warning}`));
+      lines.push('');
+    }
+
+    for (const block of this.packBlocks()) {
+      lines.push(block.title);
+      block.items.forEach((item, index) => {
+        lines.push(`${index + 1}. ${item}`);
+      });
+      lines.push('');
+    }
+
+    return lines.join('\n').trim();
+  }
+
   isLoading(action: ReputationAction): boolean {
     return this.loadingAction() === action;
   }
@@ -440,6 +465,14 @@ export class ReputationAiComponent implements OnDestroy {
       DONE: 'готов',
       FAILED: 'ошибка'
     }[job.status] ?? job.status.toLowerCase();
+  }
+
+  deepResearchJobError(job: DeepCompanyResearchJob): string {
+    return this.humanizeAiError(job.errorMessage, 'Глубокий GPT-отчёт завершился ошибкой.');
+  }
+
+  contentPackJobError(job: ReputationContentPackJob): string {
+    return this.humanizeAiError(job.errorMessage, 'AI-пакет завершился ошибкой.');
   }
 
   private reportStatusIcon(job: DeepCompanyResearchJob | null): string {
@@ -521,7 +554,7 @@ export class ReputationAiComponent implements OnDestroy {
 
     if (job.status === 'FAILED') {
       this.stopContentPackPolling();
-      this.error.set(job.errorMessage || 'AI-пакет не собрался. Попробуйте профиль Эконом или повторите позже.');
+      this.error.set(this.contentPackJobError(job));
       if (this.loadingAction() === 'contentPack') {
         this.loadingAction.set(null);
       }
@@ -565,9 +598,13 @@ export class ReputationAiComponent implements OnDestroy {
     return text ? text : null;
   }
 
-  private positiveOrNull(value: number): number | null {
+  private positiveOrNull(value: number, max?: number): number | null {
     const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? Math.trunc(number) : null;
+    if (!Number.isFinite(number) || number <= 0) {
+      return null;
+    }
+    const normalized = Math.trunc(number);
+    return max ? Math.min(normalized, max) : normalized;
   }
 
   private splitMarkdownIntoBlocks(markdown: string): { title: string; body: string }[] {
@@ -648,8 +685,8 @@ export class ReputationAiComponent implements OnDestroy {
         label: 'Эконом',
         model: 'gpt-5.4-mini',
         description: 'Быстрее и дешевле для локальных проверок.',
-        maxToolCalls: 10,
-        maxOutputTokens: 9000,
+        maxToolCalls: 6,
+        maxOutputTokens: 6000,
         reasoningEffort: 'low',
         searchContextSize: 'low'
       },
@@ -676,6 +713,25 @@ export class ReputationAiComponent implements OnDestroy {
     ];
   }
 
+  private humanizeAiError(message: string | null | undefined, fallback: string): string {
+    const text = (message ?? '').trim();
+    if (!text) {
+      return fallback;
+    }
+
+    const lower = text.toLowerCase();
+    if (lower.includes('rate limit reached')
+      || lower.includes('tokens per min')
+      || lower.includes('rate_limit_exceeded')
+      || lower.includes('лимит токен')) {
+      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1];
+      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
+      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
+    }
+
+    return text;
+  }
+
   private fallbackContentPackProfiles(): ReputationAiModelProfile[] {
     return [
       {
@@ -684,7 +740,7 @@ export class ReputationAiComponent implements OnDestroy {
         model: 'gpt-5.4-mini',
         description: 'Дешевле для быстрых вариантов пакета по готовому отчёту.',
         maxToolCalls: 0,
-        maxOutputTokens: 8000,
+        maxOutputTokens: 10000,
         reasoningEffort: 'low',
         searchContextSize: 'off'
       },
@@ -694,7 +750,7 @@ export class ReputationAiComponent implements OnDestroy {
         model: 'gpt-5.5',
         description: 'Основной режим: сильный маркетинговый пакет без web search.',
         maxToolCalls: 0,
-        maxOutputTokens: 11000,
+        maxOutputTokens: 18000,
         reasoningEffort: 'low',
         searchContextSize: 'off'
       },
@@ -704,7 +760,7 @@ export class ReputationAiComponent implements OnDestroy {
         model: 'gpt-5.5',
         description: 'Самый подробный маркетинговый пакет по глубокому отчёту.',
         maxToolCalls: 0,
-        maxOutputTokens: 15000,
+        maxOutputTokens: 26000,
         reasoningEffort: 'medium',
         searchContextSize: 'off'
       }

@@ -109,10 +109,10 @@ export class ReviewCheckApi {
     );
   }
 
-  sendToCheck(orderDetailId: string): Observable<ReviewCheckPayload> {
+  sendToCheck(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
     return this.http.post<ReviewCheckPayload>(
       `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/send-to-check`,
-      {}
+      request
     );
   }
 

@@ -10,9 +10,9 @@ public enum DeepResearchProfile {
             "Эконом",
             "gpt-5.4-mini",
             "Быстрее и дешевле для локальных проверок.",
-            Duration.ofMinutes(6),
-            10,
-            9000,
+            Duration.ofMinutes(5),
+            6,
+            6000,
             "low",
             "low"
     ),

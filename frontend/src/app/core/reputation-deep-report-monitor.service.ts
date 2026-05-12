@@ -1,18 +1,21 @@
 import { Injectable, signal } from '@angular/core';
-import { Subscription, timer } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 import { DeepCompanyResearchJob, ReputationAiApi } from './reputation-ai.api';
 import { ToastService } from '../shared/toast.service';
 
 const ACTIVE_DEEP_REPORT_COMPANY_KEY = 'otziv.reputationAi.activeDeepReportCompanyId';
-const DEEP_REPORT_POLL_INTERVAL_MS = 20_000;
+const DEEP_REPORT_FAST_POLL_INTERVAL_MS = 30_000;
+const DEEP_REPORT_SLOW_POLL_INTERVAL_MS = 90_000;
+const DEEP_REPORT_FAST_POLL_WINDOW_MS = 3 * 60_000;
 
 @Injectable({ providedIn: 'root' })
 export class ReputationDeepReportMonitorService {
   readonly currentJob = signal<DeepCompanyResearchJob | null>(null);
 
   private pollSubscription: Subscription | null = null;
+  private pollTimeoutId: number | null = null;
   private activeCompanyId: number | null = null;
+  private watchStartedAtMs = 0;
 
   constructor(
     private readonly api: ReputationAiApi,
@@ -39,10 +42,20 @@ export class ReputationDeepReportMonitorService {
 
     this.stopPolling();
     this.activeCompanyId = id;
-    this.pollSubscription = timer(0, DEEP_REPORT_POLL_INTERVAL_MS)
-      .pipe(switchMap(() => this.api.latestDeepResearchJob(id)))
+    this.watchStartedAtMs = Date.now();
+    this.pollLatestJob(id);
+  }
+
+  private pollLatestJob(companyId: number): void {
+    this.pollSubscription?.unsubscribe();
+    this.pollSubscription = this.api.latestDeepResearchJob(companyId)
       .subscribe({
-        next: (job) => this.handleJob(job),
+        next: (job) => {
+          this.handleJob(job);
+          if (this.activeCompanyId === companyId && this.isActiveJob(job)) {
+            this.scheduleNextPoll(companyId);
+          }
+        },
         error: () => this.stopPolling()
       });
   }
@@ -69,13 +82,62 @@ export class ReputationDeepReportMonitorService {
     if (job.status === 'FAILED') {
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
       this.stopPolling();
-      this.toastService.error('Глубокий отчёт не собрался', job.errorMessage || 'Попробуйте запустить ещё раз');
+      this.toastService.error('Глубокий отчёт не собрался', this.humanizeAiError(job.errorMessage));
     }
+  }
+
+  private scheduleNextPoll(companyId: number): void {
+    this.clearPollTimeout();
+    this.pollTimeoutId = window.setTimeout(() => {
+      this.pollTimeoutId = null;
+      if (this.activeCompanyId === companyId) {
+        this.pollLatestJob(companyId);
+      }
+    }, this.nextPollDelayMs());
+  }
+
+  private nextPollDelayMs(): number {
+    const elapsedMs = Date.now() - this.watchStartedAtMs;
+    return elapsedMs < DEEP_REPORT_FAST_POLL_WINDOW_MS
+      ? DEEP_REPORT_FAST_POLL_INTERVAL_MS
+      : DEEP_REPORT_SLOW_POLL_INTERVAL_MS;
+  }
+
+  private isActiveJob(job: DeepCompanyResearchJob): boolean {
+    return job.status === 'QUEUED' || job.status === 'RUNNING';
   }
 
   private stopPolling(): void {
     this.pollSubscription?.unsubscribe();
     this.pollSubscription = null;
+    this.clearPollTimeout();
     this.activeCompanyId = null;
+    this.watchStartedAtMs = 0;
+  }
+
+  private clearPollTimeout(): void {
+    if (this.pollTimeoutId !== null) {
+      window.clearTimeout(this.pollTimeoutId);
+      this.pollTimeoutId = null;
+    }
+  }
+
+  private humanizeAiError(message: string | null | undefined): string {
+    const text = (message ?? '').trim();
+    if (!text) {
+      return 'Попробуйте запустить ещё раз.';
+    }
+
+    const lower = text.toLowerCase();
+    if (lower.includes('rate limit reached')
+      || lower.includes('tokens per min')
+      || lower.includes('rate_limit_exceeded')
+      || lower.includes('лимит токен')) {
+      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1];
+      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
+      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
+    }
+
+    return text;
   }
 }

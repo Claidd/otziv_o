@@ -174,6 +174,7 @@ public class ApiReviewCheckController {
     @PostMapping("/{orderDetailId}/send-to-check")
     public ReviewCheckResponse sendToCheck(
             @PathVariable UUID orderDetailId,
+            @RequestBody(required = false) ReviewCheckUpdateRequest request,
             Authentication authentication
     ) throws Exception {
         ReviewCheckPermissions permissions = permissions(authentication);
@@ -183,6 +184,10 @@ public class ApiReviewCheckController {
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
+
+        if (request != null && request.reviews() != null) {
+            updateReviews(orderDetails, request);
+        }
 
         if (!orderService.changeStatusForOrder(order.getId(), "В проверку")) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось отправить заказ на проверку");

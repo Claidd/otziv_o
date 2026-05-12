@@ -10,8 +10,8 @@ public enum ContentPackProfile {
             "Эконом",
             "gpt-5.4-mini",
             "Дешевле для быстрых вариантов пакета по готовому отчёту.",
-            Duration.ofMinutes(2),
-            8000,
+            Duration.ofMinutes(4),
+            10000,
             "low"
     ),
     QUALITY(
@@ -19,8 +19,8 @@ public enum ContentPackProfile {
             "Качество",
             "gpt-5.5",
             "Основной режим: сильный маркетинговый пакет без web search.",
-            Duration.ofMinutes(4),
-            11000,
+            Duration.ofMinutes(6),
+            18000,
             "low"
     ),
     MAXIMUM(
@@ -28,8 +28,8 @@ public enum ContentPackProfile {
             "Максимум",
             "gpt-5.5",
             "Самый подробный маркетинговый пакет по глубокому отчёту.",
-            Duration.ofMinutes(6),
-            15000,
+            Duration.ofMinutes(8),
+            26000,
             "medium"
     );
 

@@ -51,7 +51,7 @@
       @if (job.status === 'FAILED') {
         <section class="alert error">
           <span class="material-icons-sharp">error</span>
-          <p>{{ job.errorMessage || 'Глубокий GPT-отчёт завершился ошибкой.' }}</p>
+          <p>{{ deepResearchJobError(job) }}</p>
         </section>
       }
     }
@@ -66,7 +66,7 @@
       @if (job.status === 'FAILED') {
         <section class="alert error">
           <span class="material-icons-sharp">error</span>
-          <p>{{ job.errorMessage || 'AI-пакет завершился ошибкой.' }}</p>
+          <p>{{ contentPackJobError(job) }}</p>
         </section>
       }
     }
@@ -171,19 +171,19 @@
         <div class="count-grid">
           <label>
             <span>Реклама</span>
-            <input type="number" min="1" max="30" name="adTextsCount" [(ngModel)]="adTextsCount">
+            <input type="number" min="1" max="8" name="adTextsCount" [(ngModel)]="adTextsCount">
           </label>
           <label>
             <span>Посты</span>
-            <input type="number" min="1" max="30" name="socialPostsCount" [(ngModel)]="socialPostsCount">
+            <input type="number" min="1" max="5" name="socialPostsCount" [(ngModel)]="socialPostsCount">
           </label>
           <label>
             <span>Позитив</span>
-            <input type="number" min="1" max="30" name="positiveReplyCount" [(ngModel)]="positiveReplyCount">
+            <input type="number" min="1" max="8" name="positiveReplyCount" [(ngModel)]="positiveReplyCount">
           </label>
           <label>
             <span>Негатив</span>
-            <input type="number" min="1" max="30" name="negativeReplyCount" [(ngModel)]="negativeReplyCount">
+            <input type="number" min="1" max="6" name="negativeReplyCount" [(ngModel)]="negativeReplyCount">
           </label>
         </div>
 
@@ -330,6 +330,10 @@
         <div class="panel-title">
           <span class="material-icons-sharp">inventory_2</span>
           <h2>AI-пакет компании</h2>
+          <button type="button" class="copy-button panel-copy-button" (click)="copyText(contentPackText(pack))">
+            <span class="material-icons-sharp">content_copy</span>
+            Скопировать всё
+          </button>
         </div>
 
         <section class="company-profile">

@@ -17,8 +17,8 @@ class OpenAiContentPackOptionsTest {
 
         assertThat(options.profileKey()).isEqualTo("maximum");
         assertThat(options.model()).isEqualTo("gpt-5.5");
-        assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(6));
-        assertThat(options.maxOutputTokens()).isEqualTo(15000);
+        assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(8));
+        assertThat(options.maxOutputTokens()).isEqualTo(26000);
         assertThat(options.reasoningEffort()).isEqualTo("medium");
     }
 

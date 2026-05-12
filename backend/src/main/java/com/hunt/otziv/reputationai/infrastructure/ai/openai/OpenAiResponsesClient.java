@@ -20,13 +20,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class OpenAiResponsesClient {
+    private static final Pattern RETRY_AFTER_MESSAGE = Pattern.compile(
+            "Please try again in ([0-9]+(?:\\.[0-9]+)?)s",
+            Pattern.CASE_INSENSITIVE
+    );
 
     static {
         // Java disables Basic proxy auth for HTTPS CONNECT unless this list is cleared.
@@ -71,7 +78,12 @@ public class OpenAiResponsesClient {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
         if (request.jsonObject()) {
-            body.put("text", Map.of("format", Map.of("type", "json_object")));
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", "reputation_content_pack",
+                    "strict", true,
+                    "schema", contentPackSchema()
+            )));
         }
 
         return postResponse(body, options.timeout());
@@ -92,7 +104,7 @@ public class OpenAiResponsesClient {
                 "type", "json_schema",
                 "name", "company_deep_research_report",
                 "strict", true,
-                "schema", deepResearchSchema()
+                "schema", deepResearchSchema(12, 15)
         )));
         if (deep.isBackground()) {
             body.put("background", true);
@@ -123,7 +135,7 @@ public class OpenAiResponsesClient {
                 "type", "json_schema",
                 "name", "company_research_report",
                 "strict", true,
-                "schema", deepResearchSchema()
+                "schema", deepResearchSchema(options)
         )));
 
         return postResponse(body, options.timeout());
@@ -298,7 +310,24 @@ public class OpenAiResponsesClient {
         if (message.isBlank()) {
             message = "пустое тело ответа";
         }
+        if (statusCode == 429 && isRateLimitMessage(message)) {
+            return openAiRateLimitError(message);
+        }
         return "OpenAI вернул HTTP " + statusCode + ": " + message;
+    }
+
+    private boolean isRateLimitMessage(String message) {
+        return message.toLowerCase(Locale.ROOT).contains("rate limit")
+                || message.toLowerCase(Locale.ROOT).contains("tokens per min");
+    }
+
+    private String openAiRateLimitError(String message) {
+        Matcher matcher = RETRY_AFTER_MESSAGE.matcher(message);
+        String retryHint = matcher.find()
+                ? " API просит повторить примерно через " + matcher.group(1) + " с."
+                : "";
+        return "OpenAI временно уперся в лимит токенов в минуту." + retryHint
+                + " Подождите 1-2 минуты и запустите отчёт снова или выберите более лёгкий профиль.";
     }
 
     private String extractOpenAiErrorMessage(String body) {
@@ -333,7 +362,75 @@ public class OpenAiResponsesClient {
         return builder.build();
     }
 
-    private Map<String, Object> deepResearchSchema() {
+    private Map<String, Object> deepResearchSchema(OpenAiResearchReportOptions options) {
+        boolean economy = "economy".equals(options.profileKey());
+        return deepResearchSchema(economy ? 8 : 12, economy ? 10 : 15);
+    }
+
+    private Map<String, Object> contentPackSchema() {
+        Map<String, Object> stringArray = Map.of(
+                "type", "array",
+                "items", Map.of("type", "string")
+        );
+        Map<String, Object> cappedStringArray = Map.of(
+                "type", "array",
+                "maxItems", 10,
+                "items", Map.of("type", "string")
+        );
+        Map<String, Object> companyProfile = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "shortDescription", Map.of("type", "string"),
+                        "category", Map.of("type", "string"),
+                        "products", cappedStringArray,
+                        "advantages", cappedStringArray,
+                        "positiveReviewTopics", cappedStringArray,
+                        "negativeReviewTopics", cappedStringArray,
+                        "factualWarnings", cappedStringArray
+                ),
+                "required", List.of(
+                        "shortDescription",
+                        "category",
+                        "products",
+                        "advantages",
+                        "positiveReviewTopics",
+                        "negativeReviewTopics",
+                        "factualWarnings"
+                )
+        );
+
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "companyProfile", companyProfile,
+                        "utp", cappedStringArray,
+                        "adTexts", cappedStringArray,
+                        "socialPostTopics", cappedStringArray,
+                        "socialPosts", cappedStringArray,
+                        "honestReviewTopics", cappedStringArray,
+                        "reviewDraftTemplates", cappedStringArray,
+                        "positiveReviewReplies", cappedStringArray,
+                        "negativeReviewReplies", cappedStringArray,
+                        "safetyNotes", stringArray
+                ),
+                "required", List.of(
+                        "companyProfile",
+                        "utp",
+                        "adTexts",
+                        "socialPostTopics",
+                        "socialPosts",
+                        "honestReviewTopics",
+                        "reviewDraftTemplates",
+                        "positiveReviewReplies",
+                        "negativeReviewReplies",
+                        "safetyNotes"
+                )
+        );
+    }
+
+    private Map<String, Object> deepResearchSchema(int minSections, int maxSections) {
         Map<String, Object> section = Map.of(
                 "type", "object",
                 "additionalProperties", false,
@@ -370,8 +467,8 @@ public class OpenAiResponsesClient {
                         "sections", Map.of(
                                 "type", "array",
                                 "description", "Тематические markdown-блоки для интерфейса и сохраненного отчёта. Держи стабильный универсальный порядок: сводка, профиль бизнеса, услуги/товары/цены, филиалы, клиентский опыт с интерьером и экстерьером, репутационные темы, доверие, сценарии и УТП, сотрудники, условия, сроки/аудитория, риски и возражения, что ещё собирать, идеи контента, главный вывод.",
-                                "minItems", 12,
-                                "maxItems", 15,
+                                "minItems", minSections,
+                                "maxItems", maxSections,
                                 "items", section
                         ),
                         "sources", Map.of("type", "array", "items", source),

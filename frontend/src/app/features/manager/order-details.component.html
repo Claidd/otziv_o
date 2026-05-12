@@ -428,7 +428,7 @@
       </div>
 
       <footer class="details-actions">
-        <button type="button" class="send-check-action" (click)="sendToCheck()" [disabled]="isMutating('send-check')">
+        <button type="button" class="send-check-action" (click)="sendToCheck()" [disabled]="busy() || hasPendingReviewFieldChanges()">
           {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
         </button>
         <a [routerLink]="editAllReviewsRoute()">

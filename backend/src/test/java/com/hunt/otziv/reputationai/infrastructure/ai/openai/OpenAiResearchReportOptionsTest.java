@@ -10,6 +10,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OpenAiResearchReportOptionsTest {
 
     @Test
+    void usesSmallerPresetForEconomyProfile() {
+        ReputationAiProperties.OpenAi.ResearchReport fallback = new ReputationAiProperties.OpenAi.ResearchReport();
+
+        OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(fallback, "economy");
+
+        assertThat(options.profileKey()).isEqualTo("economy");
+        assertThat(options.model()).isEqualTo("gpt-5.4-mini");
+        assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(options.maxToolCalls()).isEqualTo(6);
+        assertThat(options.maxOutputTokens()).isEqualTo(6000);
+        assertThat(options.reasoningEffort()).isEqualTo("low");
+        assertThat(options.searchContextSize()).isEqualTo("low");
+    }
+
+    @Test
     void usesSafePresetForKnownProfile() {
         ReputationAiProperties.OpenAi.ResearchReport fallback = new ReputationAiProperties.OpenAi.ResearchReport();
 
