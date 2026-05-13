@@ -168,9 +168,11 @@ class RestApiAuditActionResolverTest {
             case "buttonKey" -> "pay";
             case "companyId" -> "3";
             case "filialId" -> "9";
+            case "key" -> "content_pack.user";
             case "managerId" -> "22";
             case "orderDetailId" -> "11111111-1111-1111-1111-111111111111";
             case "orderId" -> "17";
+            case "presetKey" -> "strict_facts";
             case "reminderId" -> "7";
             case "reviewId" -> "25";
             case "section" -> "managerOrders";
@@ -223,6 +225,35 @@ class RestApiAuditActionResolverTest {
                 arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text", "редактирование текста отзыва 25 при проверке"),
                 arguments("GET", "/api/worker/overdue-orders", "проверка заказов специалиста, которые давно не менялись"),
                 arguments("POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве 25"),
+                arguments("GET", "/api/ai/reputation/status", "загрузка статуса AI-помощника репутации"),
+                arguments("POST", "/api/ai/reputation/status/openai-check", "проверка маршрута OpenAI для AI-помощника репутации"),
+                arguments("GET", "/api/ai/reputation/prompts", "загрузка промптов AI-помощника репутации"),
+                arguments("GET", "/api/ai/reputation/prompts/{key}/history", "загрузка истории промпта AI-помощника \"content_pack.user\""),
+                arguments("POST", "/api/ai/reputation/prompts/{key}/validate", "проверка промпта AI-помощника \"content_pack.user\""),
+                arguments("POST", "/api/ai/reputation/prompts/{key}/preview", "предпросмотр промпта AI-помощника \"content_pack.user\""),
+                arguments("POST", "/api/ai/reputation/prompts/{key}/presets/{presetKey}", "применение пресета \"strict_facts\" к промпту AI-помощника \"content_pack.user\""),
+                arguments("PUT", "/api/ai/reputation/prompts/{key}", "сохранение промпта AI-помощника \"content_pack.user\""),
+                arguments("DELETE", "/api/ai/reputation/prompts/{key}", "сброс промпта AI-помощника \"content_pack.user\""),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/research", "сбор источников AI-репутации для компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/research/latest", "загрузка последнего слепка источников AI-репутации компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/deep-research", "создание глубокого AI-отчета по компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs", "запуск фонового глубокого AI-отчета по компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/refresh-sources", "обновление источников глубокого AI-отчета по компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/rebuild-text", "пересборка текста глубокого AI-отчета по компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/rebuild-section", "перегенерация секции глубокого AI-отчета по компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest", "загрузка последнего запуска глубокого AI-отчета компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/history", "загрузка истории глубоких AI-отчетов компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest/export", "экспорт последнего глубокого AI-отчета компании 3 в Markdown"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/{jobId}/export", "экспорт глубокого AI-отчета 15 компании 3 в Markdown"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/content-pack", "создание AI-пакета репутации для компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/content-pack/jobs", "запуск фонового AI-пакета репутации для компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest", "загрузка последнего AI-пакета репутации компании 3"),
+                arguments("GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest/export", "экспорт последнего AI-пакета репутации компании 3 в Markdown"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/review-draft", "создание черновика отзыва через AI-помощник для компании 3"),
+                arguments("POST", "/api/ai/reputation/review/rewrite", "переписывание отзыва через AI-помощник репутации"),
+                arguments("POST", "/api/ai/reputation/review/check", "проверка отзыва на безопасность через AI-помощник репутации"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/reply/positive", "создание ответа на положительный отзыв через AI-помощник для компании 3"),
+                arguments("POST", "/api/ai/reputation/companies/{companyId}/reply/negative", "создание ответа на негативный отзыв через AI-помощник для компании 3"),
                 arguments("GET", "/logs", "просмотр логов системы"),
                 arguments("GET", "/logs/tail", "загрузка новых строк лога"),
                 arguments("POST", "/logs/clear", "очистка текущего файла лога"),

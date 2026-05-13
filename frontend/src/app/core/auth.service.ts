@@ -31,6 +31,7 @@ export class AuthService {
       const authenticated = await this.keycloak.init({
         onLoad: 'check-sso',
         pkceMethod: 'S256',
+        responseMode: 'query',
         checkLoginIframe: false
       });
 

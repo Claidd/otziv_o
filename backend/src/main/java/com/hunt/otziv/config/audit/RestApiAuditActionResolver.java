@@ -383,6 +383,37 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/bots/{botId}/browser/open", "открытие браузера аккаунта {botId}");
         put(actions, "POST", "/api/bots/{botId}/browser/close", "закрытие браузера аккаунта {botId}");
         put(actions, "GET", "/api/review", "генерация текста отзыва");
+
+        put(actions, "GET", "/api/ai/reputation/status", "загрузка статуса AI-помощника репутации");
+        put(actions, "POST", "/api/ai/reputation/status/openai-check", "проверка маршрута OpenAI для AI-помощника репутации");
+        put(actions, "GET", "/api/ai/reputation/prompts", "загрузка промптов AI-помощника репутации");
+        put(actions, "GET", "/api/ai/reputation/prompts/{key}/history", "загрузка истории промпта AI-помощника \"{key}\"");
+        put(actions, "POST", "/api/ai/reputation/prompts/{key}/validate", "проверка промпта AI-помощника \"{key}\"");
+        put(actions, "POST", "/api/ai/reputation/prompts/{key}/preview", "предпросмотр промпта AI-помощника \"{key}\"");
+        put(actions, "POST", "/api/ai/reputation/prompts/{key}/presets/{presetKey}", "применение пресета \"{presetKey}\" к промпту AI-помощника \"{key}\"");
+        put(actions, "PUT", "/api/ai/reputation/prompts/{key}", "сохранение промпта AI-помощника \"{key}\"");
+        put(actions, "DELETE", "/api/ai/reputation/prompts/{key}", "сброс промпта AI-помощника \"{key}\"");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/research", "сбор источников AI-репутации для компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/research/latest", "загрузка последнего слепка источников AI-репутации компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/deep-research", "создание глубокого AI-отчета по компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs", "запуск фонового глубокого AI-отчета по компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/refresh-sources", "обновление источников глубокого AI-отчета по компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/rebuild-text", "пересборка текста глубокого AI-отчета по компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/rebuild-section", "перегенерация секции глубокого AI-отчета по компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest", "загрузка последнего запуска глубокого AI-отчета компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/history", "загрузка истории глубоких AI-отчетов компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest/export", "экспорт последнего глубокого AI-отчета компании {companyId} в Markdown");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/{jobId}/export", "экспорт глубокого AI-отчета {jobId} компании {companyId} в Markdown");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack", "создание AI-пакета репутации для компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack/jobs", "запуск фонового AI-пакета репутации для компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest", "загрузка последнего AI-пакета репутации компании {companyId}");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest/export", "экспорт последнего AI-пакета репутации компании {companyId} в Markdown");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/review-draft", "создание черновика отзыва через AI-помощник для компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/review/rewrite", "переписывание отзыва через AI-помощник репутации");
+        put(actions, "POST", "/api/ai/reputation/review/check", "проверка отзыва на безопасность через AI-помощник репутации");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/reply/positive", "создание ответа на положительный отзыв через AI-помощник для компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/reply/negative", "создание ответа на негативный отзыв через AI-помощник для компании {companyId}");
+
         put(actions, "POST", "/api/auth/register", "регистрация клиента \"{username}\"");
         put(actions, "POST", "/api/auth/legacy-migration", "миграция пользователя \"{username}\"");
         put(actions, "GET", "/api/me", "загрузка текущего пользователя");

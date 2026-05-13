@@ -12,7 +12,8 @@ public record ReputationContentPackRequest(
         Integer socialPostsCount,
         Integer positiveReplyCount,
         Integer negativeReplyCount,
-        String contentPackProfile
+        String contentPackProfile,
+        Long deepReportJobId
 ) {
     public ReputationResearchRequest toResearchRequest() {
         return new ReputationResearchRequest(
@@ -21,6 +22,10 @@ public record ReputationContentPackRequest(
                 productsOrServices,
                 publicUrls,
                 includeCompanyWebsite,
+                null,
+                null,
+                null,
+                null,
                 null
         );
     }

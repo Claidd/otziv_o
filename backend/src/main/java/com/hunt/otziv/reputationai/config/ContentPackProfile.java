@@ -7,7 +7,7 @@ import java.util.List;
 public enum ContentPackProfile {
     ECONOMY(
             "economy",
-            "Эконом",
+            "Быстро",
             "gpt-5.4-mini",
             "Дешевле для быстрых вариантов пакета по готовому отчёту.",
             Duration.ofMinutes(4),
@@ -16,9 +16,9 @@ public enum ContentPackProfile {
     ),
     QUALITY(
             "quality",
-            "Качество",
+            "Баланс",
             "gpt-5.5",
-            "Основной режим: сильный маркетинговый пакет без web search.",
+            "Основной режим: сильный маркетинговый пакет по глубокому отчёту.",
             Duration.ofMinutes(6),
             18000,
             "low"

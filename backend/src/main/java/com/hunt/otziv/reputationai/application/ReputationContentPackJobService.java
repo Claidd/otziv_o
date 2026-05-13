@@ -148,7 +148,7 @@ public class ReputationContentPackJobService {
 
     private ReputationContentPackRequest safeRequest(ReputationContentPackRequest request) {
         return request == null
-                ? new ReputationContentPackRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationContentPackRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
     }
 

@@ -19,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.security.Principal;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -101,6 +102,35 @@ public class OrderBoardQueryService {
     }
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
+        return getAllOrderDTOAndKeywordByManagerAll(
+                principal,
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        );
+    }
+
+    public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
+        return getAllOrderDTOAndKeywordByManagerAll(
+                principal,
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                BoardLiveSlice.WORKER_BOARD_ALL_ORDER_STATUSES
+        );
+    }
+
+    private Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(
+            Principal principal,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            Collection<String> liveStatuses
+    ) {
         Manager manager = resolveManagerFromPrincipal(principal);
         if (manager == null) {
             return emptyOrderPage(pageNumber, pageSize);
@@ -114,13 +144,13 @@ public class OrderBoardQueryService {
                     manager,
                     keyword,
                     keyword,
-                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    liveStatuses,
                     pageable
             );
         } else {
             orderIds = orderRepository.findPageIdToManagerLive(
                     manager,
-                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    liveStatuses,
                     pageable
             );
         }
@@ -210,6 +240,37 @@ public class OrderBoardQueryService {
     }
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Worker worker, String keyword, int pageNumber, int pageSize) {
+        return getAllOrderDTOAndKeywordByWorkerAll(
+                worker,
+                keyword,
+                pageNumber,
+                pageSize,
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+        );
+    }
+
+    public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
+        Worker worker = resolveWorkerFromPrincipal(principal);
+        return getWorkerBoardOrderDTOAndKeywordByWorkerAll(worker, keyword, pageNumber, pageSize);
+    }
+
+    public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Worker worker, String keyword, int pageNumber, int pageSize) {
+        return getAllOrderDTOAndKeywordByWorkerAll(
+                worker,
+                keyword,
+                pageNumber,
+                pageSize,
+                BoardLiveSlice.WORKER_BOARD_ALL_ORDER_STATUSES
+        );
+    }
+
+    private Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(
+            Worker worker,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            Collection<String> liveStatuses
+    ) {
         if (worker == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
@@ -222,13 +283,13 @@ public class OrderBoardQueryService {
                     worker,
                     keyword,
                     keyword,
-                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    liveStatuses,
                     pageable
             );
         } else {
             orderIds = orderRepository.findPageIdToWorkerForBoardLive(
                     worker,
-                    BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                    liveStatuses,
                     pageable
             );
         }

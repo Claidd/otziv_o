@@ -7,9 +7,9 @@ import java.util.List;
 public enum DeepResearchProfile {
     ECONOMY(
             "economy",
-            "Эконом",
+            "Быстро",
             "gpt-5.4-mini",
-            "Быстрее и дешевле для локальных проверок.",
+            "Короткий и дешёвый отчёт для быстрой проверки маршрута и фактов.",
             Duration.ofMinutes(5),
             6,
             6000,
@@ -18,9 +18,9 @@ public enum DeepResearchProfile {
     ),
     QUALITY(
             "quality",
-            "Качество",
+            "Баланс",
             "gpt-5.5",
-            "Основной режим для хорошего отчёта.",
+            "Основной режим: нормальный отчёт с web search и источниками.",
             Duration.ofMinutes(8),
             16,
             12000,
@@ -31,7 +31,7 @@ public enum DeepResearchProfile {
             "maximum",
             "Максимум",
             "gpt-5.5",
-            "Устойчивый режим 5.5 с усиленным reasoning без чрезмерного расхода TPM.",
+            "Глубокий отчёт с усиленным reasoning и большим запасом контекста.",
             Duration.ofMinutes(12),
             20,
             14000,

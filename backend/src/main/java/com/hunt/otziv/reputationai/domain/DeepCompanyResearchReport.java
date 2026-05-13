@@ -14,6 +14,8 @@ public record DeepCompanyResearchReport(
         List<Section> sections,
         List<Source> sources,
         List<String> warnings,
+        List<QualityCheck> qualityChecks,
+        FactSnapshot factSnapshot,
         LocalDateTime createdAt
 ) {
     public DeepCompanyResearchReport {
@@ -30,6 +32,10 @@ public record DeepCompanyResearchReport(
                 .map(String::trim)
                 .distinct()
                 .toList();
+        qualityChecks = qualityChecks == null ? List.of() : qualityChecks.stream()
+                .filter(value -> value != null)
+                .toList();
+        factSnapshot = factSnapshot == null ? FactSnapshot.empty() : factSnapshot;
         createdAt = createdAt == null ? LocalDateTime.now() : createdAt;
     }
 
@@ -45,6 +51,55 @@ public record DeepCompanyResearchReport(
             title = normalize(title);
             url = normalize(url);
             note = normalize(note);
+        }
+    }
+
+    public record QualityCheck(String key, String label, String status, String detail) {
+        public QualityCheck {
+            key = normalize(key);
+            label = normalize(label);
+            status = normalize(status);
+            detail = normalize(detail);
+        }
+    }
+
+    public record FactSnapshot(
+            List<FactItem> confirmedFacts,
+            List<FactItem> uncertainFacts,
+            List<SourceReview> sourceReviews
+    ) {
+        public FactSnapshot {
+            confirmedFacts = confirmedFacts == null ? List.of() : confirmedFacts.stream()
+                    .filter(value -> value != null)
+                    .toList();
+            uncertainFacts = uncertainFacts == null ? List.of() : uncertainFacts.stream()
+                    .filter(value -> value != null)
+                    .toList();
+            sourceReviews = sourceReviews == null ? List.of() : sourceReviews.stream()
+                    .filter(value -> value != null)
+                    .toList();
+        }
+
+        public static FactSnapshot empty() {
+            return new FactSnapshot(List.of(), List.of(), List.of());
+        }
+    }
+
+    public record FactItem(String label, String value, String evidence, String confidence) {
+        public FactItem {
+            label = normalize(label);
+            value = normalize(value);
+            evidence = normalize(evidence);
+            confidence = normalize(confidence);
+        }
+    }
+
+    public record SourceReview(String title, String url, String status, String reason) {
+        public SourceReview {
+            title = normalize(title);
+            url = normalize(url);
+            status = normalize(status);
+            reason = normalize(reason);
         }
     }
 

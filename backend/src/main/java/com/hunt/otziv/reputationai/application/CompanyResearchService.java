@@ -61,7 +61,7 @@ public class CompanyResearchService {
     @Transactional
     public ResearchSnapshot createSnapshot(Long companyId, ReputationResearchRequest request) {
         ReputationResearchRequest safeRequest = request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
                 : request;
         Company company = companyService.getCompaniesById(companyId);
 

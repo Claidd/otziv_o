@@ -42,7 +42,7 @@ class LocalReputationContentFactoryTest {
 
         ReputationContentPack pack = factory.create(
                 snapshot,
-                new ReputationContentPackRequest("декоративная штукатурка", null, null, null, true, 5, 5, 3, 3, null)
+                new ReputationContentPackRequest("декоративная штукатурка", null, null, null, true, 5, 5, 3, 3, null, null)
         );
 
         assertThat(pack.companyProfile().shortDescription()).contains("Ромашка");

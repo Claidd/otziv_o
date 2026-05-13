@@ -23,8 +23,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.LocalDateTime;
 
 @Component
 @Slf4j
@@ -36,18 +38,65 @@ public class OpenAiResponsesClient {
     );
 
     static {
-        // Java disables Basic proxy auth for HTTPS CONNECT unless this list is cleared.
+        // Java disables Basic proxy auth for HTTP proxying and HTTPS CONNECT unless these lists are cleared.
         System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+        System.setProperty("jdk.http.auth.proxying.disabledSchemes", "");
     }
 
     private final ReputationAiProperties properties;
     private final ObjectMapper objectMapper;
+    private final AtomicReference<OpenAiLastCheck> lastCheck = new AtomicReference<>(
+            new OpenAiLastCheck(null, null, "not_checked", "Проверка OpenAI ещё не запускалась.")
+    );
+
+    public record OpenAiLastCheck(
+            LocalDateTime checkedAt,
+            Integer httpStatus,
+            String status,
+            String message
+    ) {
+        public OpenAiLastCheck {
+            status = status == null ? "" : status.trim();
+            message = message == null ? "" : message.trim();
+        }
+    }
 
     public boolean isAvailable() {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         return !isBlank(openai.getApiKey())
                 && !isBlank(openai.getBaseUrl())
                 && !isBlank(openai.getModel());
+    }
+
+    public OpenAiLastCheck lastCheck() {
+        return lastCheck.get();
+    }
+
+    public OpenAiLastCheck checkConnection() {
+        if (!isAvailable()) {
+            return rememberCheck("not_configured", null, "OpenAI не настроен: укажите OPENAI_API_KEY и модель.");
+        }
+
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(openai.getBaseUrl() + "/models"))
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .timeout(Duration.ofSeconds(20))
+                    .header("Authorization", "Bearer " + openai.getApiKey())
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                return rememberCheck("ok", response.statusCode(), "OpenAI доступен по текущему маршруту.");
+            }
+            return rememberCheck("http_error", response.statusCode(), openAiHttpError(response.statusCode(), response.body()));
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            return rememberCheck("network_error", null, "Проверка OpenAI была прервана.");
+        } catch (Exception exception) {
+            return rememberCheck("network_error", null, openAiTransportError("Проверка OpenAI", exception));
+        }
     }
 
     public OpenAiResponseResult createTextResponse(AiRequest request) {
@@ -141,6 +190,80 @@ public class OpenAiResponsesClient {
         return postResponse(body, options.timeout());
     }
 
+    public OpenAiResponseResult createSourceRefreshResponse(String instructions, String input, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
+        OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", instructions);
+        body.put("input", input);
+        body.put("tools", List.of(Map.of(
+                "type", "web_search_preview",
+                "search_context_size", options.searchContextSize()
+        )));
+        body.put("max_tool_calls", Math.max(4, Math.min(options.maxToolCalls(), 10)));
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 6000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "company_research_sources_refresh",
+                "strict", true,
+                "schema", sourceRefreshSchema()
+        )));
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createResearchReportRewriteResponse(String instructions, String input, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
+        OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", instructions);
+        body.put("input", input);
+        body.put("max_output_tokens", options.maxOutputTokens());
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "company_research_report_rewrite",
+                "strict", true,
+                "schema", deepResearchSchema(options)
+        )));
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createResearchReportSectionRewriteResponse(String instructions, String input, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
+        OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", instructions);
+        body.put("input", input);
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 5000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "company_research_section_rewrite",
+                "strict", true,
+                "schema", sectionRewriteSchema()
+        )));
+
+        return postResponse(body, options.timeout());
+    }
+
     private OpenAiResponseResult postResponse(Map<String, Object> body, Duration timeout) {
         if (!isAvailable()) {
             return errorResult("", "", "OpenAI не настроен.");
@@ -161,6 +284,7 @@ public class OpenAiResponsesClient {
             try {
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                         .uri(URI.create(openai.getBaseUrl() + "/responses"))
+                        .version(HttpClient.Version.HTTP_1_1)
                         .timeout(timeout == null ? Duration.ofSeconds(60) : timeout)
                         .header("Authorization", "Bearer " + openai.getApiKey())
                         .header("Content-Type", "application/json")
@@ -169,6 +293,8 @@ public class OpenAiResponsesClient {
 
                 HttpResponse<String> response = httpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    String httpError = openAiHttpError(response.statusCode(), response.body());
+                    rememberCheck("http_error", response.statusCode(), httpError);
                     log.warn("OpenAI Responses API returned HTTP {} on attempt {}/{}: {}",
                             response.statusCode(),
                             attempt,
@@ -178,9 +304,10 @@ public class OpenAiResponsesClient {
                         sleepBeforeRetry(response, attempt);
                         continue;
                     }
-                    return errorResult("", fallbackModel, openAiHttpError(response.statusCode(), response.body()));
+                    return errorResult("", fallbackModel, httpError);
                 }
 
+                rememberCheck("ok", response.statusCode(), "OpenAI Responses API вернул успешный ответ.");
                 JsonNode root = objectMapper.readTree(response.body());
                 if (Boolean.TRUE.equals(body.get("background")) && extractOutputText(root).isBlank()) {
                     return pollResponse(root.path("id").asText(""), timeout, fallbackModel);
@@ -203,7 +330,9 @@ public class OpenAiResponsesClient {
                     }
                     continue;
                 }
-                return errorResult("", fallbackModel, "Запрос OpenAI завершился ошибкой: " + exception.getMessage());
+                String transportError = openAiTransportError("Запрос OpenAI", exception);
+                rememberCheck("network_error", null, transportError);
+                return errorResult("", fallbackModel, transportError);
             }
         }
 
@@ -253,16 +382,20 @@ public class OpenAiResponsesClient {
                 Thread.sleep(3000);
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(openai.getBaseUrl() + "/responses/" + responseId))
+                        .version(HttpClient.Version.HTTP_1_1)
                         .timeout(Duration.ofSeconds(30))
                         .header("Authorization", "Bearer " + openai.getApiKey())
                         .GET()
                         .build();
                 HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    String httpError = openAiHttpError(response.statusCode(), response.body());
+                    rememberCheck("http_error", response.statusCode(), httpError);
                     log.warn("OpenAI Responses API poll returned HTTP {}: {}", response.statusCode(), limit(response.body(), 800));
-                    return errorResult(responseId, fallbackModel, openAiHttpError(response.statusCode(), response.body()));
+                    return errorResult(responseId, fallbackModel, httpError);
                 }
 
+                rememberCheck("ok", response.statusCode(), "OpenAI Responses API вернул успешный фоновый ответ.");
                 JsonNode root = objectMapper.readTree(response.body());
                 String status = root.path("status").asText("");
                 String text = extractOutputText(root);
@@ -278,7 +411,9 @@ public class OpenAiResponsesClient {
                 return errorResult(responseId, fallbackModel, "Ожидание фонового ответа OpenAI было прервано.");
             } catch (Exception exception) {
                 log.warn("OpenAI Responses API poll failed: {}", exception.getMessage());
-                return errorResult(responseId, fallbackModel, "Проверка фонового ответа OpenAI завершилась ошибкой: " + exception.getMessage());
+                String transportError = openAiTransportError("Проверка фонового ответа OpenAI", exception);
+                rememberCheck("network_error", null, transportError);
+                return errorResult(responseId, fallbackModel, transportError);
             }
         }
 
@@ -302,6 +437,29 @@ public class OpenAiResponsesClient {
         return new OpenAiResponseResult(responseId, "", fallbackModel, 0, 0, limit(message, 1000));
     }
 
+    private OpenAiLastCheck rememberCheck(String status, Integer httpStatus, String message) {
+        OpenAiLastCheck check = new OpenAiLastCheck(LocalDateTime.now(), httpStatus, status, limit(message, 1000));
+        lastCheck.set(check);
+        return check;
+    }
+
+    private String openAiTransportError(String prefix, Exception exception) {
+        String message = exception.getMessage();
+        String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("eof")
+                || normalized.contains("connection reset")
+                || normalized.contains("connection closed")
+                || normalized.contains("header parser received no bytes")
+                || normalized.contains("remote host terminated")
+                || normalized.contains("unexpected end of file")) {
+            return prefix + " оборвался на сетевом уровне. Это не ошибка модели: чаще всего виноват proxy/VPN/маршрут до OpenAI. Повторите запрос или переключите локальный стенд на прямое соединение, если оно доступно.";
+        }
+        if (normalized.contains("timed out") || normalized.contains("timeout")) {
+            return prefix + " не успел завершиться по таймауту. Повторите запрос или выберите более лёгкий профиль.";
+        }
+        return prefix + " завершился ошибкой: " + message;
+    }
+
     private String openAiHttpError(int statusCode, String body) {
         String message = extractOpenAiErrorMessage(body);
         if (message.isBlank()) {
@@ -313,12 +471,26 @@ public class OpenAiResponsesClient {
         if (statusCode == 429 && isRateLimitMessage(message)) {
             return openAiRateLimitError(message);
         }
+        if (statusCode == 403 && isUnsupportedRegionMessage(message)) {
+            return "OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy: OPENAI_PROXY_ENABLED=true, заданы OPENAI_PROXY_HOST/PORT, а VPS-прокси разрешает IP приложения.";
+        }
+        if (statusCode == 407) {
+            return "OpenAI proxy вернул HTTP 407: VPS-прокси не пустил запрос. Для схемы без логина и пароля проверьте, что Squid разрешает IP приложения через http_access allow и не требует proxy_auth.";
+        }
         return "OpenAI вернул HTTP " + statusCode + ": " + message;
     }
 
     private boolean isRateLimitMessage(String message) {
         return message.toLowerCase(Locale.ROOT).contains("rate limit")
                 || message.toLowerCase(Locale.ROOT).contains("tokens per min");
+    }
+
+    private boolean isUnsupportedRegionMessage(String message) {
+        String normalized = message.toLowerCase(Locale.ROOT);
+        return normalized.contains("unsupported_country_region_territory")
+                || normalized.contains("country, region, or territory not supported")
+                || normalized.contains("unsupported country")
+                || normalized.contains("request_forbidden");
     }
 
     private String openAiRateLimitError(String message) {
@@ -430,6 +602,66 @@ public class OpenAiResponsesClient {
         );
     }
 
+    private Map<String, Object> sourceRefreshSchema() {
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "sources", Map.of(
+                                "type", "array",
+                                "maxItems", 30,
+                                "items", sourceSchema()
+                        ),
+                        "warnings", Map.of(
+                                "type", "array",
+                                "items", Map.of("type", "string")
+                        )
+                ),
+                "required", List.of("sources", "warnings")
+        );
+    }
+
+    private Map<String, Object> sourceSchema() {
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "title", Map.of("type", "string"),
+                        "url", Map.of("type", "string"),
+                        "note", Map.of(
+                                "type", "string",
+                                "description", "Какие ключевые факты подтверждает источник: цены, адрес, правила, отзывы, акции или спорные данные."
+                        )
+                ),
+                "required", List.of("title", "url", "note")
+        );
+    }
+
+    private Map<String, Object> sectionRewriteSchema() {
+        Map<String, Object> section = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "title", Map.of("type", "string"),
+                        "body", Map.of(
+                                "type", "string",
+                                "description", "Переписанный markdown-фрагмент только выбранного раздела без заголовка верхнего уровня."
+                        )
+                ),
+                "required", List.of("title", "body")
+        );
+
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "section", section,
+                        "warnings", Map.of("type", "array", "items", Map.of("type", "string"))
+                ),
+                "required", List.of("section", "warnings")
+        );
+    }
+
     private Map<String, Object> deepResearchSchema(int minSections, int maxSections) {
         Map<String, Object> section = Map.of(
                 "type", "object",
@@ -446,19 +678,6 @@ public class OpenAiResponsesClient {
                 ),
                 "required", List.of("title", "body")
         );
-        Map<String, Object> source = Map.of(
-                "type", "object",
-                "additionalProperties", false,
-                "properties", Map.of(
-                        "title", Map.of("type", "string"),
-                        "url", Map.of("type", "string"),
-                        "note", Map.of(
-                                "type", "string",
-                                "description", "Какие ключевые факты подтверждает источник: цены, адрес, правила, отзывы, акции или спорные данные."
-                        )
-                ),
-                "required", List.of("title", "url", "note")
-        );
 
         return Map.of(
                 "type", "object",
@@ -471,7 +690,7 @@ public class OpenAiResponsesClient {
                                 "maxItems", maxSections,
                                 "items", section
                         ),
-                        "sources", Map.of("type", "array", "items", source),
+                        "sources", Map.of("type", "array", "items", sourceSchema()),
                         "warnings", Map.of("type", "array", "items", Map.of("type", "string"))
                 ),
                 "required", List.of("sections", "sources", "warnings")

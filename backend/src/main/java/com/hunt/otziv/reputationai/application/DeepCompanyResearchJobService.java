@@ -17,12 +17,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class DeepCompanyResearchJobService {
+    public static final String OPERATION_FULL_REPORT = "full_report";
+    public static final String OPERATION_REFRESH_SOURCES = "refresh_sources";
+    public static final String OPERATION_REBUILD_TEXT = "rebuild_text";
+    public static final String OPERATION_REBUILD_SECTION = "rebuild_section";
 
     private final ReputationDeepReportJobRepository jobRepository;
     private final CompanyRepository companyRepository;
@@ -32,19 +37,38 @@ public class DeepCompanyResearchJobService {
     private final TaskExecutor reputationDeepReportExecutor;
 
     public DeepCompanyResearchJobStatus start(Long companyId, ReputationResearchRequest request) {
-        ReputationResearchRequest safeRequest = safeRequest(request);
+        return startWithOperation(companyId, request, OPERATION_FULL_REPORT);
+    }
+
+    public DeepCompanyResearchJobStatus refreshSources(Long companyId, ReputationResearchRequest request) {
+        return startWithOperation(companyId, request, OPERATION_REFRESH_SOURCES);
+    }
+
+    public DeepCompanyResearchJobStatus rebuildText(Long companyId, ReputationResearchRequest request) {
+        return startWithOperation(companyId, request, OPERATION_REBUILD_TEXT);
+    }
+
+    public DeepCompanyResearchJobStatus rebuildSection(Long companyId, ReputationResearchRequest request) {
+        return startWithOperation(companyId, request, OPERATION_REBUILD_SECTION);
+    }
+
+    private DeepCompanyResearchJobStatus startWithOperation(
+            Long companyId,
+            ReputationResearchRequest request,
+            String operation
+    ) {
+        ReputationResearchRequest safeRequest = withOperation(safeRequest(request), operation);
         Long jobId = transactionTemplate.execute(status -> {
             Company company = companyRepository.findByIdForReputationAi(companyId)
                     .orElseThrow(() -> new UsernameNotFoundException(
                             String.format("Компания '%d' не найдена", companyId)
                     ));
-            ReputationDeepReportJobEntity entity = jobRepository.findByCompanyId(companyId)
-                    .orElseGet(ReputationDeepReportJobEntity::new);
-
-            if (entity.getId() != null && isActive(entity)) {
-                return entity.getId();
+            Optional<ReputationDeepReportJobEntity> activeJob = findActiveJob(companyId);
+            if (activeJob.isPresent()) {
+                return activeJob.get().getId();
             }
 
+            ReputationDeepReportJobEntity entity = new ReputationDeepReportJobEntity();
             entity.setCompanyId(company.getId());
             entity.setCompanyTitle(company.getTitle());
             entity.setStatus(DeepReportJobStatus.QUEUED);
@@ -65,7 +89,32 @@ public class DeepCompanyResearchJobService {
     }
 
     public Optional<DeepCompanyResearchJobStatus> findLatest(Long companyId) {
-        return jobRepository.findByCompanyId(companyId).map(this::toStatus);
+        return jobRepository.findFirstByCompanyIdOrderByCreatedAtDesc(companyId).map(this::toStatus);
+    }
+
+    public Optional<DeepCompanyResearchJobStatus> findLatestReady(Long companyId) {
+        return jobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .map(this::toStatus)
+                .filter(status -> status.report() != null)
+                .findFirst();
+    }
+
+    public Optional<DeepCompanyResearchJobStatus> findByIdForCompany(Long companyId, Long jobId) {
+        if (companyId == null || jobId == null) {
+            return Optional.empty();
+        }
+
+        return jobRepository.findById(jobId)
+                .filter(entity -> companyId.equals(entity.getCompanyId()))
+                .map(this::toStatus);
+    }
+
+    public List<DeepCompanyResearchJobStatus> history(Long companyId, int limit) {
+        int safeLimit = Math.max(1, Math.min(20, limit));
+        return jobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .limit(safeLimit)
+                .map(this::toStatus)
+                .toList();
     }
 
     private Optional<DeepCompanyResearchJobStatus> findById(Long jobId) {
@@ -79,11 +128,37 @@ public class DeepCompanyResearchJobService {
         }
 
         try {
-            DeepCompanyResearchReport report = deepCompanyResearchService.createReport(input.companyId(), input.request());
+            DeepCompanyResearchReport report = runReport(jobId, input);
             saveDone(jobId, report);
         } catch (Exception exception) {
             saveFailed(jobId, exception);
         }
+    }
+
+    private DeepCompanyResearchReport runReport(Long jobId, JobRunInput input) {
+        String operation = operation(input.request());
+        if (OPERATION_REFRESH_SOURCES.equals(operation)) {
+            return deepCompanyResearchService.refreshSources(
+                    input.companyId(),
+                    input.request(),
+                    baseReport(input.companyId(), jobId, input.request(), "обновления источников")
+            );
+        }
+        if (OPERATION_REBUILD_TEXT.equals(operation)) {
+            return deepCompanyResearchService.rebuildText(
+                    input.companyId(),
+                    input.request(),
+                    baseReport(input.companyId(), jobId, input.request(), "пересборки текста")
+            );
+        }
+        if (OPERATION_REBUILD_SECTION.equals(operation)) {
+            return deepCompanyResearchService.rebuildSection(
+                    input.companyId(),
+                    input.request(),
+                    baseReport(input.companyId(), jobId, input.request(), "пересборки раздела")
+            );
+        }
+        return deepCompanyResearchService.createReport(input.companyId(), input.request());
     }
 
     private JobRunInput markRunning(Long jobId) {
@@ -143,6 +218,7 @@ public class DeepCompanyResearchJobService {
                 entity.getResponseId(),
                 entity.getErrorMessage(),
                 readReport(entity.getReportJson()),
+                readOperation(entity.getRequestJson()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getStartedAt(),
@@ -152,8 +228,65 @@ public class DeepCompanyResearchJobService {
 
     private ReputationResearchRequest safeRequest(ReputationResearchRequest request) {
         return request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
                 : request;
+    }
+
+    private ReputationResearchRequest withOperation(ReputationResearchRequest request, String operation) {
+        return new ReputationResearchRequest(
+                request.websiteOverride(),
+                request.manualDescription(),
+                request.productsOrServices(),
+                request.publicUrls(),
+                request.includeCompanyWebsite(),
+                request.deepResearchProfile(),
+                operation,
+                request.baseReportJobId(),
+                request.sectionTitle(),
+                request.sectionIndex()
+        );
+    }
+
+    private String operation(ReputationResearchRequest request) {
+        String operation = request == null ? null : request.deepResearchMode();
+        return operation == null || operation.isBlank() ? OPERATION_FULL_REPORT : operation.trim().toLowerCase();
+    }
+
+    private String readOperation(String requestJson) {
+        try {
+            return operation(readRequest(requestJson));
+        } catch (Exception exception) {
+            return OPERATION_FULL_REPORT;
+        }
+    }
+
+    private DeepCompanyResearchReport baseReport(
+            Long companyId,
+            Long currentJobId,
+            ReputationResearchRequest request,
+            String actionLabel
+    ) {
+        Long requestedJobId = request == null ? null : request.baseReportJobId();
+        if (requestedJobId != null) {
+            ReputationDeepReportJobEntity entity = jobRepository.findById(requestedJobId)
+                    .orElseThrow(() -> new IllegalStateException("Базовый отчёт для " + actionLabel + " не найден."));
+            if (!companyId.equals(entity.getCompanyId())) {
+                throw new IllegalStateException("Базовый отчёт принадлежит другой компании.");
+            }
+            DeepCompanyResearchReport report = readReport(entity.getReportJson());
+            if (report == null) {
+                throw new IllegalStateException("В выбранной задаче нет готового отчёта для " + actionLabel + ".");
+            }
+            return report;
+        }
+
+        return jobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .filter(entity -> !entity.getId().equals(currentJobId))
+                .filter(entity -> entity.getStatus() == DeepReportJobStatus.DONE)
+                .map(entity -> readReport(entity.getReportJson()))
+                .filter(report -> report != null)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Нет готового базового отчёта для " + actionLabel + "."));
     }
 
     private boolean isActive(ReputationDeepReportJobEntity entity) {
@@ -166,6 +299,16 @@ public class DeepCompanyResearchJobService {
 
         LocalDateTime startedAt = entity.getStartedAt();
         return startedAt != null && startedAt.isAfter(LocalDateTime.now().minusMinutes(20));
+    }
+
+    private Optional<ReputationDeepReportJobEntity> findActiveJob(Long companyId) {
+        return jobRepository.findByCompanyIdAndStatusInOrderByCreatedAtDesc(
+                        companyId,
+                        List.of(DeepReportJobStatus.QUEUED, DeepReportJobStatus.RUNNING)
+                )
+                .stream()
+                .filter(this::isActive)
+                .max(Comparator.comparing(ReputationDeepReportJobEntity::getCreatedAt));
     }
 
     private String writeJson(Object value) {

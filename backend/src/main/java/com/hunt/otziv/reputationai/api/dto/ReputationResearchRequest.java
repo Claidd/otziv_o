@@ -8,7 +8,11 @@ public record ReputationResearchRequest(
         List<String> productsOrServices,
         List<String> publicUrls,
         Boolean includeCompanyWebsite,
-        String deepResearchProfile
+        String deepResearchProfile,
+        String deepResearchMode,
+        Long baseReportJobId,
+        String sectionTitle,
+        Integer sectionIndex
 ) {
     public boolean shouldIncludeCompanyWebsite() {
         return includeCompanyWebsite == null || includeCompanyWebsite;

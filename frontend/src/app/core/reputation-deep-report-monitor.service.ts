@@ -72,7 +72,7 @@ export class ReputationDeepReportMonitorService {
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
       this.stopPolling();
       this.toastService.success(
-        'Глубокий отчёт готов',
+        this.doneTitle(job),
         `${job.companyName || 'Компания #' + job.companyId}: можно открыть AI-помощник`,
         { label: 'Открыть', routerLink: '/admin/reputation-ai' }
       );
@@ -138,6 +138,30 @@ export class ReputationDeepReportMonitorService {
       return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
     }
 
+    if (lower.includes('http 407') || lower.includes('proxy authentication required')) {
+      return 'VPS-прокси не пустил запрос к OpenAI. Проверьте allowlist IP в Squid/UFW и отсутствие proxy_auth для этого маршрута.';
+    }
+
+    if (lower.includes('unsupported_country_region_territory')
+      || lower.includes('country, region, or territory not supported')
+      || lower.includes('неподдерживаемого региона')) {
+      return 'OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy и приложение идёт через VPS.';
+    }
+
+    if (lower.includes('поврежд') && lower.includes('json')) {
+      return 'Модель вернула повреждённый JSON отчёта, восстановить структуру не удалось. Запустите отчёт повторно или выберите более лёгкий профиль.';
+    }
+
     return text;
+  }
+
+  private doneTitle(job: DeepCompanyResearchJob): string {
+    if (job.operation === 'refresh_sources') {
+      return 'Источники отчёта обновлены';
+    }
+    if (job.operation === 'rebuild_text') {
+      return 'Текст отчёта пересобран';
+    }
+    return 'Глубокий отчёт готов';
   }
 }

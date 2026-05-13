@@ -15,6 +15,7 @@ public record ReputationAiStatus(
         String openAiModel,
         String openAiResearchReportModel,
         String openAiContentPackModel,
+        OpenAiProviderDiagnostics openAiDiagnostics,
         List<ReputationAiModelProfile> openAiResearchReportProfiles,
         List<ReputationAiModelProfile> openAiContentPackProfiles,
         List<String> warnings

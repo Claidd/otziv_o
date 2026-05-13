@@ -24,9 +24,9 @@ public class ReputationContentPackService {
 
     public ReputationContentPack createContentPack(Long companyId, ReputationContentPackRequest request) {
         ReputationContentPackRequest safeRequest = request == null
-                ? new ReputationContentPackRequest(null, null, null, null, true, null, null, null, null, null)
+                ? new ReputationContentPackRequest(null, null, null, null, true, null, null, null, null, null, null)
                 : request;
-        DeepCompanyResearchReport deepReport = latestDeepReport(companyId)
+        DeepCompanyResearchReport deepReport = deepReport(companyId, safeRequest.deepReportJobId())
                 .orElseThrow(() -> new IllegalStateException(
                         "Сначала соберите глубокий отчет компании: AI-пакет теперь строится по последнему успешному deep report."
                 ));
@@ -37,10 +37,19 @@ public class ReputationContentPackService {
                 ));
     }
 
-    private Optional<DeepCompanyResearchReport> latestDeepReport(Long companyId) {
-        return deepReportJobRepository.findByCompanyId(companyId)
+    private Optional<DeepCompanyResearchReport> deepReport(Long companyId, Long reportJobId) {
+        if (reportJobId != null && reportJobId > 0) {
+            return deepReportJobRepository.findById(reportJobId)
+                    .filter(entity -> entity.getCompanyId().equals(companyId))
+                    .map(ReputationDeepReportJobEntity::getReportJson)
+                    .filter(json -> json != null && !json.isBlank())
+                    .map(this::readDeepReport);
+        }
+
+        return deepReportJobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(ReputationDeepReportJobEntity::getReportJson)
                 .filter(json -> json != null && !json.isBlank())
+                .findFirst()
                 .map(this::readDeepReport);
     }
 

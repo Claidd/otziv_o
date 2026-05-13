@@ -229,13 +229,12 @@ try {
 
 if (-not $NoProxyTest) {
     if ([string]::IsNullOrWhiteSpace($proxyUsername) -or [string]::IsNullOrWhiteSpace($proxyPassword)) {
-        Write-Warning "OPENAI_PROXY_USERNAME or OPENAI_PROXY_PASSWORD is not set; skipping proxy connectivity test."
-        return
+        $proxyUri = "http://${proxyHost}:${proxyPort}"
+    } else {
+        $encodedUsername = [System.Uri]::EscapeDataString($proxyUsername)
+        $encodedPassword = [System.Uri]::EscapeDataString($proxyPassword)
+        $proxyUri = "http://${encodedUsername}:${encodedPassword}@${proxyHost}:${proxyPort}"
     }
-
-    $encodedUsername = [System.Uri]::EscapeDataString($proxyUsername)
-    $encodedPassword = [System.Uri]::EscapeDataString($proxyPassword)
-    $proxyUri = "http://${encodedUsername}:${encodedPassword}@${proxyHost}:${proxyPort}"
 
     Write-Host "Testing proxy route to OpenAI..."
     & curl.exe -I -x $proxyUri "https://api.openai.com/v1/models" --connect-timeout 20 | Out-Host

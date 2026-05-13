@@ -9,7 +9,10 @@ param(
     [switch]$NoUp,
     [switch]$NoLogs,
     [switch]$SkipOpenAiProxyIpSync,
-    [switch]$WithDbAdmin
+    [switch]$WithDbAdmin,
+    [switch]$WithReputationAiSmoke,
+    [int]$ReputationAiCompanyId = 1,
+    [switch]$SkipReputationAiOpenAiRouteCheck
 )
 
 Set-StrictMode -Version Latest
@@ -66,6 +69,19 @@ function Get-EnvValue {
     return $found
 }
 
+function ConvertTo-SmokeArray {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value) {
+        return @()
+    }
+    if ($Value -is [array]) {
+        return $Value
+    }
+
+    return @($Value)
+}
+
 function Wait-HttpOk {
     param(
         [Parameter(Mandatory = $true)][string]$Url,
@@ -90,6 +106,532 @@ function Wait-HttpOk {
     }
 
     throw "Timed out waiting for $Name at $Url"
+}
+
+function Get-KeycloakServiceAccountToken {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath
+    )
+
+    $realm = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_REALM"
+    if ([string]::IsNullOrWhiteSpace($realm)) {
+        $realm = "otziv"
+    }
+    $clientId = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_CLIENT_ID"
+    if ([string]::IsNullOrWhiteSpace($clientId)) {
+        $clientId = "otziv-backend"
+    }
+    $clientSecret = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_CLIENT_SECRET"
+    if ([string]::IsNullOrWhiteSpace($clientSecret)) {
+        throw "KEYCLOAK_ADMIN_CLIENT_SECRET must be set for reputation AI smoke."
+    }
+
+    $tokenUrl = "$($RootUrl.TrimEnd('/'))/keycloak/realms/$realm/protocol/openid-connect/token"
+    $body = @{
+        grant_type = "client_credentials"
+        client_id = $clientId
+        client_secret = $clientSecret
+    }
+    $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded" -TimeoutSec 20
+    if ([string]::IsNullOrWhiteSpace($response.access_token)) {
+        throw "Keycloak did not return a service account token."
+    }
+
+    return $response.access_token
+}
+
+function Get-KeycloakRealm {
+    param([Parameter(Mandatory = $true)][string]$EnvPath)
+
+    $realm = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_REALM"
+    if ([string]::IsNullOrWhiteSpace($realm)) {
+        return "otziv"
+    }
+
+    return $realm
+}
+
+function Get-KeycloakAdminToken {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath
+    )
+
+    $adminUser = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN"
+    $adminPassword = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_PASSWORD"
+    if ([string]::IsNullOrWhiteSpace($adminUser) -or [string]::IsNullOrWhiteSpace($adminPassword)) {
+        throw "KEYCLOAK_ADMIN and KEYCLOAK_ADMIN_PASSWORD must be set for reputation AI role smoke."
+    }
+
+    $tokenUrl = "$($RootUrl.TrimEnd('/'))/keycloak/realms/master/protocol/openid-connect/token"
+    $body = @{
+        grant_type = "password"
+        client_id = "admin-cli"
+        username = $adminUser
+        password = $adminPassword
+    }
+    $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded" -TimeoutSec 20
+    if ([string]::IsNullOrWhiteSpace($response.access_token)) {
+        throw "Keycloak did not return an admin token."
+    }
+
+    return $response.access_token
+}
+
+function Get-KeycloakClientCredentialsToken {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$Realm,
+        [Parameter(Mandatory = $true)][string]$ClientId,
+        [Parameter(Mandatory = $true)][string]$ClientSecret
+    )
+
+    $tokenUrl = "$($RootUrl.TrimEnd('/'))/keycloak/realms/$Realm/protocol/openid-connect/token"
+    $body = @{
+        grant_type = "client_credentials"
+        client_id = $ClientId
+        client_secret = $ClientSecret
+    }
+    $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType "application/x-www-form-urlencoded" -TimeoutSec 20
+    if ([string]::IsNullOrWhiteSpace($response.access_token)) {
+        throw "Keycloak did not return a token for smoke client $ClientId."
+    }
+
+    return $response.access_token
+}
+
+function New-KeycloakSmokeClient {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$Realm,
+        [Parameter(Mandatory = $true)][hashtable]$AdminHeaders,
+        [Parameter(Mandatory = $true)][string]$Role
+    )
+
+    $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
+    $roleKey = $Role.ToLowerInvariant()
+    $clientId = "otziv-smoke-ai-$roleKey-$([guid]::NewGuid().ToString("N").Substring(0, 12))"
+    $clientBody = @{
+        clientId = $clientId
+        name = "Reputation AI smoke $Role"
+        enabled = $true
+        protocol = "openid-connect"
+        publicClient = $false
+        bearerOnly = $false
+        standardFlowEnabled = $false
+        implicitFlowEnabled = $false
+        directAccessGrantsEnabled = $false
+        serviceAccountsEnabled = $true
+        protocolMappers = @(
+            @{
+                name = "realm roles"
+                protocol = "openid-connect"
+                protocolMapper = "oidc-usermodel-realm-role-mapper"
+                consentRequired = $false
+                config = @{
+                    "multivalued" = "true"
+                    "userinfo.token.claim" = "true"
+                    "id.token.claim" = "true"
+                    "access.token.claim" = "true"
+                    "claim.name" = "roles"
+                    "jsonType.label" = "String"
+                }
+            },
+            @{
+                name = "backend audience"
+                protocol = "openid-connect"
+                protocolMapper = "oidc-audience-mapper"
+                consentRequired = $false
+                config = @{
+                    "included.client.audience" = "otziv-backend"
+                    "id.token.claim" = "false"
+                    "access.token.claim" = "true"
+                }
+            }
+        )
+    } | ConvertTo-Json -Depth 12
+
+    Invoke-RestMethod -Uri "$apiRoot/clients" -Method Post -Headers $AdminHeaders -Body $clientBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
+    $clientResponse = Invoke-RestMethod -Uri "$apiRoot/clients?clientId=$([Uri]::EscapeDataString($clientId))" -Headers $AdminHeaders -TimeoutSec 30
+    $clients = @(ConvertTo-SmokeArray -Value $clientResponse)
+    if ($clients.Count -eq 0 -or [string]::IsNullOrWhiteSpace($clients[0].id)) {
+        throw "Keycloak smoke client was not created: $clientId"
+    }
+
+    $clientUuid = $clients[0].id
+    $secret = Invoke-RestMethod -Uri "$apiRoot/clients/$clientUuid/client-secret" -Headers $AdminHeaders -TimeoutSec 30
+    if ([string]::IsNullOrWhiteSpace($secret.value)) {
+        throw "Keycloak did not return a secret for smoke client $clientId."
+    }
+
+    $serviceAccount = Invoke-RestMethod -Uri "$apiRoot/clients/$clientUuid/service-account-user" -Headers $AdminHeaders -TimeoutSec 30
+    if ([string]::IsNullOrWhiteSpace($serviceAccount.id)) {
+        throw "Keycloak did not return a service account user for smoke client $clientId."
+    }
+
+    $realmRole = Invoke-RestMethod -Uri "$apiRoot/roles/$([Uri]::EscapeDataString($Role))" -Headers $AdminHeaders -TimeoutSec 30
+    $roleBody = ConvertTo-Json -InputObject @(@{
+        id = $realmRole.id
+        name = $realmRole.name
+        composite = $realmRole.composite
+        clientRole = $realmRole.clientRole
+        containerId = $realmRole.containerId
+    }) -Depth 8
+    Invoke-RestMethod -Uri "$apiRoot/users/$($serviceAccount.id)/role-mappings/realm" -Method Post -Headers $AdminHeaders -Body $roleBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
+
+    return [pscustomobject]@{
+        ClientId = $clientId
+        ClientUuid = $clientUuid
+        ClientSecret = $secret.value
+        Role = $Role
+    }
+}
+
+function Remove-KeycloakSmokeClient {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$Realm,
+        [Parameter(Mandatory = $true)][hashtable]$AdminHeaders,
+        [Parameter(Mandatory = $true)][object]$Client
+    )
+
+    if ($null -eq $Client -or [string]::IsNullOrWhiteSpace($Client.ClientUuid)) {
+        return
+    }
+
+    try {
+        $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
+        Invoke-RestMethod -Uri "$apiRoot/clients/$($Client.ClientUuid)" -Method Delete -Headers $AdminHeaders -TimeoutSec 30 | Out-Null
+    } catch {
+        Write-Warning "Could not remove Keycloak smoke client $($Client.ClientId): $($_.Exception.Message)"
+    }
+}
+
+function Remove-KeycloakSmokeClientsByPrefix {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$Realm,
+        [Parameter(Mandatory = $true)][hashtable]$AdminHeaders
+    )
+
+    $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
+    $clientResponse = Invoke-RestMethod -Uri "$apiRoot/clients?clientId=otziv-smoke-ai" -Headers $AdminHeaders -TimeoutSec 30
+    $clients = @(ConvertTo-SmokeArray -Value $clientResponse) |
+        Where-Object { $_.clientId -like "otziv-smoke-ai-*" }
+    foreach ($client in $clients) {
+        Remove-KeycloakSmokeClient -RootUrl $RootUrl -Realm $Realm -AdminHeaders $AdminHeaders -Client ([pscustomobject]@{
+            ClientId = $client.clientId
+            ClientUuid = $client.id
+        })
+    }
+}
+
+function Invoke-SmokeWebRequest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$Method,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [string]$Body,
+        [string]$ContentType
+    )
+
+    try {
+        $request = @{
+            Uri = $Uri
+            Method = $Method
+            Headers = $Headers
+            UseBasicParsing = $true
+            TimeoutSec = 30
+        }
+        if ($PSBoundParameters.ContainsKey("Body")) {
+            $request.Body = $Body
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ContentType)) {
+            $request.ContentType = $ContentType
+        }
+
+        $response = Invoke-WebRequest @request
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            Content = [string]$response.Content
+            Headers = $response.Headers
+        }
+    } catch {
+        $response = $_.Exception.Response
+        if ($null -eq $response) {
+            throw
+        }
+
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            Content = ""
+            Headers = $response.Headers
+        }
+    }
+}
+
+function Assert-ReputationAiPromptRendering {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$PromptKey,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+
+    $encodedKey = [Uri]::EscapeDataString($PromptKey)
+    $body = @{ content = $Content } | ConvertTo-Json -Compress
+    $validation = Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedKey/validate" -Method Post -Headers $Headers -Body $body -ContentType "application/json" -TimeoutSec 30
+    if (-not $validation.valid) {
+        throw "Reputation AI prompt validation failed for ${PromptKey}: missing=$($validation.missingPlaceholders -join ', ')."
+    }
+
+    $preview = Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedKey/preview" -Method Post -Headers $Headers -Body $body -ContentType "application/json" -TimeoutSec 30
+    if ([string]::IsNullOrWhiteSpace($preview.renderedContent)) {
+        throw "Reputation AI prompt preview did not render content for $PromptKey."
+    }
+    if ($preview.renderedContent -match "\{\{[^}]+\}\}") {
+        throw "Reputation AI prompt preview left unresolved placeholders for ${PromptKey}: $($preview.unresolvedPlaceholders -join ', ')."
+    }
+}
+
+function Invoke-ReputationAiPromptPresetSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$PromptKey,
+        [Parameter(Mandatory = $true)][string]$PresetKey
+    )
+
+    $encodedPromptKey = [Uri]::EscapeDataString($PromptKey)
+    $encodedPresetKey = [Uri]::EscapeDataString($PresetKey)
+    $promptResponse = Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts" -Headers $Headers -TimeoutSec 30
+    $originalPrompt = @(ConvertTo-SmokeArray -Value $promptResponse) |
+        Where-Object { $_.key -eq $PromptKey } |
+        Select-Object -First 1
+    if ($null -eq $originalPrompt) {
+        throw "Reputation AI prompt was not found for preset smoke: $PromptKey."
+    }
+
+    $originalContent = [string]$originalPrompt.content
+    $originalCustomized = [bool]$originalPrompt.customized
+    $applied = $false
+    try {
+        $presetPrompt = Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedPromptKey/presets/$encodedPresetKey" -Method Post -Headers $Headers -Body "{}" -ContentType "application/json" -TimeoutSec 30
+        $applied = $true
+        if ($presetPrompt.key -ne $PromptKey -or -not $presetPrompt.customized) {
+            throw "Reputation AI prompt preset did not return a customized $PromptKey prompt."
+        }
+        if ($null -eq $presetPrompt.presets -or $presetPrompt.presets.Count -lt 3) {
+            throw "Reputation AI prompt preset response did not include preset metadata."
+        }
+
+        Assert-ReputationAiPromptRendering -ApiRoot $ApiRoot -Headers $Headers -PromptKey $PromptKey -Content $presetPrompt.content
+
+        $history = @(Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedPromptKey/history?limit=5" -Headers $Headers -TimeoutSec 30)
+        $presetHistory = $history | Where-Object { $_.action -eq "preset:$PresetKey" } | Select-Object -First 1
+        if ($null -eq $presetHistory) {
+            throw "Reputation AI prompt history did not include preset:$PresetKey for $PromptKey."
+        }
+
+        Write-Host "Reputation AI prompt preset OK: $PromptKey -> $PresetKey."
+    } finally {
+        if ($applied) {
+            if ($originalCustomized) {
+                $restoreBody = @{ content = $originalContent } | ConvertTo-Json -Compress
+                Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedPromptKey" -Method Put -Headers $Headers -Body $restoreBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
+            } else {
+                Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts/$encodedPromptKey" -Method Delete -Headers $Headers -TimeoutSec 30 | Out-Null
+            }
+
+            $restoredResponse = Invoke-RestMethod -Uri "$ApiRoot/api/ai/reputation/prompts" -Headers $Headers -TimeoutSec 30
+            $restoredPrompt = @(ConvertTo-SmokeArray -Value $restoredResponse) |
+                Where-Object { $_.key -eq $PromptKey } |
+                Select-Object -First 1
+            if ($null -eq $restoredPrompt -or [string]$restoredPrompt.content -ne $originalContent) {
+                throw "Reputation AI prompt restore failed after preset smoke for $PromptKey."
+            }
+        }
+    }
+}
+
+function Invoke-ReputationAiRoleSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string]$PromptKey,
+        [Parameter(Mandatory = $true)][string]$PromptContent
+    )
+
+    $apiRoot = $RootUrl.TrimEnd("/")
+    $realm = Get-KeycloakRealm -EnvPath $EnvPath
+    $adminToken = Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath
+    $adminHeaders = @{ Authorization = "Bearer $adminToken" }
+    $clients = @()
+
+    Remove-KeycloakSmokeClientsByPrefix -RootUrl $RootUrl -Realm $realm -AdminHeaders $adminHeaders
+    try {
+        foreach ($role in @("MANAGER", "MARKETOLOG")) {
+            $client = New-KeycloakSmokeClient -RootUrl $RootUrl -Realm $realm -AdminHeaders $adminHeaders -Role $role
+            $clients += $client
+            $roleToken = Get-KeycloakClientCredentialsToken -RootUrl $RootUrl -Realm $realm -ClientId $client.ClientId -ClientSecret $client.ClientSecret
+            $roleHeaders = @{ Authorization = "Bearer $roleToken" }
+
+            $status = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/status" -Method "Get" -Headers $roleHeaders
+            if ($status.StatusCode -ne 200) {
+                throw "Reputation AI status should be readable for $role, got HTTP $($status.StatusCode)."
+            }
+            $prompts = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/prompts" -Method "Get" -Headers $roleHeaders
+            if ($prompts.StatusCode -ne 200) {
+                throw "Reputation AI prompts should be readable for $role, got HTTP $($prompts.StatusCode)."
+            }
+
+            $encodedPromptKey = [Uri]::EscapeDataString($PromptKey)
+            $mutationBody = @{ content = $PromptContent } | ConvertTo-Json -Compress
+            $presetAttempt = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/prompts/$encodedPromptKey/presets/strict_facts" -Method "Post" -Headers $roleHeaders -Body "{}" -ContentType "application/json"
+            if ($presetAttempt.StatusCode -ne 403) {
+                throw "Reputation AI prompt preset should be forbidden for $role, got HTTP $($presetAttempt.StatusCode)."
+            }
+            $updateAttempt = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/prompts/$encodedPromptKey" -Method "Put" -Headers $roleHeaders -Body $mutationBody -ContentType "application/json"
+            if ($updateAttempt.StatusCode -ne 403) {
+                throw "Reputation AI prompt update should be forbidden for $role, got HTTP $($updateAttempt.StatusCode)."
+            }
+            $resetAttempt = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/prompts/$encodedPromptKey" -Method "Delete" -Headers $roleHeaders
+            if ($resetAttempt.StatusCode -ne 403) {
+                throw "Reputation AI prompt reset should be forbidden for $role, got HTTP $($resetAttempt.StatusCode)."
+            }
+        }
+
+        Write-Host "Reputation AI role smoke OK: MANAGER/MARKETOLOG can read, prompt mutations are forbidden."
+    } finally {
+        foreach ($client in $clients) {
+            Remove-KeycloakSmokeClient -RootUrl $RootUrl -Realm $realm -AdminHeaders $adminHeaders -Client $client
+        }
+        Remove-KeycloakSmokeClientsByPrefix -RootUrl $RootUrl -Realm $realm -AdminHeaders $adminHeaders
+    }
+}
+
+function Invoke-ReputationAiSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][int]$CompanyId,
+        [Parameter(Mandatory = $true)][bool]$SkipRouteCheck
+    )
+
+    Write-Host "Running reputation AI smoke..."
+    $token = Get-KeycloakServiceAccountToken -RootUrl $RootUrl -EnvPath $EnvPath
+    $headers = @{ Authorization = "Bearer $token" }
+    $apiRoot = $RootUrl.TrimEnd("/")
+
+    $frontendRoute = Invoke-WebRequest -Uri "$apiRoot/admin/reputation-ai" -UseBasicParsing -TimeoutSec 30
+    if ($frontendRoute.StatusCode -ne 200 -or -not ([string]$frontendRoute.Content).Contains("app-root")) {
+        throw "Reputation AI frontend route shell failed: HTTP $($frontendRoute.StatusCode)."
+    }
+    Write-Host "Reputation AI frontend route OK: /admin/reputation-ai."
+
+    $status = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/status" -Headers $headers -TimeoutSec 30
+    if ([string]::IsNullOrWhiteSpace($status.aiProvider)) {
+        throw "Reputation AI status response did not include aiProvider."
+    }
+    if ($null -eq $status.openAiDiagnostics) {
+        throw "Reputation AI status response did not include OpenAI diagnostics."
+    }
+    Write-Host "Reputation AI status OK: AI=$($status.aiProvider), Search=$($status.searchProvider), Route=$($status.openAiDiagnostics.route)."
+
+    $prompts = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/prompts" -Headers $headers -TimeoutSec 30
+    $promptItems = @(ConvertTo-SmokeArray -Value $prompts)
+    if ($promptItems.Count -lt 2) {
+        throw "Reputation AI prompts response did not include expected prompt templates."
+    }
+    $deepReportPrompt = $promptItems | Where-Object { $_.key -eq "deep_report.instructions" } | Select-Object -First 1
+    if ($null -eq $deepReportPrompt -or [string]::IsNullOrWhiteSpace($deepReportPrompt.content)) {
+        throw "Reputation AI prompts response did not include deep_report.instructions content."
+    }
+    $contentPackPrompt = $promptItems | Where-Object { $_.key -eq "content_pack.user" } | Select-Object -First 1
+    if ($null -eq $contentPackPrompt -or [string]::IsNullOrWhiteSpace($contentPackPrompt.content)) {
+        throw "Reputation AI prompts response did not include content_pack.user content."
+    }
+    if ($null -eq $contentPackPrompt.presets -or $contentPackPrompt.presets.Count -lt 3) {
+        throw "Reputation AI prompt presets were not returned for content_pack.user."
+    }
+    foreach ($prompt in @($deepReportPrompt, $contentPackPrompt)) {
+        Assert-ReputationAiPromptRendering -ApiRoot $apiRoot -Headers $headers -PromptKey $prompt.key -Content $prompt.content
+    }
+    $promptHistory = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/prompts/content_pack.user/history?limit=3" -Headers $headers -TimeoutSec 30
+    $promptHistoryCount = if ($null -eq $promptHistory) { 0 } elseif ($promptHistory -is [array]) { $promptHistory.Count } else { 1 }
+    Write-Host "Reputation AI prompts endpoint OK: $($promptItems.Count) prompt(s), history=$promptHistoryCount."
+
+    Invoke-ReputationAiRoleSmoke -RootUrl $RootUrl -EnvPath $EnvPath -PromptKey "content_pack.user" -PromptContent $contentPackPrompt.content
+    Invoke-ReputationAiPromptPresetSmoke -ApiRoot $apiRoot -Headers $headers -PromptKey "content_pack.user" -PresetKey "strict_facts"
+
+    $history = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/history?limit=3" -Headers $headers -TimeoutSec 30
+    $historyCount = if ($null -eq $history) { 0 } elseif ($history -is [array]) { $history.Count } else { 1 }
+    Write-Host "Reputation AI history endpoint OK: $historyCount item(s)."
+
+    $latestDeepJob = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest" -Method "Get" -Headers $headers
+    if ($latestDeepJob.StatusCode -eq 200) {
+        $deepJob = $latestDeepJob.Content | ConvertFrom-Json
+        if ($null -ne $deepJob.report) {
+            $deepExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest/export" -Method "Get" -Headers $headers
+            if ($deepExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($deepExport.Content) -or -not $deepExport.Content.Contains("Глубокий AI-отчет")) {
+                throw "Reputation AI deep report markdown export failed: HTTP $($deepExport.StatusCode), length=$($deepExport.Content.Length)."
+            }
+            Write-Host "Reputation AI deep report Markdown export OK: $($deepExport.Content.Length) chars."
+        } else {
+            Write-Host "Reputation AI deep report Markdown export OK: latest job has no ready report yet."
+        }
+    } elseif ($latestDeepJob.StatusCode -eq 404) {
+        Write-Host "Reputation AI deep report Markdown export OK: no deep report job yet (404)."
+    } else {
+        throw "Reputation AI latest deep report job endpoint failed: HTTP $($latestDeepJob.StatusCode)."
+    }
+
+    $latestContentPackJob = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest" -Method "Get" -Headers $headers
+    if ($latestContentPackJob.StatusCode -eq 200) {
+        $packJob = $latestContentPackJob.Content | ConvertFrom-Json
+        if ($null -ne $packJob.pack) {
+            $packExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest/export" -Method "Get" -Headers $headers
+            if ($packExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($packExport.Content) -or -not $packExport.Content.Contains("AI-пакет компании")) {
+                throw "Reputation AI content pack markdown export failed: HTTP $($packExport.StatusCode), length=$($packExport.Content.Length)."
+            }
+            Write-Host "Reputation AI content pack Markdown export OK: $($packExport.Content.Length) chars."
+        } else {
+            Write-Host "Reputation AI content pack Markdown export OK: latest job has no ready pack yet."
+        }
+    } elseif ($latestContentPackJob.StatusCode -eq 404) {
+        Write-Host "Reputation AI content pack Markdown export OK: no content pack job yet (404)."
+    } else {
+        throw "Reputation AI latest content pack job endpoint failed: HTTP $($latestContentPackJob.StatusCode)."
+    }
+
+    $latestResearch = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/research/latest" -Method "Get" -Headers $headers
+    if ($latestResearch.StatusCode -eq 200) {
+        $snapshot = $latestResearch.Content | ConvertFrom-Json
+        if ($null -eq $snapshot.companyId) {
+            throw "Reputation AI latest research response did not include companyId."
+        }
+        Write-Host "Reputation AI latest research endpoint OK: source(s)=$($snapshot.sources.Count), searchResults=$($snapshot.searchResultsCount)."
+    } elseif ($latestResearch.StatusCode -eq 404) {
+        Write-Host "Reputation AI latest research endpoint OK: no snapshot yet (404)."
+    } else {
+        throw "Reputation AI latest research endpoint failed: HTTP $($latestResearch.StatusCode)."
+    }
+
+    $sectionRewriteOptions = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/rebuild-section" -Method "Options" -Headers $headers
+    $allowedMethods = [string]$sectionRewriteOptions.Headers.Allow
+    if ($sectionRewriteOptions.StatusCode -lt 200 -or $sectionRewriteOptions.StatusCode -ge 400 -or -not $allowedMethods.Contains("POST")) {
+        throw "Reputation AI rebuild-section endpoint is not advertised as POST. HTTP=$($sectionRewriteOptions.StatusCode), Allow=$allowedMethods"
+    }
+    Write-Host "Reputation AI rebuild-section endpoint OK: Allow=$allowedMethods."
+
+    if (-not $SkipRouteCheck) {
+        $diagnostics = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/status/openai-check" -Method Post -Headers $headers -TimeoutSec 45
+        if ($diagnostics.configured -and $diagnostics.lastCheckStatus -ne "ok") {
+            throw "OpenAI route check failed: status=$($diagnostics.lastCheckStatus), http=$($diagnostics.lastHttpStatus), message=$($diagnostics.lastMessage)"
+        }
+        Write-Host "OpenAI route check OK: status=$($diagnostics.lastCheckStatus), http=$($diagnostics.lastHttpStatus)."
+    }
 }
 
 function Test-RegistryBuildFailure {
@@ -255,6 +797,13 @@ try {
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
+    if ($WithReputationAiSmoke) {
+        Invoke-ReputationAiSmoke `
+            -RootUrl $BaseUrl `
+            -EnvPath $envPath `
+            -CompanyId $ReputationAiCompanyId `
+            -SkipRouteCheck:$SkipReputationAiOpenAiRouteCheck
+    }
 
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("ps"))
     Write-Host "Local prod-like smoke passed: $BaseUrl"

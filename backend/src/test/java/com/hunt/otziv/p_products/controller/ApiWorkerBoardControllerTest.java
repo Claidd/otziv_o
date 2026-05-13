@@ -177,7 +177,7 @@ class ApiWorkerBoardControllerTest {
                 eq(0),
                 eq(10)
         )).thenReturn(emptyOrderPage());
-        lenient().when(orderService.getAllOrderDTOAndKeywordByWorkerAll(
+        lenient().when(orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByWorkerAll(
                 eq(principal),
                 eq(""),
                 eq(0),
@@ -466,7 +466,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("all", response.section());
         assertFalse(response.warning());
-        verify(orderService).getAllOrderDTOAndKeywordByWorkerAll(principal, "", 0, 10);
+        verify(orderBoardQueryService).getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, "", 0, 10);
         verify(reviewService, never()).hasActiveNagulReviews(principal);
     }
 

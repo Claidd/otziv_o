@@ -1986,3 +1986,648 @@ app-order-details .review-edit-modal .review-save-action {
   }
 }
 
+app-reputation-ai .reputation-ai-side {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.95rem;
+}
+
+app-reputation-ai .side-panel {
+  display: grid;
+  gap: 0.85rem;
+  border-radius: 1.05rem;
+  padding: 1rem;
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+app-reputation-ai :where(.workflow-help-list, .snapshot-source-groups, .snapshot-source-groups details, .history-filters, .history-detail-card, .snapshot-source-row, .side-metric-list, .provider-summary, .provider-diagnostics, .side-history-list, .settings-panel details, .fact-block, .source-review-block) {
+  display: grid;
+  gap: 0.55rem;
+}
+
+app-reputation-ai .workflow-help-step {
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.55rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .workflow-help-step > .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1.2rem;
+}
+
+app-reputation-ai :where(.workflow-help-step, .snapshot-source-row, .history-detail-card) :where(strong, small, a, span) {
+  display: block;
+}
+
+app-reputation-ai :where(.workflow-help-step small, .snapshot-source-row small, .history-detail-card small) {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+app-reputation-ai :where(.snapshot-metrics, .snapshot-query-list, .history-detail-grid) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+app-reputation-ai :where(.snapshot-metrics span, .snapshot-query-list span, .history-detail-grid span) {
+  border-radius: 999px;
+  padding: 0.28rem 0.45rem;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.12);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+app-reputation-ai :where(.snapshot-warning-list p, .history-detail-warnings p) {
+  color: #806116;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+app-reputation-ai :where(.snapshot-source-groups summary, .snapshot-source-row a, .snapshot-source-row span) {
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+app-reputation-ai .side-title {
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+app-reputation-ai .side-title .icon-button {
+  margin-left: auto;
+}
+
+app-reputation-ai :where(.side-metric, .fact-row, .source-review-row, .side-history-row, .history-detail-card) {
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.85rem;
+  padding: 0.7rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .side-metric {
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+app-reputation-ai .settings-panel details {
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .settings-panel summary {
+  color: var(--otziv-dark);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+app-reputation-ai .settings-panel details[open] summary {
+  margin-bottom: 0.7rem;
+}
+
+app-reputation-ai .profile-mode-card {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid rgba(108, 155, 207, 0.2);
+  border-radius: 0.75rem;
+  padding: 0.7rem;
+  background: rgba(108, 155, 207, 0.08);
+}
+
+app-reputation-ai .profile-mode-card strong {
+  color: var(--otziv-dark);
+  font-size: 0.84rem;
+}
+
+app-reputation-ai .profile-mode-card small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+app-reputation-ai .prompt-side-panel {
+  gap: 0.75rem;
+}
+
+app-reputation-ai .prompt-meta {
+  display: grid;
+  gap: 0.28rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .prompt-meta.custom {
+  border-color: rgba(108, 155, 207, 0.32);
+  background: rgba(108, 155, 207, 0.08);
+}
+
+app-reputation-ai .prompt-meta strong {
+  color: var(--otziv-dark);
+  font-size: 0.83rem;
+}
+
+app-reputation-ai .prompt-meta small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai .prompt-presets {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid rgba(108, 155, 207, 0.18);
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  background: rgba(108, 155, 207, 0.07);
+}
+
+app-reputation-ai .prompt-presets > strong {
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+}
+
+app-reputation-ai .prompt-presets > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+app-reputation-ai .prompt-presets button {
+  min-width: 0;
+  justify-content: flex-start;
+  padding-inline: 0.58rem;
+}
+
+app-reputation-ai .prompt-validation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .prompt-validation.valid {
+  border-color: rgba(27, 156, 133, 0.26);
+  background: rgba(27, 156, 133, 0.08);
+}
+
+app-reputation-ai .prompt-validation.invalid {
+  border-color: rgba(230, 91, 91, 0.3);
+  background: rgba(230, 91, 91, 0.08);
+}
+
+app-reputation-ai .prompt-validation .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1.1rem;
+}
+
+app-reputation-ai .prompt-validation.invalid .material-icons-sharp {
+  color: var(--otziv-danger);
+}
+
+app-reputation-ai .prompt-validation :where(strong, small) {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai .prompt-validation strong {
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+}
+
+app-reputation-ai .prompt-validation small {
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+app-reputation-ai .prompt-editor textarea {
+  min-height: 14rem;
+  resize: vertical;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+app-reputation-ai .prompt-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+app-reputation-ai .prompt-actions button {
+  min-width: 0;
+}
+
+app-reputation-ai :where(.prompt-preview-panel, .prompt-diff-panel, .prompt-history-panel) {
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai :where(.prompt-preview-panel, .prompt-diff-panel, .prompt-history-panel) summary {
+  cursor: pointer;
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+app-reputation-ai .prompt-preview-meta,
+app-reputation-ai .prompt-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+app-reputation-ai :where(.prompt-preview-meta span, .prompt-chip-list span) {
+  border-radius: 999px;
+  padding: 0.25rem 0.45rem;
+  color: var(--otziv-info);
+  background: rgba(103, 116, 131, 0.1);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+app-reputation-ai .prompt-chip-list span {
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.12);
+}
+
+app-reputation-ai .prompt-chip-list.warning span {
+  color: var(--otziv-danger);
+  background: rgba(230, 91, 91, 0.1);
+}
+
+app-reputation-ai .prompt-preview-warnings {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+app-reputation-ai .prompt-preview-warnings p {
+  margin: 0;
+  border-radius: 0.62rem;
+  padding: 0.45rem;
+  color: var(--otziv-danger);
+  background: rgba(230, 91, 91, 0.08);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+app-reputation-ai .prompt-preview-panel pre {
+  max-height: 26rem;
+  margin: 0.65rem 0 0;
+  overflow: auto;
+  border-radius: 0.65rem;
+  padding: 0.7rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 255, 255, 0.8);
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.68rem;
+  line-height: 1.42;
+  white-space: pre-wrap;
+}
+
+app-reputation-ai .prompt-diff-list,
+app-reputation-ai .prompt-history-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+app-reputation-ai .prompt-diff-line {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  gap: 0.45rem;
+  border-radius: 0.55rem;
+  padding: 0.42rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+app-reputation-ai .prompt-diff-line.changed {
+  background: rgba(247, 208, 96, 0.16);
+}
+
+app-reputation-ai .prompt-diff-line.added {
+  background: rgba(27, 156, 133, 0.12);
+}
+
+app-reputation-ai .prompt-diff-line.removed {
+  background: rgba(230, 91, 91, 0.1);
+}
+
+app-reputation-ai .prompt-diff-line span {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+app-reputation-ai .prompt-diff-line pre {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+app-reputation-ai .prompt-history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border-radius: 0.7rem;
+  padding: 0.58rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+app-reputation-ai .prompt-history-row .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1rem;
+}
+
+app-reputation-ai .prompt-history-row :where(strong, small) {
+  display: block;
+}
+
+app-reputation-ai .prompt-history-row strong {
+  color: var(--otziv-dark);
+  font-size: 0.76rem;
+}
+
+app-reputation-ai .prompt-history-row small {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai .check-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 0.7rem;
+  padding: 0.7rem;
+  background: var(--otziv-field-background);
+}
+
+app-reputation-ai .check-row input {
+  width: 1.05rem;
+}
+
+app-reputation-ai :where(.provider-summary span, .provider-summary strong, .provider-diagnostics span, .provider-diagnostics small) {
+  display: block;
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai :where(.provider-summary strong, .provider-diagnostics span:first-child, .fact-block > strong, .source-review-block > strong) {
+  color: var(--otziv-dark);
+}
+
+app-reputation-ai .provider-summary strong {
+  width: max-content;
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.12);
+}
+
+app-reputation-ai .provider-diagnostics {
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+app-reputation-ai .fact-row {
+  display: grid;
+  gap: 0.22rem;
+}
+
+app-reputation-ai :where(.fact-row span, .fact-row small, .source-review-row small, .side-history-row small, .side-history-row p) {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+app-reputation-ai .fact-row strong {
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai .fact-block.uncertain .fact-row {
+  border-color: rgba(247, 208, 96, 0.38);
+  background: rgba(247, 208, 96, 0.13);
+}
+
+app-reputation-ai .source-review-row {
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+app-reputation-ai .source-review-row > div {
+  min-width: 0;
+}
+
+app-reputation-ai :where(.source-review-row a, .source-review-row div > span) {
+  display: block;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+app-reputation-ai .side-action {
+  width: 100%;
+}
+
+app-reputation-ai .side-history-row {
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+app-reputation-ai .side-history-row.current {
+  border-color: rgba(108, 155, 207, 0.32);
+  background: rgba(108, 155, 207, 0.08);
+}
+
+app-reputation-ai .side-history-row.selected {
+  box-shadow: 0 0 0 2px rgba(108, 155, 207, 0.16) inset;
+}
+
+app-reputation-ai .history-filter-row {
+  gap: 0.35rem;
+}
+
+app-reputation-ai .history-filter-row select {
+  min-width: 0;
+  padding-inline: 0.45rem;
+}
+
+app-reputation-ai .side-history-row > div:first-of-type {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+app-reputation-ai .history-title-line {
+  justify-content: space-between;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+app-reputation-ai .side-history-row :where(strong, small, p) {
+  display: block;
+}
+
+app-reputation-ai .side-history-row strong {
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-reputation-ai .side-history-row p {
+  margin-top: 0.3rem;
+  color: var(--otziv-danger);
+}
+
+app-reputation-ai .history-stat-row {
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+app-reputation-ai :where(.history-stat-row span, .current-badge) {
+  border-radius: 999px;
+  padding: 0.24rem 0.42rem;
+  color: var(--otziv-info);
+  background: rgba(103, 116, 131, 0.1);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+app-reputation-ai .current-badge {
+  flex: 0 0 auto;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.14);
+}
+
+app-reputation-ai .history-actions {
+  gap: 0.35rem;
+}
+
+app-reputation-ai [data-tooltip] {
+  position: relative;
+}
+
+app-reputation-ai [data-tooltip]::after,
+app-reputation-ai [data-tooltip]::before {
+  position: absolute;
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  visibility: hidden;
+}
+
+app-reputation-ai [data-tooltip]::after {
+  content: attr(data-tooltip);
+  top: calc(100% + 0.55rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(18rem, 78vw);
+  padding: 0.62rem 0.72rem;
+  border: 1px solid rgba(28, 41, 57, 0.12);
+  border-radius: 0.7rem;
+  color: #fff;
+  background: rgba(28, 41, 57, 0.96);
+  box-shadow: 0 1rem 2rem rgba(28, 41, 57, 0.18);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: left;
+  transform: translate(-50%, 0.35rem);
+  white-space: normal;
+}
+
+app-reputation-ai [data-tooltip]::before {
+  content: "";
+  top: calc(100% + 0.25rem);
+  left: 50%;
+  border-right: 0.32rem solid transparent;
+  border-bottom: 0.32rem solid rgba(28, 41, 57, 0.96);
+  border-left: 0.32rem solid transparent;
+  transform: translate(-50%, 0.35rem);
+}
+
+app-reputation-ai [data-tooltip]:hover::after,
+app-reputation-ai [data-tooltip]:hover::before,
+app-reputation-ai [data-tooltip]:focus-visible::after,
+app-reputation-ai [data-tooltip]:focus-visible::before,
+app-reputation-ai [data-tooltip]:focus-within::after,
+app-reputation-ai [data-tooltip]:focus-within::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+app-reputation-ai .reputation-ai-side [data-tooltip]::after {
+  right: 0;
+  left: auto;
+  max-width: min(17rem, calc(100vw - 2rem));
+  transform: translateY(0.35rem);
+}
+
+app-reputation-ai .reputation-ai-side [data-tooltip]::before {
+  right: 1rem;
+  left: auto;
+  transform: translateY(0.35rem);
+}
+
+app-reputation-ai .reputation-ai-side [data-tooltip]:hover::after,
+app-reputation-ai .reputation-ai-side [data-tooltip]:hover::before,
+app-reputation-ai .reputation-ai-side [data-tooltip]:focus-visible::after,
+app-reputation-ai .reputation-ai-side [data-tooltip]:focus-visible::before,
+app-reputation-ai .reputation-ai-side [data-tooltip]:focus-within::after,
+app-reputation-ai .reputation-ai-side [data-tooltip]:focus-within::before {
+  transform: translateY(0);
+}
+

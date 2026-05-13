@@ -12,6 +12,7 @@ public record DeepCompanyResearchJobStatus(
         String responseId,
         String errorMessage,
         DeepCompanyResearchReport report,
+        String operation,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime startedAt,
@@ -24,6 +25,7 @@ public record DeepCompanyResearchJobStatus(
         model = normalize(model);
         responseId = normalize(responseId);
         errorMessage = normalize(errorMessage);
+        operation = normalize(operation);
         createdAt = createdAt == null ? LocalDateTime.now() : createdAt;
         updatedAt = updatedAt == null ? createdAt : updatedAt;
     }

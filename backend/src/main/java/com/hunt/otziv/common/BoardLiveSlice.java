@@ -18,6 +18,19 @@ public final class BoardLiveSlice {
             "Не оплачено"
     );
 
+    public static final List<String> WORKER_BOARD_ALL_ORDER_STATUSES = List.of(
+            "Новый",
+            "В проверку",
+            "На проверке",
+            "Коррекция",
+            "Публикация",
+            "Опубликовано",
+            "Выставлен счет",
+            "Напоминание",
+            "Не оплачено",
+            "Оплачено"
+    );
+
     public static final Set<String> HIDDEN_COMPANY_STATUSES = Set.of(
             "На стопе",
             "Бан"

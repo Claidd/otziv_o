@@ -60,6 +60,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -83,6 +84,7 @@ public class ApiWorkerBoardController {
     private static final String ORDER_STATUS_NEW = "Новый";
     private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
+    private static final String ORDER_STATUS_PAID = "Оплачено";
     private static final int WORKER_FLOW_BLOCKING_UNCHANGED_DAYS = 1;
     private static final Set<String> WORKER_FLOW_ORDER_STATUSES = Set.of(
             ORDER_STATUS_NEW,
@@ -508,7 +510,7 @@ public class ApiWorkerBoardController {
 
         if (selectedWorker != null) {
             return "Все".equals(status)
-                    ? orderBoardQueryService.getAllOrderDTOAndKeywordByWorkerAll(selectedWorker, keyword, pageNumber, pageSize)
+                    ? orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByWorkerAll(selectedWorker, keyword, pageNumber, pageSize)
                     : orderBoardQueryService.getAllOrderDTOAndKeywordByWorker(selectedWorker, keyword, status, pageNumber, pageSize, sortDirection);
         }
 
@@ -526,12 +528,12 @@ public class ApiWorkerBoardController {
 
         if (hasRole(authentication, "MANAGER")) {
             return "Все".equals(status)
-                    ? orderService.getAllOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize, sortDirection)
+                    ? orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByManagerAll(principal, keyword, pageNumber, pageSize, sortDirection)
                     : orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, status, pageNumber, pageSize, sortDirection);
         }
 
         return "Все".equals(status)
-                ? orderService.getAllOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize)
+                ? orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize)
                 : orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, status, pageNumber, pageSize);
     }
 
@@ -807,7 +809,10 @@ public class ApiWorkerBoardController {
             Worker selectedWorker
     ) {
         if (selectedWorker != null) {
-            return orderService.countActionableOrdersByStatusToWorker(selectedWorker);
+            return withPaidStatusCount(
+                    orderService.countActionableOrdersByStatusToWorker(selectedWorker),
+                    orderService.countOrdersByWorkerAndStatus(selectedWorker, ORDER_STATUS_PAID)
+            );
         }
         if (hasRole(authentication, "ADMIN")) {
             return orderService.countActionableOrdersByStatus();
@@ -816,9 +821,26 @@ public class ApiWorkerBoardController {
             return orderService.countActionableOrdersByStatusToOwner(resolveOwnerManagers(principal));
         }
         if (hasRole(authentication, "MANAGER")) {
-            return orderService.countActionableOrdersByStatusToManager(resolveManager(principal));
+            Manager manager = resolveManager(principal);
+            return withPaidStatusCount(
+                    orderService.countActionableOrdersByStatusToManager(manager),
+                    orderService.getAllOrderDTOByStatusToManager(manager, ORDER_STATUS_PAID)
+            );
         }
-        return orderService.countActionableOrdersByStatusToWorker(resolveWorker(principal));
+        Worker worker = resolveWorker(principal);
+        return withPaidStatusCount(
+                orderService.countActionableOrdersByStatusToWorker(worker),
+                orderService.countOrdersByWorkerAndStatus(worker, ORDER_STATUS_PAID)
+        );
+    }
+
+    private Map<String, Integer> withPaidStatusCount(Map<String, Integer> counts, int paidCount) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        if (counts != null) {
+            result.putAll(counts);
+        }
+        result.put(ORDER_STATUS_PAID, Math.max(paidCount, 0));
+        return result;
     }
 
     private int countStatus(Map<String, Integer> counts, String status) {

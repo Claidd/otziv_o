@@ -1,26 +1,31 @@
 <app-admin-layout title="AI-помощник репутации" active="reputation-ai" rightPanelMode="custom">
   <section class="reputation-ai-workspace">
-    <header class="workspace-toolbar">
-      <div class="company-control">
-        <span class="material-icons-sharp">business</span>
-        <label>
-          <span>Компания</span>
-          <input type="number" min="1" name="companyId" [(ngModel)]="companyId">
-        </label>
+    <header class="ai-toolbar">
+      <div class="toolbar-title">
+        <span class="material-icons-sharp">auto_awesome</span>
+        <div>
+          <p class="eyebrow">Репутация</p>
+          <h2>Отчёт, AI-пакет и тексты</h2>
+        </div>
       </div>
 
       <div class="toolbar-actions">
-        <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
+        <label class="company-inline" appTooltip="ID компании из CRM. Все отчёты, сырьё и AI-пакеты собираются для этой компании.">
+          <span>Компания</span>
+          <input type="number" min="1" name="companyId" [(ngModel)]="companyId">
+        </label>
+
+        <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()" appTooltip="Открыть последнюю сохранённую задачу глубокого отчёта для выбранной компании.">
           <span class="material-icons-sharp">article</span>
-          Последний отчёт
+          Последний
         </button>
-        <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
+        <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()" appTooltip="Запустить новый глубокий отчёт: OpenAI соберёт источники, разделы, риски и чек-лист качества.">
           <span class="material-icons-sharp">psychology</span>
-          {{ isLoading('deepResearch') ? 'Запускаю' : hasActiveDeepResearch() ? 'Отчёт собирается' : 'Обновить отчёт' }}
+          {{ isLoading('deepResearch') ? 'Запускаю' : hasActiveDeepResearch() ? 'Собирается' : 'Обновить отчёт' }}
         </button>
-        <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack()">
-          <span class="material-icons-sharp">auto_awesome</span>
-          {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Создать AI-пакет' }}
+        <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack()" appTooltip="Собрать AI-пакет: УТП, рекламу, темы постов, отзывы и ответы компании. Лучше запускать после готового отчёта.">
+          <span class="material-icons-sharp">inventory_2</span>
+          {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'AI-пакет' }}
         </button>
       </div>
     </header>
@@ -43,9 +48,7 @@
       @if (job.status === 'QUEUED' || job.status === 'RUNNING') {
         <section class="alert info">
           <span class="material-icons-sharp">hourglass_top</span>
-          <p>
-            Глубокий отчёт {{ deepResearchStatusLabel(job) }}. Можно перейти в другой раздел: результат сохранится в базе и появится в уведомлении.
-          </p>
+          <p>Глубокий отчёт {{ deepResearchStatusLabel(job) }}. Результат сохранится в базе.</p>
         </section>
       }
       @if (job.status === 'FAILED') {
@@ -60,7 +63,7 @@
       @if (job.status === 'QUEUED' || job.status === 'RUNNING') {
         <section class="alert info">
           <span class="material-icons-sharp">hourglass_top</span>
-          <p>AI-пакет {{ job.status === 'QUEUED' ? 'в очереди' : 'собирается' }} через OpenAI. Страница обновляет статус автоматически.</p>
+          <p>AI-пакет {{ job.status === 'QUEUED' ? 'в очереди' : 'собирается' }}.</p>
         </section>
       }
       @if (job.status === 'FAILED') {
@@ -71,7 +74,7 @@
       }
     }
 
-    <section class="metric-grid" aria-label="Паспорт глубокого отчёта">
+    <section class="workflow-metrics" aria-label="Паспорт глубокого отчёта">
       @for (metric of reportPassportMetrics(); track trackMetric($index, metric)) {
         <article class="metric-card" [class]="metric.tone">
           <span class="material-icons-sharp">{{ metric.icon }}</span>
@@ -83,209 +86,192 @@
       }
     </section>
 
-    <section class="main-grid">
-      <form class="panel setup-panel" (ngSubmit)="createContentPack()">
-        <div class="panel-title">
-          <span class="material-icons-sharp">tune</span>
-          <h2>Параметры</h2>
-        </div>
-
-        <div class="compact-hint">
-          <span class="material-icons-sharp">info</span>
-          <p>AI-пакет собирает OpenAI по последнему глубокому отчёту. Поля ниже можно оставить пустыми или использовать как ручное усиление.</p>
-        </div>
-
-        <label>
-          <span>Товар или услуга</span>
-          <input type="text" name="productOrService" [(ngModel)]="productOrService" placeholder="Например, декоративная штукатурка">
-        </label>
-
-        <label>
-          <span>Модель глубокого отчёта</span>
-          <select
-            name="deepResearchProfile"
-            [ngModel]="deepResearchProfile()"
-            (ngModelChange)="deepResearchProfile.set($event)"
-          >
-            @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
-              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
-            }
-          </select>
-        </label>
-
-        @if (selectedDeepResearchProfile(); as profile) {
-          <div class="profile-mode-card">
-            <strong>{{ profile.label }} · {{ profile.model }}</strong>
-            <span>{{ profile.description }}</span>
-            <small>
-              search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }}
-              · tools {{ profile.maxToolCalls }} · output {{ profile.maxOutputTokens }}
-            </small>
-          </div>
-        }
-
-        <label>
-          <span>Модель AI-пакета</span>
-          <select
-            name="contentPackProfile"
-            [ngModel]="contentPackProfile()"
-            (ngModelChange)="contentPackProfile.set($event)"
-          >
-            @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
-              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
-            }
-          </select>
-        </label>
-
-        @if (selectedContentPackProfile(); as profile) {
-          <div class="profile-mode-card">
-            <strong>{{ profile.label }} · {{ profile.model }}</strong>
-            <span>{{ profile.description }}</span>
-            <small>
-              reasoning {{ profile.reasoningEffort || 'off' }} · search {{ profile.searchContextSize }}
-              · output {{ profile.maxOutputTokens }}
-            </small>
-          </div>
-        }
-
-        <label>
-          <span>Описание вручную</span>
-          <textarea rows="4" name="manualDescription" [(ngModel)]="manualDescription" placeholder="Факты о компании, которые уже известны"></textarea>
-        </label>
-
-        <label>
-          <span>Товары и услуги</span>
-          <textarea rows="4" name="productsOrServicesText" [(ngModel)]="productsOrServicesText" placeholder="Каждый пункт с новой строки"></textarea>
-        </label>
-
-        <label>
-          <span>Публичные страницы</span>
-          <textarea rows="4" name="publicUrlsText" [(ngModel)]="publicUrlsText" placeholder="Сайт, карточки, справочники, отзовики"></textarea>
-        </label>
-
-        <label class="check-row">
-          <input type="checkbox" name="includeCompanyWebsite" [(ngModel)]="includeCompanyWebsite">
-          <span>Собирать сайт из карточки компании</span>
-        </label>
-
-        <div class="count-grid">
-          <label>
-            <span>Реклама</span>
-            <input type="number" min="1" max="8" name="adTextsCount" [(ngModel)]="adTextsCount">
-          </label>
-          <label>
-            <span>Посты</span>
-            <input type="number" min="1" max="5" name="socialPostsCount" [(ngModel)]="socialPostsCount">
-          </label>
-          <label>
-            <span>Позитив</span>
-            <input type="number" min="1" max="8" name="positiveReplyCount" [(ngModel)]="positiveReplyCount">
-          </label>
-          <label>
-            <span>Негатив</span>
-            <input type="number" min="1" max="6" name="negativeReplyCount" [(ngModel)]="negativeReplyCount">
-          </label>
-        </div>
-
-        <button type="submit" [disabled]="busy() || hasActiveContentPackJob()">
-          <span class="material-icons-sharp">bolt</span>
-          {{ isLoading('contentPack') ? 'Запускаю пакет' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Сгенерировать пакет' }}
-        </button>
-      </form>
-
-      <section class="panel report-control-panel">
-        <div class="panel-title">
-          <span class="material-icons-sharp">psychology</span>
+    <section class="panel report-stage">
+      <div class="panel-title">
+        <span class="material-icons-sharp">psychology</span>
+        <div>
           <h2>Глубокий отчёт</h2>
-        </div>
-
-        @if (deepResearch(); as report) {
-          <div class="report-control-summary">
-            <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
-            <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
-            <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} тематических блоков</small>
-          </div>
-        } @else {
-          <div class="empty-state">
-            <span class="material-icons-sharp">article</span>
-            <p>Загрузи последний отчёт или запусти новый фоновый сбор.</p>
-          </div>
-        }
-
-        @if (selectedDeepResearchProfile(); as profile) {
-          <div class="profile-mode-card compact">
-            <strong>Новый запуск: {{ profile.label }}</strong>
-            <span>{{ profile.model }} · search {{ profile.searchContextSize }} · output {{ profile.maxOutputTokens }}</span>
-          </div>
-        }
-
-        <div class="report-actions">
-          <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
-            <span class="material-icons-sharp">history</span>
-            Последний отчёт
-          </button>
-          <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
-            <span class="material-icons-sharp">refresh</span>
-            {{ hasActiveDeepResearch() ? 'Собирается' : 'Обновить' }}
-          </button>
-          @if (deepResearch(); as report) {
-            <button type="button" class="secondary" (click)="copyText(report.reportMarkdown)">
-              <span class="material-icons-sharp">content_copy</span>
-              Копировать
-            </button>
-            <button type="button" class="secondary" (click)="downloadDeepReport(report)">
-              <span class="material-icons-sharp">download</span>
-              Markdown
-            </button>
+          @if (deepResearchJob(); as job) {
+            <p>{{ deepResearchStatusLabel(job) }} · {{ deepResearchOperationLabel(job) }}</p>
+          } @else {
+            <p>Не запускался</p>
           }
         </div>
-      </section>
-    </section>
+      </div>
 
-    @if (deepResearch(); as report) {
-      <section class="panel deep-research-panel">
-        <div class="panel-title">
-          <span class="material-icons-sharp">psychology</span>
-          <h2>Глубокий GPT-отчёт</h2>
-        </div>
-
-        <section class="report-passport">
-          <div class="profile-head">
-            <div>
-              <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
-              <span>
-                {{ report.provider }} · {{ report.model }}
-                @if (deepResearchJob(); as job) {
-                  · {{ deepResearchStatusLabel(job) }}
-                }
-              </span>
-            </div>
-            <small>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+      @if (deepResearch(); as report) {
+        <section class="report-head">
+          <div>
+            <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
+            <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
+            <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} блоков · {{ deepResearchOperationLabel(deepResearchJob()) }}</small>
           </div>
 
           <div class="report-actions">
-            <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
-              <span class="material-icons-sharp">history</span>
-              Последний
-            </button>
-            <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
-              <span class="material-icons-sharp">refresh</span>
-              {{ hasActiveDeepResearch() ? 'Собирается' : 'Обновить' }}
-            </button>
-            <button type="button" class="secondary" (click)="copyText(report.reportMarkdown)">
+            <button type="button" class="secondary" (click)="copyDeepReportMarkdown()" appTooltip="Скопировать весь markdown отчёта в буфер обмена.">
               <span class="material-icons-sharp">content_copy</span>
               Копировать
             </button>
-            <button type="button" class="secondary" (click)="downloadDeepReport(report)">
+            <button type="button" class="secondary" (click)="downloadDeepReport(report)" appTooltip="Скачать текущую версию отчёта markdown-файлом.">
               <span class="material-icons-sharp">download</span>
               Markdown
+            </button>
+            <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="refreshDeepReportSources()" appTooltip="Обновить только список публичных источников. Текст разделов останется из базового отчёта.">
+              <span class="material-icons-sharp">travel_explore</span>
+              {{ isLoading('refreshSources') ? 'Запускаю' : 'Источники' }}
+            </button>
+            <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="rebuildDeepReportText()" appTooltip="Пересобрать весь текст отчёта по сохранённым источникам без нового web search.">
+              <span class="material-icons-sharp">auto_fix_high</span>
+              {{ isLoading('rebuildText') ? 'Запускаю' : 'Пересобрать' }}
+            </button>
+            <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack(deepResearchJob()?.jobId ?? null)" appTooltip="Создать AI-пакет именно из открытой версии отчёта.">
+              <span class="material-icons-sharp">auto_awesome</span>
+              AI-пакет из отчёта
             </button>
           </div>
         </section>
 
-        @if (report.warnings.length > 0) {
+        @if (reportComparison(); as comparison) {
+          <section class="change-panel" [class.empty]="!comparison.hasChanges">
+            <div class="change-head">
+              <span class="material-icons-sharp">compare_arrows</span>
+              <div>
+                <strong>Что изменилось</strong>
+                <small>Сравнение с {{ comparison.baseJob.createdAt | date: 'dd.MM HH:mm' }} · {{ deepResearchOperationLabel(comparison.baseJob) }}</small>
+              </div>
+            </div>
+
+            <div class="change-summary-grid">
+              @for (item of comparison.summaryItems; track trackChangeItem($index, item)) {
+                <article
+                  class="change-summary-card"
+                  [class.green]="item.tone === 'green'"
+                  [class.yellow]="item.tone === 'yellow'"
+                  [class.red]="item.tone === 'red'"
+                  [class.blue]="item.tone === 'blue'"
+                  [class.gray]="item.tone === 'gray'"
+                >
+                  <span class="material-icons-sharp">{{ item.icon }}</span>
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.detail }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+
+            @if (comparison.sourceAdded.length > 0 || comparison.sourceRemoved.length > 0 || comparison.sectionChanges.length > 0 || comparison.warningsResolved.length > 0 || comparison.warningsAdded.length > 0) {
+              <div class="change-detail-grid">
+                @if (comparison.sourceAdded.length > 0) {
+                  <article class="change-detail-block green">
+                    <strong>Новые источники</strong>
+                    <div class="change-chip-list">
+                      @for (source of comparison.sourceAdded; track trackText($index, source.url || source.title || source.note)) {
+                        @if (source.url) {
+                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                        } @else {
+                          <span>{{ source.title || source.note }}</span>
+                        }
+                      }
+                    </div>
+                  </article>
+                }
+
+                @if (comparison.sourceRemoved.length > 0) {
+                  <article class="change-detail-block yellow">
+                    <strong>Убраны из источников</strong>
+                    <div class="change-chip-list">
+                      @for (source of comparison.sourceRemoved; track trackText($index, source.url || source.title || source.note)) {
+                        @if (source.url) {
+                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                        } @else {
+                          <span>{{ source.title || source.note }}</span>
+                        }
+                      }
+                    </div>
+                  </article>
+                }
+
+                @if (comparison.sectionChanges.length > 0) {
+                  <article class="change-detail-block blue">
+                    <strong>Разделы отчёта</strong>
+                    <div class="change-chip-list">
+                      @for (change of comparison.sectionChanges; track trackSectionChange($index, change)) {
+                        <span [class]="change.status">{{ sectionChangeLabel(change.status) }} · {{ change.title }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+
+                @if (comparison.warningsResolved.length > 0) {
+                  <article class="change-detail-block green">
+                    <strong>Закрытые риски</strong>
+                    <div class="change-chip-list">
+                      @for (warning of comparison.warningsResolved; track trackText($index, warning)) {
+                        <span>{{ warning }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+
+                @if (comparison.warningsAdded.length > 0) {
+                  <article class="change-detail-block yellow">
+                    <strong>Новые сомнения</strong>
+                    <div class="change-chip-list">
+                      @for (warning of comparison.warningsAdded; track trackText($index, warning)) {
+                        <span>{{ warning }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted">По источникам, разделам, рискам и чек-листу версии совпадают.</p>
+            }
+          </section>
+        }
+
+        <section
+          class="quality-checklist"
+          [class.green]="reportQualitySummary().tone === 'green'"
+          [class.yellow]="reportQualitySummary().tone === 'yellow'"
+          [class.red]="reportQualitySummary().tone === 'red'"
+          [class.gray]="reportQualitySummary().tone === 'gray'"
+        >
+          <div class="quality-summary">
+            <span class="material-icons-sharp">{{ reportQualitySummary().icon }}</span>
+            <div>
+              <strong>{{ reportQualitySummary().label }}</strong>
+              <small>Проверки {{ reportQualitySummary().passed }}/{{ reportQualitySummary().total }}</small>
+            </div>
+          </div>
+
+          @if (reportQualityChecks().length > 0) {
+            <div class="quality-grid">
+              @for (check of reportQualityChecks(); track trackQualityCheck($index, check)) {
+                <article
+                  class="quality-check"
+                  [class.pass]="check.status === 'pass'"
+                  [class.warn]="check.status === 'warn'"
+                  [class.fail]="check.status === 'fail'"
+                  [class.info]="check.status !== 'pass' && check.status !== 'warn' && check.status !== 'fail'"
+                >
+                  <span class="material-icons-sharp">{{ qualityStatusIcon(check.status) }}</span>
+                  <div>
+                    <strong>{{ check.label }}</strong>
+                    <small>{{ qualityStatusLabel(check.status) }} · {{ check.detail }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="muted">Старый отчёт без автопроверок качества. Новый запуск соберёт чек-лист.</p>
+          }
+        </section>
+
+        @if (reportWarnings().length > 0) {
           <div class="warning-list">
-            @for (warning of report.warnings; track trackText($index, warning)) {
+            @for (warning of reportWarnings(); track trackText($index, warning)) {
               <p>
                 <span class="material-icons-sharp">warning</span>
                 {{ warning }}
@@ -303,11 +289,23 @@
         }
 
         <div class="deep-report-topic-grid">
-          @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
+          @for (block of deepReportBlocks(); track trackDeepBlock($index, block); let sectionIndex = $index) {
             <article class="deep-report-topic">
               <header>
-                <span class="material-icons-sharp">{{ block.icon }}</span>
-                <h3>{{ block.title }}</h3>
+                <div>
+                  <span class="material-icons-sharp">{{ block.icon }}</span>
+                  <h3>{{ block.title }}</h3>
+                </div>
+                <button
+                  type="button"
+                  class="icon-button"
+                  [disabled]="busy() || hasActiveDeepResearch()"
+                  (click)="rebuildDeepReportSection(block, sectionIndex)"
+                  aria-label="Пересобрать раздел"
+                  appTooltip="Пересобрать только этот раздел по сохранённым источникам и фактам. Остальные разделы не меняются."
+                >
+                  <span class="material-icons-sharp">auto_fix_high</span>
+                </button>
               </header>
               <div class="deep-report-markdown" [innerHTML]="block.html"></div>
             </article>
@@ -318,21 +316,47 @@
           <div class="deep-report-sources">
             <strong>Источники</strong>
             @for (source of report.sources; track trackText($index, source.url || source.title)) {
-              <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+              @if (source.url) {
+                <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+              } @else {
+                <span>{{ source.title || source.note }}</span>
+              }
             }
           </div>
         }
-      </section>
-    }
+      } @else {
+        <section class="empty-stage">
+          <span class="material-icons-sharp">article</span>
+          <h2>Отчёт пока не открыт</h2>
+          <div class="empty-actions">
+            <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()">
+              <span class="material-icons-sharp">history</span>
+              Загрузить последний
+            </button>
+            <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
+              <span class="material-icons-sharp">refresh</span>
+              Запустить сбор
+            </button>
+          </div>
+        </section>
+      }
+    </section>
 
     @if (contentPack(); as pack) {
       <section class="panel content-pack-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">inventory_2</span>
-          <h2>AI-пакет компании</h2>
-          <button type="button" class="copy-button panel-copy-button" (click)="copyText(contentPackText(pack))">
+          <div>
+            <h2>AI-пакет компании</h2>
+            <p>{{ packBlocks().length }} блоков · {{ pack.sourceUrls.length }} ссылок</p>
+          </div>
+          <button type="button" class="copy-button panel-copy-button" (click)="copyContentPackMarkdown()" appTooltip="Скопировать весь AI-пакет в Markdown.">
             <span class="material-icons-sharp">content_copy</span>
-            Скопировать всё
+            Всё
+          </button>
+          <button type="button" class="copy-button" (click)="downloadContentPackMarkdown(pack)" appTooltip="Скачать AI-пакет markdown-файлом.">
+            <span class="material-icons-sharp">download</span>
+            Markdown
           </button>
         </div>
 
@@ -356,7 +380,7 @@
                 @for (item of block.items; track trackText($index, item)) {
                   <li>
                     <p>{{ item }}</p>
-                    <button type="button" class="icon-button" (click)="copyText(item)" title="Скопировать">
+                    <button type="button" class="icon-button" (click)="copyText(item)" aria-label="Скопировать" appTooltip="Скопировать этот текст в буфер обмена.">
                       <span class="material-icons-sharp">content_copy</span>
                     </button>
                   </li>
@@ -366,13 +390,30 @@
           }
         </div>
       </section>
+    } @else if (deepResearch()) {
+      <section class="panel next-step-panel">
+        <div class="panel-title">
+          <span class="material-icons-sharp">auto_awesome</span>
+          <div>
+            <h2>Следующий шаг</h2>
+            <p>AI-пакет</p>
+          </div>
+        </div>
+        <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack(deepResearchJob()?.jobId ?? null)">
+          <span class="material-icons-sharp">inventory_2</span>
+          {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Создать из отчёта' }}
+        </button>
+      </section>
     }
 
     <section class="tools-grid">
       <section class="panel tool-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">rate_review</span>
-          <h2>Черновик отзыва</h2>
+          <div>
+            <h2>Черновик отзыва</h2>
+            <p>Клиентский опыт</p>
+          </div>
         </div>
 
         <label>
@@ -397,7 +438,7 @@
 
         <button type="button" [disabled]="busy()" (click)="createDraft()">
           <span class="material-icons-sharp">edit_note</span>
-          {{ isLoading('draft') ? 'Пишу' : 'Создать черновик' }}
+          {{ isLoading('draft') ? 'Пишу' : 'Создать' }}
         </button>
 
         @if (draftResult(); as draft) {
@@ -417,7 +458,10 @@
       <section class="panel tool-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">policy</span>
-          <h2>Проверка текста</h2>
+          <div>
+            <h2>Проверка текста</h2>
+            <p>Факты и риски</p>
+          </div>
         </div>
 
         <label>
@@ -427,7 +471,7 @@
 
         <label>
           <span>Разрешенные факты</span>
-          <textarea rows="3" name="allowedFactsText" [(ngModel)]="allowedFactsText" placeholder="Каждый факт с новой строки"></textarea>
+          <textarea rows="3" name="allowedFactsText" [(ngModel)]="allowedFactsText"></textarea>
         </label>
 
         <div class="inline-actions">
@@ -443,7 +487,7 @@
 
         @if (checkReport(); as report) {
           <article class="safety-box" [class]="safetyTone(report)">
-            <strong>{{ report.safeToUseAsDraft ? 'Можно использовать как черновик' : 'Нужна правка' }}</strong>
+            <strong>{{ report.safeToUseAsDraft ? 'Можно использовать' : 'Нужна правка' }}</strong>
             <span>Риск {{ report.riskScore }}%</span>
             <ul>
               @for (warning of report.warnings; track trackText($index, warning)) {
@@ -470,7 +514,10 @@
       <section class="panel tool-panel">
         <div class="panel-title">
           <span class="material-icons-sharp">support_agent</span>
-          <h2>Ответы компании</h2>
+          <div>
+            <h2>Ответы компании</h2>
+            <p>Позитив и негатив</p>
+          </div>
         </div>
 
         <label>
@@ -521,71 +568,603 @@
   </section>
 
   <section admin-right-content class="reputation-ai-side">
-    <article class="side-panel">
-      <span class="material-icons-sharp">key</span>
-      <div>
-        <h2>Провайдеры</h2>
-        @if (status(); as providerStatus) {
-          <p>
-            AI: {{ providerStatus.aiProvider }} · {{ providerStatus.aiAvailable ? 'доступен' : 'не доступен' }}
-            <br>
-            Search: {{ providerStatus.searchProvider }} · {{ providerStatus.searchAvailable ? 'доступен' : 'не доступен' }}
-            <br>
-            OpenAI: {{ providerStatus.openAiConfigured ? providerStatus.openAiModel : 'не настроен' }}
-            @if (providerStatus.openAiProxyEnabled) {
-              <span> · proxy</span>
+    <form class="side-panel settings-panel" (ngSubmit)="createContentPack()">
+      <div class="side-title">
+        <span class="material-icons-sharp">tune</span>
+        <h2>Настройки запуска</h2>
+      </div>
+
+      <details open appTooltip="Профили управляют ценой, глубиной поиска, моделью и размером результата.">
+        <summary>Профили</summary>
+        <label appTooltip="Быстро — дешёвый короткий отчёт, Баланс — основной режим, Максимум — больше поиска и контекста.">
+          <span>Глубокий отчёт</span>
+          <select
+            name="deepResearchProfile"
+            [ngModel]="deepResearchProfile()"
+            (ngModelChange)="deepResearchProfile.set($event)"
+          >
+            @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
+              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
             }
-            @if (providerStatus.openAiConfigured) {
-              <br>
-              Отчёт: {{ providerStatus.openAiResearchReportModel || providerStatus.openAiModel }}
+          </select>
+        </label>
+
+        @if (selectedDeepResearchProfile(); as profile) {
+          <div class="profile-mode-card">
+            <strong>{{ profile.label }} · {{ profile.model }}</strong>
+            <small>search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }} · tools {{ profile.maxToolCalls }}</small>
+          </div>
+        }
+
+        <label appTooltip="Профиль AI-пакета влияет на качество маркетинговых текстов и расход токенов.">
+          <span>AI-пакет</span>
+          <select
+            name="contentPackProfile"
+            [ngModel]="contentPackProfile()"
+            (ngModelChange)="contentPackProfile.set($event)"
+          >
+            @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
+              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
             }
-          </p>
-        } @else {
-          <p>Ключи берутся backend из `.env`, фронт их не хранит.</p>
+          </select>
+        </label>
+
+        @if (selectedContentPackProfile(); as profile) {
+          <div class="profile-mode-card">
+            <strong>{{ profile.label }} · {{ profile.model }}</strong>
+            <small>reasoning {{ profile.reasoningEffort || 'off' }} · output {{ profile.maxOutputTokens }}</small>
+          </div>
+        }
+      </details>
+
+      <details appTooltip="Ручные факты усиливают отчёт, когда CRM или публичные источники неполные.">
+        <summary>Ручные факты</summary>
+        <label appTooltip="Главный продукт или услуга для AI-пакета и черновиков отзывов.">
+          <span>Товар или услуга</span>
+          <input type="text" name="productOrService" [(ngModel)]="productOrService">
+        </label>
+
+        <label appTooltip="Факты, которые нужно учитывать, но которых может не быть в публичных источниках.">
+          <span>Описание</span>
+          <textarea rows="4" name="manualDescription" [(ngModel)]="manualDescription"></textarea>
+        </label>
+
+        <label appTooltip="Каждый товар или услуга с новой строки. Помогает отчёту выделить коммерческие детали.">
+          <span>Товары и услуги</span>
+          <textarea rows="4" name="productsOrServicesText" [(ngModel)]="productsOrServicesText"></textarea>
+        </label>
+
+        <label appTooltip="Сайт, карточки, отзовики, соцсети и другие URL, которые нужно проверить в первую очередь.">
+          <span>Публичные страницы</span>
+          <textarea rows="4" name="publicUrlsText" [(ngModel)]="publicUrlsText"></textarea>
+        </label>
+
+        <label class="check-row" appTooltip="Если включено, система добавит сайт из CRM-карточки в приоритетные источники.">
+          <input type="checkbox" name="includeCompanyWebsite" [(ngModel)]="includeCompanyWebsite">
+          <span>Сайт из карточки компании</span>
+        </label>
+      </details>
+
+      <details appTooltip="Настройка количества текстов в AI-пакете.">
+        <summary>Объём пакета</summary>
+        <div class="count-grid">
+          <label appTooltip="Сколько рекламных мини-текстов подготовить в AI-пакете.">
+            <span>Реклама</span>
+            <input type="number" min="1" max="8" name="adTextsCount" [(ngModel)]="adTextsCount">
+          </label>
+          <label appTooltip="Сколько готовых постов для соцсетей подготовить.">
+            <span>Посты</span>
+            <input type="number" min="1" max="5" name="socialPostsCount" [(ngModel)]="socialPostsCount">
+          </label>
+          <label appTooltip="Сколько вариантов ответа на позитивный отзыв подготовить.">
+            <span>Позитив</span>
+            <input type="number" min="1" max="8" name="positiveReplyCount" [(ngModel)]="positiveReplyCount">
+          </label>
+          <label appTooltip="Сколько вариантов ответа на негативный отзыв подготовить.">
+            <span>Негатив</span>
+            <input type="number" min="1" max="6" name="negativeReplyCount" [(ngModel)]="negativeReplyCount">
+          </label>
+        </div>
+      </details>
+
+      <button type="submit" class="accent" [disabled]="busy() || hasActiveContentPackJob()" appTooltip="Собрать AI-пакет по открытому отчёту или последнему доступному слепку компании.">
+        <span class="material-icons-sharp">bolt</span>
+        {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Собирается' : 'Собрать пакет' }}
+      </button>
+    </form>
+
+    <article class="side-panel prompt-side-panel" appTooltip="Промпты глубокого отчёта можно смотреть, менять и сбрасывать к дефолту. Новая версия применяется к следующим AI-запускам.">
+      <div class="side-title">
+        <span class="material-icons-sharp">terminal</span>
+        <h2>Промпты</h2>
+        <button type="button" class="icon-button" [disabled]="savingPrompt()" (click)="loadPrompts()" aria-label="Обновить промпты" appTooltip="Загрузить актуальные промпты и статусы кастомизации.">
+          <span class="material-icons-sharp">refresh</span>
+        </button>
+      </div>
+
+      @if (prompts().length > 0) {
+        <label appTooltip="Выберите, какой промпт посмотреть или отредактировать. Сейчас доступны основные промпты глубокого отчёта.">
+          <span>Шаблон</span>
+          <select
+            name="selectedPromptKey"
+            [ngModel]="selectedPromptKey()"
+            (ngModelChange)="selectPrompt($event)"
+          >
+            @for (prompt of prompts(); track trackPrompt($index, prompt)) {
+              <option [value]="prompt.key">{{ prompt.title }}</option>
+            }
+          </select>
+        </label>
+
+        @if (selectedPrompt(); as prompt) {
+          <div class="prompt-meta" [class.custom]="prompt.customized">
+            <strong>{{ prompt.customized ? 'Кастомная версия' : 'Дефолт проекта' }}</strong>
+            <small>{{ prompt.description }}</small>
+            @if (prompt.requiredPlaceholders.length > 0) {
+              <small>Обязательные маркеры: {{ prompt.requiredPlaceholders.join(', ') }}</small>
+            }
+            @if (prompt.updatedAt) {
+              <small>Обновлён {{ prompt.updatedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+            }
+          </div>
+
+          @if (prompt.presets.length > 0) {
+            <div class="prompt-presets" appTooltip="Пресет быстро применяет готовый стиль промпта и сохраняет его как кастомную версию с записью в историю.">
+              <strong>Пресеты</strong>
+              <div>
+                @for (preset of prompt.presets; track trackPromptPreset($index, preset)) {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="applyingPromptPreset() !== null || savingPrompt()"
+                    (click)="applyPromptPreset(preset)"
+                    [appTooltip]="preset.description"
+                  >
+                    <span class="material-icons-sharp">{{ preset.key === 'stable' ? 'restart_alt' : 'tune' }}</span>
+                    {{ applyingPromptPreset() === preset.key ? 'Применяю' : preset.title }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <div
+            class="prompt-validation"
+            [class.invalid]="promptMissingPlaceholders().length > 0 || promptValidation()?.valid === false"
+            [class.valid]="promptMissingPlaceholders().length === 0 && promptValidation()?.valid === true"
+            appTooltip="Проверка защищает динамические маркеры: без них промпт не получит JSON, факты или параметры генерации."
+          >
+            <span class="material-icons-sharp">{{ promptMissingPlaceholders().length > 0 ? 'warning' : 'verified' }}</span>
+            <div>
+              @if (promptMissingPlaceholders().length > 0) {
+                <strong>Не хватает маркеров</strong>
+                <small>{{ promptMissingPlaceholders().join(', ') }}</small>
+              } @else if (promptValidation()?.valid) {
+                <strong>Проверка пройдена</strong>
+                <small>Обязательные маркеры на месте.</small>
+              } @else {
+                <strong>Маркеры на месте</strong>
+                <small>Можно дополнительно проверить через API перед сохранением.</small>
+              }
+            </div>
+          </div>
+
+          <label class="prompt-editor" appTooltip="Редактируйте текст аккуратно: обязательные маркеры в шаблоне входа должны остаться на месте.">
+            <span>Текст промпта</span>
+            <textarea
+              rows="12"
+              name="promptDraft"
+              [ngModel]="promptDraft()"
+              (ngModelChange)="updatePromptDraft($event)"
+            ></textarea>
+          </label>
+
+          <div class="prompt-actions">
+            <button type="button" class="secondary" [disabled]="validatingPrompt()" (click)="validatePrompt()" appTooltip="Проверить промпт на backend без сохранения.">
+              <span class="material-icons-sharp">rule</span>
+              {{ validatingPrompt() ? 'Проверяю' : 'Проверить' }}
+            </button>
+            <button type="button" class="secondary" [disabled]="previewingPrompt()" (click)="previewPrompt()" appTooltip="Собрать итоговый prompt input на демо-данных без вызова OpenAI.">
+              <span class="material-icons-sharp">preview</span>
+              {{ previewingPrompt() ? 'Собираю' : 'Preview' }}
+            </button>
+            <button type="button" class="secondary" [disabled]="savingPrompt() || !promptChanged() || promptMissingPlaceholders().length > 0" (click)="savePrompt()" appTooltip="Сохранить кастомную версию. Доступно только ADMIN/OWNER, версия будет записана в историю.">
+              <span class="material-icons-sharp">save</span>
+              {{ savingPrompt() ? 'Сохраняю' : 'Сохранить' }}
+            </button>
+            <button type="button" class="secondary" [disabled]="savingPrompt() || !prompt.customized" (click)="resetPrompt()" appTooltip="Удалить кастомную версию и вернуть дефолтный промпт из проекта. Доступно только ADMIN/OWNER.">
+              <span class="material-icons-sharp">restart_alt</span>
+              Сбросить
+            </button>
+          </div>
+
+          @if (promptPreview(); as preview) {
+            <details class="prompt-preview-panel" open appTooltip="Итоговый текст после подстановки демо-данных. OpenAI здесь не вызывается.">
+              <summary>Preview · {{ preview.sampleName }}</summary>
+              <div class="prompt-preview-meta">
+                <span>{{ preview.replacedPlaceholders.length }} подставлено</span>
+                <span>{{ preview.unresolvedPlaceholders.length }} осталось</span>
+              </div>
+              @if (preview.replacedPlaceholders.length > 0) {
+                <div class="prompt-chip-list">
+                  @for (placeholder of preview.replacedPlaceholders; track trackText($index, placeholder)) {
+                    <span>{{ placeholder }}</span>
+                  }
+                </div>
+              }
+              @if (preview.unresolvedPlaceholders.length > 0) {
+                <div class="prompt-chip-list warning">
+                  @for (placeholder of preview.unresolvedPlaceholders; track trackText($index, placeholder)) {
+                    <span>{{ placeholder }}</span>
+                  }
+                </div>
+              }
+              @if (preview.warnings.length > 0) {
+                <div class="prompt-preview-warnings">
+                  @for (warning of preview.warnings; track trackText($index, warning)) {
+                    <p>{{ warning }}</p>
+                  }
+                </div>
+              }
+              <pre>{{ preview.renderedContent }}</pre>
+            </details>
+          }
+
+          <details class="prompt-diff-panel" appTooltip="Сравнение текущего текста с дефолтным промптом из проекта.">
+            <summary>Diff с дефолтом · {{ promptDiffSummary() }}</summary>
+            <div class="prompt-diff-list">
+              @for (line of promptDiffLines(); track trackPromptDiff($index, line)) {
+                <div class="prompt-diff-line" [class]="line.status">
+                  <span>{{ line.lineNumber }}</span>
+                  <pre>{{ line.status === 'added' ? line.draftText : line.status === 'removed' ? line.defaultText : line.draftText }}</pre>
+                </div>
+              }
+            </div>
+          </details>
+
+          <details class="prompt-history-panel" appTooltip="История сохраняет, кто и когда менял промпт или сбрасывал его к дефолту.">
+            <summary>История версий · {{ promptHistory().length }}</summary>
+            @if (promptHistory().length > 0) {
+              <div class="prompt-history-list">
+                @for (version of promptHistory(); track trackPromptVersion($index, version)) {
+                  <article class="prompt-history-row">
+                    <span class="material-icons-sharp">{{ version.action === 'reset' ? 'restart_alt' : 'save' }}</span>
+                    <div>
+                      <strong>{{ promptHistoryActionLabel(version.action) }}</strong>
+                      <small>{{ version.actor || 'unknown' }} · {{ version.createdAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+                    </div>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="muted">Истории пока нет: промпт ещё не меняли через UI.</p>
+            }
+          </details>
+        }
+      } @else {
+        <p class="muted">Промпты пока не загружены.</p>
+      }
+    </article>
+
+    <article class="side-panel help-side-panel" appTooltip="Короткая справка по правильному порядку работы с AI-помощником.">
+      <div class="side-title">
+        <span class="material-icons-sharp">help</span>
+        <h2>Порядок работы</h2>
+      </div>
+      <div class="workflow-help-list">
+        @for (step of workflowSteps(); track trackWorkflowStep($index, step)) {
+          <article class="workflow-help-step" [appTooltip]="step.text">
+            <span class="material-icons-sharp">{{ step.icon }}</span>
+            <div>
+              <strong>{{ step.title }}</strong>
+              <small>{{ step.text }}</small>
+            </div>
+          </article>
         }
       </div>
     </article>
 
-    @if (status()?.warnings?.length) {
-      <article class="side-panel yellow">
-        <span class="material-icons-sharp">settings_alert</span>
-        <div>
-          <h2>Настройка</h2>
-          @for (warning of status()?.warnings ?? []; track trackText($index, warning)) {
-            <p>{{ warning }}</p>
+    <article class="side-panel raw-snapshot-panel" appTooltip="Сырьё — это факты и URL до генерации глубокого отчёта. По нему видно, что система нашла и что может попасть в синтез.">
+      <div class="side-title">
+        <span class="material-icons-sharp">storage</span>
+        <h2>Сырьё и источники</h2>
+        <button type="button" class="icon-button" [disabled]="busy()" (click)="loadLatestResearchSnapshot()" aria-label="Загрузить сырьё" appTooltip="Загрузить последний сохранённый слепок сырья.">
+          <span class="material-icons-sharp">history</span>
+        </button>
+        <button type="button" class="icon-button" [disabled]="busy()" (click)="refreshResearchSnapshot()" aria-label="Обновить сырьё" appTooltip="Обновить сырьё: CRM, сайт, поиск, публичные страницы и извлечённые источники.">
+          <span class="material-icons-sharp">refresh</span>
+        </button>
+      </div>
+
+      @if (activeResearchSnapshot(); as snapshot) {
+        <div class="snapshot-metrics">
+          @for (metric of snapshotMetrics(); track trackSnapshotMetric($index, metric)) {
+            <span appTooltip="Метрика сырьевого слепка">{{ metric.label }}: {{ metric.value }}</span>
           }
         </div>
+
+        @if (snapshot.searchQueries.length > 0) {
+          <div class="snapshot-query-list" appTooltip="Поисковые запросы, которые система использовала для сбора публичных данных.">
+            @for (query of snapshot.searchQueries; track trackText($index, query)) {
+              <span>{{ query }}</span>
+            }
+          </div>
+        }
+
+        @if (snapshot.warnings.length > 0) {
+          <div class="snapshot-warning-list">
+            @for (warning of snapshot.warnings; track trackText($index, warning)) {
+              <p>{{ warning }}</p>
+            }
+          </div>
+        }
+
+        @if (snapshotSourceGroups().length > 0) {
+          <div class="snapshot-source-groups">
+            @for (group of snapshotSourceGroups(); track trackSnapshotSourceGroup($index, group)) {
+              <details [appTooltip]="'Группа источников: ' + group.label">
+                <summary>{{ group.label }} · {{ group.sources.length }}</summary>
+                @for (source of group.sources; track trackCompanySource($index, source)) {
+                  <article class="snapshot-source-row" [appTooltip]="source.excerpt || 'Источник без фрагмента текста.'">
+                    @if (source.url) {
+                      <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                    } @else {
+                      <span>{{ source.title || 'Источник без ссылки' }}</span>
+                    }
+                    @if (source.excerpt) {
+                      <small>{{ source.excerpt }}</small>
+                    }
+                  </article>
+                }
+              </details>
+            }
+          </div>
+        } @else {
+          <p class="muted">Источники в сырьевом слепке не найдены.</p>
+        }
+      } @else {
+        <p class="muted">Сырьё пока не открыто. Загрузите последнее или обновите слепок для выбранной компании.</p>
+      }
+    </article>
+
+    @if (deepResearch()) {
+      <article class="side-panel facts-side-panel">
+        <div class="side-title">
+          <span class="material-icons-sharp">fact_check</span>
+          <h2>Факты отчёта</h2>
+        </div>
+
+        @if (confirmedFacts().length > 0) {
+          <div class="fact-block">
+            <strong>Подтверждено</strong>
+            @for (fact of confirmedFacts(); track trackFact($index, fact)) {
+              <article class="fact-row">
+                <span>{{ fact.label }}</span>
+                <strong>{{ fact.value }}</strong>
+                <small>{{ fact.evidence }} · уверенность {{ confidenceLabel(fact.confidence) }}</small>
+              </article>
+            }
+          </div>
+        }
+
+        @if (uncertainFacts().length > 0) {
+          <div class="fact-block uncertain">
+            <strong>Нужно проверить</strong>
+            @for (fact of uncertainFacts(); track trackFact($index, fact)) {
+              <article class="fact-row">
+                <span>{{ fact.label }}</span>
+                <strong>{{ fact.value }}</strong>
+                <small>{{ fact.evidence }} · уверенность {{ confidenceLabel(fact.confidence) }}</small>
+              </article>
+            }
+          </div>
+        }
+
+        @if (sourceReviews().length > 0) {
+          <div class="source-review-block">
+            <strong>Источники</strong>
+            @for (source of sourceReviews(); track trackSourceReview($index, source)) {
+              <article class="source-review-row" [class.needs-review]="source.status !== 'trusted_public'">
+                <span class="material-icons-sharp">{{ sourceReviewIcon(source.status) }}</span>
+                <div>
+                  @if (source.url) {
+                    <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                  } @else {
+                    <span>{{ source.title || 'Источник без ссылки' }}</span>
+                  }
+                  <small>{{ sourceReviewLabel(source.status) }} · {{ source.reason }}</small>
+                </div>
+              </article>
+            }
+          </div>
+        }
+
+        @if (!confirmedFacts().length && !uncertainFacts().length && !sourceReviews().length) {
+          <p class="muted">Для старого отчёта снимка фактов нет. Новый запуск добавит подтверждения и сомнения.</p>
+        }
       </article>
     }
 
-    @if (deepResearch(); as report) {
-      <article class="side-panel">
-        <span class="material-icons-sharp">article</span>
-        <div>
-          <h2>{{ report.companyName || 'Компания #' + report.companyId }}</h2>
-          <p>{{ report.sources.length }} источников · {{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }}</p>
+    <article class="side-panel">
+      <div class="side-title">
+        <span class="material-icons-sharp">key</span>
+        <h2>Маршрут OpenAI</h2>
+      </div>
+
+      @if (status(); as providerStatus) {
+        <div class="provider-summary">
+          <span>AI: {{ providerStatus.aiProvider }} · {{ providerStatus.aiAvailable ? 'доступен' : 'не доступен' }}</span>
+          <span>Search: {{ providerStatus.searchProvider }} · {{ providerStatus.searchAvailable ? 'доступен' : 'не доступен' }}</span>
+          <span>OpenAI: {{ providerStatus.openAiConfigured ? providerStatus.openAiModel : 'не настроен' }}</span>
+          @if (providerStatus.openAiProxyEnabled) {
+            <strong>proxy</strong>
+          }
         </div>
+
+        @if (providerStatus.openAiDiagnostics; as diagnostics) {
+          <div class="provider-diagnostics">
+            <span>{{ openAiRouteLabel(diagnostics) }}</span>
+            <span>{{ openAiCheckLabel(diagnostics) }}</span>
+            @if (diagnostics.lastCheckedAt) {
+              <small>{{ diagnostics.lastCheckedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+            }
+            @if (diagnostics.lastMessage) {
+              <small>{{ diagnostics.lastMessage }}</small>
+            }
+          </div>
+          <button type="button" class="secondary side-action" [disabled]="checkingOpenAiRoute()" (click)="checkOpenAiRoute()">
+            <span class="material-icons-sharp">network_check</span>
+            {{ checkingOpenAiRoute() ? 'Проверяю' : 'Проверить OpenAI' }}
+          </button>
+        }
+      } @else {
+        <p class="muted">Статус не загружен.</p>
+      }
+    </article>
+
+    @if (status()?.warnings?.length) {
+      <article class="side-panel yellow">
+        <div class="side-title">
+          <span class="material-icons-sharp">settings_alert</span>
+          <h2>Настройка</h2>
+        </div>
+        @for (warning of status()?.warnings ?? []; track trackText($index, warning)) {
+          <p class="muted">{{ warning }}</p>
+        }
       </article>
     }
 
-    @if (contentPack(); as pack) {
-      <article class="side-panel">
-        <span class="material-icons-sharp">inventory</span>
-        <div>
-          <h2>{{ packBlocks().length }} блоков</h2>
-          <p>{{ pack.sourceUrls.length }} ссылок-источников</p>
-        </div>
-      </article>
-    }
+    <article class="side-panel history-side-panel">
+      <div class="side-title">
+        <span class="material-icons-sharp">history</span>
+        <h2>История отчётов</h2>
+        <button type="button" class="icon-button" [disabled]="busy()" (click)="loadDeepResearchHistory()" aria-label="Обновить историю" appTooltip="Обновить историю задач глубокого отчёта.">
+          <span class="material-icons-sharp">refresh</span>
+        </button>
+      </div>
 
-    @if (checkReport(); as report) {
-      <article class="side-panel" [class]="safetyTone(report)">
-        <span class="material-icons-sharp">policy</span>
-        <div>
-          <h2>Риск {{ report.riskScore }}%</h2>
-          <p>{{ report.safeToUseAsDraft ? 'Черновик безопасен' : 'Требуется редактура' }}</p>
+      <div class="history-filters">
+        <input
+          type="search"
+          name="historySearch"
+          [ngModel]="historySearchText()"
+          (ngModelChange)="historySearchText.set($event)"
+          placeholder="Поиск"
+          appTooltip="Поиск по компании, ID задачи, модели, ошибке, статусу или типу запуска."
+        >
+        <div class="history-filter-row">
+          <select
+            name="historyStatusFilter"
+            [ngModel]="historyStatusFilter()"
+            (ngModelChange)="historyStatusFilter.set($event)"
+            appTooltip="Фильтр истории по статусу задачи."
+          >
+            <option value="all">Все статусы</option>
+            <option value="DONE">Готовые</option>
+            <option value="FAILED">Ошибки</option>
+            <option value="RUNNING">Собираются</option>
+            <option value="QUEUED">В очереди</option>
+          </select>
+          <select
+            name="historyOperationFilter"
+            [ngModel]="historyOperationFilter()"
+            (ngModelChange)="historyOperationFilter.set($event)"
+            appTooltip="Фильтр истории по типу запуска."
+          >
+            <option value="all">Все типы</option>
+            <option value="full_report">Новый отчёт</option>
+            <option value="refresh_sources">Источники</option>
+            <option value="rebuild_text">Текст</option>
+            <option value="rebuild_section">Раздел</option>
+          </select>
+          <button type="button" class="icon-button" (click)="resetHistoryFilters()" aria-label="Сбросить фильтры" appTooltip="Сбросить фильтры истории.">
+            <span class="material-icons-sharp">filter_alt_off</span>
+          </button>
         </div>
-      </article>
-    }
+      </div>
+
+      @if (filteredDeepResearchHistory().length > 0) {
+        <div class="side-history-list">
+          @for (job of filteredDeepResearchHistory(); track trackJob($index, job)) {
+            <article
+              class="side-history-row"
+              [class.failed]="job.status === 'FAILED'"
+              [class.done]="job.status === 'DONE'"
+              [class.current]="isCurrentDeepResearchJob(job)"
+              [class.selected]="selectedHistoryDetails()?.jobId === job.jobId"
+              appTooltip="Версия отчёта: можно открыть, сравнить с текущей, собрать AI-пакет или посмотреть паспорт версии."
+            >
+              <span class="material-icons-sharp">{{ reportStatusIcon(job) }}</span>
+              <div>
+                <div class="history-title-line">
+                  <strong>{{ job.companyName || 'Компания #' + job.companyId }}</strong>
+                  @if (isCurrentDeepResearchJob(job)) {
+                    <span class="current-badge">открыт</span>
+                  }
+                </div>
+                <small>{{ job.createdAt | date: 'dd.MM HH:mm' }} · {{ deepResearchStatusLabel(job) }} · {{ deepResearchOperationLabel(job) }}</small>
+                @if (job.report) {
+                  <div class="history-stat-row">
+                    <span>Q {{ jobQualityLabel(job) }}</span>
+                    <span>{{ jobSourceCount(job) }} src</span>
+                    <span>{{ jobSectionCount(job) }} sec</span>
+                  </div>
+                }
+                @if (job.errorMessage) {
+                  <p>{{ deepResearchJobError(job) }}</p>
+                }
+              </div>
+              <div class="history-actions">
+                <button type="button" class="icon-button" (click)="selectHistoryJob(job)" aria-label="Показать паспорт версии" appTooltip="Показать паспорт этой версии.">
+                  <span class="material-icons-sharp">info</span>
+                </button>
+                <button type="button" class="icon-button" (click)="openDeepResearchJob(job)" aria-label="Открыть версию отчёта" appTooltip="Открыть эту версию отчёта в основной области.">
+                  <span class="material-icons-sharp">visibility</span>
+                </button>
+                <button type="button" class="icon-button" [disabled]="!canCompareWithCurrent(job)" (click)="compareWithCurrent(job)" aria-label="Сравнить версии отчёта" appTooltip="Сравнить эту версию с открытой версией отчёта.">
+                  <span class="material-icons-sharp">compare_arrows</span>
+                </button>
+                <button type="button" class="icon-button accent" [disabled]="busy() || hasActiveContentPackJob() || !job.report" (click)="createContentPackFromJob(job)" aria-label="Собрать AI-пакет из версии" appTooltip="Собрать AI-пакет именно из этой версии отчёта.">
+                  <span class="material-icons-sharp">auto_awesome</span>
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="muted">{{ deepResearchHistory().length > 0 ? 'По текущим фильтрам ничего не найдено.' : 'История пока пустая.' }}</p>
+      }
+
+      @if (selectedHistoryDetails(); as detail) {
+        <div class="history-detail-card" appTooltip="Паспорт версии: техническая и качественная сводка выбранного запуска.">
+          <strong>{{ detail.companyName || 'Компания #' + detail.companyId }}</strong>
+          <div class="history-detail-grid">
+            <span>ID {{ detail.jobId }}</span>
+            <span>{{ deepResearchStatusLabel(detail) }}</span>
+            <span>{{ deepResearchOperationLabel(detail) }}</span>
+            <span>Q {{ jobQualityLabel(detail) }}</span>
+            <span>{{ jobSourceCount(detail) }} источников</span>
+            <span>{{ jobSectionCount(detail) }} разделов</span>
+          </div>
+          <small>Создан {{ detail.createdAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+          @if (detail.startedAt) {
+            <small>Старт {{ detail.startedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+          }
+          @if (detail.completedAt) {
+            <small>Финиш {{ detail.completedAt | date: 'dd.MM.yyyy HH:mm' }}</small>
+          }
+          @if (detail.model) {
+            <small>{{ detail.provider }} · {{ detail.model }}</small>
+          }
+          @if (historyDetailWarnings(detail).length > 0) {
+            <div class="history-detail-warnings">
+              @for (warning of historyDetailWarnings(detail); track trackText($index, warning)) {
+                <p>{{ warning }}</p>
+              }
+            </div>
+          }
+        </div>
+      }
+    </article>
   </section>
 </app-admin-layout>

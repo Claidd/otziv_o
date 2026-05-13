@@ -1,11 +1,13 @@
 package com.hunt.otziv.reputationai.api;
 
 import com.hunt.otziv.reputationai.api.dto.ReputationContentPackRequest;
+import com.hunt.otziv.reputationai.api.dto.OpenAiProviderDiagnostics;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiModelProfile;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiStatus;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewCheckRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewDraftRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationAiPromptUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyResponse;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewRewriteRequest;
@@ -13,6 +15,8 @@ import com.hunt.otziv.reputationai.api.dto.ReputationReviewRewriteResponse;
 import com.hunt.otziv.reputationai.application.CompanyResearchService;
 import com.hunt.otziv.reputationai.application.DeepCompanyResearchJobService;
 import com.hunt.otziv.reputationai.application.DeepCompanyResearchService;
+import com.hunt.otziv.reputationai.application.ReputationAiMarkdownExportService;
+import com.hunt.otziv.reputationai.application.ReputationAiPromptService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackJobService;
 import com.hunt.otziv.reputationai.application.ReviewDraftService;
@@ -21,6 +25,10 @@ import com.hunt.otziv.reputationai.application.ReviewSafetyService;
 import com.hunt.otziv.reputationai.config.ContentPackProfile;
 import com.hunt.otziv.reputationai.config.DeepResearchProfile;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.reputationai.domain.ReputationAiPrompt;
+import com.hunt.otziv.reputationai.domain.ReputationAiPromptPreview;
+import com.hunt.otziv.reputationai.domain.ReputationAiPromptValidation;
+import com.hunt.otziv.reputationai.domain.ReputationAiPromptVersion;
 import com.hunt.otziv.reputationai.domain.ReputationContentPack;
 import com.hunt.otziv.reputationai.domain.ReputationContentPackJobStatus;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
@@ -29,18 +37,28 @@ import com.hunt.otziv.reputationai.domain.ResearchSnapshot;
 import com.hunt.otziv.reputationai.domain.ReviewDraftResult;
 import com.hunt.otziv.reputationai.domain.ReviewSafetyReport;
 import com.hunt.otziv.reputationai.infrastructure.ai.AiProviderRouter;
+import com.hunt.otziv.reputationai.infrastructure.ai.openai.OpenAiResponsesClient;
 import com.hunt.otziv.reputationai.infrastructure.search.SearchProviderRouter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.Principal;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,11 +73,14 @@ public class ReputationAiController {
     private final DeepCompanyResearchService deepCompanyResearchService;
     private final ReputationContentPackService contentPackService;
     private final ReputationContentPackJobService contentPackJobService;
+    private final ReputationAiMarkdownExportService markdownExportService;
     private final ReviewDraftService reviewDraftService;
     private final ReviewReplyService reviewReplyService;
     private final ReviewSafetyService reviewSafetyService;
+    private final ReputationAiPromptService promptService;
     private final AiProviderRouter aiProviderRouter;
     private final SearchProviderRouter searchProviderRouter;
+    private final OpenAiResponsesClient openAiResponsesClient;
     private final ReputationAiProperties properties;
 
     @GetMapping("/status")
@@ -95,10 +116,72 @@ public class ReputationAiController {
                 properties.getOpenai().getModel(),
                 properties.getOpenai().getResearchReport().getModel(),
                 ContentPackProfile.QUALITY.model(),
+                openAiDiagnostics(),
                 deepResearchProfiles(),
                 contentPackProfiles(),
                 warnings
         );
+    }
+
+    @PostMapping("/status/openai-check")
+    public OpenAiProviderDiagnostics checkOpenAiRoute() {
+        openAiResponsesClient.checkConnection();
+        return openAiDiagnostics();
+    }
+
+    @GetMapping("/prompts")
+    public List<ReputationAiPrompt> prompts() {
+        return promptService.listPrompts();
+    }
+
+    @GetMapping("/prompts/{key}/history")
+    public List<ReputationAiPromptVersion> promptHistory(
+            @PathVariable String key,
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        return promptService.history(key, limit);
+    }
+
+    @PostMapping("/prompts/{key}/validate")
+    public ReputationAiPromptValidation validatePrompt(
+            @PathVariable String key,
+            @RequestBody ReputationAiPromptUpdateRequest request
+    ) {
+        return promptService.validate(key, request == null ? null : request.content());
+    }
+
+    @PostMapping("/prompts/{key}/preview")
+    public ReputationAiPromptPreview previewPrompt(
+            @PathVariable String key,
+            @RequestBody ReputationAiPromptUpdateRequest request
+    ) {
+        return promptService.preview(key, request == null ? null : request.content());
+    }
+
+    @PostMapping("/prompts/{key}/presets/{presetKey}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ReputationAiPrompt applyPromptPreset(
+            @PathVariable String key,
+            @PathVariable String presetKey,
+            Principal principal
+    ) {
+        return promptService.applyPreset(key, presetKey, principalName(principal));
+    }
+
+    @PutMapping("/prompts/{key}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ReputationAiPrompt updatePrompt(
+            @PathVariable String key,
+            @RequestBody ReputationAiPromptUpdateRequest request,
+            Principal principal
+    ) {
+        return promptService.update(key, request == null ? null : request.content(), principalName(principal));
+    }
+
+    @DeleteMapping("/prompts/{key}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ReputationAiPrompt resetPrompt(@PathVariable String key, Principal principal) {
+        return promptService.reset(key, principalName(principal));
     }
 
     private List<ReputationAiModelProfile> deepResearchProfiles() {
@@ -163,10 +246,71 @@ public class ReputationAiController {
         }
     }
 
+    @PostMapping("/companies/{companyId}/deep-research/jobs/refresh-sources")
+    public DeepCompanyResearchJobStatus refreshDeepResearchSources(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationResearchRequest request
+    ) {
+        try {
+            return deepCompanyResearchJobService.refreshSources(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/companies/{companyId}/deep-research/jobs/rebuild-text")
+    public DeepCompanyResearchJobStatus rebuildDeepResearchText(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationResearchRequest request
+    ) {
+        try {
+            return deepCompanyResearchJobService.rebuildText(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/companies/{companyId}/deep-research/jobs/rebuild-section")
+    public DeepCompanyResearchJobStatus rebuildDeepResearchSection(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationResearchRequest request
+    ) {
+        try {
+            return deepCompanyResearchJobService.rebuildSection(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
+    }
+
     @GetMapping("/companies/{companyId}/deep-research/jobs/latest")
     public DeepCompanyResearchJobStatus latestDeepResearchJob(@PathVariable Long companyId) {
         return deepCompanyResearchJobService.findLatest(companyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Глубокий GPT-отчет пока не запускался"));
+    }
+
+    @GetMapping("/companies/{companyId}/deep-research/jobs/history")
+    public List<DeepCompanyResearchJobStatus> deepResearchJobHistory(
+            @PathVariable Long companyId,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return deepCompanyResearchJobService.history(companyId, limit);
+    }
+
+    @GetMapping(value = "/companies/{companyId}/deep-research/jobs/latest/export", produces = "text/markdown;charset=UTF-8")
+    public ResponseEntity<String> exportLatestDeepResearchMarkdown(@PathVariable Long companyId) {
+        return markdownExportService.latestDeepReport(companyId)
+                .map(this::markdownResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый глубокий GPT-отчет для экспорта пока не найден"));
+    }
+
+    @GetMapping(value = "/companies/{companyId}/deep-research/jobs/{jobId}/export", produces = "text/markdown;charset=UTF-8")
+    public ResponseEntity<String> exportDeepResearchMarkdown(
+            @PathVariable Long companyId,
+            @PathVariable Long jobId
+    ) {
+        return markdownExportService.deepReport(companyId, jobId)
+                .map(this::markdownResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый глубокий GPT-отчет для экспорта не найден"));
     }
 
     @GetMapping("/companies/{companyId}/research/latest")
@@ -203,6 +347,13 @@ public class ReputationAiController {
     public ReputationContentPackJobStatus latestContentPackJob(@PathVariable Long companyId) {
         return contentPackJobService.findLatest(companyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AI-пакет для этой компании пока не запускался"));
+    }
+
+    @GetMapping(value = "/companies/{companyId}/content-pack/jobs/latest/export", produces = "text/markdown;charset=UTF-8")
+    public ResponseEntity<String> exportLatestContentPackMarkdown(@PathVariable Long companyId) {
+        return markdownExportService.latestContentPack(companyId)
+                .map(this::markdownResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый AI-пакет для экспорта пока не найден"));
     }
 
     @PostMapping("/companies/{companyId}/review-draft")
@@ -245,5 +396,46 @@ public class ReputationAiController {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String principalName(Principal principal) {
+        return principal == null || principal.getName() == null ? "unknown" : principal.getName();
+    }
+
+    private ResponseEntity<String> markdownResponse(ReputationAiMarkdownExportService.MarkdownExport export) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/markdown;charset=UTF-8"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(export.fileName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .body(export.markdown());
+    }
+
+    private OpenAiProviderDiagnostics openAiDiagnostics() {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        ReputationAiProperties.OpenAi.Proxy proxy = openai.getProxy();
+        boolean configured = !isBlank(openai.getApiKey()) && !isBlank(openai.getBaseUrl()) && !isBlank(openai.getModel());
+        boolean proxyConfigured = proxy.isEnabled() && !isBlank(proxy.getHost());
+        boolean proxyAuthConfigured = !isBlank(proxy.getUsername());
+        OpenAiResponsesClient.OpenAiLastCheck lastCheck = openAiResponsesClient.lastCheck();
+        return new OpenAiProviderDiagnostics(
+                openai.getBaseUrl(),
+                configured,
+                proxy.isEnabled(),
+                proxyConfigured,
+                proxyAuthConfigured,
+                proxy.getHost(),
+                proxy.getPort(),
+                proxyConfigured,
+                proxyConfigured ? "proxy" : "direct",
+                lastCheck.status(),
+                lastCheck.httpStatus(),
+                lastCheck.message(),
+                lastCheck.checkedAt()
+        );
     }
 }

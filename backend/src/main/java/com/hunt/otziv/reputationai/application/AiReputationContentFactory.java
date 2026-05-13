@@ -42,6 +42,7 @@ public class AiReputationContentFactory {
 
     private final OpenAiProvider openAiProvider;
     private final ObjectMapper objectMapper;
+    private final ReputationAiPromptService promptService;
 
     public Optional<ReputationContentPack> create(
             ResearchSnapshot snapshot,
@@ -176,70 +177,21 @@ public class AiReputationContentFactory {
             String previousResponse,
             List<String> qualityIssues
     ) throws Exception {
-        return """
-                Предыдущий JSON был отклонен контролем качества.
-                Причины: %s
-                
-                Перепиши пакет полностью. Обязательные правила:
-                - главным источником считай deepResearch: репутационные темы, доверие, возражения, сценарии, услуги/цены, филиалы, интерьер/экстерьер и риски;
-                - прямо используй конкретные факты из deepResearch, evidenceFacts и trusted/review sources: названия сценариев, город, адреса, рейтинг, количество отзывов, возраст, цены, сайт, карточки, товары или услуги;
-                - sources с типами catalog_listing, competitor_listing и unknown_public не используй как факты о компании; это только внешний контекст выдачи;
-                - УТП и рекламные карточки должны звучать как готовые тексты от лица самой компании: живо, уверенно, по-человечески, с пользой для клиента;
-                - adTexts перепиши как готовые продающие тексты от первого лица множественного числа ("мы", "поможем", "подскажем", "возьмем на себя"), а не как анкету с полями "Заголовок/Кому/Зачем";
-                - если в deepResearch или request.publicUrls есть официальный сайт, страницы услуг, прайса, контактов или карточки 2ГИС, используй их как контекст смысла: какие услуги, для кого, зачем, при каких условиях. Не выводи их сухим списком;
-                - не пиши в УТП и adTexts фразы вроде "сайт указывает", "2ГИС указывает", "UrbanPlaces указывает", "по открытым данным"; источники нужны для фактчекинга, а не для рекламного текста;
-                - разведи роли блоков: utp = разные короткие преимущества компании; adTexts = разные продающие сценарии/объявления; socialPosts = статьи с заголовками и раскрытием темы;
-                - не повторяй один и тот же плюс в каждом УТП и каждом рекламном тексте. Каждый элемент должен иметь отдельный угол: маршрут, экономия, консультация, офис, запись, сопровождение, подготовка документов, спокойствие клиента, сроки, доверие;
-                - socialPosts должны быть полноценными статьями, а не заголовками и не короткими заметками;
-                - reviewDraftTemplates должны быть почти готовыми отзывами, но с честными местами для личной проверки клиента;
-                - если факт сомнительный, напиши предупреждение в factualWarnings или safetyNotes, но не теряй остальную конкретику.
-                
-                Исходное задание и данные:
-                %s
-                
-                Отклоненный ответ:
-                %s
-                """.formatted(
-                String.join("; ", qualityIssues),
-                userPrompt(snapshot, deepReport, request),
-                limit(previousResponse, 6000)
-        );
+        return renderPromptTemplate(promptService.content(ReputationAiPromptKeys.CONTENT_PACK_REVISION), Map.of(
+                "qualityIssues", String.join("; ", qualityIssues),
+                "userPrompt", userPrompt(snapshot, deepReport, request),
+                "previousResponse", limit(previousResponse, 6000)
+        ));
     }
 
     private String systemPrompt() {
-        return """
-                Ты элитная команда маркетинга в одном лице: бренд-стратег, performance-маркетолог, SMM-редактор, reputation manager и строгий фактчекер.
-                Твоя задача - превратить глубокое исследование компании в сильный AI-пакет для репутации, рекламы, отзывов и соцсетей.
-                Главный источник истины - deepResearch. Быстрый слепок и sources используй как дополнительный контекст.
-                Используй только факты из deepResearch, входного слепка компании и публичных источников.
-                Не выдумывай адреса, даты, товары, услуги, награды, цены, сроки и гарантии.
-                Если факта нет, формулируй осторожно: "можно уточнить", "клиент может отметить, если это было в опыте".
-                Каждый рекламный текст, УТП, статья и черновик отзыва должны использовать конкретику: город, адрес, рейтинг, отзывы, сценарии, цены, возраст, формат, интерьер/экстерьер, доверие, возражения, контакты, товары или услуги.
-                Пиши как лучшие маркетологи: не общими словами, а через инсайт, клиентский сценарий, доказательство, выгоду и честный следующий шаг.
-                УТП в поле utp пиши как готовые фразы продавца от лица компании: 1-2 живых предложения, без технических ссылок на источники и без конструкции "источник сообщает".
-                Каждый пункт УТП должен раскрывать отдельное достоинство. Не делай семь вариантов одной мысли. Начинай с разных смысловых углов: "Удобно начать в Благовещенске", "Помогаем с маршрутом", "Объясняем этапы лечения", "Снижаем тревогу перед поездкой", "Подбираем формат под задачу".
-                Рекламные тексты в поле adTexts пиши как готовые продающие мини-тексты %s знаков от лица компании. Это не анкета и не таблица: не используй ярлыки "Заголовок:", "Кому:", "Зачем:", "Почему можно доверять:", "Текст:", "Следующий шаг:".
-                Рекламные тексты должны отличаться от УТП: это не список преимуществ, а готовые объявления под разные аудитории и ситуации. Один текст - для тех, кто боится логистики; другой - для тех, кто сравнивает стоимость; третий - для протезирования/брекетов; четвертый - для первого обращения; пятый - про офис и консультацию; шестой - про сопровождение.
-                В каждом рекламном тексте естественно объясняй клиенту: чем поможем, для какой ситуации услуга подходит, какую проблему снимаем, почему нам можно доверять и как обратиться. Не повторяй одинаковый первый абзац.
-                Пиши живой речью: "Поможем оформить ДТП без лишней паники", "Возьмем на себя документы", "Подскажем, что делать на месте". Не копируй стиль справочника.
-                Запрещены пустые формулы вроде "индивидуальный подход", "высокое качество", "лучший сервис", если рядом нет конкретного факта из исследования.
-                Запрещено делать utp/adTexts списком ссылок, ИНН/ОГРН, телефонов, названий источников или сухих SEO-фраз. Реквизиты можно упоминать только в safetyNotes или companyProfile, если это важно для доверия.
-                Запрещены формулировки "сайт указывает", "2ГИС указывает", "UrbanPlaces указывает", "в открытых данных указано", "официальный сайт описывает" внутри utp и adTexts. Переписывай такие факты в человеческую пользу без упоминания источника.
-                Посты для соцсетей должны быть полноценными готовыми статьями: 900-1600 знаков, с явным заголовком первой строкой, лидом, 3-5 смысловыми абзацами и мягким CTA. Заголовок нужен именно в socialPosts, но не нужен в adTexts.
-                Черновики отзывов должны быть почти готовыми текстами для реальных клиентов: 500-900 знаков, с конкретными деталями компании, но без утверждения непроверенного личного опыта.
-                В черновиках отзывов оставляй только 2-4 короткие вставки в квадратных скобках для того, что обязан подтвердить сам клиент.
-                Не делай короткие заголовки вместо статей. Не используй общие фразы без фактов, если во входных данных есть конкретика.
-                Верни только валидный JSON без markdown.
-                """.formatted("350-700");
+        return renderPromptTemplate(promptService.content(ReputationAiPromptKeys.CONTENT_PACK_SYSTEM), Map.of(
+                "adTextRange", "350-700"
+        ));
     }
 
     private String compactSystemPrompt() {
-        return """
-                Ты маркетолог и фактчекер. Твоя задача - вернуть короткий, законченный и строго валидный JSON для AI-пакета.
-                Главный приоритет - валидность JSON: никаких markdown-блоков, пояснений вокруг объекта и незакрытых строк.
-                Не выдумывай факты. Используй deepResearch, CRM-данные и priorityUrls как смысловой контекст.
-                Лучше вернуть меньше элементов, но каждый должен быть человеческим, понятным и основанным на фактах.
-                """;
+        return promptService.content(ReputationAiPromptKeys.CONTENT_PACK_COMPACT_SYSTEM);
     }
 
     private String userPrompt(
@@ -318,27 +270,13 @@ public class AiReputationContentFactory {
                 "safetyNotes", "string[]"
         ));
 
-        return """
-                Подготовь структурированный AI-пакет компании.
-                Главный материал - deepResearch: это уже собранное исследование компании. Быстрый snapshot нужен только как дополнительная CRM/поисковая подложка.
-                Сделай тексты конкретными: используй название, город, категорию, найденные товары/услуги, цены, филиалы, интерьер/экстерьер, репутационные темы, доверие, возражения, сценарии и факты из sources.
-                priorityUrls - это не текст для копирования пользователю, а список источников, из которых нужно понять контекст компании: официальный сайт, услуги, цены, контакты, карточки и документы.
-                Если источников или подтверждений мало, явно добавь factualWarnings и safetyNotes, но не усиливай непроверенные утверждения.
-                Требование к качеству:
-                - companyProfile: сжатое позиционирование, продукты, преимущества, репутационные плюсы/минусы и предупреждения;
-                - utp: %s сильных УТП. Каждое УТП - отдельное преимущество компании, а не вариация одной мысли. Пиши готовой человеческой фразой от лица компании: что мы делаем, чем это помогает клиенту, почему это удобно/надежно. Не пиши "сайт указывает", "2ГИС указывает", "источник подтверждает";
-                - adTexts: готовые продающие мини-тексты %s знаков от лица компании. Они должны раскрывать разные сценарии покупки и не дублировать УТП слово в слово. Не делай анкету с ярлыками "Заголовок/Кому/Зачем/Почему можно доверять/Текст/Следующий шаг". Не делай сухой набор ссылок, ИНН, ОГРН, телефонов и названий. Пиши живой речью продавца: "поможем", "подскажем", "возьмем на себя", "оставьте заявку";
-                - socialPostTopics: темы-планы с аудиторией, сценарием и смыслом поста, не просто заголовки;
-                - socialPosts: полноценные статьи по темам socialPostTopics, %s знаков каждая, с явным заголовком первой строкой, хорошим лидом и мягким CTA. В постах заголовок обязателен;
-                - honestReviewTopics: конкретные темы, по которым клиенту легко вспомнить реальный опыт;
-                - reviewDraftTemplates: почти готовые отзывы %s знаков, но с короткими местами для проверки клиентом;
-                - positiveReviewReplies/negativeReviewReplies: ответы компании с учетом ниши, возражений и репутационного тона.
-                Количество элементов в списках ориентируй на request.*Count.
-                В utp и adTexts не упоминай источники данных как говорящего. Факты из источников превращай в клиентскую пользу: не "2ГИС указывает круглосуточный прием", а "можно обратиться в любое время, если это подтверждено отчетом".
-                
-                Входные данные:
-                """.formatted(utpRange, adTextRange, socialPostRange, reviewDraftRange)
-                + objectMapper.writeValueAsString(payload);
+        return renderPromptTemplate(promptService.content(ReputationAiPromptKeys.CONTENT_PACK_USER), Map.of(
+                "utpRange", utpRange,
+                "adTextRange", adTextRange,
+                "socialPostRange", socialPostRange,
+                "reviewDraftRange", reviewDraftRange,
+                "payloadJson", objectMapper.writeValueAsString(payload)
+        ));
     }
 
     private String compactRetryPrompt(
@@ -348,39 +286,15 @@ public class AiReputationContentFactory {
             String previousResponse,
             String parseError
     ) throws Exception {
-        return """
-                Предыдущий ответ OpenAI был невалидным JSON или оборвался по лимиту output tokens.
-                Ошибка парсинга: %s
-
-                Верни новый компактный JSON по той же схеме. Требования:
-                - companyProfile заполни коротко, но осмысленно;
-                - utp: 5-7 пунктов;
-                - adTexts: %d готовых продающих мини-текста по 280-500 знаков от лица компании, каждый под отдельный сценарий клиента, без ярлыков "Заголовок/Кому/Зачем/Почему можно доверять/Текст/Следующий шаг";
-                - socialPostTopics: 4-5 тем;
-                - socialPosts: %d статьи по 650-1000 знаков, каждая с коротким заголовком первой строкой;
-                - honestReviewTopics: 5-7 тем;
-                - reviewDraftTemplates: 4-6 черновиков по 350-650 знаков;
-                - positiveReviewReplies: %d ответов;
-                - negativeReviewReplies: %d ответов;
-                - safetyNotes: 3-7 предупреждений.
-                Не копируй сырой список ссылок или реквизитов. Ссылки используй только для понимания смысла компании.
-                В utp и adTexts не пиши "сайт указывает", "2ГИС указывает", "UrbanPlaces указывает", "по открытым данным". Говори как компания: "мы поможем", "подскажем", "оформим", "можно обратиться".
-                Обязательно закрой все массивы, строки и объект.
-
-                Сжатый фрагмент предыдущего ответа для понимания намерения:
-                %s
-
-                Входные данные:
-                %s
-                """.formatted(
-                valueOrBlank(parseError),
-                boundedCount(request.adTextsCount(), 4, 4),
-                boundedCount(request.socialPostsCount(), 2, 2),
-                boundedCount(request.positiveReplyCount(), 4, 4),
-                boundedCount(request.negativeReplyCount(), 2, 2),
-                limit(previousResponse, 1800),
-                userPrompt(snapshot, deepReport, request)
-        );
+        return renderPromptTemplate(promptService.content(ReputationAiPromptKeys.CONTENT_PACK_COMPACT_RETRY), Map.of(
+                "parseError", valueOrBlank(parseError),
+                "adTextsCount", String.valueOf(boundedCount(request.adTextsCount(), 4, 4)),
+                "socialPostsCount", String.valueOf(boundedCount(request.socialPostsCount(), 2, 2)),
+                "positiveReplyCount", String.valueOf(boundedCount(request.positiveReplyCount(), 4, 4)),
+                "negativeReplyCount", String.valueOf(boundedCount(request.negativeReplyCount(), 2, 2)),
+                "previousResponse", limit(previousResponse, 1800),
+                "userPrompt", userPrompt(snapshot, deepReport, request)
+        ));
     }
 
     private ReputationContentPack parsePack(ResearchSnapshot snapshot, String responseText) throws Exception {
@@ -464,6 +378,31 @@ public class AiReputationContentFactory {
         payload.put("createdAt", report.createdAt());
         payload.put("model", report.model());
         payload.put("warnings", report.warnings());
+        payload.put("qualityChecks", report.qualityChecks().stream()
+                .map(check -> Map.of(
+                        "label", check.label(),
+                        "status", check.status(),
+                        "detail", check.detail()
+                ))
+                .toList());
+        payload.put("factSnapshot", Map.of(
+                "confirmedFacts", report.factSnapshot().confirmedFacts().stream()
+                        .map(fact -> Map.of(
+                                "label", fact.label(),
+                                "value", fact.value(),
+                                "evidence", fact.evidence(),
+                                "confidence", fact.confidence()
+                        ))
+                        .toList(),
+                "uncertainFacts", report.factSnapshot().uncertainFacts().stream()
+                        .map(fact -> Map.of(
+                                "label", fact.label(),
+                                "value", fact.value(),
+                                "evidence", fact.evidence(),
+                                "confidence", fact.confidence()
+                        ))
+                        .toList()
+        ));
         payload.put("sections", report.sections().stream()
                 .map(section -> Map.of(
                         "title", section.title(),
@@ -873,6 +812,14 @@ public class AiReputationContentFactory {
         return value == null ? "" : value.trim();
     }
 
+    private String renderPromptTemplate(String template, Map<String, String> values) {
+        String result = valueOrBlank(template);
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            result = result.replace("{{" + entry.getKey() + "}}", valueOrBlank(entry.getValue()));
+        }
+        return result;
+    }
+
     private int count(Integer value, int fallback) {
         return value == null || value <= 0 ? fallback : value;
     }
@@ -896,7 +843,8 @@ public class AiReputationContentFactory {
                 Math.min(boundedCount(request.socialPostsCount(), 4, MAX_SOCIAL_POSTS_PER_PACK), 2),
                 Math.min(boundedCount(request.positiveReplyCount(), 6, MAX_POSITIVE_REPLIES_PER_PACK), 4),
                 Math.min(boundedCount(request.negativeReplyCount(), 4, MAX_NEGATIVE_REPLIES_PER_PACK), 2),
-                request.contentPackProfile()
+                request.contentPackProfile(),
+                request.deepReportJobId()
         );
     }
 
