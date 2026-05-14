@@ -243,11 +243,11 @@
 
 .review-card {
   display: grid;
-  grid-template-rows: auto auto auto 2.2rem auto 2.2rem auto;
+  grid-template-rows: auto auto auto 2.2rem auto auto;
   align-content: start;
   gap: 0.62rem;
   min-width: 0;
-  height: var(--review-card-height);
+  height: fit-content;
   min-height: 0;
   border: 1px solid rgba(103, 116, 131, 0.2);
   border-radius: 0.9rem;
@@ -259,7 +259,7 @@
 
 .review-card--fluid {
   height: auto;
-  min-height: var(--review-card-height);
+  min-height: fit-content;
 }
 
 .review-card header {
@@ -422,6 +422,7 @@
 }
 
 .review-field-editor {
+  position: relative;
   display: grid;
   gap: 0.4rem;
   min-width: 0;
@@ -668,7 +669,7 @@
 
 .review-card footer {
   justify-content: space-between;
-  margin-top: 0.5rem;
+  margin-top: 0.1rem;
 }
 
 .review-card footer a {

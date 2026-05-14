@@ -435,6 +435,9 @@ public class OrderServiceImpl implements OrderService {
             orderStatusCheckerService.checkAndMarkOrderCompleted(order);
 
             return true;
+        } catch (ResponseStatusException e) {
+            log.warn("Публикация отзыва id={} отклонена: {}", reviewId, e.getReason());
+            throw e;
         } catch (Exception e) {
             log.error("Ошибка при смене статуса отзыва id={}", reviewId, e);
             throw e;

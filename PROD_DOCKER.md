@@ -1,6 +1,6 @@
 # Production Docker runbook для VPS
 
-Продовый стек отделен от локального dev-запуска. Для разработки продолжай использовать текущие `compose.yaml`/`composeLocal.yaml`, `npm start` и dev/local Spring-профили. VPS-прод запускается через `docker-compose.yaml` и профиль Spring `prod`.
+Продовый стек отделен от локального dev-запуска. Для разработки используй `compose.yaml`, а для проверки перед VPS - `compose.prod-local.yaml`. VPS-прод запускается через `docker-compose.yaml` и профиль Spring `prod`.
 
 Важно: в репозитории есть и `compose.yaml`, и `docker-compose.yaml`. Поэтому на VPS всегда запускай prod с явным `-f docker-compose.yaml`.
 
@@ -20,10 +20,10 @@
 - `docker-compose.yaml` - production Docker Compose stack для VPS.
 - `docker-compose.build.yaml` - локальная сборка и push backend/frontend образов.
 - `compose.yaml` - локальный dev stack, его не используем на VPS.
-- `compose.ide.yaml` - локальный IDE-режим одним compose-файлом: backend/frontend на Windows, инфраструктура в Docker.
+- `compose.prod-local.yaml` - локальная prod-like проверка перед VPS.
 - `LOCAL_DEV.md` - команды запуска локальной разработки через IDE.
 - `.env.prod.example` - шаблон переменных для домена `o-ogo.ru`.
-- `backend/src/main/resources/application-docker.properties` - Spring Boot profile для локального Docker stack.
+- `backend/src/main/resources/application.yaml` и `application.properties` - базовая конфигурация Spring Boot.
 - `backend/src/main/resources/application-prod.properties` - Spring Boot prod profile.
 - `frontend/Dockerfile` - сборка Angular и Nginx runtime.
 - `infrastructure/nginx/prod.conf` - TLS reverse proxy.
@@ -194,7 +194,7 @@ docker compose -f docker-compose.build.yaml push
 ## Локальный Docker запуск
 
 `compose.yaml` поднимает Angular отдельно как `frontend` на `http://localhost:4200`.
-Backend в этом режиме стартует со Spring profile `docker`, подключается к MySQL по docker-сети и проверяет Keycloak-токены с issuer `http://localhost:8180/realms/otziv`.
+Backend в этом режиме стартует со Spring profile `prod`, подключается к MySQL по docker-сети и проверяет Keycloak-токены с issuer `http://localhost:8180/realms/otziv`.
 
 ```powershell
 docker compose -f compose.yaml up -d --build app frontend

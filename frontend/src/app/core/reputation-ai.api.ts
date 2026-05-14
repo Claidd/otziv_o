@@ -14,6 +14,7 @@ export interface ReputationResearchRequest {
   baseReportJobId?: number | null;
   sectionTitle?: string | null;
   sectionIndex?: number | null;
+  enrichCollectionGaps?: boolean | null;
 }
 
 export interface ReputationContentPackRequest {
@@ -35,6 +36,32 @@ export interface ReputationReviewDraftRequest {
   realExperiencePoints?: string[];
   tone?: string | null;
   length?: string | null;
+}
+
+export interface ReputationReviewTemplatesRequest {
+  deepReportJobId?: number | null;
+  contentPackJobId?: number | null;
+  manualNotes?: string | null;
+  topicsCount?: number | null;
+  draftsCount?: number | null;
+  tone?: string | null;
+  contentPackProfile?: string | null;
+}
+
+export interface ReputationReviewTemplatesApplyRequest {
+  contentPackJobId?: number | null;
+  honestReviewTopics: string[];
+  reviewDraftTemplates: string[];
+}
+
+export interface ReputationSingleReviewDraftRequest {
+  deepReportJobId?: number | null;
+  contentPackJobId?: number | null;
+  idea?: string | null;
+  style?: string | null;
+  manualNotes?: string | null;
+  length?: string | null;
+  contentPackProfile?: string | null;
 }
 
 export interface ReputationReviewCheckRequest {
@@ -298,6 +325,35 @@ export interface ReputationContentPackJob {
   completedAt: string | null;
 }
 
+export interface ReputationReviewTemplatesResult {
+  companyId: number;
+  companyName: string;
+  deepReportJobId: number | null;
+  contentPackJobId: number | null;
+  provider: string;
+  model: string;
+  honestReviewTopics: string[];
+  reviewDraftTemplates: string[];
+  safetyNotes: string[];
+  generatedAt: string;
+}
+
+export interface ReputationSingleReviewDraftResult {
+  companyId: number;
+  companyName: string;
+  deepReportJobId: number | null;
+  contentPackJobId: number | null;
+  provider: string;
+  model: string;
+  idea: string;
+  style: string;
+  draft: string;
+  sourceFacts: string[];
+  safetyNotes: string[];
+  safetyReport: ReviewSafetyReport;
+  generatedAt: string;
+}
+
 export interface ReviewSafetyReport {
   safeToUseAsDraft: boolean;
   riskScore: number;
@@ -424,6 +480,13 @@ export class ReputationAiApi {
     });
   }
 
+  exportDeepResearchPdf(companyId: number, jobId?: number | null): Observable<Blob> {
+    const jobPath = jobId ? `${jobId}` : 'latest';
+    return this.http.get(`${this.baseUrl}/companies/${companyId}/deep-research/jobs/${jobPath}/export/pdf`, {
+      responseType: 'blob'
+    });
+  }
+
   deepResearchJobHistory(companyId: number, limit = 10): Observable<DeepCompanyResearchJob[]> {
     return this.http.get<DeepCompanyResearchJob[]>(
       `${this.baseUrl}/companies/${companyId}/deep-research/jobs/history`,
@@ -447,6 +510,33 @@ export class ReputationAiApi {
     return this.http.get(`${this.baseUrl}/companies/${companyId}/content-pack/jobs/latest/export`, {
       responseType: 'text'
     });
+  }
+
+  exportContentPackPdf(companyId: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/companies/${companyId}/content-pack/jobs/latest/export/pdf`, {
+      responseType: 'blob'
+    });
+  }
+
+  improveReviewTemplates(companyId: number, request: ReputationReviewTemplatesRequest): Observable<ReputationReviewTemplatesResult> {
+    return this.http.post<ReputationReviewTemplatesResult>(
+      `${this.baseUrl}/companies/${companyId}/content-pack/review-templates`,
+      request
+    );
+  }
+
+  applyReviewTemplates(companyId: number, request: ReputationReviewTemplatesApplyRequest): Observable<ReputationContentPack> {
+    return this.http.post<ReputationContentPack>(
+      `${this.baseUrl}/companies/${companyId}/content-pack/review-templates/apply`,
+      request
+    );
+  }
+
+  createSingleReviewDraft(companyId: number, request: ReputationSingleReviewDraftRequest): Observable<ReputationSingleReviewDraftResult> {
+    return this.http.post<ReputationSingleReviewDraftResult>(
+      `${this.baseUrl}/companies/${companyId}/content-pack/review-draft`,
+      request
+    );
   }
 
   createReviewDraft(companyId: number, request: ReputationReviewDraftRequest): Observable<ReviewDraftResult> {

@@ -126,12 +126,63 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
+        body.put("background", true);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
                     "name", "reputation_content_pack",
                     "strict", true,
                     "schema", contentPackSchema()
+            )));
+        }
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createReviewTemplatesResponse(AiRequest request, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", request.systemPrompt());
+        body.put("input", request.userPrompt());
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 9000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("background", true);
+        if (request.jsonObject()) {
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", "reputation_review_templates",
+                    "strict", true,
+                    "schema", reviewTemplatesSchema()
+            )));
+        }
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createSingleReviewDraftResponse(AiRequest request, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", request.systemPrompt());
+        body.put("input", request.userPrompt());
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 3000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("background", true);
+        if (request.jsonObject()) {
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", "reputation_single_review_draft",
+                    "strict", true,
+                    "schema", singleReviewDraftSchema()
             )));
         }
 
@@ -180,6 +231,7 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
+        body.put("background", true);
         body.put("text", Map.of("format", Map.of(
                 "type", "json_schema",
                 "name", "company_research_report",
@@ -213,6 +265,34 @@ public class OpenAiResponsesClient {
                 "name", "company_research_sources_refresh",
                 "strict", true,
                 "schema", sourceRefreshSchema()
+        )));
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createResearchGapEnrichmentResponse(String instructions, String input, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
+        OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", instructions);
+        body.put("input", input);
+        body.put("tools", List.of(Map.of(
+                "type", "web_search_preview",
+                "search_context_size", options.searchContextSize()
+        )));
+        body.put("max_tool_calls", Math.max(3, Math.min(options.maxToolCalls(), 8)));
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 7000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "company_research_gap_enrichment",
+                "strict", true,
+                "schema", gapEnrichmentSchema()
         )));
 
         return postResponse(body, options.timeout());
@@ -602,6 +682,43 @@ public class OpenAiResponsesClient {
         );
     }
 
+    private Map<String, Object> reviewTemplatesSchema() {
+        Map<String, Object> cappedStringArray = Map.of(
+                "type", "array",
+                "maxItems", 10,
+                "items", Map.of("type", "string")
+        );
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "honestReviewTopics", cappedStringArray,
+                        "reviewDraftTemplates", cappedStringArray,
+                        "safetyNotes", cappedStringArray
+                ),
+                "required", List.of("honestReviewTopics", "reviewDraftTemplates", "safetyNotes")
+        );
+    }
+
+    private Map<String, Object> singleReviewDraftSchema() {
+        Map<String, Object> stringArray = Map.of(
+                "type", "array",
+                "maxItems", 8,
+                "items", Map.of("type", "string")
+        );
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "idea", Map.of("type", "string"),
+                        "draft", Map.of("type", "string"),
+                        "sourceFacts", stringArray,
+                        "safetyNotes", stringArray
+                ),
+                "required", List.of("idea", "draft", "sourceFacts", "safetyNotes")
+        );
+    }
+
     private Map<String, Object> sourceRefreshSchema() {
         return Map.of(
                 "type", "object",
@@ -662,6 +779,32 @@ public class OpenAiResponsesClient {
         );
     }
 
+    private Map<String, Object> gapEnrichmentSchema() {
+        Map<String, Object> section = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "title", Map.of("type", "string"),
+                        "body", Map.of(
+                                "type", "string",
+                                "description", "Markdown-раздел с ответами на пункты из блока что еще собирать: что удалось проверить публично, что не найдено и что остается уточнить у владельца."
+                        )
+                ),
+                "required", List.of("title", "body")
+        );
+
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "section", section,
+                        "sources", Map.of("type", "array", "items", sourceSchema()),
+                        "warnings", Map.of("type", "array", "items", Map.of("type", "string"))
+                ),
+                "required", List.of("section", "sources", "warnings")
+        );
+    }
+
     private Map<String, Object> deepResearchSchema(int minSections, int maxSections) {
         Map<String, Object> section = Map.of(
                 "type", "object",
@@ -673,7 +816,7 @@ public class OpenAiResponsesClient {
                         ),
                         "body", Map.of(
                                 "type", "string",
-                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии и идеи контента."
+                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, вход, этаж, ориентиры, парковку, доступность и зону ожидания, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии, идеи контента и аудит готовности будущей карточки компании без повторов."
                         )
                 ),
                 "required", List.of("title", "body")
@@ -685,7 +828,7 @@ public class OpenAiResponsesClient {
                 "properties", Map.of(
                         "sections", Map.of(
                                 "type", "array",
-                                "description", "Тематические markdown-блоки для интерфейса и сохраненного отчёта. Держи стабильный универсальный порядок: сводка, профиль бизнеса, услуги/товары/цены, филиалы, клиентский опыт с интерьером и экстерьером, репутационные темы, доверие, сценарии и УТП, сотрудники, условия, сроки/аудитория, риски и возражения, что ещё собирать, идеи контента, главный вывод.",
+                                "description", "Тематические markdown-блоки для интерфейса и сохраненного отчёта. Держи стабильный универсальный порядок: сводка, профиль бизнеса, услуги/товары/цены, филиалы, клиентский опыт с интерьером/экстерьером/парковкой/входом, репутационные темы, доверие, сценарии и УТП, сотрудники, условия, сроки/аудитория, риски и возражения, что ещё собирать с аудитом готовности карточки компании, идеи контента, главный вывод.",
                                 "minItems", minSections,
                                 "maxItems", maxSections,
                                 "items", section

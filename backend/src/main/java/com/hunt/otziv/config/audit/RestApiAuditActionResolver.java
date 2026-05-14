@@ -404,10 +404,16 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/history", "загрузка истории глубоких AI-отчетов компании {companyId}");
         put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest/export", "экспорт последнего глубокого AI-отчета компании {companyId} в Markdown");
         put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/{jobId}/export", "экспорт глубокого AI-отчета {jobId} компании {companyId} в Markdown");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/latest/export/pdf", "экспорт последнего глубокого AI-отчета компании {companyId} в PDF");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/deep-research/jobs/{jobId}/export/pdf", "экспорт глубокого AI-отчета {jobId} компании {companyId} в PDF");
         put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack", "создание AI-пакета репутации для компании {companyId}");
         put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack/jobs", "запуск фонового AI-пакета репутации для компании {companyId}");
         put(actions, "GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest", "загрузка последнего AI-пакета репутации компании {companyId}");
         put(actions, "GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest/export", "экспорт последнего AI-пакета репутации компании {companyId} в Markdown");
+        put(actions, "GET", "/api/ai/reputation/companies/{companyId}/content-pack/jobs/latest/export/pdf", "экспорт последнего AI-пакета репутации компании {companyId} в PDF");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack/review-templates", "улучшение шаблонов отзывов AI-пакета компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack/review-templates/apply", "замена шаблонов отзывов в AI-пакете компании {companyId}");
+        put(actions, "POST", "/api/ai/reputation/companies/{companyId}/content-pack/review-draft", "создание точечного черновика отзыва по AI-пакету компании {companyId}");
         put(actions, "POST", "/api/ai/reputation/companies/{companyId}/review-draft", "создание черновика отзыва через AI-помощник для компании {companyId}");
         put(actions, "POST", "/api/ai/reputation/review/rewrite", "переписывание отзыва через AI-помощник репутации");
         put(actions, "POST", "/api/ai/reputation/review/check", "проверка отзыва на безопасность через AI-помощник репутации");

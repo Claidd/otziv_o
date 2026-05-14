@@ -395,6 +395,30 @@ function Assert-ReputationAiPromptRendering {
     }
 }
 
+function Assert-ReputationAiPdfExport {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $tempFile = New-TemporaryFile
+    try {
+        $response = Invoke-WebRequest -Uri $Uri -Method Get -Headers $Headers -UseBasicParsing -TimeoutSec 45 -OutFile $tempFile.FullName -PassThru
+        $bytes = [System.IO.File]::ReadAllBytes($tempFile.FullName)
+        $signature = if ($bytes.Length -ge 4) { [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4) } else { "" }
+        $contentType = [string]::Join(" ", @($response.Headers["Content-Type"]))
+        $contentDisposition = [string]::Join(" ", @($response.Headers["Content-Disposition"]))
+        if ($response.StatusCode -ne 200 -or $bytes.Length -lt 1000 -or $signature -ne "%PDF" -or $contentType -notmatch "application/pdf" -or $contentDisposition -notmatch "\.pdf") {
+            throw "Reputation AI $Label PDF export failed: HTTP $($response.StatusCode), length=$($bytes.Length), signature=$signature, contentType=$contentType, contentDisposition=$contentDisposition."
+        }
+
+        Write-Host "Reputation AI $Label PDF export OK: $($bytes.Length) bytes."
+    } finally {
+        Remove-Item -LiteralPath $tempFile.FullName -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-ReputationAiPromptPresetSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$ApiRoot,
@@ -569,15 +593,20 @@ function Invoke-ReputationAiSmoke {
     $historyCount = if ($null -eq $history) { 0 } elseif ($history -is [array]) { $history.Count } else { 1 }
     Write-Host "Reputation AI history endpoint OK: $historyCount item(s)."
 
+    $hasReadyDeepReport = $false
+    $readyDeepReportJobId = $null
     $latestDeepJob = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest" -Method "Get" -Headers $headers
     if ($latestDeepJob.StatusCode -eq 200) {
         $deepJob = $latestDeepJob.Content | ConvertFrom-Json
         if ($null -ne $deepJob.report) {
+            $hasReadyDeepReport = $true
+            $readyDeepReportJobId = $deepJob.jobId
             $deepExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest/export" -Method "Get" -Headers $headers
             if ($deepExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($deepExport.Content) -or -not $deepExport.Content.Contains("Глубокий AI-отчет")) {
                 throw "Reputation AI deep report markdown export failed: HTTP $($deepExport.StatusCode), length=$($deepExport.Content.Length)."
             }
             Write-Host "Reputation AI deep report Markdown export OK: $($deepExport.Content.Length) chars."
+            Assert-ReputationAiPdfExport -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest/export/pdf" -Headers $headers -Label "deep report"
         } else {
             Write-Host "Reputation AI deep report Markdown export OK: latest job has no ready report yet."
         }
@@ -587,15 +616,20 @@ function Invoke-ReputationAiSmoke {
         throw "Reputation AI latest deep report job endpoint failed: HTTP $($latestDeepJob.StatusCode)."
     }
 
+    $hasReadyContentPack = $false
+    $readyContentPackJobId = $null
     $latestContentPackJob = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest" -Method "Get" -Headers $headers
     if ($latestContentPackJob.StatusCode -eq 200) {
         $packJob = $latestContentPackJob.Content | ConvertFrom-Json
         if ($null -ne $packJob.pack) {
+            $hasReadyContentPack = $true
+            $readyContentPackJobId = $packJob.jobId
             $packExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest/export" -Method "Get" -Headers $headers
             if ($packExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($packExport.Content) -or -not $packExport.Content.Contains("AI-пакет компании")) {
                 throw "Reputation AI content pack markdown export failed: HTTP $($packExport.StatusCode), length=$($packExport.Content.Length)."
             }
             Write-Host "Reputation AI content pack Markdown export OK: $($packExport.Content.Length) chars."
+            Assert-ReputationAiPdfExport -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest/export/pdf" -Headers $headers -Label "content pack"
         } else {
             Write-Host "Reputation AI content pack Markdown export OK: latest job has no ready pack yet."
         }
@@ -603,6 +637,50 @@ function Invoke-ReputationAiSmoke {
         Write-Host "Reputation AI content pack Markdown export OK: no content pack job yet (404)."
     } else {
         throw "Reputation AI latest content pack job endpoint failed: HTTP $($latestContentPackJob.StatusCode)."
+    }
+
+    if ($hasReadyDeepReport -and $hasReadyContentPack) {
+        if ([string]$status.aiProvider -eq "local") {
+            $reviewTemplateBody = @{
+                deepReportJobId = $readyDeepReportJobId
+                contentPackJobId = $readyContentPackJobId
+                manualNotes = "Smoke: улучшить углы отзывов через факты отчета и AI-пакета."
+                topicsCount = 4
+                draftsCount = 3
+            } | ConvertTo-Json -Compress
+            $reviewTemplates = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/review-templates" -Method "Post" -Headers $headers -Body $reviewTemplateBody -ContentType "application/json"
+            if ($reviewTemplates.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($reviewTemplates.Content)) {
+                throw "Reputation AI review templates endpoint failed: HTTP $($reviewTemplates.StatusCode)."
+            }
+            $reviewTemplateResult = $reviewTemplates.Content | ConvertFrom-Json
+            if ($reviewTemplateResult.honestReviewTopics.Count -lt 1 -or $reviewTemplateResult.reviewDraftTemplates.Count -lt 1) {
+                throw "Reputation AI review templates endpoint returned empty topics or drafts."
+            }
+            Write-Host "Reputation AI review templates endpoint OK: topics=$($reviewTemplateResult.honestReviewTopics.Count), drafts=$($reviewTemplateResult.reviewDraftTemplates.Count)."
+
+            $singleReviewBody = @{
+                deepReportJobId = $readyDeepReportJobId
+                contentPackJobId = $readyContentPackJobId
+                idea = "Smoke: один черновик по УТП и готовому AI-пакету."
+                style = "спокойный, честный, с мягкой рекламной пользой"
+                length = "short"
+            } | ConvertTo-Json -Compress
+            $singleReview = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/review-draft" -Method "Post" -Headers $headers -Body $singleReviewBody -ContentType "application/json"
+            if ($singleReview.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($singleReview.Content)) {
+                throw "Reputation AI single review draft endpoint failed: HTTP $($singleReview.StatusCode)."
+            }
+            $singleReviewResult = $singleReview.Content | ConvertFrom-Json
+            if ([string]::IsNullOrWhiteSpace($singleReviewResult.draft) -or [string]::IsNullOrWhiteSpace($singleReviewResult.idea)) {
+                throw "Reputation AI single review draft endpoint returned an empty draft or idea."
+            }
+            Write-Host "Reputation AI single review draft endpoint OK: provider=$($singleReviewResult.provider), chars=$($singleReviewResult.draft.Length)."
+        } else {
+            Write-Host "Reputation AI review templates endpoint OK: skipped live generation for AI provider '$($status.aiProvider)'."
+            Write-Host "Reputation AI single review draft endpoint OK: skipped live generation for AI provider '$($status.aiProvider)'."
+        }
+    } else {
+        Write-Host "Reputation AI review templates endpoint OK: skipped until both latest report and content pack are ready."
+        Write-Host "Reputation AI single review draft endpoint OK: skipped until both latest report and content pack are ready."
     }
 
     $latestResearch = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/research/latest" -Method "Get" -Headers $headers

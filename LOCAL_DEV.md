@@ -1,63 +1,29 @@
 # Local development with Docker infrastructure
 
-Этот режим нужен, когда backend и Angular запускаются из IDE/терминала на Windows, а MySQL, Keycloak, Grafana, Loki, Alloy и остальные сервисы работают в Docker.
+Поддерживаемые локальные сценарии сейчас сведены к двум compose-файлам: `compose.yaml` для обычного локального Docker stack и `compose.prod-local.yaml` для prod-like проверки перед VPS.
 
-## 1. Остановить Docker backend/frontend/nginx
+## 1. Запустить локальный Docker stack
 
-Если до этого запускался полный Docker stack, останови контейнеры приложения:
-
-```powershell
-docker compose -f compose.yaml stop app frontend nginx
-```
-
-## 2. Поднять инфраструктуру
+`compose.yaml` поднимает backend, Angular, MySQL, Keycloak, Grafana, Loki, Alloy и остальные локальные сервисы. Backend запускается со Spring profile `prod`, как и production/prod-like окружения.
 
 ```powershell
-docker compose -f compose.ide.yaml -p otziv up -d
+docker compose -f compose.yaml up -d --build
 ```
-
-Важно: `compose.ide.yaml` уже сам подключает нужные сервисы из `compose.yaml`, поэтому в IDEA можно указывать только этот файл.
 
 В этом режиме:
 
-- MySQL доступен backend из IDE как `localhost:3307`.
-- Keycloak доступен как `http://localhost:8180`.
+- приложение доступно на `http://localhost`;
+- backend доступен как `http://localhost:8080`;
+- Angular dev-сервер в контейнере доступен как `http://localhost:4200`;
+- MySQL доступен как `localhost:3307`;
+- Keycloak доступен как `http://localhost:8180`;
 - Grafana доступна как `http://localhost:3000`.
-- phpMyAdmin в prod/prod-like режимах выключен по умолчанию; для IDE-стека смотри настройки используемого compose-файла.
-- Prometheus скрейпит backend из IDE по `host.docker.internal:8080`.
+- phpMyAdmin доступен как `http://localhost:8085`.
 
-## 3. Запустить backend в IntelliJ IDEA
-
-Run configuration:
-
-- Main class: `com.hunt.otziv.OtzivOApplication`
-- Working directory: `D:\Java\otziv\backend`
-- Active profile: `dev`
-
-Или VM option:
-
-```text
--Dspring.profiles.active=dev
-```
-
-`application-dev.properties` уже настроен на:
-
-- MySQL: `jdbc:mysql://localhost:3307/otziv`
-- Keycloak issuer: `http://localhost:8180/realms/otziv`
-
-## 4. Запустить Angular локально
+## 2. Остановить локальный Docker stack
 
 ```powershell
-cd frontend
-npm start
-```
-
-Angular откроется на `http://localhost:4200`, а `/api` и `/actuator` будут проксироваться на локальный backend `http://localhost:8080` через `frontend/proxy.conf.json`.
-
-## 5. Остановить инфраструктуру
-
-```powershell
-docker compose -f compose.ide.yaml -p otziv down
+docker compose -f compose.yaml down
 ```
 
 Если нужно сохранить базы, используй `down` без `-v`.

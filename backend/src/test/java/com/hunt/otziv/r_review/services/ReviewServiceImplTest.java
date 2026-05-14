@@ -196,9 +196,13 @@ class ReviewServiceImplTest {
             long reviewId = i + 1L;
             Review review = new Review();
             review.setId(reviewId);
+            review.setText("Готовый текст отзыва " + reviewId);
             review.setBot(i == 0 ? bot : null);
             reviews.add(review);
-            reviewDtos.add(ReviewDTO.builder().id(reviewId).build());
+            reviewDtos.add(ReviewDTO.builder()
+                    .id(reviewId)
+                    .text("Готовый текст отзыва " + reviewId)
+                    .build());
             when(reviewRepository.findById(reviewId)).thenReturn(Optional.of(review));
         }
 

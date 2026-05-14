@@ -228,7 +228,7 @@ public class DeepCompanyResearchJobService {
 
     private ReputationResearchRequest safeRequest(ReputationResearchRequest request) {
         return request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
     }
 
@@ -243,7 +243,8 @@ public class DeepCompanyResearchJobService {
                 operation,
                 request.baseReportJobId(),
                 request.sectionTitle(),
-                request.sectionIndex()
+                request.sectionIndex(),
+                request.enrichCollectionGaps()
         );
     }
 

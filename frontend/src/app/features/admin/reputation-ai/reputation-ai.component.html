@@ -1,34 +1,96 @@
-<app-admin-layout title="AI-помощник репутации" active="reputation-ai" rightPanelMode="custom">
+<app-admin-layout title="" active="reputation-ai" rightPanelMode="custom">
   <section class="reputation-ai-workspace">
-    <header class="ai-toolbar">
-      <div class="toolbar-title">
-        <span class="material-icons-sharp">auto_awesome</span>
-        <div>
-          <p class="eyebrow">Репутация</p>
-          <h2>Отчёт, AI-пакет и тексты</h2>
+    <form class="launch-command-panel settings-panel" (ngSubmit)="createContentPack()">
+      <header class="launch-command-head">
+        <div class="launch-command-meta">
+          <label class="company-inline" appTooltip="ID компании из CRM. Все отчёты, сырьё и AI-пакеты собираются для этой компании.">
+            <span>Компания</span>
+            <input type="number" min="1" name="companyId" [(ngModel)]="companyId">
+          </label>
+
+          <button type="button" class="latest-report-link" [disabled]="busy()" (click)="loadLatestDeepResearch()" appTooltip="Открыть последнюю сохранённую задачу глубокого отчёта для выбранной компании.">
+            <span class="material-icons-sharp">history</span>
+            Последний отчёт
+          </button>
+
+          <button type="button" class="latest-report-link" [disabled]="busy()" (click)="loadLatestContentPack()" appTooltip="Открыть последний сохранённый AI-пакет для выбранной компании без новой генерации.">
+            <span class="material-icons-sharp">inventory_2</span>
+            Прошлый пакет
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div class="toolbar-actions">
-        <label class="company-inline" appTooltip="ID компании из CRM. Все отчёты, сырьё и AI-пакеты собираются для этой компании.">
-          <span>Компания</span>
-          <input type="number" min="1" name="companyId" [(ngModel)]="companyId">
-        </label>
+      <div class="launch-command-body">
+        <section class="launch-settings-area" appTooltip="Профили и дополнительные факты применяются к двум основным действиям ниже.">
+          <div class="launch-settings-title">
+            <span class="material-icons-sharp">tune</span>
+          <div>
+              <h2>Настройки AI-сбора</h2>
+          </div>
+          </div>
 
-        <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestDeepResearch()" appTooltip="Открыть последнюю сохранённую задачу глубокого отчёта для выбранной компании.">
-          <span class="material-icons-sharp">article</span>
-          Последний
-        </button>
-        <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()" appTooltip="Запустить новый глубокий отчёт: OpenAI соберёт источники, разделы, риски и чек-лист качества.">
-          <span class="material-icons-sharp">psychology</span>
-          {{ isLoading('deepResearch') ? 'Запускаю' : hasActiveDeepResearch() ? 'Собирается' : 'Обновить отчёт' }}
-        </button>
-        <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack()" appTooltip="Собрать AI-пакет: УТП, рекламу, темы постов, отзывы и ответы компании. Лучше запускать после готового отчёта.">
-          <span class="material-icons-sharp">inventory_2</span>
-          {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'AI-пакет' }}
-        </button>
+          <div class="launch-controls-grid">
+            <section class="launch-profile-fields" appTooltip="Профили управляют стоимостью, глубиной поиска, моделью и размером результата.">
+              <div class="launch-field" appTooltip="Быстро — дешёвый короткий отчёт, Баланс — основной режим, Максимум — больше поиска и контекста.">
+                <div class="field-title">
+                  <span>Глубокий отчёт</span>
+                  @if (selectedDeepResearchProfile(); as profile) {
+                    <small>search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }} · tools {{ profile.maxToolCalls }}</small>
+                  }
+                </div>
+                <select
+                  name="deepResearchProfile"
+                  [ngModel]="deepResearchProfile()"
+                  (ngModelChange)="setDeepResearchProfile($event)"
+                >
+                  @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
+                    <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="launch-field" appTooltip="Профиль AI-пакета влияет на качество маркетинговых текстов и расход токенов.">
+                <div class="field-title">
+                  <span>AI-пакет</span>
+                  @if (selectedContentPackProfile(); as profile) {
+                    <small>reasoning {{ profile.reasoningEffort || 'off' }} · output {{ profile.maxOutputTokens }}</small>
+                  }
+                </div>
+                <select
+                  name="contentPackProfile"
+                  [ngModel]="contentPackProfile()"
+                  (ngModelChange)="contentPackProfile.set($event)"
+                >
+                  @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
+                    <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+                  }
+                </select>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="launch-action-area" aria-label="Основные действия AI-помощника">
+          <button type="button" class="flow-action-button report-action" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()" appTooltip="Запустить новый глубокий отчёт: OpenAI соберёт источники, разделы, риски и чек-лист качества.">
+            <span class="flow-step">1</span>
+            <span class="material-icons-sharp">psychology</span>
+            <span class="flow-action-copy">
+              <strong>{{ isLoading('deepResearch') ? 'Запускаю' : hasActiveDeepResearch() ? 'Собирается' : 'Обновить отчёт' }}</strong>
+              <small>Источники, разделы и риски</small>
+            </span>
+          </button>
+
+          <button type="submit" class="flow-action-button pack-action" [disabled]="busy() || hasActiveContentPackJob()" appTooltip="Собрать AI-пакет: УТП, рекламу, темы постов, отзывы и ответы компании. Лучше запускать после готового отчёта.">
+            <span class="flow-step">2</span>
+            <span class="material-icons-sharp">inventory_2</span>
+            <span class="flow-action-copy">
+              <strong>{{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Собирается' : 'Собрать AI-пакет' }}</strong>
+              <small>Тексты по готовому отчёту</small>
+            </span>
+          </button>
+        </section>
       </div>
-    </header>
+    </form>
 
     @if (error()) {
       <section class="alert error">
@@ -105,6 +167,13 @@
             <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
             <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
             <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} блоков · {{ deepResearchOperationLabel(deepResearchJob()) }}</small>
+            @if (gapEnrichmentStatus(); as gapStatus) {
+              <div class="change-chip-list" [appTooltip]="gapStatus.detail">
+                <span [class.added]="gapStatus.tone === 'green'" [class.removed]="gapStatus.tone === 'yellow' || gapStatus.tone === 'red'">
+                  {{ gapStatus.label }}
+                </span>
+              </div>
+            }
           </div>
 
           <div class="report-actions">
@@ -115,6 +184,10 @@
             <button type="button" class="secondary" (click)="downloadDeepReport(report)" appTooltip="Скачать текущую версию отчёта markdown-файлом.">
               <span class="material-icons-sharp">download</span>
               Markdown
+            </button>
+            <button type="button" class="secondary" (click)="downloadDeepReportPdf(report)" appTooltip="Скачать текущую версию отчёта PDF-файлом.">
+              <span class="material-icons-sharp">picture_as_pdf</span>
+              PDF
             </button>
             <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="refreshDeepReportSources()" appTooltip="Обновить только список публичных источников. Текст разделов останется из базового отчёта.">
               <span class="material-icons-sharp">travel_explore</span>
@@ -333,6 +406,10 @@
               <span class="material-icons-sharp">history</span>
               Загрузить последний
             </button>
+            <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestContentPack()">
+              <span class="material-icons-sharp">inventory_2</span>
+              Прошлый пакет
+            </button>
             <button type="button" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()">
               <span class="material-icons-sharp">refresh</span>
               Запустить сбор
@@ -358,6 +435,10 @@
             <span class="material-icons-sharp">download</span>
             Markdown
           </button>
+          <button type="button" class="copy-button" (click)="downloadContentPackPdf(pack)" appTooltip="Скачать AI-пакет PDF-файлом.">
+            <span class="material-icons-sharp">picture_as_pdf</span>
+            PDF
+          </button>
         </div>
 
         <section class="company-profile">
@@ -367,6 +448,163 @@
               <span class="warning">{{ warning }}</span>
             }
           </div>
+        </section>
+
+        <section class="change-panel">
+          <div class="change-head">
+            <span class="material-icons-sharp">rate_review</span>
+            <div>
+              <strong>Улучшенные отзывы</strong>
+              <small>Deep report + УТП + реклама + посты</small>
+            </div>
+          </div>
+
+          <label>
+            <span>Приписки и акценты</span>
+            <textarea rows="3" name="reviewTemplateNotes" [(ngModel)]="reviewTemplateNotes" placeholder="Например: больше про лазертаг, не упоминать цены, сделать акцент на днях рождения"></textarea>
+          </label>
+
+          <div class="inline-fields">
+            <label>
+              <span>Темы</span>
+              <input type="number" min="4" max="10" name="reviewTemplateTopicsCount" [(ngModel)]="reviewTemplateTopicsCount">
+            </label>
+            <label>
+              <span>Черновики</span>
+              <input type="number" min="3" max="8" name="reviewTemplateDraftsCount" [(ngModel)]="reviewTemplateDraftsCount">
+            </label>
+          </div>
+
+          <label>
+            <span>Тон</span>
+            <input type="text" name="reviewTemplateTone" [(ngModel)]="reviewTemplateTone">
+          </label>
+
+          <div class="inline-actions">
+            <button type="button" [disabled]="busy()" (click)="improveReviewTemplates()">
+              <span class="material-icons-sharp">auto_fix_high</span>
+              {{ isLoading('reviewTemplates') ? 'Собираю' : 'Улучшить отзывы' }}
+            </button>
+            @if (reviewTemplatesResult(); as improved) {
+              <button type="button" class="secondary" [disabled]="busy()" (click)="applyImprovedReviewTemplates()">
+                <span class="material-icons-sharp">save</span>
+                {{ isLoading('applyReviewTemplates') ? 'Сохраняю' : 'Заменить в пакете' }}
+              </button>
+            }
+          </div>
+
+          <div class="change-head">
+            <span class="material-icons-sharp">edit_note</span>
+            <div>
+              <strong>Один отзыв</strong>
+              <small>Случайная тема + стилистика</small>
+            </div>
+          </div>
+
+          <label>
+            <span>Идея</span>
+            <textarea rows="2" name="singleReviewIdea" [(ngModel)]="singleReviewIdea" placeholder="Оставь пустым — выберу случайную идею из УТП, постов и черновиков"></textarea>
+          </label>
+
+          <div class="inline-fields">
+            <label>
+              <span>Стилистика</span>
+              <input type="text" name="singleReviewStyle" [(ngModel)]="singleReviewStyle">
+            </label>
+            <label>
+              <span>Длина</span>
+              <select name="singleReviewLength" [(ngModel)]="singleReviewLength">
+                <option value="short">Короткий</option>
+                <option value="medium">Средний</option>
+                <option value="long">Подробный</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="inline-actions">
+            <button type="button" [disabled]="busy()" (click)="createSingleReviewDraft()">
+              <span class="material-icons-sharp">casino</span>
+              {{ isLoading('singleReviewDraft') ? 'Пишу' : 'Новый один отзыв' }}
+            </button>
+          </div>
+
+          @if (singleReviewDraftResult(); as singleDraft) {
+            <article class="pack-block">
+              <header>
+                <span class="material-icons-sharp">rate_review</span>
+                <h3>Точечный черновик</h3>
+              </header>
+              <p><strong>Идея:</strong> {{ singleDraft.idea }}</p>
+              <ol>
+                <li>
+                  <p>{{ singleDraft.draft }}</p>
+                  <button type="button" class="icon-button" (click)="copyText(singleDraft.draft)" aria-label="Скопировать" appTooltip="Скопировать этот черновик в буфер обмена.">
+                    <span class="material-icons-sharp">content_copy</span>
+                  </button>
+                </li>
+              </ol>
+              @if (singleDraft.sourceFacts.length > 0) {
+                <div class="tag-block">
+                  @for (fact of singleDraft.sourceFacts; track trackText($index, fact)) {
+                    <span>{{ fact }}</span>
+                  }
+                </div>
+              }
+              @if (singleDraft.safetyNotes.length > 0) {
+                <div class="tag-block">
+                  @for (note of singleDraft.safetyNotes; track trackText($index, note)) {
+                    <span class="warning">{{ note }}</span>
+                  }
+                </div>
+              }
+            </article>
+          }
+
+          @if (reviewTemplatesResult(); as improved) {
+            <div class="pack-grid">
+              <article class="pack-block">
+                <header>
+                  <span class="material-icons-sharp">fact_check</span>
+                  <h3>Новые темы отзывов</h3>
+                </header>
+                <ol>
+                  @for (item of improved.honestReviewTopics; track trackText($index, item)) {
+                    <li>
+                      <p>{{ item }}</p>
+                      <button type="button" class="icon-button" (click)="copyText(item)" aria-label="Скопировать" appTooltip="Скопировать этот текст в буфер обмена.">
+                        <span class="material-icons-sharp">content_copy</span>
+                      </button>
+                    </li>
+                  }
+                </ol>
+              </article>
+
+              <article class="pack-block">
+                <header>
+                  <span class="material-icons-sharp">rate_review</span>
+                  <h3>Новые черновики</h3>
+                </header>
+                <ol>
+                  @for (item of improved.reviewDraftTemplates; track trackText($index, item)) {
+                    <li>
+                      <p>{{ item }}</p>
+                      <button type="button" class="icon-button" (click)="copyText(item)" aria-label="Скопировать" appTooltip="Скопировать этот текст в буфер обмена.">
+                        <span class="material-icons-sharp">content_copy</span>
+                      </button>
+                    </li>
+                  }
+                </ol>
+              </article>
+            </div>
+
+            @if (improved.safetyNotes.length > 0) {
+              <div class="tag-block">
+                @for (note of improved.safetyNotes; track trackText($index, note)) {
+                  <span class="warning">{{ note }}</span>
+                }
+              </div>
+            }
+          }
         </section>
 
         <div class="pack-grid">
@@ -402,6 +640,10 @@
         <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack(deepResearchJob()?.jobId ?? null)">
           <span class="material-icons-sharp">inventory_2</span>
           {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Пакет собирается' : 'Создать из отчёта' }}
+        </button>
+        <button type="button" class="secondary" [disabled]="busy()" (click)="loadLatestContentPack()">
+          <span class="material-icons-sharp">history</span>
+          {{ isLoading('loadContentPack') ? 'Загружаю' : 'Прошлый пакет' }}
         </button>
       </section>
     }
@@ -568,84 +810,51 @@
   </section>
 
   <section admin-right-content class="reputation-ai-side">
-    <form class="side-panel settings-panel" (ngSubmit)="createContentPack()">
+    <article class="side-panel settings-panel launch-side-options">
       <div class="side-title">
         <span class="material-icons-sharp">tune</span>
-        <h2>Настройки запуска</h2>
+        <h2>Параметры запуска</h2>
       </div>
 
-      <details open appTooltip="Профили управляют ценой, глубиной поиска, моделью и размером результата.">
-        <summary>Профили</summary>
-        <label appTooltip="Быстро — дешёвый короткий отчёт, Баланс — основной режим, Максимум — больше поиска и контекста.">
-          <span>Глубокий отчёт</span>
-          <select
-            name="deepResearchProfile"
-            [ngModel]="deepResearchProfile()"
-            (ngModelChange)="deepResearchProfile.set($event)"
-          >
-            @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
-              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
-            }
-          </select>
-        </label>
+      <label class="check-row" appTooltip="Если включено, после основного отчёта будет второй короткий web-search по пунктам из «Что ещё собирать». Для быстрого профиля обычно выключаем, для баланса и максимума включаем.">
+        <input type="checkbox" name="autoEnrichCollectionGaps" [(ngModel)]="autoEnrichCollectionGaps">
+        <span>
+          <strong>Автодосбор рекомендаций</strong>
+          <small>{{ autoEnrichCollectionGapsHint() }}</small>
+        </span>
+      </label>
 
-        @if (selectedDeepResearchProfile(); as profile) {
-          <div class="profile-mode-card">
-            <strong>{{ profile.label }} · {{ profile.model }}</strong>
-            <small>search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }} · tools {{ profile.maxToolCalls }}</small>
-          </div>
-        }
-
-        <label appTooltip="Профиль AI-пакета влияет на качество маркетинговых текстов и расход токенов.">
-          <span>AI-пакет</span>
-          <select
-            name="contentPackProfile"
-            [ngModel]="contentPackProfile()"
-            (ngModelChange)="contentPackProfile.set($event)"
-          >
-            @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
-              <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
-            }
-          </select>
-        </label>
-
-        @if (selectedContentPackProfile(); as profile) {
-          <div class="profile-mode-card">
-            <strong>{{ profile.label }} · {{ profile.model }}</strong>
-            <small>reasoning {{ profile.reasoningEffort || 'off' }} · output {{ profile.maxOutputTokens }}</small>
-          </div>
-        }
-      </details>
-
-      <details appTooltip="Ручные факты усиливают отчёт, когда CRM или публичные источники неполные.">
+      <details class="launch-details manual-facts" appTooltip="Ручные факты усиливают отчёт, когда CRM или публичные источники неполные.">
         <summary>Ручные факты</summary>
-        <label appTooltip="Главный продукт или услуга для AI-пакета и черновиков отзывов.">
-          <span>Товар или услуга</span>
-          <input type="text" name="productOrService" [(ngModel)]="productOrService">
-        </label>
+        <div class="manual-facts-grid">
+          <label appTooltip="Главный продукт или услуга для AI-пакета и черновиков отзывов.">
+            <span>Товар или услуга</span>
+            <input type="text" name="productOrService" [(ngModel)]="productOrService">
+          </label>
 
-        <label appTooltip="Факты, которые нужно учитывать, но которых может не быть в публичных источниках.">
-          <span>Описание</span>
-          <textarea rows="4" name="manualDescription" [(ngModel)]="manualDescription"></textarea>
-        </label>
+          <label appTooltip="Факты, которые нужно учитывать, но которых может не быть в публичных источниках.">
+            <span>Описание</span>
+            <textarea rows="3" name="manualDescription" [(ngModel)]="manualDescription"></textarea>
+          </label>
 
-        <label appTooltip="Каждый товар или услуга с новой строки. Помогает отчёту выделить коммерческие детали.">
-          <span>Товары и услуги</span>
-          <textarea rows="4" name="productsOrServicesText" [(ngModel)]="productsOrServicesText"></textarea>
-        </label>
+          <label appTooltip="Каждый товар или услуга с новой строки. Помогает отчёту выделить коммерческие детали.">
+            <span>Товары и услуги</span>
+            <textarea rows="3" name="productsOrServicesText" [(ngModel)]="productsOrServicesText"></textarea>
+          </label>
 
-        <label appTooltip="Сайт, карточки, отзовики, соцсети и другие URL, которые нужно проверить в первую очередь.">
-          <span>Публичные страницы</span>
-          <textarea rows="4" name="publicUrlsText" [(ngModel)]="publicUrlsText"></textarea>
-        </label>
+          <label appTooltip="Сайт, карточки, отзовики, соцсети и другие URL, которые нужно проверить в первую очередь.">
+            <span>Публичные страницы</span>
+            <textarea rows="3" name="publicUrlsText" [(ngModel)]="publicUrlsText"></textarea>
+          </label>
 
-        <label class="check-row" appTooltip="Если включено, система добавит сайт из CRM-карточки в приоритетные источники.">
-          <input type="checkbox" name="includeCompanyWebsite" [(ngModel)]="includeCompanyWebsite">
-          <span>Сайт из карточки компании</span>
-        </label>
+          <label class="check-row" appTooltip="Если включено, система добавит сайт из CRM-карточки в приоритетные источники.">
+            <input type="checkbox" name="includeCompanyWebsite" [(ngModel)]="includeCompanyWebsite">
+            <span>Сайт из карточки компании</span>
+          </label>
+        </div>
       </details>
 
-      <details appTooltip="Настройка количества текстов в AI-пакете.">
+      <details class="launch-details volume-settings" appTooltip="Настройка количества текстов в AI-пакете.">
         <summary>Объём пакета</summary>
         <div class="count-grid">
           <label appTooltip="Сколько рекламных мини-текстов подготовить в AI-пакете.">
@@ -666,12 +875,7 @@
           </label>
         </div>
       </details>
-
-      <button type="submit" class="accent" [disabled]="busy() || hasActiveContentPackJob()" appTooltip="Собрать AI-пакет по открытому отчёту или последнему доступному слепку компании.">
-        <span class="material-icons-sharp">bolt</span>
-        {{ isLoading('contentPack') ? 'Запускаю' : hasActiveContentPackJob() ? 'Собирается' : 'Собрать пакет' }}
-      </button>
-    </form>
+    </article>
 
     <article class="side-panel prompt-side-panel" appTooltip="Промпты глубокого отчёта можно смотреть, менять и сбрасывать к дефолту. Новая версия применяется к следующим AI-запускам.">
       <div class="side-title">

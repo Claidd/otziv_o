@@ -26,6 +26,7 @@ public record ReputationContentPackRequest(
                 null,
                 null,
                 null,
+                null,
                 null
         );
     }

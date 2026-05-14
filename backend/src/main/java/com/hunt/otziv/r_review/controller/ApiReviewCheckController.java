@@ -46,6 +46,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/review-check")
@@ -136,6 +138,8 @@ public class ApiReviewCheckController {
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Публикация", authentication);
         Order order = requireOrder(orderDetails);
         OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+        validateReviewTextsReadyForAction(updateDto, "Нельзя разрешить публикацию: заполните текст всех отзывов");
+        saveUpdateDto(updateDto);
 
         if (!orderService.changeStatusForOrder(order.getId(), "Публикация")) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в публикацию");
@@ -186,7 +190,9 @@ public class ApiReviewCheckController {
         Order order = requireOrder(orderDetails);
 
         if (request != null && request.reviews() != null) {
-            updateReviews(orderDetails, request);
+            OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+            validateReviewTextsReadyForAction(updateDto, "Нельзя отправить заказ на проверку: заполните текст всех отзывов");
+            saveUpdateDto(updateDto);
         }
 
         if (!orderService.changeStatusForOrder(order.getId(), "В проверку")) {
@@ -291,7 +297,23 @@ public class ApiReviewCheckController {
 
     private void updateReviews(OrderDetails orderDetails, ReviewCheckUpdateRequest request) {
         OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+        saveUpdateDto(updateDto);
+    }
+
+    private void saveUpdateDto(OrderDetailsDTO updateDto) {
         updateDto.getReviews().forEach(review -> reviewService.updateOrderDetailAndReview(updateDto, review, review.getId()));
+    }
+
+    private void validateReviewTextsReadyForAction(OrderDetailsDTO updateDto, String errorMessage) {
+        if (updateDto.getReviews() == null || updateDto.getReviews().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
+
+        boolean hasInvalidReviewText = updateDto.getReviews().stream()
+                .anyMatch(review -> review == null || isBlankOrPlaceholder(review.getText()));
+        if (hasInvalidReviewText) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
     }
 
     private OrderDetailsDTO toUpdateDto(OrderDetails orderDetails, ReviewCheckUpdateRequest request) {

@@ -21,8 +21,8 @@ public record ReputationContentPack(
         adTexts = safeList(adTexts);
         socialPostTopics = safeList(socialPostTopics);
         socialPosts = safeList(socialPosts);
-        honestReviewTopics = safeList(honestReviewTopics);
-        reviewDraftTemplates = safeList(reviewDraftTemplates);
+        honestReviewTopics = safeReviewList(honestReviewTopics);
+        reviewDraftTemplates = safeReviewList(reviewDraftTemplates);
         positiveReviewReplies = safeList(positiveReviewReplies);
         negativeReviewReplies = safeList(negativeReviewReplies);
         sourceUrls = safeList(sourceUrls);
@@ -39,5 +39,25 @@ public record ReputationContentPack(
                 .map(String::trim)
                 .distinct()
                 .toList();
+    }
+
+    private static List<String> safeReviewList(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(ReputationContentPack::cleanReviewText)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private static String cleanReviewText(String value) {
+        return value
+                .replace('[', ' ')
+                .replace(']', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 }

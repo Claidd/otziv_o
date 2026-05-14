@@ -5,7 +5,8 @@
       [class.toast--success]="toast.type === 'success'"
       [class.toast--error]="toast.type === 'error'"
       [class.toast--info]="toast.type === 'info'"
-      [attr.role]="toast.type === 'error' ? 'alert' : 'status'"
+      [class.toast--warning]="toast.type === 'warning'"
+      [attr.role]="toast.type === 'error' || toast.type === 'warning' ? 'alert' : 'status'"
     >
       <span class="toast-icon material-icons-sharp">{{ iconFor(toast.type) }}</span>
       <div>

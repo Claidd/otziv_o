@@ -203,7 +203,7 @@ export class AdminLayoutComponent {
     }
 
     this.loadedHeaderProfileFor = username;
-    this.cabinetApi.getProfile().subscribe({
+    this.cabinetApi.getProfile(undefined, { skipAuthRedirectOn401: true }).subscribe({
       next: (profile) => {
         const imageId = this.customProfileImageId(profile.workerZp?.imageId, profile.user?.image);
         this.headerProfileFallbackUrl.set(imageId ? this.cabinetApi.imageUrl(imageId) : null);

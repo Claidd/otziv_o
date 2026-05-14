@@ -1,6 +1,7 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, from, switchMap, throwError } from 'rxjs';
+import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
@@ -24,7 +25,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }));
     }),
     catchError((error) => {
-      if (isUnauthorized(error) || isExpiredForbidden(error, auth)) {
+      if (!req.context.get(SKIP_AUTH_REDIRECT_ON_401) && (isUnauthorized(error) || isExpiredForbidden(error, auth))) {
         auth.handleUnauthorized(currentBrowserPath());
       }
 

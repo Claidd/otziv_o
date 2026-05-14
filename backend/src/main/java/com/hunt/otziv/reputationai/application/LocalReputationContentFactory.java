@@ -42,16 +42,21 @@ public class LocalReputationContentFactory {
         int postsCount = clamp(request == null ? null : request.socialPostsCount(), 3, 20, 10);
         int positiveReplyCount = clamp(request == null ? null : request.positiveReplyCount(), 3, 20, 10);
         int negativeReplyCount = clamp(request == null ? null : request.negativeReplyCount(), 3, 20, 10);
+        List<String> utp = buildUtp(snapshot, product);
+        List<String> postTopics = buildPostTopics(snapshot, product, postsCount);
+        List<String> socialPosts = postTopics.stream()
+                .map(topic -> buildArticlePost(snapshot, product, topic))
+                .toList();
 
         return new ReputationContentPack(
                 snapshot,
                 profile,
-                buildUtp(snapshot, product),
+                utp,
                 buildAdTexts(snapshot, product, adCount),
-                buildPostTopics(snapshot, product, postsCount),
-                buildSocialPosts(snapshot, product, postsCount),
-                buildHonestReviewTopics(snapshot, product),
-                buildReviewDraftTemplates(snapshot, product),
+                postTopics,
+                socialPosts,
+                buildHonestReviewTopics(snapshot, product, utp, postTopics),
+                buildReviewDraftTemplates(snapshot, product, utp, socialPosts),
                 buildPositiveReplies(snapshot, positiveReplyCount),
                 buildNegativeReplies(snapshot, negativeReplyCount),
                 snapshot.sources().stream().map(CompanySource::url).filter(url -> !url.isBlank()).distinct().toList(),
@@ -137,26 +142,33 @@ public class LocalReputationContentFactory {
                 .toList();
     }
 
-    private List<String> buildHonestReviewTopics(ResearchSnapshot snapshot, String product) {
+    private List<String> buildHonestReviewTopics(ResearchSnapshot snapshot, String product, List<String> utp, List<String> postTopics) {
         LinkedHashSet<String> topics = new LinkedHashSet<>();
-        topics.add("что именно покупали или какой услугой пользовались");
-        topics.add("почему выбрали " + firstNonBlank(snapshot.companyName(), "компанию"));
-        topics.add("что понравилось в " + product);
-        topics.addAll(snapshot.commonPositiveTopics());
-        topics.add("что можно улучшить, если такой опыт действительно был");
-        topics.add("соответствовал ли результат ожиданиям");
+        String companyName = firstNonBlank(snapshot.companyName(), "компании");
+        topics.add("Выбор " + product + ": почему остановились на " + companyName + ", какую задачу решали и какой личный результат получили.");
+        topics.add("УТП: " + firstNonBlank(firstItem(utp), "понятные условия") + " Личный штрих: что именно помогло вам принять решение.");
+        topics.add("Сценарий из поста: " + firstNonBlank(firstItem(postTopics), "как выбрать подходящий формат") + ". Добавьте, с каким запросом пришли и что оказалось полезным.");
+        topics.add("Польза услуги: какой конкретный товар, пакет или формат выбрали и почему он подошёл под вашу ситуацию.");
+        topics.add("Доверие перед заказом: какие условия, цена, адрес, сроки, консультация или отзывы помогли не сомневаться.");
+        topics.add("Организация процесса: как прошли запись, консультация, доставка, самовывоз, визит или сопровождение, если это было в вашем опыте.");
+        for (String topic : snapshot.commonPositiveTopics()) {
+            topics.add("Репутационный плюс: " + topic + ". Расскажите, как он проявился именно у вас.");
+        }
+        topics.add("Честное уточнение: что стоит проверить заранее и какой совет вы бы дали следующему клиенту.");
         return limit(topics, 10);
     }
 
-    private List<String> buildReviewDraftTemplates(ResearchSnapshot snapshot, String product) {
+    private List<String> buildReviewDraftTemplates(ResearchSnapshot snapshot, String product, List<String> utp, List<String> socialPosts) {
         String companyName = firstNonBlank(snapshot.companyName(), "компанию");
         String city = firstNonBlank(snapshot.city(), "городе");
         String anchor = concreteAnchor(snapshot);
+        String utpAngle = firstNonBlank(firstItem(utp), "понятные условия и помощь с выбором");
+        String postAngle = firstNonBlank(firstItem(socialPosts), "Перед выбором полезно сверить условия, формат и отзывы.");
         return List.of(
-                "Выбирал(а) " + product + " в " + city + " и остановился(ась) на " + companyName + ". Перед визитом посмотрел(а) описание, отзывы и условия" + anchor + ". Понравилось, что [что именно совпало с вашим опытом]. Отдельно отмечу [работу администратора / атмосферу / организацию], потому что это сильно влияет на первое впечатление. Если будете идти впервые, советую заранее уточнить [возраст / сложность / состав команды], чтобы ожидания совпали с реальностью.",
-                "Были в " + companyName + " на " + product + ". По описанию было понятно, чего ожидать, а на месте [что подтвердилось из вашего опыта]. Для меня важны были организация, понятные условия и возможность задать вопросы заранее. В итоге впечатления [ваша оценка], особенно запомнилось [конкретная деталь]. Такой отзыв пишу не ради красивых слов, а чтобы другим было проще понять, подойдет ли им этот вариант.",
-                "Выбрали " + companyName + " после сравнения вариантов в " + city + ". Смотрели на отзывы, формат и удобство записи" + anchor + ". В нашем случае хорошо сработало, что [что реально понравилось]. Такой формат подойдет тем, кто хочет [семейный отдых / компанию друзей / день рождения], но детали лучше уточнять перед бронированием. После посещения осталось ощущение, что [ваш честный итог].",
-                "Опыт посещения " + companyName + " в целом [ваша оценка]. Понравилось, что можно было заранее понять условия и выбрать подходящий " + product + ". Из плюсов лично для меня: [1-2 реальных плюса]. Если что-то улучшать, то [реальное замечание, если оно было]. В остальном впечатления остались [ваш итог]. Перед публикацией я бы еще добавил(а) пару своих деталей: с кем ходили, какой был повод и что запомнилось больше всего."
+                "Выбирал(а) " + product + " в " + city + " и остановился(ась) на " + companyName + ". Для меня важным был не просто список услуг, а понятный выбор: " + shortSentence(utpAngle) + " Перед обращением смотрел(а) условия, отзывы и детали" + anchor + ". Личную часть лучше дописать через реальный опыт: что именно выбрали, как прошёл контакт и что подтвердилось.",
+                "Обращался(лась) в " + companyName + " за " + product + ". Хорошо, когда компания заранее объясняет формат, условия и следующий шаг: " + shortSentence(postAngle) + " Это не заменяет личный опыт, но помогает идти без лишних ожиданий. В отзыве стоит добавить одну настоящую деталь визита или заказа и заранее уточнить цену, сроки, ограничения и состав услуги.",
+                "Выбрали " + companyName + " после сравнения вариантов в " + city + ". Сработал конкретный плюс: " + shortSentence(utpAngle) + " По таким деталям легче понять, чем предложение отличается от похожих компаний. Личный пример лучше дописать отдельно: что выбрали, почему подошло и совпали ли ожидания с результатом.",
+                "Опыт с " + companyName + " полезно описывать через сочетание услуги и понятной организации. " + shortSentence(postAngle) + " В личной части клиент добавляет свой повод, задачу или ограничение, а также 1-2 реальные детали, которые можно честно подтвердить после обращения."
         );
     }
 
@@ -313,6 +325,22 @@ public class LocalReputationContentFactory {
 
     private List<String> limit(LinkedHashSet<String> values, int limit) {
         return values.stream().limit(limit).toList();
+    }
+
+    private String firstItem(List<String> values) {
+        return values == null || values.isEmpty() ? "" : values.getFirst();
+    }
+
+    private String shortSentence(String value) {
+        String clean = value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        if (clean.isBlank()) {
+            return "";
+        }
+        int sentenceEnd = clean.indexOf('.');
+        if (sentenceEnd > 40 && sentenceEnd <= 180) {
+            return clean.substring(0, sentenceEnd + 1);
+        }
+        return clean.length() <= 180 ? clean : clean.substring(0, 177).trim() + "...";
     }
 
     private String firstNonBlank(String... values) {

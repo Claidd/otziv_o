@@ -20,6 +20,7 @@
 		<apache.poi.version>5.5.1</apache.poi.version>
 		<commons-compress.version>1.28.0</commons-compress.version>
 		<commons-io.version>2.22.0</commons-io.version>
+		<pdfbox.version>3.0.7</pdfbox.version>
 		<testcontainers.version>2.0.5</testcontainers.version>
 		<aws.sdk.version>2.44.1</aws.sdk.version>
 	</properties>
@@ -172,6 +173,13 @@
 			<groupId>org.jsoup</groupId>
 			<artifactId>jsoup</artifactId>
 			<version>1.22.2</version>
+		</dependency>
+
+		<!-- PDF export -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>${pdfbox.version}</version>
 		</dependency>
 
 		<!-- JWT -->

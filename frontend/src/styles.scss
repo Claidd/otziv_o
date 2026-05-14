@@ -1989,16 +1989,34 @@ app-order-details .review-edit-modal .review-save-action {
 app-reputation-ai .reputation-ai-side {
   display: grid;
   gap: 0.9rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 0.95rem;
 }
 
 app-reputation-ai .side-panel {
   display: grid;
   gap: 0.85rem;
+  min-width: 0;
+  max-width: 100%;
   border-radius: 1.05rem;
   padding: 1rem;
   background: var(--otziv-white);
   box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+app-reputation-ai .reputation-ai-side :where(details, label, div, article, section, header, input, textarea, select, button, strong, small, span, p, pre) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+app-reputation-ai .reputation-ai-side :where(strong, small, span, p) {
+  overflow-wrap: anywhere;
+}
+
+app-reputation-ai .reputation-ai-side button {
+  white-space: normal;
 }
 
 app-reputation-ai :where(.workflow-help-list, .snapshot-source-groups, .snapshot-source-groups details, .history-filters, .history-detail-card, .snapshot-source-row, .side-metric-list, .provider-summary, .provider-diagnostics, .side-history-list, .settings-panel details, .fact-block, .source-review-block) {
@@ -2065,6 +2083,11 @@ app-reputation-ai .side-title {
   min-width: 0;
 }
 
+app-reputation-ai .side-title h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 app-reputation-ai .side-title .icon-button {
   margin-left: auto;
 }
@@ -2082,6 +2105,8 @@ app-reputation-ai .side-metric {
 }
 
 app-reputation-ai .settings-panel details {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid rgba(103, 116, 131, 0.14);
   border-radius: 0.85rem;
   padding: 0.75rem;
@@ -2098,9 +2123,26 @@ app-reputation-ai .settings-panel details[open] summary {
   margin-bottom: 0.7rem;
 }
 
+app-reputation-ai .settings-panel :where(label, input, textarea, select, button) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+app-reputation-ai .settings-panel :where(input, textarea, select) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+app-reputation-ai .settings-panel button[type='submit'] {
+  width: 100%;
+  white-space: normal;
+}
+
 app-reputation-ai .profile-mode-card {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid rgba(108, 155, 207, 0.2);
   border-radius: 0.75rem;
   padding: 0.7rem;
@@ -2108,11 +2150,15 @@ app-reputation-ai .profile-mode-card {
 }
 
 app-reputation-ai .profile-mode-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--otziv-dark);
   font-size: 0.84rem;
 }
 
 app-reputation-ai .profile-mode-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--otziv-info);
   font-size: 0.72rem;
   font-weight: 900;
@@ -2166,7 +2212,7 @@ app-reputation-ai .prompt-presets > strong {
 
 app-reputation-ai .prompt-presets > div {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.2rem), 1fr));
   gap: 0.4rem;
 }
 
@@ -2401,6 +2447,30 @@ app-reputation-ai .check-row input {
   width: 1.05rem;
 }
 
+app-reputation-ai .reputation-ai-side .count-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.4rem), 1fr));
+}
+
+@media (min-width: 1501px) {
+  app-reputation-ai app-admin-layout .admin-layout {
+    grid-template-columns: 12.2rem minmax(0, 1fr) 20rem;
+  }
+}
+
+@media (min-width: 1321px) and (max-width: 1500px) {
+  app-reputation-ai app-admin-layout .admin-layout {
+    grid-template-columns: 5.8rem minmax(0, 1fr) 19.25rem;
+  }
+
+  app-reputation-ai .side-panel {
+    padding: 0.85rem;
+  }
+
+  app-reputation-ai .settings-panel details {
+    padding: 0.65rem;
+  }
+}
+
 app-reputation-ai :where(.provider-summary span, .provider-summary strong, .provider-diagnostics span, .provider-diagnostics small) {
   display: block;
   color: var(--otziv-info);
@@ -2476,7 +2546,75 @@ app-reputation-ai .side-action {
   width: 100%;
 }
 
-app-reputation-ai .side-history-row {
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-grid {
+  align-items: start;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block {
+  align-content: start;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block header {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block h3 {
+  margin-top: 0;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block ol {
+  align-content: start;
+  gap: 0.6rem;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: pack-item;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 2.05rem;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.78rem;
+  padding: 0.68rem;
+  background: var(--otziv-white);
+  counter-increment: pack-item;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block li::before {
+  content: counter(pack-item) ".";
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block li p {
+  overflow-wrap: anywhere;
+  line-height: 1.48;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block .icon-button {
+  position: static;
+  align-self: start;
+  justify-self: end;
+  border: 2px solid rgba(108, 155, 207, 0.72);
+  color: var(--otziv-primary);
+  background: transparent;
+  box-shadow: none;
+}
+
+app-reputation-ai .reputation-ai-workspace .content-pack-panel .pack-block .icon-button:hover:not(:disabled) {
+  border-color: rgba(27, 156, 133, 0.58);
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.08);
+}
+
+app-reputation-ai .reputation-ai-side .side-history-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
   align-items: flex-start;
   gap: 0.6rem;
 }
@@ -2550,7 +2688,11 @@ app-reputation-ai .current-badge {
 }
 
 app-reputation-ai .history-actions {
+  grid-column: 2;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 0.35rem;
+  margin-top: 0.1rem;
 }
 
 app-reputation-ai [data-tooltip] {
@@ -2598,12 +2740,8 @@ app-reputation-ai [data-tooltip]::before {
   transform: translate(-50%, 0.35rem);
 }
 
-app-reputation-ai [data-tooltip]:hover::after,
-app-reputation-ai [data-tooltip]:hover::before,
-app-reputation-ai [data-tooltip]:focus-visible::after,
-app-reputation-ai [data-tooltip]:focus-visible::before,
-app-reputation-ai [data-tooltip]:focus-within::after,
-app-reputation-ai [data-tooltip]:focus-within::before {
+app-reputation-ai [data-tooltip].tooltip-open::after,
+app-reputation-ai [data-tooltip].tooltip-open::before {
   opacity: 1;
   transform: translate(-50%, 0);
   visibility: visible;
@@ -2622,12 +2760,8 @@ app-reputation-ai .reputation-ai-side [data-tooltip]::before {
   transform: translateY(0.35rem);
 }
 
-app-reputation-ai .reputation-ai-side [data-tooltip]:hover::after,
-app-reputation-ai .reputation-ai-side [data-tooltip]:hover::before,
-app-reputation-ai .reputation-ai-side [data-tooltip]:focus-visible::after,
-app-reputation-ai .reputation-ai-side [data-tooltip]:focus-visible::before,
-app-reputation-ai .reputation-ai-side [data-tooltip]:focus-within::after,
-app-reputation-ai .reputation-ai-side [data-tooltip]:focus-within::before {
+app-reputation-ai .reputation-ai-side [data-tooltip].tooltip-open::after,
+app-reputation-ai .reputation-ai-side [data-tooltip].tooltip-open::before {
   transform: translateY(0);
 }
 

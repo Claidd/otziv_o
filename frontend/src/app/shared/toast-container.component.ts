@@ -15,7 +15,8 @@ export class ToastContainerComponent {
     return {
       success: 'check_circle',
       error: 'error',
-      info: 'info'
+      info: 'info',
+      warning: 'warning'
     }[type];
   }
 }

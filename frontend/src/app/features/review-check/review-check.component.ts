@@ -999,7 +999,7 @@ export class ReviewCheckComponent {
   }
 
   reviewDate(review: ReviewCheckReview): string {
-    return review.publishedDate || (review.publish ? 'ОПУБЛИКОВАНО' : '-');
+    return review.publishedDate || (review.publish ? 'ОПУБЛИКОВАНО' : 'Не назначено');
   }
 
   private isReviewPublished(review: ReviewCheckReview): boolean {

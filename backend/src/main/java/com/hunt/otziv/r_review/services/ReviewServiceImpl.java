@@ -50,6 +50,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 
 @Service
@@ -171,9 +172,10 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdmin(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublish(localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH, ReviewBoardScope.ADMIN,
+                localDate, null, null, null, null, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByWorkerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
@@ -187,9 +189,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublish(worker, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublish(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
@@ -203,10 +206,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublish(
-                manager.getUser().getWorkers(), manager, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH, ReviewBoardScope.MANAGER,
+                localDate, null, null, manager, manager.getUser().getWorkers(), "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     @Override
@@ -223,9 +226,10 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublish(workerList, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH, ReviewBoardScope.OWNER,
+                localDate, null, null, null, workerList, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     @Override
@@ -332,8 +336,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
         if (!hasText(keyword)) {
-            Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-            return getReviewDTOPage(reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublish(worker, localDate, pageable));
+            return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                    ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
+                    localDate, null, worker, null, null, "", pageNumber, pageSize, sortDirection
+            ));
         }
         return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.PUBLISH, ReviewBoardScope.WORKER,
                 localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));
@@ -1009,6 +1015,11 @@ public class ReviewServiceImpl implements ReviewService {
                 return false;
             }
 
+            if (orderDetailsDTO.getReviews().stream().anyMatch(this::hasInvalidPublicationText)) {
+                log.warn("Даты публикации не назначены: пустые или шаблонные тексты у отзывов");
+                return false;
+            }
+
             Bot firstBot = reviews.get(0).getBot();
             int botCounter = safeBotCounter(firstBot);
             LocalDate startDate = getLocalDate(botCounter);
@@ -1038,6 +1049,10 @@ public class ReviewServiceImpl implements ReviewService {
             log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
             return false;
         }
+    }
+
+    private boolean hasInvalidPublicationText(ReviewDTO reviewDTO) {
+        return reviewDTO == null || isBlankOrPlaceholder(reviewDTO.getText());
     }
 
     private List<LocalDate> randomPublicationDates(
@@ -1180,9 +1195,10 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize, String sortDirection) {
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByPublishedDateAndPublishToVigul(localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.VIGUL, ReviewBoardScope.ADMIN,
+                localDate, null, null, null, null, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     public Page<ReviewDTOOne> getAllReviewDTOByManagerByPublishToVigul(LocalDate localDate, Principal principal, int pageNumber, int pageSize) {
@@ -1196,10 +1212,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByManagerAndPublishedDateAndPublishToVigul(
-                manager.getUser().getWorkers(), manager, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.VIGUL, ReviewBoardScope.MANAGER,
+                localDate, null, null, manager, manager.getUser().getWorkers(), "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     @Override
@@ -1216,9 +1232,10 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Set<Worker> workerList = workerService.getAllWorkersToManagerList(managerList);
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkersAndPublishedDateAndPublishToVigul(workerList, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.VIGUL, ReviewBoardScope.OWNER,
+                localDate, null, null, null, workerList, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     @Override
@@ -1234,9 +1251,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
 
-        Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-        Page<Long> reviewIds = reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublishToVigul(worker, localDate, pageable);
-        return getReviewDTOPage(reviewIds);
+        return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
+                localDate, null, worker, null, null, "", pageNumber, pageSize, sortDirection
+        ));
     }
 
     @Override
@@ -1304,8 +1322,10 @@ public class ReviewServiceImpl implements ReviewService {
             return emptyReviewPage(pageNumber, pageSize, sortDirection);
         }
         if (!hasText(keyword)) {
-            Pageable pageable = reviewBoardQueryService.reviewPageable(pageNumber, pageSize, sortDirection);
-            return getReviewDTOPage(reviewRepository.findPageIdsByWorkerAndPublishedDateAndPublishToVigul(worker, localDate, pageable));
+            return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(
+                    ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
+                    localDate, null, worker, null, null, "", pageNumber, pageSize, sortDirection
+            ));
         }
         return getReviewDTOPage(reviewBoardQueryService.findReviewIdsForBoard(ReviewBoardMode.VIGUL, ReviewBoardScope.WORKER,
                 localDate, null, worker, null, null, keyword, pageNumber, pageSize, sortDirection));

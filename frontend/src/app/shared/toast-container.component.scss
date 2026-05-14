@@ -53,6 +53,14 @@
   --toast-icon-bg: #6c9bcf;
 }
 
+.toast--warning {
+  --toast-bg: #fff5cc;
+  --toast-border: #e5b633;
+  --toast-ink: #6d5100;
+  --toast-muted: #82651a;
+  --toast-icon-bg: #d99a00;
+}
+
 .toast-icon {
   display: grid;
   width: 2.15rem;

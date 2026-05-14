@@ -84,6 +84,7 @@ public class ReviewBoardQueryService {
             case PUBLISH -> {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
+                addReadyReviewTextConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");
@@ -94,6 +95,7 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publish = false");
                 conditions.add("r.vigul = false");
                 conditions.add("(b IS NULL OR b.counter <= 2)");
+                addReadyReviewTextConditions(conditions);
             }
         }
 
@@ -154,6 +156,7 @@ public class ReviewBoardQueryService {
             case PUBLISH -> {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
+                addReadyReviewTextConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");
@@ -164,6 +167,7 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publish = false");
                 conditions.add("r.vigul = false");
                 conditions.add("(b IS NULL OR b.counter <= 2)");
+                addReadyReviewTextConditions(conditions);
             }
         }
 
@@ -229,6 +233,12 @@ public class ReviewBoardQueryService {
         if (scope == ReviewBoardScope.MANAGER) {
             query.setParameter("manager", manager);
         }
+    }
+
+    private void addReadyReviewTextConditions(List<String> conditions) {
+        conditions.add("r.text IS NOT NULL");
+        conditions.add("TRIM(r.text) <> ''");
+        conditions.add("LOWER(TRIM(r.text)) <> 'текст отзыва'");
     }
 
     private void bindReviewBoardParameters(

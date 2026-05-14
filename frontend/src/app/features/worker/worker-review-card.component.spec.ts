@@ -173,6 +173,17 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('footer a')?.textContent?.trim()).toBe('City');
   });
 
+  it('does not fall back to the creation date when publication date is empty', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review({ created: '2026-05-01', publishedDate: '' });
+
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.reviewDate()).toBe('Не назначено');
+    expect((fixture.nativeElement as HTMLElement).querySelector('footer span')?.textContent?.trim())
+      .toBe('Не назначено');
+  });
+
   it('emits review action events without owning mutations', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

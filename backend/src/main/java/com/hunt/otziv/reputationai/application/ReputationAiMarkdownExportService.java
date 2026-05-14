@@ -103,8 +103,8 @@ public class ReputationAiMarkdownExportService {
         appendListSection(markdown, "Рекламные тексты", pack.adTexts(), true);
         appendListSection(markdown, "Темы постов", pack.socialPostTopics(), true);
         appendListSection(markdown, "Посты и статьи", pack.socialPosts(), true);
-        appendListSection(markdown, "Темы честного отзыва", pack.honestReviewTopics(), true);
-        appendListSection(markdown, "Черновики честного отзыва", pack.reviewDraftTemplates(), true);
+        appendListSection(markdown, "Темы для честного отзыва", pack.honestReviewTopics(), true);
+        appendListSection(markdown, "Черновики отзывов с УТП", pack.reviewDraftTemplates(), true);
         appendListSection(markdown, "Ответы на положительные отзывы", pack.positiveReviewReplies(), true);
         appendListSection(markdown, "Ответы на негативные отзывы", pack.negativeReviewReplies(), true);
         appendListSection(markdown, "Проверки и ограничения", pack.safetyNotes(), false);

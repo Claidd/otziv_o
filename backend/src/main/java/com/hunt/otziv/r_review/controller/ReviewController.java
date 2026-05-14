@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
+
 @Controller
 @LegacyMvc
 @Slf4j
@@ -151,6 +153,15 @@ public class ReviewController {
         try {
             Long orderId = orderDetailDTO.getOrder().getId();
 
+            if (hasInvalidReviewText(orderDetailDTO)) {
+                rm.addFlashAttribute("errorMessage", "Заполните текст всех отзывов перед публикацией");
+                return "redirect:/review/editReviews/{orderDetailId}";
+            }
+
+            for (ReviewDTO reviewDTO: orderDetailDTO.getReviews()) {
+                reviewService.updateOrderDetailAndReview(orderDetailDTO, reviewDTO, reviewDTO.getId());
+            }
+
             // 1. Сначала меняем статус заказа на "Публикация" (это назначит ботов если нужно)
             log.info("Начинаем обновлять статус заказа на 'Публикация'");
             boolean statusChanged = orderService.changeStatusForOrder(orderId, "Публикация");
@@ -228,5 +239,14 @@ private void checkTimeMethod(String text, long startTime){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return ((UserDetails) authentication.getPrincipal()).getAuthorities().iterator().next().getAuthority();
     }// Берем роль пользователя
+
+    private boolean hasInvalidReviewText(OrderDetailsDTO orderDetailsDTO) {
+        if (orderDetailsDTO.getReviews() == null || orderDetailsDTO.getReviews().isEmpty()) {
+            return true;
+        }
+
+        return orderDetailsDTO.getReviews().stream()
+                .anyMatch(review -> review == null || isBlankOrPlaceholder(review.getText()));
+    }
 
 }

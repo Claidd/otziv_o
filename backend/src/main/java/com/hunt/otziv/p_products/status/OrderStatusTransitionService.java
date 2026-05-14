@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
@@ -53,6 +55,7 @@ public class OrderStatusTransitionService {
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderBotLifecycleService orderBotLifecycleService;
     private final ReviewArchiveService reviewArchiveService;
+    private final ReviewRepository reviewRepository;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -92,6 +95,8 @@ public class OrderStatusTransitionService {
     }
 
     private boolean handleToPublicStatus(Order order) {
+        validateReviewsReadyForPublication(order);
+
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===");
             log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
@@ -169,8 +174,56 @@ public class OrderStatusTransitionService {
     }
 
     private void validateReviewsReadyForArchive(Order order) {
+        validateReviewsReadyForStatus(
+                order,
+                "Архивация",
+                "Нельзя отправить заказ в архив: заполните текст всех отзывов"
+        );
+    }
+
+    private void validateReviewsReadyForCheck(Order order) {
+        validateReviewsReadyForStatus(
+                order,
+                "Отправка на проверку",
+                "Нельзя отправить заказ на проверку: заполните текст всех отзывов"
+        );
+        validateReviewTextsNotDuplicatedWithinOrder(
+                order,
+                "Отправка на проверку",
+                "Нельзя отправить заказ на проверку: в заказе есть одинаковые тексты отзывов. Измените повторяющийся текст и сохраните его дискеткой."
+        );
+        validateReviewTextsNotPreviouslyPublished(
+                order,
+                "Отправка на проверку",
+                "Нельзя отправить заказ на проверку: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой."
+        );
+    }
+
+    private void validateReviewsReadyForPublication(Order order) {
+        validateReviewsReadyForStatus(
+                order,
+                "Публикация",
+                "Нельзя отправить заказ в публикацию: заполните текст всех отзывов"
+        );
+        validateReviewTextsNotDuplicatedWithinOrder(
+                order,
+                "Публикация",
+                "Нельзя отправить заказ в публикацию: в заказе есть одинаковые тексты отзывов. Измените повторяющийся текст и сохраните его дискеткой."
+        );
+        validateReviewTextsNotPreviouslyPublished(
+                order,
+                "Публикация",
+                "Нельзя отправить заказ в публикацию: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой."
+        );
+    }
+
+    private void validateReviewsReadyForStatus(
+            Order order,
+            String logActionTitle,
+            String errorMessage
+    ) {
         List<Review> invalidReviews = getAllReviews(order).stream()
-                .filter(this::hasInvalidArchiveText)
+                .filter(this::hasInvalidReviewText)
                 .toList();
 
         if (invalidReviews.isEmpty()) {
@@ -180,20 +233,75 @@ public class OrderStatusTransitionService {
         String reviewIds = invalidReviews.stream()
                 .map(review -> review.getId() == null ? "без id" : review.getId().toString())
                 .collect(Collectors.joining(", "));
-        log.warn("Архивация заказа ID {} отменена: пустые или шаблонные тексты у отзывов {}",
-                order.getId(), reviewIds);
+        log.warn("{} заказа ID {} отменена: пустые или шаблонные тексты у отзывов {}",
+                logActionTitle, order.getId(), reviewIds);
 
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Нельзя отправить заказ в архив: заполните текст всех отзывов"
-        );
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
     }
 
-    private boolean hasInvalidArchiveText(Review review) {
-        return isBlankOrPlaceholder(review.getText());
+    private boolean hasInvalidReviewText(Review review) {
+        return review == null || isBlankOrPlaceholder(review.getText());
+    }
+
+    private void validateReviewTextsNotDuplicatedWithinOrder(
+            Order order,
+            String logActionTitle,
+            String errorMessage
+    ) {
+        List<Review> duplicateReviews = getAllReviews(order).stream()
+                .filter(review -> review != null && !review.isPublish())
+                .filter(review -> !isBlankOrPlaceholder(review.getText()))
+                .collect(Collectors.groupingBy(review -> normalizedReviewText(review.getText())))
+                .values()
+                .stream()
+                .filter(reviews -> reviews.size() > 1)
+                .flatMap(List::stream)
+                .toList();
+
+        rejectIfDuplicatedReviewsFound(order, logActionTitle, errorMessage, duplicateReviews, "одинаковые тексты");
+    }
+
+    private void validateReviewTextsNotPreviouslyPublished(
+            Order order,
+            String logActionTitle,
+            String errorMessage
+    ) {
+        List<Review> duplicateReviews = getAllReviews(order).stream()
+                .filter(review -> review != null && !review.isPublish())
+                .filter(review -> !isBlankOrPlaceholder(review.getText()))
+                .filter(review -> reviewRepository.existsPublishedByTextExcludingReviewId(review.getText(), review.getId()))
+                .toList();
+
+        rejectIfDuplicatedReviewsFound(order, logActionTitle, errorMessage, duplicateReviews, "ранее опубликованные тексты");
+    }
+
+    private void rejectIfDuplicatedReviewsFound(
+            Order order,
+            String logActionTitle,
+            String errorMessage,
+            List<Review> duplicateReviews,
+            String reason
+    ) {
+        if (duplicateReviews.isEmpty()) {
+            return;
+        }
+
+        String reviewIds = duplicateReviews.stream()
+                .map(review -> review.getId() == null ? "без id" : review.getId().toString())
+                .collect(Collectors.joining(", "));
+        log.warn("{} заказа ID {} отменена: {} у отзывов {}",
+                logActionTitle, order.getId(), reason, reviewIds);
+
+        throw new ResponseStatusException(HttpStatus.CONFLICT, errorMessage);
+    }
+
+    private String normalizedReviewText(String text) {
+        return text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
     }
 
     private boolean handleToCheckStatus(Order order) {
+        validateReviewsReadyForCheck(order);
+
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===");
             log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));

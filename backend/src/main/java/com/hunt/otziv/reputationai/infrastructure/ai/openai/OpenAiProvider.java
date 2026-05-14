@@ -41,6 +41,34 @@ public class OpenAiProvider implements AiProvider {
         );
     }
 
+    public AiResponse generateReviewTemplates(AiRequest request, String profileKey) {
+        if (!isAvailable()) {
+            return new AiResponse("", providerName(), 0, 0);
+        }
+
+        OpenAiResponseResult result = responsesClient.createReviewTemplatesResponse(request, profileKey);
+        return new AiResponse(
+                result.text(),
+                providerName(),
+                result.inputTokens(),
+                result.outputTokens()
+        );
+    }
+
+    public AiResponse generateSingleReviewDraft(AiRequest request, String profileKey) {
+        if (!isAvailable()) {
+            return new AiResponse("", providerName(), 0, 0);
+        }
+
+        OpenAiResponseResult result = responsesClient.createSingleReviewDraftResponse(request, profileKey);
+        return new AiResponse(
+                result.text(),
+                providerName(),
+                result.inputTokens(),
+                result.outputTokens()
+        );
+    }
+
     @Override
     public String providerName() {
         return "openai";

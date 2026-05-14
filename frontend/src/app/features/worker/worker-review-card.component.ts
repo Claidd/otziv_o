@@ -283,9 +283,7 @@ export class WorkerReviewCardComponent {
   }
 
   reviewDate(): string {
-    return (
-      this.review.badTaskScheduledDate || this.review.publishedDate || this.review.created || '-'
-    );
+    return this.review.badTaskScheduledDate || this.review.publishedDate || 'Не назначено';
   }
 
   doneLabel(): string {

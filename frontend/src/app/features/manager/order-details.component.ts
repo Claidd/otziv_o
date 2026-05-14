@@ -45,6 +45,7 @@ type ActiveOrderReviewFieldEdit = {
   mutationKey: string;
 };
 const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
+const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
 @Component({
   selector: 'app-order-details',
@@ -59,6 +60,8 @@ export class OrderDetailsComponent {
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
+  private readonly reviewFieldDraftToastIds = new Map<string, number>();
+  private restoredReviewFieldsToastId: number | null = null;
 
   readonly orderId = signal<number | null>(null);
   readonly details = signal<OrderDetailsPayload | null>(null);
@@ -90,6 +93,7 @@ export class OrderDetailsComponent {
   readonly reviewEditNewAccountSaving = signal(false);
   readonly reviewEditError = signal<string | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
+  readonly browserOnline = signal(this.readBrowserOnline());
 
   readonly layoutTitle = computed(() => this.details()?.title || 'Детали заказа');
   readonly reviews = computed(() => this.details()?.reviews ?? []);
@@ -156,6 +160,16 @@ export class OrderDetailsComponent {
   @HostListener('window:resize')
   onWindowResize(): void {
     this.updateMobileReviewLayout();
+  }
+
+  @HostListener('window:online')
+  onWindowOnline(): void {
+    this.browserOnline.set(true);
+  }
+
+  @HostListener('window:offline')
+  onWindowOffline(): void {
+    this.browserOnline.set(false);
   }
 
   loadDetails(): void {
@@ -232,6 +246,12 @@ export class OrderDetailsComponent {
       [key]: value
     }));
     this.writeOrderDetailsSessionDraft();
+
+    if (value !== this.reviewFieldSourceValue(review, field)) {
+      this.showReviewFieldDraftToast(review, field);
+    } else {
+      this.dismissReviewFieldDraftToast(key);
+    }
   }
 
   cancelReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -251,6 +271,12 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const blockReason = this.reviewFieldSaveBlockReason();
+    if (blockReason) {
+      this.toastService.error(field === 'text' ? 'Текст не сохранен' : 'Ответ не сохранен', blockReason);
+      return;
+    }
+
     const key = this.saveFieldMutationKey(review, field);
     const fieldKey = this.reviewFieldKey(review, field);
     this.mutationKey.set(key);
@@ -265,9 +291,12 @@ export class OrderDetailsComponent {
         this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
         this.savedReviewFieldKey.set(fieldKey);
+        this.dismissAllReviewFieldDraftToasts();
         this.toastService.success(
-          field === 'text' ? 'Текст сохранен' : 'Ответ сохранен',
-          `Отзыв #${review.id} обновлен`
+          'Сохранено в базе',
+          field === 'text'
+            ? `Текст отзыва #${review.id} записан в БД`
+            : `Ответ отзыва #${review.id} записан в БД`
         );
 
         window.setTimeout(() => {
@@ -283,10 +312,7 @@ export class OrderDetailsComponent {
         }, 1000);
       },
       error: (err) => {
-        const message = this.errorMessage(err, field === 'text'
-          ? 'Не удалось сохранить текст отзыва'
-          : 'Не удалось сохранить ответ на отзыв'
-        );
+        const message = this.reviewFieldSaveFailureMessage(err, field);
         this.mutationKey.set(null);
         this.error.set(message);
         this.toastService.error(field === 'text' ? 'Текст не сохранен' : 'Ответ не сохранен', message);
@@ -1248,8 +1274,9 @@ export class OrderDetailsComponent {
       return;
     }
 
-    if (this.hasPendingReviewFieldChanges()) {
-      this.toastService.error('Есть несохраненные тексты', 'Сначала сохраните изменения по дискетке');
+    const blockReason = this.sendToCheckBlockReason();
+    if (blockReason) {
+      this.toastService.error('Заказ не отправлен', blockReason);
       return;
     }
 
@@ -1268,7 +1295,7 @@ export class OrderDetailsComponent {
       },
       error: (err) => {
         this.mutationKey.set(null);
-        this.toastService.error('Заказ не отправлен', this.errorMessage(err, 'Не удалось отправить заказ на проверку'));
+        this.toastService.error('Заказ не отправлен', this.sendToCheckFailureMessage(err));
       }
     });
   }
@@ -1324,6 +1351,43 @@ export class OrderDetailsComponent {
       const field = match?.[2] as ReviewEditableField | undefined;
       return !!review && !!field && value !== this.reviewFieldSourceValue(review, field);
     });
+  }
+
+  sendToCheckBlockReason(): string | null {
+    if (this.isBrowserOffline()) {
+      return 'Нельзя отправить на проверку: нет подключения к интернету. Проверьте сеть или VPN, дождитесь подключения, сохраните черновики дискеткой, если они есть, и нажмите отправку еще раз.';
+    }
+
+    if (this.isAuthUnavailable()) {
+      return 'Нельзя отправить на проверку: авторизация закончилась или не подтверждена. Войдите в систему заново, вернитесь к заказу, сохраните черновики дискеткой, если они есть, и повторите отправку.';
+    }
+
+    if (this.hasPendingReviewFieldChanges()) {
+      return 'Нельзя отправить на проверку: есть черновики в браузере. Нажмите дискетку у карточки, чтобы записать текст в БД.';
+    }
+
+    const invalidReviewCount = this.invalidReviewTextCount();
+    if (invalidReviewCount > 0) {
+      return `Нельзя отправить на проверку: есть пустые отзывы или заготовка "${PLACEHOLDER_REVIEW_TEXT}" (${invalidReviewCount}). Заполните настоящий текст и сохраните дискеткой.`;
+    }
+
+    return null;
+  }
+
+  private invalidReviewTextCount(): number {
+    const details = this.details();
+    if (!details) {
+      return 0;
+    }
+
+    return details.reviews
+      .filter((review) => this.isInvalidReviewText(this.reviewFieldSourceValue(review, 'text')))
+      .length;
+  }
+
+  private isInvalidReviewText(value: string): boolean {
+    const text = value.trim();
+    return !text || text.toLocaleLowerCase('ru-RU') === PLACEHOLDER_REVIEW_TEXT;
   }
 
   private toReviewEditDraft(review: OrderReviewItem): ReviewEditDraft {
@@ -1495,10 +1559,19 @@ export class OrderDetailsComponent {
 
   private restoreOrderDetailsSessionDraft(details: OrderDetailsPayload): void {
     const sessionDraft = this.readOrderDetailsSessionDraft(details.orderId);
+    this.dismissRestoredReviewFieldsToast();
 
-    this.reviewFieldDrafts.set(this.filterReviewFieldDrafts(details, sessionDraft?.reviewFields));
+    const reviewFieldDrafts = this.filterReviewFieldDrafts(details, sessionDraft?.reviewFields);
+    this.reviewFieldDrafts.set(reviewFieldDrafts);
     this.reviewNoteDrafts.set(this.filterReviewNoteDrafts(details, sessionDraft?.reviewNotes));
     this.sideNoteDrafts.set(this.filterSideNoteDrafts(details, sessionDraft?.sideNotes));
+
+    if (Object.keys(reviewFieldDrafts).length > 0) {
+      this.restoredReviewFieldsToastId = this.toastService.warning(
+        'Восстановлен черновик',
+        'Это текст из памяти браузера. Нажмите дискетку на карточке, чтобы записать его в БД'
+      );
+    }
   }
 
   private writeOrderDetailsSessionDraft(): void {
@@ -1662,12 +1735,52 @@ export class OrderDetailsComponent {
 
   private clearReviewFieldDraft(review: OrderReviewItem, field: ReviewEditableField): void {
     const key = this.reviewFieldKey(review, field);
+    this.dismissReviewFieldDraftToast(key);
     this.reviewFieldDrafts.update((drafts) => {
       const next = { ...drafts };
       delete next[key];
       return next;
     });
     this.writeOrderDetailsSessionDraft();
+  }
+
+  private showReviewFieldDraftToast(review: OrderReviewItem, field: ReviewEditableField): void {
+    const key = this.reviewFieldKey(review, field);
+    if (this.reviewFieldDraftToastIds.has(key)) {
+      return;
+    }
+
+    const title = field === 'text' ? 'Текст сохранен в черновик' : 'Ответ сохранен в черновик';
+    const id = this.toastService.warning(
+      title,
+      'Пока это только память браузера. Нажмите дискетку на карточке, чтобы записать в БД'
+    );
+    this.reviewFieldDraftToastIds.set(key, id);
+  }
+
+  private dismissReviewFieldDraftToast(key: string): void {
+    const toastId = this.reviewFieldDraftToastIds.get(key);
+    if (toastId) {
+      this.toastService.dismiss(toastId);
+    }
+
+    this.reviewFieldDraftToastIds.delete(key);
+  }
+
+  private dismissAllReviewFieldDraftToasts(): void {
+    for (const toastId of this.reviewFieldDraftToastIds.values()) {
+      this.toastService.dismiss(toastId);
+    }
+
+    this.reviewFieldDraftToastIds.clear();
+    this.dismissRestoredReviewFieldsToast();
+  }
+
+  private dismissRestoredReviewFieldsToast(): void {
+    if (this.restoredReviewFieldsToastId) {
+      this.toastService.dismiss(this.restoredReviewFieldsToastId);
+      this.restoredReviewFieldsToastId = null;
+    }
   }
 
   private clearReviewNoteDraft(reviewId: number): void {
@@ -1695,6 +1808,78 @@ export class OrderDetailsComponent {
       return next;
     });
     this.writeOrderDetailsSessionDraft();
+  }
+
+  private reviewFieldSaveBlockReason(): string | null {
+    if (this.isBrowserOffline()) {
+      return 'Нет подключения к интернету. Черновик остался в браузере: проверьте сеть или VPN и нажмите дискетку еще раз.';
+    }
+
+    if (this.isAuthUnavailable()) {
+      return 'Авторизация закончилась или не подтверждена. Черновик остался в браузере: войдите в систему заново и нажмите дискетку еще раз.';
+    }
+
+    return null;
+  }
+
+  private reviewFieldSaveFailureMessage(err: unknown, field: ReviewEditableField): string {
+    const fieldLabel = field === 'text' ? 'текст отзыва' : 'ответ на отзыв';
+
+    if (this.isNetworkError(err)) {
+      return `Не удалось записать ${fieldLabel} в БД: нет связи с сервером или интернетом. Черновик остался в браузере; проверьте сеть или VPN и нажмите дискетку еще раз.`;
+    }
+
+    if (this.isAuthorizationError(err)) {
+      return `Не удалось записать ${fieldLabel} в БД: авторизация закончилась. Черновик остался в браузере; войдите в систему заново и нажмите дискетку еще раз.`;
+    }
+
+    return this.errorMessage(err, field === 'text'
+      ? 'Не удалось сохранить текст отзыва'
+      : 'Не удалось сохранить ответ на отзыв'
+    );
+  }
+
+  private sendToCheckFailureMessage(err: unknown): string {
+    if (this.isNetworkError(err)) {
+      return 'Нет связи с сервером или интернетом. Проверьте сеть или VPN, убедитесь, что черновики сохранены дискеткой, и нажмите отправку еще раз.';
+    }
+
+    if (this.isAuthorizationError(err)) {
+      return 'Авторизация закончилась. Войдите в систему заново, вернитесь к заказу, убедитесь, что черновики сохранены дискеткой, и повторите отправку.';
+    }
+
+    return this.errorMessage(err, 'Не удалось отправить заказ на проверку');
+  }
+
+  private isBrowserOffline(): boolean {
+    return !this.browserOnline();
+  }
+
+  private isAuthUnavailable(): boolean {
+    const status = this.auth.status();
+    return status === 'anonymous' || status === 'expired' || status === 'error' || !this.auth.authenticated();
+  }
+
+  private isNetworkError(err: unknown): boolean {
+    return this.isBrowserOffline() || this.httpStatus(err) === 0;
+  }
+
+  private isAuthorizationError(err: unknown): boolean {
+    const status = this.httpStatus(err);
+    return status === 401 || (status === 403 && !this.auth.isAuthenticated()) || this.isAuthUnavailable();
+  }
+
+  private httpStatus(err: unknown): number | null {
+    if (typeof err !== 'object' || err === null || !('status' in err)) {
+      return null;
+    }
+
+    const status = (err as { status?: unknown }).status;
+    return typeof status === 'number' ? status : null;
+  }
+
+  private readBrowserOnline(): boolean {
+    return typeof navigator === 'undefined' ? true : navigator.onLine;
   }
 
   private errorMessage(err: unknown, fallback: string): string {

@@ -38,7 +38,7 @@ public class DeepCompanyResearchService {
         }
 
         ReputationResearchRequest safeRequest = request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
         Company company = companyRepository.findByIdForReputationAi(companyId)
                 .orElseThrow(() -> new UsernameNotFoundException(
@@ -57,11 +57,21 @@ public class DeepCompanyResearchService {
                     : errorMessage);
         }
 
+        DeepCompanyResearchReport report;
         try {
-            return parseReport(company, response);
+            report = parseReport(company, response);
         } catch (ReportParseException exception) {
-            return repairAndParseReport(company, response, exception);
+            report = repairAndParseReport(company, response, exception);
         }
+        if (!safeRequest.shouldEnrichCollectionGaps()) {
+            return reportWithCollectionGapEnrichmentStatus(
+                    company,
+                    report,
+                    "info",
+                    "Автодосбор по рекомендациям пропущен настройкой запуска."
+            );
+        }
+        return enrichCollectionGaps(company, safeRequest, report);
     }
 
     public DeepCompanyResearchReport refreshSources(
@@ -77,7 +87,7 @@ public class DeepCompanyResearchService {
         }
 
         ReputationResearchRequest safeRequest = request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
         Company company = companyRepository.findByIdForReputationAi(companyId)
                 .orElseThrow(() -> new UsernameNotFoundException(
@@ -141,7 +151,7 @@ public class DeepCompanyResearchService {
         }
 
         ReputationResearchRequest safeRequest = request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
         Company company = companyRepository.findByIdForReputationAi(companyId)
                 .orElseThrow(() -> new UsernameNotFoundException(
@@ -182,7 +192,7 @@ public class DeepCompanyResearchService {
         }
 
         ReputationResearchRequest safeRequest = request == null
-                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null)
+                ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
         Company company = companyRepository.findByIdForReputationAi(companyId)
                 .orElseThrow(() -> new UsernameNotFoundException(
@@ -401,6 +411,292 @@ public class DeepCompanyResearchService {
                 factsToPrompt(baseReport.factSnapshot().uncertainFacts()),
                 sectionsToPrompt(baseReport.sections(), baseReport.reportMarkdown(), 18000)
         );
+    }
+
+    private DeepCompanyResearchReport enrichCollectionGaps(
+            Company company,
+            ReputationResearchRequest request,
+            DeepCompanyResearchReport report
+    ) {
+        List<String> gapItems = collectionGapItems(report);
+        if (gapItems.isEmpty()) {
+            return reportWithCollectionGapEnrichmentStatus(
+                    company,
+                    report,
+                    "info",
+                    "Автодосбор не требовался: в отчёте нет отдельного списка пунктов для дополнительной публичной проверки."
+            );
+        }
+
+        OpenAiResponseResult response = openAiResponsesClient.createResearchGapEnrichmentResponse(
+                collectionGapEnrichmentInstructions(),
+                collectionGapEnrichmentInput(company, request, report, gapItems),
+                request.deepResearchProfile()
+        );
+        if (response.text().isBlank()) {
+            String detail = response.errorMessage().isBlank()
+                    ? "OpenAI не вернул текст дополнительного дозапроса."
+                    : response.errorMessage();
+            return reportWithCollectionGapEnrichmentStatus(
+                    company,
+                    reportWithWarnings(report, List.of("Автодосбор по рекомендациям не выполнен: " + detail)),
+                    "warn",
+                    "Автодосбор не выполнен: " + detail
+            );
+        }
+
+        try {
+            JsonNode root = readReportJson(response.text());
+            List<DeepCompanyResearchReport.Section> parsedSections = parseSections(root.path("section"));
+            if (parsedSections.isEmpty()) {
+                parsedSections = parseSections(root.path("sections"));
+            }
+            if (parsedSections.isEmpty() || parsedSections.get(0).body().isBlank()) {
+                return reportWithCollectionGapEnrichmentStatus(
+                        company,
+                        reportWithWarnings(report, List.of("Автодосбор по рекомендациям не добавлен: OpenAI не вернул section с title/body.")),
+                        "warn",
+                        "Автодосбор не добавлен: OpenAI не вернул section с title/body."
+                );
+            }
+
+            DeepCompanyResearchReport.Section parsedSection = parsedSections.get(0);
+            DeepCompanyResearchReport.Section enrichmentSection = new DeepCompanyResearchReport.Section(
+                    parsedSection.title().isBlank() ? "Автодосбор по рекомендациям" : parsedSection.title(),
+                    parsedSection.body()
+            );
+            List<DeepCompanyResearchReport.Section> sections = withCollectionGapEnrichmentSection(
+                    report.sections(),
+                    enrichmentSection
+            );
+            List<DeepCompanyResearchReport.Source> sources = mergeSources(parseSources(root.path("sources")), report.sources());
+            String markdown = sectionsToMarkdown(sections);
+            List<String> warnings = new ArrayList<>(report.warnings());
+            warnings.addAll(parseWarnings(root.path("warnings")));
+
+            List<DeepCompanyResearchReport.QualityCheck> qualityChecks = reportQualityChecks(company, sections, sources, markdown);
+            qualityChecks = withCollectionGapEnrichmentCheck(
+                    qualityChecks,
+                    "info",
+                    "Досбор выполнен: публично проверяемые пункты из раздела «Что ещё собирать» вынесены в отдельную секцию."
+            );
+            DeepCompanyResearchReport.FactSnapshot factSnapshot = factSnapshot(company, sections, sources, qualityChecks, markdown);
+            warnings.addAll(qualityChecks.stream()
+                    .filter(this::isActionableQualityCheck)
+                    .map(DeepCompanyResearchReport.QualityCheck::detail)
+                    .filter(detail -> detail != null && !detail.isBlank())
+                    .toList());
+
+            return new DeepCompanyResearchReport(
+                    report.companyId(),
+                    report.companyName(),
+                    report.city(),
+                    report.provider(),
+                    report.model(),
+                    report.responseId(),
+                    markdown,
+                    sections,
+                    sources,
+                    warnings,
+                    qualityChecks,
+                    factSnapshot,
+                    LocalDateTime.now()
+            );
+        } catch (Exception exception) {
+            String detail = exception.getMessage() == null || exception.getMessage().isBlank()
+                    ? exception.getClass().getSimpleName()
+                    : exception.getMessage();
+            return reportWithCollectionGapEnrichmentStatus(
+                    company,
+                    reportWithWarnings(report, List.of("Автодосбор по рекомендациям не выполнен: " + detail)),
+                    "warn",
+                    "Автодосбор не выполнен: " + detail
+            );
+        }
+    }
+
+    private String collectionGapEnrichmentInstructions() {
+        return """
+                Ты делаешь короткий дополнительный публичный дозбор по пунктам из раздела "Что ещё собирать" в уже готовом отчёте.
+                Используй web search только для публично проверяемых вещей: сайт, карты, справочники, прайсы, правила, адреса, режим, вход, этаж, парковка, доставка, отзывы, карточки филиалов, документы и страницы услуг.
+                Не пытайся закрыть пункты, которые можно узнать только у владельца/менеджера: внутренние договоры, актуальный штат, закрытые прайсы, реальные правила конкретной даты, фото, которых нет публично.
+                Не выдумывай факты. Если публичного подтверждения нет, прямо напиши "публично не найдено" и оставь пункт для ручного уточнения.
+                Верни только валидный JSON без markdown-обёртки.
+                В section.body сделай markdown с тремя блоками: "Что удалось проверить публично", "Что публично не найдено", "Что спросить у владельца". По каждому пункту дай короткий ответ и источник/причину.
+                """.stripIndent().trim();
+    }
+
+    private String collectionGapEnrichmentInput(
+            Company company,
+            ReputationResearchRequest request,
+            DeepCompanyResearchReport report,
+            List<String> gapItems
+    ) {
+        return """
+                Компания и CRM-факты:
+                %s
+
+                Ручное описание:
+                %s
+
+                Ручные публичные URL:
+                %s
+
+                Пункты из "Что ещё собирать", которые нужно попробовать закрыть публичным поиском:
+                %s
+
+                Уже сохранённые sources отчёта:
+                %s
+
+                Контекст основного отчёта:
+                %s
+                """.formatted(
+                companyFacts(company),
+                blankToDash(request.manualDescription()),
+                listToText(request.publicUrls()),
+                listToText(gapItems),
+                sourcesToPrompt(report.sources()),
+                sectionsToPrompt(report.sections(), report.reportMarkdown(), 18000)
+        );
+    }
+
+    List<String> collectionGapItems(DeepCompanyResearchReport report) {
+        if (report == null || report.sections().isEmpty()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (DeepCompanyResearchReport.Section section : report.sections()) {
+            if (!isCollectionGapSection(section.title())) {
+                continue;
+            }
+            for (String line : section.body().split("\\R")) {
+                String clean = line.replaceFirst("^\\s*(?:[-*•]|\\d+[.)])\\s*", "").trim();
+                if (clean.equals(line.trim()) || clean.length() < 12) {
+                    continue;
+                }
+                result.add(clean.replaceAll("\\s+", " "));
+                if (result.size() >= 12) {
+                    return result;
+                }
+            }
+        }
+        return result.stream().distinct().toList();
+    }
+
+    private boolean isCollectionGapSection(String title) {
+        String normalized = normalizeLookup(title).replace('ё', 'е');
+        return normalized.contains("что еще собирать")
+                || normalized.contains("что еще собрать")
+                || normalized.contains("что собрать")
+                || normalized.contains("дособ")
+                || (normalized.contains("собир") && normalized.contains("еще"));
+    }
+
+    private boolean isCollectionGapEnrichmentSection(String title) {
+        String normalized = normalizeLookup(title).replace('ё', 'е');
+        return normalized.contains("автодосбор") || normalized.contains("досбор по рекомендац");
+    }
+
+    private List<DeepCompanyResearchReport.Section> withCollectionGapEnrichmentSection(
+            List<DeepCompanyResearchReport.Section> sections,
+            DeepCompanyResearchReport.Section enrichmentSection
+    ) {
+        List<DeepCompanyResearchReport.Section> result = new ArrayList<>();
+        boolean inserted = false;
+        for (DeepCompanyResearchReport.Section section : sections) {
+            if (isCollectionGapEnrichmentSection(section.title())) {
+                if (!inserted) {
+                    result.add(enrichmentSection);
+                    inserted = true;
+                }
+                continue;
+            }
+            result.add(section);
+            if (!inserted && isCollectionGapSection(section.title())) {
+                result.add(enrichmentSection);
+                inserted = true;
+            }
+        }
+        if (!inserted) {
+            result.add(enrichmentSection);
+        }
+        return result;
+    }
+
+    private DeepCompanyResearchReport reportWithWarnings(DeepCompanyResearchReport report, List<String> additionalWarnings) {
+        List<String> warnings = new ArrayList<>(report.warnings());
+        warnings.addAll(additionalWarnings);
+        return new DeepCompanyResearchReport(
+                report.companyId(),
+                report.companyName(),
+                report.city(),
+                report.provider(),
+                report.model(),
+                report.responseId(),
+                report.reportMarkdown(),
+                report.sections(),
+                report.sources(),
+                warnings,
+                report.qualityChecks(),
+                report.factSnapshot(),
+                report.createdAt()
+        );
+    }
+
+    private DeepCompanyResearchReport reportWithCollectionGapEnrichmentStatus(
+            Company company,
+            DeepCompanyResearchReport report,
+            String status,
+            String detail
+    ) {
+        String markdown = report.reportMarkdown().isBlank() ? sectionsToMarkdown(report.sections()) : report.reportMarkdown();
+        List<DeepCompanyResearchReport.QualityCheck> qualityChecks = withCollectionGapEnrichmentCheck(
+                report.qualityChecks(),
+                status,
+                detail
+        );
+        DeepCompanyResearchReport.FactSnapshot factSnapshot = factSnapshot(
+                company,
+                report.sections(),
+                report.sources(),
+                qualityChecks,
+                markdown
+        );
+        return new DeepCompanyResearchReport(
+                report.companyId(),
+                report.companyName(),
+                report.city(),
+                report.provider(),
+                report.model(),
+                report.responseId(),
+                markdown,
+                report.sections(),
+                report.sources(),
+                report.warnings(),
+                qualityChecks,
+                factSnapshot,
+                report.createdAt()
+        );
+    }
+
+    private List<DeepCompanyResearchReport.QualityCheck> withCollectionGapEnrichmentCheck(
+            List<DeepCompanyResearchReport.QualityCheck> checks,
+            String status,
+            String detail
+    ) {
+        List<DeepCompanyResearchReport.QualityCheck> result = new ArrayList<>();
+        for (DeepCompanyResearchReport.QualityCheck check : checks) {
+            if (!"gap_enrichment".equals(check.key())) {
+                result.add(check);
+            }
+        }
+        result.add(new DeepCompanyResearchReport.QualityCheck(
+                "gap_enrichment",
+                "Автодосбор рекомендаций",
+                status,
+                detail
+        ));
+        return result;
     }
 
     private String companyFacts(Company company) {
@@ -693,6 +989,7 @@ public class DeepCompanyResearchService {
             String markdown
     ) {
         List<DeepCompanyResearchReport.QualityCheck> checks = new ArrayList<>();
+        String safeMarkdown = markdown == null ? "" : markdown;
         if (sections.size() < 4) {
             checks.add(new DeepCompanyResearchReport.QualityCheck(
                     "sections",
@@ -753,7 +1050,7 @@ public class DeepCompanyResearchService {
         }
 
         String city = company.getCity();
-        if (city != null && !city.isBlank() && !markdown.toLowerCase().contains(city.trim().toLowerCase())) {
+        if (city != null && !city.isBlank() && !safeMarkdown.toLowerCase().contains(city.trim().toLowerCase())) {
             checks.add(new DeepCompanyResearchReport.QualityCheck(
                     "city",
                     "Город CRM",
@@ -773,6 +1070,142 @@ public class DeepCompanyResearchService {
                     "Город CRM",
                     "info",
                     "В карточке компании нет города, проверка локации пропущена."
+                ));
+        }
+
+        if (hasDuplicateSectionTitles(sections) || hasRepeatedLongParagraphs(safeMarkdown)) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "duplicates",
+                    "Повторы в отчёте",
+                    "warn",
+                    "В отчёте есть повторяющиеся заголовки или длинные повторяющиеся фрагменты. Перед использованием карточки лучше убрать дубли."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "duplicates",
+                    "Повторы в отчёте",
+                    "pass",
+                    "Явных повторов заголовков и длинных блоков не найдено."
+            ));
+        }
+
+        boolean hasPriorityUrls = companyHasPriorityUrls(company);
+        boolean hasMapOrDirectory = hasMapOrDirectorySignal(sources, safeMarkdown);
+        if (hasPriorityUrls && !hasMapOrDirectory) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "maps_directories",
+                    "Карты и справочники",
+                    "warn",
+                    "В CRM есть сайт/филиальные URL, но в отчёте не видно явной сверки карт или справочников. Проверьте 2ГИС/Яндекс/Google карточки вручную."
+            ));
+        } else if (hasMapOrDirectory) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "maps_directories",
+                    "Карты и справочники",
+                    "pass",
+                    "В отчёте или источниках есть признаки карт, карточек или справочников."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "maps_directories",
+                    "Карты и справочники",
+                    "info",
+                    "Явных карт или справочников во входных данных и sources не найдено."
+            ));
+        }
+
+        boolean hasCardDetails = containsAny(
+                safeMarkdown,
+                "адрес",
+                "филиал",
+                "режим",
+                "этаж",
+                "вход",
+                "вывес",
+                "ориентир",
+                "как добраться",
+                "логист"
+        );
+        if (!hasCardDetails) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "card_details",
+                    "Детали карточки",
+                    "warn",
+                    "В отчёте не видно адресов, филиалов, режима, входа, этажа или ориентиров. Для карточки компании этих деталей может не хватить."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "card_details",
+                    "Детали карточки",
+                    "pass",
+                    "В отчёте есть адресные или операционные детали для будущей карточки."
+            ));
+        }
+
+        boolean hasOfflineSignals = hasPriorityUrls || containsAny(safeMarkdown, "адрес", "филиал", "офис", "карта", "2гис", "посетител", "клиент");
+        boolean hasAmenities = containsAny(
+                safeMarkdown,
+                "парков",
+                "доступност",
+                "зона ожид",
+                "ожидания",
+                "вход",
+                "этаж",
+                "туалет",
+                "гардероб",
+                "оплат",
+                "достав",
+                "самовывоз",
+                "выезд",
+                "онлайн-зап",
+                "запись"
+        );
+        if (hasOfflineSignals && !hasAmenities) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "amenities",
+                    "Парковка и удобства",
+                    "warn",
+                    "Компания выглядит как офлайн-точка, но не разобраны парковка, вход, этаж, доступность, зона ожидания, оплата или похожие удобства."
+            ));
+        } else if (hasAmenities) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "amenities",
+                    "Парковка и удобства",
+                    "pass",
+                    "В отчёте есть детали про парковку, вход, этаж, доступность, запись, оплату или другие удобства."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "amenities",
+                    "Парковка и удобства",
+                    "info",
+                    "Офлайн-удобства не выглядят ключевыми по найденным данным."
+            ));
+        }
+
+        boolean hasReadinessNotes = containsAny(
+                safeMarkdown,
+                "что ещё собирать",
+                "что еще собирать",
+                "уточнить",
+                "перед публикац",
+                "карточк",
+                "дозвон",
+                "проверить"
+        );
+        if (!hasReadinessNotes) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "card_readiness",
+                    "Готовность карточки",
+                    "warn",
+                    "В отчёте нет явного списка, что проверить перед публикацией карточки компании."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "card_readiness",
+                    "Готовность карточки",
+                    "pass",
+                    "В отчёте есть уточнения или список проверки перед публикацией карточки."
             ));
         }
 
@@ -1013,6 +1446,69 @@ public class DeepCompanyResearchService {
                 .anyMatch(section -> containsAny(section.title() + " " + section.body(), needles));
     }
 
+    private boolean hasDuplicateSectionTitles(List<DeepCompanyResearchReport.Section> sections) {
+        Set<String> seen = new LinkedHashSet<>();
+        for (DeepCompanyResearchReport.Section section : sections) {
+            String title = normalizeLongText(section.title());
+            if (!title.isBlank() && !seen.add(title)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasRepeatedLongParagraphs(String markdown) {
+        Set<String> seen = new LinkedHashSet<>();
+        String[] blocks = (markdown == null ? "" : markdown).split("\\R\\s*\\R");
+        for (String block : blocks) {
+            String normalized = normalizeLongText(block);
+            if (normalized.length() < 140 || normalized.startsWith("|")) {
+                continue;
+            }
+            if (!seen.add(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean companyHasPriorityUrls(Company company) {
+        if (company.getUrlSite() != null && !company.getUrlSite().isBlank()) {
+            return true;
+        }
+        Set<Filial> filials = company.getFilial();
+        if (filials == null || filials.isEmpty()) {
+            return false;
+        }
+        return filials.stream()
+                .anyMatch(filial -> filial != null && filial.getUrl() != null && !filial.getUrl().isBlank());
+    }
+
+    private boolean hasMapOrDirectorySignal(List<DeepCompanyResearchReport.Source> sources, String markdown) {
+        StringBuilder combined = new StringBuilder(markdown == null ? "" : markdown);
+        for (DeepCompanyResearchReport.Source source : sources) {
+            combined.append(' ')
+                    .append(source.title()).append(' ')
+                    .append(source.url()).append(' ')
+                    .append(source.note());
+        }
+        return containsAny(
+                combined.toString(),
+                "2gis",
+                "2гис",
+                "yandex",
+                "яндекс",
+                "google maps",
+                "google.com/maps",
+                "maps.google",
+                "карты",
+                "справочник",
+                "каталог",
+                "zoon",
+                "flamp"
+        );
+    }
+
     private boolean isActionableQualityCheck(DeepCompanyResearchReport.QualityCheck check) {
         return "warn".equals(check.status()) || "fail".equals(check.status());
     }
@@ -1043,6 +1539,10 @@ public class DeepCompanyResearchService {
     }
 
     private String normalizeLookup(String value) {
+        return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase();
+    }
+
+    private String normalizeLongText(String value) {
         return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase();
     }
 

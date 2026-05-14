@@ -27,9 +27,9 @@ sh infrastructure/keycloak/apply-theme.sh
 On a running production Docker Compose stack, apply the same values directly:
 
 ```sh
-docker compose --env-file .env.prod -f compose.prod.yaml exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/keycloak --realm master --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
-docker compose --env-file .env.prod -f compose.prod.yaml exec keycloak /opt/keycloak/bin/kcadm.sh update realms/otziv -s accessTokenLifespan=600 -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=86400
-docker compose --env-file .env.prod -f compose.prod.yaml exec keycloak /opt/keycloak/bin/kcadm.sh get realms/otziv --fields accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan
+docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/keycloak --realm master --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
+docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh update realms/otziv -s accessTokenLifespan=600 -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=86400
+docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh get realms/otziv --fields accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan
 ```
 
 Local Angular development still talks to Keycloak directly on `http://localhost:8180`. For production behind nginx, set:

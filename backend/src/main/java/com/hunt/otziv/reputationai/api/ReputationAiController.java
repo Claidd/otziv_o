@@ -7,6 +7,9 @@ import com.hunt.otziv.reputationai.api.dto.ReputationAiStatus;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewCheckRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewDraftRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationReviewTemplatesApplyRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationReviewTemplatesRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationSingleReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiPromptUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyResponse;
@@ -16,9 +19,12 @@ import com.hunt.otziv.reputationai.application.CompanyResearchService;
 import com.hunt.otziv.reputationai.application.DeepCompanyResearchJobService;
 import com.hunt.otziv.reputationai.application.DeepCompanyResearchService;
 import com.hunt.otziv.reputationai.application.ReputationAiMarkdownExportService;
+import com.hunt.otziv.reputationai.application.ReputationAiPdfExportService;
 import com.hunt.otziv.reputationai.application.ReputationAiPromptService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackJobService;
+import com.hunt.otziv.reputationai.application.ReputationReviewTemplateService;
+import com.hunt.otziv.reputationai.application.ReputationSingleReviewDraftService;
 import com.hunt.otziv.reputationai.application.ReviewDraftService;
 import com.hunt.otziv.reputationai.application.ReviewReplyService;
 import com.hunt.otziv.reputationai.application.ReviewSafetyService;
@@ -31,6 +37,8 @@ import com.hunt.otziv.reputationai.domain.ReputationAiPromptValidation;
 import com.hunt.otziv.reputationai.domain.ReputationAiPromptVersion;
 import com.hunt.otziv.reputationai.domain.ReputationContentPack;
 import com.hunt.otziv.reputationai.domain.ReputationContentPackJobStatus;
+import com.hunt.otziv.reputationai.domain.ReputationReviewTemplatesResult;
+import com.hunt.otziv.reputationai.domain.ReputationSingleReviewDraftResult;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
 import com.hunt.otziv.reputationai.domain.ResearchSnapshot;
@@ -74,6 +82,9 @@ public class ReputationAiController {
     private final ReputationContentPackService contentPackService;
     private final ReputationContentPackJobService contentPackJobService;
     private final ReputationAiMarkdownExportService markdownExportService;
+    private final ReputationAiPdfExportService pdfExportService;
+    private final ReputationReviewTemplateService reviewTemplateService;
+    private final ReputationSingleReviewDraftService singleReviewDraftService;
     private final ReviewDraftService reviewDraftService;
     private final ReviewReplyService reviewReplyService;
     private final ReviewSafetyService reviewSafetyService;
@@ -313,6 +324,23 @@ public class ReputationAiController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый глубокий GPT-отчет для экспорта не найден"));
     }
 
+    @GetMapping(value = "/companies/{companyId}/deep-research/jobs/latest/export/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportLatestDeepResearchPdf(@PathVariable Long companyId) {
+        return pdfExportService.latestDeepReport(companyId)
+                .map(this::pdfResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый глубокий GPT-отчет для PDF-экспорта пока не найден"));
+    }
+
+    @GetMapping(value = "/companies/{companyId}/deep-research/jobs/{jobId}/export/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportDeepResearchPdf(
+            @PathVariable Long companyId,
+            @PathVariable Long jobId
+    ) {
+        return pdfExportService.deepReport(companyId, jobId)
+                .map(this::pdfResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый глубокий GPT-отчет для PDF-экспорта не найден"));
+    }
+
     @GetMapping("/companies/{companyId}/research/latest")
     public ResearchSnapshot latestResearch(@PathVariable Long companyId) {
         return researchService.findLatestSnapshot(companyId)
@@ -354,6 +382,49 @@ public class ReputationAiController {
         return markdownExportService.latestContentPack(companyId)
                 .map(this::markdownResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый AI-пакет для экспорта пока не найден"));
+    }
+
+    @GetMapping(value = "/companies/{companyId}/content-pack/jobs/latest/export/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportLatestContentPackPdf(@PathVariable Long companyId) {
+        return pdfExportService.latestContentPack(companyId)
+                .map(this::pdfResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Готовый AI-пакет для PDF-экспорта пока не найден"));
+    }
+
+    @PostMapping("/companies/{companyId}/content-pack/review-templates")
+    public ReputationReviewTemplatesResult improveReviewTemplates(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationReviewTemplatesRequest request
+    ) {
+        try {
+            return reviewTemplateService.generate(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/companies/{companyId}/content-pack/review-templates/apply")
+    public ReputationContentPack applyReviewTemplates(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationReviewTemplatesApplyRequest request
+    ) {
+        try {
+            return reviewTemplateService.apply(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/companies/{companyId}/content-pack/review-draft")
+    public ReputationSingleReviewDraftResult singleReviewDraft(
+            @PathVariable Long companyId,
+            @RequestBody(required = false) ReputationSingleReviewDraftRequest request
+    ) {
+        try {
+            return singleReviewDraftService.generate(companyId, request);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
     }
 
     @PostMapping("/companies/{companyId}/review-draft")
@@ -413,6 +484,19 @@ public class ReputationAiController {
                                 .toString()
                 )
                 .body(export.markdown());
+    }
+
+    private ResponseEntity<byte[]> pdfResponse(ReputationAiPdfExportService.PdfExport export) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(export.fileName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .body(export.bytes());
     }
 
     private OpenAiProviderDiagnostics openAiDiagnostics() {

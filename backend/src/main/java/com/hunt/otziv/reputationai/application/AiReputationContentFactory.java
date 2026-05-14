@@ -317,8 +317,8 @@ public class AiReputationContentFactory {
                 strings(root.path("adTexts")),
                 strings(root.path("socialPostTopics")),
                 strings(root.path("socialPosts")),
-                strings(root.path("honestReviewTopics")),
-                strings(root.path("reviewDraftTemplates")),
+                cleanReviewItems(strings(root.path("honestReviewTopics"))),
+                cleanReviewItems(strings(root.path("reviewDraftTemplates"))),
                 strings(root.path("positiveReviewReplies")),
                 strings(root.path("negativeReviewReplies")),
                 snapshot.sources().stream().map(CompanySource::url).filter(url -> !url.isBlank()).distinct().toList(),
@@ -339,6 +339,18 @@ public class AiReputationContentFactory {
             }
         }
         return result;
+    }
+
+    private List<String> cleanReviewItems(List<String> values) {
+        return values.stream()
+                .map(value -> value == null ? "" : value
+                        .replace('[', ' ')
+                        .replace(']', ' ')
+                        .replaceAll("\\s+", " ")
+                        .trim())
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
     }
 
     private String extractJsonObject(String text) {
@@ -545,6 +557,18 @@ public class AiReputationContentFactory {
         if (!pack.reviewDraftTemplates().isEmpty() && readyReviews < Math.min(pack.reviewDraftTemplates().size(), economy ? 2 : 3)) {
             issues.add("черновики отзывов слишком короткие");
         }
+        long usefulReviewTopics = pack.honestReviewTopics().stream()
+                .filter(this::isUsefulReviewTopic)
+                .count();
+        if (!pack.honestReviewTopics().isEmpty() && usefulReviewTopics < Math.min(pack.honestReviewTopics().size(), economy ? 3 : 5)) {
+            issues.add("темы отзывов похожи на вопросник и не используют УТП/услуги/сценарии");
+        }
+        long commercialReviewDrafts = pack.reviewDraftTemplates().stream()
+                .filter(text -> isCommercialReviewDraft(text, economy))
+                .count();
+        if (!pack.reviewDraftTemplates().isEmpty() && commercialReviewDrafts < Math.min(pack.reviewDraftTemplates().size(), economy ? 2 : 3)) {
+            issues.add("черновики отзывов не связывают личный опыт с УТП, услугами или постами AI-пакета");
+        }
 
         String allText = normalizeForQuality(String.join(" ", pack.utp())
                 + " " + String.join(" ", pack.adTexts())
@@ -593,6 +617,67 @@ public class AiReputationContentFactory {
             }
         }
         return explanatorySignals >= (economy ? 1 : 2);
+    }
+
+    private boolean isUsefulReviewTopic(String value) {
+        String normalized = normalizeForQuality(value);
+        if (normalized.length() < 58 || isShortQuestionnaireTopic(normalized)) {
+            return false;
+        }
+        return containsReviewCommercialSignal(normalized);
+    }
+
+    private boolean isCommercialReviewDraft(String value, boolean economy) {
+        String normalized = normalizeForQuality(value);
+        if (normalized.length() < (economy ? 320 : 430)) {
+            return false;
+        }
+        if (countPersonalPlaceholders(value) > 0) {
+            return false;
+        }
+        return containsReviewCommercialSignal(normalized);
+    }
+
+    private boolean isShortQuestionnaireTopic(String normalized) {
+        if (normalized.length() >= 95) {
+            return false;
+        }
+        return normalized.startsWith("как ")
+                || normalized.startsWith("что ")
+                || normalized.startsWith("какой ")
+                || normalized.startsWith("какая ")
+                || normalized.startsWith("какие ")
+                || normalized.startsWith("насколько ")
+                || normalized.startsWith("почему ")
+                || normalized.startsWith("был ")
+                || normalized.startsWith("была ")
+                || normalized.startsWith("были ")
+                || normalized.startsWith("удобно ")
+                || normalized.startsWith("понравил");
+    }
+
+    private boolean containsReviewCommercialSignal(String normalized) {
+        for (String signal : List.of(
+                "услуг", "товар", "позици", "пакет", "программ", "формат",
+                "сценар", "цена", "стоим", "услов", "адрес", "филиал",
+                "достав", "самовывоз", "запис", "брон", "консультац",
+                "гарант", "срок", "ассортимент", "ремонт", "обслужив",
+                "заказ", "утп", "польз", "подходит", "помог", "удоб",
+                "выбор", "пост", "акци", "интерьер", "фото", "логист",
+                "маршрут", "парков", "вход", "рейтинг", "отзыв"
+        )) {
+            if (normalized.contains(signal)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private long countPersonalPlaceholders(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        return value.chars().filter(character -> character == '[').count();
     }
 
     private boolean containsServiceLabels(String normalized) {
@@ -663,17 +748,17 @@ public class AiReputationContentFactory {
 
     private String contentAngle(String value) {
         String normalized = normalizeForQuality(value);
-        if (normalized.contains("протез") || normalized.contains("брекет") || normalized.contains("лечен")) {
-            return "treatment";
+        if (normalized.contains("услуг") || normalized.contains("товар") || normalized.contains("пакет") || normalized.contains("программ")) {
+            return "offer";
         }
-        if (normalized.contains("маршрут") || normalized.contains("логист") || normalized.contains("поезд")) {
-            return "route";
+        if (normalized.contains("маршрут") || normalized.contains("логист") || normalized.contains("достав") || normalized.contains("самовывоз") || normalized.contains("как добраться")) {
+            return "logistics";
         }
         if (normalized.contains("стоим") || normalized.contains("эконом") || normalized.contains("доступн") || normalized.contains("переплач")) {
             return "price";
         }
-        if (normalized.contains("офис") || normalized.contains("благовещ") || normalized.contains("адрес")) {
-            return "office";
+        if (normalized.contains("офис") || normalized.contains("адрес") || normalized.contains("филиал") || normalized.contains("вход") || normalized.contains("этаж")) {
+            return "location";
         }
         if (normalized.contains("консультац") || normalized.contains("вопрос") || normalized.contains("обсуд")) {
             return "consultation";
@@ -681,11 +766,17 @@ public class AiReputationContentFactory {
         if (normalized.contains("сопровожд") || normalized.contains("поддерж") || normalized.contains("связ")) {
             return "support";
         }
-        if (normalized.contains("документ") || normalized.contains("запис") || normalized.contains("подготов")) {
-            return "preparation";
+        if (normalized.contains("запис") || normalized.contains("брон") || normalized.contains("заказ") || normalized.contains("подготов")) {
+            return "order_flow";
+        }
+        if (normalized.contains("семейн") || normalized.contains("дет") || normalized.contains("корпоратив") || normalized.contains("b2b") || normalized.contains("подар")) {
+            return "audience";
         }
         if (normalized.contains("спокой") || normalized.contains("тревог") || normalized.contains("ясност") || normalized.contains("понят")) {
             return "clarity";
+        }
+        if (normalized.contains("гарант") || normalized.contains("отзыв") || normalized.contains("рейтинг") || normalized.contains("довер")) {
+            return "trust";
         }
         List<String> tokens = java.util.Arrays.stream(normalized.split("[^\\p{L}\\p{N}]+"))
                 .filter(token -> token.length() >= 5)

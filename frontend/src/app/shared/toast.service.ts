@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { sanitizeErrorText } from './api-error-message';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 export type ToastMessage = {
   id: number;
@@ -37,6 +37,10 @@ export class ToastService {
 
   info(title: string, message?: string): number {
     return this.show({ type: 'info', title, message }, 4200);
+  }
+
+  warning(title: string, message?: string): number {
+    return this.show({ type: 'warning', title, message }, 4200);
   }
 
   dismiss(id: number): void {

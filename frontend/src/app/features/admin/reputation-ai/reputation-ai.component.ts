@@ -25,6 +25,8 @@ import type {
   ReputationAiPromptVersion,
   OpenAiProviderDiagnostics,
   ReputationReviewReplyResponse,
+  ReputationSingleReviewDraftResult,
+  ReputationReviewTemplatesResult,
   ReputationReviewRewriteResponse,
   ReviewDraftResult,
   ReviewSafetyReport
@@ -40,6 +42,10 @@ type ReputationAction =
   | 'rebuildText'
   | 'rebuildSection'
   | 'contentPack'
+  | 'loadContentPack'
+  | 'reviewTemplates'
+  | 'applyReviewTemplates'
+  | 'singleReviewDraft'
   | 'draft'
   | 'check'
   | 'rewrite'
@@ -95,6 +101,13 @@ type ReportSectionChange = {
   key: string;
   title: string;
   status: 'added' | 'removed' | 'changed';
+};
+
+type GapEnrichmentStatus = {
+  label: string;
+  detail: string;
+  icon: string;
+  tone: 'green' | 'yellow' | 'red' | 'gray' | 'blue';
 };
 
 type HistoryStatusFilter = 'all' | 'DONE' | 'FAILED' | 'RUNNING' | 'QUEUED';
@@ -153,6 +166,7 @@ export class ReputationAiComponent implements OnDestroy {
   productsOrServicesText = '';
   publicUrlsText = '';
   includeCompanyWebsite = true;
+  autoEnrichCollectionGaps = false;
   readonly deepResearchProfile = signal('economy');
   readonly contentPackProfile = signal('quality');
   adTextsCount = 6;
@@ -168,6 +182,13 @@ export class ReputationAiComponent implements OnDestroy {
   replyReviewText = '';
   replyTone = 'деловой';
   replyCount = 3;
+  reviewTemplateNotes = '';
+  reviewTemplateTopicsCount = 7;
+  reviewTemplateDraftsCount = 5;
+  reviewTemplateTone = 'естественный, рекламно-полезный, без фейкового опыта';
+  singleReviewIdea = '';
+  singleReviewStyle = 'живой, спокойный, с мягкой рекламной пользой';
+  singleReviewLength = 'medium';
 
   readonly deepResearchJob = signal<DeepCompanyResearchJob | null>(null);
   readonly deepResearch = signal<DeepCompanyResearchReport | null>(null);
@@ -191,6 +212,8 @@ export class ReputationAiComponent implements OnDestroy {
   readonly savingPrompt = signal(false);
   readonly contentPack = signal<ReputationContentPack | null>(null);
   readonly contentPackJob = signal<ReputationContentPackJob | null>(null);
+  readonly reviewTemplatesResult = signal<ReputationReviewTemplatesResult | null>(null);
+  readonly singleReviewDraftResult = signal<ReputationSingleReviewDraftResult | null>(null);
   readonly draftResult = signal<ReviewDraftResult | null>(null);
   readonly checkReport = signal<ReviewSafetyReport | null>(null);
   readonly rewriteResult = signal<ReputationReviewRewriteResponse | null>(null);
@@ -357,13 +380,17 @@ export class ReputationAiComponent implements OnDestroy {
   readonly reportQualityChecks = computed<DeepResearchQualityCheck[]>(() => this.deepResearch()?.qualityChecks ?? []);
   readonly reportQualitySummary = computed<ReportQualitySummary>(() => {
     const checks = this.reportQualityChecks();
-    const total = checks.length;
-    const passed = checks.filter((check) => check.status === 'pass').length;
+    const scoredChecks = checks.filter((check) => check.status !== 'info');
+    const total = scoredChecks.length;
+    const passed = scoredChecks.filter((check) => check.status === 'pass').length;
     const failed = checks.filter((check) => check.status === 'fail').length;
     const warned = checks.filter((check) => check.status === 'warn').length;
 
-    if (total === 0) {
+    if (checks.length === 0) {
       return { passed: 0, total: 0, label: 'Чек-лист не собран', tone: 'gray', icon: 'rule' };
+    }
+    if (total === 0) {
+      return { passed: 0, total: 0, label: 'Только справочные проверки', tone: 'gray', icon: 'rule' };
     }
     if (failed > 0) {
       return { passed, total, label: 'Есть критичные пробелы', tone: 'red', icon: 'error' };
@@ -376,6 +403,31 @@ export class ReputationAiComponent implements OnDestroy {
   readonly reportWarnings = computed<string[]>(() => {
     const qualityDetails = new Set(this.reportQualityChecks().map((check) => check.detail).filter(Boolean));
     return (this.deepResearch()?.warnings ?? []).filter((warning) => !qualityDetails.has(warning));
+  });
+  readonly gapEnrichmentStatus = computed<GapEnrichmentStatus | null>(() => {
+    const check = this.reportQualityChecks().find((item) => item.key === 'gap_enrichment');
+    if (!check) {
+      return null;
+    }
+
+    const detail = check.detail || '';
+    const normalized = detail.toLowerCase();
+    if (check.status === 'warn' || normalized.includes('не выполнен') || normalized.includes('не добавлен')) {
+      return { label: 'Досбор не выполнен', detail, icon: 'warning', tone: 'yellow' };
+    }
+    if (check.status === 'fail') {
+      return { label: 'Досбор с ошибкой', detail, icon: 'error', tone: 'red' };
+    }
+    if (normalized.includes('пропущен')) {
+      return { label: 'Досбор пропущен', detail, icon: 'block', tone: 'gray' };
+    }
+    if (normalized.includes('не требовался')) {
+      return { label: 'Досбор не требовался', detail, icon: 'task_alt', tone: 'gray' };
+    }
+    if (normalized.includes('выполнен')) {
+      return { label: 'Досбор выполнен', detail, icon: 'travel_explore', tone: 'green' };
+    }
+    return { label: 'Досбор', detail, icon: 'info', tone: 'blue' };
   });
   readonly confirmedFacts = computed<DeepResearchFactItem[]>(() => this.deepResearch()?.factSnapshot?.confirmedFacts ?? []);
   readonly uncertainFacts = computed<DeepResearchFactItem[]>(() => this.deepResearch()?.factSnapshot?.uncertainFacts ?? []);
@@ -432,8 +484,8 @@ export class ReputationAiComponent implements OnDestroy {
       { key: 'adTexts', title: 'Рекламные тексты', icon: 'campaign', items: pack.adTexts },
       { key: 'socialPostTopics', title: 'Темы постов', icon: 'forum', items: pack.socialPostTopics },
       { key: 'socialPosts', title: 'Посты / статьи', icon: 'edit_note', items: pack.socialPosts },
-      { key: 'honestReviewTopics', title: 'Темы честного отзыва', icon: 'fact_check', items: pack.honestReviewTopics },
-      { key: 'reviewDraftTemplates', title: 'Черновики честного отзыва', icon: 'rate_review', items: pack.reviewDraftTemplates },
+      { key: 'honestReviewTopics', title: 'Темы для честного отзыва', icon: 'fact_check', items: pack.honestReviewTopics },
+      { key: 'reviewDraftTemplates', title: 'Черновики отзывов с УТП', icon: 'rate_review', items: pack.reviewDraftTemplates },
       { key: 'positiveReviewReplies', title: 'Ответы на положительные отзывы', icon: 'thumb_up', items: pack.positiveReviewReplies },
       { key: 'negativeReviewReplies', title: 'Ответы на негативные отзывы', icon: 'support_agent', items: pack.negativeReviewReplies },
       { key: 'safetyNotes', title: 'Проверки и ограничения', icon: 'policy', items: pack.safetyNotes }
@@ -910,9 +962,114 @@ export class ReputationAiComponent implements OnDestroy {
     });
   }
 
+  loadLatestContentPack(): void {
+    const companyId = this.validCompanyId();
+    if (companyId == null) {
+      return;
+    }
+
+    this.start('loadContentPack');
+    this.reputationAiApi.latestContentPackJob(companyId).subscribe({
+      next: (job) => {
+        this.applyContentPackJob(job);
+        if (this.isActiveContentPackJob(job)) {
+          this.watchContentPackJob(companyId);
+          this.finish('AI-пакет ещё собирается.');
+        } else if (job.pack) {
+          this.finish('Последний AI-пакет загружен из базы.');
+        } else {
+          this.finish('Статус AI-пакета загружен.');
+        }
+      },
+      error: (error: unknown) => this.fail(error, 'AI-пакет для этой компании пока не найден.')
+    });
+  }
+
   createContentPackFromJob(job: DeepCompanyResearchJob): void {
     this.openDeepResearchJob(job);
     this.createContentPack(job.jobId);
+  }
+
+  improveReviewTemplates(): void {
+    const companyId = this.validCompanyId();
+    const pack = this.contentPack();
+    if (companyId == null || !pack) {
+      this.error.set('Сначала открой готовый AI-пакет.');
+      return;
+    }
+
+    this.start('reviewTemplates');
+    this.reputationAiApi.improveReviewTemplates(companyId, {
+      deepReportJobId: this.deepResearchJob()?.jobId ?? null,
+      contentPackJobId: this.contentPackJob()?.jobId ?? null,
+      manualNotes: this.cleanText(this.reviewTemplateNotes),
+      topicsCount: this.positiveOrNull(this.reviewTemplateTopicsCount, 10),
+      draftsCount: this.positiveOrNull(this.reviewTemplateDraftsCount, 8),
+      tone: this.cleanText(this.reviewTemplateTone),
+      contentPackProfile: this.cleanText(this.contentPackProfile())
+    }).subscribe({
+      next: (result) => {
+        this.reviewTemplatesResult.set(result);
+        this.finish(result.provider === 'local'
+          ? 'Улучшенные отзывы собраны локально, OpenAI не использовался.'
+          : 'Улучшенные отзывы готовы.');
+      },
+      error: (error: unknown) => this.fail(error, 'Не удалось улучшить шаблоны отзывов.')
+    });
+  }
+
+  applyImprovedReviewTemplates(): void {
+    const companyId = this.validCompanyId();
+    const result = this.reviewTemplatesResult();
+    if (companyId == null || !result) {
+      return;
+    }
+
+    this.start('applyReviewTemplates');
+    this.reputationAiApi.applyReviewTemplates(companyId, {
+      contentPackJobId: result.contentPackJobId ?? this.contentPackJob()?.jobId ?? null,
+      honestReviewTopics: result.honestReviewTopics,
+      reviewDraftTemplates: result.reviewDraftTemplates
+    }).subscribe({
+      next: (pack) => {
+        this.contentPack.set(pack);
+        const job = this.contentPackJob();
+        if (job) {
+          this.contentPackJob.set({ ...job, pack });
+        }
+        this.finish('Улучшенные отзывы сохранены в AI-пакет.');
+      },
+      error: (error: unknown) => this.fail(error, 'Не удалось заменить отзывы в AI-пакете.')
+    });
+  }
+
+  createSingleReviewDraft(): void {
+    const companyId = this.validCompanyId();
+    const pack = this.contentPack();
+    if (companyId == null || !pack) {
+      this.error.set('Сначала открой готовый AI-пакет.');
+      return;
+    }
+
+    this.start('singleReviewDraft');
+    this.reputationAiApi.createSingleReviewDraft(companyId, {
+      deepReportJobId: this.deepResearchJob()?.jobId ?? null,
+      contentPackJobId: this.contentPackJob()?.jobId ?? null,
+      idea: this.cleanText(this.singleReviewIdea),
+      style: this.cleanText(this.singleReviewStyle),
+      manualNotes: this.cleanText(this.reviewTemplateNotes),
+      length: this.cleanText(this.singleReviewLength),
+      contentPackProfile: this.cleanText(this.contentPackProfile())
+    }).subscribe({
+      next: (result) => {
+        this.singleReviewDraftResult.set(result);
+        this.checkReport.set(result.safetyReport);
+        this.finish(result.provider === 'local'
+          ? 'Один черновик собран локально, OpenAI не использовался.'
+          : 'Один черновик отзыва готов.');
+      },
+      error: (error: unknown) => this.fail(error, 'Не удалось подготовить точечный черновик отзыва.')
+    });
   }
 
   ngOnDestroy(): void {
@@ -1081,6 +1238,18 @@ export class ReputationAiComponent implements OnDestroy {
     return Boolean(job && Number(job.companyId) === Number(this.companyId) && this.isActiveContentPackJob(job));
   }
 
+  setDeepResearchProfile(profileKey: string): void {
+    const nextProfile = profileKey || 'economy';
+    this.deepResearchProfile.set(nextProfile);
+    this.autoEnrichCollectionGaps = this.defaultAutoEnrichCollectionGaps(nextProfile);
+  }
+
+  autoEnrichCollectionGapsHint(): string {
+    return this.autoEnrichCollectionGaps
+      ? 'Включён второй короткий поиск по пунктам из «Что ещё собирать».'
+      : 'Второй поиск отключён, отчёт соберётся быстрее.';
+  }
+
   downloadDeepReport(report: DeepCompanyResearchReport): void {
     const companyId = this.validCompanyId();
     if (companyId == null) {
@@ -1092,6 +1261,20 @@ export class ReputationAiComponent implements OnDestroy {
     this.reputationAiApi.exportDeepResearchMarkdown(companyId, jobId).subscribe({
       next: (markdown) => this.downloadMarkdown(markdown, fileName, 'Markdown-отчёт скачан.'),
       error: (error: unknown) => this.fail(error, 'Не удалось скачать Markdown-отчёт.')
+    });
+  }
+
+  downloadDeepReportPdf(report: DeepCompanyResearchReport): void {
+    const companyId = this.validCompanyId();
+    if (companyId == null) {
+      return;
+    }
+
+    const fileName = `${this.slugify(report.companyName || `company-${report.companyId}`)}-deep-report.pdf`;
+    const jobId = this.deepResearchJob()?.jobId ?? null;
+    this.reputationAiApi.exportDeepResearchPdf(companyId, jobId).subscribe({
+      next: (blob) => this.downloadBlob(blob, fileName, 'PDF-отчёт скачан.'),
+      error: (error: unknown) => this.fail(error, 'Не удалось скачать PDF-отчёт.')
     });
   }
 
@@ -1109,6 +1292,20 @@ export class ReputationAiComponent implements OnDestroy {
     });
   }
 
+  downloadContentPackPdf(pack: ReputationContentPack): void {
+    const companyId = this.validCompanyId();
+    if (companyId == null) {
+      return;
+    }
+
+    const companyName = pack.researchSnapshot?.companyName || pack.companyProfile?.shortDescription || `company-${companyId}`;
+    const fileName = `${this.slugify(companyName)}-content-pack.pdf`;
+    this.reputationAiApi.exportContentPackPdf(companyId).subscribe({
+      next: (blob) => this.downloadBlob(blob, fileName, 'PDF AI-пакета скачан.'),
+      error: (error: unknown) => this.fail(error, 'Не удалось скачать PDF AI-пакета.')
+    });
+  }
+
   private downloadMarkdown(markdown: string, fileName: string, message: string): void {
     const text = markdown?.trim();
     if (!text) {
@@ -1116,6 +1313,14 @@ export class ReputationAiComponent implements OnDestroy {
     }
 
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    this.downloadBlob(blob, fileName, message);
+  }
+
+  private downloadBlob(blob: Blob, fileName: string, message: string): void {
+    if (!blob || blob.size === 0) {
+      return;
+    }
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1722,6 +1927,8 @@ export class ReputationAiComponent implements OnDestroy {
     if (job.pack) {
       this.contentPack.set(job.pack);
       this.researchSnapshot.set(job.pack.researchSnapshot);
+      this.reviewTemplatesResult.set(null);
+      this.singleReviewDraftResult.set(null);
     }
   }
 
@@ -1806,7 +2013,8 @@ export class ReputationAiComponent implements OnDestroy {
       deepResearchMode,
       baseReportJobId,
       sectionTitle,
-      sectionIndex
+      sectionIndex,
+      enrichCollectionGaps: deepResearchMode ? false : this.autoEnrichCollectionGaps
     };
   }
 
@@ -1891,6 +2099,9 @@ export class ReputationAiComponent implements OnDestroy {
     if (/(сценари|утп|возраж|контент|тем)/.test(value)) {
       return 'psychology_alt';
     }
+    if (/(автодосбор|досбор)/.test(value)) {
+      return 'travel_explore';
+    }
     if (/(акци|скид|брон|заказ|запис|возврат|гарант)/.test(value)) {
       return 'assignment_turned_in';
     }
@@ -1910,6 +2121,11 @@ export class ReputationAiComponent implements OnDestroy {
       .replace(/[^a-zа-я0-9]+/gi, '-')
       .replace(/^-+|-+$/g, '');
     return ascii || 'deep-report';
+  }
+
+  private defaultAutoEnrichCollectionGaps(profileKey: string | null | undefined): boolean {
+    const key = (profileKey ?? '').trim().toLowerCase();
+    return key === 'quality' || key === 'maximum';
   }
 
   private fallbackDeepResearchProfiles(): ReputationAiModelProfile[] {

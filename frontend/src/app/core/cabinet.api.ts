@@ -1,7 +1,8 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { catchError, Observable, shareReplay, throwError } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { AuthService } from './auth.service';
 
 export interface UserLk {
@@ -155,6 +156,7 @@ export interface AnalyticsResponse {
 
 export type CacheOptions = {
   forceRefresh?: boolean;
+  skipAuthRedirectOn401?: boolean;
 };
 
 export type AnalyticsPeriod = {
@@ -193,6 +195,7 @@ export class CabinetApi {
 
     return this.cached(this.profileCache, cacheKey, options, () =>
       this.http.get<CabinetProfile>(`${appEnvironment.apiBaseUrl}/api/cabinet/profile`, {
+        context: this.requestContext(options),
         params: this.paramsWithDate(date, options)
       })
     );
@@ -274,6 +277,14 @@ export class CabinetApi {
     }
 
     return params;
+  }
+
+  private requestContext(options: CacheOptions): HttpContext | undefined {
+    if (!options.skipAuthRedirectOn401) {
+      return undefined;
+    }
+
+    return new HttpContext().set(SKIP_AUTH_REDIRECT_ON_401, true);
   }
 
   private cached<T>(
