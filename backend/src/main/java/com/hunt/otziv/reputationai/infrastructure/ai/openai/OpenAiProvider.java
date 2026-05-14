@@ -23,7 +23,8 @@ public class OpenAiProvider implements AiProvider {
                 result.text(),
                 providerName(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                result.errorMessage()
         );
     }
 
@@ -37,7 +38,8 @@ public class OpenAiProvider implements AiProvider {
                 result.text(),
                 providerName(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                result.errorMessage()
         );
     }
 
@@ -51,7 +53,8 @@ public class OpenAiProvider implements AiProvider {
                 result.text(),
                 providerName(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                result.errorMessage()
         );
     }
 
@@ -65,7 +68,8 @@ public class OpenAiProvider implements AiProvider {
                 result.text(),
                 providerName(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                result.errorMessage()
         );
     }
 

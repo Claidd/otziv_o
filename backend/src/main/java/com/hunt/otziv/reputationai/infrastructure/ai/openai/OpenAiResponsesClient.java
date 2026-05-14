@@ -126,7 +126,7 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        body.put("background", true);
+        enableStreaming(body);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
@@ -151,7 +151,7 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        body.put("background", true);
+        enableStreaming(body);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
@@ -176,7 +176,7 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        body.put("background", true);
+        enableStreaming(body);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
@@ -231,7 +231,7 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        body.put("background", true);
+        enableStreaming(body);
         body.put("text", Map.of("format", Map.of(
                 "type", "json_schema",
                 "name", "company_research_report",
@@ -266,6 +266,7 @@ public class OpenAiResponsesClient {
                 "strict", true,
                 "schema", sourceRefreshSchema()
         )));
+        enableStreaming(body);
 
         return postResponse(body, options.timeout());
     }
@@ -294,6 +295,7 @@ public class OpenAiResponsesClient {
                 "strict", true,
                 "schema", gapEnrichmentSchema()
         )));
+        enableStreaming(body);
 
         return postResponse(body, options.timeout());
     }
@@ -317,6 +319,7 @@ public class OpenAiResponsesClient {
                 "strict", true,
                 "schema", deepResearchSchema(options)
         )));
+        enableStreaming(body);
 
         return postResponse(body, options.timeout());
     }
@@ -340,8 +343,14 @@ public class OpenAiResponsesClient {
                 "strict", true,
                 "schema", sectionRewriteSchema()
         )));
+        enableStreaming(body);
 
         return postResponse(body, options.timeout());
+    }
+
+    private void enableStreaming(Map<String, Object> body) {
+        body.remove("background");
+        body.put("stream", true);
     }
 
     private OpenAiResponseResult postResponse(Map<String, Object> body, Duration timeout) {
@@ -368,6 +377,7 @@ public class OpenAiResponsesClient {
                         .timeout(timeout == null ? Duration.ofSeconds(60) : timeout)
                         .header("Authorization", "Bearer " + openai.getApiKey())
                         .header("Content-Type", "application/json")
+                        .header("Accept", Boolean.TRUE.equals(body.get("stream")) ? "text/event-stream" : "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                         .build();
 
@@ -388,6 +398,9 @@ public class OpenAiResponsesClient {
                 }
 
                 rememberCheck("ok", response.statusCode(), "OpenAI Responses API вернул успешный ответ.");
+                if (Boolean.TRUE.equals(body.get("stream"))) {
+                    return parseStreamResponse(response.body(), fallbackModel);
+                }
                 JsonNode root = objectMapper.readTree(response.body());
                 if (Boolean.TRUE.equals(body.get("background")) && extractOutputText(root).isBlank()) {
                     return pollResponse(root.path("id").asText(""), timeout, fallbackModel);
@@ -417,6 +430,85 @@ public class OpenAiResponsesClient {
         }
 
         return errorResult("", fallbackModel, "OpenAI не вернул ответ после повторных попыток.");
+    }
+
+    private OpenAiResponseResult parseStreamResponse(String responseBody, String fallbackModel) {
+        StringBuilder outputText = new StringBuilder();
+        String responseId = "";
+        String model = fallbackModel;
+        int inputTokens = 0;
+        int outputTokens = 0;
+        String errorMessage = "";
+
+        for (String eventBlock : responseBody.split("\\R\\R")) {
+            String data = streamEventData(eventBlock);
+            if (data.isBlank() || "[DONE]".equals(data)) {
+                continue;
+            }
+
+            try {
+                JsonNode event = objectMapper.readTree(data);
+                String type = event.path("type").asText("");
+                if ("response.output_text.delta".equals(type)) {
+                    outputText.append(event.path("delta").asText(""));
+                    continue;
+                }
+                if ("response.output_text.done".equals(type) && outputText.isEmpty()) {
+                    outputText.append(event.path("text").asText(""));
+                    continue;
+                }
+                if ("response.completed".equals(type)) {
+                    JsonNode response = event.path("response");
+                    responseId = response.path("id").asText(responseId);
+                    model = response.path("model").asText(model);
+                    JsonNode usage = response.path("usage");
+                    inputTokens = usage.path("input_tokens").asInt(inputTokens);
+                    outputTokens = usage.path("output_tokens").asInt(outputTokens);
+                    if (outputText.isEmpty()) {
+                        outputText.append(extractOutputText(response));
+                    }
+                    continue;
+                }
+                if ("response.failed".equals(type)
+                        || "response.incomplete".equals(type)
+                        || "error".equals(type)) {
+                    JsonNode response = event.path("response");
+                    responseId = response.path("id").asText(responseId);
+                    model = response.path("model").asText(model);
+                    errorMessage = firstNonBlank(
+                            event.path("error").path("message").asText(""),
+                            response.path("error").path("message").asText(""),
+                            response.path("incomplete_details").path("reason").asText(""),
+                            "OpenAI stream завершился со статусом " + type + "."
+                    );
+                }
+            } catch (Exception exception) {
+                log.debug("OpenAI Responses API stream event parse skipped: {}", exception.getMessage());
+            }
+        }
+
+        String text = outputText.toString().trim();
+        if (text.isBlank() && !errorMessage.isBlank()) {
+            return errorResult(responseId, model, errorMessage);
+        }
+        return new OpenAiResponseResult(responseId, text, model, inputTokens, outputTokens);
+    }
+
+    private String streamEventData(String eventBlock) {
+        if (eventBlock == null || eventBlock.isBlank()) {
+            return "";
+        }
+
+        StringBuilder data = new StringBuilder();
+        for (String line : eventBlock.split("\\R")) {
+            if (line.startsWith("data:")) {
+                if (!data.isEmpty()) {
+                    data.append('\n');
+                }
+                data.append(line.substring("data:".length()).trim());
+            }
+        }
+        return data.toString().trim();
     }
 
     private boolean isRetryableStatus(int statusCode) {
@@ -869,6 +961,18 @@ public class OpenAiResponsesClient {
             return value == null ? "" : value;
         }
         return value.substring(0, maxLength).trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private boolean isBlank(String value) {

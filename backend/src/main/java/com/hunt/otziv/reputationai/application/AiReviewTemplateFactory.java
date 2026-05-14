@@ -54,6 +54,7 @@ public class AiReviewTemplateFactory {
                     true
             ), request.contentPackProfile());
             if (response.text().isBlank()) {
+                throwIfAiError(response);
                 return Optional.empty();
             }
             ReputationReviewTemplatesResult result = parseResult(
@@ -71,7 +72,16 @@ public class AiReviewTemplateFactory {
             return Optional.of(result);
         } catch (Exception exception) {
             log.warn("AI review templates generation failed: {}", exception.getMessage());
+            if (exception instanceof IllegalStateException stateException) {
+                throw stateException;
+            }
             return Optional.empty();
+        }
+    }
+
+    private void throwIfAiError(AiResponse response) {
+        if (response != null && !response.errorMessage().isBlank()) {
+            throw new IllegalStateException(response.errorMessage());
         }
     }
 

@@ -64,6 +64,7 @@ public class AiReputationContentFactory {
             ), request.contentPackProfile());
 
             if (response.text().isBlank()) {
+                throwIfAiError(response);
                 return Optional.empty();
             }
 
@@ -81,13 +82,25 @@ public class AiReputationContentFactory {
                 if (revised.isPresent()) {
                     return revised;
                 }
+                if (!hasBlockingQualityIssues(qualityIssues)) {
+                    return Optional.of(packWithQualityWarnings(pack, qualityIssues));
+                }
                 return Optional.empty();
             }
 
             return Optional.of(pack);
         } catch (Exception exception) {
             log.warn("AI content pack generation failed: {}", exception.getMessage());
+            if (exception instanceof IllegalStateException stateException) {
+                throw stateException;
+            }
             return Optional.empty();
+        }
+    }
+
+    private void throwIfAiError(AiResponse response) {
+        if (response != null && !response.errorMessage().isBlank()) {
+            throw new IllegalStateException(response.errorMessage());
         }
     }
 
@@ -127,6 +140,7 @@ public class AiReputationContentFactory {
                     true
             ), compactRequest.contentPackProfile());
             if (response.text().isBlank()) {
+                throwIfAiError(response);
                 return Optional.empty();
             }
             return Optional.of(parsePack(snapshot, response.text()));
@@ -152,6 +166,7 @@ public class AiReputationContentFactory {
                     true
             ), request.contentPackProfile());
             if (response.text().isBlank()) {
+                throwIfAiError(response);
                 return Optional.empty();
             }
 
@@ -161,6 +176,9 @@ public class AiReputationContentFactory {
             List<String> revisedIssues = qualityIssues(pack, snapshot, deepReport, qualityRequest);
             if (!revisedIssues.isEmpty()) {
                 log.warn("AI content pack revision still low quality: {}", String.join("; ", revisedIssues));
+                if (!hasBlockingQualityIssues(revisedIssues)) {
+                    return Optional.of(packWithQualityWarnings(pack, revisedIssues));
+                }
                 return Optional.empty();
             }
             return Optional.of(pack);
@@ -182,6 +200,43 @@ public class AiReputationContentFactory {
                 "userPrompt", userPrompt(snapshot, deepReport, request),
                 "previousResponse", limit(previousResponse, 6000)
         ));
+    }
+
+    private boolean hasBlockingQualityIssues(List<String> issues) {
+        return issues.stream().anyMatch(this::isBlockingQualityIssue);
+    }
+
+    private boolean isBlockingQualityIssue(String issue) {
+        return "не хватает обязательных блоков".equals(issue)
+                || "мало полноценных постов/статей".equals(issue)
+                || "рекламные тексты похожи на анкету с техническими заголовками".equals(issue)
+                || "рекламные тексты говорят от лица источников, а не компании".equals(issue)
+                || "остались шаблонные инструкции вместо готового текста".equals(issue)
+                || "не используются базовые данные компании".equals(issue)
+                || "не используются факты из публичных источников".equals(issue)
+                || "не используются ключевые факты из глубокого отчета".equals(issue);
+    }
+
+    private ReputationContentPack packWithQualityWarnings(ReputationContentPack pack, List<String> issues) {
+        List<String> notes = new ArrayList<>(pack.safetyNotes());
+        issues.stream()
+                .map(issue -> "Редакторская проверка AI-пакета: " + issue + ".")
+                .filter(note -> !notes.contains(note))
+                .forEach(notes::add);
+        return new ReputationContentPack(
+                pack.researchSnapshot(),
+                pack.companyProfile(),
+                pack.utp(),
+                pack.adTexts(),
+                pack.socialPostTopics(),
+                pack.socialPosts(),
+                pack.honestReviewTopics(),
+                pack.reviewDraftTemplates(),
+                pack.positiveReviewReplies(),
+                pack.negativeReviewReplies(),
+                pack.sourceUrls(),
+                notes
+        );
     }
 
     private String systemPrompt() {

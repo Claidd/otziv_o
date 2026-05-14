@@ -183,18 +183,46 @@ current_count="$(printf '%s\n' "$status" | awk -v comment="$rule_comment" -v cur
 
 if [ "$existing_count" = "1" ] && [ "$current_count" = "1" ]; then
   echo "UFW rule '$rule_comment' is already current for $current_ip."
-  ufw status verbose
-  exit 0
+else
+  if [ -n "$existing_rules" ]; then
+    for rule_number in $existing_rules; do
+      ufw --force delete "$rule_number" >/dev/null
+    done
+  fi
+
+  ufw allow from "$current_ip" to any port "$proxy_port" proto tcp comment "$rule_comment" >/dev/null
+  ufw reload >/dev/null
 fi
 
-if [ -n "$existing_rules" ]; then
-  for rule_number in $existing_rules; do
-    ufw --force delete "$rule_number" >/dev/null
-  done
+squid_conf="/etc/squid/squid.conf"
+if [ -f "$squid_conf" ]; then
+  escaped_ip="$(printf '%s\n' "$current_ip" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+  if ! grep -Eq "^[[:space:]]*acl[[:space:]]+otziv_clients[[:space:]]+src[[:space:]]+$escaped_ip/32([[:space:]]|$)" "$squid_conf"; then
+    tmp_conf="$(mktemp)"
+    acl_line="acl otziv_clients src $current_ip/32 # $rule_comment"
+    awk -v acl_line="$acl_line" '
+      BEGIN { inserted = 0 }
+      /^[[:space:]]*http_access[[:space:]]+allow[[:space:]]+otziv_clients([[:space:]]|$)/ && inserted == 0 {
+        print acl_line
+        inserted = 1
+      }
+      { print }
+      END {
+        if (inserted == 0) {
+          print acl_line
+        }
+      }
+    ' "$squid_conf" > "$tmp_conf"
+    cp "$squid_conf" "$squid_conf.bak.$(date +%Y%m%d%H%M%S)"
+    cat "$tmp_conf" > "$squid_conf"
+    rm -f "$tmp_conf"
+    squid -k parse >/dev/null
+    systemctl reload squid >/dev/null || systemctl restart squid >/dev/null
+    echo "Squid ACL 'otziv_clients' updated for $current_ip."
+  else
+    echo "Squid ACL 'otziv_clients' is already current for $current_ip."
+  fi
 fi
-
-ufw allow from "$current_ip" to any port "$proxy_port" proto tcp comment "$rule_comment" >/dev/null
-ufw reload >/dev/null
 ufw status verbose
 '@
 
