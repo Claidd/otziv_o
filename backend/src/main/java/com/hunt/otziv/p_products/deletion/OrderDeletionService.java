@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ import java.security.Principal;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -41,15 +43,16 @@ public class OrderDeletionService {
             "ROLE_MARKETOLOG"
     );
     private static final Set<String> IGNORED_AUTHORITIES = Set.of(
-            "ROLE_default-roles-otziv",
-            "ROLE_offline_access",
-            "ROLE_uma_authorization"
+            "ROLE_DEFAULT-ROLES-OTZIV",
+            "ROLE_OFFLINE_ACCESS",
+            "ROLE_UMA_AUTHORIZATION"
     );
 
     private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
     private final OrderDeletionPolicy orderDeletionPolicy;
+    private final EntityManager entityManager;
 
     @Transactional
     public boolean deleteOrder(Long orderId, Principal principal) {
@@ -96,8 +99,10 @@ public class OrderDeletionService {
                 orderDetailsService.deleteAllByOrderId(orderId);
                 log.info("Успешно удалено {} деталей заказа", orderDetails.size());
 
+                clearPersistenceContextBeforeOrderDelete(orderId);
+
                 log.info("Удаление заказа ID: {}", orderId);
-                orderRepository.delete(orderToDelete);
+                orderRepository.deleteById(orderId);
                 log.info("Заказ ID: {} успешно удален", orderId);
 
                 log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов",
@@ -139,6 +144,7 @@ public class OrderDeletionService {
         List<String> authorityNames = authorities.stream()
                 .map(GrantedAuthority::getAuthority)
                 .filter(Objects::nonNull)
+                .map(this::normalizeAuthority)
                 .toList();
 
         for (String role : ROLE_PRIORITY) {
@@ -152,5 +158,15 @@ public class OrderDeletionService {
                 .findFirst()
                 .or(() -> authorityNames.stream().findFirst())
                 .orElse("");
+    }
+
+    private String normalizeAuthority(String authority) {
+        return authority == null ? "" : authority.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void clearPersistenceContextBeforeOrderDelete(Long orderId) {
+        entityManager.flush();
+        entityManager.clear();
+        log.debug("Persistence context очищен перед удалением заказа ID: {}", orderId);
     }
 }

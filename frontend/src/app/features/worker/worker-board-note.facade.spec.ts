@@ -105,6 +105,14 @@ function createFacade(sourceBoard = board()) {
         calls.push(`review-answer:${id}:${orderId}:${value}`);
         return of(void 0);
       },
+      updateBadReviewTask: (id: number, value: string, scheduledDate?: string | null) => {
+        calls.push(`bad-text:${id}:${value}:${scheduledDate ?? ''}`);
+        return of(void 0);
+      },
+      updateRecoveryTask: (id: number, value: string, scheduledDate?: string | null) => {
+        calls.push(`recovery-text:${id}:${value}:${scheduledDate ?? ''}`);
+        return of(void 0);
+      },
       updateReviewNote: (id: number, orderId: number, value: string) => {
         calls.push(`review-note:${id}:${orderId}:${value}`);
         return of(void 0);
@@ -196,6 +204,26 @@ describe('WorkerBoardNoteFacade', () => {
     expect(calls).toContain('review-answer:7:20:new answer');
     expect(boardSignal()?.reviews.content[0].answer).toBe('new answer');
     expect(facade.savedReviewFieldKey()).toBe('7-answer');
+  });
+
+  it('saves bad task text without editing the source review', () => {
+    const item = review({
+      id: 7,
+      orderId: 20,
+      text: 'old bad task text',
+      badTask: true,
+      badTaskId: 91,
+      badTaskScheduledDate: '2026-05-23'
+    });
+    const { facade, boardSignal, calls } = createFacade(board([], [item]));
+
+    facade.startReviewFieldEdit(item, 'text');
+    facade.setReviewFieldDraft(item, 'text', 'new bad task text');
+    facade.saveReviewField(item, 'text');
+
+    expect(calls).toContain('bad-text:91:new bad task text:2026-05-23');
+    expect(calls.some((call) => call.startsWith('review-text'))).toBe(false);
+    expect(boardSignal()?.reviews.content[0].text).toBe('new bad task text');
   });
 
   it('saves review notes and shared side notes', () => {

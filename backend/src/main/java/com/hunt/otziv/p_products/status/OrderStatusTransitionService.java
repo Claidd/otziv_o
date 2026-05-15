@@ -44,6 +44,7 @@ public class OrderStatusTransitionService {
     private static final String STATUS_TO_PAY = "Выставлен счет";
     private static final String STATUS_NOT_PAID = "Не оплачено";
     private static final String STATUS_ARCHIVE = "Архив";
+    private static final String STATUS_BAN = "Бан";
 
     private final OrderRepository orderRepository;
     private final OrderStatusService orderStatusService;
@@ -71,6 +72,7 @@ public class OrderStatusTransitionService {
                 case STATUS_PUBLIC -> handlePublicStatus(order);
                 case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
+                case STATUS_BAN -> handleBanStatus(order);
                 default -> {
                     order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                     orderRepository.save(order);
@@ -91,6 +93,23 @@ public class OrderStatusTransitionService {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_NOT_PAID));
         orderRepository.save(order);
         badReviewTaskService.createTasksForUnpaidOrder(order);
+        return true;
+    }
+
+    private boolean handleBanStatus(Order order) {
+        if (!STATUS_NOT_PAID.equals(safeStatusTitle(order))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Перевести заказ в Бан можно только из статуса \"Не оплачено\"");
+        }
+
+        var summary = badReviewTaskService.getSummaryForOrder(order.getId());
+        if (summary == null || summary.done() <= 0 || summary.pending() > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните все плохие задачи заказа");
+        }
+
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_BAN));
+        orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_BAN);
+        badReviewTaskService.deleteOrderReadyReminder(order);
+        orderRepository.save(order);
         return true;
     }
 

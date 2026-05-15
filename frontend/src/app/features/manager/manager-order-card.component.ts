@@ -227,6 +227,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
       case 'Оплачено':
         return 'success';
       case 'Не оплачено':
+      case 'Бан':
         return 'bad';
       default:
         return null;

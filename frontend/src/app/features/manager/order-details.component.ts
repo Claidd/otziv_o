@@ -11,12 +11,18 @@ import {
   OrderDetailsPayload,
   OrderNotesUpdate,
   OrderReviewItem,
+  ReviewRecoveryBatchItem,
+  ReviewRecoveryTaskItem,
   ReviewUpdateRequest
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import {
+  PersonalRemindersService,
+  RecoveryClientNotifiedDetail
+} from '../../shared/personal-reminders.service';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -25,10 +31,19 @@ import {
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
+type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
 type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
 type ReviewQuickFilter = 'all' | 'unpublished' | 'missing-photo' | 'with-note';
 type ReviewEditDraft = ReviewUpdateRequest;
+type RecoveryTaskDraft = {
+  recoveryText: string;
+  scheduledDate: string | null;
+};
+type BadReviewTaskDraft = {
+  taskText: string;
+  scheduledDate: string | null;
+};
 type OrderDetailsSessionDraft = {
   reviewFields?: Record<string, string>;
   reviewNotes?: Record<number, string>;
@@ -60,6 +75,7 @@ export class OrderDetailsComponent {
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
   private readonly toastService = inject(ToastService);
+  private readonly remindersService = inject(PersonalRemindersService);
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
   private restoredReviewFieldsToastId: number | null = null;
 
@@ -81,6 +97,10 @@ export class OrderDetailsComponent {
   readonly editingSideNoteField = signal<SideNoteField | null>(null);
   readonly sideNoteDrafts = signal<Partial<Record<SideNoteField, string>>>({});
   readonly savedSideNoteField = signal<SideNoteField | null>(null);
+  readonly badReviewTaskDrafts = signal<Record<number, BadReviewTaskDraft>>({});
+  readonly savedBadReviewTaskId = signal<number | null>(null);
+  readonly recoveryTaskDrafts = signal<Record<number, RecoveryTaskDraft>>({});
+  readonly savedRecoveryTaskId = signal<number | null>(null);
   readonly activeReviewSlide = signal(0);
   readonly reviewJumpValue = signal('1');
   readonly reviewQuickFilter = signal<ReviewQuickFilter>('all');
@@ -105,6 +125,20 @@ export class OrderDetailsComponent {
     .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
     .map(({ index }) => index));
   readonly productOptions = computed(() => this.details()?.products ?? []);
+  readonly badReviewTasks = computed(() => [...(this.details()?.badReviewTasks ?? [])]
+    .sort((left, right) => (left.id ?? 0) - (right.id ?? 0)));
+  readonly recoveryTasks = computed(() => [...(this.details()?.recoveryTasks ?? [])]
+    .sort((left, right) => (left.id ?? 0) - (right.id ?? 0)));
+  readonly recoveryBatchesToNotify = computed(() => {
+    const batches = new Map<number, ReviewRecoveryBatchItem>();
+    for (const task of this.recoveryTasks()) {
+      const batch = task.batch;
+      if (batch?.id && batch.statusCode === 'COMPLETED') {
+        batches.set(batch.id, batch);
+      }
+    }
+    return Array.from(batches.values());
+  });
   readonly busy = computed(() => this.mutationKey() !== null);
   readonly reviewEditBusy = computed(() => this.reviewEditSaving()
     || this.reviewEditDeleting()
@@ -170,6 +204,20 @@ export class OrderDetailsComponent {
   @HostListener('window:offline')
   onWindowOffline(): void {
     this.browserOnline.set(false);
+  }
+
+  @HostListener('window:review-recovery-client-notified', ['$event'])
+  onRecoveryClientNotified(event: Event): void {
+    const detail = (event as CustomEvent<RecoveryClientNotifiedDetail>).detail;
+    if (!detail?.orderId || detail.orderId !== this.orderId()) {
+      return;
+    }
+
+    if (this.mutationKey() === `recovery-notified-${detail.batchId}`) {
+      return;
+    }
+
+    this.loadDetails();
   }
 
   loadDetails(): void {
@@ -1024,8 +1072,31 @@ export class OrderDetailsComponent {
     );
   }
 
+  completeBadReviewTask(task: BadReviewTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canCompleteBadReviewTask(task)) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Отметить плохую задачу #${task.id} выполненной?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `bad-task-complete-${task.id}`,
+      this.managerApi.completeBadReviewTask(orderId, task.id),
+      'Оценка изменена',
+      `Задача #${task.id} закрыта`
+    );
+  }
+
   canCancelBadReviewTask(details: OrderDetailsPayload, task: BadReviewTaskItem): boolean {
-    return details.status !== 'Оплачено' && task.statusCode !== 'CANCELED';
+    return !this.isOnlyWorkerRole() && details.status !== 'Оплачено' && task.statusCode !== 'CANCELED';
+  }
+
+  canCompleteBadReviewTask(task: BadReviewTaskItem): boolean {
+    return this.isOnlyWorkerRole() && task.statusCode === 'NEW';
   }
 
   badReviewTaskState(details: OrderDetailsPayload, task: BadReviewTaskItem): string {
@@ -1047,6 +1118,245 @@ export class OrderDetailsComponent {
     }
     if (task.completedDate) {
       dates.push(`сменил: ${task.completedDate}`);
+    }
+    return dates.join(' · ') || 'дата не указана';
+  }
+
+  canEditBadReviewTask(task: BadReviewTaskItem): boolean {
+    return task.statusCode === 'NEW';
+  }
+
+  badReviewTaskDateValue(task: BadReviewTaskItem): string {
+    return this.badReviewTaskDraft(task).scheduledDate ?? '';
+  }
+
+  badReviewTaskTextValue(task: BadReviewTaskItem): string {
+    return this.badReviewTaskDraft(task).taskText;
+  }
+
+  setBadReviewTaskDate(task: BadReviewTaskItem, value: string): void {
+    this.updateBadReviewTaskDraft(task, { scheduledDate: value || null });
+  }
+
+  setBadReviewTaskText(task: BadReviewTaskItem, value: string): void {
+    this.updateBadReviewTaskDraft(task, { taskText: value });
+  }
+
+  isBadReviewTaskChanged(task: BadReviewTaskItem): boolean {
+    const draft = this.badReviewTaskDrafts()[task.id];
+    if (!draft) {
+      return false;
+    }
+
+    return draft.taskText !== (task.taskText ?? '')
+      || (draft.scheduledDate ?? '') !== (task.scheduledDate ?? '');
+  }
+
+  isBadReviewTaskSaved(task: BadReviewTaskItem): boolean {
+    return this.savedBadReviewTaskId() === task.id;
+  }
+
+  saveBadReviewTask(task: BadReviewTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canEditBadReviewTask(task)) {
+      return;
+    }
+
+    const draft = this.badReviewTaskDraft(task);
+    if (!draft.taskText.trim()) {
+      this.toastService.error('Задача не сохранена', 'Заполните текст плохой задачи');
+      return;
+    }
+    if (!draft.scheduledDate) {
+      this.toastService.error('Дата не сохранена', 'Выберите плановую дату смены оценки');
+      return;
+    }
+
+    this.runDetailsMutation(
+      `bad-task-save-${task.id}`,
+      this.managerApi.updateBadReviewTask(orderId, task.id, {
+        taskText: draft.taskText,
+        scheduledDate: draft.scheduledDate
+      }),
+      'Задача сохранена',
+      `Текст и план задачи #${task.id} обновлены`,
+      () => {
+        this.clearBadReviewTaskDraft(task.id);
+        this.savedBadReviewTaskId.set(task.id);
+        window.setTimeout(() => {
+          if (this.savedBadReviewTaskId() === task.id) {
+            this.savedBadReviewTaskId.set(null);
+          }
+        }, 1400);
+      }
+    );
+  }
+
+  badReviewTaskCopyKey(task: BadReviewTaskItem, kind: BadReviewTaskCopyKind): string {
+    return `bad-task-${task.id}-${kind}`;
+  }
+
+  async copyBadReviewTaskField(task: BadReviewTaskItem, kind: BadReviewTaskCopyKind): Promise<void> {
+    const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
+    const label = kind === 'botLogin' ? 'Логин скопирован' : 'Пароль скопирован';
+    await this.copyText(value ?? '', this.badReviewTaskCopyKey(task, kind), label);
+  }
+
+  changeBadReviewTaskBot(task: BadReviewTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canEditBadReviewTask(task)) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `bad-task-change-bot-${task.id}`,
+      this.managerApi.changeBadReviewTaskBot(orderId, task.id),
+      'Аккаунт изменен',
+      `Для задачи #${task.id} назначен новый аккаунт`
+    );
+  }
+
+  recoveryTaskForReview(review: OrderReviewItem): ReviewRecoveryTaskItem | null {
+    return this.recoveryTasks().find((task) =>
+      task.sourceReviewId === review.id && task.statusCode !== 'CANCELLED'
+    ) ?? null;
+  }
+
+  recoveryActionLabel(review: OrderReviewItem): string {
+    if (this.isMutating(`recovery-create-${review.id}`)) {
+      return '...';
+    }
+
+    const task = this.recoveryTaskForReview(review);
+    if (!task) {
+      return 'восстановить';
+    }
+
+    return task.statusCode === 'DONE' ? 'восстановлен' : 'в плане';
+  }
+
+  createRecoveryTask(review: OrderReviewItem): void {
+    const existingTask = this.recoveryTaskForReview(review);
+    if (existingTask) {
+      this.toastService.info('Уже в восстановлении', `Задача #${existingTask.id}: ${existingTask.status || 'в работе'}`);
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-create-${review.id}`,
+      this.managerApi.createReviewRecoveryTask(review.orderId, review.id),
+      'Восстановление создано',
+      `Отзыв #${review.id} добавлен в восстановление`
+    );
+  }
+
+  canEditRecoveryTask(task: ReviewRecoveryTaskItem): boolean {
+    return task.statusCode === 'PLANNED';
+  }
+
+  recoveryTaskTextValue(task: ReviewRecoveryTaskItem): string {
+    return this.recoveryTaskDraft(task).recoveryText;
+  }
+
+  recoveryTaskDateValue(task: ReviewRecoveryTaskItem): string {
+    return this.recoveryTaskDraft(task).scheduledDate ?? '';
+  }
+
+  setRecoveryTaskText(task: ReviewRecoveryTaskItem, value: string): void {
+    this.updateRecoveryTaskDraft(task, { recoveryText: value });
+  }
+
+  setRecoveryTaskDate(task: ReviewRecoveryTaskItem, value: string): void {
+    this.updateRecoveryTaskDraft(task, { scheduledDate: value || null });
+  }
+
+  isRecoveryTaskChanged(task: ReviewRecoveryTaskItem): boolean {
+    const draft = this.recoveryTaskDrafts()[task.id];
+    if (!draft) {
+      return false;
+    }
+
+    return draft.recoveryText !== (task.recoveryText ?? '')
+      || (draft.scheduledDate ?? '') !== (task.scheduledDate ?? '');
+  }
+
+  isRecoveryTaskSaved(task: ReviewRecoveryTaskItem): boolean {
+    return this.savedRecoveryTaskId() === task.id;
+  }
+
+  saveRecoveryTask(task: ReviewRecoveryTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canEditRecoveryTask(task)) {
+      return;
+    }
+
+    const draft = this.recoveryTaskDraft(task);
+    if (!draft.recoveryText.trim()) {
+      this.toastService.error('Восстановление не сохранено', 'Заполните текст восстановления');
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-save-${task.id}`,
+      this.managerApi.updateReviewRecoveryTask(orderId, task.id, {
+        recoveryText: draft.recoveryText,
+        scheduledDate: draft.scheduledDate
+      }),
+      'Восстановление сохранено',
+      `Текст и дата задачи #${task.id} обновлены`,
+      () => {
+        this.clearRecoveryTaskDraft(task.id);
+        this.savedRecoveryTaskId.set(task.id);
+        window.setTimeout(() => {
+          if (this.savedRecoveryTaskId() === task.id) {
+            this.savedRecoveryTaskId.set(null);
+          }
+        }, 1400);
+      }
+    );
+  }
+
+  completeRecoveryTask(task: ReviewRecoveryTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || task.statusCode !== 'PLANNED') {
+      return;
+    }
+
+    const confirmed = window.confirm(`Отметить задачу восстановления #${task.id} выполненной?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-complete-${task.id}`,
+      this.managerApi.completeReviewRecoveryTask(orderId, task.id),
+      'Восстановление отмечено',
+      `Задача #${task.id} закрыта`
+    );
+  }
+
+  markRecoveryClientNotified(batch: ReviewRecoveryBatchItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !batch.id) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-notified-${batch.id}`,
+      this.managerApi.markRecoveryClientNotified(orderId, batch.id),
+      'Клиент отмечен',
+      'Восстановления скрыты из рабочих списков',
+      () => this.remindersService.dispatchRecoveryClientNotified({ orderId, batchId: batch.id })
+    );
+  }
+
+  recoveryTaskDateLabel(task: ReviewRecoveryTaskItem): string {
+    const dates = [];
+    if (task.scheduledDate) {
+      dates.push(`план: ${task.scheduledDate}`);
+    }
+    if (task.completedDate) {
+      dates.push(`восстановил: ${task.completedDate}`);
     }
     return dates.join(' · ') || 'дата не указана';
   }
@@ -1339,18 +1649,39 @@ export class OrderDetailsComponent {
     return this.mutationKey() === key;
   }
 
-  hasPendingReviewFieldChanges(): boolean {
+  pendingReviewFieldCardNumbers(): number[] {
     const details = this.details();
     if (!details) {
-      return false;
+      return [];
     }
 
-    return Object.entries(this.reviewFieldDrafts()).some(([key, value]) => {
+    const cardNumbers: number[] = [];
+    const seenCardNumbers = new Set<number>();
+    const reviewIndexes = new Map(details.reviews.map((review, index) => [review.id, index + 1]));
+
+    for (const [key, value] of Object.entries(this.reviewFieldDrafts())) {
       const match = /^(\d+)-(text|answer)$/.exec(key);
       const review = match ? details.reviews.find((item) => item.id === Number(match[1])) : null;
       const field = match?.[2] as ReviewEditableField | undefined;
-      return !!review && !!field && value !== this.reviewFieldSourceValue(review, field);
-    });
+      const cardNumber = review ? reviewIndexes.get(review.id) : null;
+
+      if (
+        review
+        && field
+        && cardNumber
+        && value !== this.reviewFieldSourceValue(review, field)
+        && !seenCardNumbers.has(cardNumber)
+      ) {
+        cardNumbers.push(cardNumber);
+        seenCardNumbers.add(cardNumber);
+      }
+    }
+
+    return cardNumbers;
+  }
+
+  hasPendingReviewFieldChanges(): boolean {
+    return this.pendingReviewFieldCardNumbers().length > 0;
   }
 
   sendToCheckBlockReason(): string | null {
@@ -1362,8 +1693,10 @@ export class OrderDetailsComponent {
       return 'Нельзя отправить на проверку: авторизация закончилась или не подтверждена. Войдите в систему заново, вернитесь к заказу, сохраните черновики дискеткой, если они есть, и повторите отправку.';
     }
 
-    if (this.hasPendingReviewFieldChanges()) {
-      return 'Нельзя отправить на проверку: есть черновики в браузере. Нажмите дискетку у карточки, чтобы записать текст в БД.';
+    const pendingReviewFieldCardNumbers = this.pendingReviewFieldCardNumbers();
+    if (pendingReviewFieldCardNumbers.length > 0) {
+      const cardLabel = this.pendingReviewFieldCardLabel(pendingReviewFieldCardNumbers);
+      return `Нельзя отправить на проверку: есть черновики в браузере ${cardLabel}. Нажмите дискетку, чтобы записать текст в БД.`;
     }
 
     const invalidReviewCount = this.invalidReviewTextCount();
@@ -1383,6 +1716,14 @@ export class OrderDetailsComponent {
     return details.reviews
       .filter((review) => this.isInvalidReviewText(this.reviewFieldSourceValue(review, 'text')))
       .length;
+  }
+
+  private pendingReviewFieldCardLabel(cardNumbers: number[]): string {
+    if (cardNumbers.length === 1) {
+      return `у карточки №${cardNumbers[0]}`;
+    }
+
+    return `у карточек ${cardNumbers.map((number) => `№${number}`).join(', ')}`;
   }
 
   private isInvalidReviewText(value: string): boolean {
@@ -1425,6 +1766,54 @@ export class OrderDetailsComponent {
     };
   }
 
+  private badReviewTaskDraft(task: BadReviewTaskItem): BadReviewTaskDraft {
+    return this.badReviewTaskDrafts()[task.id] ?? {
+      taskText: task.taskText ?? '',
+      scheduledDate: task.scheduledDate || null
+    };
+  }
+
+  private updateBadReviewTaskDraft(task: BadReviewTaskItem, patch: Partial<BadReviewTaskDraft>): void {
+    const current = this.badReviewTaskDraft(task);
+    const next = { ...current, ...patch };
+    this.badReviewTaskDrafts.update((drafts) => ({
+      ...drafts,
+      [task.id]: next
+    }));
+  }
+
+  private clearBadReviewTaskDraft(taskId: number): void {
+    this.badReviewTaskDrafts.update((drafts) => {
+      const next = { ...drafts };
+      delete next[taskId];
+      return next;
+    });
+  }
+
+  private recoveryTaskDraft(task: ReviewRecoveryTaskItem): RecoveryTaskDraft {
+    return this.recoveryTaskDrafts()[task.id] ?? {
+      recoveryText: task.recoveryText ?? '',
+      scheduledDate: task.scheduledDate || null
+    };
+  }
+
+  private updateRecoveryTaskDraft(task: ReviewRecoveryTaskItem, patch: Partial<RecoveryTaskDraft>): void {
+    const current = this.recoveryTaskDraft(task);
+    const next = { ...current, ...patch };
+    this.recoveryTaskDrafts.update((drafts) => ({
+      ...drafts,
+      [task.id]: next
+    }));
+  }
+
+  private clearRecoveryTaskDraft(taskId: number): void {
+    this.recoveryTaskDrafts.update((drafts) => {
+      const next = { ...drafts };
+      delete next[taskId];
+      return next;
+    });
+  }
+
   private runReviewMutation(
     key: string,
     request: Observable<OrderReviewItem>,
@@ -1453,7 +1842,8 @@ export class OrderDetailsComponent {
     key: string,
     request: Observable<OrderDetailsPayload>,
     toastTitle: string,
-    toastMessage: string
+    toastMessage: string,
+    afterSuccess?: (details: OrderDetailsPayload) => void
   ): void {
     this.mutationKey.set(key);
     this.error.set(null);
@@ -1463,6 +1853,7 @@ export class OrderDetailsComponent {
         const activeReviewId = this.currentActiveReviewId();
         this.details.set(details);
         this.restoreActiveReview(activeReviewId);
+        afterSuccess?.(details);
         this.mutationKey.set(null);
         this.toastService.success(toastTitle, toastMessage);
       },

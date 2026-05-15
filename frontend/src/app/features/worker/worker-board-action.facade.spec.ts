@@ -96,6 +96,18 @@ function createFacade(section: WorkerSection = 'publish') {
         calls.push(`bad-done:${taskId}`);
         return of(void 0);
       },
+      completeRecoveryTask: (taskId: number) => {
+        calls.push(`recovery-done:${taskId}`);
+        return of(void 0);
+      },
+      changeRecoveryTaskBot: (taskId: number) => {
+        calls.push(`recovery-change:${taskId}`);
+        return of({ oldBotId: 11, newBotId: 46 });
+      },
+      deactivateRecoveryTaskBot: (taskId: number, botId: number) => {
+        calls.push(`recovery-deactivate:${taskId}:${botId}`);
+        return of(void 0);
+      },
       changeBadReviewTaskBot: (taskId: number) => {
         calls.push(`bad-change:${taskId}`);
         return of({ oldBotId: 11, newBotId: 45 });

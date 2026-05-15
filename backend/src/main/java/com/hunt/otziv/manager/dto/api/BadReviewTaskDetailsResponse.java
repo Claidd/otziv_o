@@ -15,6 +15,9 @@ public record BadReviewTaskDetailsResponse(
         String workerFio,
         Long botId,
         String botFio,
+        String botLogin,
+        String botPassword,
+        String taskText,
         String comment
 ) {
 }

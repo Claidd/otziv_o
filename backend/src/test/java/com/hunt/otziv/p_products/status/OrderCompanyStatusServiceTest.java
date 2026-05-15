@@ -82,6 +82,24 @@ class OrderCompanyStatusServiceTest {
     }
 
     @Test
+    void banMovesCompanyToBanEvenWhenAnotherActiveOrderExists() {
+        OrderCompanyStatusService service = service();
+        Company company = company("В работе");
+        Order current = order(1L, "Бан", company);
+        Order active = order(2L, "Публикация", company);
+        company.setOrderList(new LinkedHashSet<>(java.util.List.of(current, active)));
+        CompanyStatus ban = status("Бан");
+
+        when(companyStatusService.getStatusByTitle("Бан")).thenReturn(ban);
+
+        service.autoManageCompanyStatus(current, "Бан");
+
+        assertEquals("Бан", company.getStatus().getTitle());
+        verify(companyService).save(company);
+        verify(nextOrderRequestService, never()).hasOpenRequests(company.getId());
+    }
+
+    @Test
     void activeStatusMovesStoppedCompanyToWorkWhenNoOtherActiveOrders() {
         OrderCompanyStatusService service = service();
         Company company = company("На стопе");

@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.controller;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.manager.dto.api.BadReviewTaskUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.OrderDetailsResponse;
 import com.hunt.otziv.manager.dto.api.OrderNotesResponse;
@@ -11,6 +12,7 @@ import com.hunt.otziv.manager.dto.api.ReviewAnswerUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewDetailsResponse;
 import com.hunt.otziv.manager.dto.api.ReviewEditorUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewNoteUpdateRequest;
+import com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
@@ -20,8 +22,11 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,6 +57,8 @@ public class ApiManagerReviewController {
     private final AutoTextService autoTextService;
     private final S3UploadService s3UploadService;
     private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
+    private final UserService userService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
 
@@ -352,6 +359,121 @@ public class ApiManagerReviewController {
         }
     }
 
+    @PutMapping("/orders/{orderId}/bad-review-tasks/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse updateBadReviewTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            @RequestBody BadReviewTaskUpdateRequest request,
+            Authentication authentication
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные плохой задачи не переданы");
+        }
+        try {
+            requireBadReviewTaskForOrder(orderId, taskId);
+            badReviewTaskService.updateTask(taskId, request.taskText(), request.scheduledDate());
+            return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/orders/{orderId}/bad-review-tasks/{taskId}/change-bot")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse changeBadReviewTaskBot(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        try {
+            requireBadReviewTaskForOrder(orderId, taskId);
+            badReviewTaskService.changeTaskBot(taskId);
+            return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/orders/{orderId}/bad-review-tasks/{taskId}/complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse completeBadReviewTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        try {
+            boolean belongsToOrder = badReviewTaskService.getTasksByOrderId(orderId).stream()
+                    .anyMatch(task -> Objects.equals(task.getId(), taskId));
+            if (!belongsToOrder) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена в этом заказе");
+            }
+            badReviewTaskService.completeTask(taskId);
+            return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/recovery-tasks")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse createReviewRecoveryTask(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Authentication authentication
+    ) {
+        requireReviewForOrder(orderId, reviewId);
+        reviewRecoveryTaskService.createTask(reviewId, currentUser(authentication));
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PutMapping("/orders/{orderId}/recovery-tasks/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse updateReviewRecoveryTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            @RequestBody ReviewRecoveryTaskUpdateRequest request,
+            Authentication authentication
+    ) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные восстановления не переданы");
+        }
+        requireRecoveryTaskForOrder(orderId, taskId);
+
+        reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.scheduledDate());
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/recovery-tasks/{taskId}/complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse completeReviewRecoveryTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        requireRecoveryTaskForOrder(orderId, taskId);
+        reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/recovery-batches/{batchId}/client-notified")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public OrderDetailsResponse markRecoveryClientNotified(
+            @PathVariable Long orderId,
+            @PathVariable Long batchId,
+            Authentication authentication
+    ) {
+        requireRecoveryBatchForOrder(orderId, batchId);
+        reviewRecoveryTaskService.markClientNotified(batchId, currentUser(authentication));
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
     private <T> T firstValue(T value, T fallback) {
         return value != null ? value : fallback;
     }
@@ -378,5 +500,33 @@ public class ApiManagerReviewController {
         }
 
         return review;
+    }
+
+    private void requireRecoveryTaskForOrder(Long orderId, Long taskId) {
+        if (!reviewRecoveryTaskService.taskBelongsToOrder(taskId, orderId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Задача восстановления не найдена в этом заказе");
+        }
+    }
+
+    private void requireBadReviewTaskForOrder(Long orderId, Long taskId) {
+        boolean belongsToOrder = badReviewTaskService.getTasksByOrderId(orderId).stream()
+                .anyMatch(task -> Objects.equals(task.getId(), taskId));
+        if (!belongsToOrder) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена в этом заказе");
+        }
+    }
+
+    private void requireRecoveryBatchForOrder(Long orderId, Long batchId) {
+        if (!reviewRecoveryTaskService.batchBelongsToOrder(batchId, orderId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Пачка восстановления не найдена в этом заказе");
+        }
+    }
+
+    private User currentUser(Authentication authentication) {
+        if (authentication == null || isBlank(authentication.getName())) {
+            return null;
+        }
+
+        return userService.findByUserName(authentication.getName()).orElse(null);
     }
 }

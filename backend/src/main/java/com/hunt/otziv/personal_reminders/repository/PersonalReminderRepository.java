@@ -11,4 +11,14 @@ public interface PersonalReminderRepository extends JpaRepository<PersonalRemind
     List<PersonalReminder> findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(Long userId);
 
     Optional<PersonalReminder> findByIdAndUserId(Long id, Long userId);
+
+    void deleteByUserIdAndTitleAndTextAndCompletedAtIsNull(Long userId, String title, String text);
+
+    void deleteByUserIdAndTitleStartingWithAndTextContainingAndCompletedAtIsNull(
+            Long userId,
+            String titlePrefix,
+            String textFragment
+    );
+
+    void deleteByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNull(Long userId, String sourceType, Long sourceId);
 }

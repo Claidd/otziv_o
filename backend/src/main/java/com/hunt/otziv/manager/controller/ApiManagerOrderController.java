@@ -111,7 +111,7 @@ public class ApiManagerOrderController {
 
     @DeleteMapping("/orders/{orderId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     public void deleteOrder(
             @PathVariable Long orderId,
             Principal principal

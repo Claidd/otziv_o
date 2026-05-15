@@ -52,6 +52,15 @@ public class PersonalReminder {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "source_type", length = 60)
+    private String sourceType;
+
+    @Column(name = "source_id")
+    private Long sourceId;
+
+    @Column(name = "source_order_id")
+    private Long sourceOrderId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

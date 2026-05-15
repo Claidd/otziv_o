@@ -245,22 +245,32 @@ public class OrderBoardQueryService {
                 keyword,
                 pageNumber,
                 pageSize,
-                BoardLiveSlice.ACTIVE_ORDER_STATUSES
+                BoardLiveSlice.ACTIVE_ORDER_STATUSES,
+                "desc"
         );
     }
 
     public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize) {
+        return getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize, "desc");
+    }
+
+    public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
         Worker worker = resolveWorkerFromPrincipal(principal);
-        return getWorkerBoardOrderDTOAndKeywordByWorkerAll(worker, keyword, pageNumber, pageSize);
+        return getWorkerBoardOrderDTOAndKeywordByWorkerAll(worker, keyword, pageNumber, pageSize, sortDirection);
     }
 
     public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Worker worker, String keyword, int pageNumber, int pageSize) {
+        return getWorkerBoardOrderDTOAndKeywordByWorkerAll(worker, keyword, pageNumber, pageSize, "desc");
+    }
+
+    public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByWorkerAll(Worker worker, String keyword, int pageNumber, int pageSize, String sortDirection) {
         return getAllOrderDTOAndKeywordByWorkerAll(
                 worker,
                 keyword,
                 pageNumber,
                 pageSize,
-                BoardLiveSlice.WORKER_BOARD_ALL_ORDER_STATUSES
+                BoardLiveSlice.WORKER_BOARD_ALL_ORDER_STATUSES,
+                sortDirection
         );
     }
 
@@ -269,27 +279,31 @@ public class OrderBoardQueryService {
             String keyword,
             int pageNumber,
             int pageSize,
-            Collection<String> liveStatuses
+            Collection<String> liveStatuses,
+            String sortDirection
     ) {
         if (worker == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
 
         Pageable pageable = workerBoardPageable(pageNumber, pageSize);
+        boolean ascending = "asc".equalsIgnoreCase(sortDirection);
         Page<Long> orderIds;
 
         if (hasText(keyword)) {
-            orderIds = orderRepository.findPageIdByByWorkerAndKeyWordForBoardLive(
+            orderIds = orderRepository.findPageIdByByWorkerAndKeyWordForBoardLiveSorted(
                     worker,
                     keyword,
                     keyword,
                     liveStatuses,
+                    ascending ? "asc" : "desc",
                     pageable
             );
         } else {
-            orderIds = orderRepository.findPageIdToWorkerForBoardLive(
+            orderIds = orderRepository.findPageIdToWorkerForBoardLiveSorted(
                     worker,
                     liveStatuses,
+                    ascending ? "asc" : "desc",
                     pageable
             );
         }

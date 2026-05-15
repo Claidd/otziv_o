@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ToastService, ToastType } from './toast.service';
+import { ToastAction, ToastMessage, ToastService, ToastType } from './toast.service';
 
 @Component({
   selector: 'app-toast-container',
@@ -18,5 +18,10 @@ export class ToastContainerComponent {
       info: 'info',
       warning: 'warning'
     }[type];
+  }
+
+  handleAction(toast: ToastMessage, action: ToastAction): void {
+    action.callback?.();
+    this.toastService.dismiss(toast.id);
   }
 }

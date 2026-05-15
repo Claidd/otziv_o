@@ -18,6 +18,7 @@
 
 .worker-toolbar {
   justify-content: space-between;
+  gap: 0.65rem;
 }
 
 .worker-workspace > button.mobile-menu-toggle.mobile-menu-toggle {
@@ -58,10 +59,10 @@
 }
 
 .section-tabs {
-  display: grid;
+  display: flex;
   flex: 1;
   width: 100%;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  flex-wrap: nowrap;
   gap: 0.35rem;
 }
 
@@ -84,10 +85,12 @@
 }
 
 .section-tabs button {
-  gap: 0.25rem;
+  flex: 1 1 0;
+  gap: 0.22rem;
   min-width: 0;
   border-radius: 999px;
-  padding-inline: 0.35rem;
+  padding-inline: 0.28rem;
+  white-space: nowrap;
 }
 
 .section-tabs button.active,
@@ -112,7 +115,7 @@
 }
 
 .toolbar-search {
-  flex: 0 0 min(35rem, 38vw);
+  flex: 0 1 clamp(20rem, 29vw, 25.5rem);
 }
 
 .search-line label {
@@ -129,7 +132,18 @@
 }
 
 .search-line.toolbar-search label {
-  min-width: 14rem;
+  min-width: 9.5rem;
+}
+
+.toolbar-search select {
+  flex: 0 0 2.55rem;
+  min-width: 2.55rem;
+  padding-inline: 0.2rem;
+  text-align: center;
+}
+
+.toolbar-search .icon-button {
+  flex: 0 0 1.85rem;
 }
 
 .search-line input {

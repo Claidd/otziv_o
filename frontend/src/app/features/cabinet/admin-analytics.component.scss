@@ -1,10 +1,14 @@
 :host {
   display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .analytics-toolbar,
 .analytics-section,
 .empty-state {
+  min-width: 0;
+  max-width: 100%;
   border-radius: var(--otziv-card-radius);
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
@@ -26,6 +30,8 @@ p {
 
 .toolbar-actions {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: end;
   justify-content: flex-end;
@@ -53,6 +59,8 @@ input[type='date'] {
 .period-control {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  max-width: 100%;
   min-height: 2.55rem;
   overflow: hidden;
   border: 1px solid rgba(103, 116, 131, 0.25);
@@ -61,13 +69,14 @@ input[type='date'] {
 }
 
 .period-control button {
-  min-width: 5.6rem;
+  min-width: 0;
   border: 0;
   border-right: 1px solid rgba(103, 116, 131, 0.2);
   border-radius: 0;
   background: transparent;
   color: var(--otziv-info);
   font-weight: 800;
+  white-space: normal;
   box-shadow: none;
 }
 
@@ -100,12 +109,14 @@ input[type='date'] {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   gap: 1rem;
 }
 
 .metric-card {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   min-height: 8.2rem;
   align-items: center;
   justify-content: space-between;
@@ -116,6 +127,10 @@ input[type='date'] {
   background: var(--otziv-muted-surface);
 }
 
+.metric-card > div {
+  min-width: 0;
+}
+
 .metric-card h3 {
   color: var(--otziv-info);
 }
@@ -123,6 +138,7 @@ input[type='date'] {
 .metric-card strong {
   display: block;
   margin-top: 0.45rem;
+  overflow-wrap: anywhere;
   font-size: 1.45rem;
   line-height: 1.05;
 }

@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
@@ -26,8 +27,11 @@ import com.hunt.otziv.manager.dto.api.OrderEditResponse;
 import com.hunt.otziv.manager.dto.api.OrderProductResponse;
 import com.hunt.otziv.manager.dto.api.ProductOptionResponse;
 import com.hunt.otziv.manager.dto.api.ReviewDetailsResponse;
+import com.hunt.otziv.manager.dto.api.ReviewRecoveryBatchDetailsResponse;
+import com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskDetailsResponse;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
+import com.hunt.otziv.p_products.deletion.OrderDeletionPolicy;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
@@ -35,6 +39,11 @@ import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.AmountService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -73,7 +82,9 @@ public class ManagerBoardEditAssembler {
     private final ManagerService managerService;
     private final WorkerService workerService;
     private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
+    private final OrderDeletionPolicy orderDeletionPolicy;
 
     public CompanyEditResponse buildCompanyEditResponse(
             CompanyDTO company,
@@ -185,7 +196,10 @@ public class ManagerBoardEditAssembler {
             Authentication authentication
     ) {
         boolean adminOrOwner = managerPermissionService.hasRole(authentication, "ADMIN") || managerPermissionService.hasRole(authentication, "OWNER");
-        boolean managerCanDelete = managerPermissionService.hasRole(authentication, "MANAGER") && optionLabel(order.getStatus()).equals("Новый");
+        boolean canDelete = orderDeletionPolicy.canDelete(
+                managerPermissionService.primaryReviewRole(authentication),
+                optionLabel(order.getStatus())
+        );
         OptionResponse currentManager = option(order.getManager());
         List<OptionResponse> managers = managerPermissionService.hasOnlyWorkerRole(authentication)
                 ? currentManager == null ? List.of() : List.of(currentManager)
@@ -212,7 +226,7 @@ public class ManagerBoardEditAssembler {
                 managers,
                 workerOptions(order),
                 adminOrOwner,
-                adminOrOwner || managerCanDelete
+                canDelete
         );
     }
 
@@ -222,6 +236,7 @@ public class ManagerBoardEditAssembler {
         BadReviewTaskSummary summary = badReviewTaskService.getSummaryForOrder(orderId);
         BadReviewTaskSummary safeSummary = summary == null ? BadReviewTaskSummary.empty() : summary;
         List<BadReviewTask> badReviewTasks = badReviewTaskService.getTasksByOrderId(orderId);
+        List<ReviewRecoveryTask> recoveryTasks = reviewRecoveryTaskService.getTasksByOrderId(orderId);
         ReviewDTOOne firstReview = reviews.isEmpty() ? null : reviews.get(0);
         BigDecimal orderSum = order.getSum() == null ? BigDecimal.ZERO : order.getSum();
 
@@ -262,6 +277,7 @@ public class ManagerBoardEditAssembler {
                 dateValue(order.getChanged()),
                 reviews.stream().map(this::toReviewDetailsResponse).toList(),
                 badReviewTasks.stream().map(this::toBadReviewTaskResponse).toList(),
+                recoveryTasks.stream().map(this::toReviewRecoveryTaskResponse).toList(),
                 productOptions(),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
@@ -319,9 +335,25 @@ public class ManagerBoardEditAssembler {
 
     private BadReviewTaskDetailsResponse toBadReviewTaskResponse(BadReviewTask task) {
         Review review = task.getSourceReview();
+        Bot taskBot = task.getBot();
+        Bot sourceBot = review != null ? review.getBot() : null;
         Long sourceReviewId = review != null ? review.getId() : null;
-        Long botId = task.getBot() != null ? task.getBot().getId() : null;
-        String botFio = task.getBot() != null ? safe(task.getBot().getFio()) : "";
+        Long botId = taskBot != null ? taskBot.getId() : sourceBot != null ? sourceBot.getId() : null;
+        String botFio = firstNonBlank(
+                task.getBotFioSnapshot(),
+                taskBot != null ? taskBot.getFio() : null,
+                sourceBot != null ? sourceBot.getFio() : null
+        );
+        String botLogin = firstNonBlank(
+                task.getBotLoginSnapshot(),
+                taskBot != null ? taskBot.getLogin() : null,
+                sourceBot != null ? sourceBot.getLogin() : null
+        );
+        String botPassword = firstNonBlank(
+                task.getBotPasswordSnapshot(),
+                taskBot != null ? taskBot.getPassword() : null,
+                sourceBot != null ? sourceBot.getPassword() : null
+        );
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
                 : "";
@@ -338,7 +370,61 @@ public class ManagerBoardEditAssembler {
                 workerFio,
                 botId,
                 botFio,
+                botLogin,
+                botPassword,
+                firstNonBlank(task.getTaskText(), review != null ? review.getText() : null),
                 safe(task.getComment())
+        );
+    }
+
+    private ReviewRecoveryTaskDetailsResponse toReviewRecoveryTaskResponse(ReviewRecoveryTask task) {
+        Review review = task.getSourceReview();
+        ReviewRecoveryBatch batch = task.getBatch();
+        Long sourceReviewId = review != null ? review.getId() : null;
+        Long botId = task.getBot() != null ? task.getBot().getId() : null;
+        String botFio = task.getBot() != null && !isBlank(task.getBot().getFio())
+                ? safe(task.getBot().getFio())
+                : safe(task.getBotFioSnapshot());
+        String botLogin = task.getBot() != null && !isBlank(task.getBot().getLogin())
+                ? safe(task.getBot().getLogin())
+                : safe(task.getBotLoginSnapshot());
+        String botPassword = task.getBot() != null && !isBlank(task.getBot().getPassword())
+                ? safe(task.getBot().getPassword())
+                : safe(task.getBotPasswordSnapshot());
+        String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
+                ? safe(task.getWorker().getUser().getFio())
+                : "";
+
+        return new ReviewRecoveryTaskDetailsResponse(
+                task.getId(),
+                batch != null ? batch.getId() : null,
+                sourceReviewId,
+                recoveryTaskStatusLabel(task.getStatus()),
+                task.getStatus() == null ? "" : task.getStatus().name(),
+                safe(task.getRecoveryText()),
+                safe(task.getRecoveryAnswer()),
+                dateValue(task.getScheduledDate()),
+                dateValue(task.getCompletedDate()),
+                workerFio,
+                botId,
+                botFio,
+                botLogin,
+                botPassword,
+                toReviewRecoveryBatchResponse(batch)
+        );
+    }
+
+    private ReviewRecoveryBatchDetailsResponse toReviewRecoveryBatchResponse(ReviewRecoveryBatch batch) {
+        if (batch == null) {
+            return null;
+        }
+
+        return new ReviewRecoveryBatchDetailsResponse(
+                batch.getId(),
+                recoveryBatchStatusLabel(batch.getStatus()),
+                batch.getStatus() == null ? "" : batch.getStatus().name(),
+                dateValue(batch.getCompletedAt()),
+                dateValue(batch.getClientNotifiedAt())
         );
     }
 
@@ -589,7 +675,42 @@ public class ManagerBoardEditAssembler {
         return "В работе";
     }
 
+    private String recoveryTaskStatusLabel(ReviewRecoveryTaskStatus status) {
+        if (status == ReviewRecoveryTaskStatus.DONE) {
+            return "Восстановлено";
+        }
+        if (status == ReviewRecoveryTaskStatus.CANCELLED) {
+            return "Отменено";
+        }
+        return "Запланировано";
+    }
+
+    private String recoveryBatchStatusLabel(ReviewRecoveryBatchStatus status) {
+        if (status == ReviewRecoveryBatchStatus.COMPLETED) {
+            return "Все восстановления выполнены";
+        }
+        if (status == ReviewRecoveryBatchStatus.CLIENT_NOTIFIED) {
+            return "Клиент уведомлен";
+        }
+        if (status == ReviewRecoveryBatchStatus.ARCHIVED) {
+            return "В архиве";
+        }
+        return "В работе";
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 }

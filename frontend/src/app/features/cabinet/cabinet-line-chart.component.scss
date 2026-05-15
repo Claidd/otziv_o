@@ -1,9 +1,13 @@
 :host {
   display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chart-card {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
   border-radius: var(--otziv-card-radius);
   padding: 1.2rem;
@@ -61,6 +65,8 @@ h3 {
 .line-chart-frame {
   display: block;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .y-axis {
@@ -81,8 +87,9 @@ h3 {
 }
 
 .line-chart-scroll {
-  padding-left: 3.85rem;
   min-width: 0;
+  max-width: 100%;
+  padding-left: 3.85rem;
   overflow-x: auto;
   border: 1px solid rgba(103, 116, 131, 0.14);
   border-radius: 1rem;

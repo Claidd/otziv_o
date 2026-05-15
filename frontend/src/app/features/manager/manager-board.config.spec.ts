@@ -94,6 +94,15 @@ describe('manager-board config helpers', () => {
       'Не оплачено',
       'Оплачено'
     ]);
+    expect(managerOrderActions(order({
+      status: 'Не оплачено',
+      badReviewTasksTotal: 2,
+      badReviewTasksPending: 0
+    }), false).map((action) => action.status)).toEqual([
+      'Оплачено',
+      'Бан'
+    ]);
+    expect(managerOrderActions(order({ status: 'Бан' }), false).map((action) => action.status)).toEqual(['Оплачено']);
     expect(managerOrderActions(order({ status: 'Новый' }), true)).toBe(MANAGER_ORDER_ACTIONS);
   });
 

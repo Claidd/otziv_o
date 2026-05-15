@@ -86,12 +86,20 @@ export class WorkerReviewCardComponent {
     return !!this.review.badTask;
   }
 
+  isRecoveryTask(): boolean {
+    return !!this.review.recoveryTask;
+  }
+
   isWalkTone(): boolean {
     return this.activeSection === 'nagul' && !this.isBadTask();
   }
 
   isPublicationTone(): boolean {
     return this.activeSection === 'publish' && !this.isBadTask();
+  }
+
+  isRecoveryTone(): boolean {
+    return this.activeSection === 'recovery' || this.isRecoveryTask();
   }
 
   isBadTone(): boolean {
@@ -113,7 +121,7 @@ export class WorkerReviewCardComponent {
   isReviewTitleLinkEnabled(): boolean {
     return (
       this.canOpenTitleLink ||
-      (this.activeSection !== 'nagul' && this.activeSection !== 'publish')
+      (this.activeSection !== 'nagul' && this.activeSection !== 'recovery' && this.activeSection !== 'publish')
     );
   }
 
@@ -137,7 +145,7 @@ export class WorkerReviewCardComponent {
   }
 
   private shouldShowFilialTitle(): boolean {
-    return this.activeSection === 'nagul' || this.activeSection === 'publish';
+    return this.activeSection === 'nagul' || this.activeSection === 'recovery' || this.activeSection === 'publish';
   }
 
   botBrowserUrl(): string {
@@ -283,10 +291,14 @@ export class WorkerReviewCardComponent {
   }
 
   reviewDate(): string {
-    return this.review.badTaskScheduledDate || this.review.publishedDate || 'Не назначено';
+    return this.review.recoveryTaskScheduledDate || this.review.badTaskScheduledDate || this.review.publishedDate || 'Не назначено';
   }
 
   doneLabel(): string {
+    if (this.isRecoveryTask()) {
+      return 'Восстановил';
+    }
+
     if (this.isBadTask()) {
       return 'Сменил';
     }

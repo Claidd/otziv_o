@@ -2,7 +2,9 @@
   class="worker-card review-card"
   [class.published]="review.publish"
   [class.bad-task]="isBadTask()"
+  [class.recovery-task]="isRecoveryTask()"
   [class.card-tone--walk]="isWalkTone()"
+  [class.card-tone--recovery]="isRecoveryTone()"
   [class.card-tone--publication]="isPublicationTone()"
   [class.card-tone--bad]="isBadTone()"
   [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
@@ -49,6 +51,11 @@
         <span class="bad-task-badge" [title]="'Задача #' + review.badTaskId">{{
           ratingTaskLabel()
         }}</span>
+      }
+      @if (isRecoveryTask()) {
+        <span class="bad-task-badge recovery-task-badge" [title]="'Восстановление #' + review.recoveryTaskId">
+          восстановление
+        </span>
       }
       @if (hasReviewNote() || isReviewNoteEditing()) {
         <span

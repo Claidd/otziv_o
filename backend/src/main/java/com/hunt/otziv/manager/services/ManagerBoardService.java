@@ -13,6 +13,7 @@ import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -49,7 +50,8 @@ public class ManagerBoardService {
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
-            "Публикация"
+            "Публикация",
+            "Бан"
     );
 
     private final CompanyService companyService;
@@ -59,6 +61,7 @@ public class ManagerBoardService {
     private final UserService userService;
     private final ManagerService managerService;
     private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
     private final UserMetricSnapshotService metricSnapshotService;
 
@@ -219,6 +222,8 @@ public class ManagerBoardService {
         metrics.add(orderMetric(orderCounts, "Выставлен счет", "Выставлен счет", "receipt_long", "blue"));
         metrics.add(orderMetric(orderCounts, "Напоминание", "Напоминание", "notifications_active", "pink"));
         metrics.add(orderMetric(orderCounts, "Не оплачено", "Не оплачено", "money_off", "gray"));
+        metrics.add(orderMetric(orderCounts, "Бан", "Бан", "block", "gray"));
+        metrics.add(recoveryReadyMetric(principal, authentication));
         metrics.add(orderMetric(orderCounts, "Рабочие", "Все", "dashboard", "blue"));
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
@@ -272,6 +277,26 @@ public class ManagerBoardService {
                 tone,
                 SECTION_ORDERS,
                 status
+        );
+    }
+
+    private ManagerMetricResponse recoveryReadyMetric(Principal principal, Authentication authentication) {
+        int count;
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            count = reviewRecoveryTaskService.countCompletedBatchesToAdmin();
+        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            count = reviewRecoveryTaskService.countCompletedBatchesToOwner(resolveOwnerManagers(principal));
+        } else {
+            count = reviewRecoveryTaskService.countCompletedBatchesToManager(resolveManager(principal));
+        }
+
+        return new ManagerMetricResponse(
+                "Восст. готовы",
+                count,
+                "restore",
+                "yellow",
+                SECTION_ORDERS,
+                "Восстановления готовы"
         );
     }
 

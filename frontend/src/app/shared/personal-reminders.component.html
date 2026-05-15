@@ -23,11 +23,61 @@
           >
             <h3>{{ reminder.title }}</h3>
             <p>{{ noteText(reminder) }}</p>
+            @if (reminderChatUrl(reminder); as chatUrl) {
+              <a
+                class="reminder-chat-link"
+                [href]="chatUrl"
+                target="_blank"
+                rel="noopener"
+                (click)="$event.stopPropagation()"
+              >
+                Открыть чат
+              </a>
+            }
             <small>{{ reminderTimeLabel(reminder) }}</small>
           </div>
-          <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
-            <span class="material-icons-sharp">done</span>
-          </button>
+          @if (isRecoveryCompletionReminder(reminder)) {
+            <button
+              type="button"
+              class="reminder-client-notified-button"
+              (click)="notifyRecoveryClient(reminder)"
+              [disabled]="isRecoveryNotificationSaving(reminder) || !canNotifyRecoveryClient(reminder)"
+              title="Клиент уведомлен"
+            >
+              Клиент уведомлен
+            </button>
+          } @else if (isBadReviewReminder(reminder)) {
+            @if (hasPaymentCopyText(reminder)) {
+              <button
+                type="button"
+                class="reminder-payment-button"
+                (click)="copyReminderPayment(reminder)"
+                [disabled]="isPaymentCopying(reminder)"
+                title="Скопировать счет"
+              >
+                счет
+              </button>
+            }
+            @if (isBadReviewOrderReadyReminder(reminder)) {
+              <button
+                type="button"
+                class="reminder-ban-button"
+                (click)="moveBadReviewOrderToBan(reminder)"
+                [disabled]="isBadReviewBanSaving(reminder)"
+                title="Перевести заказ в Бан"
+              >
+                В Бан
+              </button>
+            } @else {
+              <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+                <span class="material-icons-sharp">done</span>
+              </button>
+            }
+          } @else {
+            <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+              <span class="material-icons-sharp">done</span>
+            </button>
+          }
         </article>
       }
     </div>
@@ -139,18 +189,68 @@
           >
             <h3>{{ reminder.title }}</h3>
             <p>{{ noteText(reminder) }}</p>
+            @if (reminderChatUrl(reminder); as chatUrl) {
+              <a
+                class="reminder-chat-link"
+                [href]="chatUrl"
+                target="_blank"
+                rel="noopener"
+                (click)="$event.stopPropagation()"
+              >
+                Открыть чат
+              </a>
+            }
             <small>{{ reminderTimeLabel(reminder) }}</small>
           </div>
           <div class="personal-reminder__actions">
-            <button type="button" class="reminder-icon-button" (click)="startEdit(reminder)" title="Редактировать" aria-label="Редактировать">
-              <span class="material-icons-sharp">edit</span>
-            </button>
-            <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
-              <span class="material-icons-sharp">done</span>
-            </button>
-            <button type="button" class="reminder-icon-button danger" (click)="remove(reminder)" title="Удалить" aria-label="Удалить">
-              <span class="material-icons-sharp">delete</span>
-            </button>
+            @if (isRecoveryCompletionReminder(reminder)) {
+              <button
+                type="button"
+                class="reminder-client-notified-button"
+                (click)="notifyRecoveryClient(reminder)"
+                [disabled]="isRecoveryNotificationSaving(reminder) || !canNotifyRecoveryClient(reminder)"
+                title="Клиент уведомлен"
+              >
+                Клиент уведомлен
+              </button>
+            } @else if (isBadReviewReminder(reminder)) {
+              @if (hasPaymentCopyText(reminder)) {
+                <button
+                  type="button"
+                  class="reminder-payment-button"
+                  (click)="copyReminderPayment(reminder)"
+                  [disabled]="isPaymentCopying(reminder)"
+                  title="Скопировать счет"
+                >
+                  счет
+                </button>
+              }
+              @if (isBadReviewOrderReadyReminder(reminder)) {
+                <button
+                  type="button"
+                  class="reminder-ban-button"
+                  (click)="moveBadReviewOrderToBan(reminder)"
+                  [disabled]="isBadReviewBanSaving(reminder)"
+                  title="Перевести заказ в Бан"
+                >
+                  В Бан
+                </button>
+              } @else {
+                <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+                  <span class="material-icons-sharp">done</span>
+                </button>
+              }
+            } @else {
+              <button type="button" class="reminder-icon-button" (click)="startEdit(reminder)" title="Редактировать" aria-label="Редактировать">
+                <span class="material-icons-sharp">edit</span>
+              </button>
+              <button type="button" class="reminder-icon-button done" (click)="complete(reminder)" title="Готово" aria-label="Готово">
+                <span class="material-icons-sharp">done</span>
+              </button>
+              <button type="button" class="reminder-icon-button danger" (click)="remove(reminder)" title="Удалить" aria-label="Удалить">
+                <span class="material-icons-sharp">delete</span>
+              </button>
+            }
           </div>
         </article>
       } @empty {

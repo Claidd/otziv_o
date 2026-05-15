@@ -7,6 +7,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,9 @@ class OrderDeletionServiceTest {
     @Mock
     private ReviewService reviewService;
 
+    @Mock
+    private EntityManager entityManager;
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
@@ -63,10 +67,12 @@ class OrderDeletionServiceTest {
         boolean result = service.deleteOrder(10L, principal);
 
         assertTrue(result);
-        InOrder inOrder = inOrder(reviewService, orderDetailsService, orderRepository);
+        InOrder inOrder = inOrder(reviewService, orderDetailsService, entityManager, orderRepository);
         inOrder.verify(reviewService).deleteAllByIdIn(List.of(1L, 2L));
         inOrder.verify(orderDetailsService).deleteAllByOrderId(10L);
-        inOrder.verify(orderRepository).delete(order);
+        inOrder.verify(entityManager).flush();
+        inOrder.verify(entityManager).clear();
+        inOrder.verify(orderRepository).deleteById(10L);
     }
 
     @Test
@@ -82,24 +88,46 @@ class OrderDeletionServiceTest {
 
         assertTrue(result);
         verify(orderDetailsService).deleteAllByOrderId(13L);
-        verify(orderRepository).delete(order);
+        verify(entityManager).flush();
+        verify(entityManager).clear();
+        verify(orderRepository).deleteById(13L);
         verifyNoInteractions(reviewService);
     }
 
     @Test
-    void managerCannotDeleteNonNewOrder() {
+    void managerCanDeleteCorrectionOrder() {
         OrderDeletionService service = service();
-        Order order = order(11L, "Публикация");
+        Order order = order(11L, "Коррекция");
 
-        authenticateWithRole("ROLE_MANAGER");
+        authenticateWithRole("ROLE_manager");
         when(orderRepository.findById(11L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(11L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(11L, () -> "manager");
 
-        assertFalse(result);
-        verify(orderDetailsService, never()).findByOrderId(11L);
+        assertTrue(result);
+        verify(orderDetailsService).deleteAllByOrderId(11L);
         verifyNoInteractions(reviewService);
-        verify(orderRepository, never()).delete(order);
+        verify(entityManager).flush();
+        verify(entityManager).clear();
+        verify(orderRepository).deleteById(11L);
+    }
+
+    @Test
+    void managerCannotDeleteApprovedOrder() {
+        OrderDeletionService service = service();
+        Order order = order(14L, "Публикация");
+
+        authenticateWithRole("ROLE_MANAGER");
+        when(orderRepository.findById(14L)).thenReturn(Optional.of(order));
+
+        boolean result = service.deleteOrder(14L, () -> "manager");
+
+        assertFalse(result);
+        verify(orderDetailsService, never()).findByOrderId(14L);
+        verifyNoInteractions(entityManager);
+        verifyNoInteractions(reviewService);
+        verify(orderRepository, never()).deleteById(14L);
     }
 
     @Test
@@ -122,7 +150,9 @@ class OrderDeletionServiceTest {
 
         assertTrue(result);
         verify(orderDetailsService).deleteAllByOrderId(12L);
-        verify(orderRepository).delete(order);
+        verify(entityManager).flush();
+        verify(entityManager).clear();
+        verify(orderRepository).deleteById(12L);
         verifyNoInteractions(reviewService);
     }
 
@@ -131,7 +161,8 @@ class OrderDeletionServiceTest {
                 orderRepository,
                 orderDetailsService,
                 reviewService,
-                new OrderDeletionPolicy()
+                new OrderDeletionPolicy(),
+                entityManager
         );
     }
 

@@ -1,9 +1,13 @@
 :host {
   display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chart-card {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
   border-radius: var(--otziv-card-radius);
   padding: 1.2rem;
@@ -58,6 +62,8 @@ h3 {
 .bar-chart-frame {
   display: block;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .y-axis {
@@ -80,6 +86,8 @@ h3 {
 
 .bar-chart {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   grid-auto-flow: column;
   grid-auto-columns: minmax(1.2rem, 1fr);
   height: 16.5rem;

@@ -189,6 +189,7 @@ describe('ManagerOrderCardComponent', () => {
     expect(render({ status: 'Публикация' }).classList.contains('card-tone--publication')).toBe(true);
     expect(render({ status: 'Опубликовано' }).classList.contains('card-tone--success')).toBe(true);
     expect(render({ status: 'Не оплачено' }).classList.contains('card-tone--bad')).toBe(true);
+    expect(render({ status: 'Бан' }).classList.contains('card-tone--bad')).toBe(true);
 
     const waitingArticle = render({ status: 'Коррекция', waitingForClient: true });
     expect(waitingArticle.classList.contains('waiting-client')).toBe(true);

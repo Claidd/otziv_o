@@ -23,7 +23,11 @@ public interface BadReviewTaskService {
 
     BadReviewTask completeTask(Long taskId);
 
+    BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate);
+
     BadReviewTask cancelTask(Long taskId);
+
+    void deleteOrderReadyReminder(Order order);
 
     BadReviewTask changeTaskBot(Long taskId);
 

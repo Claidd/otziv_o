@@ -6,6 +6,16 @@ import { appEnvironment } from '../core/app-environment';
 
 export type PersonalReminderMode = 'none' | 'datetime' | 'timer';
 
+export const RECOVERY_CLIENT_NOTIFIED_EVENT = 'review-recovery-client-notified';
+export const REVIEW_RECOVERY_BATCH_SOURCE = 'REVIEW_RECOVERY_BATCH';
+export const BAD_REVIEW_TASK_SOURCE = 'BAD_REVIEW_TASK';
+export const BAD_REVIEW_ORDER_READY_SOURCE = 'BAD_REVIEW_ORDER_READY';
+
+export type RecoveryClientNotifiedDetail = {
+  orderId: number;
+  batchId: number;
+};
+
 export type PersonalReminder = {
   id: number;
   title: string;
@@ -13,6 +23,10 @@ export type PersonalReminder = {
   reminderMode: PersonalReminderMode;
   remindAt: string | null;
   timerMinutes: number | null;
+  sourceType?: string | null;
+  sourceId?: number | null;
+  sourceOrderId?: number | null;
+  paymentCopyText?: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -44,6 +58,9 @@ export class PersonalRemindersService implements OnDestroy {
   private readonly tickTimer: ReturnType<typeof setInterval> | null = typeof window === 'undefined'
     ? null
     : window.setInterval(() => this.now.set(Date.now()), 15_000);
+  private readonly recoveryClientNotifiedHandler = typeof window === 'undefined'
+    ? null
+    : (event: Event) => this.handleRecoveryClientNotified(event);
   private loaded = false;
   private lastDueToastKey = '';
 
@@ -67,7 +84,7 @@ export class PersonalRemindersService implements OnDestroy {
 
     return this.activeReminders().filter((reminder) => {
       if (!reminder.remindAt) {
-        return false;
+        return this.isImplicitlyDue(reminder);
       }
 
       const dueAt = Date.parse(reminder.remindAt);
@@ -76,6 +93,10 @@ export class PersonalRemindersService implements OnDestroy {
   });
 
   constructor() {
+    if (this.recoveryClientNotifiedHandler) {
+      window.addEventListener(RECOVERY_CLIENT_NOTIFIED_EVENT, this.recoveryClientNotifiedHandler);
+    }
+
     effect(() => {
       if (this.authenticated()) {
         return;
@@ -89,6 +110,10 @@ export class PersonalRemindersService implements OnDestroy {
   ngOnDestroy(): void {
     if (this.tickTimer) {
       window.clearInterval(this.tickTimer);
+    }
+
+    if (this.recoveryClientNotifiedHandler) {
+      window.removeEventListener(RECOVERY_CLIENT_NOTIFIED_EVENT, this.recoveryClientNotifiedHandler);
     }
   }
 
@@ -144,6 +169,17 @@ export class PersonalRemindersService implements OnDestroy {
         this.reminders.update((reminders) => reminders.filter((reminder) => reminder.id !== id));
       })
     );
+  }
+
+  dispatchRecoveryClientNotified(detail: RecoveryClientNotifiedDetail): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent<RecoveryClientNotifiedDetail>(
+      RECOVERY_CLIENT_NOTIFIED_EVENT,
+      { detail }
+    ));
   }
 
   claimDueToast(key: string): boolean {
@@ -244,10 +280,36 @@ export class PersonalRemindersService implements OnDestroy {
 
   private dueRank(reminder: PersonalReminder, now: number): number {
     if (!reminder.remindAt) {
-      return 2;
+      return this.isImplicitlyDue(reminder) ? 0 : 2;
     }
 
     const dueAt = Date.parse(reminder.remindAt);
     return Number.isFinite(dueAt) && dueAt <= now ? 0 : 1;
+  }
+
+  private isImplicitlyDue(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
+      || reminder.sourceType === BAD_REVIEW_TASK_SOURCE
+      || reminder.sourceType === BAD_REVIEW_ORDER_READY_SOURCE
+      || reminder.title.trim().toLowerCase().startsWith('восстановление завершено')
+      || reminder.title.trim().toLowerCase().startsWith('плохой отзыв выполнен')
+      || reminder.title.trim().toLowerCase().startsWith('плохие отзывы завершены');
+  }
+
+  private handleRecoveryClientNotified(event: Event): void {
+    const detail = (event as CustomEvent<RecoveryClientNotifiedDetail>).detail;
+    if (!detail?.orderId || !detail.batchId) {
+      return;
+    }
+
+    this.reminders.update((reminders) => reminders.filter((reminder) => {
+      const sameBatch = reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
+        && reminder.sourceId === detail.batchId;
+      const legacySameOrder = reminder.sourceType !== REVIEW_RECOVERY_BATCH_SOURCE
+        && reminder.title.trim().toLowerCase().startsWith('восстановление завершено')
+        && reminder.text.includes(`#${detail.orderId}`);
+
+      return !sameBatch && !legacySameOrder;
+    }));
   }
 }

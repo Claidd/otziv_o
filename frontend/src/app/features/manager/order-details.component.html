@@ -331,8 +331,15 @@
               <button type="button" (click)="copyReviewField(review, 'botPassword')">
                 {{ copied() === review.id + '-botPassword' ? 'готово' : 'пароль' }}
               </button>
-              <button type="button" (click)="changeReviewText(review)" [disabled]="isMutating('text-' + review.id)">
-                {{ isMutating('text-' + review.id) ? '...' : 'вк' }}
+              <button
+                type="button"
+                class="recovery-action"
+                [class.recovery-action--planned]="!!recoveryTaskForReview(review)"
+                (click)="createRecoveryTask(review)"
+                [disabled]="isMutating('recovery-create-' + review.id) || !!recoveryTaskForReview(review)"
+                [title]="recoveryTaskForReview(review) ? 'Задача восстановления уже создана' : 'Создать задачу восстановления'"
+              >
+                {{ recoveryActionLabel(review) }}
               </button>
               <button type="button" (click)="copyReviewField(review, 'text')">
                 {{ copied() === review.id + '-text' ? 'готово' : 'текст' }}
@@ -487,35 +494,186 @@
       }
 
       <section class="mobile-order-details-side" aria-label="Сводка заказа">
-        @if ((details.badReviewSummary?.total || 0) > 0) {
-          <article class="bad-review-task-list">
-            <h2>Изменение оценок</h2>
-            @for (task of details.badReviewTasks || []; track task.id) {
+        @if (badReviewTasks().length > 0) {
+          <details class="task-foldout bad-review-task-list">
+            <summary>
+              <span>Изменение оценок</span>
+              <small>{{ badReviewTasks().length }}</small>
+            </summary>
+            @for (task of badReviewTasks(); track task.id) {
               <div
                 class="bad-review-task-row"
                 [class.bad-review-task-row--done]="task.statusCode === 'DONE'"
                 [class.bad-review-task-row--new]="task.statusCode === 'NEW'"
                 [class.bad-review-task-row--canceled]="task.statusCode === 'CANCELED'"
               >
-                <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
-                <span>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }} · {{ badReviewTaskState(details, task) }}</span>
-                <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
-                <small>{{ badReviewTaskDateLabel(task) }}</small>
-                <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
-                @if (canCancelBadReviewTask(details, task)) {
+                <header class="bad-review-task-head">
+                  <div>
+                    <strong>Задача #{{ task.id }}</strong>
+                    <span>отзыв #{{ task.sourceReviewId || '-' }}</span>
+                  </div>
+                  <b>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }}</b>
+                </header>
+                <div class="bad-review-task-meta">
+                  <span>{{ badReviewTaskState(details, task) }}</span>
+                  <span>{{ task.workerFio || '-' }}</span>
+                  <span>{{ task.botFio || '-' }}</span>
+                </div>
+                <div class="bad-review-task-date-actions">
+                  <label class="bad-review-task-date-label">
+                    <span>План смены</span>
+                    <input
+                      type="date"
+                      [disabled]="!canEditBadReviewTask(task)"
+                      [ngModel]="badReviewTaskDateValue(task)"
+                      (ngModelChange)="setBadReviewTaskDate(task, $event)"
+                      aria-label="Плановая дата смены оценки"
+                    >
+                  </label>
                   <button
                     type="button"
-                    (click)="cancelBadReviewTask(task)"
-                    [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                    class="bad-review-task-icon-action bad-review-task-icon-action--save"
+                    (click)="saveBadReviewTask(task)"
+                    [disabled]="!canEditBadReviewTask(task) || !isBadReviewTaskChanged(task) || isMutating('bad-task-save-' + task.id)"
+                    title="Сохранить задачу"
                   >
-                    {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                    <span class="material-icons-sharp">{{ isBadReviewTaskSaved(task) ? 'check' : 'save' }}</span>
                   </button>
+                </div>
+                @if (task.completedDate) {
+                  <small>сменил: {{ task.completedDate }}</small>
+                }
+                <textarea
+                  class="bad-review-task-text"
+                  [readonly]="!canEditBadReviewTask(task)"
+                  [ngModel]="badReviewTaskTextValue(task)"
+                  (ngModelChange)="setBadReviewTaskText(task, $event)"
+                  aria-label="Текст плохой задачи"
+                ></textarea>
+                <div class="bad-review-task-copy-actions">
+                  <button
+                    type="button"
+                    class="bad-review-task-action bad-review-task-action--copy"
+                    (click)="copyBadReviewTaskField(task, 'botLogin')"
+                    [disabled]="!(task.botLogin || '').trim()"
+                  >
+                    {{ copied() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="bad-review-task-action bad-review-task-action--copy"
+                    (click)="copyBadReviewTaskField(task, 'botPassword')"
+                    [disabled]="!(task.botPassword || '').trim()"
+                  >
+                    {{ copied() === badReviewTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="bad-review-task-action bad-review-task-action--bot"
+                    (click)="changeBadReviewTaskBot(task)"
+                    [disabled]="!canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                  >
+                    {{ isMutating('bad-task-change-bot-' + task.id) ? '...' : 'смена' }}
+                  </button>
+                </div>
+                <footer class="bad-review-task-footer">
+                  <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+                  @if (canCompleteBadReviewTask(task)) {
+                    <button
+                      type="button"
+                      class="bad-review-task-action bad-review-task-action--complete"
+                      (click)="completeBadReviewTask(task)"
+                      [disabled]="isMutating('bad-task-complete-' + task.id)"
+                    >
+                      {{ isMutating('bad-task-complete-' + task.id) ? 'Отмечаю...' : 'Сменил' }}
+                    </button>
+                  } @else if (canCancelBadReviewTask(details, task)) {
+                    <button
+                      type="button"
+                      class="bad-review-task-action bad-review-task-action--danger"
+                      (click)="cancelBadReviewTask(task)"
+                      [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                    >
+                      {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                    </button>
+                  } @else if (task.statusCode === 'DONE') {
+                    <span class="bad-review-task-status-pill bad-review-task-status-pill--done">Сменил</span>
+                  } @else {
+                    <em>{{ badReviewTaskState(details, task) }}</em>
+                  }
+                </footer>
+              </div>
+            }
+          </details>
+        }
+
+        @if (recoveryTasks().length > 0) {
+          <details class="task-foldout recovery-task-list">
+            <summary>
+              <span>Восстановление отзывов</span>
+              <small>{{ recoveryTasks().length }}</small>
+            </summary>
+            @for (batch of recoveryBatchesToNotify(); track batch.id) {
+              <div class="recovery-ready-banner">
+                <span>Все восстановления выполнены. Сообщите клиенту.</span>
+                <button
+                  type="button"
+                  (click)="markRecoveryClientNotified(batch)"
+                  [disabled]="isMutating('recovery-notified-' + batch.id)"
+                >
+                  {{ isMutating('recovery-notified-' + batch.id) ? 'Скрываю...' : 'Клиент уведомлен' }}
+                </button>
+              </div>
+            }
+            @for (task of recoveryTasks(); track task.id) {
+              <div
+                class="recovery-task-row"
+                [class.recovery-task-row--done]="task.statusCode === 'DONE'"
+              >
+                <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
+                <small>{{ task.status || 'В работе' }} · {{ recoveryTaskDateLabel(task) }}</small>
+                <textarea
+                  [readonly]="!canEditRecoveryTask(task)"
+                  [ngModel]="recoveryTaskTextValue(task)"
+                  (ngModelChange)="setRecoveryTaskText(task, $event)"
+                  aria-label="Текст восстановления"
+                ></textarea>
+                <label class="recovery-date-label">
+                  <span>Дата</span>
+                  <input
+                    type="date"
+                    [disabled]="!canEditRecoveryTask(task)"
+                    [ngModel]="recoveryTaskDateValue(task)"
+                    (ngModelChange)="setRecoveryTaskDate(task, $event)"
+                  >
+                </label>
+                <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
+                @if (canEditRecoveryTask(task)) {
+                  <div class="recovery-task-actions">
+                    <button
+                      type="button"
+                      class="save"
+                      (click)="saveRecoveryTask(task)"
+                      [disabled]="isMutating('recovery-save-' + task.id) || !isRecoveryTaskChanged(task)"
+                      title="Сохранить"
+                    >
+                      <span class="material-icons-sharp">{{ isRecoveryTaskSaved(task) ? 'check' : 'save' }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="complete"
+                      (click)="completeRecoveryTask(task)"
+                      [disabled]="isMutating('recovery-complete-' + task.id)"
+                    >
+                      {{ isMutating('recovery-complete-' + task.id) ? 'Отмечаю...' : 'Восстановил' }}
+                    </button>
+                  </div>
                 } @else {
-                  <em>{{ badReviewTaskState(details, task) }}</em>
+                  <em>{{ task.status || 'Готово' }}</em>
                 }
               </div>
             }
-          </article>
+          </details>
         }
 
         <article class="side-note-card">
@@ -613,35 +771,186 @@
 
   <section admin-right-content class="order-details-side">
     @if (details(); as details) {
-      @if ((details.badReviewSummary?.total || 0) > 0) {
-        <article class="bad-review-task-list">
-          <h2>Изменение оценок</h2>
-          @for (task of details.badReviewTasks || []; track task.id) {
+      @if (badReviewTasks().length > 0) {
+        <details class="task-foldout bad-review-task-list">
+          <summary>
+            <span>Изменение оценок</span>
+            <small>{{ badReviewTasks().length }}</small>
+          </summary>
+          @for (task of badReviewTasks(); track task.id) {
             <div
               class="bad-review-task-row"
               [class.bad-review-task-row--done]="task.statusCode === 'DONE'"
               [class.bad-review-task-row--new]="task.statusCode === 'NEW'"
               [class.bad-review-task-row--canceled]="task.statusCode === 'CANCELED'"
             >
-              <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
-              <span>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }} · {{ badReviewTaskState(details, task) }}</span>
-              <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
-              <small>{{ badReviewTaskDateLabel(task) }}</small>
-              <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
-              @if (canCancelBadReviewTask(details, task)) {
+              <header class="bad-review-task-head">
+                <div>
+                  <strong>Задача #{{ task.id }}</strong>
+                  <span>отзыв #{{ task.sourceReviewId || '-' }}</span>
+                </div>
+                <b>{{ task.originalRating || 5 }} -> {{ task.targetRating || 2 }}</b>
+              </header>
+              <div class="bad-review-task-meta">
+                <span>{{ badReviewTaskState(details, task) }}</span>
+                <span>{{ task.workerFio || '-' }}</span>
+                <span>{{ task.botFio || '-' }}</span>
+              </div>
+              <div class="bad-review-task-date-actions">
+                <label class="bad-review-task-date-label">
+                  <span>План смены</span>
+                  <input
+                    type="date"
+                    [disabled]="!canEditBadReviewTask(task)"
+                    [ngModel]="badReviewTaskDateValue(task)"
+                    (ngModelChange)="setBadReviewTaskDate(task, $event)"
+                    aria-label="Плановая дата смены оценки"
+                  >
+                </label>
                 <button
                   type="button"
-                  (click)="cancelBadReviewTask(task)"
-                  [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                  class="bad-review-task-icon-action bad-review-task-icon-action--save"
+                  (click)="saveBadReviewTask(task)"
+                  [disabled]="!canEditBadReviewTask(task) || !isBadReviewTaskChanged(task) || isMutating('bad-task-save-' + task.id)"
+                  title="Сохранить задачу"
                 >
-                  {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                  <span class="material-icons-sharp">{{ isBadReviewTaskSaved(task) ? 'check' : 'save' }}</span>
                 </button>
+              </div>
+              @if (task.completedDate) {
+                <small>сменил: {{ task.completedDate }}</small>
+              }
+              <textarea
+                class="bad-review-task-text"
+                [readonly]="!canEditBadReviewTask(task)"
+                [ngModel]="badReviewTaskTextValue(task)"
+                (ngModelChange)="setBadReviewTaskText(task, $event)"
+                aria-label="Текст плохой задачи"
+              ></textarea>
+              <div class="bad-review-task-copy-actions">
+                <button
+                  type="button"
+                  class="bad-review-task-action bad-review-task-action--copy"
+                  (click)="copyBadReviewTaskField(task, 'botLogin')"
+                  [disabled]="!(task.botLogin || '').trim()"
+                >
+                  {{ copied() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
+                </button>
+                <button
+                  type="button"
+                  class="bad-review-task-action bad-review-task-action--copy"
+                  (click)="copyBadReviewTaskField(task, 'botPassword')"
+                  [disabled]="!(task.botPassword || '').trim()"
+                >
+                  {{ copied() === badReviewTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
+                </button>
+                <button
+                  type="button"
+                  class="bad-review-task-action bad-review-task-action--bot"
+                  (click)="changeBadReviewTaskBot(task)"
+                  [disabled]="!canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                >
+                  {{ isMutating('bad-task-change-bot-' + task.id) ? '...' : 'смена' }}
+                </button>
+              </div>
+              <footer class="bad-review-task-footer">
+                <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+                @if (canCompleteBadReviewTask(task)) {
+                  <button
+                    type="button"
+                    class="bad-review-task-action bad-review-task-action--complete"
+                    (click)="completeBadReviewTask(task)"
+                    [disabled]="isMutating('bad-task-complete-' + task.id)"
+                  >
+                    {{ isMutating('bad-task-complete-' + task.id) ? 'Отмечаю...' : 'Сменил' }}
+                  </button>
+                } @else if (canCancelBadReviewTask(details, task)) {
+                  <button
+                    type="button"
+                    class="bad-review-task-action bad-review-task-action--danger"
+                    (click)="cancelBadReviewTask(task)"
+                    [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                  >
+                    {{ isMutating('bad-task-cancel-' + task.id) ? 'Убираю...' : 'Убрать из счета' }}
+                  </button>
+                } @else if (task.statusCode === 'DONE') {
+                  <span class="bad-review-task-status-pill bad-review-task-status-pill--done">Сменил</span>
+                } @else {
+                  <em>{{ badReviewTaskState(details, task) }}</em>
+                }
+              </footer>
+            </div>
+          }
+        </details>
+      }
+
+      @if (recoveryTasks().length > 0) {
+        <details class="task-foldout recovery-task-list">
+          <summary>
+            <span>Восстановление отзывов</span>
+            <small>{{ recoveryTasks().length }}</small>
+          </summary>
+          @for (batch of recoveryBatchesToNotify(); track batch.id) {
+            <div class="recovery-ready-banner">
+              <span>Все восстановления выполнены. Сообщите клиенту.</span>
+              <button
+                type="button"
+                (click)="markRecoveryClientNotified(batch)"
+                [disabled]="isMutating('recovery-notified-' + batch.id)"
+              >
+                {{ isMutating('recovery-notified-' + batch.id) ? 'Скрываю...' : 'Клиент уведомлен' }}
+              </button>
+            </div>
+          }
+          @for (task of recoveryTasks(); track task.id) {
+            <div
+              class="recovery-task-row"
+              [class.recovery-task-row--done]="task.statusCode === 'DONE'"
+            >
+              <span>Задача #{{ task.id }} · отзыв #{{ task.sourceReviewId || '-' }}</span>
+              <small>{{ task.status || 'В работе' }} · {{ recoveryTaskDateLabel(task) }}</small>
+              <textarea
+                [readonly]="!canEditRecoveryTask(task)"
+                [ngModel]="recoveryTaskTextValue(task)"
+                (ngModelChange)="setRecoveryTaskText(task, $event)"
+                aria-label="Текст восстановления"
+              ></textarea>
+              <label class="recovery-date-label">
+                <span>Дата</span>
+                <input
+                  type="date"
+                  [disabled]="!canEditRecoveryTask(task)"
+                  [ngModel]="recoveryTaskDateValue(task)"
+                  (ngModelChange)="setRecoveryTaskDate(task, $event)"
+                >
+              </label>
+              <small>{{ task.workerFio || '-' }} · {{ task.botFio || '-' }}</small>
+              @if (canEditRecoveryTask(task)) {
+                <div class="recovery-task-actions">
+                  <button
+                    type="button"
+                    class="save"
+                    (click)="saveRecoveryTask(task)"
+                    [disabled]="isMutating('recovery-save-' + task.id) || !isRecoveryTaskChanged(task)"
+                    title="Сохранить"
+                  >
+                    <span class="material-icons-sharp">{{ isRecoveryTaskSaved(task) ? 'check' : 'save' }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="complete"
+                    (click)="completeRecoveryTask(task)"
+                    [disabled]="isMutating('recovery-complete-' + task.id)"
+                  >
+                    {{ isMutating('recovery-complete-' + task.id) ? 'Отмечаю...' : 'Восстановил' }}
+                  </button>
+                </div>
               } @else {
-                <em>{{ badReviewTaskState(details, task) }}</em>
+                <em>{{ task.status || 'Готово' }}</em>
               }
             </div>
           }
-        </article>
+        </details>
       }
 
       <article class="side-note-card">

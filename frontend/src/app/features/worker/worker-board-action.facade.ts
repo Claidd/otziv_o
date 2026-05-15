@@ -18,6 +18,9 @@ type WorkerBoardActionApi = Pick<
   | 'changeReviewBot'
   | 'deactivateReviewBot'
   | 'publishReview'
+  | 'completeRecoveryTask'
+  | 'changeRecoveryTaskBot'
+  | 'deactivateRecoveryTaskBot'
   | 'completeBadReviewTask'
   | 'changeBadReviewTaskBot'
   | 'deactivateBadReviewTaskBot'
@@ -88,7 +91,9 @@ export class WorkerBoardActionFacade {
     const oldBotId = review.botId ?? null;
     this.deps.mutationKey.set(key);
 
-    const request = this.isBadTask(review) && review.badTaskId
+    const request = this.isRecoveryTask(review) && review.recoveryTaskId
+      ? this.deps.workerApi.changeRecoveryTaskBot(review.recoveryTaskId)
+      : this.isBadTask(review) && review.badTaskId
       ? this.deps.workerApi.changeBadReviewTaskBot(review.badTaskId)
       : this.deps.workerApi.changeReviewBot(review.id);
 
@@ -121,7 +126,9 @@ export class WorkerBoardActionFacade {
     const key = `review-${review.id}-block-bot`;
     this.deps.mutationKey.set(key);
 
-    const request = this.isBadTask(review) && review.badTaskId
+    const request = this.isRecoveryTask(review) && review.recoveryTaskId
+      ? this.deps.workerApi.deactivateRecoveryTaskBot(review.recoveryTaskId, review.botId)
+      : this.isBadTask(review) && review.badTaskId
       ? this.deps.workerApi.deactivateBadReviewTaskBot(review.badTaskId, review.botId)
       : this.deps.workerApi.deactivateReviewBot(review.id, review.botId);
 
@@ -139,6 +146,11 @@ export class WorkerBoardActionFacade {
   }
 
   markReviewDone(review: WorkerReviewItem): void {
+    if (this.isRecoveryTask(review)) {
+      this.markRecoveryTaskDone(review);
+      return;
+    }
+
     if (this.isBadTask(review)) {
       this.markBadReviewTaskDone(review);
       return;
@@ -178,7 +190,15 @@ export class WorkerBoardActionFacade {
     return !!review.badTask;
   }
 
+  isRecoveryTask(review: WorkerReviewItem): boolean {
+    return !!review.recoveryTask;
+  }
+
   reviewActionTitle(review: WorkerReviewItem): string {
+    if (this.isRecoveryTask(review) && review.recoveryTaskId) {
+      return `Восстановление #${review.recoveryTaskId}`;
+    }
+
     return this.isBadTask(review) && review.badTaskId
       ? `Плохая задача #${review.badTaskId}`
       : `Отзыв #${review.id}`;
@@ -218,6 +238,27 @@ export class WorkerBoardActionFacade {
       error: (err) => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Задача не выполнена', this.deps.errorMessage(err, 'Не удалось отметить изменение оценки'));
+      }
+    });
+  }
+
+  private markRecoveryTaskDone(review: WorkerReviewItem): void {
+    if (!review.recoveryTaskId) {
+      return;
+    }
+
+    const key = `review-${review.id}-publish`;
+    this.deps.mutationKey.set(key);
+
+    this.deps.workerApi.completeRecoveryTask(review.recoveryTaskId).subscribe({
+      next: () => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.success('Отзыв восстановлен', this.reviewActionTitle(review));
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error('Восстановление не выполнено', this.deps.errorMessage(err, 'Не удалось отметить восстановление'));
       }
     });
   }

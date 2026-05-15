@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -83,9 +84,9 @@ class OrderStatusTransitionServiceTest {
     private ReviewRepository reviewRepository;
 
     @Test
-    void paymentStatusDelegatesToTransactionService() throws Exception {
+    void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
         OrderStatusTransitionService service = service();
-        Order order = order(1L, "Новый");
+        Order order = order(1L, "Бан");
 
         when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
@@ -126,6 +127,61 @@ class OrderStatusTransitionServiceTest {
         InOrder inOrder = inOrder(orderRepository, badReviewTaskService);
         inOrder.verify(orderRepository).save(order);
         inOrder.verify(badReviewTaskService).createTasksForUnpaidOrder(order);
+    }
+
+    @Test
+    void banStatusRequiresNotPaidOrder() {
+        OrderStatusTransitionService service = service();
+        Order order = order(31L, "Напоминание");
+
+        when(orderRepository.findById(31L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(31L, "Бан")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Перевести заказ в Бан можно только из статуса \"Не оплачено\"", exception.getReason());
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void banStatusRequiresAllBadTasksDone() {
+        OrderStatusTransitionService service = service();
+        Order order = order(32L, "Не оплачено");
+
+        when(orderRepository.findById(32L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(32L))
+                .thenReturn(new BadReviewTaskSummary(2, 1, 1, 0, BigDecimal.valueOf(300), BigDecimal.valueOf(300)));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(32L, "Бан")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Сначала выполните все плохие задачи заказа", exception.getReason());
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void banStatusSavesOrderAndDeletesReadyReminderWhenBadTasksDone() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(33L, "Не оплачено");
+        OrderStatus ban = status("Бан");
+
+        when(orderRepository.findById(33L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(33L))
+                .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
+        when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
+
+        assertTrue(service.changeStatusForOrder(33L, "Бан"));
+
+        assertSame(ban, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
+        verify(badReviewTaskService).deleteOrderReadyReminder(order);
+        verify(orderRepository).save(order);
     }
 
     @Test

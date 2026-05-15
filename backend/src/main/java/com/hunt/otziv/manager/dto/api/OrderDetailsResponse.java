@@ -23,6 +23,7 @@ public record OrderDetailsResponse(
         String changed,
         List<ReviewDetailsResponse> reviews,
         List<BadReviewTaskDetailsResponse> badReviewTasks,
+        List<ReviewRecoveryTaskDetailsResponse> recoveryTasks,
         List<ProductOptionResponse> products,
         boolean canEditReviews,
         boolean canSendToCheck,

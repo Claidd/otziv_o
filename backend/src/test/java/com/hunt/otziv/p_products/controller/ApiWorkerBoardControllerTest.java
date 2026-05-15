@@ -17,6 +17,7 @@ import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -101,6 +102,9 @@ class ApiWorkerBoardControllerTest {
     private BadReviewTaskService badReviewTaskService;
 
     @Mock
+    private ReviewRecoveryTaskService reviewRecoveryTaskService;
+
+    @Mock
     private UserMetricSnapshotService metricSnapshotService;
 
     @Mock
@@ -142,6 +146,7 @@ class ApiWorkerBoardControllerTest {
                 workerService,
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 badReviewTaskService,
+                reviewRecoveryTaskService,
                 metricSnapshotService,
                 appSettingService,
                 workerFlowLockService
@@ -163,6 +168,7 @@ class ApiWorkerBoardControllerTest {
                 eq("WORKER")
         )).thenReturn(Map.of());
         lenient().when(badReviewTaskService.countDueTasksToWorker(eq(worker), any(LocalDate.class))).thenReturn(0);
+        lenient().when(reviewRecoveryTaskService.countDueTasksToWorker(eq(worker), any(LocalDate.class))).thenReturn(0);
         lenient().when(metricSnapshotService.deltas(
                 eq(principal),
                 eq(UserMetricSnapshotService.PAGE_WORKER),
@@ -181,7 +187,15 @@ class ApiWorkerBoardControllerTest {
                 eq(principal),
                 eq(""),
                 eq(0),
-                eq(10)
+                eq(10),
+                eq("desc")
+        )).thenReturn(emptyOrderPage());
+        lenient().when(orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByWorkerAll(
+                eq(principal),
+                eq(""),
+                eq(0),
+                eq(10),
+                eq("asc")
         )).thenReturn(emptyOrderPage());
         lenient().when(orderBoardQueryService.getAllOrderDTOAndKeywordByWorker(
                 any(Worker.class),
@@ -213,6 +227,12 @@ class ApiWorkerBoardControllerTest {
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(emptyBadTaskPage());
+        lenient().when(reviewRecoveryTaskService.getDueTasksToWorker(
+                eq(worker),
+                any(LocalDate.class),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
     }
 
     @Test
@@ -317,6 +337,28 @@ class ApiWorkerBoardControllerTest {
         assertEquals("bad", response.section());
         assertFalse(response.warning());
         verify(badReviewTaskService).getDueTasksToWorker(
+                eq(worker),
+                any(LocalDate.class),
+                eq(""),
+                pageableCaptor.capture()
+        );
+        Pageable pageable = pageableCaptor.getValue();
+        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
+        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
+        verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void workerCanOpenRecoveryTasksBeforePublication() {
+        when(orderService.countActionableOrdersByStatusToWorker(worker))
+                .thenReturn(Map.of("Новый", 3, "Коррекция", 2));
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("recovery");
+
+        assertEquals("recovery", response.section());
+        assertFalse(response.warning());
+        verify(reviewRecoveryTaskService).getDueTasksToWorker(
                 eq(worker),
                 any(LocalDate.class),
                 eq(""),
@@ -466,8 +508,16 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("all", response.section());
         assertFalse(response.warning());
-        verify(orderBoardQueryService).getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, "", 0, 10);
+        verify(orderBoardQueryService).getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, "", 0, 10, "desc");
         verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void workerAllPassesSortDirectionToBoardQuery() {
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("all", "asc");
+
+        assertEquals("all", response.section());
+        verify(orderBoardQueryService).getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, "", 0, 10, "asc");
     }
 
     @Test
@@ -543,6 +593,10 @@ class ApiWorkerBoardControllerTest {
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {
         return controller.getBoard(section, "", 0, 10, "desc", null, principal, workerAuth);
+    }
+
+    private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section, String sortDirection) {
+        return controller.getBoard(section, "", 0, 10, sortDirection, null, principal, workerAuth);
     }
 
     private Authentication auth(String role) {

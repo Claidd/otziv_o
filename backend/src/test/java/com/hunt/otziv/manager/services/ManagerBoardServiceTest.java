@@ -11,6 +11,7 @@ import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,9 @@ class ManagerBoardServiceTest {
     private BadReviewTaskService badReviewTaskService;
 
     @Mock
+    private ReviewRecoveryTaskService reviewRecoveryTaskService;
+
+    @Mock
     private UserMetricSnapshotService metricSnapshotService;
 
     @Spy
@@ -113,7 +117,7 @@ class ManagerBoardServiceTest {
         assertEquals(List.of(order), response.orders().content());
         assertEquals(1, response.orders().totalElements());
         assertEquals(List.of("promo"), response.promoTexts());
-        assertEquals(18, response.metrics().size());
+        assertEquals(20, response.metrics().size());
         assertEquals("Рабочие", response.metrics().stream()
                 .filter(metric -> "orders".equals(metric.section()) && "Все".equals(metric.status()))
                 .findFirst()

@@ -25,6 +25,14 @@ class ManagerPermissionServiceTest {
     }
 
     @Test
+    void hasRoleNormalizesAuthorityCase() {
+        Authentication authentication = authentication("ROLE_owner");
+
+        assertTrue(service.hasRole(authentication, "OWNER"));
+        assertTrue(service.hasAnyRole(authentication, "ADMIN", "OWNER"));
+    }
+
+    @Test
     void hasAnyRoleChecksEveryProvidedRole() {
         Authentication authentication = authentication("ROLE_MANAGER");
 

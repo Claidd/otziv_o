@@ -31,6 +31,7 @@ import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -187,11 +188,18 @@ public class SecurityConfig {
                 "/api/manager/orders/*/reviews/*/answer",
                 "/api/manager/orders/*/reviews/*/note"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.PUT, "/api/manager/orders/*/recovery-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.PUT, "/api/manager/orders/*/bad-review-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(
                 HttpMethod.POST,
                 "/api/manager/orders/*/status",
-                "/api/manager/orders/*/reviews"
+                "/api/manager/orders/*/reviews",
+                "/api/manager/orders/*/bad-review-tasks/*/complete",
+                "/api/manager/orders/*/bad-review-tasks/*/change-bot",
+                "/api/manager/orders/*/reviews/*/recovery-tasks",
+                "/api/manager/orders/*/recovery-tasks/*/complete"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/recovery-batches/*/client-notified").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/reviews/*/photo").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(
                 HttpMethod.POST,
@@ -199,6 +207,7 @@ public class SecurityConfig {
                 "/api/manager/orders/*/reviews/*/new-account",
                 "/api/manager/orders/*/reviews/*/bots/*/deactivate"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*").authenticated();
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
@@ -322,7 +331,7 @@ public class SecurityConfig {
 
     private GrantedAuthority toRoleAuthority(String role) {
         String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
-        return new SimpleGrantedAuthority(authority);
+        return new SimpleGrantedAuthority(authority.toUpperCase(Locale.ROOT));
     }
 
 }

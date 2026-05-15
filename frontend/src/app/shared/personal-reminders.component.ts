@@ -1,13 +1,18 @@
 import { Component, Input, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  BAD_REVIEW_ORDER_READY_SOURCE,
+  BAD_REVIEW_TASK_SOURCE,
   PersonalReminder,
   PersonalReminderInput,
   PersonalReminderMode,
-  PersonalRemindersService
+  PersonalRemindersService,
+  REVIEW_RECOVERY_BATCH_SOURCE
 } from './personal-reminders.service';
 import { apiErrorMessage } from './api-error-message';
 import { ToastService } from './toast.service';
+import type { ToastAction } from './toast.service';
+import { ManagerApi } from '../core/manager.api';
 
 type PersonalReminderView = 'full' | 'alert' | 'list';
 
@@ -19,6 +24,8 @@ type PersonalReminderDraft = {
   timerMinutes: number;
 };
 
+const CHAT_LINE_PATTERN = /(^|\n)\s*Чат:\s*(https?:\/\/\S+|tel:\S+)/i;
+
 @Component({
   selector: 'app-personal-reminders',
   imports: [FormsModule],
@@ -28,6 +35,7 @@ type PersonalReminderDraft = {
 export class PersonalRemindersComponent implements OnInit {
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly toastService = inject(ToastService);
+  private readonly managerApi = inject(ManagerApi);
 
   readonly view = signal<PersonalReminderView>('full');
   readonly initialized = signal(false);
@@ -35,6 +43,9 @@ export class PersonalRemindersComponent implements OnInit {
   readonly editingId = signal<number | null>(null);
   readonly expandedReminderId = signal<number | null>(null);
   readonly saving = signal(false);
+  readonly notifyingRecoveryReminderId = signal<number | null>(null);
+  readonly copyingPaymentReminderId = signal<number | null>(null);
+  readonly banningBadReviewReminderId = signal<number | null>(null);
   readonly draft = signal<PersonalReminderDraft>(this.emptyDraft());
 
   readonly authenticated = this.remindersService.authenticated;
@@ -85,7 +96,23 @@ export class PersonalRemindersComponent implements OnInit {
         return;
       }
 
-      this.toastService.info('Есть неоконченное дело', due[0].title);
+      const reminder = due[0];
+      const chatUrl = this.reminderChatUrl(reminder);
+      const actions: ToastAction[] = [];
+      if (chatUrl) {
+        actions.push({ label: 'Открыть чат', href: chatUrl });
+      }
+      if (this.hasPaymentCopyText(reminder)) {
+        actions.push({ label: 'счет', callback: () => void this.copyReminderPayment(reminder) });
+      }
+      if (this.isBadReviewOrderReadyReminder(reminder)) {
+        actions.push({ label: 'В Бан', callback: () => this.moveBadReviewOrderToBan(reminder) });
+      }
+      this.toastService.info(
+        'Есть неоконченное дело',
+        this.toastText(reminder),
+        actions.length ? actions : undefined
+      );
     });
   }
 
@@ -139,9 +166,85 @@ export class PersonalRemindersComponent implements OnInit {
   }
 
   complete(reminder: PersonalReminder): void {
+    if (this.isRecoveryCompletionReminder(reminder)) {
+      this.notifyRecoveryClient(reminder);
+      return;
+    }
+
     this.remindersService.complete(reminder.id).subscribe({
       next: () => this.toastService.success('Дело закрыто', reminder.title),
       error: (err) => this.toastService.error('Дело не закрыто', apiErrorMessage(err, 'Попробуйте еще раз'))
+    });
+  }
+
+  async copyReminderPayment(reminder: PersonalReminder): Promise<void> {
+    const text = this.reminderPaymentText(reminder);
+    if (!text) {
+      this.toastService.error('Счет не скопирован', 'В напоминании нет текста счета');
+      return;
+    }
+
+    this.copyingPaymentReminderId.set(reminder.id);
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toastService.success('Скопировано', 'Текст счета скопирован');
+    } catch {
+      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    } finally {
+      this.copyingPaymentReminderId.set(null);
+    }
+  }
+
+  moveBadReviewOrderToBan(reminder: PersonalReminder): void {
+    const orderId = reminder.sourceOrderId ?? this.recoveryOrderIdFromText(reminder);
+    if (!orderId || !this.isBadReviewOrderReadyReminder(reminder)) {
+      this.toastService.error('Заказ не переведен', 'Откройте детали заказа и измените статус там.');
+      return;
+    }
+
+    this.banningBadReviewReminderId.set(reminder.id);
+    this.managerApi.updateOrderStatus(orderId, 'Бан').subscribe({
+      next: () => {
+        this.remindersService.complete(reminder.id).subscribe({
+          next: () => {
+            this.banningBadReviewReminderId.set(null);
+            this.toastService.success('Заказ переведен в Бан', reminder.title);
+          },
+          error: (err) => {
+            this.banningBadReviewReminderId.set(null);
+            this.toastService.error('Напоминание не закрыто', apiErrorMessage(err, 'Обновите страницу'));
+          }
+        });
+      },
+      error: (err) => {
+        this.banningBadReviewReminderId.set(null);
+        this.toastService.error('Заказ не переведен', apiErrorMessage(err, 'Проверьте статус и плохие задачи'));
+      }
+    });
+  }
+
+  notifyRecoveryClient(reminder: PersonalReminder): void {
+    const batchId = reminder.sourceId;
+    const orderId = reminder.sourceOrderId ?? this.recoveryOrderIdFromText(reminder);
+    if (!batchId || !orderId) {
+      this.toastService.error(
+        'Не удалось отметить клиента',
+        'Откройте детали заказа и нажмите "Клиент уведомлен" там.'
+      );
+      return;
+    }
+
+    this.notifyingRecoveryReminderId.set(reminder.id);
+    this.managerApi.markRecoveryClientNotified(orderId, batchId).subscribe({
+      next: () => {
+        this.notifyingRecoveryReminderId.set(null);
+        this.remindersService.dispatchRecoveryClientNotified({ orderId, batchId });
+        this.toastService.success('Клиент уведомлен', reminder.title);
+      },
+      error: (err) => {
+        this.notifyingRecoveryReminderId.set(null);
+        this.toastService.error('Клиент не отмечен', apiErrorMessage(err, 'Попробуйте еще раз'));
+      }
     });
   }
 
@@ -175,11 +278,17 @@ export class PersonalRemindersComponent implements OnInit {
   }
 
   noteText(reminder: PersonalReminder): string {
-    return reminder.text || 'Без текста';
+    const text = (reminder.text || '').replace(CHAT_LINE_PATTERN, '$1').trim();
+    return text || 'Без текста';
   }
 
   fullNoteTitle(reminder: PersonalReminder): string {
     return `${reminder.title}\n${this.noteText(reminder)}`;
+  }
+
+  reminderChatUrl(reminder: PersonalReminder): string | null {
+    const match = (reminder.text || '').match(CHAT_LINE_PATTERN);
+    return match?.[2]?.trim() || null;
   }
 
   toggleExpanded(reminder: PersonalReminder): void {
@@ -192,6 +301,16 @@ export class PersonalRemindersComponent implements OnInit {
 
   reminderTimeLabel(reminder: PersonalReminder): string {
     if (!reminder.remindAt) {
+      if (this.isRecoveryCompletionReminder(reminder)) {
+        return 'Требует уведомить клиента';
+      }
+      if (this.isBadReviewOrderReadyReminder(reminder)) {
+        return 'Готово к решению по оплате';
+      }
+      if (this.isBadReviewTaskReminder(reminder)) {
+        return 'Требует отправить счет';
+      }
+
       return 'Без напоминания';
     }
 
@@ -223,7 +342,7 @@ export class PersonalRemindersComponent implements OnInit {
 
   isDue(reminder: PersonalReminder): boolean {
     if (!reminder.remindAt) {
-      return false;
+      return this.isRecoveryCompletionReminder(reminder) || this.isBadReviewReminder(reminder);
     }
 
     const dueAt = Date.parse(reminder.remindAt);
@@ -268,5 +387,61 @@ export class PersonalRemindersComponent implements OnInit {
     const date = new Date(Date.now() + minutes * 60_000);
     const timezoneOffset = date.getTimezoneOffset() * 60_000;
     return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  }
+
+  private toastText(reminder: PersonalReminder): string {
+    const text = `${reminder.title}. ${this.noteText(reminder)}`.replace(/\s+/g, ' ').trim();
+    return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
+  }
+
+  isRecoveryCompletionReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
+      || reminder.title.trim().toLowerCase().startsWith('восстановление завершено');
+  }
+
+  isBadReviewTaskReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === BAD_REVIEW_TASK_SOURCE
+      || reminder.title.trim().toLowerCase().startsWith('плохой отзыв выполнен');
+  }
+
+  isBadReviewOrderReadyReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === BAD_REVIEW_ORDER_READY_SOURCE
+      || reminder.title.trim().toLowerCase().startsWith('плохие отзывы завершены');
+  }
+
+  isBadReviewReminder(reminder: PersonalReminder): boolean {
+    return this.isBadReviewTaskReminder(reminder) || this.isBadReviewOrderReadyReminder(reminder);
+  }
+
+  hasPaymentCopyText(reminder: PersonalReminder): boolean {
+    return Boolean(this.reminderPaymentText(reminder));
+  }
+
+  reminderPaymentText(reminder: PersonalReminder): string {
+    return (reminder.paymentCopyText ?? '').trim();
+  }
+
+  isPaymentCopying(reminder: PersonalReminder): boolean {
+    return this.copyingPaymentReminderId() === reminder.id;
+  }
+
+  isBadReviewBanSaving(reminder: PersonalReminder): boolean {
+    return this.banningBadReviewReminderId() === reminder.id;
+  }
+
+  canNotifyRecoveryClient(reminder: PersonalReminder): boolean {
+    return this.isRecoveryCompletionReminder(reminder)
+      && Boolean(reminder.sourceId)
+      && Boolean(reminder.sourceOrderId ?? this.recoveryOrderIdFromText(reminder));
+  }
+
+  isRecoveryNotificationSaving(reminder: PersonalReminder): boolean {
+    return this.notifyingRecoveryReminderId() === reminder.id;
+  }
+
+  private recoveryOrderIdFromText(reminder: PersonalReminder): number | null {
+    const match = (reminder.text || '').match(/#(\d+)/);
+    const orderId = Number(match?.[1]);
+    return Number.isFinite(orderId) && orderId > 0 ? orderId : null;
   }
 }

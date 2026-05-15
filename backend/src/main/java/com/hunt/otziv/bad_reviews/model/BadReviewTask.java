@@ -54,6 +54,18 @@ public class BadReviewTask {
     @JoinColumn(name = "bad_review_task_bot")
     private Bot bot;
 
+    @Column(name = "bad_review_task_text", columnDefinition = "LONGTEXT")
+    private String taskText;
+
+    @Column(name = "bad_review_task_bot_login_snapshot")
+    private String botLoginSnapshot;
+
+    @Column(name = "bad_review_task_bot_password_snapshot")
+    private String botPasswordSnapshot;
+
+    @Column(name = "bad_review_task_bot_fio_snapshot")
+    private String botFioSnapshot;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "bad_review_task_status", nullable = false)
     private BadReviewTaskStatus status;

@@ -4,6 +4,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 @Service
 public class ManagerPermissionService {
 
@@ -12,9 +14,10 @@ public class ManagerPermissionService {
             return false;
         }
 
-        String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+        String authority = normalizeRole(role);
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
+                .map(this::normalizeRole)
                 .anyMatch(authority::equals);
     }
 
@@ -54,5 +57,15 @@ public class ManagerPermissionService {
         }
 
         return "anonymous";
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+
+        String trimmed = role.trim();
+        String authority = trimmed.startsWith("ROLE_") ? trimmed : "ROLE_" + trimmed;
+        return authority.toUpperCase(Locale.ROOT);
     }
 }

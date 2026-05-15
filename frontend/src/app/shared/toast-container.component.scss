@@ -90,15 +90,42 @@
   overflow-wrap: anywhere;
 }
 
-.toast-action {
-  display: inline-flex;
+.toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   margin-top: 0.35rem;
-  color: var(--toast-ink);
-  font-size: 0.8rem;
-  font-weight: 900;
 }
 
-.toast button {
+.toast-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  color: var(--toast-ink);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.toast-action-button.toast-action-button {
+  width: auto;
+  height: auto;
+  min-height: 1.45rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--toast-ink);
+  cursor: pointer;
+}
+
+.toast > button {
   display: grid;
   width: 1.75rem;
   height: 1.75rem;
@@ -111,12 +138,12 @@
   cursor: pointer;
 }
 
-.toast button:hover {
+.toast > button:hover {
   color: var(--toast-ink);
   background: rgba(255, 255, 255, 0.78);
 }
 
-.toast button span {
+.toast > button span {
   font-size: 1.1rem;
 }
 

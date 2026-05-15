@@ -1446,17 +1446,21 @@ app-order-details .review-edit-modal .review-save-action {
 
   app-admin-layout .admin-layout.admin-layout {
     display: block;
-    width: min(calc(100% - 1rem), 46rem);
+    width: min(100%, 46rem);
+    max-width: 100%;
+    min-width: 0;
+    padding-inline: 0.5rem;
     overflow-x: hidden;
   }
 
   app-admin-layout .admin-layout.admin-layout.sidebar-hidden {
     display: flex;
     flex-direction: column;
-    width: calc(100vw - 1rem);
+    width: min(100%, 46rem);
     max-width: 46rem;
     margin-right: auto;
     margin-left: auto;
+    padding-inline: 0.5rem;
   }
 
   app-admin-layout .admin-layout .admin-sidebar {
@@ -1480,6 +1484,8 @@ app-order-details .review-edit-modal .review-save-action {
     z-index: 1;
     flex: 0 0 auto;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
     flex-direction: row;
     margin-top: 0;
@@ -1536,6 +1542,8 @@ app-order-details .review-edit-modal .review-save-action {
   }
 
   app-admin-layout .admin-layout .admin-content {
+    min-width: 0;
+    max-width: 100%;
     padding-top: 0.65rem;
     overflow-x: hidden;
   }
@@ -1960,8 +1968,9 @@ app-order-details .review-edit-modal .review-save-action {
 }
 
 @media (max-width: 540px) {
-  app-admin-layout .admin-layout {
-    width: min(100% - 0.75rem, 28rem);
+  app-admin-layout .admin-layout.admin-layout {
+    width: min(100%, 28rem);
+    padding-inline: 0.375rem;
   }
 
   :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
@@ -2763,5 +2772,423 @@ app-reputation-ai .reputation-ai-side [data-tooltip]::before {
 app-reputation-ai .reputation-ai-side [data-tooltip].tooltip-open::after,
 app-reputation-ai .reputation-ai-side [data-tooltip].tooltip-open::before {
   transform: translateY(0);
+}
+
+app-order-details .task-foldout {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+app-order-details .task-foldout:not([open]) {
+  gap: 0;
+}
+
+app-order-details .task-foldout > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  min-height: 2.35rem;
+  border: 1px solid rgba(103, 116, 131, 0.16);
+  border-radius: 0.85rem;
+  padding: 0.45rem 0.55rem 0.45rem 0.75rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  font-family: var(--otziv-font-family);
+  font-weight: 900;
+  list-style: none;
+}
+
+app-order-details .task-foldout > summary::-webkit-details-marker {
+  display: none;
+}
+
+app-order-details .task-foldout > summary span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.95rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-order-details .task-foldout > summary small {
+  display: inline-flex;
+  min-width: 1.55rem;
+  min-height: 1.4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  color: #7d5f00;
+  background: #fff4c8;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+app-order-details .task-foldout > summary::after {
+  content: 'expand_more';
+  display: inline-grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--otziv-primary);
+  background: rgba(115, 128, 236, 0.1);
+  font-family: 'Material Icons Sharp';
+  font-size: 1.05rem;
+  font-weight: 400;
+  line-height: 1;
+  transition: transform 0.16s ease;
+}
+
+app-order-details .task-foldout[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+app-order-details .task-foldout > summary:hover {
+  border-color: rgba(115, 128, 236, 0.24);
+  background: var(--otziv-white);
+}
+
+app-order-details .bad-review-task-list {
+  display: grid;
+  gap: 0.95rem;
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 1.05rem;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 0.9rem 1.8rem rgba(132, 139, 200, 0.1);
+}
+
+app-order-details .bad-review-task-list h2 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+app-order-details .bad-review-task-row {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-left: 0.24rem solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: linear-gradient(180deg, rgba(255, 207, 64, 0.07), var(--otziv-white) 34%);
+  box-shadow: 0 0.7rem 1.4rem rgba(132, 139, 200, 0.12);
+  font-family: var(--otziv-font-family);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+app-order-details .bad-review-task-row + .bad-review-task-row {
+  margin-top: 0.9rem;
+}
+
+app-order-details .bad-review-task-row--new {
+  border-left-color: var(--otziv-warning);
+}
+
+app-order-details .bad-review-task-row--done {
+  border-left-color: var(--otziv-success);
+}
+
+app-order-details .bad-review-task-row--canceled {
+  border-left-color: var(--otziv-info);
+}
+
+app-order-details .bad-review-task-head,
+app-order-details .bad-review-task-date-actions,
+app-order-details .bad-review-task-inline-actions,
+app-order-details .bad-review-task-copy-actions,
+app-order-details .bad-review-task-footer {
+  display: grid;
+  gap: 0.5rem;
+}
+
+app-order-details .bad-review-task-head,
+app-order-details .bad-review-task-date-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+app-order-details .bad-review-task-head div,
+app-order-details .bad-review-task-date-label {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+app-order-details .bad-review-task-head strong,
+app-order-details .bad-review-task-footer strong {
+  color: var(--otziv-dark);
+  font-size: 0.86rem;
+  line-height: 1.1;
+}
+
+app-order-details .bad-review-task-head span,
+app-order-details .bad-review-task-meta,
+app-order-details .bad-review-task-date-label span,
+app-order-details .bad-review-task-row small {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+app-order-details .bad-review-task-head b {
+  border-radius: 0.45rem;
+  padding: 0.18rem 0.48rem;
+  color: #7d5f00;
+  background: #fff4c8;
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+app-order-details .bad-review-task-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+app-order-details .bad-review-task-meta span {
+  overflow: hidden;
+  border: 1px solid rgba(103, 116, 131, 0.16);
+  border-radius: 999px;
+  padding: 0.36rem 0.5rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-order-details .bad-review-task-meta span:first-child {
+  grid-column: 1 / -1;
+  color: var(--otziv-primary);
+  background: rgba(115, 128, 236, 0.08);
+}
+
+app-order-details .bad-review-task-date-actions {
+  grid-template-columns: minmax(0, 1fr) 2.2rem;
+  align-items: end;
+}
+
+app-order-details .bad-review-task-inline-actions,
+app-order-details .bad-review-task-copy-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+app-order-details .bad-review-task-copy-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+app-order-details .bad-review-task-date-label input,
+app-order-details .bad-review-task-text {
+  width: 100%;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.55rem;
+  background: var(--otziv-white);
+  color: var(--otziv-dark);
+  font: 800 0.78rem var(--otziv-font-family);
+}
+
+app-order-details .bad-review-task-date-label input {
+  min-height: 2.35rem;
+  padding: 0 0.65rem;
+}
+
+app-order-details .bad-review-task-text {
+  min-height: 5.6rem;
+  max-height: 10rem;
+  padding: 0.65rem;
+  resize: vertical;
+  line-height: 1.22;
+}
+
+app-order-details .bad-review-task-date-label input:disabled,
+app-order-details .bad-review-task-text:read-only {
+  background: #f8f9fc;
+  color: var(--otziv-info);
+}
+
+app-order-details .bad-review-task-row button {
+  min-height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+app-order-details .bad-review-task-action--copy,
+app-order-details .bad-review-task-action--ghost,
+app-order-details .bad-review-task-action--bot {
+  min-width: 0;
+  min-height: 2.05rem;
+  padding: 0 0.25rem;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  border-color: rgba(103, 116, 131, 0.22);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+app-order-details .bad-review-task-action--bot {
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  border-color: rgba(103, 116, 131, 0.22);
+}
+
+app-order-details .bad-review-task-action--ghost {
+  color: var(--otziv-danger);
+}
+
+app-order-details .bad-review-task-action--save,
+app-order-details .bad-review-task-icon-action--save {
+  color: var(--otziv-primary);
+  background: rgba(115, 128, 236, 0.18);
+}
+
+app-order-details .bad-review-task-action--complete {
+  border-color: rgba(247, 208, 96, 0.58);
+  border-radius: 1rem;
+  color: #806116;
+  background: #fff4c8;
+  text-transform: uppercase;
+}
+
+app-order-details .bad-review-task-action--danger {
+  border-color: rgba(255, 0, 96, 0.18);
+  border-radius: 1rem;
+  color: #c44d72;
+  background: #ffe6ef;
+  text-transform: uppercase;
+}
+
+app-order-details .bad-review-task-icon-action {
+  display: grid;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  place-items: center;
+  padding: 0;
+}
+
+app-order-details .bad-review-task-footer {
+  align-items: center;
+}
+
+app-order-details .bad-review-task-footer .bad-review-task-action,
+app-order-details .bad-review-task-status-pill {
+  width: 100%;
+}
+
+app-order-details .bad-review-task-status-pill {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(27, 156, 133, 0.24);
+  border-radius: 1rem;
+  color: #137d69;
+  background: #dff7ed;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+app-order-details .bad-review-task-action--complete:not(:disabled):hover {
+  border-color: rgba(247, 208, 96, 0.72);
+  color: #6e5100;
+  background: #ffeaa0;
+  box-shadow: 0 0.55rem 1.1rem rgba(247, 208, 96, 0.2);
+}
+
+app-order-details .bad-review-task-action--danger:not(:disabled):hover {
+  border-color: transparent;
+  color: white;
+  background: #c44d72;
+  box-shadow: 0 0.55rem 1.1rem rgba(196, 77, 114, 0.18);
+}
+
+app-order-details .bad-review-task-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+app-order-details .bad-review-task-row button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.45rem 0.9rem rgba(115, 128, 236, 0.16);
+}
+
+app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--copy,
+app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--bot {
+  min-height: 2.05rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 999px;
+  padding: 0 0.25rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: none;
+  font-size: 0.68rem;
+}
+
+app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--copy:not(:disabled):hover,
+app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--bot:not(:disabled):hover {
+  border-color: rgba(103, 116, 131, 0.32);
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+  box-shadow: none;
+}
+
+app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--complete {
+  min-height: 2.25rem;
+  border: 1px solid rgba(247, 208, 96, 0.58);
+  border-radius: 1rem;
+  color: #806116;
+  background: #fff4c8;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--danger {
+  min-height: 2.25rem;
+  border: 1px solid rgba(255, 0, 96, 0.18);
+  border-radius: 1rem;
+  color: #c44d72;
+  background: #ffe6ef;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+app-order-details .admin-layout .bad-review-task-footer .bad-review-task-status-pill--done {
+  min-height: 2.25rem;
+  border: 1px solid rgba(27, 156, 133, 0.24);
+  border-radius: 1rem;
+  color: #137d69;
+  background: #dff7ed;
+  box-shadow: none;
+}
+
+app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--complete:not(:disabled):hover {
+  border-color: rgba(247, 208, 96, 0.72);
+  color: #6e5100;
+  background: #ffeaa0;
+  box-shadow: none;
+}
+
+app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--danger:not(:disabled):hover {
+  border-color: rgba(255, 0, 96, 0.18);
+  color: #c44d72;
+  background: #ffe6ef;
+  box-shadow: none;
 }
 

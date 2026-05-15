@@ -116,6 +116,8 @@ export class WorkerBoardComponent implements OnDestroy {
   });
   readonly title = computed(() => `Специалист - ${this.board()?.title ?? workerSectionLabel(this.activeSection())}`);
   readonly metrics = computed(() => this.board()?.metrics ?? []);
+  readonly visibleSections = computed(() => this.sections.filter((section) => this.shouldShowWorkerSection(section.key)));
+  readonly visibleMetrics = computed(() => this.metrics().filter((metric) => this.shouldShowWorkerSection(metric.section, metric.value)));
   readonly workerOptions = computed(() => this.board()?.workerOptions ?? []);
   readonly workerFilterAvailable = computed(() => {
     this.auth.tokenParsed();
@@ -604,7 +606,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   isReviewSection(section = this.activeSection()): boolean {
-    return section === 'nagul' || section === 'publish' || section === 'bad';
+    return section === 'nagul' || section === 'recovery' || section === 'publish' || section === 'bad';
   }
 
   canOpenOrderEditModal(): boolean {
@@ -680,6 +682,14 @@ export class WorkerBoardComponent implements OnDestroy {
 
   private findMetric(section: WorkerSection): WorkerMetric | undefined {
     return this.board()?.metrics.find((item) => item.section === section);
+  }
+
+  private shouldShowWorkerSection(section: WorkerSection, metricValue = this.findMetric(section)?.value ?? 0): boolean {
+    if (section !== 'recovery' && section !== 'bad') {
+      return true;
+    }
+
+    return metricValue > 0 || this.activeSection() === section;
   }
 
   private openCurrentWorkSection(): void {

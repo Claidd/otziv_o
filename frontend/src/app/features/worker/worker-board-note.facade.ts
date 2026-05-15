@@ -28,6 +28,8 @@ type WorkerBoardNoteApi = Pick<
   | 'updateOrderCompanyNote'
   | 'updateReviewText'
   | 'updateReviewAnswer'
+  | 'updateBadReviewTask'
+  | 'updateRecoveryTask'
   | 'updateReviewNote'
 >;
 
@@ -181,9 +183,13 @@ export class WorkerBoardNoteFacade {
 
     const key = workerSaveReviewFieldMutationKey(review, field);
     const fieldKey = workerReviewFieldKey(review, field);
-    const request = field === 'text'
-      ? this.deps.workerApi.updateReviewText(review.id, review.orderId, value)
-      : this.deps.workerApi.updateReviewAnswer(review.id, review.orderId, value);
+    const request = field === 'text' && review.badTask && review.badTaskId
+      ? this.deps.workerApi.updateBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null)
+      : field === 'text' && review.recoveryTask && review.recoveryTaskId
+      ? this.deps.workerApi.updateRecoveryTask(review.recoveryTaskId, value, review.recoveryTaskScheduledDate || review.publishedDate || null)
+      : field === 'text'
+        ? this.deps.workerApi.updateReviewText(review.id, review.orderId, value)
+        : this.deps.workerApi.updateReviewAnswer(review.id, review.orderId, value);
 
     this.deps.mutationKey.set(key);
     request.subscribe({

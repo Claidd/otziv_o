@@ -347,7 +347,7 @@ export class ManagerBoardComponent {
     if (metric.section === 'companies') {
       this.companyStatus.set(metric.status);
     } else {
-      this.orderStatus.set(metric.status);
+      this.orderStatus.set(metric.status === 'Восстановления готовы' ? 'Все' : metric.status);
     }
 
     this.pageNumber.set(0);

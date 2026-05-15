@@ -37,6 +37,11 @@
   );
 }
 
+.worker-card.card-tone--recovery {
+  border-color: rgba(244, 197, 66, 0.7);
+  background: linear-gradient(180deg, #fff8d8 0%, var(--otziv-white) 100%);
+}
+
 .worker-card.card-tone--bad {
   border-color: var(--otziv-tone-bad-border);
   background: linear-gradient(180deg, var(--otziv-tone-bad-surface) 0%, var(--otziv-white) 100%);
@@ -67,11 +72,28 @@
 }
 
 .worker-card.card-tone--walk header .review-title,
+.worker-card.card-tone--recovery header .review-title,
 .worker-card.card-tone--publication header .review-title {
   overflow: visible;
   overflow-wrap: anywhere;
   text-overflow: clip;
   white-space: normal;
+}
+
+.worker-card.recovery-task header {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.28rem;
+}
+
+.worker-card.recovery-task header .review-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: normal;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: normal;
 }
 
 .worker-card footer {
@@ -148,8 +170,28 @@
   font-weight: 900;
 }
 
+.worker-card.recovery-task .review-id-line {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 .bad-task-badge {
   color: var(--otziv-danger);
+}
+
+.recovery-task-badge {
+  display: inline-flex;
+  min-height: 1.22rem;
+  align-items: center;
+  border: 1px solid rgba(244, 197, 66, 0.48);
+  border-radius: 999px;
+  padding: 0 0.38rem;
+  background: rgba(255, 248, 216, 0.82);
+  color: #8a6400;
+  font-size: 0.66rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .review-photo-link {

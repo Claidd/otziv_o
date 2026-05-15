@@ -29,10 +29,12 @@ public class OrderCompanyStatusService {
     private static final String STATUS_PUBLIC = "Опубликовано";
     private static final String STATUS_TO_PAY = "Выставлен счет";
     private static final String STATUS_ARCHIVE = "Архив";
+    private static final String STATUS_BAN = "Бан";
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
     private static final String STATUS_COMPANY_IN_STOP = "На стопе";
     private static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
+    private static final String STATUS_COMPANY_BAN = "Бан";
 
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
@@ -52,22 +54,30 @@ public class OrderCompanyStatusService {
             String currentCompanyStatus = company.getStatus() != null ? company.getStatus().getTitle() : "";
             log.info("🏢 Компания ID: {}, текущий статус: {}", company.getId(), currentCompanyStatus);
 
+            if (STATUS_BAN.equals(newOrderStatus)) {
+                log.info("📌 ПРАВИЛО БАН: заказ переведен в 'Бан' -> компания тоже в 'Бан'");
+                company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_BAN));
+                companyService.save(company);
+                log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
+                return;
+            }
+
             boolean hasOtherActiveOrders = hasOtherActiveUnpaidOrders(company, changedOrder);
             log.info("🔍 Есть другие активные заказы: {}", hasOtherActiveOrders);
 
             if (STATUS_ARCHIVE.equals(newOrderStatus)) {
                 if (!hasOtherActiveOrders) {
                     if (nextOrderRequestService.hasOpenRequests(company.getId())) {
-                        log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет активных заказов, но есть заявка на следующий -> компания в 'Новый заказ'");
+                        log.info("📌 ПРАВИЛО 1: Завершение заказа. Нет активных заказов, но есть заявка на следующий -> компания в 'Новый заказ'");
                         company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_NEW_ORDER));
                     } else {
-                        log.info("📌 ПРАВИЛО 1: Архивация заказа. Нет других активных заказов -> компания в 'Стоп'");
+                        log.info("📌 ПРАВИЛО 1: Завершение заказа. Нет других активных заказов -> компания в 'Стоп'");
                         company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
                     }
                     companyService.save(company);
                     log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
                 } else {
-                    log.info("📌 ПРАВИЛО 1: Архивация заказа. Есть другие активные заказы -> статус компании не меняем");
+                    log.info("📌 ПРАВИЛО 1: Завершение заказа. Есть другие активные заказы -> статус компании не меняем");
                 }
             } else if (isActiveOrderStatus(newOrderStatus)) {
                 if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus) && !hasOtherActiveOrders) {
@@ -102,7 +112,8 @@ public class OrderCompanyStatusService {
                     .filter(order -> {
                         String orderStatus = safeStatusTitle(order);
                         boolean isActive = !STATUS_PAYMENT.equalsIgnoreCase(orderStatus)
-                                && !STATUS_ARCHIVE.equalsIgnoreCase(orderStatus);
+                                && !STATUS_ARCHIVE.equalsIgnoreCase(orderStatus)
+                                && !STATUS_BAN.equalsIgnoreCase(orderStatus);
                         if (isActive) {
                             log.debug("Найден активный неоплаченный заказ ID: {}, статус: {}", order.getId(), orderStatus);
                         }

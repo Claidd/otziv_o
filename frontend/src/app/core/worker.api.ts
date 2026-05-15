@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { ManagerOverdueOrders, OrderCardItem } from './manager.api';
 
-export type WorkerSection = 'new' | 'correct' | 'nagul' | 'publish' | 'bad' | 'all';
+export type WorkerSection = 'new' | 'correct' | 'nagul' | 'recovery' | 'publish' | 'bad' | 'all';
 export type WorkerBoardSectionQuery = WorkerSection | 'current';
 
 export interface WorkerPage<T> {
@@ -73,6 +73,11 @@ export interface WorkerReviewItem {
   badTaskScheduledDate?: string;
   badTaskCompletedDate?: string;
   badTaskComment?: string;
+  recoveryTask?: boolean;
+  recoveryTaskId?: number | null;
+  recoveryTaskStatus?: string;
+  recoveryTaskScheduledDate?: string;
+  recoveryTaskCompletedDate?: string;
 }
 
 export interface WorkerMetric {
@@ -189,6 +194,32 @@ export class WorkerApi {
 
   completeBadReviewTask(taskId: number): Observable<void> {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/complete`, {});
+  }
+
+  updateBadReviewTask(taskId: number, taskText: string, scheduledDate?: string | null): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}`,
+      { taskText, scheduledDate: scheduledDate || null }
+    );
+  }
+
+  updateRecoveryTask(taskId: number, recoveryText: string, scheduledDate?: string | null): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}`,
+      { recoveryText, scheduledDate: scheduledDate || null }
+    );
+  }
+
+  completeRecoveryTask(taskId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/complete`, {});
+  }
+
+  changeRecoveryTaskBot(taskId: number): Observable<BotChangeResponse> {
+    return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/change-bot`, {});
+  }
+
+  deactivateRecoveryTaskBot(taskId: number, botId: number): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/bots/${botId}/deactivate`, {});
   }
 
   changeBadReviewTaskBot(taskId: number): Observable<BotChangeResponse> {

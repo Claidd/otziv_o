@@ -21,7 +21,9 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     @Query("""
         SELECT DISTINCT t
         FROM BadReviewTask t
-        LEFT JOIN FETCH t.sourceReview
+        LEFT JOIN FETCH t.sourceReview r
+        LEFT JOIN FETCH r.bot rb
+        LEFT JOIN FETCH rb.status
         LEFT JOIN FETCH t.worker w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH t.bot b

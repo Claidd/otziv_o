@@ -15,7 +15,8 @@ public final class BoardLiveSlice {
             "Опубликовано",
             "Выставлен счет",
             "Напоминание",
-            "Не оплачено"
+            "Не оплачено",
+            "Бан"
     );
 
     public static final List<String> WORKER_BOARD_ALL_ORDER_STATUSES = List.of(
@@ -28,6 +29,7 @@ public final class BoardLiveSlice {
             "Выставлен счет",
             "Напоминание",
             "Не оплачено",
+            "Бан",
             "Оплачено"
     );
 

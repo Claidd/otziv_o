@@ -14,10 +14,30 @@
         @if (toast.message) {
           <p>{{ toast.message }}</p>
         }
-        @if (toast.action) {
-          <a class="toast-action" [routerLink]="toast.action.routerLink" (click)="toastService.dismiss(toast.id)">
-            {{ toast.action.label }}
-          </a>
+        @if (toast.actions?.length) {
+          <div class="toast-actions">
+            @for (action of toast.actions; track action.label) {
+              @if (action.href) {
+                <a
+                  class="toast-action"
+                  [href]="action.href"
+                  target="_blank"
+                  rel="noopener"
+                  (click)="toastService.dismiss(toast.id)"
+                >
+                  {{ action.label }}
+                </a>
+              } @else if (action.routerLink) {
+                <a class="toast-action" [routerLink]="action.routerLink" (click)="toastService.dismiss(toast.id)">
+                  {{ action.label }}
+                </a>
+              } @else if (action.callback) {
+                <button type="button" class="toast-action toast-action-button" (click)="handleAction(toast, action)">
+                  {{ action.label }}
+                </button>
+              }
+            }
+          </div>
         }
       </div>
       <button type="button" (click)="toastService.dismiss(toast.id)" title="Закрыть">

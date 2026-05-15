@@ -136,7 +136,8 @@ function orderDetails(overrides: Partial<OrderDetailsPayload> = {}): OrderDetail
     canEditReviewPublish: true,
     canEditReviewVigul: true,
     canDeleteReviews: true,
-    ...overrides
+    ...overrides,
+    recoveryTasks: overrides.recoveryTasks ?? []
   };
 }
 

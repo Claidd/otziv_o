@@ -16,13 +16,13 @@
       <header class="worker-toolbar">
         <nav class="worker-dropdowns" aria-label="Меню специалиста">
           <select class="worker-section-select" [ngModel]="activeSection()" (ngModelChange)="handleSectionMenu($event)" aria-label="Раздел специалиста">
-            @for (section of sections; track trackSection($index, section)) {
+            @for (section of visibleSections(); track trackSection($index, section)) {
               <option [ngValue]="section.key">{{ sectionOptionLabel(section) }}</option>
             }
           </select>
 
           <div class="section-tabs" aria-label="Статусы специалиста">
-            @for (section of sections; track trackSection($index, section)) {
+            @for (section of visibleSections(); track trackSection($index, section)) {
               <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
                 <span class="material-icons-sharp">{{ section.icon }}</span>
                 {{ section.label }}
@@ -192,7 +192,7 @@
         </label>
       }
 
-      @for (metric of metrics(); track trackMetric($index, metric)) {
+      @for (metric of visibleMetrics(); track trackMetric($index, metric)) {
         <button
           type="button"
           class="stat-card"
@@ -237,7 +237,7 @@
       </label>
     }
 
-    @for (metric of metrics(); track trackMetric($index, metric)) {
+    @for (metric of visibleMetrics(); track trackMetric($index, metric)) {
       <button
         type="button"
         class="stat-card"

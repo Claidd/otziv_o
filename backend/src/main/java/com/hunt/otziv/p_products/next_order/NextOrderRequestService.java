@@ -29,7 +29,7 @@ public class NextOrderRequestService {
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
     private static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
-    private static final Set<String> INACTIVE_ORDER_STATUSES = Set.of("Оплачено", "Архив");
+    private static final Set<String> INACTIVE_ORDER_STATUSES = Set.of("Оплачено", "Архив", "Бан");
     private static final Set<NextOrderRequestStatus> OPEN_REQUEST_STATUSES = Set.of(
             NextOrderRequestStatus.PENDING,
             NextOrderRequestStatus.FAILED

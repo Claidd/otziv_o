@@ -5,6 +5,7 @@ import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -26,6 +27,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -56,7 +58,12 @@ class OrderBoardQueryServiceTest {
         Object[] firstRow = new Object[]{"first"};
         Object[] secondRow = new Object[]{"second"};
 
-        when(orderRepository.findPageIdByKeyWordLive(eq("needle"), eq("needle"), any(), any(Pageable.class)))
+        when(orderRepository.findPageIdByKeyWordLive(
+                eq("needle"),
+                eq("needle"),
+                argThat(statuses -> statuses.contains("Бан")),
+                any(Pageable.class)
+        ))
                 .thenAnswer(invocation -> page(List.of(2L, 1L), invocation.getArgument(3), 2));
         when(orderRepository.findOrderListRows(List.of(2L, 1L)))
                 .thenReturn(List.of(firstRow, secondRow));
@@ -136,6 +143,29 @@ class OrderBoardQueryServiceTest {
                 eq("Новый"),
                 eq("needle"),
                 eq("Новый"),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    void workerBoardAllPassesRequestedSortDirectionToRepository() {
+        OrderBoardQueryService service = service();
+        Worker worker = new Worker();
+
+        when(orderRepository.findPageIdToWorkerForBoardLiveSorted(
+                eq(worker),
+                any(),
+                eq("asc"),
+                any(Pageable.class)
+        )).thenAnswer(invocation -> page(List.of(), invocation.getArgument(3), 0));
+
+        Page<OrderDTOList> result = service.getWorkerBoardOrderDTOAndKeywordByWorkerAll(worker, "", 0, 10, "asc");
+
+        assertTrue(result.isEmpty());
+        verify(orderRepository).findPageIdToWorkerForBoardLiveSorted(
+                eq(worker),
+                any(),
+                eq("asc"),
                 any(Pageable.class)
         );
     }

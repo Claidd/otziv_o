@@ -448,7 +448,46 @@ export interface BadReviewTaskItem {
   workerFio?: string;
   botId?: number | null;
   botFio?: string;
+  botLogin?: string;
+  botPassword?: string;
+  taskText?: string;
   comment?: string;
+}
+
+export interface BadReviewTaskUpdateRequest {
+  taskText: string;
+  scheduledDate: string | null;
+}
+
+export interface ReviewRecoveryBatchItem {
+  id: number;
+  status: string;
+  statusCode: string;
+  completedAt?: string;
+  clientNotifiedAt?: string;
+}
+
+export interface ReviewRecoveryTaskItem {
+  id: number;
+  batchId?: number | null;
+  sourceReviewId?: number | null;
+  status: string;
+  statusCode: string;
+  recoveryText: string;
+  recoveryAnswer?: string;
+  scheduledDate?: string;
+  completedDate?: string;
+  workerFio?: string;
+  botId?: number | null;
+  botFio?: string;
+  botLogin?: string;
+  botPassword?: string;
+  batch?: ReviewRecoveryBatchItem | null;
+}
+
+export interface ReviewRecoveryTaskUpdateRequest {
+  recoveryText: string;
+  scheduledDate?: string | null;
 }
 
 export interface OrderDetailsPayload {
@@ -470,6 +509,7 @@ export interface OrderDetailsPayload {
   changed: string;
   reviews: OrderReviewItem[];
   badReviewTasks: BadReviewTaskItem[];
+  recoveryTasks: ReviewRecoveryTaskItem[];
   products: ProductOption[];
   canEditReviews: boolean;
   canSendToCheck: boolean;
@@ -707,6 +747,63 @@ export class ManagerApi {
   cancelBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/cancel`,
+      {}
+    );
+  }
+
+  completeBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/complete`,
+      {}
+    );
+  }
+
+  updateBadReviewTask(
+    orderId: number,
+    taskId: number,
+    request: BadReviewTaskUpdateRequest
+  ): Observable<OrderDetailsPayload> {
+    return this.http.put<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}`,
+      request
+    );
+  }
+
+  changeBadReviewTaskBot(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/change-bot`,
+      {}
+    );
+  }
+
+  createReviewRecoveryTask(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/recovery-tasks`,
+      {}
+    );
+  }
+
+  updateReviewRecoveryTask(
+    orderId: number,
+    taskId: number,
+    request: ReviewRecoveryTaskUpdateRequest
+  ): Observable<OrderDetailsPayload> {
+    return this.http.put<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-tasks/${taskId}`,
+      request
+    );
+  }
+
+  completeReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-tasks/${taskId}/complete`,
+      {}
+    );
+  }
+
+  markRecoveryClientNotified(orderId: number, batchId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-batches/${batchId}/client-notified`,
       {}
     );
   }

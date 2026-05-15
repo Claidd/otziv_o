@@ -1,11 +1,15 @@
 :host {
   display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .profile-toolbar,
 .person-head,
 .metric-card,
 .empty-state {
+  min-width: 0;
+  max-width: 100%;
   border-radius: var(--otziv-card-radius);
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
@@ -95,8 +99,15 @@ input[type='date'] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.metric-grid > *,
+.chart-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .metric-card {
   display: flex;
+  min-width: 0;
   min-height: 8.2rem;
   align-items: center;
   justify-content: space-between;
@@ -113,6 +124,7 @@ input[type='date'] {
 .metric-card strong {
   display: block;
   margin-top: 0.45rem;
+  overflow-wrap: anywhere;
   font-size: 1.35rem;
   line-height: 1.05;
 }

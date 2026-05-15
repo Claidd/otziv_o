@@ -77,6 +77,7 @@ export const MANAGER_ORDER_ACTIONS: StatusAction[] = [
   { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
   { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
   { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
+  { label: 'в бан', status: 'Бан', icon: 'block' },
   { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
 ];
 
@@ -125,7 +126,8 @@ export const DEFAULT_MANAGER_ORDER_STATUSES = [
   'Опубликовано',
   'Выставлен счет',
   'Напоминание',
-  'Не оплачено'
+  'Не оплачено',
+  'Бан'
 ];
 
 export const MANAGER_MOBILE_NAV_LINKS: MobileNavLink[] = [
@@ -294,7 +296,11 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
     actions.push(MANAGER_ORDER_ACTIONS[7]);
   }
 
-  if (order.status === 'Выставлен счет' || order.status === 'Напоминание' || order.status === 'Не оплачено') {
+  if (order.status === 'Выставлен счет' || order.status === 'Напоминание' || order.status === 'Не оплачено' || order.status === 'Бан') {
+    actions.push(MANAGER_ORDER_ACTIONS[9]);
+  }
+
+  if (order.status === 'Не оплачено' && (order.badReviewTasksTotal ?? 0) > 0 && (order.badReviewTasksPending ?? 0) === 0) {
     actions.push(MANAGER_ORDER_ACTIONS[8]);
   }
 

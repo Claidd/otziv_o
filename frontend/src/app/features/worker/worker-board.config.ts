@@ -37,6 +37,7 @@ export const WORKER_SECTIONS: SectionTab[] = [
   { key: 'new', label: 'Новые', icon: 'fiber_new' },
   { key: 'correct', label: 'Коррекция', icon: 'build_circle' },
   { key: 'nagul', label: 'Выгул', icon: 'directions_walk' },
+  { key: 'recovery', label: 'Восстановление', icon: 'restore' },
   { key: 'publish', label: 'Публикация', icon: 'published_with_changes' },
   { key: 'bad', label: 'Плохие', icon: 'money_off' },
   { key: 'all', label: 'Все', icon: 'dashboard' }

@@ -12,6 +12,10 @@ public record PersonalReminderResponse(
         Instant remindAt,
         Integer timerMinutes,
         Instant completedAt,
+        String sourceType,
+        Long sourceId,
+        Long sourceOrderId,
+        String paymentCopyText,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -24,6 +28,10 @@ public record PersonalReminderResponse(
                 reminder.getRemindAt(),
                 reminder.getTimerMinutes(),
                 reminder.getCompletedAt(),
+                reminder.getSourceType(),
+                reminder.getSourceId(),
+                reminder.getSourceOrderId(),
+                null,
                 reminder.getCreatedAt(),
                 reminder.getUpdatedAt()
         );
