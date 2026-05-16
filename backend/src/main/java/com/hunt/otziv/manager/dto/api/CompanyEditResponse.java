@@ -6,6 +6,7 @@ public record CompanyEditResponse(
         Long id,
         String title,
         String urlChat,
+        String urlSite,
         String telephone,
         String city,
         String email,

@@ -8,6 +8,7 @@ export function managerCompanyEditDraft(payload: CompanyEditPayload): CompanyUpd
   return {
     title: payload.title,
     urlChat: payload.urlChat,
+    urlSite: payload.urlSite,
     telephone: payload.telephone,
     city: payload.city,
     email: payload.email,

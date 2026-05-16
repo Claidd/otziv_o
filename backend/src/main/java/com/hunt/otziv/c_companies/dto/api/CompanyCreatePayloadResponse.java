@@ -7,6 +7,7 @@ public record CompanyCreatePayloadResponse(
         Long leadId,
         String title,
         String urlChat,
+        String urlSite,
         String telephone,
         String city,
         String email,

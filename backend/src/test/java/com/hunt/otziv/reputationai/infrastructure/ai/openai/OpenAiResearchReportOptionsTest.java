@@ -18,7 +18,7 @@ class OpenAiResearchReportOptionsTest {
         assertThat(options.profileKey()).isEqualTo("economy");
         assertThat(options.model()).isEqualTo("gpt-5.4-mini");
         assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(5));
-        assertThat(options.maxToolCalls()).isEqualTo(6);
+        assertThat(options.maxToolCalls()).isEqualTo(10);
         assertThat(options.maxOutputTokens()).isEqualTo(6000);
         assertThat(options.reasoningEffort()).isEqualTo("low");
         assertThat(options.searchContextSize()).isEqualTo("low");
@@ -33,10 +33,10 @@ class OpenAiResearchReportOptionsTest {
         assertThat(options.profileKey()).isEqualTo("maximum");
         assertThat(options.model()).isEqualTo("gpt-5.5");
         assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(12));
-        assertThat(options.maxToolCalls()).isEqualTo(20);
-        assertThat(options.maxOutputTokens()).isEqualTo(14000);
+        assertThat(options.maxToolCalls()).isEqualTo(48);
+        assertThat(options.maxOutputTokens()).isEqualTo(16000);
         assertThat(options.reasoningEffort()).isEqualTo("medium");
-        assertThat(options.searchContextSize()).isEqualTo("low");
+        assertThat(options.searchContextSize()).isEqualTo("medium");
     }
 
     @Test

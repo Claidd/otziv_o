@@ -10,7 +10,8 @@ import java.time.Duration;
 public class ReputationAiProperties {
 
     private String provider = "local";
-    private int maxWebsitePages = 16;
+    private int maxWebsitePages = 36;
+    private int maxDeepWebsitePages = 12;
     private int maxWebsiteChars = 20_000;
     private Duration websiteTimeout = Duration.ofSeconds(8);
     private String userAgent = "OtzivReputationAI/1.0";
@@ -32,6 +33,14 @@ public class ReputationAiProperties {
 
     public void setMaxWebsitePages(int maxWebsitePages) {
         this.maxWebsitePages = Math.max(1, maxWebsitePages);
+    }
+
+    public int getMaxDeepWebsitePages() {
+        return maxDeepWebsitePages;
+    }
+
+    public void setMaxDeepWebsitePages(int maxDeepWebsitePages) {
+        this.maxDeepWebsitePages = Math.max(1, Math.min(20, maxDeepWebsitePages));
     }
 
     public int getMaxWebsiteChars() {
@@ -143,9 +152,9 @@ public class ReputationAiProperties {
 
     public static class Search {
         private String provider = "local";
-        private int maxQueries = 5;
+        private int maxQueries = 6;
         private int resultsPerQuery = 5;
-        private int crawlResultLimit = 6;
+        private int crawlResultLimit = 20;
         private YandexSearch yandex = new YandexSearch();
 
         public String getProvider() {
@@ -161,7 +170,7 @@ public class ReputationAiProperties {
         }
 
         public void setMaxQueries(int maxQueries) {
-            this.maxQueries = Math.max(0, Math.min(10, maxQueries));
+            this.maxQueries = Math.max(0, Math.min(12, maxQueries));
         }
 
         public int getResultsPerQuery() {
@@ -177,7 +186,7 @@ public class ReputationAiProperties {
         }
 
         public void setCrawlResultLimit(int crawlResultLimit) {
-            this.crawlResultLimit = Math.max(0, Math.min(10, crawlResultLimit));
+            this.crawlResultLimit = Math.max(0, Math.min(20, crawlResultLimit));
         }
 
         public YandexSearch getYandex() {
@@ -432,7 +441,7 @@ public class ReputationAiProperties {
         public static class ResearchReport {
             private String model = "gpt-5.5";
             private Duration timeout = Duration.ofMinutes(6);
-            private int maxToolCalls = 24;
+            private int maxToolCalls = 32;
             private int maxOutputTokens = 12000;
             private String reasoningEffort = "low";
             private String searchContextSize = "medium";

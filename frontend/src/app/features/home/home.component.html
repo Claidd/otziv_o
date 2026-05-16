@@ -180,5 +180,25 @@
       >
       <span class="start-illustration-heading start-illustration-heading--bottom">с отзывами</span>
     </section>
+
+    <section class="panel public-entry" aria-label="Публичная информация">
+      <div class="panel-title">
+        <span class="material-icons-sharp" aria-hidden="true">storefront</span>
+        <div>
+          <p class="eyebrow">PUBLIC</p>
+          <h2>Информация для клиентов</h2>
+        </div>
+      </div>
+
+      <div class="public-link-grid">
+        @for (link of publicLinks; track link.routerLink) {
+          <a class="action-card" [routerLink]="link.routerLink">
+            <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+            <strong>{{ link.label }}</strong>
+            <small>{{ link.description }}</small>
+          </a>
+        }
+      </div>
+    </section>
   }
 </app-admin-layout>

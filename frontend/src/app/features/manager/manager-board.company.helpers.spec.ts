@@ -17,6 +17,7 @@ function payload(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     id: 9,
     title: 'Company',
     urlChat: 'https://chat',
+    urlSite: 'https://company.example.test',
     telephone: '+7000',
     city: 'City',
     email: 'mail@example.test',
@@ -47,6 +48,7 @@ describe('manager-board company helpers', () => {
     expect(managerCompanyEditDraft(payload())).toEqual({
       title: 'Company',
       urlChat: 'https://chat',
+      urlSite: 'https://company.example.test',
       telephone: '+7000',
       city: 'City',
       email: 'mail@example.test',

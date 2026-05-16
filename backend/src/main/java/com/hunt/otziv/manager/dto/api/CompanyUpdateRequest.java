@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.dto.api;
 public record CompanyUpdateRequest(
         String title,
         String urlChat,
+        String urlSite,
         String telephone,
         String city,
         String email,

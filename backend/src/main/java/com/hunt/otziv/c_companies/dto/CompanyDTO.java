@@ -39,6 +39,9 @@ public class CompanyDTO {
     @NotEmpty(message = "Ссылка на чат не может быть пустой")
     private String urlChat;
 
+    //    официальный сайт компании
+    private String urlSite;
+
     //    телефон нового компании
     private String telephone;
 

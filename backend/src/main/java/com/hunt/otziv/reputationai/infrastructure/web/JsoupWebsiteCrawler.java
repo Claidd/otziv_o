@@ -91,12 +91,16 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         Set<String> queued = new LinkedHashSet<>();
         boolean followInternalLinks = shouldFollowInternalLinks(rootHost)
                 && (deepCrawlHosts == null || deepCrawlHosts.isEmpty() || deepCrawlHosts.contains(rootHost));
+        int rootPageStart = pages.size();
+        int rootPageBudget = followInternalLinks ? properties.getMaxDeepWebsitePages() : 1;
         enqueue(rootUrl, rootHost, queue, queued, visited);
         if (followInternalLinks) {
             discoverSitemapUrls(rootUrl, rootHost).forEach(url -> enqueue(url, rootHost, queue, queued, visited));
         }
 
-        while (!queue.isEmpty() && pages.size() < properties.getMaxWebsitePages()) {
+        while (!queue.isEmpty()
+                && pages.size() < properties.getMaxWebsitePages()
+                && pages.size() - rootPageStart < rootPageBudget) {
             String currentUrl = queue.poll();
             if (!visited.add(currentUrl)) {
                 continue;

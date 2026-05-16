@@ -24,6 +24,95 @@ export const routes: Routes = [
       .then((m) => m.HomeComponent)
   },
   {
+    path: 'services',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'services' }
+  },
+  {
+    path: 'prices',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'prices' }
+  },
+  {
+    path: 'payment',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'payment' }
+  },
+  {
+    path: 'refund',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'refund' }
+  },
+  {
+    path: 'offer',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'offer' }
+  },
+  {
+    path: 'privacy',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'privacy' }
+  },
+  {
+    path: 'contacts',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'contacts' }
+  },
+  {
+    path: 'receipt-consent',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'receiptConsent' }
+  },
+  {
+    path: 'pay',
+    loadComponent: () => import('./features/public/public-page.component')
+      .then((m) => m.PublicPageComponent),
+    data: { page: 'pay' }
+  },
+  {
+    path: 'uslugi',
+    redirectTo: 'services',
+    pathMatch: 'full'
+  },
+  {
+    path: 'tarify',
+    redirectTo: 'prices',
+    pathMatch: 'full'
+  },
+  {
+    path: 'oplata',
+    redirectTo: 'payment',
+    pathMatch: 'full'
+  },
+  {
+    path: 'vozvrat',
+    redirectTo: 'refund',
+    pathMatch: 'full'
+  },
+  {
+    path: 'oferta',
+    redirectTo: 'offer',
+    pathMatch: 'full'
+  },
+  {
+    path: 'politika',
+    redirectTo: 'privacy',
+    pathMatch: 'full'
+  },
+  {
+    path: 'kontakty',
+    redirectTo: 'contacts',
+    pathMatch: 'full'
+  },
+  {
     path: 'register-client',
     loadComponent: () => import('./features/auth/register-client.component')
       .then((m) => m.RegisterClientComponent)

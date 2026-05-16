@@ -61,6 +61,17 @@
               >
             </label>
 
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Официальный сайт</span>
+              <input
+                name="urlSite"
+                type="text"
+                autocomplete="url"
+                [ngModel]="draft.urlSite"
+                (ngModelChange)="setField('urlSite', $event)"
+              >
+            </label>
+
             <label class="lead-edit-field">
               <span>Город компании</span>
               <input

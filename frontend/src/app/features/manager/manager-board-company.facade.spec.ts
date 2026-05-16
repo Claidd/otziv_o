@@ -38,6 +38,7 @@ function companyPayload(overrides: Partial<CompanyEditPayload> = {}): CompanyEdi
     id: 10,
     title: 'Company',
     urlChat: 'https://chat.example',
+    urlSite: 'https://company.example.test',
     telephone: '+79990000000',
     city: 'City',
     email: 'company@example.test',
@@ -149,6 +150,7 @@ describe('ManagerBoardCompanyFacade', () => {
     expect(facade.editDraft()).toEqual({
       title: 'Company',
       urlChat: 'https://chat.example',
+      urlSite: 'https://company.example.test',
       telephone: '+79990000000',
       city: 'City',
       email: 'company@example.test',

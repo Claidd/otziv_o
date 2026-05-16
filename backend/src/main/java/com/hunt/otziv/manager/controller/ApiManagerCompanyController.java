@@ -276,6 +276,7 @@ public class ApiManagerCompanyController {
                 .id(companyId)
                 .title(normalize(request.title()))
                 .urlChat(normalize(request.urlChat()))
+                .urlSite(blankToNull(request.urlSite()))
                 .telephone(normalize(request.telephone()))
                 .city(normalize(request.city()))
                 .email(blankToNull(request.email()))

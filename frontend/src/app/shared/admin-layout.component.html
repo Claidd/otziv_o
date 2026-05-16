@@ -138,7 +138,7 @@
           [alt]="profileImageUrl ? profileImageAlt : 'Компания О!'"
         >
         <h2>{{ profileImageUrl ? username() : 'Компания О!' }}</h2>
-        <p>{{ profileImageUrl ? primaryRole() : 'Компания по повышению репутации' }}</p>
+        <p>{{ profileImageUrl ? primaryRole() : 'PR, тексты, реклама и карточки компаний' }}</p>
       </article>
 
       <app-personal-reminders mode="full" />
@@ -150,46 +150,46 @@
         </div>
 
         <article class="notification">
-          <span class="notification-icon material-icons-sharp">rate_review</span>
+          <span class="notification-icon material-icons-sharp">article</span>
           <div>
-            <h3>Хорошие отзывы + ответы</h3>
-            <small>Репутация и доверие</small>
+            <h3>PR и публикации</h3>
+            <small>Площадки и упоминания</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
         <article class="notification blue">
-          <span class="notification-icon material-icons-sharp">business</span>
+          <span class="notification-icon material-icons-sharp">edit_note</span>
           <div>
-            <h3>Ведение карточек</h3>
-            <small>Профили и площадки</small>
+            <h3>Тексты и материалы</h3>
+            <small>Сайт и соцсети</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
         <article class="notification">
-          <span class="notification-icon material-icons-sharp">verified_user</span>
+          <span class="notification-icon material-icons-sharp">campaign</span>
           <div>
-            <h3>PR статьи на сайтах</h3>
-            <small>Контроль упоминаний</small>
+            <h3>Реклама и продвижение</h3>
+            <small>Посты и Яндекс Директ</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
         <article class="notification danger">
-          <span class="notification-icon material-icons-sharp">campaign</span>
+          <span class="notification-icon material-icons-sharp">business</span>
           <div>
-            <h3>Запуск рекламы</h3>
-            <small>Заявки и продвижение</small>
+            <h3>Карточки компаний</h3>
+            <small>Справочники и площадки</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>
 
         <article class="notification warning">
-          <span class="notification-icon material-icons-sharp">shield</span>
+          <span class="notification-icon material-icons-sharp">rate_review</span>
           <div>
-            <h3>Удаление негатива</h3>
-            <small>Защита выдачи</small>
+            <h3>Отзывы и обратная связь</h3>
+            <small>Коммуникация с клиентами</small>
           </div>
           <span class="material-icons-sharp muted">more_vert</span>
         </article>

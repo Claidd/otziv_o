@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -127,13 +128,7 @@ public class CompanyResearchService {
                     result.snippet()
             ));
         }
-        urlsToCrawl.addAll(searchRun.results().stream()
-                .filter(result -> pageRoleClassifier.classify(result.url(), result.title(), result.snippet(), pageContext).canCrawlFromSearch())
-                .map(SearchResult::url)
-                .filter(url -> !url.isBlank())
-                .filter(this::isLikelyPublicBusinessUrl)
-                .limit(properties.getSearch().getCrawlResultLimit())
-                .toList());
+        urlsToCrawl.addAll(prioritizedCrawlUrls(searchRun.results(), pageContext));
 
         Set<String> deepCrawlHosts = pageRoleClassifier.host(website).isBlank()
                 ? Set.of()
@@ -254,14 +249,52 @@ public class CompanyResearchService {
         String product = products == null || products.isEmpty() ? "" : products.getFirst();
 
         queries.add(joinNonBlank(companyName, city, category, "отзывы"));
+        queries.add(joinNonBlank(companyName, city, "2ГИС"));
+        queries.add(joinNonBlank(companyName, city, "Яндекс Карты"));
+        queries.add(joinNonBlank(companyName, city, "Google Maps"));
         queries.add(joinNonBlank(companyName, city, "сайт"));
         if (!isBlank(product)) {
             queries.add(joinNonBlank(companyName, product, city));
         }
+        queries.add(joinNonBlank(companyName, city, "цены услуги"));
 
         return queries.stream()
                 .filter(query -> !query.isBlank())
                 .toList();
+    }
+
+    private List<String> prioritizedCrawlUrls(List<SearchResult> results, PageRoleContext pageContext) {
+        if (results == null || results.isEmpty()) {
+            return List.of();
+        }
+
+        return results.stream()
+                .filter(result -> result != null)
+                .filter(result -> pageRoleClassifier.classify(result.url(), result.title(), result.snippet(), pageContext).canCrawlFromSearch())
+                .filter(result -> !isBlank(result.url()))
+                .filter(result -> isLikelyPublicBusinessUrl(result.url()))
+                .sorted(Comparator.comparingInt(this::crawlPriority))
+                .map(SearchResult::url)
+                .distinct()
+                .limit(properties.getSearch().getCrawlResultLimit())
+                .toList();
+    }
+
+    private int crawlPriority(SearchResult result) {
+        String value = normalizeForMatch(joinNonBlank(result.url(), result.title(), result.snippet()));
+        if (value.contains("2gis") || value.contains("2гис")) {
+            return 0;
+        }
+        if (value.contains("yandex") && (value.contains("maps") || value.contains("карты"))) {
+            return 1;
+        }
+        if (value.contains("google") && value.contains("maps")) {
+            return 2;
+        }
+        if (value.contains("карты") || value.contains("справочник") || value.contains("каталог")) {
+            return 3;
+        }
+        return 10;
     }
 
     private ResearchSnapshot readSnapshot(ReputationResearchSnapshotEntity entity) {

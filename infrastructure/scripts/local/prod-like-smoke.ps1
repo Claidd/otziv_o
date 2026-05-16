@@ -108,6 +108,49 @@ function Wait-HttpOk {
     throw "Timed out waiting for $Name at $Url"
 }
 
+function Assert-FrontendShellRoute {
+    param(
+        [Parameter(Mandatory = $true)][string]$BaseUrl,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $root = $BaseUrl.TrimEnd("/")
+    $routePath = if ($Path.StartsWith("/")) { $Path } else { "/$Path" }
+    $url = "$root$routePath"
+    $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30
+    $content = [string]$response.Content
+    if ($response.StatusCode -ne 200 -or -not $content.Contains("app-root")) {
+        throw "Frontend route failed for ${Name}: $url returned HTTP $($response.StatusCode)."
+    }
+
+    Write-Host "Frontend route OK: $routePath ($Name)."
+}
+
+function Invoke-PublicFrontendSmoke {
+    param([Parameter(Mandatory = $true)][string]$BaseUrl)
+
+    Write-Host "Running public frontend route smoke..."
+    $routes = @(
+        @{ Path = "/"; Name = "home" },
+        @{ Path = "/services"; Name = "services" },
+        @{ Path = "/prices"; Name = "prices" },
+        @{ Path = "/payment"; Name = "payment" },
+        @{ Path = "/refund"; Name = "refund" },
+        @{ Path = "/offer"; Name = "offer" },
+        @{ Path = "/privacy"; Name = "privacy" },
+        @{ Path = "/contacts"; Name = "contacts" },
+        @{ Path = "/receipt-consent"; Name = "receipt consent" },
+        @{ Path = "/pay"; Name = "pay form" },
+        @{ Path = "/uslugi"; Name = "services redirect alias" },
+        @{ Path = "/oplata"; Name = "payment redirect alias" }
+    )
+
+    foreach ($route in $routes) {
+        Assert-FrontendShellRoute -BaseUrl $BaseUrl -Path $route.Path -Name $route.Name
+    }
+}
+
 function Get-KeycloakServiceAccountToken {
     param(
         [Parameter(Mandatory = $true)][string]$RootUrl,
@@ -875,6 +918,7 @@ try {
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
+    Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
     if ($WithReputationAiSmoke) {
         Invoke-ReputationAiSmoke `
             -RootUrl $BaseUrl `

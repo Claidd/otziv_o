@@ -103,6 +103,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .telephone(changeNumberPhone(companyDTO.getTelephone()))
                 .city(companyDTO.getCity())
                 .urlChat(companyDTO.getUrlChat())
+                .urlSite(companyDTO.getUrlSite())
                 .email(companyDTO.getEmail())
                 .user(convertUserDTOToUser(companyDTO.getUser()))
                 .operator(companyDTO.getOperator())
@@ -723,6 +724,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setTelephone(company.getTelephone());
             companyDTO.setCity(company.getCity());
             companyDTO.setUrlChat(company.getUrlChat());
+            companyDTO.setUrlSite(company.getUrlSite());
             companyDTO.setEmail(company.getEmail());
             companyDTO.setOperator(company.getOperator());
             companyDTO.setCounterNoPay(company.getCounterNoPay());
@@ -919,6 +921,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .id(company.getId())
                 .title(company.getTitle())
                 .urlChat(company.getUrlChat())
+                .urlSite(company.getUrlSite())
                 .telephone(company.getTelephone())
                 .manager(convertToManagerDTO(company.getManager()))
                 .workers(convertToWorkerDTOList(company.getWorkers()))
@@ -1113,6 +1116,11 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat())){ /*Проверка смены ссылки на чат*/
             log.info("Обновляем ссылку на чат");
             saveCompany.setUrlChat(companyDTO.getUrlChat());
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.getUrlSite(), saveCompany.getUrlSite())){ /*Проверка смены официального сайта*/
+            log.info("Обновляем официальный сайт");
+            saveCompany.setUrlSite(companyDTO.getUrlSite());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getEmail(), saveCompany.getEmail())){ /*Проверка смены мейл*/

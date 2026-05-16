@@ -1,0 +1,147 @@
+<app-admin-layout [title]="page().title" [active]="pageKey()" [rightPanelMode]="'custom'">
+  <section class="public-hero" aria-labelledby="public-page-title">
+    <div>
+      <p class="eyebrow">{{ page().eyebrow }}</p>
+      <h2 id="public-page-title">{{ page().title }}</h2>
+      <p>{{ page().lead }}</p>
+    </div>
+    <aside>
+      <span class="material-icons-sharp" aria-hidden="true">verified</span>
+      <strong>{{ page().accent }}</strong>
+    </aside>
+  </section>
+
+  <nav class="public-nav" aria-label="Публичные разделы сайта">
+    @for (link of publicLinks; track link.href) {
+      <a [routerLink]="link.href" [class.active]="isActiveLink(link)">
+        <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+        <span>{{ link.label }}</span>
+      </a>
+    }
+  </nav>
+
+  @if (pageKey() === 'pay') {
+    <section class="pay-grid">
+      <form class="pay-form" (ngSubmit)="preparePayment()" aria-label="Форма оплаты">
+        <label>
+          <span>Сумма, руб.</span>
+          <input
+            type="number"
+            name="amount"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [(ngModel)]="paymentDraft.amount"
+            placeholder="Например, 4800"
+          >
+        </label>
+
+        <label>
+          <span>E-mail для электронного чека</span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="email"
+            [(ngModel)]="paymentDraft.email"
+            placeholder="client@example.ru"
+          >
+        </label>
+
+        <label class="wide">
+          <span>Комментарий к платежу</span>
+          <textarea
+            name="comment"
+            rows="4"
+            [(ngModel)]="paymentDraft.comment"
+            placeholder="Номер заказа, название компании или согласованная услуга"
+          ></textarea>
+        </label>
+
+        <label class="consent wide">
+          <input type="checkbox" name="offerConsent" [(ngModel)]="paymentDraft.offerConsent">
+          <span>Согласен с публичной офертой и политикой обработки персональных данных.</span>
+        </label>
+
+        <label class="consent wide">
+          <input type="checkbox" name="receiptConsent" [(ngModel)]="paymentDraft.receiptConsent">
+          <span>Согласен получить электронный кассовый чек на указанный e-mail.</span>
+        </label>
+
+        <div class="pay-actions wide">
+          <button type="submit" [disabled]="!canPreparePayment()">
+            <span class="material-icons-sharp" aria-hidden="true">arrow_forward</span>
+            Продолжить к оплате
+          </button>
+          @if (paymentStatus()) {
+            <p>{{ paymentStatus() }}</p>
+          }
+        </div>
+      </form>
+
+      <section class="public-card pay-note">
+        <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+        <h3>Что будет дальше</h3>
+        <p>После подключения эквайринга форма создаст платеж через API Т-Банка и откроет безопасную платежную страницу банка.</p>
+      </section>
+    </section>
+  } @else {
+    @if (page().prices?.length) {
+      <section class="price-grid" aria-label="Тарифы">
+        @for (price of page().prices; track price.title) {
+          <article class="price-card">
+            <div>
+              <h3>{{ price.title }}</h3>
+              <strong>{{ price.price }}</strong>
+              <p>{{ price.description }}</p>
+            </div>
+            <ul>
+              @for (detail of price.details; track detail) {
+                <li>{{ detail }}</li>
+              }
+            </ul>
+          </article>
+        }
+      </section>
+    }
+
+    <section class="public-grid" [class.public-grid--policy]="pageKey() === 'privacy'" aria-label="Содержание страницы">
+      @for (section of page().sections; track section.title) {
+        <article class="public-card">
+          <span class="material-icons-sharp" aria-hidden="true">{{ section.icon }}</span>
+          <h3>{{ section.title }}</h3>
+          <p>{{ section.body }}</p>
+          @if (section.items?.length) {
+            <ul>
+              @for (item of section.items; track item) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          }
+        </article>
+      }
+    </section>
+  }
+
+  <section admin-right-content class="public-side">
+    <div class="public-side-head">
+      <img src="/assets/images/logo-o.png" alt="">
+      <div>
+        <h2>Компания О!</h2>
+        <p>Публичные разделы</p>
+      </div>
+    </div>
+
+    <nav aria-label="Публичные ссылки">
+      <a routerLink="/">
+        <span class="material-icons-sharp" aria-hidden="true">home</span>
+        <strong>Главная</strong>
+      </a>
+      @for (link of publicLinks; track link.href) {
+        <a [routerLink]="link.href">
+          <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+          <strong>{{ link.label }}</strong>
+        </a>
+      }
+    </nav>
+  </section>
+</app-admin-layout>

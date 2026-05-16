@@ -11,7 +11,7 @@ public enum DeepResearchProfile {
             "gpt-5.4-mini",
             "Короткий и дешёвый отчёт для быстрой проверки маршрута и фактов.",
             Duration.ofMinutes(5),
-            6,
+            10,
             6000,
             "low",
             "low"
@@ -22,10 +22,10 @@ public enum DeepResearchProfile {
             "gpt-5.5",
             "Основной режим: нормальный отчёт с web search и источниками.",
             Duration.ofMinutes(8),
-            16,
+            32,
             12000,
             "low",
-            "low"
+            "medium"
     ),
     MAXIMUM(
             "maximum",
@@ -33,10 +33,10 @@ public enum DeepResearchProfile {
             "gpt-5.5",
             "Глубокий отчёт с усиленным reasoning и большим запасом контекста.",
             Duration.ofMinutes(12),
-            20,
-            14000,
+            48,
+            16000,
             "medium",
-            "low"
+            "medium"
     );
 
     private final String key;

@@ -167,7 +167,7 @@ export class ReputationAiComponent implements OnDestroy {
   publicUrlsText = '';
   includeCompanyWebsite = true;
   autoEnrichCollectionGaps = false;
-  readonly deepResearchProfile = signal('economy');
+  readonly deepResearchProfile = signal('quality');
   readonly contentPackProfile = signal('quality');
   adTextsCount = 6;
   socialPostsCount = 4;
@@ -1239,7 +1239,7 @@ export class ReputationAiComponent implements OnDestroy {
   }
 
   setDeepResearchProfile(profileKey: string): void {
-    const nextProfile = profileKey || 'economy';
+    const nextProfile = profileKey || 'quality';
     this.deepResearchProfile.set(nextProfile);
     this.autoEnrichCollectionGaps = this.defaultAutoEnrichCollectionGaps(nextProfile);
   }
@@ -2135,7 +2135,7 @@ export class ReputationAiComponent implements OnDestroy {
         label: 'Быстро',
         model: 'gpt-5.4-mini',
         description: 'Короткий и дешёвый отчёт для быстрой проверки маршрута и фактов.',
-        maxToolCalls: 6,
+        maxToolCalls: 10,
         maxOutputTokens: 6000,
         reasoningEffort: 'low',
         searchContextSize: 'low'
@@ -2145,20 +2145,20 @@ export class ReputationAiComponent implements OnDestroy {
         label: 'Баланс',
         model: 'gpt-5.5',
         description: 'Основной режим: нормальный отчёт с web search и источниками.',
-        maxToolCalls: 16,
+        maxToolCalls: 32,
         maxOutputTokens: 12000,
         reasoningEffort: 'low',
-        searchContextSize: 'low'
+        searchContextSize: 'medium'
       },
       {
         key: 'maximum',
         label: 'Максимум',
         model: 'gpt-5.5',
         description: 'Глубокий отчёт с усиленным reasoning и большим запасом контекста.',
-        maxToolCalls: 20,
-        maxOutputTokens: 14000,
+        maxToolCalls: 48,
+        maxOutputTokens: 16000,
         reasoningEffort: 'medium',
-        searchContextSize: 'low'
+        searchContextSize: 'medium'
       }
     ];
   }

@@ -37,6 +37,13 @@ type DashboardWarning = {
   icon: string;
 };
 
+type PublicHomeLink = {
+  label: string;
+  description: string;
+  icon: string;
+  routerLink: string;
+};
+
 const MONTH_NAMES = [
   'Январь',
   'Февраль',
@@ -121,6 +128,57 @@ export class HomeComponent {
       icon: 'monitoring',
       roles: ['ADMIN', 'OWNER'],
       href: appEnvironment.metricsBaseUrl
+    }
+  ];
+
+  readonly publicLinks: PublicHomeLink[] = [
+    {
+      label: 'Услуги',
+      description: 'Что именно оказывает компания',
+      icon: 'rate_review',
+      routerLink: '/services'
+    },
+    {
+      label: 'Цены',
+      description: 'Тарифы и состав работ',
+      icon: 'payments',
+      routerLink: '/prices'
+    },
+    {
+      label: 'Оплата',
+      description: 'Порядок онлайн-оплаты',
+      icon: 'credit_card',
+      routerLink: '/payment'
+    },
+    {
+      label: 'Возврат',
+      description: 'Отмена услуги и возврат',
+      icon: 'undo',
+      routerLink: '/refund'
+    },
+    {
+      label: 'Оферта',
+      description: 'Условия договора',
+      icon: 'article',
+      routerLink: '/offer'
+    },
+    {
+      label: 'Контакты',
+      description: 'Связь и реквизиты',
+      icon: 'contacts',
+      routerLink: '/contacts'
+    },
+    {
+      label: 'Электронный чек',
+      description: 'Согласие на получение чека',
+      icon: 'mark_email_read',
+      routerLink: '/receipt-consent'
+    },
+    {
+      label: 'Оплатить',
+      description: 'Форма оплаты услуги',
+      icon: 'shopping_cart',
+      routerLink: '/pay'
     }
   ];
 

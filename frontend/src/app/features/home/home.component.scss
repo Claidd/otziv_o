@@ -42,6 +42,7 @@ small {
 .cabinet-metrics,
 .dashboard-grid,
 .action-grid,
+.public-link-grid,
 .chart-grid {
   display: grid;
   gap: 1.05rem;
@@ -64,6 +65,7 @@ small {
 .cabinet-metrics > *,
 .dashboard-grid > *,
 .action-grid > *,
+.public-link-grid > *,
 .chart-grid > * {
   min-width: 0;
   max-width: 100%;
@@ -296,6 +298,16 @@ dd {
   margin-top: 0;
 }
 
+.public-entry {
+  max-width: 92rem;
+  margin-inline: auto;
+}
+
+.public-link-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0;
+}
+
 .action-card {
   display: grid;
   min-width: 0;
@@ -396,6 +408,7 @@ dd {
   .cabinet-metrics,
   .dashboard-grid,
   .action-grid,
+  .public-link-grid,
   .chart-grid {
     grid-template-columns: 1fr;
   }

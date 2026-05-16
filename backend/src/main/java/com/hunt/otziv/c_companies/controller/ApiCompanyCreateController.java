@@ -221,6 +221,7 @@ public class ApiCompanyCreateController {
     private CompanyDTO toCompanyDto(CompanyDTO base, CompanyCreateRequest request) {
         base.setTitle(normalize(request.title()));
         base.setUrlChat(normalize(request.urlChat()));
+        base.setUrlSite(blankToNull(request.urlSite()));
         base.setTelephone(normalize(request.telephone()));
         base.setCity(normalize(request.city()));
         base.setEmail(blankToNull(request.email()));
@@ -307,6 +308,7 @@ public class ApiCompanyCreateController {
                 leadId,
                 safe(company.getTitle()),
                 safe(company.getUrlChat()),
+                safe(company.getUrlSite()),
                 safe(company.getTelephone()),
                 safe(company.getCity()),
                 safe(company.getEmail()),

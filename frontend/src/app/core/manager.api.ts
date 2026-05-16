@@ -287,6 +287,7 @@ export interface CompanyEditPayload {
   id: number;
   title: string;
   urlChat: string;
+  urlSite: string;
   telephone: string;
   city: string;
   email: string;
@@ -313,6 +314,7 @@ export interface CompanyEditPayload {
 export interface CompanyUpdateRequest {
   title: string;
   urlChat: string;
+  urlSite: string;
   telephone: string;
   city: string;
   email: string;

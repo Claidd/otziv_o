@@ -15,6 +15,7 @@ export interface CompanyCreatePayload {
   leadId?: number | null;
   title: string;
   urlChat: string;
+  urlSite: string;
   telephone: string;
   city: string;
   email: string;
@@ -42,6 +43,7 @@ export interface CompanyCreateRequest {
   managerId?: number | null;
   title: string;
   urlChat: string;
+  urlSite: string;
   telephone: string;
   city: string;
   email: string;

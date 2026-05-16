@@ -27,6 +27,7 @@ function company(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     id: 10,
     title: 'Company',
     urlChat: 'https://chat',
+    urlSite: 'https://company.example.test',
     telephone: '+7999',
     city: 'City',
     email: 'company@example.com',
@@ -56,6 +57,7 @@ function draft(overrides: Partial<CompanyUpdateRequest> = {}): CompanyUpdateRequ
   return {
     title: 'Company',
     urlChat: 'https://chat',
+    urlSite: 'https://company.example.test',
     telephone: '+7999',
     city: 'City',
     email: 'company@example.com',
@@ -92,6 +94,7 @@ describe('ManagerCompanyEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#company-edit-title')?.textContent?.trim()).toBe('Редактирование компании');
     expect(element.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Company');
+    expect(element.querySelector<HTMLInputElement>('input[name="urlSite"]')?.value).toBe('https://company.example.test');
     expect(element.textContent).toContain('Worker 6');
     expect(element.textContent).toContain('City: Filial 7');
   });

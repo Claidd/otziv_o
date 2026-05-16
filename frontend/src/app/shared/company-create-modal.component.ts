@@ -17,6 +17,7 @@ type CompanyCreateDraft = {
   managerId: number | null;
   title: string;
   urlChat: string;
+  urlSite: string;
   telephone: string;
   city: string;
   email: string;
@@ -31,7 +32,7 @@ type CompanyCreateDraft = {
 
 type PreservedDraftFields = Pick<
   CompanyCreateDraft,
-  'title' | 'urlChat' | 'telephone' | 'city' | 'email' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
+  'title' | 'urlChat' | 'urlSite' | 'telephone' | 'city' | 'email' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
 >;
 
 @Component({
@@ -136,6 +137,18 @@ type PreservedDraftFields = Pick<
                   [disabled]="saving()"
                   [ngModel]="draft.urlChat"
                   (ngModelChange)="setField('urlChat', $event)"
+                >
+              </label>
+
+              <label class="lead-edit-field">
+                <span>Официальный сайт</span>
+                <input
+                  name="companyUrlSite"
+                  type="text"
+                  autocomplete="url"
+                  [disabled]="saving()"
+                  [ngModel]="draft.urlSite"
+                  (ngModelChange)="setField('urlSite', $event)"
                 >
               </label>
 
@@ -397,6 +410,7 @@ export class CompanyCreateModalComponent implements OnChanges {
       managerId: payload.manager?.id ?? managerId ?? null,
       title: payload.title ?? '',
       urlChat: payload.urlChat ?? '',
+      urlSite: payload.urlSite ?? '',
       telephone: payload.telephone ?? '',
       city: payload.city ?? '',
       email: payload.email ?? '',
@@ -414,6 +428,7 @@ export class CompanyCreateModalComponent implements OnChanges {
     return {
       title: draft.title,
       urlChat: draft.urlChat,
+      urlSite: draft.urlSite,
       telephone: draft.telephone,
       city: draft.city,
       email: draft.email,
@@ -434,6 +449,7 @@ export class CompanyCreateModalComponent implements OnChanges {
       managerId: draft.managerId,
       title: draft.title.trim(),
       urlChat: draft.urlChat.trim(),
+      urlSite: draft.urlSite.trim(),
       telephone: draft.telephone.trim(),
       city: draft.city.trim(),
       email: draft.email.trim(),

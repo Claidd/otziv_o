@@ -732,13 +732,13 @@ public class DeepCompanyResearchService {
 
     private String crmPriorityUrls(Company company, ReputationResearchRequest request) {
         LinkedHashSet<String> urls = new LinkedHashSet<>();
+        addUrl(urls, company.getUrlSite(), "Официальный сайт из CRM");
         if (request.publicUrls() != null) {
             request.publicUrls().stream()
                     .filter(value -> value != null && !value.isBlank())
                     .map(String::trim)
                     .forEach(urls::add);
         }
-        addUrl(urls, company.getUrlSite(), "Официальный сайт из CRM");
 
         Set<Filial> filials = company.getFilial();
         if (filials != null) {

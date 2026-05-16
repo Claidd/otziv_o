@@ -96,6 +96,7 @@ public class ManagerBoardEditAssembler {
                 company.getId(),
                 safe(company.getTitle()),
                 safe(company.getUrlChat()),
+                safe(company.getUrlSite()),
                 safe(company.getTelephone()),
                 safe(company.getCity()),
                 safe(company.getEmail()),
