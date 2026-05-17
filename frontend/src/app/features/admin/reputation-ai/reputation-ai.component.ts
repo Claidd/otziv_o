@@ -33,6 +33,7 @@ import type {
 } from '../../../core/reputation-ai.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
+import { DeepResearchReportViewComponent } from '../../../shared/reputation/deep-research-report-view.component';
 import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
 
 type ReputationAction =
@@ -155,7 +156,7 @@ type ReportComparison = {
 
 @Component({
   selector: 'app-reputation-ai',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, UiTooltipDirective],
+  imports: [AdminLayoutComponent, DatePipe, DeepResearchReportViewComponent, FormsModule, UiTooltipDirective],
   templateUrl: './reputation-ai.component.html',
   styleUrl: './reputation-ai.component.scss'
 })
@@ -166,7 +167,7 @@ export class ReputationAiComponent implements OnDestroy {
   productsOrServicesText = '';
   publicUrlsText = '';
   includeCompanyWebsite = true;
-  autoEnrichCollectionGaps = false;
+  autoEnrichCollectionGaps = true;
   readonly deepResearchProfile = signal('quality');
   readonly contentPackProfile = signal('quality');
   adTextsCount = 6;
@@ -1599,6 +1600,33 @@ export class ReputationAiComponent implements OnDestroy {
 
   sourceTypeLabel(type: string): string {
     const normalized = (type || '').toLowerCase();
+    if (normalized === 'official_site') {
+      return 'Официальный сайт';
+    }
+    if (normalized === 'map_card') {
+      return 'Карты';
+    }
+    if (normalized === 'directory') {
+      return 'Справочник';
+    }
+    if (normalized === 'review_platform') {
+      return 'Отзывы';
+    }
+    if (normalized === 'social') {
+      return 'Соцсеть';
+    }
+    if (normalized === 'legal') {
+      return 'Юридический';
+    }
+    if (normalized === 'aggregator') {
+      return 'Агрегатор';
+    }
+    if (normalized === 'media') {
+      return 'Медиа';
+    }
+    if (normalized === 'other') {
+      return 'Другое';
+    }
     if (normalized.includes('website')) {
       return 'Сайт';
     }
@@ -1827,7 +1855,7 @@ export class ReputationAiComponent implements OnDestroy {
     if (url) {
       return url;
     }
-    return this.textKey(`${source.title ?? ''} ${source.note ?? ''}`);
+    return this.textKey(`${source.title ?? ''} ${source.type ?? ''} ${(source.usedFor ?? []).join(' ')} ${source.note ?? ''}`);
   }
 
   private sectionMap(report: DeepCompanyResearchReport): Map<string, { title: string; body: string }> {
@@ -2096,7 +2124,7 @@ export class ReputationAiComponent implements OnDestroy {
     if (/(довер|доказат|сертифик|лиценз|юрид|портфолио|кейс)/.test(value)) {
       return 'verified';
     }
-    if (/(сценари|утп|возраж|контент|тем)/.test(value)) {
+    if (/(сценари|утп|возраж|контент|тем|иде|пост|карточк)/.test(value)) {
       return 'psychology_alt';
     }
     if (/(автодосбор|досбор)/.test(value)) {
@@ -2124,8 +2152,7 @@ export class ReputationAiComponent implements OnDestroy {
   }
 
   private defaultAutoEnrichCollectionGaps(profileKey: string | null | undefined): boolean {
-    const key = (profileKey ?? '').trim().toLowerCase();
-    return key === 'quality' || key === 'maximum';
+    return true;
   }
 
   private fallbackDeepResearchProfiles(): ReputationAiModelProfile[] {
@@ -2134,9 +2161,9 @@ export class ReputationAiComponent implements OnDestroy {
         key: 'economy',
         label: 'Быстро',
         model: 'gpt-5.4-mini',
-        description: 'Короткий и дешёвый отчёт для быстрой проверки маршрута и фактов.',
-        maxToolCalls: 10,
-        maxOutputTokens: 6000,
+        description: 'Компактный отчёт: быстрый фактчек без полного 15-20 источникового прохода.',
+        maxToolCalls: 6,
+        maxOutputTokens: 4500,
         reasoningEffort: 'low',
         searchContextSize: 'low'
       },
@@ -2202,7 +2229,7 @@ export class ReputationAiComponent implements OnDestroy {
     }
 
     if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('таймаут')) {
-      return 'OpenAI не успел ответить за отведённое время. Можно повторить запрос или выбрать более лёгкий профиль.';
+      return 'OpenAI не успел ответить за отведённое время. Можно повторить запрос или выбрать профиль «Баланс», если mini-профиль не успевает с web search.';
     }
 
     if (lower.includes('поврежд') && lower.includes('json')) {

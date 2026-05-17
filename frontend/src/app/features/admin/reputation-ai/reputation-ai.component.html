@@ -24,45 +24,33 @@
         <section class="launch-settings-area" appTooltip="Профили и дополнительные факты применяются к двум основным действиям ниже.">
           <div class="launch-settings-title">
             <span class="material-icons-sharp">tune</span>
-          <div>
+            <div>
               <h2>Настройки AI-сбора</h2>
-          </div>
+            </div>
           </div>
 
           <div class="launch-controls-grid">
             <section class="launch-profile-fields" appTooltip="Профили управляют стоимостью, глубиной поиска, моделью и размером результата.">
               <div class="launch-field" appTooltip="Быстро — дешёвый короткий отчёт, Баланс — основной режим, Максимум — больше поиска и контекста.">
-                <div class="field-title">
-                  <span>Глубокий отчёт</span>
-                  @if (selectedDeepResearchProfile(); as profile) {
-                    <small>search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }} · tools {{ profile.maxToolCalls }}</small>
-                  }
-                </div>
                 <select
                   name="deepResearchProfile"
                   [ngModel]="deepResearchProfile()"
                   (ngModelChange)="setDeepResearchProfile($event)"
                 >
                   @for (profile of deepResearchProfiles(); track trackProfile($index, profile)) {
-                    <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+                    <option [value]="profile.key">Глубокий отчёт · {{ profile.label }} · {{ profile.model }} · search {{ profile.searchContextSize }} · reasoning {{ profile.reasoningEffort || 'off' }} · tools {{ profile.maxToolCalls }}</option>
                   }
                 </select>
               </div>
 
               <div class="launch-field" appTooltip="Профиль AI-пакета влияет на качество маркетинговых текстов и расход токенов.">
-                <div class="field-title">
-                  <span>AI-пакет</span>
-                  @if (selectedContentPackProfile(); as profile) {
-                    <small>reasoning {{ profile.reasoningEffort || 'off' }} · output {{ profile.maxOutputTokens }}</small>
-                  }
-                </div>
                 <select
                   name="contentPackProfile"
                   [ngModel]="contentPackProfile()"
                   (ngModelChange)="contentPackProfile.set($event)"
                 >
                   @for (profile of contentPackProfiles(); track trackProfile($index, profile)) {
-                    <option [value]="profile.key">{{ profile.label }} · {{ profile.model }}</option>
+                    <option [value]="profile.key">AI-пакет · {{ profile.label }} · {{ profile.model }} · reasoning {{ profile.reasoningEffort || 'off' }} · output {{ profile.maxOutputTokens }}</option>
                   }
                 </select>
               </div>
@@ -162,241 +150,24 @@
       </div>
 
       @if (deepResearch(); as report) {
-        <section class="report-head">
-          <div>
-            <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
-            <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
-            <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} блоков · {{ deepResearchOperationLabel(deepResearchJob()) }}</small>
-            @if (gapEnrichmentStatus(); as gapStatus) {
-              <div class="change-chip-list" [appTooltip]="gapStatus.detail">
-                <span [class.added]="gapStatus.tone === 'green'" [class.removed]="gapStatus.tone === 'yellow' || gapStatus.tone === 'red'">
-                  {{ gapStatus.label }}
-                </span>
-              </div>
-            }
-          </div>
-
-          <div class="report-actions">
-            <button type="button" class="secondary" (click)="copyDeepReportMarkdown()" appTooltip="Скопировать весь markdown отчёта в буфер обмена.">
-              <span class="material-icons-sharp">content_copy</span>
-              Копировать
-            </button>
-            <button type="button" class="secondary" (click)="downloadDeepReport(report)" appTooltip="Скачать текущую версию отчёта markdown-файлом.">
-              <span class="material-icons-sharp">download</span>
-              Markdown
-            </button>
-            <button type="button" class="secondary" (click)="downloadDeepReportPdf(report)" appTooltip="Скачать текущую версию отчёта PDF-файлом.">
-              <span class="material-icons-sharp">picture_as_pdf</span>
-              PDF
-            </button>
-            <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="refreshDeepReportSources()" appTooltip="Обновить только список публичных источников. Текст разделов останется из базового отчёта.">
-              <span class="material-icons-sharp">travel_explore</span>
-              {{ isLoading('refreshSources') ? 'Запускаю' : 'Источники' }}
-            </button>
-            <button type="button" class="secondary" [disabled]="busy() || hasActiveDeepResearch()" (click)="rebuildDeepReportText()" appTooltip="Пересобрать весь текст отчёта по сохранённым источникам без нового web search.">
-              <span class="material-icons-sharp">auto_fix_high</span>
-              {{ isLoading('rebuildText') ? 'Запускаю' : 'Пересобрать' }}
-            </button>
-            <button type="button" class="accent" [disabled]="busy() || hasActiveContentPackJob()" (click)="createContentPack(deepResearchJob()?.jobId ?? null)" appTooltip="Создать AI-пакет именно из открытой версии отчёта.">
-              <span class="material-icons-sharp">auto_awesome</span>
-              AI-пакет из отчёта
-            </button>
-          </div>
-        </section>
-
-        @if (reportComparison(); as comparison) {
-          <section class="change-panel" [class.empty]="!comparison.hasChanges">
-            <div class="change-head">
-              <span class="material-icons-sharp">compare_arrows</span>
-              <div>
-                <strong>Что изменилось</strong>
-                <small>Сравнение с {{ comparison.baseJob.createdAt | date: 'dd.MM HH:mm' }} · {{ deepResearchOperationLabel(comparison.baseJob) }}</small>
-              </div>
-            </div>
-
-            <div class="change-summary-grid">
-              @for (item of comparison.summaryItems; track trackChangeItem($index, item)) {
-                <article
-                  class="change-summary-card"
-                  [class.green]="item.tone === 'green'"
-                  [class.yellow]="item.tone === 'yellow'"
-                  [class.red]="item.tone === 'red'"
-                  [class.blue]="item.tone === 'blue'"
-                  [class.gray]="item.tone === 'gray'"
-                >
-                  <span class="material-icons-sharp">{{ item.icon }}</span>
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <small>{{ item.detail }}</small>
-                  </div>
-                </article>
-              }
-            </div>
-
-            @if (comparison.sourceAdded.length > 0 || comparison.sourceRemoved.length > 0 || comparison.sectionChanges.length > 0 || comparison.warningsResolved.length > 0 || comparison.warningsAdded.length > 0) {
-              <div class="change-detail-grid">
-                @if (comparison.sourceAdded.length > 0) {
-                  <article class="change-detail-block green">
-                    <strong>Новые источники</strong>
-                    <div class="change-chip-list">
-                      @for (source of comparison.sourceAdded; track trackText($index, source.url || source.title || source.note)) {
-                        @if (source.url) {
-                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
-                        } @else {
-                          <span>{{ source.title || source.note }}</span>
-                        }
-                      }
-                    </div>
-                  </article>
-                }
-
-                @if (comparison.sourceRemoved.length > 0) {
-                  <article class="change-detail-block yellow">
-                    <strong>Убраны из источников</strong>
-                    <div class="change-chip-list">
-                      @for (source of comparison.sourceRemoved; track trackText($index, source.url || source.title || source.note)) {
-                        @if (source.url) {
-                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
-                        } @else {
-                          <span>{{ source.title || source.note }}</span>
-                        }
-                      }
-                    </div>
-                  </article>
-                }
-
-                @if (comparison.sectionChanges.length > 0) {
-                  <article class="change-detail-block blue">
-                    <strong>Разделы отчёта</strong>
-                    <div class="change-chip-list">
-                      @for (change of comparison.sectionChanges; track trackSectionChange($index, change)) {
-                        <span [class]="change.status">{{ sectionChangeLabel(change.status) }} · {{ change.title }}</span>
-                      }
-                    </div>
-                  </article>
-                }
-
-                @if (comparison.warningsResolved.length > 0) {
-                  <article class="change-detail-block green">
-                    <strong>Закрытые риски</strong>
-                    <div class="change-chip-list">
-                      @for (warning of comparison.warningsResolved; track trackText($index, warning)) {
-                        <span>{{ warning }}</span>
-                      }
-                    </div>
-                  </article>
-                }
-
-                @if (comparison.warningsAdded.length > 0) {
-                  <article class="change-detail-block yellow">
-                    <strong>Новые сомнения</strong>
-                    <div class="change-chip-list">
-                      @for (warning of comparison.warningsAdded; track trackText($index, warning)) {
-                        <span>{{ warning }}</span>
-                      }
-                    </div>
-                  </article>
-                }
-              </div>
-            } @else {
-              <p class="muted">По источникам, разделам, рискам и чек-листу версии совпадают.</p>
-            }
-          </section>
-        }
-
-        <section
-          class="quality-checklist"
-          [class.green]="reportQualitySummary().tone === 'green'"
-          [class.yellow]="reportQualitySummary().tone === 'yellow'"
-          [class.red]="reportQualitySummary().tone === 'red'"
-          [class.gray]="reportQualitySummary().tone === 'gray'"
-        >
-          <div class="quality-summary">
-            <span class="material-icons-sharp">{{ reportQualitySummary().icon }}</span>
-            <div>
-              <strong>{{ reportQualitySummary().label }}</strong>
-              <small>Проверки {{ reportQualitySummary().passed }}/{{ reportQualitySummary().total }}</small>
-            </div>
-          </div>
-
-          @if (reportQualityChecks().length > 0) {
-            <div class="quality-grid">
-              @for (check of reportQualityChecks(); track trackQualityCheck($index, check)) {
-                <article
-                  class="quality-check"
-                  [class.pass]="check.status === 'pass'"
-                  [class.warn]="check.status === 'warn'"
-                  [class.fail]="check.status === 'fail'"
-                  [class.info]="check.status !== 'pass' && check.status !== 'warn' && check.status !== 'fail'"
-                >
-                  <span class="material-icons-sharp">{{ qualityStatusIcon(check.status) }}</span>
-                  <div>
-                    <strong>{{ check.label }}</strong>
-                    <small>{{ qualityStatusLabel(check.status) }} · {{ check.detail }}</small>
-                  </div>
-                </article>
-              }
-            </div>
-          } @else {
-            <p class="muted">Старый отчёт без автопроверок качества. Новый запуск соберёт чек-лист.</p>
-          }
-        </section>
-
-        @if (reportWarnings().length > 0) {
-          <div class="warning-list">
-            @for (warning of reportWarnings(); track trackText($index, warning)) {
-              <p>
-                <span class="material-icons-sharp">warning</span>
-                {{ warning }}
-              </p>
-            }
-          </div>
-        }
-
-        @if (deepReportBlocks().length > 0) {
-          <div class="deep-report-outline" aria-label="Темы отчёта">
-            @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
-              <span>{{ block.title }}</span>
-            }
-          </div>
-        }
-
-        <div class="deep-report-topic-grid">
-          @for (block of deepReportBlocks(); track trackDeepBlock($index, block); let sectionIndex = $index) {
-            <article class="deep-report-topic">
-              <header>
-                <div>
-                  <span class="material-icons-sharp">{{ block.icon }}</span>
-                  <h3>{{ block.title }}</h3>
-                </div>
-                <button
-                  type="button"
-                  class="icon-button"
-                  [disabled]="busy() || hasActiveDeepResearch()"
-                  (click)="rebuildDeepReportSection(block, sectionIndex)"
-                  aria-label="Пересобрать раздел"
-                  appTooltip="Пересобрать только этот раздел по сохранённым источникам и фактам. Остальные разделы не меняются."
-                >
-                  <span class="material-icons-sharp">auto_fix_high</span>
-                </button>
-              </header>
-              <div class="deep-report-markdown" [innerHTML]="block.html"></div>
-            </article>
-          }
-        </div>
-
-        @if (report.sources.length > 0) {
-          <div class="deep-report-sources">
-            <strong>Источники</strong>
-            @for (source of report.sources; track trackText($index, source.url || source.title)) {
-              @if (source.url) {
-                <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
-              } @else {
-                <span>{{ source.title || source.note }}</span>
-              }
-            }
-          </div>
-        }
+        <app-deep-research-report-view
+          [report]="report"
+          [job]="deepResearchJob()"
+          [comparison]="reportComparison()"
+          [busy]="busy() || hasActiveDeepResearch()"
+          [contentPackBusy]="busy() || hasActiveContentPackJob()"
+          [showActions]="true"
+          [showRefreshActions]="true"
+          [showSectionActions]="true"
+          [showContentPackAction]="true"
+          (copyMarkdown)="copyDeepReportMarkdown()"
+          (downloadMarkdown)="downloadDeepReport($event)"
+          (downloadPdf)="downloadDeepReportPdf($event)"
+          (refreshSources)="refreshDeepReportSources()"
+          (rebuildText)="rebuildDeepReportText()"
+          (createContentPack)="createContentPack(deepResearchJob()?.jobId ?? null)"
+          (rebuildSection)="rebuildDeepReportSection($event.block, $event.sectionIndex)"
+        />
       } @else {
         <section class="empty-stage">
           <span class="material-icons-sharp">article</span>
@@ -816,7 +587,7 @@
         <h2>Параметры запуска</h2>
       </div>
 
-      <label class="check-row" appTooltip="Если включено, после основного отчёта будет второй короткий web-search по пунктам из «Что ещё собирать». Для быстрого профиля обычно выключаем, для баланса и максимума включаем.">
+      <label class="check-row" appTooltip="Если включено, после основного отчёта будет второй короткий web-search по пунктам из «Что ещё собирать». По умолчанию включено для всех профилей, но можно выключить для более быстрого запуска.">
         <input type="checkbox" name="autoEnrichCollectionGaps" [(ngModel)]="autoEnrichCollectionGaps">
         <span>
           <strong>Автодосбор рекомендаций</strong>

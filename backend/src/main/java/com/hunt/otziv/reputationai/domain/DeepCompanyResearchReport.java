@@ -46,11 +46,35 @@ public record DeepCompanyResearchReport(
         }
     }
 
-    public record Source(String title, String url, String note) {
+    public record Source(
+            String title,
+            String url,
+            String note,
+            String type,
+            List<String> usedFor,
+            String confidence
+    ) {
+        public Source(String title, String url, String note) {
+            this(title, url, note, "", List.of(), "");
+        }
+
         public Source {
             title = normalize(title);
             url = normalize(url);
             note = normalize(note);
+            type = normalize(type);
+            if (type.isBlank()) {
+                type = "other";
+            }
+            usedFor = usedFor == null ? List.of() : usedFor.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
+            confidence = normalize(confidence);
+            if (confidence.isBlank()) {
+                confidence = "medium";
+            }
         }
     }
 

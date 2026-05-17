@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
@@ -147,6 +148,7 @@ class ReviewBotChangeServiceTest {
         ReviewBotChangeService service = service();
         City city = city(9L, "Иркутск");
         Filial filial = filial(11L, city);
+        filial.setCompany(company(22L));
         Bot currentBot = bot(5L, "Старый Бот", 0);
         Bot selectedBot = bot(88L, "Впиши Имя Фамилию", 99);
         Review review = new Review();
@@ -155,7 +157,8 @@ class ReviewBotChangeServiceTest {
         review.setVigul(true);
 
         when(reviewRepository.findByIdForBotChange(44L)).thenReturn(Optional.of(review));
-        when(botService.claimNewAccountForCity(same(city), eq(Set.of(5L)))).thenReturn(Optional.of(selectedBot));
+        when(reviewRepository.findUsedBotIdsByCompanyId(22L)).thenReturn(Set.of(77L));
+        when(botService.claimNewAccountForCity(same(city), eq(Set.of(77L, 5L)))).thenReturn(Optional.of(selectedBot));
 
         service.assignNewAccount(44L);
 
@@ -221,5 +224,11 @@ class ReviewBotChangeServiceTest {
         filial.setId(id);
         filial.setCity(city);
         return filial;
+    }
+
+    private Company company(Long id) {
+        Company company = new Company();
+        company.setId(id);
+        return company;
     }
 }

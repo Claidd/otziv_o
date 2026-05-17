@@ -494,10 +494,10 @@ public class CompanyResearchService {
                 interiorAnswer(businessText, reviewQuotes),
                 sourceEvidence(sources, List.of("атмосфер", "интерьер", "уют", "страш", "локац", "антураж", "актер"), 6),
                 containsAny(businessText, List.of("атмосфер", "интерьер", "антураж", "актер")) ? 65 : 25);
-        addAnswer(answers, "amenities", "Парковка, зона ожидания, дополнительные удобства",
-                answerFromSentences(businessText, List.of("парков", "зона ожид", "ожидан", "удобств", "чай", "кофе", "сануз"), "Парковка, зона ожидания и удобства не найдены в источниках. Нужно уточнить вручную."),
-                sourceEvidence(sources, List.of("парков", "зона ожид", "удобств", "ожидан"), 4),
-                containsAny(businessText, List.of("парков", "зона ожид", "удобств", "чай")) ? 65 : 0);
+        addAnswer(answers, "amenities", "Парковка, зона ожидания, Wi-Fi и дополнительные удобства",
+                answerFromSentences(businessText, List.of("парков", "зона ожид", "ожидан", "удобств", "wi-fi", "wifi", "вай-фай", "туалет", "сануз", "гардероб", "детская зон", "чай", "кофе", "оплат"), "Парковка, зона ожидания, Wi-Fi и другие удобства не найдены в источниках. Нужно уточнить вручную."),
+                sourceEvidence(sources, List.of("парков", "зона ожид", "удобств", "ожидан", "wi-fi", "wifi", "вай-фай", "туалет", "сануз", "гардероб", "детская зон", "оплат"), 4),
+                containsAny(businessText, List.of("парков", "зона ожид", "удобств", "wi-fi", "wifi", "вай-фай", "туалет", "сануз", "гардероб", "детская зон", "чай", "оплат")) ? 65 : 0);
         addAnswer(answers, "popular", "Хиты продаж / популярные услуги",
                 popularAnswer(quotedNames, reviewQuotes),
                 sourceEvidence(sources, List.of("популяр", "рейтинг", "отзыв", "понрав", "квест"), 6),

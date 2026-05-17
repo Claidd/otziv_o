@@ -329,6 +329,8 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/change-bot", "смена аккаунта плохого отзыва {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/recovery-tasks", "создание восстановления отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/help-draft", "создание AI-помощи для отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/reviews/help-drafts", "создание AI-помощи для всех отзывов заказа {orderId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "редактирование восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/complete", "выполнение восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/recovery-batches/{batchId}/client-notified", "отметка клиента уведомленным по восстановлению {batchId}");

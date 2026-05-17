@@ -44,6 +44,9 @@ class DeepCompanyResearchServiceTest {
                 .containsExactly("Краткая сводка", "Цены");
         assertThat(report.reportMarkdown()).contains("## Краткая сводка", "Семейно-детский квестовый формат.");
         assertThat(report.sources()).hasSize(1);
+        assertThat(report.sources().get(0).type()).isEqualTo("official_site");
+        assertThat(report.sources().get(0).usedFor()).contains("факты");
+        assertThat(report.sources().get(0).confidence()).isEqualTo("high");
         assertThat(report.qualityChecks()).extracting(DeepCompanyResearchReport.QualityCheck::key)
                 .contains(
                         "sections",
@@ -106,7 +109,7 @@ class DeepCompanyResearchServiceTest {
                   "responseId": "resp_1",
                   "reportMarkdown": "## Сводка",
                   "sections": [{"title": "Сводка", "body": "Текст"}],
-                  "sources": [],
+                  "sources": [{"title": "Сайт", "url": "https://example.ru", "note": "Факты"}],
                   "warnings": [],
                   "createdAt": "2026-05-13T10:00:00"
                 }
@@ -119,6 +122,10 @@ class DeepCompanyResearchServiceTest {
         assertThat(report.qualityChecks()).isEmpty();
         assertThat(report.factSnapshot().confirmedFacts()).isEmpty();
         assertThat(report.factSnapshot().uncertainFacts()).isEmpty();
+        assertThat(report.sources()).hasSize(1);
+        assertThat(report.sources().get(0).type()).isEqualTo("other");
+        assertThat(report.sources().get(0).usedFor()).isEmpty();
+        assertThat(report.sources().get(0).confidence()).isEqualTo("medium");
     }
 
     @Test
@@ -159,12 +166,12 @@ class DeepCompanyResearchServiceTest {
     }
 
     @Test
-    void defaultsCollectionGapEnrichmentByDeepResearchProfile() {
+    void enablesCollectionGapEnrichmentByDefault() {
         ReputationResearchRequest economy = request("economy", null);
         ReputationResearchRequest quality = request("quality", null);
         ReputationResearchRequest maximumDisabled = request("maximum", false);
 
-        assertThat(economy.shouldEnrichCollectionGaps()).isFalse();
+        assertThat(economy.shouldEnrichCollectionGaps()).isTrue();
         assertThat(quality.shouldEnrichCollectionGaps()).isTrue();
         assertThat(maximumDisabled.shouldEnrichCollectionGaps()).isFalse();
     }

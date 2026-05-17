@@ -20,6 +20,15 @@
 
     @if (details(); as details) {
       <div class="review-carousel">
+        @if (sendToCheckBlockReason(); as blockReason) {
+          <p
+            class="session-draft-warning"
+            style="margin:0 0 .85rem;padding:.72rem .9rem;border:1px solid #e1b94f;border-radius:.75rem;background:#fff8d8;color:#6d5100;font-weight:900;line-height:1.35;text-align:center"
+          >
+            {{ blockReason }}
+          </p>
+        }
+
         <section class="review-cards" aria-label="Отзывы заказа" (scroll)="onReviewCarouselScroll($event)">
           @for (review of visibleReviews(); track trackReview($index, review); let first = $first) {
             <article
@@ -331,16 +340,28 @@
               <button type="button" (click)="copyReviewField(review, 'botPassword')">
                 {{ copied() === review.id + '-botPassword' ? 'готово' : 'пароль' }}
               </button>
-              <button
-                type="button"
-                class="recovery-action"
-                [class.recovery-action--planned]="!!recoveryTaskForReview(review)"
-                (click)="createRecoveryTask(review)"
-                [disabled]="isMutating('recovery-create-' + review.id) || !!recoveryTaskForReview(review)"
-                [title]="recoveryTaskForReview(review) ? 'Задача восстановления уже создана' : 'Создать задачу восстановления'"
-              >
-                {{ recoveryActionLabel(review) }}
-              </button>
+              @if (showReviewHelpAction(details)) {
+                <button
+                  type="button"
+                  class="recovery-action"
+                  (click)="createReviewHelpDraft(review)"
+                  [disabled]="isMutating('review-help-' + review.id) || companyReportBusy()"
+                  [title]="reviewHelpActionTitle()"
+                >
+                  {{ reviewHelpActionLabel(review) }}
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="recovery-action"
+                  [class.recovery-action--planned]="!!recoveryTaskForReview(review)"
+                  (click)="createRecoveryTask(review)"
+                  [disabled]="isMutating('recovery-create-' + review.id) || !!recoveryTaskForReview(review)"
+                  [title]="recoveryTaskForReview(review) ? 'Задача восстановления уже создана' : 'Создать задачу восстановления'"
+                >
+                  {{ recoveryActionLabel(review) }}
+                </button>
+              }
               <button type="button" (click)="copyReviewField(review, 'text')">
                 {{ copied() === review.id + '-text' ? 'готово' : 'текст' }}
               </button>
@@ -446,16 +467,35 @@
         }
       </div>
 
-      @if (sendToCheckBlockReason(); as blockReason) {
-        <p
-          class="session-draft-warning"
-          style="margin:.75rem 0 0;padding:.75rem .9rem;border:1px solid #e1b94f;border-radius:.75rem;background:#fff8d8;color:#6d5100;font-weight:800;line-height:1.35;text-align:center"
-        >
-          {{ blockReason }}
-        </p>
-      }
-
       <footer class="details-actions">
+        <button
+          type="button"
+          class="company-report-action"
+          [class.company-report-action--missing]="isCompanyReportMissing()"
+          (click)="openCompanyReport()"
+          [disabled]="companyReportLoading() || isActiveCompanyReport(companyReportJob())"
+        >
+          <span class="material-icons-sharp">{{ isActiveCompanyReport(companyReportJob()) ? 'hourglass_top' : 'business' }}</span>
+          {{ companyReportActionLabel() }}
+        </button>
+        @if (showReviewHelpAction(details)) {
+          <button
+            type="button"
+            class="company-report-action"
+            (click)="createAllReviewHelpDrafts()"
+            [disabled]="busy() || companyReportBusy()"
+            [title]="reviewHelpActionTitle()"
+          >
+            <span class="material-icons-sharp">auto_awesome</span>
+            {{ reviewHelpAllActionLabel() }}
+          </button>
+        }
+        @if (canRefreshCompanyReport()) {
+          <button type="button" class="company-report-refresh-action" (click)="refreshCompanyReport()" [disabled]="companyReportBusy()">
+            <span class="material-icons-sharp">refresh</span>
+            Обновить отчёт
+          </button>
+        }
         <button type="button" class="send-check-action" (click)="sendToCheck()" [disabled]="busy()">
           {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
         </button>
@@ -466,6 +506,55 @@
           {{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}
         </button>
       </footer>
+
+      @if (companyReportVisible()) {
+        <section class="side-note-card company-report-stage">
+          <header class="company-report-stage-head">
+            <div>
+              <small>{{ details.companyTitle || 'Компания' }}</small>
+              <h2>О компании</h2>
+            </div>
+            @if (companyReportLoading()) {
+              <span class="company-report-status">
+                <span class="material-icons-sharp">hourglass_top</span>
+                Проверяю
+              </span>
+            } @else if (isActiveCompanyReport(companyReportJob())) {
+              <span class="company-report-status preparing">
+                <span class="material-icons-sharp">autorenew</span>
+                Готовится
+              </span>
+            }
+          </header>
+
+          @if (companyReportError()) {
+            <p class="company-report-message error">{{ companyReportError() }}</p>
+          }
+
+          @if (companyReportJob(); as job) {
+            @if (job.report) {
+              <app-deep-research-report-view
+                [report]="job.report"
+                [job]="job"
+                [compact]="true"
+                [showActions]="false"
+              />
+            } @else if (isActiveCompanyReport(job)) {
+              <div class="company-report-message">
+                <span class="material-icons-sharp">hourglass_top</span>
+                <p>Отчёт собирается в фоне. Можно продолжать редактировать отзывы и переходить по сайту.</p>
+              </div>
+            } @else if (job.status === 'FAILED') {
+              <p class="company-report-message error">{{ companyReportJobErrorMessage(job.errorMessage) }}</p>
+            }
+          } @else if (!companyReportLoading()) {
+            <div class="company-report-message">
+              <span class="material-icons-sharp">article</span>
+              <p>Готового отчёта ещё нет.</p>
+            </div>
+          }
+        </section>
+      }
 
       @if (activeReviewFieldEdit(); as edit) {
         <section

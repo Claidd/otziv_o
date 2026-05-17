@@ -99,6 +99,10 @@ public class DeepCompanyResearchJobService {
                 .findFirst();
     }
 
+    public Optional<DeepCompanyResearchJobStatus> findActive(Long companyId) {
+        return findActiveJob(companyId).map(this::toStatus);
+    }
+
     public Optional<DeepCompanyResearchJobStatus> findByIdForCompany(Long companyId, Long jobId) {
         if (companyId == null || jobId == null) {
             return Optional.empty();

@@ -73,6 +73,21 @@ public class OpenAiProvider implements AiProvider {
         );
     }
 
+    public AiResponse generateBatchReviewDraft(AiRequest request, String profileKey) {
+        if (!isAvailable()) {
+            return new AiResponse("", providerName(), 0, 0);
+        }
+
+        OpenAiResponseResult result = responsesClient.createBatchReviewDraftResponse(request, profileKey);
+        return new AiResponse(
+                result.text(),
+                providerName(),
+                result.inputTokens(),
+                result.outputTokens(),
+                result.errorMessage()
+        );
+    }
+
     @Override
     public String providerName() {
         return "openai";

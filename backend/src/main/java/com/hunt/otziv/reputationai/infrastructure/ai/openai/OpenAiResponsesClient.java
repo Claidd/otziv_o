@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -34,6 +35,10 @@ import java.time.LocalDateTime;
 public class OpenAiResponsesClient {
     private static final Pattern RETRY_AFTER_MESSAGE = Pattern.compile(
             "Please try again in ([0-9]+(?:\\.[0-9]+)?)s",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern RETRY_AFTER_RU_MESSAGE = Pattern.compile(
+            "через\\s+([0-9]+(?:\\.[0-9]+)?)\\s*с",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -104,11 +109,13 @@ public class OpenAiResponsesClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", openai.getModel());
         body.put("instructions", request.systemPrompt());
-        body.put("input", request.userPrompt());
         body.put("temperature", request.temperature());
         body.put("max_output_tokens", openai.getMaxOutputTokens());
         if (request.jsonObject()) {
+            body.put("input", ensureJsonKeyword(request.userPrompt()));
             body.put("text", Map.of("format", Map.of("type", "json_object")));
+        } else {
+            body.put("input", request.userPrompt());
         }
 
         return postResponse(body, openai.getTimeout());
@@ -172,9 +179,16 @@ public class OpenAiResponsesClient {
         body.put("model", options.model());
         body.put("instructions", request.systemPrompt());
         body.put("input", request.userPrompt());
-        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 3000));
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 2400));
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        if ("reputation-single-review-draft".equals(request.task())) {
+            body.put("tools", List.of(Map.of(
+                    "type", "web_search_preview",
+                    "search_context_size", "low"
+            )));
+            body.put("max_tool_calls", 2);
         }
         enableStreaming(body);
         if (request.jsonObject()) {
@@ -183,6 +197,31 @@ public class OpenAiResponsesClient {
                     "name", "reputation_single_review_draft",
                     "strict", true,
                     "schema", singleReviewDraftSchema()
+            )));
+        }
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createBatchReviewDraftResponse(AiRequest request, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", request.systemPrompt());
+        body.put("input", request.userPrompt());
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 9000));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        enableStreaming(body);
+        if (request.jsonObject()) {
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", "reputation_batch_review_drafts",
+                    "strict", true,
+                    "schema", batchReviewDraftSchema()
             )));
         }
 
@@ -204,7 +243,7 @@ public class OpenAiResponsesClient {
                 "type", "json_schema",
                 "name", "company_deep_research_report",
                 "strict", true,
-                "schema", deepResearchSchema(12, 15)
+                "schema", deepResearchSchema(12, 16)
         )));
         if (deep.isBackground()) {
             body.put("background", true);
@@ -368,13 +407,14 @@ public class OpenAiResponsesClient {
             return errorResult("", fallbackModel, "Не удалось подготовить запрос OpenAI: " + exception.getMessage());
         }
 
+        Duration effectiveTimeout = effectiveTimeout(body, timeout);
         int maxAttempts = 3;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                         .uri(URI.create(openai.getBaseUrl() + "/responses"))
                         .version(HttpClient.Version.HTTP_1_1)
-                        .timeout(timeout == null ? Duration.ofSeconds(60) : timeout)
+                        .timeout(effectiveTimeout)
                         .header("Authorization", "Bearer " + openai.getApiKey())
                         .header("Content-Type", "application/json")
                         .header("Accept", Boolean.TRUE.equals(body.get("stream")) ? "text/event-stream" : "application/json")
@@ -399,16 +439,30 @@ public class OpenAiResponsesClient {
 
                 rememberCheck("ok", response.statusCode(), "OpenAI Responses API вернул успешный ответ.");
                 if (Boolean.TRUE.equals(body.get("stream"))) {
-                    return parseStreamResponse(response.body(), fallbackModel);
+                    OpenAiResponseResult result = parseStreamResponse(response.body(), fallbackModel);
+                    if (!result.errorMessage().isBlank() && attempt < maxAttempts && isRetryableOpenAiError(result.errorMessage())) {
+                        sleepBeforeRetryMessage(result.errorMessage(), attempt);
+                        continue;
+                    }
+                    return result;
                 }
                 JsonNode root = objectMapper.readTree(response.body());
                 if (Boolean.TRUE.equals(body.get("background")) && extractOutputText(root).isBlank()) {
-                    return pollResponse(root.path("id").asText(""), timeout, fallbackModel);
+                    return pollResponse(root.path("id").asText(""), effectiveTimeout, fallbackModel);
                 }
                 return parseResponse(root, fallbackModel);
             } catch (InterruptedException interruptedException) {
                 Thread.currentThread().interrupt();
                 return errorResult("", fallbackModel, "Запрос OpenAI был прерван.");
+            } catch (HttpTimeoutException timeoutException) {
+                log.warn("OpenAI Responses API request timed out after {} on attempt {}/{}: {}",
+                        effectiveTimeout,
+                        attempt,
+                        maxAttempts,
+                        timeoutException.getMessage());
+                String transportError = openAiTransportError("Запрос OpenAI", timeoutException);
+                rememberCheck("network_error", null, transportError);
+                return errorResult("", fallbackModel, transportError);
             } catch (Exception exception) {
                 log.warn("OpenAI Responses API request failed on attempt {}/{}: {}",
                         attempt,
@@ -430,6 +484,27 @@ public class OpenAiResponsesClient {
         }
 
         return errorResult("", fallbackModel, "OpenAI не вернул ответ после повторных попыток.");
+    }
+
+    private Duration effectiveTimeout(Map<String, Object> body, Duration requestedTimeout) {
+        Duration base = requestedTimeout == null ? Duration.ofSeconds(60) : requestedTimeout;
+        if (usesWebSearch(body) && base.compareTo(Duration.ofMinutes(8)) < 0) {
+            return Duration.ofMinutes(8);
+        }
+        return base;
+    }
+
+    private boolean usesWebSearch(Map<String, Object> body) {
+        Object tools = body.get("tools");
+        if (!(tools instanceof List<?> list)) {
+            return false;
+        }
+        for (Object tool : list) {
+            if (tool instanceof Map<?, ?> map && "web_search_preview".equals(Objects.toString(map.get("type"), ""))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private OpenAiResponseResult parseStreamResponse(String responseBody, String fallbackModel) {
@@ -488,8 +563,10 @@ public class OpenAiResponsesClient {
         }
 
         String text = outputText.toString().trim();
-        if (text.isBlank() && !errorMessage.isBlank()) {
-            return errorResult(responseId, model, errorMessage);
+        if (!errorMessage.isBlank()) {
+            String userFacingError = openAiUserFacingError(errorMessage);
+            rememberCheck("http_error", 200, userFacingError);
+            return errorResult(responseId, model, userFacingError);
         }
         return new OpenAiResponseResult(responseId, text, model, inputTokens, outputTokens);
     }
@@ -540,6 +617,28 @@ public class OpenAiResponsesClient {
                 })
                 .map(value -> Math.max(1L, Math.min(60L, value)))
                 .orElse(Math.min(30L, 6L * attempt));
+    }
+
+    private void sleepBeforeRetryMessage(String message, int attempt) throws InterruptedException {
+        Thread.sleep(Duration.ofSeconds(retryAfterSeconds(message, attempt)).toMillis());
+    }
+
+    private long retryAfterSeconds(String message, int attempt) {
+        String clean = message == null ? "" : message;
+        Matcher matcher = RETRY_AFTER_MESSAGE.matcher(clean);
+        boolean found = matcher.find();
+        if (!found) {
+            matcher = RETRY_AFTER_RU_MESSAGE.matcher(clean);
+            found = matcher.find();
+        }
+        if (found) {
+            try {
+                return Math.max(1L, Math.min(60L, Math.round(Double.parseDouble(matcher.group(1)))));
+            } catch (NumberFormatException ignored) {
+                // Fall through to the exponential-ish fallback below.
+            }
+        }
+        return Math.min(30L, 6L * attempt);
     }
 
     private OpenAiResponseResult pollResponse(String responseId, Duration timeout, String fallbackModel) {
@@ -594,6 +693,16 @@ public class OpenAiResponsesClient {
     }
 
     private OpenAiResponseResult parseResponse(JsonNode root, String fallbackModel) {
+        String status = root.path("status").asText("");
+        if ("failed".equalsIgnoreCase(status)
+                || "cancelled".equalsIgnoreCase(status)
+                || "incomplete".equalsIgnoreCase(status)) {
+            return errorResult(
+                    root.path("id").asText(""),
+                    root.path("model").asText(fallbackModel),
+                    responseErrorMessage(root, "OpenAI завершил ответ со статусом " + status + ".")
+            );
+        }
         String text = extractOutputText(root);
         JsonNode usage = root.path("usage");
         return new OpenAiResponseResult(
@@ -603,6 +712,14 @@ public class OpenAiResponsesClient {
                 usage.path("input_tokens").asInt(0),
                 usage.path("output_tokens").asInt(0)
         );
+    }
+
+    private String responseErrorMessage(JsonNode root, String fallback) {
+        return openAiUserFacingError(firstNonBlank(
+                root.path("error").path("message").asText(""),
+                root.path("incomplete_details").path("reason").asText(""),
+                fallback
+        ));
     }
 
     private OpenAiResponseResult errorResult(String responseId, String fallbackModel, String message) {
@@ -627,7 +744,7 @@ public class OpenAiResponsesClient {
             return prefix + " оборвался на сетевом уровне. Это не ошибка модели: чаще всего виноват proxy/VPN/маршрут до OpenAI. Повторите запрос или переключите локальный стенд на прямое соединение, если оно доступно.";
         }
         if (normalized.contains("timed out") || normalized.contains("timeout")) {
-            return prefix + " не успел завершиться по таймауту. Повторите запрос или выберите более лёгкий профиль.";
+            return prefix + " не успел завершиться по таймауту. Повторите запрос или выберите профиль «Баланс», если mini-профиль не успевает с web search.";
         }
         return prefix + " завершился ошибкой: " + message;
     }
@@ -652,9 +769,33 @@ public class OpenAiResponsesClient {
         return "OpenAI вернул HTTP " + statusCode + ": " + message;
     }
 
+    private boolean isRetryableOpenAiError(String message) {
+        return isRateLimitMessage(message);
+    }
+
+    private String openAiUserFacingError(String message) {
+        String clean = message == null ? "" : message.replaceAll("\\s+", " ").trim();
+        if (clean.isBlank()) {
+            return "";
+        }
+        if (isRateLimitMessage(clean)) {
+            return openAiRateLimitError(clean);
+        }
+        if (isUnsupportedRegionMessage(clean)) {
+            return "OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy: OPENAI_PROXY_ENABLED=true, заданы OPENAI_PROXY_HOST/PORT, а VPS-прокси разрешает IP приложения.";
+        }
+        if (clean.toLowerCase(Locale.ROOT).contains("proxy authentication required")) {
+            return "OpenAI proxy вернул HTTP 407: VPS-прокси не пустил запрос. Для схемы без логина и пароля проверьте, что Squid разрешает IP приложения через http_access allow и не требует proxy_auth.";
+        }
+        return clean;
+    }
+
     private boolean isRateLimitMessage(String message) {
-        return message.toLowerCase(Locale.ROOT).contains("rate limit")
-                || message.toLowerCase(Locale.ROOT).contains("tokens per min");
+        String normalized = message.toLowerCase(Locale.ROOT);
+        return normalized.contains("rate limit")
+                || normalized.contains("rate_limit_exceeded")
+                || normalized.contains("tokens per min")
+                || normalized.contains("лимит токен");
     }
 
     private boolean isUnsupportedRegionMessage(String message) {
@@ -667,11 +808,16 @@ public class OpenAiResponsesClient {
 
     private String openAiRateLimitError(String message) {
         Matcher matcher = RETRY_AFTER_MESSAGE.matcher(message);
-        String retryHint = matcher.find()
+        boolean found = matcher.find();
+        if (!found) {
+            matcher = RETRY_AFTER_RU_MESSAGE.matcher(message);
+            found = matcher.find();
+        }
+        String retryHint = found
                 ? " API просит повторить примерно через " + matcher.group(1) + " с."
                 : "";
-        return "OpenAI временно уперся в лимит токенов в минуту." + retryHint
-                + " Подождите 1-2 минуты и запустите отчёт снова или выберите более лёгкий профиль.";
+        return "OpenAI временно упёрся в лимит токенов в минуту." + retryHint
+                + " Подождите 1-2 минуты и повторите действие или выберите более лёгкий профиль.";
     }
 
     private String extractOpenAiErrorMessage(String body) {
@@ -708,7 +854,7 @@ public class OpenAiResponsesClient {
 
     private Map<String, Object> deepResearchSchema(OpenAiResearchReportOptions options) {
         boolean economy = "economy".equals(options.profileKey());
-        return deepResearchSchema(economy ? 8 : 12, economy ? 10 : 15);
+        return deepResearchSchema(economy ? 6 : 12, economy ? 9 : 16);
     }
 
     private Map<String, Object> contentPackSchema() {
@@ -807,7 +953,45 @@ public class OpenAiResponsesClient {
                         "sourceFacts", stringArray,
                         "safetyNotes", stringArray
                 ),
-                "required", List.of("idea", "draft", "sourceFacts", "safetyNotes")
+                "required", List.of(
+                        "idea",
+                        "draft",
+                        "sourceFacts",
+                        "safetyNotes"
+                )
+        );
+    }
+
+    private Map<String, Object> batchReviewDraftSchema() {
+        Map<String, Object> stringArray = Map.of(
+                "type", "array",
+                "maxItems", 8,
+                "items", Map.of("type", "string")
+        );
+        Map<String, Object> draftItem = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "reviewId", Map.of("type", "integer"),
+                        "idea", Map.of("type", "string"),
+                        "draft", Map.of("type", "string"),
+                        "sourceFacts", stringArray,
+                        "safetyNotes", stringArray
+                ),
+                "required", List.of("reviewId", "idea", "draft", "sourceFacts", "safetyNotes")
+        );
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "drafts", Map.of(
+                                "type", "array",
+                                "maxItems", 30,
+                                "items", draftItem
+                        ),
+                        "safetyNotes", stringArray
+                ),
+                "required", List.of("drafts", "safetyNotes")
         );
     }
 
@@ -837,12 +1021,36 @@ public class OpenAiResponsesClient {
                 "properties", Map.of(
                         "title", Map.of("type", "string"),
                         "url", Map.of("type", "string"),
+                        "type", Map.of(
+                                "type", "string",
+                                "enum", List.of(
+                                        "official_site",
+                                        "map_card",
+                                        "directory",
+                                        "review_platform",
+                                        "social",
+                                        "legal",
+                                        "aggregator",
+                                        "media",
+                                        "other"
+                                )
+                        ),
+                        "usedFor", Map.of(
+                                "type", "array",
+                                "maxItems", 8,
+                                "items", Map.of("type", "string"),
+                                "description", "Какие факты подтверждает источник: услуги, цены, контакты, адрес, режим, парковка, отзывы, сотрудники, юридические данные, фото, удобства."
+                        ),
+                        "confidence", Map.of(
+                                "type", "string",
+                                "enum", List.of("high", "medium", "low")
+                        ),
                         "note", Map.of(
                                 "type", "string",
                                 "description", "Какие ключевые факты подтверждает источник: цены, адрес, правила, отзывы, акции или спорные данные."
                         )
                 ),
-                "required", List.of("title", "url", "note")
+                "required", List.of("title", "url", "type", "usedFor", "confidence", "note")
         );
     }
 
@@ -908,7 +1116,7 @@ public class OpenAiResponsesClient {
                         ),
                         "body", Map.of(
                                 "type", "string",
-                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, вход, этаж, ориентиры, парковку, доступность и зону ожидания, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии, идеи контента и аудит готовности будущей карточки компании без повторов."
+                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, вход, этаж, ориентиры, парковку, доступность, зону ожидания, Wi-Fi, туалет, гардероб, детскую зону, онлайн-запись, доставку/самовывоз/выезд и способы оплаты, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии, отдельные идеи для постов/карточки, отдельные 10 идей для отзывов и аудит готовности будущей карточки компании без повторов."
                         )
                 ),
                 "required", List.of("title", "body")
@@ -920,7 +1128,7 @@ public class OpenAiResponsesClient {
                 "properties", Map.of(
                         "sections", Map.of(
                                 "type", "array",
-                                "description", "Тематические markdown-блоки для интерфейса и сохраненного отчёта. Держи стабильный универсальный порядок: сводка, профиль бизнеса, услуги/товары/цены, филиалы, клиентский опыт с интерьером/экстерьером/парковкой/входом, репутационные темы, доверие, сценарии и УТП, сотрудники, условия, сроки/аудитория, риски и возражения, что ещё собирать с аудитом готовности карточки компании, идеи контента, главный вывод.",
+                                "description", "Тематические markdown-блоки для интерфейса и сохраненного отчёта. Держи стабильный универсальный порядок: сводка, профиль бизнеса, услуги/товары/цены, филиалы, клиентский опыт с интерьером/экстерьером/парковкой/входом/Wi-Fi/туалетом/гардеробом/детской зоной/оплатой, репутационные темы, доверие, сценарии и УТП, сотрудники, условия, сроки/аудитория, риски и возражения, что ещё собирать с аудитом готовности карточки компании, идеи для постов и карточки, идеи для отзывов, главный вывод.",
                                 "minItems", minSections,
                                 "maxItems", maxSections,
                                 "items", section
@@ -977,5 +1185,13 @@ public class OpenAiResponsesClient {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String ensureJsonKeyword(String input) {
+        String normalized = input == null ? "" : input.trim();
+        if (normalized.toLowerCase(Locale.ROOT).contains("json")) {
+            return normalized;
+        }
+        return "Верни результат в формате JSON.\n\n" + normalized;
     }
 }

@@ -4,9 +4,16 @@ import { DeepCompanyResearchJob, ReputationAiApi } from './reputation-ai.api';
 import { ToastService } from '../shared/toast.service';
 
 const ACTIVE_DEEP_REPORT_COMPANY_KEY = 'otziv.reputationAi.activeDeepReportCompanyId';
+const ACTIVE_DEEP_REPORT_CONTEXT_KEY = 'otziv.reputationAi.activeDeepReportContext';
 const DEEP_REPORT_FAST_POLL_INTERVAL_MS = 30_000;
 const DEEP_REPORT_SLOW_POLL_INTERVAL_MS = 90_000;
 const DEEP_REPORT_FAST_POLL_WINDOW_MS = 3 * 60_000;
+
+export type DeepReportMonitorContext = {
+  routerLink?: string;
+  actionLabel?: string;
+  doneMessage?: string;
+};
 
 @Injectable({ providedIn: 'root' })
 export class ReputationDeepReportMonitorService {
@@ -15,6 +22,7 @@ export class ReputationDeepReportMonitorService {
   private pollSubscription: Subscription | null = null;
   private pollTimeoutId: number | null = null;
   private activeCompanyId: number | null = null;
+  private activeContext: DeepReportMonitorContext | null = null;
   private watchStartedAtMs = 0;
 
   constructor(
@@ -25,17 +33,19 @@ export class ReputationDeepReportMonitorService {
   restore(): void {
     const stored = Number(window.localStorage.getItem(ACTIVE_DEEP_REPORT_COMPANY_KEY));
     if (Number.isFinite(stored) && stored > 0) {
-      this.watch(Math.trunc(stored));
+      this.watch(Math.trunc(stored), this.readStoredContext());
     }
   }
 
-  watch(companyId: number): void {
+  watch(companyId: number, context: DeepReportMonitorContext | null = null): void {
     const id = Math.trunc(Number(companyId));
     if (!Number.isFinite(id) || id <= 0) {
       return;
     }
 
     window.localStorage.setItem(ACTIVE_DEEP_REPORT_COMPANY_KEY, String(id));
+    this.activeContext = context;
+    this.writeStoredContext(context);
     if (this.activeCompanyId === id && this.pollSubscription) {
       return;
     }
@@ -62,6 +72,7 @@ export class ReputationDeepReportMonitorService {
 
   clear(): void {
     window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+    window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
     this.stopPolling();
     this.currentJob.set(null);
   }
@@ -69,18 +80,21 @@ export class ReputationDeepReportMonitorService {
   private handleJob(job: DeepCompanyResearchJob): void {
     this.currentJob.set(job);
     if (job.status === 'DONE') {
+      const context = this.activeContext;
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       this.stopPolling();
       this.toastService.success(
         this.doneTitle(job),
-        `${job.companyName || 'Компания #' + job.companyId}: можно открыть AI-помощник`,
-        { label: 'Открыть', routerLink: '/admin/reputation-ai' }
+        context?.doneMessage ?? `${job.companyName || 'Компания #' + job.companyId}: можно открыть AI-помощник`,
+        { label: context?.actionLabel ?? 'Открыть', routerLink: context?.routerLink ?? '/admin/reputation-ai' }
       );
       return;
     }
 
     if (job.status === 'FAILED') {
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       this.stopPolling();
       this.toastService.error('Глубокий отчёт не собрался', this.humanizeAiError(job.errorMessage));
     }
@@ -112,6 +126,7 @@ export class ReputationDeepReportMonitorService {
     this.pollSubscription = null;
     this.clearPollTimeout();
     this.activeCompanyId = null;
+    this.activeContext = null;
     this.watchStartedAtMs = 0;
   }
 
@@ -163,5 +178,28 @@ export class ReputationDeepReportMonitorService {
       return 'Текст отчёта пересобран';
     }
     return 'Глубокий отчёт готов';
+  }
+
+  private readStoredContext(): DeepReportMonitorContext | null {
+    const raw = window.localStorage.getItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as DeepReportMonitorContext;
+      return typeof parsed === 'object' && parsed !== null ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStoredContext(context: DeepReportMonitorContext | null): void {
+    if (!context) {
+      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY, JSON.stringify(context));
   }
 }

@@ -118,9 +118,10 @@ public class ReviewBotChangeService {
             throw new RuntimeException("Новый аккаунт недоступен для филиалов с городом 320 или 326");
         }
 
-        Set<Long> excludedBotIds = review.getBot() != null && review.getBot().getId() != null
-                ? Set.of(review.getBot().getId())
-                : Set.of();
+        Set<Long> excludedBotIds = getUsedBotIdsInCompany(filial, review.getId());
+        if (review.getBot() != null && review.getBot().getId() != null) {
+            excludedBotIds.add(review.getBot().getId());
+        }
 
         Bot selectedBot = botService.claimNewAccountForCity(city, excludedBotIds)
                 .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Впиши Имя Фамилию\" в городе 325"));
@@ -160,7 +161,7 @@ public class ReviewBotChangeService {
             return Collections.emptyList();
         }
 
-        Set<Long> usedBotIdsInThisFilial = getUsedBotIdsInFilial(filial, review.getId());
+        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial, review.getId());
         Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
 
         boolean vigul = review.isVigul();
@@ -168,7 +169,7 @@ public class ReviewBotChangeService {
         List<Bot> idealBots = allBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
+                .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
                 .filter(this::hasNewStatus)
                 .collect(Collectors.toList());
@@ -183,7 +184,7 @@ public class ReviewBotChangeService {
         List<Bot> fallbackBots = allBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInThisFilial.contains(bot.getId()))
+                .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
                 .filter(this::hasNewStatus)
                 .collect(Collectors.toList());
 
@@ -211,6 +212,27 @@ public class ReviewBotChangeService {
     private java.util.Optional<Review> findReviewForBotChange(Long reviewId) {
         java.util.Optional<Review> review = reviewRepository.findByIdForBotChange(reviewId);
         return review.isPresent() ? review : reviewRepository.findById(reviewId);
+    }
+
+    private Set<Long> getUsedBotIdsInCompany(Filial filial, Long currentReviewId) {
+        if (filial == null || filial.getCompany() == null || filial.getCompany().getId() == null) {
+            return getUsedBotIdsInFilial(filial, currentReviewId);
+        }
+
+        try {
+            Set<Long> botIds = reviewRepository.findUsedBotIdsByCompanyId(filial.getCompany().getId());
+            if (botIds == null) {
+                return new HashSet<>();
+            }
+
+            return botIds.stream()
+                    .filter(Objects::nonNull)
+                    .filter(botId -> !STUB_BOT_ID.equals(botId))
+                    .collect(Collectors.toCollection(HashSet::new));
+        } catch (Exception e) {
+            log.error("Ошибка при получении использованных ботов для компании филиала {}", filial.getId(), e);
+            return getUsedBotIdsInFilial(filial, currentReviewId);
+        }
     }
 
     private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {

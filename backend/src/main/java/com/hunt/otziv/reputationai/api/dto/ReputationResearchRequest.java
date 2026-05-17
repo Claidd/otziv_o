@@ -23,7 +23,6 @@ public record ReputationResearchRequest(
         if (enrichCollectionGaps != null) {
             return enrichCollectionGaps;
         }
-        String profile = deepResearchProfile == null ? "" : deepResearchProfile.trim().toLowerCase();
-        return "quality".equals(profile) || "maximum".equals(profile);
+        return true;
     }
 }

@@ -539,13 +539,54 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
     List<Review> findAllByFilials(@Param("filials") Set<Filial> filials);
 
-    @Query("""
-        SELECT DISTINCT r.bot.id
-        FROM Review r
-        WHERE r.bot IS NOT NULL
-          AND r.bot.id <> 1
-          AND r.filial.company.id = :companyId
-    """)
+    @Query(value = """
+        SELECT DISTINCT used_bots.bot_id
+        FROM (
+            SELECT r.review_bot AS bot_id
+            FROM filial f
+            JOIN reviews r ON r.review_filial = f.filial_id
+            WHERE f.company_id = :companyId
+              AND r.review_bot IS NOT NULL
+              AND r.review_bot <> 1
+
+            UNION ALL
+
+            SELECT r.review_bot AS bot_id
+            FROM orders o
+            JOIN order_details od ON od.order_detail_order = o.order_id
+            JOIN reviews r ON r.review_order_details = od.order_detail_id
+            LEFT JOIN filial f ON f.filial_id = r.review_filial
+            WHERE o.order_company = :companyId
+              AND f.company_id IS NULL
+              AND r.review_bot IS NOT NULL
+              AND r.review_bot <> 1
+
+            UNION ALL
+
+            SELECT ar.review_bot AS bot_id
+            FROM filial af
+            JOIN archive_reviews ar ON ar.review_filial = af.filial_id
+            LEFT JOIN archive_order_details aod ON aod.order_detail_id = ar.review_order_details
+            LEFT JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
+            WHERE af.company_id = :companyId
+              AND ar.review_bot IS NOT NULL
+              AND ar.review_bot <> 1
+              AND ao.restored_at IS NULL
+
+            UNION ALL
+
+            SELECT ar.review_bot AS bot_id
+            FROM archive_orders ao
+            JOIN archive_order_details aod ON aod.order_detail_order = ao.order_id
+            JOIN archive_reviews ar ON ar.review_order_details = aod.order_detail_id
+            LEFT JOIN filial af ON af.filial_id = ar.review_filial
+            WHERE ao.order_company = :companyId
+              AND ao.restored_at IS NULL
+              AND af.company_id IS NULL
+              AND ar.review_bot IS NOT NULL
+              AND ar.review_bot <> 1
+        ) used_bots
+    """, nativeQuery = true)
     Set<Long> findUsedBotIdsByCompanyId(@Param("companyId") Long companyId);
 
     @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")

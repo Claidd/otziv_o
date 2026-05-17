@@ -147,6 +147,9 @@ public class AiReviewTemplateFactory {
                 .map(source -> Map.of(
                         "title", source.title(),
                         "url", source.url(),
+                        "type", source.type(),
+                        "usedFor", source.usedFor(),
+                        "confidence", source.confidence(),
                         "note", source.note()
                 ))
                 .toList());

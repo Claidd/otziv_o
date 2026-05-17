@@ -55,11 +55,13 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
         log.info("Назначение ботов для новых отзывов: vigul={}, требуется {} ботов", vigul, neededForOrder);
 
+        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
+
         // 3. Получаем доступных ботов по правилам
-        List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededForOrder);
+        List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededForOrder, usedBotIdsInCompany);
 
         // 4. Создаем отзывы с УНИКАЛЬНЫМИ ботами
-        Set<Long> usedBotIdsInThisOrder = new HashSet<>();
+        Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
 
         for (int i = 0; i < neededForOrder; i++) {
             Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, filial);
@@ -100,15 +102,17 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             int neededBots = reviewsWithoutBots.size();
             log.info("Требуется назначить {} ботов, vigul = {}", neededBots, vigul);
 
+            Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
+
             // 3. Получаем доступных ботов по правилам
-            List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededBots);
+            List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededBots, usedBotIdsInCompany);
 
             if (availableBots.isEmpty()) {
                 log.warn("Обычных доступных ботов нет, будет выполнен поиск резервных аккаунтов");
             }
 
             // 4. Назначаем ботов отзывам
-            Set<Long> usedBotIdsInThisOrder = new HashSet<>();
+            Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
             int assignedCount = 0;
             int reviewIndex = 0;
 
@@ -165,13 +169,14 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             throw new IllegalArgumentException("Филиал отзыва не может быть null");
         }
 
-        Set<Long> usedBotIdsForThisChange = excludedBotIds == null
-                ? new HashSet<>()
-                : excludedBotIds.stream()
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
+        Set<Long> usedBotIdsForThisChange = new HashSet<>(getUsedBotIdsInCompany(filial));
+        if (excludedBotIds != null) {
+            usedBotIdsForThisChange.addAll(excludedBotIds.stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet()));
+        }
 
-        List<Bot> availableBots = getAvailableBotsByRules(filial, review.isVigul(), 1);
+        List<Bot> availableBots = getAvailableBotsByRules(filial, review.isVigul(), 1, usedBotIdsForThisChange);
         Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsForThisChange, 0, filial);
 
         log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
@@ -184,6 +189,13 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     @Override
     public List<Bot> getAvailableBotsByRules(Filial filial, boolean vigul, int neededForOrder) {
+        return getAvailableBotsByRules(filial, vigul, neededForOrder, getUsedBotIdsInCompany(filial));
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds) {
         log.info("Получение доступных ботов для филиала ID {}, vigul={}, требуется={}",
                 filial.getId(), vigul, neededForOrder);
 
@@ -191,9 +203,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Bot> allCityBots = botService.getFindAllByFilialCityId(filial.getCity().getId());
         log.info("Всего ботов в городе {}: {}", filial.getCity().getTitle(), allCityBots.size());
 
-        // 2. Получаем ID ботов, уже использованных в этой компании
-        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
-        log.info("Ботов уже использованных в компании филиала {}: {}", filial.getId(), usedBotIdsInCompany.size());
+        // 2. Получаем ID ботов, которые нельзя использовать для текущего назначения
+        Set<Long> excludedBotIds = blockedBotIds == null ? Set.of() : blockedBotIds;
+        log.info("Ботов исключено для филиала {}: {}", filial.getId(), excludedBotIds.size());
 
         // 3. Получаем ID ботов, занятых в активных отзывах других филиалов
         Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial);
@@ -204,7 +216,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Bot> idealBots = allCityBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
-                .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
                 .filter(bot -> {
                     if (bot.getStatus() == null) return false;
@@ -226,7 +238,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             List<Bot> fallbackBots = allCityBots.stream()
                     .filter(Objects::nonNull)
                     .filter(bot -> bot.getId() != null)
-                    .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
+                    .filter(bot -> !excludedBotIds.contains(bot.getId()))
                     .filter(bot -> {
                         if (bot.getStatus() == null) return false;
                         String statusTitle = bot.getStatus().getBotStatusTitle();

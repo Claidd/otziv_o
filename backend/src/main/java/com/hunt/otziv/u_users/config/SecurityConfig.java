@@ -178,6 +178,9 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.POST, "/api/leads/*/status/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
         auth.requestMatchers("/api/review-check/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/manager/orders/*/edit", "/api/manager/orders/*/details").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.GET, "/api/manager/orders/*/company-report").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/company-report").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/company-report/refresh").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers(
                 HttpMethod.PUT,
                 "/api/manager/orders/*",
@@ -194,9 +197,11 @@ public class SecurityConfig {
                 HttpMethod.POST,
                 "/api/manager/orders/*/status",
                 "/api/manager/orders/*/reviews",
+                "/api/manager/orders/*/reviews/help-drafts",
                 "/api/manager/orders/*/bad-review-tasks/*/complete",
                 "/api/manager/orders/*/bad-review-tasks/*/change-bot",
                 "/api/manager/orders/*/reviews/*/recovery-tasks",
+                "/api/manager/orders/*/reviews/*/help-draft",
                 "/api/manager/orders/*/recovery-tasks/*/complete"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/recovery-batches/*/client-notified").hasAnyRole("ADMIN", "OWNER", "MANAGER");

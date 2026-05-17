@@ -2,6 +2,11 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import type {
+  DeepCompanyResearchJob,
+  ReputationSingleReviewDraftRequest,
+  ReputationSingleReviewDraftResult
+} from './reputation-ai.api';
 
 export type ManagerSection = 'companies' | 'orders';
 export type ArchiveOrderMode = 'all' | 'archive' | 'paid';
@@ -521,6 +526,16 @@ export interface OrderDetailsPayload {
   canDeleteReviews: boolean;
 }
 
+export interface CompanyDeepReportState {
+  companyId: number;
+  companyName: string;
+  latestJob: DeepCompanyResearchJob | null;
+  activeJob: DeepCompanyResearchJob | null;
+  canStart: boolean;
+  canRefresh: boolean;
+  unavailableReason: string;
+}
+
 export interface ReviewUpdateRequest {
   text: string;
   answer: string;
@@ -707,6 +722,26 @@ export class ManagerApi {
     return this.http.get<OrderDetailsPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/details`);
   }
 
+  getOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
+    return this.http.get<CompanyDeepReportState>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/company-report`
+    );
+  }
+
+  startOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
+    return this.http.post<CompanyDeepReportState>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/company-report`,
+      {}
+    );
+  }
+
+  refreshOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
+    return this.http.post<CompanyDeepReportState>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/company-report/refresh`,
+      {}
+    );
+  }
+
   addOrderReview(orderId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews`, {});
   }
@@ -781,6 +816,24 @@ export class ManagerApi {
   createReviewRecoveryTask(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/recovery-tasks`,
+      {}
+    );
+  }
+
+  createReviewHelpDraft(
+    orderId: number,
+    reviewId: number,
+    request: ReputationSingleReviewDraftRequest
+  ): Observable<ReputationSingleReviewDraftResult> {
+    return this.http.post<ReputationSingleReviewDraftResult>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/help-draft`,
+      request
+    );
+  }
+
+  createReviewHelpDrafts(orderId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/help-drafts`,
       {}
     );
   }

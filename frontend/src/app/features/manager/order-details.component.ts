@@ -1,12 +1,15 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
+import type { DeepCompanyResearchJob, ReputationSingleReviewDraftResult } from '../../core/reputation-ai.api';
 import {
   BadReviewTaskItem,
+  CompanyDeepReportState,
   ManagerApi,
   OrderDetailsPayload,
   OrderNotesUpdate,
@@ -28,6 +31,7 @@ import {
   removeSessionDraft,
   writeSessionDraft
 } from '../../shared/session-draft-storage';
+import { DeepResearchReportViewComponent } from '../../shared/reputation/deep-research-report-view.component';
 import { ToastService } from '../../shared/toast.service';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
@@ -60,11 +64,12 @@ type ActiveOrderReviewFieldEdit = {
   mutationKey: string;
 };
 const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
+const REVIEW_HELP_ORDER_STATUSES = new Set(['новый']);
 const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
 @Component({
   selector: 'app-order-details',
-  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DecimalPipe, DeepResearchReportViewComponent, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './order-details.component.html',
   styleUrl: './order-details.component.scss'
 })
@@ -74,6 +79,7 @@ export class OrderDetailsComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
+  private readonly deepReportMonitor = inject(ReputationDeepReportMonitorService);
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
@@ -112,6 +118,10 @@ export class OrderDetailsComponent {
   readonly reviewEditUploading = signal(false);
   readonly reviewEditNewAccountSaving = signal(false);
   readonly reviewEditError = signal<string | null>(null);
+  readonly companyReportState = signal<CompanyDeepReportState | null>(null);
+  readonly companyReportVisible = signal(false);
+  readonly companyReportLoading = signal(false);
+  readonly companyReportError = signal<string | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
   readonly browserOnline = signal(this.readBrowserOnline());
 
@@ -144,6 +154,11 @@ export class OrderDetailsComponent {
     || this.reviewEditDeleting()
     || this.reviewEditUploading()
     || this.reviewEditNewAccountSaving());
+  readonly companyReportJob = computed(() => this.companyReportState()?.activeJob
+    ?? this.companyReportState()?.latestJob
+    ?? null);
+  readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
+  readonly companyReportBusy = computed(() => this.companyReportLoading() || this.isActiveCompanyReport(this.companyReportJob()));
   readonly activeReviewFieldEdit = computed<ActiveOrderReviewFieldEdit | null>(() => {
     const key = this.editingReviewFieldKey();
     const details = this.details();
@@ -172,6 +187,10 @@ export class OrderDetailsComponent {
 
   constructor() {
     this.updateMobileReviewLayout();
+    effect(() => {
+      const job = this.deepReportMonitor.currentJob();
+      queueMicrotask(() => this.applyMonitoredCompanyReportJob(job));
+    });
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
@@ -236,6 +255,7 @@ export class OrderDetailsComponent {
         this.activeReviewSlide.set(0);
         this.syncReviewJumpValue(0);
         this.loading.set(false);
+        this.loadCompanyReportState(false);
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось загрузить детали заказа');
@@ -284,6 +304,201 @@ export class OrderDetailsComponent {
         ...drafts,
         [key]: this.reviewFieldSourceValue(review, field)
       };
+    });
+  }
+
+  openCompanyReport(): void {
+    const state = this.companyReportState();
+    if (state?.activeJob) {
+      this.companyReportVisible.set(true);
+      this.watchCompanyReport(state.companyId, state.companyName);
+      return;
+    }
+
+    if (state?.latestJob?.report) {
+      this.companyReportVisible.set(true);
+      return;
+    }
+
+    if (!state || state.canStart) {
+      this.startCompanyReport();
+      return;
+    }
+
+    this.companyReportVisible.set(true);
+    if (state.unavailableReason) {
+      this.toastService.info('Отчёт уже есть', state.unavailableReason);
+    }
+  }
+
+  refreshCompanyReport(): void {
+    const state = this.companyReportState();
+    if (!state?.canRefresh) {
+      return;
+    }
+
+    this.startCompanyReport(true);
+  }
+
+  companyReportActionLabel(): string {
+    if (this.companyReportLoading()) {
+      return 'Проверяю';
+    }
+    if (this.isActiveCompanyReport(this.companyReportJob())) {
+      return 'Готовится';
+    }
+    return 'О компании';
+  }
+
+  isCompanyReportMissing(): boolean {
+    const state = this.companyReportState();
+    return !state?.latestJob?.report && !state?.activeJob;
+  }
+
+  canRefreshCompanyReport(): boolean {
+    return !!this.companyReportState()?.canRefresh && this.hasReadyCompanyReport();
+  }
+
+  isActiveCompanyReport(job: DeepCompanyResearchJob | null | undefined): boolean {
+    return !!job && (job.status === 'QUEUED' || job.status === 'RUNNING');
+  }
+
+  companyReportJobErrorMessage(message: string | null | undefined): string {
+    const text = (message ?? '').trim();
+    if (!text) {
+      return 'Отчёт не собрался. Администратор или владелец может запустить обновление.';
+    }
+
+    const lower = text.toLowerCase();
+    if (lower.includes('rate limit reached')
+      || lower.includes('tokens per min')
+      || lower.includes('rate_limit_exceeded')
+      || lower.includes('лимит токен')) {
+      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1]
+        ?? text.match(/через\s+([0-9.]+)\s*с/i)?.[1];
+      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
+      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
+    }
+
+    if (lower.includes('http 407') || lower.includes('proxy authentication required')) {
+      return 'VPS-прокси не пустил запрос к OpenAI. Проверьте allowlist IP в Squid/UFW и отсутствие proxy_auth для этого маршрута.';
+    }
+
+    if (lower.includes('unsupported_country_region_territory')
+      || lower.includes('country, region, or territory not supported')
+      || lower.includes('неподдерживаемого региона')) {
+      return 'OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy и приложение идёт через VPS.';
+    }
+
+    return text;
+  }
+
+  private loadCompanyReportState(showErrors: boolean): void {
+    const orderId = this.orderId();
+    if (!orderId) {
+      return;
+    }
+
+    this.companyReportLoading.set(true);
+    this.companyReportError.set(null);
+    this.managerApi.getOrderCompanyReport(orderId).subscribe({
+      next: (state) => {
+        this.applyCompanyReportState(state);
+        this.companyReportLoading.set(false);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось проверить отчёт о компании');
+        this.companyReportError.set(message);
+        this.companyReportLoading.set(false);
+        if (showErrors) {
+          this.toastService.error('Отчёт не проверен', message);
+        }
+      }
+    });
+  }
+
+  private startCompanyReport(refresh = false): void {
+    const orderId = this.orderId();
+    if (!orderId || this.companyReportLoading()) {
+      return;
+    }
+
+    this.companyReportVisible.set(true);
+    this.companyReportLoading.set(true);
+    this.companyReportError.set(null);
+
+    const request = refresh
+      ? this.managerApi.refreshOrderCompanyReport(orderId)
+      : this.managerApi.startOrderCompanyReport(orderId);
+
+    request.subscribe({
+      next: (state) => {
+        this.applyCompanyReportState(state);
+        this.companyReportLoading.set(false);
+        const job = state.activeJob ?? state.latestJob;
+        if (job && this.isActiveCompanyReport(job)) {
+          this.watchCompanyReport(state.companyId, state.companyName);
+          this.toastService.info(
+            refresh ? 'Обновление запущено' : 'Отчёт готовится',
+            'Можно продолжать работать на сайте. Когда отчёт будет готов, появится уведомление.'
+          );
+        }
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, refresh ? 'Не удалось обновить отчёт' : 'Не удалось запустить отчёт');
+        this.companyReportError.set(message);
+        this.companyReportLoading.set(false);
+        this.toastService.error('Отчёт не запущен', message);
+        this.loadCompanyReportState(false);
+      }
+    });
+  }
+
+  private applyCompanyReportState(state: CompanyDeepReportState): void {
+    this.companyReportState.set(state);
+    if (state.activeJob) {
+      this.watchCompanyReport(state.companyId, state.companyName);
+    }
+  }
+
+  private applyMonitoredCompanyReportJob(job: DeepCompanyResearchJob | null): void {
+    const details = this.details();
+    if (!job || !details?.companyId || Number(job.companyId) !== Number(details.companyId)) {
+      return;
+    }
+
+    const active = this.isActiveCompanyReport(job);
+    this.companyReportVisible.set(true);
+    this.companyReportState.update((state) => {
+      const canRefresh = state?.canRefresh ?? false;
+      const hasReadyReport = !!job.report || !!state?.latestJob?.report;
+      return {
+        companyId: job.companyId,
+        companyName: job.companyName || state?.companyName || details.companyTitle,
+        latestJob: job,
+        activeJob: active ? job : null,
+        canStart: !active && (canRefresh || !hasReadyReport),
+        canRefresh,
+        unavailableReason: active
+          ? 'Отчёт уже готовится.'
+          : hasReadyReport && !canRefresh
+            ? 'Отчёт уже готов. Повторный запуск доступен только администратору или владельцу.'
+            : state?.unavailableReason ?? ''
+      };
+    });
+  }
+
+  private watchCompanyReport(companyId: number, companyName: string): void {
+    const details = this.details();
+    const orderId = this.orderId();
+    const routerLink = details?.companyId && orderId
+      ? `/manager/orders/${details.companyId}/${orderId}`
+      : '/manager';
+    const name = companyName || details?.companyTitle || `Компания #${companyId}`;
+    this.deepReportMonitor.watch(companyId, {
+      routerLink,
+      actionLabel: 'К деталям',
+      doneMessage: `Отчёт о компании "${name}" готов.`
     });
   }
 
@@ -1250,6 +1465,103 @@ export class OrderDetailsComponent {
     );
   }
 
+  showReviewHelpAction(details: OrderDetailsPayload | null | undefined = this.details()): boolean {
+    const status = (details?.status ?? '').trim().toLocaleLowerCase('ru-RU');
+    return REVIEW_HELP_ORDER_STATUSES.has(status);
+  }
+
+  reviewHelpActionLabel(review: OrderReviewItem): string {
+    return this.isMutating(`review-help-${review.id}`) ? '...' : 'помощь';
+  }
+
+  reviewHelpActionTitle(): string {
+    if (this.companyReportBusy()) {
+      return 'Отчёт о компании сейчас готовится';
+    }
+
+    if (!this.hasReadyCompanyReport()) {
+      return 'Сначала собрать отчёт о компании, потом подготовить текст отзыва';
+    }
+
+    return 'Подготовить и сохранить текст отзыва через AI-помощник';
+  }
+
+  reviewHelpAllActionLabel(): string {
+    return this.isMutating('review-help-all') ? 'Пишу...' : 'Помощь';
+  }
+
+  createAllReviewHelpDrafts(): void {
+    const orderId = this.orderId();
+    const details = this.details();
+    if (!orderId || !details || !this.showReviewHelpAction(details)) {
+      return;
+    }
+
+    if (this.companyReportBusy()) {
+      this.toastService.info('Отчёт готовится', 'Дождитесь готового отчёта о компании');
+      return;
+    }
+
+    if (!this.hasReadyCompanyReport()) {
+      this.toastService.info('Нужен отчёт о компании', 'Сначала соберите отчёт, чтобы помощник взял факты о компании');
+      this.openCompanyReport();
+      return;
+    }
+
+    this.runDetailsMutation(
+      'review-help-all',
+      this.managerApi.createReviewHelpDrafts(orderId),
+      'Тексты сохранены',
+      'AI-помощник заполнил карточки разными отзывами'
+    );
+  }
+
+  createReviewHelpDraft(review: OrderReviewItem): void {
+    const orderId = this.orderId();
+    const details = this.details();
+    if (!orderId || !details) {
+      return;
+    }
+
+    if (this.companyReportBusy()) {
+      this.toastService.info('Отчёт готовится', 'Дождитесь готового отчёта о компании');
+      return;
+    }
+
+    if (!this.hasReadyCompanyReport()) {
+      this.toastService.info('Нужен отчёт о компании', 'Сначала соберите отчёт, чтобы помощник взял факты о компании');
+      this.openCompanyReport();
+      return;
+    }
+
+    const key = `review-help-${review.id}`;
+    this.mutationKey.set(key);
+    this.error.set(null);
+
+    this.managerApi.createReviewHelpDraft(orderId, review.id, {
+      deepReportJobId: this.companyReportJob()?.jobId ?? null,
+      contentPackJobId: null,
+      idea: this.reviewHelpIdea(details, review),
+      style: 'живой, естественный, без одинаковых заходов и канцелярита',
+      authorType: 'нейтральный клиент',
+      emojiMode: 'без смайлов',
+      manualNotes: this.reviewHelpManualNotes(details, review),
+      length: 'medium',
+      contentPackProfile: 'quality',
+      targetReviewId: review.id,
+      previousDraft: this.reviewFieldValue(review, 'text'),
+      orderContext: this.reviewHelpFrontendContext(details, review)
+    }).subscribe({
+      next: (result) => this.saveReviewHelpDraft(review, result),
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось подготовить текст отзыва');
+        this.mutationKey.set(null);
+        this.error.set(message);
+        this.toastService.error('Помощь не сработала', message);
+      }
+    });
+  }
+
   canEditRecoveryTask(task: ReviewRecoveryTaskItem): boolean {
     return task.statusCode === 'PLANNED';
   }
@@ -1864,6 +2176,98 @@ export class OrderDetailsComponent {
         this.toastService.error('Действие не выполнено', message);
       }
     });
+  }
+
+  private saveReviewHelpDraft(
+    review: OrderReviewItem,
+    result: ReputationSingleReviewDraftResult
+  ): void {
+    const text = (result.draft ?? '').trim();
+    if (!text) {
+      this.mutationKey.set(null);
+      this.toastService.error('Текст не получен', 'AI-помощник вернул пустой черновик');
+      return;
+    }
+
+    this.startReviewFieldEdit(review, 'text');
+    this.setReviewFieldDraft(review, 'text', text);
+    this.expandedReviewTextIds.update((items) => ({
+      ...items,
+      [review.id]: true
+    }));
+
+    this.managerApi.updateOrderReviewText(review.orderId, review.id, text).subscribe({
+      next: (updatedReview) => {
+        this.applyUpdatedOrderReview(updatedReview);
+        this.clearReviewFieldDraft(review, 'text');
+        this.savedReviewFieldKey.set(this.reviewFieldKey(review, 'text'));
+        this.mutationKey.set(null);
+        this.toastService.success(
+          'Текст сохранён',
+          result.provider === 'local'
+            ? 'Черновик собран локально и записан в карточку'
+            : 'AI-помощник записал текст в карточку'
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Черновик подготовлен, но не сохранён');
+        this.mutationKey.set(null);
+        this.error.set(message);
+        this.toastService.error('Текст не сохранён', message);
+      }
+    });
+
+  }
+
+  private reviewHelpIdea(details: OrderDetailsPayload, review: OrderReviewItem): string {
+    const product = this.cleanReviewHelpText(review.productTitle || details.productTitle);
+    const current = this.cleanReviewHelpText(this.reviewFieldSourceValue(review, 'text'));
+    const base = product
+      ? `Новый отзыв по карточке заказа: клиент получил/заказывал "${product}".`
+      : 'Новый отзыв по карточке заказа на основе отчёта о компании и данных заказа.';
+
+    if (current && current.toLocaleLowerCase('ru-RU') !== PLACEHOLDER_REVIEW_TEXT) {
+      return `${base} Не копировать старый текст, а написать новый вариант с другим началом и структурой.`;
+    }
+
+    return base;
+  }
+
+  private reviewHelpManualNotes(details: OrderDetailsPayload, review: OrderReviewItem): string {
+    const notes = [
+      this.cleanReviewHelpText(review.comment),
+      this.cleanReviewHelpText(review.orderComments || details.orderComments),
+      this.cleanReviewHelpText(review.commentCompany || details.companyComments)
+    ].filter(Boolean);
+
+    return notes.slice(0, 4).join('\n');
+  }
+
+  private reviewHelpFrontendContext(details: OrderDetailsPayload, review: OrderReviewItem): string {
+    const lines = [
+      `Заказ #${details.orderId}`,
+      `Статус заказа: ${details.status}`,
+      `Компания: ${details.companyTitle}`,
+      `Категория: ${review.category || ''}`,
+      `Подкатегория: ${review.subCategory || ''}`,
+      `Филиал: ${review.filialTitle || ''}`,
+      `Город филиала: ${review.filialCity || ''}`,
+      `Товар/услуга карточки: ${review.productTitle || details.productTitle || ''}`,
+      review.price != null ? `Цена карточки: ${review.price}` : '',
+      details.amount != null ? `Количество в заказе: ${details.amount}` : '',
+      details.sum != null ? `Сумма заказа: ${details.sum}` : ''
+    ];
+
+    return lines
+      .map((line) => this.cleanReviewHelpText(line))
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private cleanReviewHelpText(value: string | number | null | undefined): string {
+    return String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private async copyText(text: string, key: string, toast: string): Promise<void> {

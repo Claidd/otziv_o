@@ -59,9 +59,14 @@ export interface ReputationSingleReviewDraftRequest {
   contentPackJobId?: number | null;
   idea?: string | null;
   style?: string | null;
+  authorType?: string | null;
+  emojiMode?: string | null;
   manualNotes?: string | null;
   length?: string | null;
   contentPackProfile?: string | null;
+  targetReviewId?: number | null;
+  previousDraft?: string | null;
+  orderContext?: string | null;
 }
 
 export interface ReputationReviewCheckRequest {
@@ -129,6 +134,9 @@ export interface DeepResearchSource {
   title: string;
   url: string;
   note: string;
+  type?: 'official_site' | 'map_card' | 'directory' | 'review_platform' | 'social' | 'legal' | 'aggregator' | 'media' | 'other' | string;
+  usedFor?: string[];
+  confidence?: 'high' | 'medium' | 'low' | string;
 }
 
 export interface DeepResearchQualityCheck {

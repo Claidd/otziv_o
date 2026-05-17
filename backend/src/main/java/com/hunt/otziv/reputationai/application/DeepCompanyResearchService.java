@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -270,12 +271,28 @@ public class DeepCompanyResearchService {
     }
 
     private String researchInput(Company company, ReputationResearchRequest request) {
-        return promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INPUT)
+        return profileGuidance(request) + "\n\n" + promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INPUT)
                 .replace("{{companyFacts}}", companyFacts(company))
                 .replace("{{manualDescription}}", blankToDash(request.manualDescription()))
                 .replace("{{productsOrServices}}", listToText(request.productsOrServices()))
                 .replace("{{publicUrls}}", listToText(request.publicUrls()))
                 .replace("{{crmPriorityUrls}}", crmPriorityUrls(company, request));
+    }
+
+    private String profileGuidance(ReputationResearchRequest request) {
+        String profile = request == null || request.deepResearchProfile() == null
+                ? ""
+                : request.deepResearchProfile().trim().toLowerCase(Locale.ROOT);
+        if (!"economy".equals(profile)) {
+            return "Режим отчёта: стандартный.";
+        }
+        return """
+                Режим отчёта: БЫСТРО / gpt-5.4-mini.
+                Сожми исследование: сначала официальный сайт и CRM/карты, затем только 4-6 самых релевантных подтверждающих источников.
+                Не делай полный проход по 15-20 результатам выдачи. Если официальные источники, карты и несколько качественных страниц уже дали картину, остановись и отметь ограничения в warnings.
+                Верни компактный отчёт на 6-8 секций: профиль, услуги/цены, филиалы/логистика, удобства, репутационные сигналы, риски/что уточнить, идеи для постов и идеи для отзывов.
+                Не растягивай таблицы и списки; спорные и слабые сведения помечай коротко.
+                """;
     }
 
     private String sourceRefreshInstructions() {
@@ -828,10 +845,12 @@ public class DeepCompanyResearchService {
                 """
                         Ты исправляешь повреждённый JSON отчёта о репутации компании.
                         Верни только валидный JSON-объект без markdown-обёртки и без пояснений.
-                        Схема: sections — массив объектов {title, body}, sources — массив {title, url, note}, warnings — массив строк.
+                        Схема: sections — массив объектов {title, body}, sources — массив объектов {title, url, type, usedFor, confidence, note}, warnings — массив строк.
+                        type: official_site, map_card, directory, review_platform, social, legal, aggregator, media или other.
+                        confidence: high, medium или low. usedFor — массив коротких тем, которые подтверждает источник.
                         Не добавляй новые факты. Если часть ответа была обычным markdown, разложи её на sections.
                         """,
-                "Повреждённый ответ OpenAI:\n" + limitForRepair(response.text()),
+                "Повреждённый JSON-ответ OpenAI:\n" + limitForRepair(response.text()),
                 0.0,
                 true
         ));
@@ -929,7 +948,7 @@ public class DeepCompanyResearchService {
             }
             return sources;
         }
-        if (sourcesNode.isObject() && (sourcesNode.has("title") || sourcesNode.has("url") || sourcesNode.has("note"))) {
+        if (sourcesNode.isObject() && (sourcesNode.has("title") || sourcesNode.has("url") || sourcesNode.has("note") || sourcesNode.has("type"))) {
             addSource(sources, sourcesNode, "");
             return sources;
         }
@@ -953,10 +972,188 @@ public class DeepCompanyResearchService {
         if (note.isBlank()) {
             note = source.path("description").asText("");
         }
-        if (title.isBlank() && url.isBlank() && note.isBlank()) {
+        if (note.isBlank()) {
+            note = source.path("excerpt").asText("");
+        }
+        String rawType = source.path("type").asText("");
+        String rawConfidence = source.path("confidence").asText("");
+        String type = normalizeSourceType(rawType, title, url, note);
+        List<String> usedFor = parseUsedFor(source.path("usedFor"));
+        if (usedFor.isEmpty()) {
+            usedFor = parseUsedFor(source.path("used_for"));
+        }
+        if (usedFor.isEmpty()) {
+            usedFor = inferUsedFor(title + " " + note);
+        }
+        String confidence = normalizeSourceConfidence(
+                rawConfidence,
+                type,
+                title,
+                url,
+                note
+        );
+        if (title.isBlank()
+                && url.isBlank()
+                && note.isBlank()
+                && rawType.isBlank()
+                && rawConfidence.isBlank()
+                && usedFor.isEmpty()) {
             return;
         }
-        sources.add(new DeepCompanyResearchReport.Source(title, url, note));
+        sources.add(new DeepCompanyResearchReport.Source(title, url, note, type, usedFor, confidence));
+    }
+
+    private String normalizeSourceType(String rawType, String title, String url, String note) {
+        String normalizedType = normalizeLookup(rawType).replace('-', '_');
+        if (List.of(
+                "official_site",
+                "map_card",
+                "directory",
+                "review_platform",
+                "social",
+                "legal",
+                "aggregator",
+                "media",
+                "other"
+        ).contains(normalizedType)) {
+            return normalizedType;
+        }
+
+        String combined = normalizeLookup(String.join(" ", title, url, note));
+        if (containsAny(combined, "инн", "огрн", "егрюл", "rusprofile", "checko", "зачестныйбизнес", "nalog.ru")) {
+            return "legal";
+        }
+        if (containsAny(combined, "2gis", "2гис", "yandex maps", "яндекс карт", "google maps", "google.com/maps", "maps.google")) {
+            return "map_card";
+        }
+        if (containsAny(combined, "vk.com", "t.me", "telegram", "instagram", "facebook", "ok.ru", "youtube", "соцсет")) {
+            return "social";
+        }
+        if (containsAny(combined, "otzovik", "irecommend", "flamp", "yell", "отзыв", "отзовик")) {
+            return "review_platform";
+        }
+        if (containsAny(combined, "zoon", "orgpage", "sprav", "каталог", "справочник", "yellow", "2find")) {
+            return "directory";
+        }
+        if (containsAny(combined, "aggregator", "агрегатор", "avito", "profi.ru", "yandex services", "услуги яндекс")) {
+            return "aggregator";
+        }
+        if (containsAny(combined, "новости", "сми", "статья", "интервью", "media", "vc.ru", "rb.ru")) {
+            return "media";
+        }
+        if (containsAny(combined, "официаль", "официальный сайт", "сайт компании", "сайт", "главная", "прайс", "контакты")) {
+            return "official_site";
+        }
+        return "other";
+    }
+
+    private List<String> parseUsedFor(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                addUsedFor(values, item.asText(""));
+            }
+        } else if (node.isObject()) {
+            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                if (field.getValue().isBoolean()) {
+                    if (field.getValue().asBoolean(false)) {
+                        addUsedFor(values, field.getKey());
+                    }
+                } else {
+                    addUsedFor(values, field.getValue().asText(field.getKey()));
+                }
+            }
+        } else {
+            for (String part : node.asText("").split("[,;\\n]")) {
+                addUsedFor(values, part);
+            }
+        }
+        return values.stream().limit(8).toList();
+    }
+
+    private List<String> inferUsedFor(String note) {
+        String normalized = normalizeLookup(note);
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        if (containsAny(normalized, "услуг", "товар", "меню", "пакет", "тариф", "абонемент", "ассортимент")) {
+            values.add("услуги");
+        }
+        if (containsAny(normalized, "цен", "стоим", "прайс", "тариф", "чек")) {
+            values.add("цены");
+        }
+        if (containsAny(normalized, "адрес", "филиал", "город", "контакт", "телефон")) {
+            values.add("контакты");
+        }
+        if (containsAny(normalized, "режим", "время работы", "часы работы", "расписан")) {
+            values.add("режим");
+        }
+        if (containsAny(normalized, "парков", "wi-fi", "wifi", "вай-фай", "туалет", "гардероб", "детск", "вход", "этаж", "доступност", "зона ожид")) {
+            values.add("удобства");
+        }
+        if (containsAny(normalized, "отзыв", "рейтинг", "жалоб", "хвал")) {
+            values.add("отзывы");
+        }
+        if (containsAny(normalized, "сотруд", "специалист", "мастер", "администратор", "врач", "тренер", "ведущ", "аниматор", "преподавател")) {
+            values.add("сотрудники");
+        }
+        if (containsAny(normalized, "инн", "огрн", "лиценз", "сертифик", "юр", "егрюл")) {
+            values.add("юридические данные");
+        }
+        if (containsAny(normalized, "фото", "фасад", "вывеск", "интерьер", "экстерьер")) {
+            values.add("фото");
+        }
+        if (containsAny(normalized, "достав", "самовывоз", "выезд", "логист")) {
+            values.add("логистика");
+        }
+        if (values.isEmpty()) {
+            values.add("факты");
+        }
+        return values.stream().limit(8).toList();
+    }
+
+    private void addUsedFor(LinkedHashSet<String> values, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        String clean = value.trim().replaceAll("\\s+", " ");
+        if (!clean.isBlank()) {
+            values.add(clean);
+        }
+    }
+
+    private String normalizeSourceConfidence(String rawConfidence, String type, String title, String url, String note) {
+        String normalized = normalizeLookup(rawConfidence);
+        if (normalized.equals("high") || normalized.startsWith("выс")) {
+            return "high";
+        }
+        if (normalized.equals("low") || normalized.startsWith("низ")) {
+            return "low";
+        }
+        if (normalized.equals("medium") || normalized.startsWith("сред")) {
+            return "medium";
+        }
+
+        String combined = normalizeLookup(String.join(" ", title, url, note));
+        if (containsAny(combined, "неувер", "слабый сигнал", "сниппет", "стар", "архив", "неподтверж", "единичн")) {
+            return "low";
+        }
+        if (containsAny(combined, "2+ независ", "два независ", "несколько независ", "подтверждено несколькими")) {
+            return "high";
+        }
+        if ("official_site".equals(type) || "legal".equals(type)) {
+            return "high";
+        }
+        if ("map_card".equals(type) || "directory".equals(type) || "aggregator".equals(type) || "social".equals(type)) {
+            return "medium";
+        }
+        return "low";
     }
 
     private List<String> parseWarnings(JsonNode warningsNode) {
@@ -1149,10 +1346,15 @@ public class DeepCompanyResearchService {
                 "доступност",
                 "зона ожид",
                 "ожидания",
+                "wi-fi",
+                "wifi",
+                "вай-фай",
                 "вход",
                 "этаж",
                 "туалет",
                 "гардероб",
+                "детская зон",
+                "детск",
                 "оплат",
                 "достав",
                 "самовывоз",
@@ -1165,14 +1367,14 @@ public class DeepCompanyResearchService {
                     "amenities",
                     "Парковка и удобства",
                     "warn",
-                    "Компания выглядит как офлайн-точка, но не разобраны парковка, вход, этаж, доступность, зона ожидания, оплата или похожие удобства."
+                    "Компания выглядит как офлайн-точка, но не разобраны парковка, вход, этаж, доступность, Wi-Fi, туалет, гардероб, детская зона, зона ожидания, оплата или похожие удобства."
             ));
         } else if (hasAmenities) {
             checks.add(new DeepCompanyResearchReport.QualityCheck(
                     "amenities",
                     "Парковка и удобства",
                     "pass",
-                    "В отчёте есть детали про парковку, вход, этаж, доступность, запись, оплату или другие удобства."
+                    "В отчёте есть детали про парковку, вход, этаж, доступность, Wi-Fi, туалет, гардероб, детскую зону, запись, оплату или другие удобства."
             ));
         } else {
             checks.add(new DeepCompanyResearchReport.QualityCheck(
@@ -1311,20 +1513,27 @@ public class DeepCompanyResearchService {
     }
 
     private DeepCompanyResearchReport.SourceReview sourceReview(DeepCompanyResearchReport.Source source) {
+        String meta = sourceMetaText(source);
         if (source.url().isBlank()) {
             return new DeepCompanyResearchReport.SourceReview(
                     source.title(),
                     source.url(),
                     "needs_review",
-                    "У источника нет URL."
+                    "У источника нет URL. " + meta
             );
         }
         boolean publicUrl = isLikelyPublicUrl(source.url());
+        boolean lowConfidence = "low".equals(source.confidence());
+        String reason = publicUrl
+                ? (lowConfidence
+                ? "Публичный URL, но источник отмечен как низкая уверенность. " + meta
+                : "Публичный URL. " + meta)
+                : "Ссылка похожа на CRM, локальную или служебную. " + meta;
         return new DeepCompanyResearchReport.SourceReview(
                 source.title(),
                 source.url(),
-                publicUrl ? "trusted_public" : "needs_review",
-                publicUrl ? "Публичный URL, можно открыть вручную." : "Ссылка похожа на CRM, локальную или служебную."
+                publicUrl && !lowConfidence ? "trusted_public" : "needs_review",
+                reason
         );
     }
 
@@ -1393,11 +1602,21 @@ public class DeepCompanyResearchService {
             return "-";
         }
         return sources.stream()
-                .map(source -> "- %s | %s | %s".formatted(source.title(), source.url(), source.note()))
+                .map(source -> "- %s | %s | %s | %s".formatted(
+                        source.title(),
+                        source.url(),
+                        sourceMetaText(source),
+                        source.note()
+                ))
                 .toList()
                 .stream()
                 .reduce((left, right) -> left + "\n" + right)
                 .orElse("-");
+    }
+
+    private String sourceMetaText(DeepCompanyResearchReport.Source source) {
+        String usedFor = source.usedFor().isEmpty() ? "-" : String.join(", ", source.usedFor());
+        return "type=%s; confidence=%s; usedFor=%s".formatted(source.type(), source.confidence(), usedFor);
     }
 
     private String factsToPrompt(List<DeepCompanyResearchReport.FactItem> facts) {
@@ -1490,6 +1709,8 @@ public class DeepCompanyResearchService {
             combined.append(' ')
                     .append(source.title()).append(' ')
                     .append(source.url()).append(' ')
+                    .append(source.type()).append(' ')
+                    .append(String.join(" ", source.usedFor())).append(' ')
                     .append(source.note());
         }
         return containsAny(

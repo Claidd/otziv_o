@@ -52,8 +52,8 @@ p {
   display: grid;
   grid-template-columns: minmax(12.5rem, 0.65fr) minmax(23rem, 1.75fr) minmax(27rem, 1.35fr);
   grid-template-areas:
-    "title profiles meta"
-    "actions actions actions";
+    "actions actions actions"
+    "title profiles meta";
   gap: 0.75rem 0.85rem;
   align-items: end;
   border-radius: var(--otziv-card-radius);
@@ -86,7 +86,7 @@ p {
 .launch-command-meta {
   display: grid;
   grid-template-columns: minmax(7.4rem, 0.8fr) repeat(2, minmax(8.2rem, 1fr));
-  align-items: end;
+  align-items: stretch;
   gap: 0.55rem;
   width: 100%;
   min-width: 0;
@@ -94,7 +94,6 @@ p {
 
 .latest-report-link {
   width: 100%;
-  min-height: 2.55rem;
   border: 2px solid rgba(108, 155, 207, 0.64);
   color: var(--otziv-primary);
   background: transparent;
@@ -146,35 +145,7 @@ p {
 
 .launch-field {
   display: grid;
-  gap: 0.4rem;
   min-width: 0;
-}
-
-.field-title {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.55rem;
-}
-
-.field-title span {
-  flex: 0 0 auto;
-  color: var(--otziv-info);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.field-title small {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--otziv-primary);
-  font-size: 0.66rem;
-  font-weight: 900;
-  line-height: 1.2;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .launch-details {
@@ -235,13 +206,19 @@ button.flow-action-button {
   gap: 0.75rem;
   border: 2px solid rgba(108, 155, 207, 0.72);
   border-radius: 0.95rem;
-  padding: 0.55rem 1rem;
+  padding: 0 1rem;
   color: var(--otziv-dark);
   background: transparent;
   box-shadow: none;
   text-align: left;
   white-space: normal;
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.launch-command-panel :where(select, .company-inline, .latest-report-link, .flow-action-button) {
+  box-sizing: border-box;
+  height: 3.15rem;
+  min-height: 3.15rem;
 }
 
 .flow-action-button > .material-icons-sharp {
@@ -340,10 +317,12 @@ label {
 }
 
 .company-inline {
-  grid-template-columns: auto 5.2rem;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.55rem;
+  min-width: 0;
   min-height: 2.55rem;
+  overflow: hidden;
   border: 1px solid rgba(103, 116, 131, 0.2);
   border-radius: var(--otziv-small-radius);
   padding: 0 0.7rem;
@@ -369,6 +348,7 @@ select {
 }
 
 .company-inline input {
+  min-width: 0;
   min-height: 1.8rem;
   border: 0;
   padding: 0;
@@ -735,7 +715,7 @@ button:disabled {
 .change-chip-list a,
 .change-chip-list span {
   max-width: 100%;
-  overflow: hidden;
+  min-width: 0;
   border-radius: 999px;
   padding: 0.35rem 0.55rem;
   color: var(--otziv-dark);
@@ -743,8 +723,8 @@ button:disabled {
   font-size: 0.72rem;
   font-weight: 900;
   text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .change-chip-list a {
@@ -853,7 +833,8 @@ button:disabled {
   background: var(--otziv-white);
 }
 
-.quality-check > div {
+.quality-check > div,
+.source-review-row > div {
   min-width: 0;
 }
 
@@ -879,6 +860,7 @@ button:disabled {
   font-size: 0.8rem;
   font-weight: 900;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .deep-report-outline,
@@ -890,8 +872,6 @@ button:disabled {
 }
 
 .deep-report-outline span,
-.deep-report-sources a,
-.deep-report-sources span,
 .tag-block span {
   border-radius: 999px;
   padding: 0.4rem 0.62rem;
@@ -955,7 +935,8 @@ button:disabled {
   font-size: 0.96rem;
   font-weight: 600;
   line-height: 1.62;
-  overflow-wrap: anywhere;
+  overflow-x: auto;
+  overflow-wrap: break-word;
 }
 
 .deep-report-markdown :where(h2, h3, h4, h5) {
@@ -1001,30 +982,30 @@ button:disabled {
   font-size: 0.9em;
 }
 
-.deep-report-markdown pre,
-.deep-report-markdown table {
+.deep-report-markdown pre {
   max-width: 100%;
   overflow-x: auto;
 }
 
-.deep-report-markdown table {
-  display: block;
+:host ::ng-deep .deep-report-markdown table {
   border-collapse: collapse;
   margin: 0.85rem 0 1.15rem;
+  min-width: 64rem;
   font-size: 0.86rem;
 }
 
-.deep-report-markdown th,
-.deep-report-markdown td {
-  border: 1px solid rgba(103, 116, 131, 0.2);
+:host ::ng-deep .deep-report-markdown :where(th, td) {
+  border-top: 1px solid rgba(103, 116, 131, 0.24);
   padding: 0.55rem 0.65rem;
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
   min-width: 9rem;
+  overflow-wrap: break-word;
 }
 
-.deep-report-markdown th {
+:host ::ng-deep .deep-report-markdown th {
   background: var(--otziv-white);
-  text-align: left;
+  white-space: nowrap;
 }
 
 .deep-report-sources {
@@ -1198,8 +1179,8 @@ li {
   .launch-command-panel {
     grid-template-columns: minmax(12.5rem, 0.65fr) minmax(0, 1.45fr) minmax(25rem, 1.35fr);
     grid-template-areas:
-      "title profiles meta"
-      "actions actions actions";
+      "actions actions actions"
+      "title profiles meta";
   }
 
   .launch-settings-title {
@@ -1227,10 +1208,10 @@ li {
   .launch-command-panel {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
+      "actions"
       "title"
       "profiles"
-      "meta"
-      "actions";
+      "meta";
   }
 
   .launch-command-meta,

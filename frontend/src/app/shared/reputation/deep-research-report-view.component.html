@@ -1,0 +1,276 @@
+@if (report; as report) {
+  <section class="deep-research-report-view" [class.compact]="compact">
+    <section class="report-head">
+      <div>
+        <strong>{{ report.companyName || 'Компания #' + report.companyId }}</strong>
+        <span>{{ report.createdAt | date: 'dd.MM.yyyy HH:mm' }} · {{ report.model }}</span>
+        <small>{{ report.sources.length }} источников · {{ deepReportBlocks().length }} блоков · {{ deepResearchOperationLabel(job) }}</small>
+      </div>
+
+      @if (showActions) {
+        <div class="report-actions">
+          <button type="button" class="secondary" (click)="copyMarkdown.emit()" appTooltip="Скопировать весь markdown отчёта в буфер обмена.">
+            <span class="material-icons-sharp">content_copy</span>
+            Markdown
+          </button>
+          <button type="button" class="secondary" (click)="downloadMarkdown.emit(report)" appTooltip="Скачать текущую версию отчёта markdown-файлом.">
+            <span class="material-icons-sharp">download</span>
+            MD
+          </button>
+          <button type="button" class="secondary" (click)="downloadPdf.emit(report)" appTooltip="Скачать текущую версию отчёта PDF-файлом.">
+            <span class="material-icons-sharp">picture_as_pdf</span>
+            PDF
+          </button>
+          @if (showRefreshActions) {
+            <button type="button" class="secondary" [disabled]="busy" (click)="refreshSources.emit()" appTooltip="Обновить только публичные источники и пересобрать отчёт поверх текущей версии.">
+              <span class="material-icons-sharp">travel_explore</span>
+              Источники
+            </button>
+            <button type="button" class="secondary" [disabled]="busy" (click)="rebuildText.emit()" appTooltip="Пересобрать текст текущего отчёта без нового полного поиска.">
+              <span class="material-icons-sharp">auto_fix_high</span>
+              Текст
+            </button>
+          }
+          @if (showContentPackAction) {
+            <button type="button" class="accent" [disabled]="busy || contentPackBusy" (click)="createContentPack.emit()" appTooltip="Создать AI-пакет именно из открытой версии отчёта.">
+              <span class="material-icons-sharp">inventory</span>
+              AI-пакет
+            </button>
+          }
+        </div>
+      }
+    </section>
+
+    <div class="deep-report-topic-grid">
+      @for (block of deepReportBlocks(); track trackDeepBlock($index, block); let sectionIndex = $index) {
+        <article class="deep-report-topic">
+          <header>
+            <div>
+              <span class="material-icons-sharp">{{ block.icon }}</span>
+              <h3>{{ block.title }}</h3>
+            </div>
+            @if (showSectionActions) {
+              <button
+                type="button"
+                class="icon-button"
+                [disabled]="busy"
+                (click)="emitRebuildSection(block, sectionIndex)"
+                aria-label="Пересобрать раздел"
+                appTooltip="Пересобрать только этот раздел отчёта."
+              >
+                <span class="material-icons-sharp">refresh</span>
+              </button>
+            }
+          </header>
+          <div class="deep-report-markdown" [innerHTML]="block.html"></div>
+        </article>
+      }
+    </div>
+
+    <details class="report-extra-details">
+      <summary>Проверки, изменения и источники · {{ report.sources.length }} источников · {{ reportQualityChecks().length }} проверок</summary>
+      <div class="deep-report-topic-grid">
+        @if (comparison; as comparison) {
+          <section class="change-panel" [class.empty]="!comparison.hasChanges">
+            <header class="change-head">
+              <span class="material-icons-sharp">{{ comparison.hasChanges ? 'compare_arrows' : 'rule' }}</span>
+              <div>
+                <strong>{{ comparison.hasChanges ? 'Что изменилось в версии' : 'Версия без заметных изменений' }}</strong>
+                <small>Сравнение с {{ comparison.baseJob.createdAt | date: 'dd.MM HH:mm' }} · {{ deepResearchOperationLabel(comparison.baseJob) }}</small>
+              </div>
+            </header>
+
+            <div class="change-summary-grid">
+              @for (item of comparison.summaryItems; track item.key) {
+                <article class="change-summary-card" [class]="item.tone">
+                  <span class="material-icons-sharp">{{ item.icon }}</span>
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.detail }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+
+            @if (comparison.sourceAdded.length > 0 || comparison.sourceRemoved.length > 0 || comparison.sectionChanges.length > 0 || comparison.warningsResolved.length > 0 || comparison.warningsAdded.length > 0) {
+              <div class="change-detail-grid">
+                @if (comparison.sourceAdded.length > 0) {
+                  <article class="change-detail-block">
+                    <strong>Новые источники</strong>
+                    <div class="change-chip-list">
+                      @for (source of comparison.sourceAdded; track trackText($index, source.url || source.title || source.note)) {
+                        @if (source.url) {
+                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                        } @else {
+                          <span>{{ source.title || source.note }}</span>
+                        }
+                      }
+                    </div>
+                  </article>
+                }
+                @if (comparison.sourceRemoved.length > 0) {
+                  <article class="change-detail-block">
+                    <strong>Убраны источники</strong>
+                    <div class="change-chip-list">
+                      @for (source of comparison.sourceRemoved; track trackText($index, source.url || source.title || source.note)) {
+                        @if (source.url) {
+                          <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                        } @else {
+                          <span>{{ source.title || source.note }}</span>
+                        }
+                      }
+                    </div>
+                  </article>
+                }
+                @if (comparison.sectionChanges.length > 0) {
+                  <article class="change-detail-block">
+                    <strong>Разделы</strong>
+                    <div class="change-chip-list">
+                      @for (change of comparison.sectionChanges; track trackSectionChange($index, change)) {
+                        <span [class]="change.status">{{ sectionChangeLabel(change.status) }} · {{ change.title }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+                @if (comparison.warningsAdded.length > 0 || comparison.warningsResolved.length > 0) {
+                  <article class="change-detail-block">
+                    <strong>Риски и замечания</strong>
+                    <div class="change-chip-list">
+                      @for (warning of comparison.warningsAdded; track trackText($index, warning)) {
+                        <span class="removed">новый риск: {{ warning }}</span>
+                      }
+                      @for (warning of comparison.warningsResolved; track trackText($index, warning)) {
+                        <span class="added">закрыто: {{ warning }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+        }
+
+        <section
+          class="quality-checklist"
+          [class.green]="reportQualitySummary().tone === 'green'"
+          [class.yellow]="reportQualitySummary().tone === 'yellow'"
+          [class.red]="reportQualitySummary().tone === 'red'"
+          [class.gray]="reportQualitySummary().tone === 'gray'"
+        >
+          <div class="quality-summary">
+            <span class="material-icons-sharp">{{ reportQualitySummary().icon }}</span>
+            <div>
+              <strong>{{ reportQualitySummary().label }}</strong>
+              <small>Проверки {{ reportQualitySummary().passed }}/{{ reportQualitySummary().total }}</small>
+            </div>
+          </div>
+
+          @if (reportQualityChecks().length > 0) {
+            <div class="quality-grid">
+              @for (check of reportQualityChecks(); track trackQualityCheck($index, check)) {
+                <article class="quality-check" [class]="check.status">
+                  <span class="material-icons-sharp">{{ qualityStatusIcon(check.status) }}</span>
+                  <div>
+                    <strong>{{ check.label }}</strong>
+                    <small>{{ qualityStatusLabel(check.status) }} · {{ check.detail }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+
+        @if (reportWarnings().length > 0) {
+          <div class="warning-list">
+            @for (warning of reportWarnings(); track trackText($index, warning)) {
+              <p>
+                <span class="material-icons-sharp">warning</span>
+                {{ warning }}
+              </p>
+            }
+          </div>
+        }
+
+        <div class="deep-report-outline" aria-label="Темы отчёта">
+          @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
+            <span>{{ block.title }}</span>
+          }
+        </div>
+
+        @if (report.sources.length > 0) {
+          <div class="deep-report-sources">
+            <strong>Источники отчёта</strong>
+            @for (source of report.sources; track trackText($index, source.url || source.title)) {
+              <article class="source-review-row" [class.needs-review]="source.confidence === 'low'">
+                <span class="material-icons-sharp">{{ source.confidence === 'low' ? 'manage_search' : 'public' }}</span>
+                <div>
+                  @if (source.url) {
+                    <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                  } @else {
+                    <span>{{ source.title || source.note }}</span>
+                  }
+                  <small>
+                    {{ sourceTypeLabel(source.type || '') }} · уверенность {{ confidenceLabel(source.confidence || 'medium') }}
+                    @if (source.usedFor?.length) {
+                      · {{ source.usedFor?.join(', ') }}
+                    }
+                  </small>
+                  @if (source.note) {
+                    <small>{{ source.note }}</small>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+
+        @if (confirmedFacts().length || uncertainFacts().length || sourceReviews().length) {
+          <section class="facts-panel">
+            @if (confirmedFacts().length > 0) {
+              <div class="fact-block">
+                <strong>Подтверждено</strong>
+                @for (fact of confirmedFacts(); track trackFact($index, fact)) {
+                  <article class="fact-row">
+                    <span>{{ fact.label }}</span>
+                    <b>{{ fact.value }}</b>
+                    <small>{{ fact.evidence }} · уверенность {{ confidenceLabel(fact.confidence) }}</small>
+                  </article>
+                }
+              </div>
+            }
+            @if (uncertainFacts().length > 0) {
+              <div class="fact-block uncertain">
+                <strong>Нужно проверить</strong>
+                @for (fact of uncertainFacts(); track trackFact($index, fact)) {
+                  <article class="fact-row">
+                    <span>{{ fact.label }}</span>
+                    <b>{{ fact.value }}</b>
+                    <small>{{ fact.evidence }} · уверенность {{ confidenceLabel(fact.confidence) }}</small>
+                  </article>
+                }
+              </div>
+            }
+            @if (sourceReviews().length > 0) {
+              <div class="source-review-block">
+                <strong>Оценка источников</strong>
+                @for (source of sourceReviews(); track trackSourceReview($index, source)) {
+                  <article class="source-review-row" [class.needs-review]="source.status !== 'trusted_public'">
+                    <span class="material-icons-sharp">{{ sourceReviewIcon(source.status) }}</span>
+                    <div>
+                      @if (source.url) {
+                        <a [href]="source.url" target="_blank" rel="noreferrer">{{ source.title || source.url }}</a>
+                      } @else {
+                        <span>{{ source.title || 'Источник без ссылки' }}</span>
+                      }
+                      <small>{{ sourceReviewLabel(source.status) }} · {{ source.reason }}</small>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+        }
+      </div>
+    </details>
+  </section>
+}

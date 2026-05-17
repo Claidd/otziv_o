@@ -204,6 +204,19 @@ public class ReputationAiMarkdownExportService {
             if (!clean(source.url()).isBlank()) {
                 markdown.append(": ").append(clean(source.url()));
             }
+            List<String> meta = new java.util.ArrayList<>();
+            if (!clean(source.type()).isBlank()) {
+                meta.add("type=" + clean(source.type()));
+            }
+            if (!clean(source.confidence()).isBlank()) {
+                meta.add("confidence=" + clean(source.confidence()));
+            }
+            if (source.usedFor() != null && !source.usedFor().isEmpty()) {
+                meta.add("usedFor=" + clean(String.join(", ", source.usedFor())));
+            }
+            if (!meta.isEmpty()) {
+                markdown.append(" (").append(String.join("; ", meta)).append(")");
+            }
             if (!clean(source.note()).isBlank()) {
                 markdown.append(". ").append(clean(source.note()));
             }
