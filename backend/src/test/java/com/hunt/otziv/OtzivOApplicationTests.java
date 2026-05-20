@@ -232,6 +232,7 @@ class OtzivOApplicationTests {
 				"all",
 				0,
 				10,
+				"desc",
 				() -> "admin",
 				adminAuth
 		);
@@ -264,6 +265,7 @@ class OtzivOApplicationTests {
 				"all",
 				0,
 				10,
+				"desc",
 				() -> "admin",
 				adminAuth
 		);
@@ -272,6 +274,50 @@ class OtzivOApplicationTests {
 					assertThat(order.id()).isEqualTo(orderId);
 					assertThat(order.source()).isEqualTo("live");
 				});
+	}
+
+	@Test
+	void managerArchiveSearchMatchesWordsAcrossVisibleArchiveFields() {
+		LocalDate archiveDate = LocalDate.of(2026, 5, 10);
+		jdbcTemplate.update("INSERT INTO order_statuses (order_status_title) VALUES ('Архив')");
+		Long archiveStatusId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		Long orderId = 990_001L;
+
+		jdbcTemplate.update("DELETE FROM archive_orders WHERE order_id = ?", orderId);
+		jdbcTemplate.update("""
+			INSERT INTO archive_orders (
+			    order_id,
+			    order_changed,
+			    order_status,
+			    order_amount,
+			    order_counter,
+			    order_sum,
+			    company_title_snapshot,
+			    company_phone_snapshot,
+			    company_city_snapshot,
+			    filial_title_snapshot,
+			    manager_name_snapshot,
+			    worker_name_snapshot,
+			    archived_at,
+			    archive_reason
+			)
+			VALUES (?, ?, ?, 5, 1, 1000.00, 'У дома', '+7 (904) 123-45-67', 'Иркутск', 'Улица Саянская, 4а', 'Анжелика Б.', 'Вика Ц.', ?, 'search-test')
+		""", orderId, archiveDate, archiveStatusId, archiveDate.atStartOfDay());
+
+		TestingAuthenticationToken adminAuth = new TestingAuthenticationToken("admin", "n/a", "ROLE_ADMIN");
+		PageResponse<ManagerArchiveOrderListItem> archiveOrders = managerArchiveService.findOrders(
+				"дома саянская",
+				"archive",
+				0,
+				10,
+				"desc",
+				() -> "admin",
+				adminAuth
+		);
+
+		assertThat(archiveOrders.content())
+				.extracting(ManagerArchiveOrderListItem::id)
+				.contains(orderId);
 	}
 
 	private byte[] uuidBytes(UUID uuid) {

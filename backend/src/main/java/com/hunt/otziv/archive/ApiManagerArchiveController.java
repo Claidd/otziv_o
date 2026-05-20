@@ -29,10 +29,11 @@ public class ApiManagerArchiveController {
             @RequestParam(defaultValue = "all") String mode,
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Principal principal,
             Authentication authentication
     ) {
-        return managerArchiveService.findOrders(keyword, mode, pageNumber, pageSize, principal, authentication);
+        return managerArchiveService.findOrders(keyword, mode, pageNumber, pageSize, sortDirection, principal, authentication);
     }
 
     @GetMapping("/orders/{orderId}")

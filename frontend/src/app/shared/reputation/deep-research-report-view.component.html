@@ -41,6 +41,68 @@
       }
     </section>
 
+    @if (reviewIdeas().length > 0 || editingReviewIdeas) {
+      <section class="review-ideas-panel">
+        <header>
+          <div>
+            <span class="material-icons-sharp">rate_review</span>
+            <div>
+              <strong>Идеи для отзывов</strong>
+              <small>{{ editingReviewIdeas ? cleanReviewIdeas(reviewIdeaDraft).length : reviewIdeas().length }}/30</small>
+            </div>
+          </div>
+
+          <div class="review-idea-actions">
+            @if (editingReviewIdeas) {
+              <button type="button" class="secondary" [disabled]="busy" (click)="addReviewIdea()" appTooltip="Добавить строку идеи. Максимум 30.">
+                <span class="material-icons-sharp">add</span>
+                Добавить
+              </button>
+              <button type="button" class="secondary" [disabled]="busy" (click)="cancelReviewIdeasEdit()">
+                <span class="material-icons-sharp">close</span>
+                Отмена
+              </button>
+              <button type="button" class="accent" [disabled]="busy || cleanReviewIdeas(reviewIdeaDraft).length === 0" (click)="emitSaveReviewIdeas()">
+                <span class="material-icons-sharp">save</span>
+                Сохранить
+              </button>
+            } @else {
+              <button type="button" class="secondary" [disabled]="busy" (click)="startReviewIdeasEdit()" appTooltip="Отредактировать идеи, которые попадут в генерацию карточек заказа.">
+                <span class="material-icons-sharp">edit</span>
+                Редактировать
+              </button>
+            }
+          </div>
+        </header>
+
+        @if (editingReviewIdeas) {
+          <div class="review-ideas-editor">
+            @for (idea of reviewIdeaDraft; track trackReviewIdea($index, idea); let ideaIndex = $index) {
+              <label class="review-idea-row">
+                <span>{{ ideaIndex + 1 }}</span>
+                <textarea
+                  rows="2"
+                  [value]="idea"
+                  [disabled]="busy"
+                  maxlength="500"
+                  (input)="updateReviewIdea(ideaIndex, $event)"
+                ></textarea>
+                <button type="button" class="icon-button" [disabled]="busy" (click)="removeReviewIdea(ideaIndex)" aria-label="Удалить идею">
+                  <span class="material-icons-sharp">delete</span>
+                </button>
+              </label>
+            }
+          </div>
+        } @else {
+          <ol class="review-ideas-list">
+            @for (idea of reviewIdeas(); track trackReviewIdea($index, idea)) {
+              <li>{{ idea }}</li>
+            }
+          </ol>
+        }
+      </section>
+    }
+
     <div class="deep-report-topic-grid">
       @for (block of deepReportBlocks(); track trackDeepBlock($index, block); let sectionIndex = $index) {
         <article class="deep-report-topic">

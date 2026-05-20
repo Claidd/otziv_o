@@ -64,4 +64,10 @@ public class OrderDTO {
     private FilialDTO filial;
 
     private String groupId;
+
+    private Long telegramGroupChatId;
+
+    private boolean telegramGroupLinked;
+
+    private String telegramBotInviteUrl;
 }

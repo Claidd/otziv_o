@@ -5,6 +5,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -12,6 +13,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -26,10 +28,11 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class OrderDtoMapperTest {
 
-    private final OrderDtoMapper mapper = new OrderDtoMapper();
+    private final OrderDtoMapper mapper = new OrderDtoMapper(new TelegramGroupLinkService(mock(CompanyRepository.class)));
 
     @Test
     void toBoardDTOMapsOrderForManagerBoard() {
@@ -77,6 +80,7 @@ class OrderDtoMapperTest {
                 "В работе",
                 new BigDecimal("300.00"),
                 "https://chat.example",
+                null,
                 "79000000000",
                 "pay text",
                 2,

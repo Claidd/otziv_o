@@ -6,6 +6,7 @@ import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.AppSettingService;
@@ -104,6 +105,8 @@ public class ApiWorkerBoardController {
             "Публикация"
     );
     private static final Set<String> REVIEW_CREDENTIAL_COPY_FIELDS = Set.of("login", "password");
+    private static final String REVIEW_DTO_ERROR_COMPANY_TITLE = "ОШИБКА ПРИ ОБРАБОТКЕ";
+    private static final String REVIEW_DTO_MISSING_ORDER_TITLE = "НЕТ ЗАКАЗА";
     private static final List<String> CURRENT_WORK_SECTIONS = List.of(
             SECTION_NEW,
             SECTION_CORRECT,
@@ -1178,13 +1181,14 @@ public class ApiWorkerBoardController {
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
                 : safe(review.getWorkerFio());
+        String urlPhoto = !safe(review.getUrlPhoto()).isBlank() ? safe(review.getUrlPhoto()) : safe(review.getUrl());
 
         return new WorkerReviewResponse(
                 review.getId(),
-                review.getCompanyId(),
+                recoveryCompanyId(task, review),
                 review.getOrderDetailsId(),
-                review.getOrderId(),
-                safe(review.getOrderStatus()),
+                recoveryOrderId(task, review),
+                recoveryOrderStatus(task, review),
                 safe(task.getRecoveryText()),
                 safe(task.getRecoveryAnswer()),
                 safe(review.getCategory()),
@@ -1194,12 +1198,12 @@ public class ApiWorkerBoardController {
                 botLogin,
                 botPassword,
                 botCounter,
-                safe(review.getCompanyTitle()),
-                safe(review.getCommentCompany()),
-                safe(review.getOrderComments()),
-                safe(review.getFilialCity()),
-                safe(review.getFilialTitle()),
-                safe(review.getFilialUrl()),
+                recoveryCompanyTitle(task, review),
+                recoveryCompanyNote(task, review),
+                recoveryOrderNote(task, review),
+                recoveryFilialCity(task, review),
+                recoveryFilialTitle(task, review),
+                recoveryFilialUrl(task, review),
                 review.getProductId(),
                 safe(review.getProductTitle()),
                 review.isProductPhoto(),
@@ -1212,7 +1216,7 @@ public class ApiWorkerBoardController {
                 safe(review.getComment()),
                 review.getPrice(),
                 safe(review.getUrl()),
-                !safe(review.getUrlPhoto()).isBlank() ? safe(review.getUrlPhoto()) : safe(review.getUrl()),
+                urlPhoto,
                 false,
                 null,
                 review.getId(),
@@ -1229,6 +1233,80 @@ public class ApiWorkerBoardController {
                 dateValue(task.getScheduledDate()),
                 dateValue(task.getCompletedDate())
         );
+    }
+
+    private Long recoveryCompanyId(ReviewRecoveryTask task, ReviewDTOOne review) {
+        if (review.getCompanyId() != null) {
+            return review.getCompanyId();
+        }
+
+        Order order = task != null ? task.getOrder() : null;
+        Company company = order != null ? order.getCompany() : null;
+        return company != null ? company.getId() : null;
+    }
+
+    private Long recoveryOrderId(ReviewRecoveryTask task, ReviewDTOOne review) {
+        return review.getOrderId() != null
+                ? review.getOrderId()
+                : task != null && task.getOrder() != null ? task.getOrder().getId() : null;
+    }
+
+    private String recoveryOrderStatus(ReviewRecoveryTask task, ReviewDTOOne review) {
+        return firstNonBlank(
+                review.getOrderStatus(),
+                task != null && task.getOrder() != null && task.getOrder().getStatus() != null
+                        ? task.getOrder().getStatus().getTitle()
+                        : ""
+        );
+    }
+
+    private String recoveryCompanyTitle(ReviewRecoveryTask task, ReviewDTOOne review) {
+        String reviewTitle = safe(review.getCompanyTitle()).trim();
+        if (!reviewTitle.isBlank()
+                && !REVIEW_DTO_ERROR_COMPANY_TITLE.equalsIgnoreCase(reviewTitle)
+                && !REVIEW_DTO_MISSING_ORDER_TITLE.equalsIgnoreCase(reviewTitle)) {
+            return reviewTitle;
+        }
+
+        Order order = task != null ? task.getOrder() : null;
+        Company company = order != null ? order.getCompany() : null;
+        return firstNonBlank(company != null ? company.getTitle() : "", reviewTitle);
+    }
+
+    private String recoveryCompanyNote(ReviewRecoveryTask task, ReviewDTOOne review) {
+        Order order = task != null ? task.getOrder() : null;
+        Company company = order != null ? order.getCompany() : null;
+        return firstNonBlank(review.getCommentCompany(), company != null ? company.getCommentsCompany() : "");
+    }
+
+    private String recoveryOrderNote(ReviewRecoveryTask task, ReviewDTOOne review) {
+        Order order = task != null ? task.getOrder() : null;
+        return firstNonBlank(review.getOrderComments(), order != null ? order.getZametka() : "");
+    }
+
+    private String recoveryFilialCity(ReviewRecoveryTask task, ReviewDTOOne review) {
+        Review sourceReview = task != null ? task.getSourceReview() : null;
+        Filial filial = sourceReview != null ? sourceReview.getFilial() : null;
+        Order order = task != null ? task.getOrder() : null;
+        Company company = order != null ? order.getCompany() : null;
+
+        return firstNonBlank(
+                review.getFilialCity(),
+                filial != null && filial.getCity() != null ? filial.getCity().getTitle() : "",
+                company != null ? company.getCity() : ""
+        );
+    }
+
+    private String recoveryFilialTitle(ReviewRecoveryTask task, ReviewDTOOne review) {
+        Review sourceReview = task != null ? task.getSourceReview() : null;
+        Filial filial = sourceReview != null ? sourceReview.getFilial() : null;
+        return firstNonBlank(review.getFilialTitle(), filial != null ? filial.getTitle() : "");
+    }
+
+    private String recoveryFilialUrl(ReviewRecoveryTask task, ReviewDTOOne review) {
+        Review sourceReview = task != null ? task.getSourceReview() : null;
+        Filial filial = sourceReview != null ? sourceReview.getFilial() : null;
+        return firstNonBlank(review.getFilialUrl(), filial != null ? filial.getUrl() : "");
     }
 
     private void requireCompleteCounter(Order order, String status) {

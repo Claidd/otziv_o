@@ -164,9 +164,10 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         task.setBot(nextBot);
-        task.setBotLoginSnapshot(nextBot.getLogin());
-        task.setBotPasswordSnapshot(nextBot.getPassword());
-        task.setBotFioSnapshot(nextBot.getFio());
+        task.setBotLoginSnapshot(botLogin(nextBot));
+        task.setBotPasswordSnapshot(botPassword(nextBot));
+        task.setBotFioSnapshot(botFio(nextBot));
+        syncSourceReviewBot(task, nextBot);
         return taskRepository.save(task);
     }
 
@@ -592,6 +593,16 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
         return botService.claimReserveBotForCity(city, currentBotId == null ? Set.of() : Set.of(currentBotId))
                 .orElse(null);
+    }
+
+    private void syncSourceReviewBot(ReviewRecoveryTask task, Bot bot) {
+        Review review = task != null ? task.getSourceReview() : null;
+        if (review == null || review.getId() == null || bot == null) {
+            return;
+        }
+
+        review.setBot(bot);
+        reviewRepository.save(review);
     }
 
     private LocalDate safeDate(LocalDate date) {

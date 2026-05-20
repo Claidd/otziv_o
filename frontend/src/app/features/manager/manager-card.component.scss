@@ -119,6 +119,16 @@
   text-decoration: none;
 }
 
+.manager-card header a.telegram-bot-link-pending,
+.phone-row a.telegram-bot-link-pending {
+  color: var(--otziv-danger);
+}
+
+.phone-row a.telegram-bot-link-pending {
+  border-color: rgba(207, 64, 64, 0.36);
+  background: rgba(207, 64, 64, 0.08);
+}
+
 .manager-card header small,
 .manager-card footer span,
 .manager-card footer button,

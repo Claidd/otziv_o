@@ -10,6 +10,8 @@ import {
   managerHasMeaningfulNote,
   managerOrderChatUrl,
   managerOrderDetailsUrl,
+  managerOrderHeaderUrl,
+  managerOrderNeedsTelegramBot,
   managerOrderReviewUrl,
   managerPayableOrderSum,
   managerProgress,
@@ -50,6 +52,14 @@ export class ManagerOrderCardComponent implements OnDestroy {
 
   orderChatUrl(): string {
     return this.cleanUrl(managerOrderChatUrl(this.order));
+  }
+
+  orderHeaderUrl(): string {
+    return this.cleanUrl(managerOrderHeaderUrl(this.order));
+  }
+
+  needsTelegramBot(): boolean {
+    return managerOrderNeedsTelegramBot(this.order);
   }
 
   orderDetailsUrl(): string {

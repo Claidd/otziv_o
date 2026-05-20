@@ -179,6 +179,7 @@ export interface DeepCompanyResearchReport {
   warnings: string[];
   qualityChecks?: DeepResearchQualityCheck[];
   factSnapshot?: DeepResearchFactSnapshot | null;
+  reviewIdeas?: string[];
   createdAt: string;
 }
 
@@ -499,6 +500,13 @@ export class ReputationAiApi {
     return this.http.get<DeepCompanyResearchJob[]>(
       `${this.baseUrl}/companies/${companyId}/deep-research/jobs/history`,
       { params: { limit } }
+    );
+  }
+
+  updateDeepResearchReviewIdeas(companyId: number, jobId: number, reviewIdeas: string[]): Observable<DeepCompanyResearchJob> {
+    return this.http.put<DeepCompanyResearchJob>(
+      `${this.baseUrl}/companies/${companyId}/deep-research/jobs/${jobId}/review-ideas`,
+      { reviewIdeas }
     );
   }
 

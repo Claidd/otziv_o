@@ -9,6 +9,7 @@ param(
     [switch]$NoUp,
     [switch]$NoLogs,
     [switch]$SkipOpenAiProxyIpSync,
+    [switch]$UseConfiguredOutboundProxy,
     [switch]$WithDbAdmin,
     [switch]$WithReputationAiSmoke,
     [int]$ReputationAiCompanyId = 1,
@@ -859,10 +860,40 @@ if (-not (Test-Path -LiteralPath $envPath)) {
     Write-Host "Created $envPath from .env.prod-local.example."
 }
 
+if (-not $UseConfiguredOutboundProxy) {
+    $env:OPENAI_PROXY_ENABLED = "false"
+    $env:WHATSAPP_PROXY_ENABLED = "false"
+    $env:WHATSAPP_PROXY_HOST = ""
+
+    $telegramProxyHost = Get-EnvValue -Path $envPath -Name "TELEGRAM_PROXY_HOST"
+    if ([string]::IsNullOrWhiteSpace($telegramProxyHost)) {
+        $telegramProxyHost = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_HOST"
+    }
+    $telegramProxyPort = Get-EnvValue -Path $envPath -Name "TELEGRAM_PROXY_PORT"
+    if ([string]::IsNullOrWhiteSpace($telegramProxyPort)) {
+        $telegramProxyPort = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_PORT"
+    }
+    if ([string]::IsNullOrWhiteSpace($telegramProxyPort)) {
+        $telegramProxyPort = "8888"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($telegramProxyHost)) {
+        $env:TELEGRAM_PROXY_ENABLED = "false"
+        $env:TELEGRAM_PROXY_HOST = ""
+        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI, Telegram and WhatsApp. Pass -UseConfiguredOutboundProxy to use proxy values from the env file."
+    } else {
+        $env:TELEGRAM_PROXY_ENABLED = "true"
+        $env:TELEGRAM_PROXY_HOST = $telegramProxyHost
+        $env:TELEGRAM_PROXY_PORT = $telegramProxyPort
+        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI and WhatsApp; Telegram uses the configured local Docker proxy ${telegramProxyHost}:$telegramProxyPort because Docker does not inherit the host VPN route."
+    }
+}
+
 $openAiProxyEnabled = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_ENABLED"
 $openAiProxySyncLocalIp = Get-EnvValue -Path $envPath -Name "OPENAI_PROXY_SYNC_LOCAL_IP"
 if (
     -not $SkipOpenAiProxyIpSync `
+    -and $UseConfiguredOutboundProxy `
     -and $openAiProxyEnabled `
     -and $openAiProxyEnabled.Equals("true", [System.StringComparison]::OrdinalIgnoreCase) `
     -and -not ($openAiProxySyncLocalIp -and $openAiProxySyncLocalIp.Equals("false", [System.StringComparison]::OrdinalIgnoreCase))

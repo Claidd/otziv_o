@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
@@ -71,6 +72,9 @@ class CompanyServiceImplTest {
     private TelegramService telegramService;
 
     @Mock
+    private TelegramGroupLinkService telegramGroupLinkService;
+
+    @Mock
     private NextOrderRequestRepository nextOrderRequestRepository;
 
     @Test
@@ -107,6 +111,7 @@ class CompanyServiceImplTest {
                 reviewService,
                 operatorService,
                 telegramService,
+                telegramGroupLinkService,
                 nextOrderRequestRepository
         );
     }

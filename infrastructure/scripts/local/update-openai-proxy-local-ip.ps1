@@ -86,7 +86,7 @@ function Get-ProxyRouteIp {
         [Parameter(Mandatory = $true)][string]$ProxySshTarget
     )
 
-    $captureCommand = "timeout 8 tcpdump -n -c 1 -i any tcp dst port $ProxyPort 2>/dev/null"
+    $captureCommand = "timeout 12 tcpdump -l -n -c 1 -i any 'tcp dst port $ProxyPort and tcp[tcpflags] & tcp-syn != 0' 2>/dev/null"
     $captureJob = Start-Job -ScriptBlock {
         param(
             [Parameter(Mandatory = $true)][string]$Target,
@@ -97,19 +97,26 @@ function Get-ProxyRouteIp {
     } -ArgumentList $ProxySshTarget, $captureCommand
 
     try {
-        Start-Sleep -Seconds 2
-        $client = [System.Net.Sockets.TcpClient]::new()
-        try {
-            $async = $client.BeginConnect($ProxyHost, [int]$ProxyPort, $null, $null)
-            if ($async.AsyncWaitHandle.WaitOne(1500)) {
-                try {
-                    $client.EndConnect($async)
-                } catch {
-                    # The firewall may drop the probe before the TCP handshake completes; tcpdump still sees the SYN.
+        Start-Sleep -Seconds 3
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+            $client = [System.Net.Sockets.TcpClient]::new()
+            try {
+                $async = $client.BeginConnect($ProxyHost, [int]$ProxyPort, $null, $null)
+                if ($async.AsyncWaitHandle.WaitOne(1500)) {
+                    try {
+                        $client.EndConnect($async)
+                    } catch {
+                        # The firewall may drop the probe before the TCP handshake completes; tcpdump still sees the SYN.
+                    }
                 }
+            } finally {
+                $client.Dispose()
             }
-        } finally {
-            $client.Dispose()
+
+            if ($captureJob.State -ne "Running") {
+                break
+            }
+            Start-Sleep -Milliseconds 700
         }
 
         $output = @()
@@ -136,6 +143,13 @@ function Get-ProxyRouteIp {
     return $null
 }
 
+function ConvertTo-CurlConfigValue {
+    param([AllowNull()][string]$Value)
+
+    $escaped = if ($null -eq $Value) { "" } else { $Value.Replace("\", "\\").Replace('"', '\"') }
+    return '"' + $escaped + '"'
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
 $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
@@ -144,6 +158,7 @@ $proxyHost = Get-Setting -Name "OPENAI_PROXY_HOST"
 $proxyPort = Get-Setting -Name "OPENAI_PROXY_PORT" -DefaultValue "3128"
 $proxyUsername = Get-Setting -Name "OPENAI_PROXY_USERNAME"
 $proxyPassword = Get-Setting -Name "OPENAI_PROXY_PASSWORD"
+$openAiApiKey = Get-Setting -Name "OPENAI_API_KEY"
 
 if ([string]::IsNullOrWhiteSpace($proxyHost)) {
     throw "OPENAI_PROXY_HOST is not set in environment or $envPath"
@@ -265,9 +280,36 @@ if (-not $NoProxyTest) {
     }
 
     Write-Host "Testing proxy route to OpenAI..."
-    & curl.exe -I -x $proxyUri "https://api.openai.com/v1/models" --connect-timeout 20 | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Proxy connectivity test failed. UFW rule was updated, but OpenAI may have reset the unauthenticated test request; continue and verify with the real API call."
+    $curlConfigPath = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-openai-proxy-curl-" + [guid]::NewGuid().ToString("N") + ".conf")
+    try {
+        $curlConfigLines = [System.Collections.Generic.List[string]]::new()
+        $curlConfigLines.Add("proxy = $(ConvertTo-CurlConfigValue -Value $proxyUri)")
+        $curlConfigLines.Add("connect-timeout = 20")
+        $curlConfigLines.Add("max-time = 40")
+        if (-not [string]::IsNullOrWhiteSpace($openAiApiKey)) {
+            $curlConfigLines.Add("header = $(ConvertTo-CurlConfigValue -Value ("Authorization: Bearer " + $openAiApiKey))")
+        }
+        [System.IO.File]::WriteAllLines($curlConfigPath, $curlConfigLines, [System.Text.UTF8Encoding]::new($false))
+
+        if ([string]::IsNullOrWhiteSpace($openAiApiKey)) {
+            & curl.exe --config $curlConfigPath -I "https://api.openai.com/v1/models" | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                throw "Proxy connectivity test failed. UFW/Squid rule was updated, but the proxy route to OpenAI is still unreachable."
+            }
+        } else {
+            $httpCode = (& curl.exe -sS -o NUL -w "%{http_code}" --config $curlConfigPath "https://api.openai.com/v1/models")
+            if ($LASTEXITCODE -ne 0) {
+                throw "Proxy connectivity test failed with curl exit code $LASTEXITCODE. UFW/Squid rule was updated, but the proxy route to OpenAI is still unreachable."
+            }
+            if (-not ($httpCode -match "^2\d\d$")) {
+                throw "Proxy connectivity test reached OpenAI but returned HTTP $httpCode."
+            }
+            Write-Host "Proxy route to OpenAI is OK (HTTP $httpCode)."
+        }
+    } finally {
+        if (Test-Path -LiteralPath $curlConfigPath) {
+            Remove-Item -LiteralPath $curlConfigPath -Force
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -40,6 +41,9 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private OrderStatusNotificationService orderStatusNotificationService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -95,11 +99,10 @@ class OrderStatusCheckerServiceImplTest {
 
     private OrderStatusCheckerServiceImpl service() {
         return new OrderStatusCheckerServiceImpl(
-                orderStatusService,
                 telegramService,
                 emailService,
-                whatsAppService,
-                orderRepository
+                orderRepository,
+                orderStatusNotificationService
         );
     }
 

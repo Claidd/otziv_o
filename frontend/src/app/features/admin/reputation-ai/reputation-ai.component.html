@@ -167,6 +167,7 @@
           (rebuildText)="rebuildDeepReportText()"
           (createContentPack)="createContentPack(deepResearchJob()?.jobId ?? null)"
           (rebuildSection)="rebuildDeepReportSection($event.block, $event.sectionIndex)"
+          (saveReviewIdeas)="saveDeepReportReviewIdeas($event)"
         />
       } @else {
         <section class="empty-stage">

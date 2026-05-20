@@ -36,6 +36,7 @@ public class ManagerArchiveService {
             String mode,
             int pageNumber,
             int pageSize,
+            String sortDirection,
             Principal principal,
             Authentication authentication
     ) {
@@ -44,7 +45,7 @@ public class ManagerArchiveService {
         int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
         String safeKeyword = keyword == null ? "" : keyword.trim();
         long total = repository.countOrders(scope, mode, safeKeyword);
-        List<ManagerArchiveOrderListItem> orders = repository.findOrders(scope, mode, safeKeyword, safePageNumber, safePageSize);
+        List<ManagerArchiveOrderListItem> orders = repository.findOrders(scope, mode, safeKeyword, safePageNumber, safePageSize, sortDirection);
         if (!canSeeArchiveFinance(authentication)) {
             orders = orders.stream()
                     .map(this::withoutFinance)
@@ -163,6 +164,7 @@ public class ManagerArchiveService {
                 order.companyUrlChat(),
                 order.companyCity(),
                 order.filialTitle(),
+                order.filialUrl(),
                 order.status(),
                 order.sum(),
                 order.amount(),

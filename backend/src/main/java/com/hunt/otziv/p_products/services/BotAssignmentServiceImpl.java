@@ -13,6 +13,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final BotService botService;
     private final FilialService filialService;
     private final ReviewRepository reviewRepository;
+    private final TelegramService telegramService;
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
@@ -623,8 +625,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
             log.error(alertMessage);
 
-            // Можно добавить отправку в Telegram
-            // telegramService.sendAlertToAdmins(alertMessage);
+            telegramService.sendAlertToAdmins(alertMessage);
 
         } catch (Exception e) {
             log.error("Ошибка при отправке оповещения о ботах-заглушках", e);

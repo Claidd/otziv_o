@@ -6,8 +6,15 @@
   [class.card-tone--bad]="isBadTone()"
 >
   <header>
-    @if (hasCompanyFilialUrl()) {
-      <a [href]="companyFilialUrl()" target="_blank" rel="noopener">{{ company.title || 'Без названия' }}</a>
+    @if (hasCompanyHeaderUrl()) {
+      <a
+        [href]="companyHeaderUrl()"
+        [class.telegram-bot-link-pending]="needsTelegramBot()"
+        target="_blank"
+        rel="noopener"
+      >
+        {{ company.title || 'Без названия' }}
+      </a>
     } @else {
       <a href="" (click)="$event.preventDefault(); editOpened.emit()">{{ company.title || 'Без названия' }}</a>
     }
@@ -23,7 +30,14 @@
   </header>
 
   <div class="phone-row">
-    <a [href]="companyChatUrl()" target="_blank" rel="noopener">{{ companyPhoneLabel() }}</a>
+    <a
+      [href]="companyChatUrl()"
+      [class.telegram-bot-link-pending]="needsTelegramBot()"
+      target="_blank"
+      rel="noopener"
+    >
+      {{ companyPhoneLabel() }}
+    </a>
     <button type="button" (click)="phoneCopied.emit(companyPhoneForCopy())" title="Скопировать телефон">
       {{ copied === 'телефон' ? '✓' : 'T' }}
     </button>

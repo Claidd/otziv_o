@@ -85,7 +85,11 @@ public class OrderDTOList {
 
     private String groupId;
 
+    private Long telegramGroupChatId;
 
+    private boolean telegramGroupLinked;
+
+    private String telegramBotInviteUrl;
 
 
 //    private Integer amount;

@@ -11,13 +11,17 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
 class ManagerArchiveRepository {
+
+    private static final int MAX_KEYWORD_TOKENS = 6;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -39,11 +43,13 @@ class ManagerArchiveRepository {
             String mode,
             String keyword,
             int pageNumber,
-            int pageSize
+            int pageSize,
+            String sortDirection
     ) {
         MapSqlParameterSource params = orderParams(scope, mode, keyword)
                 .addValue("limit", pageSize)
                 .addValue("offset", Math.max(pageNumber, 0) * pageSize);
+        String direction = orderDirection(sortDirection);
 
         return jdbc.query("""
                 WITH archive_page AS (
@@ -53,7 +59,7 @@ class ManagerArchiveRepository {
                         UNION ALL
                 """ + liveClosedOrderPageKeysSelect(scope, mode, keyword) + """
                     ) archive_keys
-                    ORDER BY sort_at DESC, order_id DESC
+                    ORDER BY sort_at """ + direction + ", order_id " + direction + """
                     LIMIT :limit OFFSET :offset
                 )
                 SELECT *
@@ -62,7 +68,7 @@ class ManagerArchiveRepository {
                     UNION ALL
                 """ + liveClosedOrdersSelectFromPage() + """
                 ) archive_union
-                ORDER BY sort_at DESC, order_id DESC
+                ORDER BY sort_at """ + direction + ", order_id " + direction + """
                 """, params, (rs, rowNum) -> orderListItem(rs));
     }
 
@@ -84,6 +90,7 @@ class ManagerArchiveRepository {
                     COALESCE(c.company_url_chat, '') AS company_url_chat,
                     COALESCE(ao.company_city_snapshot, c.company_city, '') AS company_city,
                     COALESCE(ao.filial_title_snapshot, f.filial_title, '') AS filial_title,
+                    COALESCE(f.filial_url, '') AS filial_url,
                     COALESCE(os.order_status_title, '') AS order_status_title,
                     ao.order_sum,
                     ao.order_amount,
@@ -413,6 +420,7 @@ class ManagerArchiveRepository {
                         COALESCE(c.company_url_chat, '') AS company_url_chat,
                         COALESCE(ao.company_city_snapshot, c.company_city, '') AS company_city,
                         COALESCE(ao.filial_title_snapshot, f.filial_title, '') AS filial_title,
+                        COALESCE(f.filial_url, '') AS filial_url,
                         COALESCE(os.order_status_title, '') AS order_status_title,
                         ao.order_sum,
                         ao.order_amount,
@@ -482,6 +490,7 @@ class ManagerArchiveRepository {
                         COALESCE(c.company_url_chat, '') AS company_url_chat,
                         COALESCE(c.company_city, '') AS company_city,
                         COALESCE(f.filial_title, '') AS filial_title,
+                        COALESCE(f.filial_url, '') AS filial_url,
                         COALESCE(os.order_status_title, '') AS order_status_title,
                         o.order_sum,
                         o.order_amount,
@@ -590,27 +599,28 @@ class ManagerArchiveRepository {
                 AND (
                     (:keywordNumber IS NOT NULL AND ao.order_id = :keywordNumber)
                     OR CAST(ao.order_id AS CHAR) LIKE :keywordLike
-                    OR COALESCE(ao.company_title_snapshot, c.company_title, '') LIKE :keywordLike
-                    OR COALESCE(ao.company_phone_snapshot, c.company_phone, '') LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.company_title_snapshot, c.company_title, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.company_phone_snapshot, c.company_phone, '')) LIKE :keywordLike
                     OR (
                         :keywordDigitsLike IS NOT NULL
                         AND REGEXP_REPLACE(COALESCE(ao.company_phone_snapshot, c.company_phone, ''), '[^0-9]', '') LIKE :keywordDigitsLike
                     )
-                    OR COALESCE(ao.company_city_snapshot, c.company_city, '') LIKE :keywordLike
-                    OR COALESCE(ao.filial_title_snapshot, f.filial_title, '') LIKE :keywordLike
-                    OR COALESCE(ao.manager_name_snapshot, mu.fio, mu.username, '') LIKE :keywordLike
-                    OR COALESCE(ao.worker_name_snapshot, wu.fio, wu.username, '') LIKE :keywordLike
-                    OR COALESCE(os.order_status_title, '') LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.company_city_snapshot, c.company_city, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.filial_title_snapshot, f.filial_title, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.manager_name_snapshot, mu.fio, mu.username, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(ao.worker_name_snapshot, wu.fio, wu.username, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(os.order_status_title, '')) LIKE :keywordLike
                     OR EXISTS (
                         SELECT 1
                         FROM archive_order_details aod_search
                         LEFT JOIN products p_search ON p_search.product_id = aod_search.order_detail_product
                         WHERE aod_search.order_detail_order = ao.order_id
                           AND (
-                              COALESCE(p_search.product_title, '') LIKE :keywordLike
-                              OR COALESCE(aod_search.order_detail_comments, '') LIKE :keywordLike
+                              LOWER(COALESCE(p_search.product_title, '')) LIKE :keywordLike
+                              OR LOWER(COALESCE(aod_search.order_detail_comments, '')) LIKE :keywordLike
                           )
                     )
+                """ + archiveVisibleKeywordTokensFilter(keyword) + """
                 """ + archiveReviewTextKeywordFilter(keyword) + """
                 )
                 """;
@@ -628,8 +638,8 @@ class ManagerArchiveRepository {
                         JOIN archive_reviews ar_search ON ar_search.review_order_details = aod_search.order_detail_id
                         WHERE aod_search.order_detail_order = ao.order_id
                           AND (
-                              ar_search.review_text LIKE :reviewKeywordLike
-                              OR ar_search.review_answer LIKE :reviewKeywordLike
+                              LOWER(COALESCE(ar_search.review_text, '')) LIKE :reviewKeywordLike
+                              OR LOWER(COALESCE(ar_search.review_answer, '')) LIKE :reviewKeywordLike
                           )
                     )
                 """;
@@ -644,27 +654,28 @@ class ManagerArchiveRepository {
                 AND (
                     (:keywordNumber IS NOT NULL AND o.order_id = :keywordNumber)
                     OR CAST(o.order_id AS CHAR) LIKE :keywordLike
-                    OR COALESCE(c.company_title, '') LIKE :keywordLike
-                    OR COALESCE(c.company_phone, '') LIKE :keywordLike
+                    OR LOWER(COALESCE(c.company_title, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(c.company_phone, '')) LIKE :keywordLike
                     OR (
                         :keywordDigitsLike IS NOT NULL
                         AND REGEXP_REPLACE(COALESCE(c.company_phone, ''), '[^0-9]', '') LIKE :keywordDigitsLike
                     )
-                    OR COALESCE(c.company_city, '') LIKE :keywordLike
-                    OR COALESCE(f.filial_title, '') LIKE :keywordLike
-                    OR COALESCE(mu.fio, mu.username, '') LIKE :keywordLike
-                    OR COALESCE(wu.fio, wu.username, '') LIKE :keywordLike
-                    OR COALESCE(os.order_status_title, '') LIKE :keywordLike
+                    OR LOWER(COALESCE(c.company_city, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(f.filial_title, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(mu.fio, mu.username, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(wu.fio, wu.username, '')) LIKE :keywordLike
+                    OR LOWER(COALESCE(os.order_status_title, '')) LIKE :keywordLike
                     OR EXISTS (
                         SELECT 1
                         FROM order_details od_search
                         LEFT JOIN products p_search ON p_search.product_id = od_search.order_detail_product
                         WHERE od_search.order_detail_order = o.order_id
                           AND (
-                              COALESCE(p_search.product_title, '') LIKE :keywordLike
-                              OR COALESCE(od_search.order_detail_comments, '') LIKE :keywordLike
+                              LOWER(COALESCE(p_search.product_title, '')) LIKE :keywordLike
+                              OR LOWER(COALESCE(od_search.order_detail_comments, '')) LIKE :keywordLike
                           )
                     )
+                """ + liveVisibleKeywordTokensFilter(keyword) + """
                 """ + liveReviewTextKeywordFilter(keyword) + """
                 )
                 """;
@@ -682,22 +693,77 @@ class ManagerArchiveRepository {
                         JOIN reviews r_search ON r_search.review_order_details = od_search.order_detail_id
                         WHERE od_search.order_detail_order = o.order_id
                           AND (
-                              r_search.review_text LIKE :reviewKeywordLike
-                              OR r_search.review_answer LIKE :reviewKeywordLike
+                              LOWER(COALESCE(r_search.review_text, '')) LIKE :reviewKeywordLike
+                              OR LOWER(COALESCE(r_search.review_answer, '')) LIKE :reviewKeywordLike
                           )
                     )
                 """;
+    }
+
+    private String archiveVisibleKeywordTokensFilter(String keyword) {
+        return visibleKeywordTokensFilter(keyword, """
+                LOWER(CONCAT_WS(' ',
+                    CAST(ao.order_id AS CHAR),
+                    COALESCE(ao.company_title_snapshot, c.company_title, ''),
+                    COALESCE(ao.company_phone_snapshot, c.company_phone, ''),
+                    REGEXP_REPLACE(COALESCE(ao.company_phone_snapshot, c.company_phone, ''), '[^0-9]', ''),
+                    COALESCE(ao.company_city_snapshot, c.company_city, ''),
+                    COALESCE(ao.filial_title_snapshot, f.filial_title, ''),
+                    COALESCE(ao.manager_name_snapshot, mu.fio, mu.username, ''),
+                    COALESCE(ao.worker_name_snapshot, wu.fio, wu.username, ''),
+                    COALESCE(os.order_status_title, '')
+                ))
+                """);
+    }
+
+    private String liveVisibleKeywordTokensFilter(String keyword) {
+        return visibleKeywordTokensFilter(keyword, """
+                LOWER(CONCAT_WS(' ',
+                    CAST(o.order_id AS CHAR),
+                    COALESCE(c.company_title, ''),
+                    COALESCE(c.company_phone, ''),
+                    REGEXP_REPLACE(COALESCE(c.company_phone, ''), '[^0-9]', ''),
+                    COALESCE(c.company_city, ''),
+                    COALESCE(f.filial_title, ''),
+                    COALESCE(mu.fio, mu.username, ''),
+                    COALESCE(wu.fio, wu.username, ''),
+                    COALESCE(os.order_status_title, '')
+                ))
+                """);
+    }
+
+    private String visibleKeywordTokensFilter(String keyword, String searchableExpression) {
+        List<String> tokens = keywordTokens(keyword);
+        if (tokens.size() <= 1) {
+            return "";
+        }
+
+        StringBuilder filter = new StringBuilder("                    OR (\n");
+        for (int i = 0; i < tokens.size(); i++) {
+            if (i > 0) {
+                filter.append("\n                        AND ");
+            } else {
+                filter.append("                        ");
+            }
+            filter.append(searchableExpression.trim()).append(" LIKE :keywordTokenLike").append(i);
+        }
+        filter.append("\n                    )\n");
+        return filter.toString();
     }
 
     private MapSqlParameterSource orderParams(ArchiveAccessScope scope, String mode, String keyword) {
         MapSqlParameterSource params = scopeParams(scope).addValue("mode", normalizeMode(mode));
         if (keyword != null && !keyword.isBlank()) {
             String trimmed = keyword.trim();
-            params.addValue("keywordLike", "%" + trimmed + "%");
+            params.addValue("keywordLike", "%" + trimmed.toLowerCase(Locale.ROOT) + "%");
             params.addValue("keywordNumber", parseOrderIdKeyword(trimmed));
             params.addValue("keywordDigitsLike", phoneDigitsLike(trimmed));
+            List<String> tokens = keywordTokens(trimmed);
+            for (int i = 0; i < tokens.size(); i++) {
+                params.addValue("keywordTokenLike" + i, "%" + tokens.get(i) + "%");
+            }
             if (shouldSearchReviewText(trimmed)) {
-                params.addValue("reviewKeywordLike", "%" + trimmed + "%");
+                params.addValue("reviewKeywordLike", "%" + trimmed.toLowerCase(Locale.ROOT) + "%");
             }
         }
         return params;
@@ -718,6 +784,29 @@ class ManagerArchiveRepository {
     private String phoneDigitsLike(String keyword) {
         String digits = keyword.replaceAll("\\D+", "");
         return digits.length() >= 4 ? "%" + digits + "%" : null;
+    }
+
+    private List<String> keywordTokens(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+
+        String normalized = keyword.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+
+        List<String> tokens = new ArrayList<>();
+        for (String token : normalized.split("\\s+")) {
+            if (token.isBlank() || tokens.contains(token)) {
+                continue;
+            }
+            tokens.add(token);
+            if (tokens.size() >= MAX_KEYWORD_TOKENS) {
+                break;
+            }
+        }
+        return tokens;
     }
 
     private boolean shouldSearchReviewText(String keyword) {
@@ -744,6 +833,10 @@ class ManagerArchiveRepository {
         return "paid".equals(normalized) || "archive".equals(normalized) ? normalized : "all";
     }
 
+    private String orderDirection(String sortDirection) {
+        return "asc".equalsIgnoreCase(sortDirection) ? "ASC" : "DESC";
+    }
+
     private ManagerArchiveOrderListItem orderListItem(ResultSet rs) throws SQLException {
         return new ManagerArchiveOrderListItem(
                 rowLong(rs, "order_id"),
@@ -754,6 +847,7 @@ class ManagerArchiveRepository {
                 safeString(rs.getString("company_url_chat")),
                 safeString(rs.getString("company_city")),
                 safeString(rs.getString("filial_title")),
+                safeString(rs.getString("filial_url")),
                 safeString(rs.getString("order_status_title")),
                 rowBigDecimal(rs, "order_sum"),
                 rowInteger(rs, "order_amount"),

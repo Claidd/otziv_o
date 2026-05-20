@@ -9,6 +9,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,6 +40,9 @@ class BotAssignmentServiceImplTest {
 
     @Mock
     private ReviewRepository reviewRepository;
+
+    @Mock
+    private TelegramService telegramService;
 
     @Test
     void getAvailableBotsByRulesExcludesBotsAlreadyUsedInCompany() {
@@ -82,7 +86,7 @@ class BotAssignmentServiceImplTest {
     }
 
     private BotAssignmentServiceImpl service() {
-        return new BotAssignmentServiceImpl(botService, filialService, reviewRepository);
+        return new BotAssignmentServiceImpl(botService, filialService, reviewRepository, telegramService);
     }
 
     private Bot bot(Long id, String fio, int counter) {

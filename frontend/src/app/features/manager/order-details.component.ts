@@ -1497,6 +1497,10 @@ export class OrderDetailsComponent {
       return;
     }
 
+    if (this.busy()) {
+      return;
+    }
+
     if (this.companyReportBusy()) {
       this.toastService.info('Отчёт готовится', 'Дождитесь готового отчёта о компании');
       return;
@@ -1508,18 +1512,33 @@ export class OrderDetailsComponent {
       return;
     }
 
-    this.runDetailsMutation(
-      'review-help-all',
-      this.managerApi.createReviewHelpDrafts(orderId),
-      'Тексты сохранены',
-      'AI-помощник заполнил карточки разными отзывами'
-    );
+    this.mutationKey.set('review-help-all');
+    this.error.set(null);
+
+    this.managerApi.createReviewHelpDrafts(orderId).subscribe({
+      next: (updatedDetails) => {
+        const activeReviewId = this.currentActiveReviewId();
+        this.details.set(updatedDetails);
+        this.restoreActiveReview(activeReviewId);
+        this.mutationKey.set(null);
+        this.toastService.success('Тексты сохранены', 'AI-помощник заполнил карточки разными отзывами');
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось подготовить тексты отзывов');
+        this.mutationKey.set(null);
+        this.toastService.error('Помощь не сработала', message);
+      }
+    });
   }
 
   createReviewHelpDraft(review: OrderReviewItem): void {
     const orderId = this.orderId();
     const details = this.details();
     if (!orderId || !details) {
+      return;
+    }
+
+    if (this.busy()) {
       return;
     }
 
@@ -1556,7 +1575,6 @@ export class OrderDetailsComponent {
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось подготовить текст отзыва');
         this.mutationKey.set(null);
-        this.error.set(message);
         this.toastService.error('Помощь не сработала', message);
       }
     });

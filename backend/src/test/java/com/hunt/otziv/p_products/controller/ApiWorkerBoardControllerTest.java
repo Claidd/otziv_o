@@ -3,6 +3,9 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.AppSettingService;
@@ -10,6 +13,7 @@ import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -17,6 +21,8 @@ import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -368,6 +374,65 @@ class ApiWorkerBoardControllerTest {
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
         assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
         verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void recoveryTaskKeepsCompanyAndCityWhenReviewDtoFallsBackAfterBotChange() {
+        when(orderService.countActionableOrdersByStatusToWorker(worker))
+                .thenReturn(Map.of("Новый", 3, "Коррекция", 2));
+
+        City city = new City();
+        city.setTitle("Иркутск");
+        Company company = new Company();
+        company.setId(321L);
+        company.setTitle("Well Event");
+        company.setCity("Иркутск");
+        company.setCommentsCompany("заметка компании");
+        Filial filial = new Filial();
+        filial.setTitle("ЛЧ");
+        filial.setUrl("https://example.test/filial");
+        filial.setCity(city);
+
+        Order order = new Order();
+        order.setId(654L);
+        order.setCompany(company);
+        order.setZametka("заметка заказа");
+
+        Review review = new Review();
+        review.setId(164388L);
+        review.setFilial(filial);
+
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(99L)
+                .order(order)
+                .sourceReview(review)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .recoveryText("Текст восстановления")
+                .scheduledDate(LocalDate.now())
+                .build();
+        ReviewDTOOne fallbackReview = ReviewDTOOne.builder()
+                .id(164388L)
+                .companyTitle("ОШИБКА ПРИ ОБРАБОТКЕ")
+                .text("Не удалось загрузить данные отзыва")
+                .build();
+
+        when(reviewRecoveryTaskService.getDueTasksToWorker(
+                eq(worker),
+                any(LocalDate.class),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(task), PageRequest.of(0, 10), 1));
+        when(reviewService.toReviewDTOOne(review)).thenReturn(fallbackReview);
+
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("recovery");
+        ApiWorkerBoardController.WorkerReviewResponse item = response.reviews().content().getFirst();
+
+        assertEquals("Well Event", item.companyTitle());
+        assertEquals("Иркутск", item.filialCity());
+        assertEquals(321L, item.companyId());
+        assertEquals(654L, item.orderId());
+        assertEquals("заметка компании", item.commentCompany());
+        assertEquals("заметка заказа", item.orderComments());
     }
 
     @Test

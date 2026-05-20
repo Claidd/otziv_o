@@ -83,6 +83,10 @@ export class DeepResearchReportViewComponent {
   @Output() rebuildText = new EventEmitter<void>();
   @Output() createContentPack = new EventEmitter<void>();
   @Output() rebuildSection = new EventEmitter<DeepReportSectionAction>();
+  @Output() saveReviewIdeas = new EventEmitter<string[]>();
+
+  editingReviewIdeas = false;
+  reviewIdeaDraft: string[] = [];
 
   deepReportBlocks(): DeepReportBlock[] {
     const report = this.report;
@@ -151,6 +155,58 @@ export class DeepResearchReportViewComponent {
 
   sourceReviews(): DeepResearchSourceReview[] {
     return this.report?.factSnapshot?.sourceReviews ?? [];
+  }
+
+  reviewIdeas(): string[] {
+    const explicit = (this.report?.reviewIdeas ?? [])
+      .map((idea) => idea?.trim() ?? '')
+      .filter(Boolean);
+    if (explicit.length > 0) {
+      return explicit.slice(0, 30);
+    }
+    return this.reviewIdeasFromSections();
+  }
+
+  startReviewIdeasEdit(): void {
+    const ideas = this.reviewIdeas();
+    this.reviewIdeaDraft = ideas.length > 0 ? [...ideas] : [''];
+    this.editingReviewIdeas = true;
+  }
+
+  cancelReviewIdeasEdit(): void {
+    this.editingReviewIdeas = false;
+    this.reviewIdeaDraft = [];
+  }
+
+  addReviewIdea(): void {
+    if (this.reviewIdeaDraft.length >= 30) {
+      return;
+    }
+    this.reviewIdeaDraft = [...this.reviewIdeaDraft, ''];
+  }
+
+  removeReviewIdea(index: number): void {
+    this.reviewIdeaDraft = this.reviewIdeaDraft.filter((_idea, ideaIndex) => ideaIndex !== index);
+    if (this.reviewIdeaDraft.length === 0) {
+      this.reviewIdeaDraft = [''];
+    }
+  }
+
+  updateReviewIdea(index: number, event: Event): void {
+    const target = event.target;
+    const value = target instanceof HTMLTextAreaElement ? target.value : '';
+    this.reviewIdeaDraft = this.reviewIdeaDraft.map((idea, ideaIndex) => ideaIndex === index ? value : idea);
+  }
+
+  emitSaveReviewIdeas(): void {
+    const ideas = this.cleanReviewIdeas(this.reviewIdeaDraft);
+    if (ideas.length === 0) {
+      this.reviewIdeaDraft = [''];
+      return;
+    }
+    this.saveReviewIdeas.emit(ideas);
+    this.editingReviewIdeas = false;
+    this.reviewIdeaDraft = ideas;
   }
 
   emitRebuildSection(block: DeepReportBlock, sectionIndex: number): void {
@@ -285,6 +341,10 @@ export class DeepResearchReportViewComponent {
     return text || String(index);
   }
 
+  trackReviewIdea(index: number, _text: string): string {
+    return String(index);
+  }
+
   trackQualityCheck(index: number, check: DeepResearchQualityCheck): string {
     return check.key || `${index}-${check.label}`;
   }
@@ -323,6 +383,49 @@ export class DeepResearchReportViewComponent {
     }
 
     return blocks.filter((block) => block.title || block.body);
+  }
+
+  private reviewIdeasFromSections(): string[] {
+    const ideas: string[] = [];
+    for (const block of this.deepReportBlocks()) {
+      const title = block.title.toLowerCase();
+      if (!title.includes('иде') || !title.includes('отзыв') || /(пост|faq|карточ|контент|коммент|дозбор|спросить|уточн)/.test(title)) {
+        continue;
+      }
+      for (const line of block.body.split(/\r?\n/)) {
+        const idea = line
+          .replace(/^\s*(?:\d+[.)]|[-*])\s+/, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (idea && idea !== line.trim() && !ideas.includes(idea)) {
+          ideas.push(idea);
+        }
+        if (ideas.length >= 30) {
+          return ideas;
+        }
+      }
+    }
+    return ideas;
+  }
+
+  cleanReviewIdeas(values: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const value of values) {
+      const clean = value
+        .replace(/^\s*(?:\d+[.)]|[-*])\s+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!clean || seen.has(clean)) {
+        continue;
+      }
+      seen.add(clean);
+      result.push(clean);
+      if (result.length >= 30) {
+        break;
+      }
+    }
+    return result;
   }
 
   private topicIcon(title: string): string {

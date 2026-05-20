@@ -220,11 +220,31 @@ export function managerHasMeaningfulNote(value?: string | null): boolean {
 }
 
 export function managerCompanyChatUrl(company: CompanyCardItem): string {
-  return company.urlChat || `tel:${company.telephone ?? ''}`;
+  return managerTelegramInviteUrl(company) || company.urlChat || `tel:${company.telephone ?? ''}`;
 }
 
 export function managerOrderChatUrl(order: OrderCardItem): string {
-  return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+  return managerTelegramInviteUrl(order) || order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+}
+
+export function managerCompanyNeedsTelegramBot(company: CompanyCardItem): boolean {
+  return Boolean(managerTelegramInviteUrl(company));
+}
+
+export function managerOrderNeedsTelegramBot(order: OrderCardItem): boolean {
+  return Boolean(managerTelegramInviteUrl(order));
+}
+
+export function managerCompanyHeaderUrl(company: CompanyCardItem): string {
+  return managerTelegramInviteUrl(company) || company.urlChat || managerCompanyFilialUrl(company);
+}
+
+export function managerOrderHeaderUrl(order: OrderCardItem): string {
+  return managerTelegramInviteUrl(order) || order.companyUrlChat || managerOrderDetailsUrl(order);
+}
+
+function managerTelegramInviteUrl(item: CompanyCardItem | OrderCardItem): string {
+  return (item.telegramBotInviteUrl ?? '').trim();
 }
 
 export function managerCompanyFilialUrl(company: CompanyCardItem): string {

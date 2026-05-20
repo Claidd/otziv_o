@@ -42,6 +42,7 @@ type ReputationAction =
   | 'refreshSources'
   | 'rebuildText'
   | 'rebuildSection'
+  | 'reviewIdeas'
   | 'contentPack'
   | 'loadContentPack'
   | 'reviewTemplates'
@@ -851,6 +852,28 @@ export class ReputationAiComponent implements OnDestroy {
           : `Раздел «${block.title}» пересобран.`);
       },
       error: (error: unknown) => this.fail(error, 'Не удалось запустить пересборку раздела.')
+    });
+  }
+
+  saveDeepReportReviewIdeas(reviewIdeas: string[]): void {
+    const companyId = this.validCompanyId();
+    if (companyId == null) {
+      return;
+    }
+    const jobId = this.deepResearchJob()?.jobId ?? null;
+    if (!jobId) {
+      this.error.set('Откройте готовый отчёт перед редактированием идей.');
+      return;
+    }
+
+    this.start('reviewIdeas');
+    this.reputationAiApi.updateDeepResearchReviewIdeas(companyId, jobId, reviewIdeas).subscribe({
+      next: (job) => {
+        this.applyDeepResearchJob(job);
+        this.refreshDeepResearchHistory(companyId);
+        this.finish('Идеи для отзывов сохранены.');
+      },
+      error: (error: unknown) => this.fail(error, 'Не удалось сохранить идеи для отзывов.')
     });
   }
 

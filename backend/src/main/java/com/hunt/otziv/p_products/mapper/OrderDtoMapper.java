@@ -19,6 +19,7 @@ import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -38,6 +39,12 @@ import java.util.stream.Collectors;
 
 @Component
 public class OrderDtoMapper {
+
+    private final TelegramGroupLinkService telegramGroupLinkService;
+
+    public OrderDtoMapper(TelegramGroupLinkService telegramGroupLinkService) {
+        this.telegramGroupLinkService = telegramGroupLinkService;
+    }
 
     public List<OrderDTOList> toBoardDTOList(List<Order> orders) {
         if (orders == null || orders.isEmpty()) {
@@ -73,6 +80,9 @@ public class OrderDtoMapper {
                 .status(safeStatusTitle(order))
                 .sum(order.getSum())
                 .companyUrlChat(order.getCompany() != null ? safeString(order.getCompany().getUrlChat()) : "")
+                .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
+                .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
+                .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .companyTelephone(order.getCompany() != null ? safeString(order.getCompany().getTelephone()) : "")
                 .managerPayText(order.getManager() != null ? safeString(order.getManager().getPayText()) : "")
                 .amount(order.getAmount())
@@ -102,7 +112,7 @@ public class OrderDtoMapper {
         }
 
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = rowLocalDate(row, 20);
+        LocalDate changedDate = rowLocalDate(row, 21);
         long daysDifference = ChronoUnit.DAYS.between(changedDate != null ? changedDate : now, now);
 
         return OrderDTOList.builder()
@@ -117,20 +127,23 @@ public class OrderDtoMapper {
                 .status(rowString(row, 8, ""))
                 .sum(rowBigDecimal(row, 9))
                 .companyUrlChat(rowString(row, 10, ""))
-                .companyTelephone(rowString(row, 11, ""))
-                .managerPayText(rowString(row, 12, ""))
-                .amount(rowInteger(row, 13))
-                .counter(rowInteger(row, 14))
-                .waitingForClient(rowBoolean(row, 15))
-                .workerUserFio(rowString(row, 16, ""))
-                .categoryTitle(rowString(row, 17, "Не выбрано"))
-                .subCategoryTitle(rowString(row, 18, "Не выбрано"))
-                .created(rowLocalDate(row, 19))
+                .telegramGroupChatId(rowLong(row, 11))
+                .telegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(rowLong(row, 11)))
+                .telegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(rowLong(row, 1), rowString(row, 10, ""), rowLong(row, 11)))
+                .companyTelephone(rowString(row, 12, ""))
+                .managerPayText(rowString(row, 13, ""))
+                .amount(rowInteger(row, 14))
+                .counter(rowInteger(row, 15))
+                .waitingForClient(rowBoolean(row, 16))
+                .workerUserFio(rowString(row, 17, ""))
+                .categoryTitle(rowString(row, 18, "Не выбрано"))
+                .subCategoryTitle(rowString(row, 19, "Не выбрано"))
+                .created(rowLocalDate(row, 20))
                 .changed(changedDate)
-                .payDay(rowLocalDate(row, 21))
+                .payDay(rowLocalDate(row, 22))
                 .dayToChangeStatusAgo(daysDifference)
-                .orderComments(rowString(row, 22, "нет заметок"))
-                .firstOrderForCompany(rowBoolean(row, 23))
+                .orderComments(rowString(row, 23, "нет заметок"))
+                .firstOrderForCompany(rowBoolean(row, 24))
                 .build();
     }
 
@@ -176,6 +189,9 @@ public class OrderDtoMapper {
                 .orderDetailsId(firstDetail != null ? firstDetail.getId() : null)
                 .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())
                 .groupId(order.getCompany() != null ? order.getCompany().getGroupId() : null)
+                .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
+                .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
+                .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .build();
     }
 
@@ -212,6 +228,9 @@ public class OrderDtoMapper {
                 .categoryCompany(company.getCategoryCompany() != null ? convertToCategoryDto(company.getCategoryCompany()) : null)
                 .subCategory(company.getSubCategory() != null ? convertToSubCategoryDto(company.getSubCategory()) : null)
                 .groupId(company.getGroupId())
+                .telegramGroupChatId(company.getTelegramGroupChatId())
+                .telegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company))
+                .telegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company))
                 .build();
     }
 
@@ -360,6 +379,9 @@ public class OrderDtoMapper {
                 .manager(order.getManager() != null ? convertToManagerDTO(order.getManager()) : null)
                 .company(order.getCompany() != null ? convertToCompanyDTO(order.getCompany()) : null)
                 .groupId(order.getCompany() != null ? order.getCompany().getGroupId() : null)
+                .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
+                .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
+                .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .build();
     }
 

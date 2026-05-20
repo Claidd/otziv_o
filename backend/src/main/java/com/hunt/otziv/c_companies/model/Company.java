@@ -141,6 +141,9 @@ public class Company {
     @Column(name = "company_group_id")
     private String groupId;
 
+    @Column(name = "company_telegram_group_chat_id")
+    private Long telegramGroupChatId;
+
 
 
 

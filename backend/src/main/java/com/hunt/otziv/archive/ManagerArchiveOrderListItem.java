@@ -14,6 +14,7 @@ public record ManagerArchiveOrderListItem(
         String companyUrlChat,
         String companyCity,
         String filialTitle,
+        String filialUrl,
         String status,
         BigDecimal sum,
         Integer amount,

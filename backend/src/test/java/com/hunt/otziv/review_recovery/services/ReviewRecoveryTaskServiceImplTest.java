@@ -2,7 +2,9 @@ package com.hunt.otziv.review_recovery.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -131,6 +133,39 @@ class ReviewRecoveryTaskServiceImplTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals("Задача восстановления уже создана", exception.getReason());
+    }
+
+    @Test
+    void changeTaskBotUpdatesTaskSnapshotsAndSourceReviewBot() {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        Bot oldBot = bot(20L);
+        Bot nextBot = bot(21L);
+        nextBot.setActive(true);
+        Review review = review(100L, "текст", order(10L), oldBot);
+        review.setFilial(filial);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(40L)
+                .order(review.getOrderDetails().getOrder())
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .build();
+
+        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(nextBot));
+        when(taskRepository.save(task)).thenReturn(task);
+
+        ReviewRecoveryTask updated = service.changeTaskBot(40L);
+
+        assertSame(nextBot, updated.getBot());
+        assertSame(nextBot, review.getBot());
+        assertEquals("login", updated.getBotLoginSnapshot());
+        assertEquals("password", updated.getBotPasswordSnapshot());
+        assertEquals("Бот Ф.", updated.getBotFioSnapshot());
+        verify(reviewRepository).save(review);
     }
 
     @Test

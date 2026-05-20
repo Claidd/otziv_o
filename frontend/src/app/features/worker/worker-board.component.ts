@@ -24,6 +24,7 @@ import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
+import { consumeWorkerCurrentSectionOpenRequest } from '../../shared/worker-entry-navigation';
 import {
   DEFAULT_WORKER_PERMISSIONS,
   EMPTY_WORKER_ORDER_PAGE,
@@ -82,6 +83,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly toastService = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
+  private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
 
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
@@ -203,7 +205,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly savedSideNoteKey = this.noteFacade.savedSideNoteKey;
 
   constructor() {
-    this.openCurrentWorkSection();
+    this.loadInitialBoard();
     this.loadDailyOverdueReminder();
   }
 
@@ -239,6 +241,7 @@ export class WorkerBoardComponent implements OnDestroy {
           this.activeSection.set(board.section);
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
         }
+        this.storeActiveSection(this.activeSection());
 
         if (board.message) {
           this.showBoardNotice();
@@ -258,6 +261,7 @@ export class WorkerBoardComponent implements OnDestroy {
   setSection(section: WorkerSection): void {
     const metric = this.findMetric(section);
     this.activeSection.set(section);
+    this.storeActiveSection(section);
     this.pageNumber.set(0);
     this.mobileMenuOpen.set(false);
     this.loadBoardAfterMetricSeen(metric);
@@ -276,7 +280,7 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
-    this.openCurrentWorkSection();
+    this.loadBoard();
   }
 
   search(): void {
@@ -350,6 +354,7 @@ export class WorkerBoardComponent implements OnDestroy {
     const section = this.workerSectionForOrderStatus(status);
     this.closeOverdueModal();
     this.activeSection.set(section);
+    this.storeActiveSection(section);
     this.keyword.set('');
     this.pageNumber.set(0);
     this.mobileMenuOpen.set(false);
@@ -692,6 +697,17 @@ export class WorkerBoardComponent implements OnDestroy {
     return metricValue > 0 || this.activeSection() === section;
   }
 
+  private loadInitialBoard(): void {
+    if (consumeWorkerCurrentSectionOpenRequest()) {
+      this.openCurrentWorkSection();
+      return;
+    }
+
+    const storedSection = this.readStoredActiveSection();
+    this.activeSection.set(storedSection);
+    this.loadBoard(storedSection);
+  }
+
   private openCurrentWorkSection(): void {
     this.keyword.set('');
     this.activeSection.set('new');
@@ -798,6 +814,24 @@ export class WorkerBoardComponent implements OnDestroy {
     return `${this.overdueAlertStorageKeyPrefix}:${userKey}`;
   }
 
+  private activeSectionStorageKey(): string {
+    const token = this.auth.tokenParsed() as { preferred_username?: string; sub?: string } | undefined;
+    const userKey = token?.preferred_username || token?.sub || 'user';
+    return `${this.activeSectionStorageKeyPrefix}:${userKey}`;
+  }
+
+  private readStoredActiveSection(): WorkerSection {
+    return this.normalizeStoredSection(this.readSessionValue(this.activeSectionStorageKey()));
+  }
+
+  private storeActiveSection(section: WorkerSection): void {
+    this.writeSessionValue(this.activeSectionStorageKey(), section);
+  }
+
+  private normalizeStoredSection(section: string | null): WorkerSection {
+    return this.sections.some((item) => item.key === section) ? section as WorkerSection : 'new';
+  }
+
   private localDateKey(date = new Date()): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -818,6 +852,22 @@ export class WorkerBoardComponent implements OnDestroy {
       localStorage.setItem(key, value);
     } catch {
       // Storage can be blocked in private mode; the reminder will simply try again later.
+    }
+  }
+
+  private readSessionValue(key: string): string | null {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeSessionValue(key: string, value: string): void {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch {
+      // If session storage is blocked, the current in-memory tab still keeps its section.
     }
   }
 

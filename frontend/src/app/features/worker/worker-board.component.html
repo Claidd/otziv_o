@@ -53,10 +53,6 @@
             <span class="material-icons-sharp">refresh</span>
           </button>
 
-          <button type="button" class="icon-button sort-toggle" (click)="toggleSortDirection()" [disabled]="loading()" title="Сортировка">
-            <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
-          </button>
-
           @if (keyword()) {
             <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
               <span class="material-icons-sharp">close</span>
@@ -169,6 +165,9 @@
     }
 
     <footer class="pager">
+      <button type="button" class="icon-button sort-toggle" (click)="toggleSortDirection()" [disabled]="loading()" title="Сортировка">
+        <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+      </button>
       <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
         <span class="material-icons-sharp">chevron_left</span>
       </button>

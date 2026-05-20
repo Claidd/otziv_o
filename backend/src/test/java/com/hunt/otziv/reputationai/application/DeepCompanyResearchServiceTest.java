@@ -98,6 +98,42 @@ class DeepCompanyResearchServiceTest {
     }
 
     @Test
+    void extractsThirtyReviewIdeasFromReportSection() {
+        Company company = Company.builder()
+                .id(1L)
+                .title("IQuest")
+                .city("Ангарск")
+                .build();
+        StringBuilder ideasBody = new StringBuilder();
+        for (int index = 1; index <= 30; index++) {
+            ideasBody
+                    .append(index)
+                    .append(". Идея ")
+                    .append(index)
+                    .append(" для честного отзыва по конкретной позиции")
+                    .append("\\n");
+        }
+        String text = """
+                {
+                  "sources": [],
+                  "warnings": [],
+                  "sections": [
+                    {"title": "Идеи для отзывов", "body": "%s"}
+                  ]
+                }
+                """.formatted(ideasBody.toString());
+
+        DeepCompanyResearchReport report = service.parseReport(
+                company,
+                new OpenAiResponseResult("resp_1", text, "gpt-5.5", 10, 20)
+        );
+
+        assertThat(report.reviewIdeas()).hasSize(30);
+        assertThat(report.reviewIdeas().get(0)).isEqualTo("Идея 1 для честного отзыва по конкретной позиции");
+        assertThat(report.reviewIdeas().get(29)).isEqualTo("Идея 30 для честного отзыва по конкретной позиции");
+    }
+
+    @Test
     void deserializesLegacyReportWithoutQualityFields() throws Exception {
         String json = """
                 {

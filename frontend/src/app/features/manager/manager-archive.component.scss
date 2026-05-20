@@ -108,6 +108,10 @@
   padding: 0;
 }
 
+.sort-toggle {
+  color: var(--otziv-primary);
+}
+
 .archive-summary {
   display: flex;
   align-items: baseline;
@@ -258,11 +262,21 @@
   gap: 0.65rem;
 }
 
-.archive-order-card header strong {
+.archive-order-card header strong,
+.archive-card-title {
   min-width: 0;
   color: var(--otziv-dark);
   font-size: 1rem;
+  font-weight: 900;
   line-height: 1.15;
+}
+
+.archive-card-title {
+  text-decoration: none;
+}
+
+.archive-card-title:hover {
+  color: var(--otziv-primary);
 }
 
 .archive-order-card header small,

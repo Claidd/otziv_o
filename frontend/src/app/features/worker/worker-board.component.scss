@@ -625,14 +625,14 @@ select {
 
   .search-line {
     display: grid;
-    grid-template-columns: minmax(5rem, 1fr) 3.05rem 2rem 2rem;
+    grid-template-columns: minmax(5rem, 1fr) 3.05rem 2rem;
     align-items: center;
     gap: 0.34rem;
     overflow: hidden;
   }
 
   .search-line.has-clear {
-    grid-template-columns: minmax(4.5rem, 1fr) 3.05rem 2rem 2rem 2rem;
+    grid-template-columns: minmax(4.5rem, 1fr) 3.05rem 2rem 2rem;
   }
 
   .search-line label,

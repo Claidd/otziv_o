@@ -190,7 +190,6 @@ public class OpenAiResponsesClient {
             )));
             body.put("max_tool_calls", 2);
         }
-        enableStreaming(body);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
@@ -215,13 +214,41 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        enableStreaming(body);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
                     "name", "reputation_batch_review_drafts",
                     "strict", true,
                     "schema", batchReviewDraftSchema()
+            )));
+        }
+
+        return postResponse(body, options.timeout());
+    }
+
+    public OpenAiResponseResult createBatchReviewWritingGuideResponse(AiRequest request, String profileKey) {
+        ReputationAiProperties.OpenAi openai = properties.getOpenai();
+        OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", options.model());
+        body.put("instructions", request.systemPrompt());
+        body.put("input", request.userPrompt());
+        body.put("max_output_tokens", Math.min(options.maxOutputTokens(), 3600));
+        if (!isBlank(options.reasoningEffort())) {
+            body.put("reasoning", Map.of("effort", options.reasoningEffort()));
+        }
+        body.put("tools", List.of(Map.of(
+                "type", "web_search_preview",
+                "search_context_size", "low"
+        )));
+        body.put("max_tool_calls", 3);
+        if (request.jsonObject()) {
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", "reputation_batch_review_writing_guide",
+                    "strict", true,
+                    "schema", batchReviewWritingGuideSchema()
             )));
         }
 
@@ -736,9 +763,13 @@ public class OpenAiResponsesClient {
         String message = exception.getMessage();
         String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
         if (normalized.contains("eof")
+                || normalized.contains("connection refused")
                 || normalized.contains("connection reset")
                 || normalized.contains("connection closed")
                 || normalized.contains("header parser received no bytes")
+                || normalized.contains("chunked transfer encoding")
+                || normalized.contains("reading_length")
+                || normalized.contains("reading_data")
                 || normalized.contains("remote host terminated")
                 || normalized.contains("unexpected end of file")) {
             return prefix + " оборвался на сетевом уровне. Это не ошибка модели: чаще всего виноват proxy/VPN/маршрут до OpenAI. Повторите запрос или переключите локальный стенд на прямое соединение, если оно доступно.";
@@ -995,6 +1026,48 @@ public class OpenAiResponsesClient {
         );
     }
 
+    private Map<String, Object> batchReviewWritingGuideSchema() {
+        Map<String, Object> shortStringArray = Map.of(
+                "type", "array",
+                "maxItems", 8,
+                "items", Map.of("type", "string")
+        );
+        Map<String, Object> ideaGuide = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "reviewId", Map.of("type", "integer"),
+                        "angles", shortStringArray,
+                        "decisionCriteria", shortStringArray,
+                        "naturalDetails", shortStringArray,
+                        "avoidClaims", shortStringArray
+                ),
+                "required", List.of("reviewId", "angles", "decisionCriteria", "naturalDetails", "avoidClaims")
+        );
+        return Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "properties", Map.of(
+                        "categoryLanguage", shortStringArray,
+                        "termHints", shortStringArray,
+                        "ideaExpansion", Map.of(
+                                "type", "array",
+                                "maxItems", 30,
+                                "items", ideaGuide
+                        ),
+                        "diversityWarnings", shortStringArray,
+                        "safetyNotes", shortStringArray
+                ),
+                "required", List.of(
+                        "categoryLanguage",
+                        "termHints",
+                        "ideaExpansion",
+                        "diversityWarnings",
+                        "safetyNotes"
+                )
+        );
+    }
+
     private Map<String, Object> sourceRefreshSchema() {
         return Map.of(
                 "type", "object",
@@ -1116,7 +1189,7 @@ public class OpenAiResponsesClient {
                         ),
                         "body", Map.of(
                                 "type", "string",
-                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, вход, этаж, ориентиры, парковку, доступность, зону ожидания, Wi-Fi, туалет, гардероб, детскую зону, онлайн-запись, доставку/самовывоз/выезд и способы оплаты, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии, отдельные идеи для постов/карточки, отдельные 10 идей для отзывов и аудит готовности будущей карточки компании без повторов."
+                                "description", "Самостоятельный markdown-фрагмент раздела. Для услуг, товаров и цен содержит таблицу с позициями, условиями, ценами и источниками, если данные найдены. Для клиентского опыта сохраняет интерьер и экстерьер филиалов, вход, этаж, ориентиры, парковку, доступность, зону ожидания, Wi-Fi, туалет, гардероб, детскую зону, онлайн-запись, доставку/самовывоз/выезд и способы оплаты, если это подтверждено источниками. Для оценки компании включает репутационные темы, доверие, возражения, сценарии, отдельные идеи для постов/карточки, отдельные 30 идей для отзывов и аудит готовности будущей карточки компании без повторов."
                         )
                 ),
                 "required", List.of("title", "body")

@@ -30,6 +30,7 @@ import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestSummary;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Manager;
@@ -80,6 +81,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final ReviewService reviewService;
     private final OperatorService operatorService;
     private final TelegramService telegramService;
+    private final TelegramGroupLinkService telegramGroupLinkService;
     private final NextOrderRequestRepository nextOrderRequestRepository;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
@@ -735,6 +737,10 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setUpdateStatus(company.getUpdateStatus());
             companyDTO.setDateNewTry(company.getDateNewTry());
             companyDTO.setActive(company.isActive());
+            companyDTO.setGroupId(company.getGroupId());
+            companyDTO.setTelegramGroupChatId(company.getTelegramGroupChatId());
+            companyDTO.setTelegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company));
+            companyDTO.setTelegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company));
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -777,6 +783,10 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setTitle(company.getTitle());
             companyListDTO.setTelephone(company.getTelephone());
             companyListDTO.setUrlChat(company.getUrlChat());
+            companyListDTO.setGroupId(company.getGroupId());
+            companyListDTO.setTelegramGroupChatId(company.getTelegramGroupChatId());
+            companyListDTO.setTelegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company));
+            companyListDTO.setTelegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company));
             companyListDTO.setCountFilials(company.getFilial() == null ? 0 : company.getFilial().size());
             companyListDTO.setUrlFilial(firstFilial != null && firstFilial.getUrl() != null ? firstFilial.getUrl() : "пусто");
             companyListDTO.setStatus(company.getStatus() != null ? company.getStatus().getTitle() : "");

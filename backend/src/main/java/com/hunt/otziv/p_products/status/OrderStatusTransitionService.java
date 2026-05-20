@@ -343,16 +343,7 @@ public class OrderStatusTransitionService {
                     textService.findById(5) + "\n\n" +
                     "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" + firstDetail.getId();
 
-            if (!hasText(groupId)) {
-                log.warn("⚠️ У компании {} отсутствует groupId. Статус выставлен без отправки сообщений",
-                        order.getCompany().getTitle());
-                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
-                orderRepository.save(order);
-                log.info("✅ Заказ ID {} переведен в статус 'На проверку' (без отправки WhatsApp)", order.getId());
-                return true;
-            }
-
-            log.info("Отправляем сообщение в WhatsApp для заказа ID: {}", order.getId());
+            log.info("Отправляем сообщение клиенту для заказа ID: {}", order.getId());
             boolean result = orderStatusNotificationService.sendMessageToGroup(
                     STATUS_TO_CHECK,
                     order,
@@ -455,14 +446,6 @@ public class OrderStatusTransitionService {
                     "Здравствуйте, ваш заказ выполнен, просьба оплатить. АЛЬФА-БАНК по счету " +
                     "https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И. " +
                     "ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " + order.getSum() + " руб.";
-
-            if (!hasText(groupId)) {
-                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
-                orderRepository.save(order);
-                log.info("✅ Статус заказа {} установлен в '{}' без отправки в WhatsApp (отсутствует groupId)",
-                        order.getId(), STATUS_PUBLIC);
-                return true;
-            }
 
             return orderStatusNotificationService.sendMessageToGroup(
                     STATUS_PUBLIC,

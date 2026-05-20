@@ -9,6 +9,8 @@
 .quality-grid,
 .change-panel,
 .change-detail-block,
+.review-ideas-panel,
+.review-ideas-editor,
 .warning-list,
 .facts-panel,
 .fact-block,
@@ -23,6 +25,10 @@
 .quality-summary,
 .quality-check,
 .change-head,
+.review-ideas-panel header,
+.review-ideas-panel header > div,
+.review-idea-actions,
+.review-idea-row,
 .change-summary-card,
 .warning-list p,
 .source-review-row {
@@ -64,6 +70,7 @@
 }
 
 .report-actions button,
+.review-idea-actions button,
 .icon-button {
   display: inline-flex;
   min-height: 2.35rem;
@@ -89,12 +96,14 @@
 }
 
 .report-actions button .material-icons-sharp,
+.review-idea-actions button .material-icons-sharp,
 .icon-button .material-icons-sharp {
   color: currentColor;
   font-size: 1.25rem;
 }
 
 .report-actions button:hover:not(:disabled),
+.review-idea-actions button:hover:not(:disabled),
 .icon-button:hover:not(:disabled) {
   border-color: rgba(27, 156, 133, 0.58);
   color: var(--otziv-success);
@@ -103,6 +112,7 @@
 }
 
 .report-actions button:disabled,
+.review-idea-actions button:disabled,
 .icon-button:disabled {
   cursor: default;
   opacity: 0.58;
@@ -117,11 +127,115 @@
 .deep-report-topic,
 .quality-checklist,
 .change-panel,
+.review-ideas-panel,
 .facts-panel {
   border: 1px solid rgba(103, 116, 131, 0.16);
   border-radius: 1rem;
   padding: 1rem;
   background: var(--otziv-muted-surface);
+}
+
+.review-ideas-panel header {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.review-ideas-panel header > div:first-child {
+  min-width: 0;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.review-ideas-panel header > div:first-child > .material-icons-sharp {
+  display: inline-grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.7rem;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.14);
+}
+
+.review-ideas-panel strong,
+.review-ideas-panel small {
+  display: block;
+}
+
+.review-ideas-panel strong {
+  color: var(--otziv-dark);
+  font-size: 1.02rem;
+}
+
+.review-ideas-panel small {
+  color: var(--otziv-info);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.review-idea-actions {
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.review-idea-actions button {
+  min-width: 7.35rem;
+}
+
+.review-ideas-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.45rem;
+  color: var(--otziv-dark);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.review-ideas-editor {
+  gap: 0.55rem;
+}
+
+.review-idea-row {
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.review-idea-row > span {
+  display: inline-grid;
+  width: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.12);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.review-idea-row textarea {
+  min-height: 3.1rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 0.8rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.review-idea-row textarea:focus {
+  border-color: rgba(108, 155, 207, 0.65);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(108, 155, 207, 0.12);
 }
 
 .deep-report-topic header {
@@ -512,8 +626,14 @@
     justify-content: stretch;
   }
 
-  .report-actions button {
+  .report-actions button,
+  .review-idea-actions button {
     flex: 1 1 8rem;
+  }
+
+  .review-ideas-panel header,
+  .review-idea-row {
+    display: grid;
   }
 
   .change-summary-grid,

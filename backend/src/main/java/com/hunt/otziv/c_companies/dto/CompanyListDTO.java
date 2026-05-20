@@ -49,6 +49,12 @@ public class CompanyListDTO {
 
     private String groupId;
 
+    private Long telegramGroupChatId;
+
+    private boolean telegramGroupLinked;
+
+    private String telegramBotInviteUrl;
+
     private int nextOrderRequestsCount;
 
     private int failedNextOrderRequestsCount;

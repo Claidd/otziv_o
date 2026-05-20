@@ -693,204 +693,127 @@ public class PersonalServiceImpl implements PersonalService {
 
 
     public String displayResult(Map<String, UserData> result) {
-        StringBuilder resultBuilder = new StringBuilder();
-
-        // Сортируем сначала менеджеров по totalSum, затем остальных по salary
-        List<Map.Entry<String, UserData>> sortedEntries = result.entrySet().stream()
-                .sorted((entry1, entry2) -> {
-                    UserData user1 = entry1.getValue();
-                    UserData user2 = entry2.getValue();
-
-                    boolean isManager1 = user1.getRole().equals("ROLE_MANAGER");
-                    boolean isManager2 = user2.getRole().equals("ROLE_MANAGER");
-
-                    if (isManager1 && isManager2) {
-                        // Оба менеджеры → сортируем по убыванию суммы чеков
-                        return Long.compare(user2.getTotalSum(), user1.getTotalSum());
-                    } else if (!isManager1 && !isManager2) {
-                        // Оба не менеджеры → сортируем по убыванию зарплаты
-                        return Long.compare(user2.getSalary(), user1.getSalary());
-                    }
-                    // Менеджеры идут первыми
-                    return Boolean.compare(isManager2, isManager1);
-                })
-                .collect(Collectors.toList());
-
-        // Вычисляем общую выручку всех менеджеров
-        long totalManagerRevenue = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
-                .mapToLong(UserData::getTotalSum)
-                .sum();
-
-        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
-        long totalSpecificManagersRevenue = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER") &&
-                        (user.getFio().equals("Звуков Андрей") || user.getFio().equals("Анжелика Б.")))
-                .mapToLong(UserData::getTotalSum)
-                .sum();
-
-        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
-        long totalZp = result.values().stream().findFirst().get().getZpTotal();
-
-
-//        System.out.println(totalZp);
-
-
-        // Вычисляем количество новых компаний
-        long totalNewCompanies = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
-                .mapToLong(UserData::getNewCompanies)
-                .sum();
-
-        // Общая выручка и новые компании
-        resultBuilder.append("Выручка за месяц всей компании: ").append(totalManagerRevenue).append(" руб. ( ")
-                .append(totalSpecificManagersRevenue).append(" руб. )\n")
-                .append("Общие затраты по ЗП: ").append(totalZp).append(" руб. \n")
-                .append("Новых компаний за месяц: ").append(totalNewCompanies).append("\n\n");
-
-        // Выручка менеджеров
-        resultBuilder.append("Выручка менеджеров:\n");
-        sortedEntries.stream()
-                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
-                .forEach(entry -> {
-                    String fio = entry.getKey();
-                    UserData userData = entry.getValue();
-                    resultBuilder.append(fio).append(": ").append(userData.getTotalSum()).append(" руб. Новых: ")
-                            .append(userData.getNewCompanies()).append("\n");
-                });
-
-        // ЗП менеджеров
-        resultBuilder.append("\nМенеджеры:\n\n");
-        sortedEntries.stream()
-                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
-                .forEach(entry -> {
-                    String fio = entry.getKey();
-                    UserData userData = entry.getValue();
-//                    String orderStatus = "Новые: " + userData.getOrderInNew() + " В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
-//                            + " Коррекция: " + userData.getCorrectOrders() + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
-//                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
-                    String orderStatus = "Лиды: " + userData.getLeadsNew() +" В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()
-                            + " Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1()
-                            + " Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay();
-                    String orderStatsForWorkers = "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders()
-                            + " Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
-                    resultBuilder.append(fio).append(": ").append(userData.getSalary()).append(" руб. \n")
-                            .append(orderStatus)
-                            .append("\n")
-//                            .append("\nСтатусы Заказов: ")
-                            .append(orderStatsForWorkers)
-                            .append("\n\n");
-                });
-
-        // ЗП Работников
-        resultBuilder.append("\nЗП Работников:\n");
-        sortedEntries.stream()
-                .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getRole()))
-                .forEach(entry -> {
-                    String fio = entry.getKey();
-                    UserData userData = entry.getValue();
-//                    String orderStats = "н-" + userData.getNewOrders() + "к-" + userData.getCorrectOrders()
-//                            + "в-" + userData.getInVigul() + "п-" + userData.getInPublish();
-                    String orderStats = "Новые - " + userData.getNewOrders() + " В коррекции - " + userData.getCorrectOrders()
-                            + " В выгуле - " + userData.getInVigul() + " На публикации - " + userData.getInPublish();
-                    resultBuilder.append(fio).append(": ").append(userData.getSalary())
-                            .append(" руб.  ").append("\n").append(orderStats).append("\n\n");
-                });
-
-        return resultBuilder.toString();
+        return buildTelegramMonthlyReport(result, true);
     }
 
     public String displayResultToTelegramAdmin(Map<String, UserData> result) {
-        StringBuilder resultBuilder = new StringBuilder();
+        return buildTelegramMonthlyReport(result, true);
+    }
 
-        // Сортируем сначала менеджеров по totalSum, затем остальных по salary
-        List<Map.Entry<String, UserData>> sortedEntries = result.entrySet().stream()
+    private String buildTelegramMonthlyReport(Map<String, UserData> result, boolean includeWorkers) {
+        if (result == null || result.isEmpty()) {
+            return "📊 *Отчёт за месяц*\n\nНет данных для отчёта.";
+        }
+
+        List<Map.Entry<String, UserData>> sortedEntries = sortedReportEntries(result);
+        long totalManagerRevenue = result.values().stream()
+                .filter(user -> "ROLE_MANAGER".equals(user.getRole()))
+                .mapToLong(user -> safeLong(user.getTotalSum()))
+                .sum();
+        long highlightedManagersRevenue = result.values().stream()
+                .filter(user -> "ROLE_MANAGER".equals(user.getRole()))
+                .filter(user -> "Анжелика Б.".equals(user.getFio()) || "Звуков Андрей".equals(user.getFio()))
+                .mapToLong(user -> safeLong(user.getTotalSum()))
+                .sum();
+        long totalZp = result.values().stream()
+                .map(UserData::getZpTotal)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(0L);
+        long totalNewCompanies = result.values().stream()
+                .filter(user -> "ROLE_MANAGER".equals(user.getRole()))
+                .mapToLong(user -> safeLong(user.getNewCompanies()))
+                .sum();
+
+        StringBuilder report = new StringBuilder();
+        report.append("📊 *Отчёт за месяц*\n\n")
+                .append("💰 *Финансы*\n");
+        appendMetricLine(report, "Выручка компании", money(totalManagerRevenue));
+        if (highlightedManagersRevenue > 0) {
+            appendMetricLine(report, "Выручка выделенных менеджеров", money(highlightedManagersRevenue));
+        }
+        appendMetricLine(report, "Общие затраты по ЗП", money(totalZp));
+        appendMetricLine(report, "Новых компаний", String.valueOf(totalNewCompanies));
+
+        report.append("\n🏆 *Выручка менеджеров*\n");
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+                .forEach(entry -> {
+                    UserData user = entry.getValue();
+                    report.append("• *").append(escapeMarkdown(entry.getKey())).append("*: `")
+                            .append(money(safeLong(user.getTotalSum()))).append("`")
+                            .append(" | 🆕 `").append(safeLong(user.getNewCompanies())).append("`\n");
+                });
+
+        report.append("\n👥 *Менеджеры*\n");
+        sortedEntries.stream()
+                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
+                .forEach(entry -> appendManagerBlock(report, entry.getKey(), entry.getValue()));
+
+        if (includeWorkers) {
+            report.append("\n🛠 *Специалисты*\n");
+            sortedEntries.stream()
+                    .filter(entry -> "ROLE_WORKER".equals(entry.getValue().getRole()))
+                    .forEach(entry -> appendWorkerBlock(report, entry.getKey(), entry.getValue()));
+        }
+
+        return report.toString();
+    }
+
+    private List<Map.Entry<String, UserData>> sortedReportEntries(Map<String, UserData> result) {
+        return result.entrySet().stream()
                 .sorted((entry1, entry2) -> {
                     UserData user1 = entry1.getValue();
                     UserData user2 = entry2.getValue();
-
-                    boolean isManager1 = user1.getRole().equals("ROLE_MANAGER");
-                    boolean isManager2 = user2.getRole().equals("ROLE_MANAGER");
+                    boolean isManager1 = "ROLE_MANAGER".equals(user1.getRole());
+                    boolean isManager2 = "ROLE_MANAGER".equals(user2.getRole());
 
                     if (isManager1 && isManager2) {
-                        // Оба менеджеры → сортируем по убыванию суммы чеков
-                        return Long.compare(user2.getTotalSum(), user1.getTotalSum());
-                    } else if (!isManager1 && !isManager2) {
-                        // Оба не менеджеры → сортируем по убыванию зарплаты
-                        return Long.compare(user2.getSalary(), user1.getSalary());
+                        return Long.compare(safeLong(user2.getTotalSum()), safeLong(user1.getTotalSum()));
                     }
-                    // Менеджеры идут первыми
+                    if (!isManager1 && !isManager2) {
+                        return Long.compare(safeLong(user2.getSalary()), safeLong(user1.getSalary()));
+                    }
                     return Boolean.compare(isManager2, isManager1);
                 })
                 .collect(Collectors.toList());
+    }
 
-        // Вычисляем общую выручку всех менеджеров
-        long totalManagerRevenue = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
-                .mapToLong(UserData::getTotalSum)
-                .sum();
+    private void appendManagerBlock(StringBuilder report, String fio, UserData user) {
+        report.append("\n👤 *").append(escapeMarkdown(fio)).append("*\n");
+        appendMetricLine(report, "ЗП", money(safeLong(user.getSalary())));
+        appendMetricLine(report, "Лиды", String.valueOf(safeLong(user.getLeadsNew())));
+        report.append("🔎 *Проверка:* в проверку `").append(safeLong(user.getOrderToCheck()))
+                .append("`, на проверке `").append(safeLong(user.getOrderInCheck())).append("`\n");
+        report.append("✅ *Опубликовано:* `").append(safeLong(user.getOrderInPublished())).append("`\n");
+        report.append("🧾 *Оплата:* счёт `").append(safeLong(user.getOrderInWaitingPay1()))
+                .append("`, напоминание `").append(safeLong(user.getOrderInWaitingPay2()))
+                .append("`, не оплачено `").append(safeLong(user.getOrderNoPay())).append("`\n");
+        report.append("📦 *Заказы:* новые `").append(safeLong(user.getNewOrders()))
+                .append("`, коррекция `").append(safeLong(user.getCorrectOrders()))
+                .append("`, выгул `").append(safeLong(user.getInVigul()))
+                .append("`, публикация `").append(safeLong(user.getInPublish())).append("`\n");
+    }
 
-        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
-        long totalSpecificManagersRevenue = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER") &&
-                        (user.getFio().equals("Анжелика Б.")))
-                .mapToLong(UserData::getTotalSum)
-                .sum();
+    private void appendWorkerBlock(StringBuilder report, String fio, UserData user) {
+        report.append("\n👷 *").append(escapeMarkdown(fio)).append("* - `")
+                .append(money(safeLong(user.getSalary()))).append("`\n");
+        report.append("📦 Новые `").append(safeLong(user.getNewOrders()))
+                .append("` | 🔧 Коррекция `").append(safeLong(user.getCorrectOrders())).append("`\n");
+        report.append("🚶 Выгул `").append(safeLong(user.getInVigul()))
+                .append("` | 📣 Публикация `").append(safeLong(user.getInPublish())).append("`\n");
+    }
 
-        // Фильтруем мапу, чтобы учесть только двух конкретных менеджеров
-        long totalZp = result.values().stream().findFirst().get().getZpTotal();
+    private void appendMetricLine(StringBuilder report, String label, String value) {
+        report.append("• *").append(escapeMarkdown(label)).append(":* `").append(value).append("`\n");
+    }
 
+    private long safeLong(Long value) {
+        return value == null ? 0L : value;
+    }
 
-//        System.out.println(totalZp);
-
-
-        // Вычисляем количество новых компаний
-        long totalNewCompanies = result.values().stream()
-                .filter(user -> user.getRole().equals("ROLE_MANAGER"))
-                .mapToLong(UserData::getNewCompanies)
-                .sum();
-
-        resultBuilder.append("*📊 Отчёт за месяц*\n\n")
-                .append("*Общая выручка:* `").append(totalManagerRevenue).append(" руб.`\n")
-                .append("*Выручка (Иван):* `").append(escapeMarkdown(String.valueOf(totalSpecificManagersRevenue))).append(" руб.`\n")
-                .append("*Общие затраты на ЗП:* `").append(totalZp).append(" руб.`\n")
-                .append("*Новых компаний:* `").append(totalNewCompanies).append("`\n\n");
-
-        resultBuilder.append("*👤 Выручка менеджеров:*\n");
-        sortedEntries.stream()
-                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
-                .forEach(entry -> {
-                    UserData user = entry.getValue();
-                    resultBuilder.append("• ").append(escapeMarkdown(entry.getKey()))
-                            .append(": `").append(user.getTotalSum()).append(" руб.`")
-                            .append(" — Новых: `").append(user.getNewCompanies()).append("`\n");
-                });
-
-        resultBuilder.append("\n*💼 Менеджеры и статусы:*\n");
-        sortedEntries.stream()
-                .filter(entry -> "ROLE_MANAGER".equals(entry.getValue().getRole()))
-                .forEach(entry -> {
-                    UserData user = entry.getValue();
-                    String fio = escapeMarkdown(entry.getKey());
-
-                    resultBuilder.append("*").append(fio).append("* — `").append(user.getSalary()).append(" руб.`\n");
-
-                    resultBuilder.append("`Лиды:` ").append(user.getLeadsNew()).append("  ")
-                            .append("`В проверку:` ").append(user.getOrderToCheck()).append("  ")
-                            .append("`На проверке:` ").append(user.getOrderInCheck()).append("  ")
-                            .append("`Опубликовано:` ").append(user.getOrderInPublished()).append("\n");
-
-                    resultBuilder.append("`Счёт:` ").append(user.getOrderInWaitingPay1()).append("  ")
-                            .append("`Напоминание:` ").append(user.getOrderInWaitingPay2()).append("  ")
-                            .append("`Не оплачено:` ").append(user.getOrderNoPay()).append("\n");
-
-                    resultBuilder.append("`Новых:` ").append(user.getNewOrders()).append("  ")
-                            .append("`Коррекция:` ").append(user.getCorrectOrders()).append("  ")
-                            .append("`Выгул:` ").append(user.getInVigul()).append("  ")
-                            .append("`Публикация:` ").append(user.getInPublish()).append("\n\n");
-                });
-
-        return resultBuilder.toString();
+    private String money(long value) {
+        return String.format(Locale.ROOT, "%,d", value).replace(',', ' ') + " руб.";
     }
 
     private String escapeMarkdown(String text) {
@@ -898,6 +821,7 @@ public class PersonalServiceImpl implements PersonalService {
         return text.replace("_", "\\_")
                 .replace("*", "\\*")
                 .replace("[", "\\[")
+                .replace("]", "\\]")
                 .replace("`", "\\`");
     }
 

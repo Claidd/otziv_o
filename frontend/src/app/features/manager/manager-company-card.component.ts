@@ -4,8 +4,10 @@ import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.c
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
   StatusAction,
+  managerCompanyHeaderUrl,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
+  managerCompanyNeedsTelegramBot,
   managerCompanyOrderUrl,
   managerHasMeaningfulNote,
   trackManagerAction
@@ -35,6 +37,10 @@ export class ManagerCompanyCardComponent {
     return managerCompanyChatUrl(this.company);
   }
 
+  companyHeaderUrl(): string {
+    return managerCompanyHeaderUrl(this.company);
+  }
+
   companyFilialUrl(): string {
     return managerCompanyFilialUrl(this.company);
   }
@@ -45,6 +51,14 @@ export class ManagerCompanyCardComponent {
 
   hasCompanyFilialUrl(): boolean {
     return !!this.companyFilialUrl();
+  }
+
+  hasCompanyHeaderUrl(): boolean {
+    return !!this.companyHeaderUrl();
+  }
+
+  needsTelegramBot(): boolean {
+    return managerCompanyNeedsTelegramBot(this.company);
   }
 
   companyPhoneLabel(): string {

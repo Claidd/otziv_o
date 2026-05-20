@@ -571,13 +571,13 @@ select {
 
   .search-line {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem 2.2rem;
+    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem;
     width: 100%;
     gap: 0.45rem;
   }
 
   .search-line.has-clear {
-    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem 2.2rem 2.2rem;
+    grid-template-columns: minmax(0, 1fr) 3.4rem 2.2rem 2.2rem;
   }
 
   .manager-cards {

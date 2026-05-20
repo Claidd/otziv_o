@@ -30,6 +30,7 @@ export interface ArchiveOrderListItem {
   companyUrlChat?: string;
   companyCity: string;
   filialTitle: string;
+  filialUrl?: string;
   status: string;
   sum?: number;
   amount?: number;
@@ -182,6 +183,9 @@ export interface CompanyCardItem {
   city?: string;
   dateNewTry?: string;
   groupId?: string;
+  telegramGroupChatId?: number | null;
+  telegramGroupLinked?: boolean;
+  telegramBotInviteUrl?: string;
   nextOrderRequestsCount?: number;
   failedNextOrderRequestsCount?: number;
   nextOrderRequestFilialTitle?: string;
@@ -221,6 +225,9 @@ export interface OrderCardItem {
   payDay?: string;
   dayToChangeStatusAgo?: number;
   groupId?: string;
+  telegramGroupChatId?: number | null;
+  telegramGroupLinked?: boolean;
+  telegramBotInviteUrl?: string;
 }
 
 export interface ManagerMetric {
@@ -571,6 +578,7 @@ export interface ManagerArchiveOrdersQuery {
   mode?: ArchiveOrderMode;
   pageNumber?: number;
   pageSize?: number;
+  sortDirection?: 'desc' | 'asc';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -602,7 +610,8 @@ export class ManagerApi {
       .set('keyword', query.keyword?.trim() ?? '')
       .set('mode', query.mode ?? 'all')
       .set('pageNumber', String(query.pageNumber ?? 0))
-      .set('pageSize', String(query.pageSize ?? 10));
+      .set('pageSize', String(query.pageSize ?? 10))
+      .set('sortDirection', query.sortDirection ?? 'desc');
 
     return this.http.get<ManagerPage<ArchiveOrderListItem>>(
       `${appEnvironment.apiBaseUrl}/api/manager/archive/orders`,

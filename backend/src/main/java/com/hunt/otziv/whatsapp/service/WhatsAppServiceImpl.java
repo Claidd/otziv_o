@@ -8,8 +8,8 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.exception.WhatsAppConfigurationException;
 import com.hunt.otziv.whatsapp.service.fichi.LastSeenParser;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,13 +29,20 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class WhatsAppServiceImpl implements WhatsAppService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final WhatsAppProperties properties;
     private final RestTemplate restTemplate;
+
+    public WhatsAppServiceImpl(
+            WhatsAppProperties properties,
+            @Qualifier("whatsAppRestTemplate") RestTemplate restTemplate
+    ) {
+        this.properties = properties;
+        this.restTemplate = restTemplate;
+    }
 
     // ==== Helpers ====
 

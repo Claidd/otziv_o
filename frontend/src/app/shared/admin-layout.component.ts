@@ -6,6 +6,7 @@ import { CabinetApi } from '../core/cabinet.api';
 import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
 import { PersonalRemindersComponent } from './personal-reminders.component';
 import { normalizeRole, roleLabel } from './role-labels';
+import { requestWorkerCurrentSectionOpen } from './worker-entry-navigation';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -142,6 +143,10 @@ export class AdminLayoutComponent {
   }
 
   handleRouterLinkClick(link: ShellLink): void {
+    if (link.active === 'worker' && !this.isActive(link)) {
+      requestWorkerCurrentSectionOpen();
+    }
+
     if (this.isActive(link)) {
       this.activeLinkClicked.emit(link.active);
     }

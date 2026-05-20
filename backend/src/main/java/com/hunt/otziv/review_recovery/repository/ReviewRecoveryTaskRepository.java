@@ -49,6 +49,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
         JOIN FETCH t.batch b
         JOIN FETCH t.order o
         JOIN FETCH t.sourceReview r
+        LEFT JOIN FETCH r.bot rb
         LEFT JOIN FETCH t.worker w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH t.bot bot
@@ -78,6 +79,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH r.subCategory
                 LEFT JOIN FETCH r.product rp
                 LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
                 LEFT JOIN FETCH r.worker rw
                 LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
@@ -89,6 +91,8 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH d.order ro
                 LEFT JOIN FETCH ro.company
                 LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -155,6 +159,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH r.subCategory
                 LEFT JOIN FETCH r.product rp
                 LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
                 LEFT JOIN FETCH r.worker rw
                 LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
@@ -166,6 +171,8 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH d.order ro
                 LEFT JOIN FETCH ro.company
                 LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -235,6 +242,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH r.subCategory
                 LEFT JOIN FETCH r.product rp
                 LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
                 LEFT JOIN FETCH r.worker rw
                 LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
@@ -246,6 +254,8 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH d.order ro
                 LEFT JOIN FETCH ro.company
                 LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b
@@ -315,6 +325,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH r.subCategory
                 LEFT JOIN FETCH r.product rp
                 LEFT JOIN FETCH rp.productCategory
+                LEFT JOIN FETCH r.bot rb
                 LEFT JOIN FETCH r.worker rw
                 LEFT JOIN FETCH rw.user
                 LEFT JOIN FETCH r.filial f
@@ -326,6 +337,8 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 LEFT JOIN FETCH d.order ro
                 LEFT JOIN FETCH ro.company
                 LEFT JOIN FETCH ro.status
+                LEFT JOIN FETCH ro.manager rm
+                LEFT JOIN FETCH rm.user
                 LEFT JOIN FETCH t.worker w
                 LEFT JOIN FETCH w.user
                 LEFT JOIN FETCH t.bot b

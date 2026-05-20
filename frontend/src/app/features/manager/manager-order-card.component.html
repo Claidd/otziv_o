@@ -10,7 +10,12 @@
   [class.card-tone--bad]="isBadTone()"
 >
   <header>
-    <a [href]="orderFilialUrl()" target="_blank" rel="noopener">
+    <a
+      [href]="orderHeaderUrl()"
+      [class.telegram-bot-link-pending]="needsTelegramBot()"
+      target="_blank"
+      rel="noopener"
+    >
       {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
     </a>
     <div class="card-id-line">
@@ -39,7 +44,14 @@
   }
 
   <div class="phone-row">
-    <a [href]="orderChatUrl()" target="_blank" rel="noopener">{{ orderPhoneLabel() }}</a>
+    <a
+      [href]="orderChatUrl()"
+      [class.telegram-bot-link-pending]="needsTelegramBot()"
+      target="_blank"
+      rel="noopener"
+    >
+      {{ orderPhoneLabel() }}
+    </a>
     @if (!selectedCompany) {
       <button type="button" (click)="phoneCopied.emit(orderPhoneForCopy())" title="Скопировать телефон">
         {{ copied === 'телефон' ? '✓' : 'T' }}

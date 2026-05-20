@@ -111,4 +111,10 @@ public class CompanyDTO {
 
     private String groupId;
 
+    private Long telegramGroupChatId;
+
+    private boolean telegramGroupLinked;
+
+    private String telegramBotInviteUrl;
+
 }

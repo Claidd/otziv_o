@@ -64,6 +64,7 @@ type ArchiveRouteState = {
   keyword: string;
   pageNumber: number;
   pageSize: number;
+  sortDirection: 'desc' | 'asc';
   archiveOrderId: number | null;
 };
 
@@ -95,6 +96,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly keyword = signal('');
   readonly pageNumber = signal(0);
   readonly pageSize = signal(10);
+  readonly sortDirection = signal<'desc' | 'asc'>('desc');
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly restoreOrder = signal<ArchiveOrderListItem | null>(null);
@@ -122,6 +124,10 @@ export class ManagerArchiveComponent implements OnDestroy {
       { label: 'Оплачено', value: orders.filter((order) => order.status === 'Оплачено').length, icon: 'payments', tone: 'yellow' }
     ];
   });
+  readonly sortTitle = computed(() => this.sortDirection() === 'desc'
+    ? 'Сначала новые архивные'
+    : 'Сначала старые архивные'
+  );
 
   constructor() {
     this.routeSubscription = this.route.queryParamMap.subscribe((params) => this.applyRouteState(params));
@@ -181,6 +187,14 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   refresh(): void {
     this.loadOrders();
+  }
+
+  toggleSortDirection(): void {
+    this.navigateArchiveState({
+      sortDirection: this.sortDirection() === 'desc' ? 'asc' : 'desc',
+      pageNumber: 0,
+      archiveOrderId: null
+    });
   }
 
   trackMode(_index: number, tab: ArchiveModeTab): ArchiveOrderMode {
@@ -251,6 +265,14 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   archiveOrderChatUrl(order: ArchiveOrderListItem): string {
     return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+  }
+
+  archiveOrderTitle(order: ArchiveOrderListItem): string {
+    return `${order.companyTitle || 'Без компании'} - ${order.filialTitle || 'Без филиала'}`;
+  }
+
+  archiveOrderFilialUrl(order: ArchiveOrderListItem): string {
+    return (order.filialUrl ?? '').trim();
   }
 
   archiveOrderReviewUrl(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): string {
@@ -393,7 +415,8 @@ export class ManagerArchiveComponent implements OnDestroy {
       keyword: this.keyword(),
       mode: this.mode(),
       pageNumber: this.pageNumber(),
-      pageSize: this.pageSize()
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection()
     }).subscribe({
       next: (page) => {
         this.ordersPage.set(page);
@@ -464,6 +487,7 @@ export class ManagerArchiveComponent implements OnDestroy {
     this.keyword.set(nextState.keyword);
     this.pageNumber.set(nextState.pageNumber);
     this.pageSize.set(nextState.pageSize);
+    this.sortDirection.set(nextState.sortDirection);
     this.activeArchiveOrderId.set(nextState.archiveOrderId);
 
     if (listKey !== this.lastListQueryKey) {
@@ -532,6 +556,7 @@ export class ManagerArchiveComponent implements OnDestroy {
       keyword: this.keyword(),
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
+      sortDirection: this.sortDirection(),
       archiveOrderId: this.activeArchiveOrderId(),
       ...patch
     };
@@ -549,6 +574,7 @@ export class ManagerArchiveComponent implements OnDestroy {
       keyword: params.get('keyword')?.trim() ?? '',
       pageNumber: this.readNonNegativeInt(params.get('pageNumber'), 0),
       pageSize: this.readPageSize(params.get('pageSize')),
+      sortDirection: this.readSortDirection(params.get('sortDirection')),
       archiveOrderId: this.readPositiveInt(params.get('archiveOrderId'))
     };
   }
@@ -567,6 +593,9 @@ export class ManagerArchiveComponent implements OnDestroy {
     if (state.pageSize !== 10) {
       queryParams['pageSize'] = state.pageSize;
     }
+    if (state.sortDirection !== 'desc') {
+      queryParams['sortDirection'] = state.sortDirection;
+    }
     if (state.archiveOrderId) {
       queryParams['archiveOrderId'] = state.archiveOrderId;
     }
@@ -574,7 +603,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   private listQueryKey(state: ArchiveRouteState): string {
-    return [state.mode, state.keyword, state.pageNumber, state.pageSize].join('|');
+    return [state.mode, state.keyword, state.pageNumber, state.pageSize, state.sortDirection].join('|');
   }
 
   private normalizeMode(mode: string | null): ArchiveOrderMode {
@@ -584,6 +613,10 @@ export class ManagerArchiveComponent implements OnDestroy {
   private readPageSize(value: string | null): number {
     const parsed = this.readNonNegativeInt(value, 10);
     return this.pageSizeOptions.includes(parsed) ? parsed : 10;
+  }
+
+  private readSortDirection(value: string | null): 'desc' | 'asc' {
+    return value === 'asc' ? 'asc' : 'desc';
   }
 
   private readNonNegativeInt(value: string | null, fallback: number): number {

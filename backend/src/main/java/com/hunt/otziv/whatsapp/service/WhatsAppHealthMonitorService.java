@@ -1,8 +1,8 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -10,11 +10,18 @@ import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WhatsAppHealthMonitorService {
 
     private final WhatsAppProperties properties;
     private final RestTemplate restTemplate;
+
+    public WhatsAppHealthMonitorService(
+            WhatsAppProperties properties,
+            @Qualifier("whatsAppRestTemplate") RestTemplate restTemplate
+    ) {
+        this.properties = properties;
+        this.restTemplate = restTemplate;
+    }
 
     @Scheduled(fixedDelay = 720000) // каждый 60 секунд
     public void checkAllClientsHealth() {

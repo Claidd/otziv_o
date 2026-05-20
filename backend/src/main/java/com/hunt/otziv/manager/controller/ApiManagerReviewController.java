@@ -36,6 +36,7 @@ import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -55,10 +56,13 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @RequestMapping("/api/manager")
 public class ApiManagerReviewController {
 
@@ -74,6 +78,7 @@ public class ApiManagerReviewController {
     private final UserService userService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
+    private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -493,6 +498,12 @@ public class ApiManagerReviewController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        if (reviewHelpDraftLocks.putIfAbsent(orderId, Boolean.TRUE) != null) {
+            log.info("REVIEW_HELP_DRAFTS_DUPLICATE orderId={} reason=already_running", orderId);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь уже готовит тексты для этого заказа");
+        }
+
+        try {
         OrderDetailsResponse details = managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
         if (!isNewOrderStatus(details.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь доступна только для заказа в статусе Новый");
@@ -509,6 +520,15 @@ public class ApiManagerReviewController {
                         orderReviewHelpContext(details, review)
                 ))
                 .toList();
+        log.info(
+                "REVIEW_HELP_DRAFTS_TARGETS orderId={} companyId={} totalReviews={} targetDrafts={} reviewIds={} targetIds={}",
+                orderId,
+                details.companyId(),
+                details.reviews().size(),
+                targets.size(),
+                details.reviews().stream().map(ReviewDetailsResponse::id).toList(),
+                targets.stream().map(ReputationBatchReviewDraftTarget::reviewId).toList()
+        );
         if (targets.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "В заказе нет отзывов для AI-помощи");
         }
@@ -521,7 +541,7 @@ public class ApiManagerReviewController {
                 "без смайлов",
                 "",
                 "mixed",
-                "quality",
+                "economy",
                 targets
         );
 
@@ -542,10 +562,33 @@ public class ApiManagerReviewController {
             }
         }
         if (saved == 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI-помощь не вернула тексты для карточек заказа");
+            if (result.drafts().isEmpty()) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        firstNonBlank(
+                                result.safetyNotes().stream().findFirst().orElse(""),
+                                "OpenAI не вернул тексты для карточек заказа. Проверьте маршрут до OpenAI/proxy и повторите запрос."
+                        )
+                );
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "AI-помощь вернула тексты, но не удалось сохранить их в карточки заказа"
+            );
         }
+        log.info(
+                "REVIEW_HELP_DRAFTS_SAVED orderId={} companyId={} returnedDrafts={} savedDrafts={} returnedIds={}",
+                orderId,
+                details.companyId(),
+                result.drafts().size(),
+                saved,
+                result.drafts().stream().map(ReputationBatchReviewDraftItem::reviewId).toList()
+        );
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        } finally {
+            reviewHelpDraftLocks.remove(orderId);
+        }
     }
 
     @PutMapping("/orders/{orderId}/recovery-tasks/{taskId}")

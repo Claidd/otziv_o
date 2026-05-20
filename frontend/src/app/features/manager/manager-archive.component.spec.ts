@@ -33,6 +33,7 @@ function archiveOrder(overrides: Partial<ArchiveOrderListItem> = {}): ArchiveOrd
     companyTelephone: '+79086431055',
     companyCity: 'Иркутск',
     filialTitle: 'Центр',
+    filialUrl: 'https://2gis.ru/irkutsk/firm/123',
     status: 'Оплачено',
     sum: 1500,
     amount: 5,
@@ -200,16 +201,42 @@ describe('ManagerArchiveComponent', () => {
       keyword: '',
       mode: 'all',
       pageNumber: 0,
-      pageSize: 10
+      pageSize: 10,
+      sortDirection: 'desc'
     });
     expect(element.textContent).toContain('Архивная компания');
     expect(element.textContent).toContain('Live компания');
+    expect(element.querySelector<HTMLAnchorElement>('.archive-card-title')?.href).toBe('https://2gis.ru/irkutsk/firm/123');
     expect(element.querySelectorAll('.restore-button')).toHaveLength(1);
     expect(element.querySelectorAll('.live-status-actions button')).toHaveLength(3);
     expect(fixture.componentInstance.canRestore(storedOrder)).toBe(true);
     expect(fixture.componentInstance.canRestore(liveOrder)).toBe(false);
     expect(fixture.componentInstance.canChangeLiveStatus(liveOrder)).toBe(true);
     expect(fixture.componentInstance.orderDetailsLink(liveOrder)).toEqual(['/manager/orders', 7, 4]);
+  });
+
+  it('toggles archive sort from the pager', async () => {
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const toggle = element.querySelector<HTMLButtonElement>('.archive-pager .sort-toggle');
+
+    expect(component.sortDirection()).toBe('desc');
+
+    toggle?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.sortDirection()).toBe('asc');
+    expect(managerApi.getArchiveOrders).toHaveBeenLastCalledWith({
+      keyword: '',
+      mode: 'all',
+      pageNumber: 0,
+      pageSize: 10,
+      sortDirection: 'asc'
+    });
   });
 
   it('loads archive details and restores an order with the selected status', () => {

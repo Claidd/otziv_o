@@ -103,6 +103,42 @@ function Set-EnvFileValue {
     Set-Content -LiteralPath $Path -Value $updated -Encoding utf8
 }
 
+function Get-EnvFileValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$DefaultValue = ""
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $DefaultValue
+    }
+
+    foreach ($existingLine in Get-Content -LiteralPath $Path) {
+        $trimmed = $existingLine.Trim()
+        if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) {
+            continue
+        }
+
+        $separator = $trimmed.IndexOf("=")
+        if ($separator -le 0) {
+            continue
+        }
+
+        if ($trimmed.Substring(0, $separator).Trim() -eq $Name) {
+            $value = $trimmed.Substring($separator + 1).Trim()
+            if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                return $value
+            }
+        }
+    }
+
+    return $DefaultValue
+}
+
 if ($Help) {
     Show-Help
     exit 0
@@ -190,6 +226,14 @@ try {
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_JWK_SET_URI" -Value "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ADMIN_SERVER_URL" -Value "http://keycloak:8080/keycloak"
         Set-EnvFileValue -Path $stageEnv -Name "KC_PROXY_TRUSTED_ADDRESSES" -Value "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
+        $outboundProxyHost = Get-EnvFileValue -Path $stageEnv -Name "OPENAI_PROXY_HOST" -DefaultValue $VpsHost
+        $outboundProxyPort = Get-EnvFileValue -Path $stageEnv -Name "OPENAI_PROXY_PORT" -DefaultValue "8888"
+        Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_ENABLED" -Value "true"
+        Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_HOST" -Value $outboundProxyHost
+        Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_PORT" -Value $outboundProxyPort
+        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_ENABLED" -Value "true"
+        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_HOST" -Value $outboundProxyHost
+        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_PORT" -Value $outboundProxyPort
     }
 
     if (Test-Path -LiteralPath $bundlePath) {
@@ -218,6 +262,7 @@ try {
     $webImageQuoted = ConvertTo-BashSingleQuoted $webImage
     $remoteEnvFileQuoted = ConvertTo-BashSingleQuoted $RemoteEnvFile
     $deployTagQuoted = ConvertTo-BashSingleQuoted $Tag
+    $vpsHostQuoted = ConvertTo-BashSingleQuoted $VpsHost
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
 
     $remoteScript = @"
@@ -231,6 +276,7 @@ app_image=$appImageQuoted
 web_image=$webImageQuoted
 env_file=$remoteEnvFileQuoted
 deploy_tag=$deployTagQuoted
+vps_host=$vpsHostQuoted
 uploaded_env=$uploadedEnv
 
 compose() {
@@ -262,6 +308,30 @@ set_env() {
   fi
 
   mv "`$tmp_file" "`$file"
+}
+
+get_env() {
+  key="`$1"
+  default_value="`$2"
+  file="`$env_file"
+
+  if [ ! -f "`$file" ]; then
+    printf '%s' "`$default_value"
+    return 0
+  fi
+
+  value="`$(awk -F= -v key="`$key" '
+    `$0 !~ /^[[:space:]]*#/ && index(`$0, key "=") == 1 {
+      sub(/^[^=]*=/, "", `$0)
+      print `$0
+    }
+  ' "`$file" | tail -n 1)"
+
+  if [ -z "`$value" ]; then
+    printf '%s' "`$default_value"
+  else
+    printf '%s' "`$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+  fi
 }
 
 remove_repo_images() {
@@ -334,6 +404,14 @@ set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
 set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
 set_env KEYCLOAK_ADMIN_SERVER_URL "http://keycloak:8080/keycloak"
 set_env KC_PROXY_TRUSTED_ADDRESSES "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
+outbound_proxy_host="`$(get_env OPENAI_PROXY_HOST "`$vps_host")"
+outbound_proxy_port="`$(get_env OPENAI_PROXY_PORT "8888")"
+set_env TELEGRAM_PROXY_ENABLED "true"
+set_env TELEGRAM_PROXY_HOST "`$outbound_proxy_host"
+set_env TELEGRAM_PROXY_PORT "`$outbound_proxy_port"
+set_env WHATSAPP_PROXY_ENABLED "true"
+set_env WHATSAPP_PROXY_HOST "`$outbound_proxy_host"
+set_env WHATSAPP_PROXY_PORT "`$outbound_proxy_port"
 
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +

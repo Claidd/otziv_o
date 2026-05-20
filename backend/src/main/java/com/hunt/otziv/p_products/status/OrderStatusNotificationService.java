@@ -33,29 +33,89 @@ public class OrderStatusNotificationService {
             String message,
             String successStatus
     ) {
-        log.info("📨 Отправка сообщения в WhatsApp-группу:");
-        log.info("🔹 Клиент: {}", clientId);
-        log.info("🔹 Группа: {}", groupId);
+        sendMessageToClientChat(title, order, clientId, groupId, message, successStatus);
+        return true;
+    }
+
+    public String sendMessageToClientChat(
+            String title,
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String successStatus
+    ) {
+        log.info("📨 Отправка сообщения в клиентский чат:");
+        log.info("🔹 Клиент WhatsApp: {}", clientId);
+        log.info("🔹 Группа WhatsApp: {}", groupId);
+        log.info("🔹 Группа Telegram: {}", telegramGroupChatId(order));
         log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
 
-        WhatsAppSendResult result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
-
-        if (result.isOk()) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(successStatus));
-            log.info("✅ Статус заказа успешно обновлён на: {}", successStatus);
+        String appliedStatus;
+        if (hasText(groupId)) {
+            appliedStatus = sendToWhatsAppOrFallback(title, order, clientId, groupId, message, successStatus);
+        } else if (telegramGroupChatId(order) != null) {
+            appliedStatus = sendToTelegramOrFallback(title, order, telegramGroupChatId(order), message, successStatus);
         } else {
-            log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: code={}, error={}",
-                    result.code(), result.displayError());
-            notifyManagerAboutFallback(title, order);
-            order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-            log.info("🔄 Статус заказа установлен вручную: {}", title);
+            log.warn("⚠️ У компании {} отсутствуют WhatsApp groupId и Telegram group chatId. Статус выставлен без отправки сообщений",
+                    companyTitle(order));
+            appliedStatus = applyFallbackStatus(title, order);
         }
 
         orderRepository.save(order);
-        log.info("💾 Заказ сохранён: ID {}. Компания - {}", order.getId(),
-                order.getCompany() != null ? order.getCompany().getTitle() : "null");
+        log.info("💾 Заказ сохранён: ID {}. Компания - {}. Статус - {}",
+                order.getId(), companyTitle(order), appliedStatus);
 
-        return true;
+        return appliedStatus;
+    }
+
+    private String sendToWhatsAppOrFallback(
+            String title,
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String successStatus
+    ) {
+        WhatsAppSendResult result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
+
+        if (result.isOk()) {
+            return applySuccessStatus(successStatus, order, "WhatsApp");
+        }
+
+        log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: code={}, error={}",
+                result.code(), result.displayError());
+        notifyManagerAboutFallback(title, order);
+        return applyFallbackStatus(title, order);
+    }
+
+    private String sendToTelegramOrFallback(
+            String title,
+            Order order,
+            Long telegramChatId,
+            String message,
+            String successStatus
+    ) {
+        boolean sent = telegramService.sendMessage(telegramChatId, message);
+        if (sent) {
+            return applySuccessStatus(successStatus, order, "Telegram");
+        }
+
+        log.warn("⚠️ Сообщение в Telegram-группу {} не отправлено", telegramChatId);
+        notifyManagerAboutFallback(title, order);
+        return applyFallbackStatus(title, order);
+    }
+
+    private String applySuccessStatus(String successStatus, Order order, String channel) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(successStatus));
+        log.info("✅ Сообщение клиенту отправлено через {}. Статус заказа успешно обновлён на: {}", channel, successStatus);
+        return successStatus;
+    }
+
+    private String applyFallbackStatus(String title, Order order) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+        log.info("🔄 Статус заказа установлен вручную: {}", title);
+        return title;
     }
 
     public boolean hasWorkerWithTelegram(Order order) {
@@ -107,6 +167,10 @@ public class OrderStatusNotificationService {
 
     private String companyTitle(Order order) {
         return order.getCompany() != null ? order.getCompany().getTitle() : "Компания";
+    }
+
+    private Long telegramGroupChatId(Order order) {
+        return order != null && order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null;
     }
 
     private boolean hasText(String value) {

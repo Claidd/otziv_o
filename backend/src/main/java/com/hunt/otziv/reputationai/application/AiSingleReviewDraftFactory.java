@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,17 +38,227 @@ import java.util.regex.Pattern;
 public class AiSingleReviewDraftFactory {
 
     private static final List<String> STRUCTURE_VARIANTS = List.of(
-            "очень коротко, 1-2 живых предложения, без вступления",
-            "сначала причина обращения, потом одна конкретная деталь и спокойный итог",
-            "сначала сомнение или опасение клиента, потом что прояснилось",
-            "сначала результат, потом коротко почему обратился",
-            "как маленькая бытовая история: повод, одна деталь общения, итог",
-            "чуть придирчиво: что насторожило, что объяснили, почему в итоге нормально",
-            "деловой отзыв без эмоций: задача, что проверили или сделали, вывод",
-            "разговорно и неровно: как человек написал между делом",
-            "не по хронологии: начать с вывода, потом дать одну причину",
-            "как заметка после визита: две конкретные детали без общего вступления",
-            "от первого лица с бытовым контекстом, но без пересказа всей услуги"
+            "очень коротко: один живой вывод и одна деталь, без общего вступления",
+            "причина обращения раскрывается через конкретную деталь и спокойный итог",
+            "сомнение клиента раскрывается через то, что стало понятнее после общения или проверки",
+            "результат стоит первым, а дальше объясняется, почему он был важен",
+            "маленькая бытовая история: повод, одна деталь общения, итог",
+            "чуть придирчиво: что насторожило, что проверили, почему в итоге нормально",
+            "деловой отзыв без эмоций: задача, одно действие или проверка, вывод",
+            "разговорно и неровно: мысль развивается как заметка между делом",
+            "не по хронологии: начать с вывода, потом дать причину и одну проверку",
+            "заметка после визита: две конкретные детали без рекламного вступления",
+            "от первого лица с бытовым контекстом, но без пересказа всей услуги",
+            "пишет спустя время: сначала проверил результат, потом сделал вывод",
+            "маленький минус без претензии: что было неудобно и почему итог устроил",
+            "сравнение обещаний с фактом: осторожно, без неподтверждённых гарантий",
+            "постсервисный вопрос: после услуги осталось уточнение, его спокойно закрыли"
+    );
+
+    private static final List<BatchNarrativeMode> BATCH_NARRATIVE_MODES = List.of(
+            new BatchNarrativeMode(
+                    "micro_reaction",
+                    "очень короткая реакция обычного клиента; можно написать почти без процесса",
+                    "0-1 конкретная деталь, 1 короткая мысль",
+                    "light: достаточно общего впечатления и одного сигнала темы, experienceFocus можно только слегка задеть",
+                    "не используй связку 'показали-согласовали-объяснили'; максимум один процессный глагол"
+            ),
+            new BatchNarrativeMode(
+                    "blunt_positive",
+                    "короткое прямое одобрение без подробностей, как в обычном отзыве на бегу",
+                    "0-1 деталь, допускается простое 'хорошо', 'нормально', 'без претензий'",
+                    "light: важнее живой тон, чем раскрытие процесса",
+                    "не добавляй цепочку этапов; не объясняй, если режим просит короткую реакцию"
+            ),
+            new BatchNarrativeMode(
+                    "neutral_ok",
+                    "ровная нейтральная оценка без восторга и без рекламы",
+                    "1 короткая деталь или общий результат",
+                    "light: достаточно спокойной оценки и одного тематического сигнала",
+                    "не используй эмоциональные выводы и подробные согласования"
+            ),
+            new BatchNarrativeMode(
+                    "concise_thanks",
+                    "короткая благодарность за конкретный момент, без длинной истории",
+                    "1 благодарность + 1 деталь",
+                    "light: можно ограничиться одним понятным эпизодом",
+                    "не пересказывай ход работы; не добавляй список действий"
+            ),
+            new BatchNarrativeMode(
+                    "routine_customer",
+                    "повторный или привычный опыт: человек обслуживается/ходит/заказывает не первый раз",
+                    "1-2 детали, без длинного описания работ",
+                    "light: можно писать про стабильность и отсутствие нареканий, без полного раскрытия процесса",
+                    "не строй текст как разовую приемку; избегай 'сначала-потом-по итогу'"
+            ),
+            new BatchNarrativeMode(
+                    "seasonal_repeat",
+                    "повторяющийся сезонный или периодический опыт, если это совместимо с услугой",
+                    "1 привычка + 1 результат",
+                    "light: достаточно показать, что это не разовое обращение",
+                    "не придумывай точные даты и периоды; пиши общо, без календарных обещаний"
+            ),
+            new BatchNarrativeMode(
+                    "no_fuss_result",
+                    "отзыв про отсутствие лишней суеты: коротко, спокойно, по делу",
+                    "1 деталь процесса + 1 итог",
+                    "light: минимальный процесс, акцент на том, что не пришлось усложнять",
+                    "избегай связки 'показали-согласовали-объяснили'; выбери только один глагол действия"
+            ),
+            new BatchNarrativeMode(
+                    "casual_phrase",
+                    "простая разговорная оценка, как человек написал между делом",
+                    "0-1 деталь, допускается короткая фраза вроде 'нормально сделали'",
+                    "light: одна живая оценка важнее полного перечисления фактов",
+                    "не перечисляй этапы; не объясняй всё подробно"
+            ),
+            new BatchNarrativeMode(
+                    "plain_recommend",
+                    "простая рекомендация без рекламного тона, как совет знакомому",
+                    "1 причина рекомендации, без превосходных степеней",
+                    "light: короткий вывод допустим, если тема считывается",
+                    "не используй 'лучшие', 'идеально', 'всем советую'; не расписывай весь процесс"
+            ),
+            new BatchNarrativeMode(
+                    "first_time_customer",
+                    "первый опыт клиента: что было непонятно до обращения и что стало яснее",
+                    "1 сомнение + 1 понятный итог",
+                    "medium: раскрывай только один вопрос новичка",
+                    "можно написать 'объяснили' один раз, без соседних 'показали' и 'согласовали'"
+            ),
+            new BatchNarrativeMode(
+                    "story_with_details",
+                    "мини-история с бытовым поводом и 2-3 конкретными деталями",
+                    "2-3 детали из slot или writingGuide, без цен и точных сроков",
+                    "full: раскрой experienceFocus как маленький клиентский эпизод",
+                    "можно использовать процессные глаголы, но не подряд 'показали-согласовали-объяснили'"
+            ),
+            new BatchNarrativeMode(
+                    "long_mini_story",
+                    "более развернутая бытовая история на 4-5 предложений",
+                    "3 детали: повод, один момент общения, один результат",
+                    "full: раскрывай experienceFocus через последовательность, но без служебных формулировок",
+                    "можно использовать хронологию, но не превращай текст в отчет по этапам"
+            ),
+            new BatchNarrativeMode(
+                    "checklist_style",
+                    "сухая заметка: что было важно и что проверили/получили",
+                    "2-3 коротких пункта внутри обычного текста",
+                    "medium: раскрывай тему через список наблюдений, без эмоций",
+                    "разрешены короткие глаголы действий, но без мини-истории"
+            ),
+            new BatchNarrativeMode(
+                    "works_list",
+                    "перечень сделанного обычным текстом, без эмоций и без оценки сервиса",
+                    "2-3 совместимые работы или наблюдения",
+                    "medium: подходит для автосервиса, ремонта, обучения, услуг с несколькими шагами",
+                    "не добавляй личную драму; используй фактические глаголы без рекламного вывода"
+            ),
+            new BatchNarrativeMode(
+                    "skeptical_then_ok",
+                    "сначала сомнение или раздражение, затем что стало понятно",
+                    "1-2 детали, одна личная реакция",
+                    "medium: покажи контраст ожидания и результата",
+                    "можно один раз написать 'объяснили', но не добавляй рядом 'показали' и 'согласовали'"
+            ),
+            new BatchNarrativeMode(
+                    "small_minus_ok",
+                    "один небольшой минус или тревога, затем почему итог всё равно устроил",
+                    "1 минус без обвинений + 1 компенсирующий результат",
+                    "medium: отзыв не должен звучать идеально, но и не должен выдумывать конфликт",
+                    "не придумывай претензию к срокам, цене или сотрудникам; используй только мягкое впечатление"
+            ),
+            new BatchNarrativeMode(
+                    "one_detail_only",
+                    "весь отзыв вокруг одной заметной детали, без пересказа всей услуги",
+                    "ровно 1 главная деталь",
+                    "medium: выбери один нюанс experienceFocus и не раскрывай остальные",
+                    "запрещена цепочка этапов; только одна деталь и вывод"
+            ),
+            new BatchNarrativeMode(
+                    "specific_object_focus",
+                    "фокус на одном объекте, узле, товаре, сценарии или участке работы",
+                    "1 предмет + 1 наблюдение по нему",
+                    "medium: не распыляйся на всю услугу, держи один предмет в центре",
+                    "не перечисляй соседние темы; не добавляй неподтвержденные варианты"
+            ),
+            new BatchNarrativeMode(
+                    "practical_result",
+                    "сразу результат, потом коротко почему это было важно",
+                    "1-2 детали результата",
+                    "medium: фокус на результате, а не на ходе работ",
+                    "не начинай с причины; не перечисляй все согласования"
+            ),
+            new BatchNarrativeMode(
+                    "before_after",
+                    "контраст до и после: что мешало до обращения и что изменилось",
+                    "1 проблема до + 1 изменение после",
+                    "medium: итог должен быть конкретнее общей похвалы",
+                    "не добавляй длинную середину процесса; держи пару 'было/стало'"
+            ),
+            new BatchNarrativeMode(
+                    "expectation_vs_reality",
+                    "ожидание против реальности: чего опасались и что оказалось иначе",
+                    "1 ожидание + 1 реальный итог",
+                    "medium: раскрывай через разницу между предположением клиента и опытом",
+                    "не делай текст рекламным; избегай абсолютов вроде 'идеально' и 'лучше всех'"
+            ),
+            new BatchNarrativeMode(
+                    "question_answer",
+                    "отзыв строится вокруг одного вопроса клиента и полученного ответа",
+                    "1 вопрос + 1 ответ/решение",
+                    "medium: хорошо подходит для тем с выбором, диагностикой, правилами или условиями",
+                    "не копируй вопросные формулировки из prompt; перефразируй как живой вопрос"
+            ),
+            new BatchNarrativeMode(
+                    "choice_between_options",
+                    "клиент выбирал между вариантами и понял, какой подходит",
+                    "2 варианта без утверждения неподтвержденного факта + 1 критерий выбора",
+                    "medium: раскрывай критерий выбора, а не только название выбранного варианта",
+                    "если варианты не подтверждены, пиши осторожно: 'сравнивали варианты', без точных утверждений"
+            ),
+            new BatchNarrativeMode(
+                    "practical_tip",
+                    "отзыв с маленьким советом будущему клиенту",
+                    "1 совет + 1 причина",
+                    "medium: совет должен вытекать из опыта, а не звучать как инструкция компании",
+                    "не добавляй правила, цены, гарантии или точные условия, если их нет во входе"
+            ),
+            new BatchNarrativeMode(
+                    "business_like",
+                    "деловой опыт: документы, график, организация или предсказуемость",
+                    "1 организационная деталь + 1 спокойный вывод",
+                    "medium: без эмоций, но не как служебный отчет",
+                    "не выдумывай юридические условия, суммы, договорные пункты или должности"
+            ),
+            new BatchNarrativeMode(
+                    "personal_reason",
+                    "личная причина обращения без лишней драматизации",
+                    "1 личный повод + 1 тематическая деталь",
+                    "medium: причина должна быть бытовой и безопасной, без точных личных фактов",
+                    "не придумывай имена, возраст, диагнозы, семейный состав или сроки"
+            ),
+            new BatchNarrativeMode(
+                    "late_realization",
+                    "клиент не сразу понял ценность услуги, но позже оценил один момент",
+                    "1 момент сомнения + 1 поздний вывод",
+                    "medium: хорошо работает для обучения, ремонта, сложных услуг и праздников",
+                    "не растягивай процесс; не добавляй неподтвержденные последствия"
+            ),
+            new BatchNarrativeMode(
+                    "compact_report",
+                    "короткий отчет без эмоций: задача, действие, результат",
+                    "3 коротких фрагмента в 1-2 предложениях",
+                    "medium: структура отчетная, но без названий полей и служебных ярлыков",
+                    "разрешена сухая последовательность, но без повторения формулы в соседних карточках"
+            ),
+            new BatchNarrativeMode(
+                    "voice_note_style",
+                    "разговорная заметка как голосовое сообщение, с неровным порядком мыслей",
+                    "1-2 детали, допускается разговорная пауза или уточнение",
+                    "medium: естественность важнее идеальной структуры",
+                    "не пиши канцелярски; не делай список согласований"
+            )
     );
 
     private static final List<String> VOICE_VARIANTS = List.of(
@@ -129,6 +340,34 @@ public class AiSingleReviewDraftFactory {
             "Nissan Qashqai", "Mitsubishi Outlander", "Honda CR-V", "Honda Stepwgn",
             "Subaru Forester", "Kia Rio", "Hyundai Solaris", "Lada Vesta", "Volkswagen Polo"
     );
+    private static final List<String> AUTO_CHASSIS_TERMS = List.of(
+            "ходов", "подвес", "стук", "скрип", "неровност", "рулев", "шаров", "стойк",
+            "втулк", "сайлент", "ступич", "ступиц", "опорн", "амортиз"
+    );
+    private static final List<String> AUTO_ELECTRIC_TERMS = List.of(
+            "стартер", "генератор", "аккумулятор", "клемм", "масса кузова", "реле стартера",
+            "щетк генератор", "щетки генератор", "запуск", "завод"
+    );
+    private static final List<String> AUTO_ENGINE_TERMS = List.of(
+            "двигател", "гбц", "дефектов", "прокладк", "грм", "свеч", "катуш", "помпа",
+            "термостат", "мотор"
+    );
+    private static final Map<String, List<String>> AUTO_MODEL_ALIASES = Map.ofEntries(
+            Map.entry("Mazda MPV", List.of("Mazda MPV", "Мазда MPV", "Мазда МПВ", "MPV", "МПВ")),
+            Map.entry("Toyota Corolla", List.of("Toyota Corolla", "Тойота Королла", "Королла")),
+            Map.entry("Toyota Camry", List.of("Toyota Camry", "Тойота Камри", "Камри")),
+            Map.entry("Toyota RAV4", List.of("Toyota RAV4", "Тойота Рав4", "Рав4", "RAV4")),
+            Map.entry("Nissan X-Trail", List.of("Nissan X-Trail", "Ниссан X-Trail", "Ниссан Икстрейл", "Икстрейл", "X-Trail")),
+            Map.entry("Nissan Qashqai", List.of("Nissan Qashqai", "Ниссан Кашкай", "Кашкай")),
+            Map.entry("Mitsubishi Outlander", List.of("Mitsubishi Outlander", "Митсубиси Аутлендер", "Аутлендер")),
+            Map.entry("Honda CR-V", List.of("Honda CR-V", "Хонда CR-V", "Хонда СРВ", "CR-V", "СРВ")),
+            Map.entry("Honda Stepwgn", List.of("Honda Stepwgn", "Хонда Stepwgn", "Хонда Степвагон", "Степвагон")),
+            Map.entry("Subaru Forester", List.of("Subaru Forester", "Субару Форестер", "Форестер")),
+            Map.entry("Kia Rio", List.of("Kia Rio", "Киа Рио", "Rio", "Рио")),
+            Map.entry("Hyundai Solaris", List.of("Hyundai Solaris", "Хендай Солярис", "Хёндэ Солярис", "Солярис")),
+            Map.entry("Lada Vesta", List.of("Lada Vesta", "Лада Веста", "Веста")),
+            Map.entry("Volkswagen Polo", List.of("Volkswagen Polo", "Фольксваген Поло", "VW Polo", "Поло"))
+    );
 
     private static final List<String> SUSPENSION_TEMPLATE_DETAILS = List.of(
             "стойки стабилизатора", "втулки стабилизатора", "шаровая опора",
@@ -173,11 +412,24 @@ public class AiSingleReviewDraftFactory {
             List<String> fallbackFacts
     ) {
         if (!openAiProvider.isAvailable()) {
+            log.info(
+                    "OPENAI_SINGLE_SKIPPED reason=openai_unavailable companyId={} reviewId={} idea=\"{}\"",
+                    companyId,
+                    request == null ? null : request.targetReviewId(),
+                    shortLogText(selectedIdea)
+            );
             return Optional.empty();
         }
 
         PromptVariant variant = PromptVariant.random(request);
         try {
+            log.info(
+                    "OPENAI_SINGLE_REQUEST companyId={} reviewId={} profile={} idea=\"{}\"",
+                    companyId,
+                    request.targetReviewId(),
+                    request.contentPackProfile(),
+                    shortLogText(selectedIdea)
+            );
             AiResponse response = openAiProvider.generateSingleReviewDraft(new AiRequest(
                     "reputation-single-review-draft",
                     draftSystemPrompt(),
@@ -189,6 +441,13 @@ public class AiSingleReviewDraftFactory {
                 if (!response.errorMessage().isBlank()) {
                     log.warn("AI single review draft generation returned no text: {}", response.errorMessage());
                 }
+                log.info(
+                        "OPENAI_SINGLE_REJECTED reason=empty_response companyId={} reviewId={} provider={} error=\"{}\"",
+                        companyId,
+                        request.targetReviewId(),
+                        response.provider(),
+                        shortLogText(response.errorMessage())
+                );
                 return Optional.empty();
             }
             ReputationSingleReviewDraftResult result = parseResult(
@@ -204,6 +463,13 @@ public class AiSingleReviewDraftFactory {
                     fallbackFacts
             );
             if (result.draft().isBlank()) {
+                log.info(
+                        "OPENAI_SINGLE_REJECTED reason=empty_parsed_draft companyId={} reviewId={} provider={} model={}",
+                        companyId,
+                        request.targetReviewId(),
+                        result.provider(),
+                        result.model()
+                );
                 return Optional.empty();
             }
             ReputationSingleReviewDraftResult polished = polishResult(companyId, deepReportJobId, contentPackJobId, pack, request, selectedIdea, fallbackFacts, result, variant)
@@ -212,9 +478,23 @@ public class AiSingleReviewDraftFactory {
                 return repairResult(companyId, deepReportJobId, contentPackJobId, pack, request, selectedIdea, fallbackFacts, polished, variant)
                         .or(() -> Optional.of(polished));
             }
+            log.info(
+                    "OPENAI_SINGLE_ACCEPTED companyId={} reviewId={} provider={} model={} draftChars={}",
+                    companyId,
+                    request.targetReviewId(),
+                    polished.provider(),
+                    polished.model(),
+                    polished.draft().length()
+            );
             return Optional.of(polished);
         } catch (Exception exception) {
             log.warn("AI single review draft generation failed: {}", exception.getMessage());
+            log.info(
+                    "OPENAI_SINGLE_REJECTED reason=exception companyId={} reviewId={} error=\"{}\"",
+                    companyId,
+                    request == null ? null : request.targetReviewId(),
+                    shortLogText(exception.getMessage())
+            );
             return Optional.empty();
         }
     }
@@ -228,14 +508,27 @@ public class AiSingleReviewDraftFactory {
             ReviewGenerationBrief brief,
             List<ReviewGenerationSlot> slots
     ) {
-        if (!openAiProvider.isAvailable() || slots == null || slots.isEmpty()) {
+        if (!openAiProvider.isAvailable()) {
+            log.info(
+                    "OPENAI_BATCH_SKIPPED reason=openai_unavailable companyId={} slots={} slotIds={}",
+                    companyId,
+                    slots == null ? 0 : slots.size(),
+                    slotIds(slots)
+            );
+            return Optional.empty();
+        }
+        if (slots == null || slots.isEmpty()) {
+            log.info("OPENAI_BATCH_SKIPPED reason=no_slots companyId={}", companyId);
             return Optional.empty();
         }
 
         PromptVariant variant = PromptVariant.random(singleRequest(request, ""));
         try {
+            BatchWritingGuide writingGuide = BatchWritingGuide.empty();
+            String variationNonce = Long.toUnsignedString(ThreadLocalRandom.current().nextLong());
+            Map<Long, BatchNarrativeMode> narrativeModes = batchNarrativeModes(slots, variationNonce);
             String systemPrompt = batchSystemPrompt();
-            String userPrompt = batchUserPrompt(request, brief, slots, variant);
+            String userPrompt = batchUserPrompt(request, brief, slots, variant, writingGuide, variationNonce, narrativeModes);
             log.info("""
                     AI batch review draft prompt
                     ===== SYSTEM =====
@@ -244,6 +537,15 @@ public class AiSingleReviewDraftFactory {
                     {}
                     ===== END PROMPT =====
                     """, systemPrompt, userPrompt);
+            log.info(
+                    "OPENAI_BATCH_REQUEST companyId={} slots={} slotIds={} profile={} writingGuide={} variationNonce={}",
+                    companyId,
+                    slots.size(),
+                    slotIds(slots),
+                    request.contentPackProfile(),
+                    !writingGuide.isEmpty(),
+                    variationNonce
+            );
             AiResponse response = openAiProvider.generateBatchReviewDraft(new AiRequest(
                     "reputation-batch-review-drafts",
                     systemPrompt,
@@ -254,6 +556,24 @@ public class AiSingleReviewDraftFactory {
             if (response.text().isBlank()) {
                 if (!response.errorMessage().isBlank()) {
                     log.warn("AI batch review draft generation returned no text: {}", response.errorMessage());
+                }
+                log.info(
+                        "OPENAI_BATCH_REJECTED reason=empty_response companyId={} provider={} slots={} error=\"{}\"",
+                        companyId,
+                        response.provider(),
+                        slots.size(),
+                        shortLogText(response.errorMessage())
+                );
+                if (!response.errorMessage().isBlank()) {
+                    return Optional.of(emptyOpenAiBatchResult(
+                            companyId,
+                            deepReportJobId,
+                            contentPackJobId,
+                            pack,
+                            response.provider(),
+                            modelLabel(request.contentPackProfile()),
+                            response.errorMessage()
+                    ));
                 }
                 return Optional.empty();
             }
@@ -266,10 +586,65 @@ public class AiSingleReviewDraftFactory {
                     modelLabel(request.contentPackProfile()),
                     response.text()
             );
-            result = keepOnlyUsableBatchDrafts(result, slots);
+            int parsedDrafts = result.drafts().size();
+            result = keepOnlyUsableBatchDrafts(result, slots, brief, narrativeModes);
+            log.info(
+                    "OPENAI_BATCH_RESULT companyId={} provider={} model={} parsedDrafts={} acceptedDrafts={} droppedDrafts={} acceptedIds={}",
+                    companyId,
+                    result.provider(),
+                    result.model(),
+                    parsedDrafts,
+                    result.drafts().size(),
+                    Math.max(0, parsedDrafts - result.drafts().size()),
+                    result.drafts().stream().map(ReputationBatchReviewDraftItem::reviewId).toList()
+            );
+            if (result.drafts().isEmpty()) {
+                log.info(
+                        "OPENAI_BATCH_REJECTED reason=all_drafts_filtered companyId={} parsedDrafts={} slotIds={}",
+                        companyId,
+                        parsedDrafts,
+                        slotIds(slots)
+                );
+            }
             return result.drafts().isEmpty() ? Optional.empty() : Optional.of(result);
         } catch (Exception exception) {
             log.warn("AI batch review draft generation failed: {}", exception.getMessage());
+            log.info(
+                    "OPENAI_BATCH_REJECTED reason=exception companyId={} slots={} error=\"{}\"",
+                    companyId,
+                    slots == null ? 0 : slots.size(),
+                    shortLogText(exception.getMessage())
+            );
+            return Optional.empty();
+        }
+    }
+
+    private Optional<BatchWritingGuide> createBatchWritingGuide(
+            ReputationBatchReviewDraftRequest request,
+            ReviewGenerationBrief brief,
+            List<ReviewGenerationSlot> slots
+    ) {
+        if (!openAiProvider.isAvailable() || brief == null || slots == null || slots.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            AiResponse response = openAiProvider.generateBatchReviewWritingGuide(new AiRequest(
+                    "reputation-batch-review-writing-guide",
+                    batchWritingGuideSystemPrompt(),
+                    batchWritingGuideUserPrompt(brief, slots),
+                    0.25,
+                    true
+            ), request.contentPackProfile());
+            if (response == null || response.text().isBlank()) {
+                if (response != null && !response.errorMessage().isBlank()) {
+                    log.warn("AI batch review writing guide returned no text: {}", response.errorMessage());
+                }
+                return Optional.empty();
+            }
+            BatchWritingGuide guide = parseBatchWritingGuide(response.text(), slots);
+            return guide.isEmpty() ? Optional.empty() : Optional.of(guide);
+        } catch (Exception exception) {
+            log.warn("AI batch review writing guide failed: {}", exception.getMessage());
             return Optional.empty();
         }
     }
@@ -360,7 +735,8 @@ public class AiSingleReviewDraftFactory {
         return """
                 Ты пишешь черновик отзыва от лица обычного клиента.
                 Используй тему отзыва, выжимку по компании и шаблонные детали из specificity.
-                Подтверждённые факты бери из companyDigest и orderContext. Шаблонные марки, товары, услуги, авто и запчасти можно использовать из templateCandidateDetails или из web search как кандидаты для выбора клиентом.
+                Подтверждённые факты бери из companyDigest и orderContext. Шаблонные товары, услуги, автоузлы и запчасти можно использовать из templateCandidateDetails или из web search как кандидаты для выбора клиентом.
+                Марку или модель автомобиля используй только если она явно есть во входных данных. Если модели нет, пиши нейтрально: машина, авто, автомобиль.
                 Не придумывай подтверждённые цены, имена мастеров, адреса, сроки и гарантии. Шаблонные детали не выдавай за подтверждённый факт.
                 Название компании - это только справочный контекст. Не используй название компании в draft. Город, район или адрес упоминай только если это часть реального клиентского опыта по дороге/локации.
                 Можно использовать web search для изучения речевых паттернов и типовых сочетаний товара/услуги/авто/запчасти по похожей нише. Не копируй чужие отзывы дословно.
@@ -375,7 +751,8 @@ public class AiSingleReviewDraftFactory {
         return """
                 Ты редактор пользовательских отзывов.
                 Перепиши черновик так, чтобы он звучал естественнее и отличался структурой от типового текста.
-                Сохрани смысл, тему и подтверждённые факты. Можно добавлять шаблонные товары/услуги/авто/запчасти только из specificity.templateCandidateDetails и помечать их в safetyNotes для проверки клиентом.
+                Сохрани смысл, тему и подтверждённые факты. Можно добавлять шаблонные товары/услуги/автоузлы/запчасти только из specificity.templateCandidateDetails и помечать их в safetyNotes для проверки клиентом.
+                Марку или модель автомобиля не добавляй, если её нет во входных данных.
                 Убери канцелярит, рекламность, название компании, лишний адрес и одинаковые связки.
                 Если черновик построен как "причина - проверили - объяснили - итог", перестрой порядок.
                 Верни только валидный JSON без markdown.
@@ -392,8 +769,14 @@ public class AiSingleReviewDraftFactory {
                 Подтверждённые факты бери только из reviewGenerationBrief и конкретного reviewSlot.
                 Используй reviewGenerationBrief.businessType и allowedScenarioTypes как мягкую отраслевую подсказку. Если theme/mustCover/mayCover задают конкретную ситуацию, следуй им.
                 У каждой карточки есть theme, mustCover, mayCover и иногда exampleDetails. Draft этой карточки должен естественно покрыть тему, 1-3 детали из mustCover/mayCover и минимум одну деталь из exampleDetails, если этот список есть.
-                exampleDetails — шаблонные детали для конкретики, а не подтверждённые факты клиента. Если там есть марка/модель и деталь/запчасть, постарайся использовать обе, если это звучит естественно.
+                Если у карточки есть experienceFocus, это обязательный фокус истории. Не своди такую идею к названию услуги/товара: раскрой минимум один нюанс из experienceFocus как клиентский опыт, но не копируй формулировку experienceFocus дословно.
+                Если theme или experienceFocus перечисляет варианты через "или" (фотоовал/фото на стекле, стартер/генератор и т.п.), клиент в отзыве должен выглядеть так, будто знает, что именно заказывал: выбери один уместный вариант для draft и добавь выбранный вариант в clientMustConfirm и safetyNotes, если он не подтверждён отдельно.
+                exampleDetails — шаблонные детали для конкретики, а не подтверждённые факты клиента. Для автосервиса это могут быть узлы, работы, симптомы и запчасти. Марку или модель автомобиля не придумывай: используй её только если она уже есть в reviewSlot без previousDraftToAvoid.
                 Если в mustCover/mayCover есть конкретное название квеста, товара, пакета, услуги, длительность или стоимость, используй это в draft естественно хотя бы в части карточек.
+                Если во входе есть конкретная цена из reviewGenerationBrief.prices или mustCover/mayCover, это входной факт: можно использовать одну подходящую цену в draft, но добавь её в clientMustConfirm/safetyNotes как деталь для проверки перед публикацией.
+                Не используй topic/theme/mustCover как ярлыки задания: запрещены фразы вроде "обсудили задачу: конкретный филиал", "уточнили хоррор-квесты", "обозначили тему".
+                openingInstruction задаёт не только первую фразу, а вход всей мини-истории: первое предложение открывает ситуацию, следующие предложения должны связно развить этот вход через тему, одну деталь и итог.
+                Проверяй связность синтаксиса и разговорную манеру: не склеивай разные подсказки через двоеточия, не делай список полей, не обрывай вступление отдельной строкой.
                 Поля reviewGenerationBrief, reviewSlots, theme, mustCover, mayCover, exampleDetails, clientMustConfirm, openingInstruction, lengthInstruction и toneInstruction — это внутренние подсказки. В draft должен попасть только клиентский опыт.
                 Ответ должен быть одним JSON-объектом строго такой формы: {"drafts":[{"reviewId":число,"draft":"текст","sourceFacts":["использованные факты"],"clientMustConfirm":["что проверить клиенту"],"safetyNotes":["что проверить"]}],"safetyNotes":["общие предупреждения"]}.
                 Не добавляй поля вне этой схемы.
@@ -401,11 +784,24 @@ public class AiSingleReviewDraftFactory {
                 Не используй в draft служебные фразы и ярлыки задания: "По теме", "Отзыв для карточки", "товар/услуга:", "категория:", "цена:", "нужно написать", "Главный вывод", "Главный якорь", "акцент из отчёта".
                 Не копируй в draft аналитические заголовки отчёта: "Смешанный бизнес", "Операционный профиль", "Клиентский путь", "Репутационный вывод", "в отзывах упоминается".
                 Используй смысл подсказок естественно: как клиентский опыт, а не как перечисление полей.
-                Шаблонные марки, товары, услуги, авто и запчасти используй из exampleDetails/mustCover/mayCover; если это личная деталь клиента, добавь её в clientMustConfirm и safetyNotes.
+                Шаблонные товары, услуги, автоузлы и запчасти используй из exampleDetails/mustCover/mayCover; если это личная деталь клиента, добавь её в clientMustConfirm и safetyNotes.
+                Не выдумывай марку или модель авто. Если модель не дана явно, пиши "машина", "авто" или "автомобиль".
                 Можно добавить одну уместную бытовую деталь для живости: торт, пицца, одноразовая посуда, пакет с угощениями, дорога после работы, ожидание в зоне, если это совместимо с темой. Такие детали не являются подтверждёнными фактами: добавь их в clientMustConfirm и safetyNotes.
                 Не придумывай имена, возраст, количество участников, точные цены, сроки, гарантии, медицинские результаты и сотрудников. Если такой точной детали нет во входе, не используй её.
                 Не копируй previousDraft и не повторяй слабые общие фразы в каждом отзыве. Не начинай два текста одинаковыми словами.
                 Верни только валидный JSON без markdown.
+                """.stripIndent().trim();
+    }
+
+    private String batchWritingGuideSystemPrompt() {
+        return """
+                Ты готовишь справочник для автора отзывов, а не сами отзывы.
+                Можно использовать web search только для типовой лексики категории, речевых паттернов, терминов, критериев выбора и способов раскрытия тем.
+                Не ищи и не добавляй факты о конкретной компании, конкурентах, ценах, адресах, сотрудниках, гарантиях или обещаниях.
+                Не называй бренды конкурентов и не сравнивай компании.
+                Если тема про автосервис, не назначай марки и модели авто: можно объяснять только узлы, симптомы, работы и запчасти.
+                Если тема содержит варианты через "или", в draft выбери один конкретный вариант, а неподтверждённость выбранного варианта вынеси в clientMustConfirm/safetyNotes.
+                Пиши коротко, как подсказки для дальнейшей генерации. Верни только валидный JSON по схеме.
                 """.stripIndent().trim();
     }
 
@@ -433,24 +829,38 @@ public class AiSingleReviewDraftFactory {
             ReputationBatchReviewDraftRequest request,
             ReviewGenerationBrief brief,
             List<ReviewGenerationSlot> slots,
-            PromptVariant variant
+            PromptVariant variant,
+            BatchWritingGuide writingGuide,
+            String variationNonce,
+            Map<Long, BatchNarrativeMode> narrativeModes
     ) throws Exception {
         List<Map<String, Object>> items = new ArrayList<>();
+        BatchExampleDetailsPicker exampleDetailsPicker = new BatchExampleDetailsPicker(variationNonce);
         for (ReviewGenerationSlot slot : slots) {
+            BatchNarrativeMode narrativeMode = narrativeModeForSlot(narrativeModes, slot);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("reviewId", slot.reviewId());
             item.put("theme", slot.theme());
             item.put("mustCover", conciseSlotFacts(slot.mustUse(), 4, 105));
             item.put("mayCover", conciseSlotFacts(slot.mayUse(), 7, 105));
-            List<String> exampleDetails = batchExampleDetails(brief, slot);
+            List<String> experienceFocus = ideaExperienceFocus(slot.theme());
+            if (!experienceFocus.isEmpty()) {
+                item.put("experienceFocus", experienceFocus);
+            }
+            List<String> exampleDetails = batchExampleDetails(brief, slot, exampleDetailsPicker);
             if (!exampleDetails.isEmpty()) {
                 item.put("exampleDetails", exampleDetails);
             }
             item.put("clientMustConfirm", conciseSlotFacts(slot.clientMustConfirm(), 6, 120));
             item.put("previousDraftToAvoid", limit(cleanPreviousDraft(slot.previousDraft()), 700));
             item.put("openingInstruction", slot.structure());
-            item.put("lengthInstruction", slot.length());
+            item.put("lengthInstruction", lengthInstructionForMode(slot, narrativeMode));
             item.put("toneInstruction", slot.tone());
+            item.put("narrativeMode", narrativeMode.key());
+            item.put("narrativeInstruction", narrativeMode.instruction());
+            item.put("detailBudget", narrativeMode.detailBudget());
+            item.put("requiredDepth", narrativeMode.requiredDepth());
+            item.put("processVerbPolicy", narrativeMode.processVerbPolicy());
             items.add(item);
         }
 
@@ -472,24 +882,43 @@ public class AiSingleReviewDraftFactory {
         briefPayload.put("interestingFacts", brief.interestingFacts());
         briefPayload.put("allowedScenarioTypes", brief.allowedScenarioTypes());
         payload.put("reviewGenerationBrief", briefPayload);
+        if (writingGuide != null && !writingGuide.isEmpty()) {
+            payload.put("writingGuide", writingGuidePayload(writingGuide));
+        }
         payload.put("batchSelectors", Map.of(
                 "style", request.style(),
                 "authorType", request.authorType(),
                 "emojiMode", emojiInstruction(request.emojiMode()),
                 "length", "смешанная: часть коротких, часть средних, без одинакового размера",
+                "shortReviewCadence", "каждая 2-3 карточка должна быть короткой: 1 предложение или максимум 2 короткие фразы",
                 "globalStructure", variant.structure(),
-                "globalVoice", variant.voice()
+                "globalVoice", variant.voice(),
+                "variationNonce", variationNonce,
+                "variationInstruction", "при повторной генерации меняй шаблонные товары, детали, narrativeMode и первый ход относительно previousDraftToAvoid"
         ));
         payload.put("reviewSlots", items);
         payload.put("batchRules", List.of(
                 "Внутри каждого drafts[] обязательно верни reviewId, draft, sourceFacts, clientMustConfirm и safetyNotes.",
                 "Верни draft для каждого reviewId из reviewSlots, не пропускай карточки.",
-                "Каждый draft 1-6 предложений; длины должны различаться.",
-                "У соседних отзывов не должно быть одинакового начала, одинаковой концовки или одинакового набора общих фраз.",
-                "В каждом draft покрой смысл slot.theme и 1-3 детали из slot.mustCover/mayCover.",
-                "Если slot.exampleDetails не пустой, обязательно используй минимум одну деталь оттуда в draft; для автосервиса желательно взять и модель авто, и одну деталь/запчасть.",
+                "narrativeMode обязателен для исполнения: разные карточки должны звучать как разные жанры отзывов, а не как один шаблон с разными фактами.",
+                "Не нормализуй все drafts к формуле 'причина -> показали -> согласовали -> объяснили -> итог'. Такая формула допустима максимум для одной карточки в пачке.",
+                "Длина и подробность определяются прежде всего detailBudget/requiredDepth/processVerbPolicy конкретного slot; lengthInstruction вторичен.",
+                "Для режимов с requiredDepth=light можно писать очень коротко: достаточно одного сигнала темы и живого впечатления, без полного раскрытия процесса.",
+                "Для режимов с requiredDepth=medium/full раскрывай тему глубже, но каждый раз другой композицией и без одинаковой цепочки действий.",
+                "У соседних отзывов не должно быть одинакового начала, одинаковой концовки, одинаковой формулы или одинакового набора глаголов процесса.",
+                "В каждом draft покрой смысл slot.theme и совместимую деталь из slot.mustCover/mayCover, но не обязан перечислять всё, если narrativeMode просит короткий отзыв.",
+                "Если slot.experienceFocus не пустой, в full/medium режимах раскрой хотя бы один его нюанс; в light-режимах достаточно намека или короткого результата. Не копируй вопросные формулировки вроде 'было ли', 'присылали ли', 'как согласовали'.",
+                "Если есть writingGuide, используй его только как подсказку по языку ниши, раскрытию темы и разнообразию. Не считай writingGuide подтверждёнными фактами компании или клиента.",
+                "Не копируй writingGuide дословно в draft; превращай подсказки в естественный опыт клиента.",
+                "Если slot.theme или slot.experienceFocus даёт список вариантов через 'или', в draft выбери один конкретный вариант, чтобы клиент не выглядел неуверенным в собственном заказе; выбранный вариант добавь в clientMustConfirm и safetyNotes, если он не подтверждён отдельно.",
+                "Если slot.exampleDetails не пустой, обязательно используй минимум одну деталь оттуда в draft; для автосервиса бери узел, работу, симптом или запчасть, но не придумывай модель авто.",
+                "Если previousDraftToAvoid уже содержит марку авто, товар или конкретную деталь из exampleDetails, не повторяй её в draft этой карточки.",
+                "Для автосервиса марку или модель авто используй только если она явно есть в slot.theme/service/product/extraDetail/mustCover/mayCover.",
+                "Не пиши мета-фразы по структуре задания: 'обсудили задачу: ...', 'обозначили тему', 'уточнили хоррор-квесты/детские квесты'. Это не клиентский опыт.",
+                "Если mustCover/mayCover содержит длинный список через запятые или обрезанный фрагмент, не копируй список в draft; выбери только совместимую конкретную деталь или вынеси её в clientMustConfirm/safetyNotes.",
                 "Если взял деталь из exampleDetails, добавь её в clientMustConfirm и safetyNotes.",
                 "Если в slot.mustCover/mayCover есть название товара, квеста, пакета, длительность или цена, не обходи это общей фразой; используй конкретику естественно.",
+                "Если используешь точную цену из входа, добавь её в clientMustConfirm и safetyNotes: цена должна быть актуальна на момент публикации.",
                 "Можно добавить одну бытовую деталь для естественности: торт, пицца, одноразовая посуда, угощения, дорога после работы, ожидание, если она совместима с темой; добавь её в clientMustConfirm и safetyNotes.",
                 "Не выдумывай точные имена, возраст, количество участников, цены, сроки, гарантии и сотрудников, если их нет во входе.",
                 "businessType и allowedScenarioTypes только помогают выбрать лексику; тема карточки, mustCover и mayCover важнее.",
@@ -498,10 +927,133 @@ public class AiSingleReviewDraftFactory {
                 "Не выводи в draft reviewId, названия полей, цену как поле, категорию как поле или формулировки задания.",
                 "Не используй аналитические слова из отчёта: Смешанный бизнес, Операционный профиль, Клиентский путь, Репутационный вывод, позиционировать.",
                 "Выполни openingInstruction, lengthInstruction и toneInstruction для каждой карточки.",
+                "openingInstruction должен быть раскрыт всем текстом: первая фраза задаёт вход, следующие фразы продолжают тот же смысл, а не перескакивают к другой служебной подсказке.",
+                "Перед финальным JSON мысленно проверь сочетание фраз, синтаксис и разговорную манеру: отзыв должен звучать как единая история, а не набор пунктов.",
                 "sourceFacts должны быть короткими использованными фактами, а не служебными полями. Шаблонные детали из exampleDetails помечай как требующие проверки."
         ));
         return "Напиши разные отзывы пачкой по чистой выжимке и слотам. Ответ JSON строго по схеме из system prompt.\n"
                 + objectMapper.writeValueAsString(payload);
+    }
+
+    private String batchWritingGuideUserPrompt(
+            ReviewGenerationBrief brief,
+            List<ReviewGenerationSlot> slots
+    ) throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("businessType", brief.businessType());
+        payload.put("category", brief.category());
+        payload.put("city", brief.city());
+        payload.put("services", conciseSlotFacts(brief.services(), 14, 90));
+        payload.put("products", conciseSlotFacts(brief.products(), 14, 90));
+        payload.put("reviewIdeas", conciseSlotFacts(brief.reviewIdeas(), 30, 130));
+        payload.put("allowedScenarioTypes", conciseSlotFacts(brief.allowedScenarioTypes(), 12, 80));
+
+        List<Map<String, Object>> slotPayloads = new ArrayList<>();
+        for (ReviewGenerationSlot slot : slots) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("reviewId", slot.reviewId());
+            item.put("theme", slot.theme());
+            item.put("mustCover", conciseSlotFacts(slot.mustUse(), 4, 100));
+            item.put("mayCover", conciseSlotFacts(slot.mayUse(), 6, 100));
+            List<String> experienceFocus = ideaExperienceFocus(slot.theme());
+            if (!experienceFocus.isEmpty()) {
+                item.put("experienceFocus", experienceFocus);
+            }
+            slotPayloads.add(item);
+        }
+        payload.put("reviewSlots", slotPayloads);
+        payload.put("task", List.of(
+                "Расширь темы как клиентские истории: какие сомнения, критерии выбора, процесс и итог можно раскрыть.",
+                "Дай типовую лексику категории и термины, но без фактов о конкретной компании.",
+                "Подскажи, как разнообразить пачку, чтобы отзывы не были одним шаблоном.",
+                "Для каждого reviewId верни angles, decisionCriteria, naturalDetails и avoidClaims."
+        ));
+        return "Подготовь безопасный справочник для пачковой генерации отзывов. Не пиши сами отзывы.\n"
+                + objectMapper.writeValueAsString(payload);
+    }
+
+    private Map<String, Object> writingGuidePayload(BatchWritingGuide guide) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("categoryLanguage", guide.categoryLanguage());
+        payload.put("termHints", guide.termHints());
+        payload.put("diversityWarnings", guide.diversityWarnings());
+        payload.put("safetyNotes", guide.safetyNotes());
+        payload.put("ideaExpansion", guide.ideaExpansion().stream()
+                .map(item -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("reviewId", item.reviewId());
+                    map.put("angles", item.angles());
+                    map.put("decisionCriteria", item.decisionCriteria());
+                    map.put("naturalDetails", item.naturalDetails());
+                    map.put("avoidClaims", item.avoidClaims());
+                    return map;
+                })
+                .toList());
+        return payload;
+    }
+
+    private Map<Long, BatchNarrativeMode> batchNarrativeModes(List<ReviewGenerationSlot> slots, String variationNonce) {
+        Map<Long, BatchNarrativeMode> result = new LinkedHashMap<>();
+        if (slots == null || slots.isEmpty()) {
+            return result;
+        }
+        List<BatchNarrativeMode> shortModes = shortNarrativeModes();
+        List<BatchNarrativeMode> storyModes = storyNarrativeModes();
+        int offset = Math.floorMod((variationNonce == null ? "" : variationNonce).hashCode(), BATCH_NARRATIVE_MODES.size());
+        int shortIndex = 0;
+        int storyIndex = 0;
+        for (int index = 0; index < slots.size(); index++) {
+            ReviewGenerationSlot slot = slots.get(index);
+            if (slot.reviewId() == null) {
+                continue;
+            }
+            if (isCadenceShortSlot(index, slots.size())) {
+                result.put(slot.reviewId(), shortModes.get(Math.floorMod(offset + shortIndex, shortModes.size())));
+                shortIndex++;
+            } else {
+                result.put(slot.reviewId(), storyModes.get(Math.floorMod(offset + storyIndex, storyModes.size())));
+                storyIndex++;
+            }
+        }
+        return result;
+    }
+
+    private List<BatchNarrativeMode> shortNarrativeModes() {
+        return BATCH_NARRATIVE_MODES.stream()
+                .filter(this::isLightNarrativeMode)
+                .toList();
+    }
+
+    private List<BatchNarrativeMode> storyNarrativeModes() {
+        List<BatchNarrativeMode> result = BATCH_NARRATIVE_MODES.stream()
+                .filter(mode -> !isLightNarrativeMode(mode))
+                .toList();
+        return result.isEmpty() ? BATCH_NARRATIVE_MODES : result;
+    }
+
+    private boolean isCadenceShortSlot(int zeroBasedIndex, int totalSlots) {
+        return totalSlots > 1 && zeroBasedIndex % 3 == 1;
+    }
+
+    private String lengthInstructionForMode(ReviewGenerationSlot slot, BatchNarrativeMode mode) {
+        if (!isLightNarrativeMode(mode)) {
+            return slot == null ? "" : slot.length();
+        }
+        return "1 предложение. Можно максимум 2 короткие фразы, как обычный короткий отзыв: "
+                + "«брал/заказывал/ходил ..., всё нормально, спасибо», но с конкретикой из theme/mustCover.";
+    }
+
+    private BatchNarrativeMode narrativeModeForSlot(
+            Map<Long, BatchNarrativeMode> narrativeModes,
+            ReviewGenerationSlot slot
+    ) {
+        if (slot != null && narrativeModes != null && slot.reviewId() != null) {
+            BatchNarrativeMode mode = narrativeModes.get(slot.reviewId());
+            if (mode != null) {
+                return mode;
+            }
+        }
+        return BATCH_NARRATIVE_MODES.getFirst();
     }
 
     private String polishUserPrompt(
@@ -525,7 +1077,8 @@ public class AiSingleReviewDraftFactory {
                 "Не начинай с 'Заехал', 'Обратился', 'В машине появилась', если это уже звучит шаблонно.",
                 "commonPhrasesCanUseSparingly из specificity можно использовать, но не делай их основой каждого отзыва.",
                 "Сохрани или добавь хотя бы одну конкретную деталь из availableSpecificDetails или templateCandidateDetails.",
-                "Если добавляешь шаблонную марку, товар, услугу или запчасть, safetyNotes должен сказать клиенту проверить эту подстановку перед публикацией.",
+                "Если добавляешь шаблонный товар, услугу, автоузел или запчасть, safetyNotes должен сказать клиенту проверить эту подстановку перед публикацией.",
+                "Марку или модель автомобиля не добавляй, если её нет во входных данных.",
                 "Если previousDraftToAvoid не пустой, новый draft должен заметно отличаться от него первым предложением, порядком мыслей и финалом.",
                 "Ответ верни JSON с теми же полями: idea, draft, sourceFacts, safetyNotes."
         ));
@@ -550,9 +1103,10 @@ public class AiSingleReviewDraftFactory {
                 "Перепиши draftToFix заметно иначе, но только на основе usedFacts, orderContext и reviewTopic.",
                 "commonPhrasesCanUseSparingly можно оставить точечно, но не повторяй те же связки, если они уже есть в draftToFix или previousDraftToAvoid.",
                 "Используй 1-2 конкретные детали из availableSpecificDetails или templateCandidateDetails.",
-                "Если точной марки автомобиля или запчасти нет во входных данных, можно поставить шаблонную марку/запчасть из templateCandidateDetails, подходящую теме.",
+                "Если точной марки автомобиля нет во входных данных, не придумывай её; пиши машина, авто или автомобиль.",
+                "Если точной запчасти нет во входных данных, можно поставить шаблонную запчасть из templateCandidateDetails, подходящую теме.",
                 "Не добавляй цены, сроки, гарантии и имена мастеров без входных данных.",
-                "Если используешь шаблонную подстановку, явно добавь в safetyNotes, что клиент должен выбрать/подтвердить эту марку или деталь.",
+                "Если используешь шаблонную подстановку, явно добавь в safetyNotes, что клиент должен выбрать/подтвердить эту деталь.",
                 "Сделай одно предложение с новым углом: бытовая причина, неловкость, сомнение, результат или сравнение с прошлым разом.",
                 "Ответ верни JSON с полями idea, draft, sourceFacts, safetyNotes."
         ));
@@ -686,7 +1240,11 @@ public class AiSingleReviewDraftFactory {
         return conciseSlotFacts(values, limit, textLimit);
     }
 
-    private List<String> batchExampleDetails(ReviewGenerationBrief brief, ReviewGenerationSlot slot) {
+    private List<String> batchExampleDetails(
+            ReviewGenerationBrief brief,
+            ReviewGenerationSlot slot,
+            BatchExampleDetailsPicker picker
+    ) {
         if (brief == null || slot == null || !"auto_service".equals(brief.businessType())) {
             return List.of();
         }
@@ -714,10 +1272,10 @@ public class AiSingleReviewDraftFactory {
         }
 
         List<String> examples = new ArrayList<>();
-        int modelIndex = Math.floorMod(slot.reviewId() == null ? 0 : slot.reviewId().hashCode(), AUTO_MODELS.size());
-        examples.add(AUTO_MODELS.get(modelIndex));
-        details.stream()
-                .distinct()
+        autoModelsFromSourceText(text).stream()
+                .limit(1)
+                .forEach(examples::add);
+        picker.detailsFor(slot, details).stream()
                 .limit(4)
                 .forEach(examples::add);
         return examples.stream()
@@ -738,6 +1296,126 @@ public class AiSingleReviewDraftFactory {
         addAll(values, slot.mustUse());
         addAll(values, slot.mayUse());
         return String.join(" ", values).toLowerCase().replace('ё', 'е');
+    }
+
+    private List<String> autoModelsFromSourceText(String value) {
+        String normalized = normalizedAutoModelText(value);
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        return AUTO_MODELS.stream()
+                .filter(model -> normalized.contains(normalizedAutoModelText(model))
+                        || AUTO_MODEL_ALIASES.getOrDefault(model, List.of()).stream()
+                        .anyMatch(alias -> normalized.contains(normalizedAutoModelText(alias))))
+                .toList();
+    }
+
+    private String normalizedAutoModelText(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("[^\\p{L}\\p{N}]+", "");
+    }
+
+    private List<String> ideaExperienceFocus(String theme) {
+        String clean = theme == null ? "" : theme
+                .replaceAll("[\\u200B-\\u200D\\uFEFF]", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isBlank()) {
+            return List.of();
+        }
+        String focus = "";
+        int colon = firstColonIndex(clean);
+        if (colon > 0 && colon < clean.length() - 1) {
+            focus = clean.substring(colon + 1).trim();
+        } else {
+            java.util.regex.Matcher matcher = Pattern
+                    .compile("(?iu)\\b(?:как|почему|что|какие|какой|какая|когда|насколько|была\\s+ли|были\\s+ли)\\b.+")
+                    .matcher(clean);
+            if (matcher.find() && matcher.start() > 12) {
+                focus = matcher.group().trim();
+            }
+        }
+        if (focus.isBlank()) {
+            return List.of();
+        }
+        focus = focus
+                .replaceAll("^[\\s:;,.!?]+", "")
+                .replaceAll("[.。]+$", "")
+                .replaceAll("(?iu)(^|\\s)как\\s+компания\\s+", "$1как здесь ")
+                .replaceAll("(?iu)(^|\\s)компания\\s+", "$1")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (focus.isBlank()) {
+            return List.of();
+        }
+        String[] parts = focus.split("\\?+|;|\\s*,\\s*(?=(?:как|почему|что|какие|какой|какая|когда|насколько|была\\s+ли|были\\s+ли)(?:\\s|$))");
+        List<String> result = new ArrayList<>();
+        for (String part : parts) {
+            String candidate = part
+                    .replaceAll("^[\\s:;,.!?]+", "")
+                    .replaceAll("[.。]+$", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            candidate = naturalExperienceFocus(candidate);
+            for (String naturalPart : candidate.split("\\s*,\\s*")) {
+                String natural = naturalPart.trim();
+                if (natural.length() >= 8) {
+                    result.add(limit(natural, 130));
+                }
+            }
+        }
+        return result.stream().distinct().limit(3).toList();
+    }
+
+    private String naturalExperienceFocus(String value) {
+        String clean = value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        if (clean.isBlank()) {
+            return "";
+        }
+        clean = clean
+                .replaceAll("(?iu)^офис,\\s*коттедж,\\s*склад\\s+или\\s+несколько\\s+квартир\\s*[—-]\\s*как\\s+соблюдались\\s+сроки\\s+и\\s+смета$", "соблюдение сроков и сметы на крупной площади")
+                .replaceAll("(?iu)(^|\\s)как\\s+прошли\\s+замер(?=$|\\s|,)", "$1процесс замера")
+                .replaceAll("(?iu)(^|\\s)как\\s+быстро\\s+отвечали,\\s*согласовывали\\s+график\\s+и\\s+изменения(?=$|\\s|,)", "$1скорость ответов и согласование графика")
+                .replaceAll("(?iu)(^|\\s)как\\s+(?:здесь\\s+)?объединил[аи]?\\s+перегородки,\\s*стяжку\\s+и\\s+подготовку\\s+стен(?=$|\\s|,)", "$1объединение перегородок, стяжки и подготовки стен")
+                .replaceAll("(?iu)(^|\\s)как\\s+контролировали\\s+практику\\s+и\\s+исправляли\\s+ошибки(?=$|\\s|,)", "$1контроль практики и исправление ошибок")
+                .replaceAll("(?iu)(^|\\s)как\\s+подбирали\\s+форму,\\s*надписи\\s+и\\s+общую\\s+композицию(?=$|\\s|,)", "$1подбор формы, надписей и общей композиции")
+                .replaceAll("(?iu)(^|\\s)какие\\s+недостатки\\s+нашли\\s+и\\s+как\\s+помог\\s+акт/список\\s+замечаний(?=$|\\s|,)", "$1найденные недостатки и список замечаний")
+                .replaceAll("(?iu)(^|\\s)чистота\\s+объекта\\s+и\\s+когда\\s+получилось\\s+продолжить\\s+ремонт(?=$|\\s|,)", "$1чистота объекта и переход к следующему этапу ремонта")
+                .replaceAll("(?iu)(^|\\s)почему\\s+выбрали\\s+этот\\s+вариант\\s+и\\s+как\\s+оценили\\s+качество\\s+изображения(?=$|\\s|,)", "$1выбор варианта и оценка качества изображения")
+                .replaceAll("(?iu)(^|\\s)было\\s+ли\\s+удобно\\s+ждать(?=$|\\s|,)", "$1удобство ожидания")
+                .replaceAll("(?iu)(^|\\s)объясняли\\s+ли\\s+ход\\s+работ(?=$|\\s|,)", "$1объяснение хода работ")
+                .replaceAll("(?iu)(^|\\s)можно\\s+ли\\s+было\\s+задать\\s+вопросы?\\s+мастеру(?=$|\\s|,)", "$1возможность задать вопросы мастеру")
+                .replaceAll("(?iu)(^|\\s)были\\s+ли\\s+детали\\s+в\\s+наличии\\s+или\\s+под\\s+заказ(?=$|\\s|,)", "$1наличие деталей или заказ")
+                .replaceAll("(?iu)(^|\\s)как\\s+согласовали\\s+стоимость\\s+и\\s+сроки(?=$|\\s|,)", "$1согласование стоимости и сроков")
+                .replaceAll("(?iu)(^|\\s)присылали\\s+ли\\s+фото/видео(?=$|\\s|,)", "$1фото или видео по ремонту")
+                .replaceAll("(?iu)(^|\\s)показывали\\s+ли\\s+старую\\s+деталь(?=$|\\s|,)", "$1показ старой детали")
+                .replaceAll("(?iu)(^|\\s)согласовывали\\s+ли\\s+дополнительные\\s+работы(?=$|\\s|,)", "$1согласование дополнительных работ")
+                .replaceAll("(?iu)(^|\\s)была\\s+ли\\s+срочность(?=$|\\s|,)", "$1срочность обращения")
+                .replaceAll("(?iu)(^|\\s)как\\s+быстро\\s+приняли\\s+машину(?=$|\\s|,)", "$1как быстро приняли машину")
+                .replaceAll("(?iu)(^|\\s)как\\s+объяснили\\s+результат(?=$|\\s|,)", "$1объяснение результата")
+                .replaceAll("(?iu)(^|\\s)какие\\s+детали\\s+меняли(?=$|\\s|,)", "$1какие детали меняли")
+                .replaceAll("(?iu)(^|\\s)сколько\\s+заняло\\s+времени(?=$|\\s|,)", "$1сколько заняли работы")
+                .replaceAll("(?iu)(^|\\s)как\\s+изменилась\\s+управляемость(?=$|\\s|,)", "$1как изменилась управляемость")
+                .replaceAll("(?iu)(^|\\s)почему\\s+выбрали\\s+этот\\s+вариант(?=$|\\s|,)", "$1выбор варианта")
+                .replaceAll("(?iu)(^|\\s)как\\s+оценили\\s+качество\\s+изображения(?=$|\\s|,)", "$1оценка качества изображения")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return clean;
+    }
+
+    private int firstColonIndex(String value) {
+        int colon = value.indexOf(':');
+        int fullWidthColon = value.indexOf('：');
+        if (colon < 0) {
+            return fullWidthColon;
+        }
+        if (fullWidthColon < 0) {
+            return colon;
+        }
+        return Math.min(colon, fullWidthColon);
     }
 
     private String conciseSlotFact(String value, int textLimit) {
@@ -879,15 +1557,16 @@ public class AiSingleReviewDraftFactory {
                 "Если в теме есть жизненная ситуация, развивай её, но не превращай отзыв в фантазию без опоры на факты.",
                 "Не пиши одинаковую схему 'заехал - проверили - посоветовали - уехал'. Меняй порядок подачи, первое предложение и финальную мысль.",
                 "commonPhrasesCanUseSparingly из specificity разрешены, но не должны повторяться в каждом отзыве и заменять конкретику.",
-                "Используй хотя бы одну конкретную услугу, товар, симптом, модель авто, узел или запчасть из availableSpecificDetails или templateCandidateDetails.",
-                "Если точной марки машины или детали нет во входных данных, можно использовать шаблонную подстановку из templateCandidateDetails или webStyleMining, но safetyNotes должен сказать клиенту проверить её.",
+                "Используй хотя бы одну конкретную услугу, товар, симптом, автоузел или запчасть из availableSpecificDetails или templateCandidateDetails.",
+                "Марку или модель автомобиля используй только если она явно есть во входных данных; если её нет, пиши нейтрально: машина, авто, автомобиль.",
+                "Если точной детали нет во входных данных, можно использовать шаблонную подстановку из templateCandidateDetails или webStyleMining, но safetyNotes должен сказать клиенту проверить её.",
                 "Цены, сроки, гарантии, имена мастеров и точные адреса не делай шаблонными подстановками.",
                 "Не делай текст идеальным: допустимы простые фразы, короткие вставки вроде 'если честно', 'ну', 'по итогу', но без перебора.",
                 "Используй webStyleMining как источник композиции, живого ритма и типовых шаблонных деталей.",
                 "Если previousDraftToAvoid не пустой, новый draft должен заметно отличаться от него.",
                 "Не называй текст черновиком и не проси клиента что-то дописать.",
                 "sourceFacts верни использованные подтверждённые факты и шаблонные детали. Шаблонные детали помечай как 'Шаблонная деталь для проверки: ...'.",
-                "safetyNotes верни коротко: что клиенту стоит проверить перед публикацией, особенно марки авто, товары, услуги и запчасти из шаблона."
+                "safetyNotes верни коротко: что клиенту стоит проверить перед публикацией, особенно товары, услуги и запчасти из шаблона."
         );
     }
 
@@ -904,7 +1583,7 @@ public class AiSingleReviewDraftFactory {
         payload.put("commonPhrasesCanUseSparingly", COMMON_REVIEW_PHRASES);
         payload.put("missingClientDetails", missingClientDetails(selectedIdea, request.orderContext(), fallbackFacts));
         payload.put("instruction", specificDetails.isEmpty()
-                ? "Если подтверждённых клиентских деталей мало, используй templateCandidateDetails как шаблонные подстановки для выбора клиентом."
+                ? "Если подтверждённых клиентских деталей мало, используй templateCandidateDetails как шаблонные подстановки для выбора клиентом, но не придумывай марку или модель авто."
                 : "В draft нужна видимая конкретика из availableSpecificDetails или templateCandidateDetails. Общие фразы допустимы только как фон.");
         return payload;
     }
@@ -1000,13 +1679,9 @@ public class AiSingleReviewDraftFactory {
         if (details.isEmpty()) {
             details.addAll(List.of("диагностика ходовой", "проверка электрики", "замена масла и фильтров", "подбор запчастей"));
         }
-        List<String> models = AUTO_MODELS.stream()
-                .filter(model -> text.contains(model.toLowerCase().replace('ё', 'е')) || text.matches(".*(марка|модель|авто|машин|автомоб).*"))
+        List<String> models = autoModelsFromSourceText(text).stream()
                 .limit(4)
                 .toList();
-        if (models.isEmpty() && auto) {
-            models = AUTO_MODELS.stream().limit(4).toList();
-        }
         List<String> candidates = new ArrayList<>();
         for (String detail : details.stream().distinct().limit(8).toList()) {
             candidates.add(detail);
@@ -1119,7 +1794,7 @@ public class AiSingleReviewDraftFactory {
         List<String> missing = new ArrayList<>();
         if (text.matches(".*(авто|автомоб|машин|ходов|двигател|гбц|акпп|мкпп|стартер|генератор|подвес).*")
                 && !text.matches(".*(toyota|honda|nissan|mazda|mitsubishi|subaru|suzuki|kia|hyundai|ford|volkswagen|vw|audi|bmw|mercedes|renault|lada|ваз|газ|уаз|lexus|skoda|chevrolet|opel|peugeot|citroen|mpv|прадо|камри|королл|солярис|рио|веста|гранта|аутлендер|форестер|икстрейл|кашкай).*")) {
-            missing.add("Марка/модель автомобиля не подтверждена: можно использовать шаблонную подстановку, клиент должен выбрать подходящую.");
+            missing.add("Марка/модель автомобиля не подтверждена: не добавляй конкретную модель, используй нейтрально машина/авто/автомобиль.");
         }
         if (text.matches(".*(запчаст|детал|ремонт|замен).*")
                 && !text.matches(".*(рычаг|шаров|стойк|втулк|сайлент|ступиц|колод|диск|свеч|ремень|цепь|насос|радиатор|патруб|датчик|подшипник|амортизатор).*")) {
@@ -1234,6 +1909,43 @@ public class AiSingleReviewDraftFactory {
         );
     }
 
+    private BatchWritingGuide parseBatchWritingGuide(String responseText, List<ReviewGenerationSlot> slots) throws Exception {
+        JsonNode root = objectMapper.readTree(responseText);
+        Set<Long> allowedIds = slots == null
+                ? Set.of()
+                : slots.stream()
+                .map(ReviewGenerationSlot::reviewId)
+                .filter(id -> id != null)
+                .collect(java.util.stream.Collectors.toSet());
+        List<BatchIdeaWritingGuide> ideaGuides = new ArrayList<>();
+        JsonNode items = root.path("ideaExpansion");
+        if (items.isArray()) {
+            items.forEach(item -> {
+                Long reviewId = item.path("reviewId").canConvertToLong() ? item.path("reviewId").asLong() : null;
+                if (reviewId == null || !allowedIds.contains(reviewId)) {
+                    return;
+                }
+                BatchIdeaWritingGuide guide = new BatchIdeaWritingGuide(
+                        reviewId,
+                        guideStrings(item.path("angles"), 5, 120),
+                        guideStrings(item.path("decisionCriteria"), 5, 120),
+                        guideStrings(item.path("naturalDetails"), 5, 120),
+                        guideStrings(item.path("avoidClaims"), 5, 120)
+                );
+                if (!guide.isEmpty()) {
+                    ideaGuides.add(guide);
+                }
+            });
+        }
+        return new BatchWritingGuide(
+                guideStrings(root.path("categoryLanguage"), 8, 120),
+                guideStrings(root.path("termHints"), 8, 120),
+                ideaGuides.stream().limit(30).toList(),
+                guideStrings(root.path("diversityWarnings"), 8, 140),
+                guideStrings(root.path("safetyNotes"), 8, 140)
+        );
+    }
+
     private ReputationBatchReviewDraftResult parseBatchResult(
             Long companyId,
             Long deepReportJobId,
@@ -1279,6 +1991,28 @@ public class AiSingleReviewDraftFactory {
                 model,
                 drafts,
                 safetyNotes,
+                LocalDateTime.now()
+        );
+    }
+
+    private ReputationBatchReviewDraftResult emptyOpenAiBatchResult(
+            Long companyId,
+            Long deepReportJobId,
+            Long contentPackJobId,
+            ReputationContentPack pack,
+            String provider,
+            String model,
+            String errorMessage
+    ) {
+        return new ReputationBatchReviewDraftResult(
+                companyId,
+                pack == null || pack.researchSnapshot() == null ? "" : pack.researchSnapshot().companyName(),
+                deepReportJobId,
+                contentPackJobId,
+                firstNonBlank(provider, "openai"),
+                model,
+                List.of(),
+                List.of(errorMessage),
                 LocalDateTime.now()
         );
     }
@@ -1419,6 +2153,38 @@ public class AiSingleReviewDraftFactory {
         return values;
     }
 
+    private List<String> guideStrings(JsonNode node, int limit, int charLimit) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        node.forEach(item -> {
+            String value = cleanGuideText(item.asText(""), charLimit);
+            if (!value.isBlank()) {
+                values.add(value);
+            }
+        });
+        return values.stream()
+                .distinct()
+                .limit(limit)
+                .toList();
+    }
+
+    private String cleanGuideText(String value, int charLimit) {
+        String clean = value == null ? "" : value.replaceAll("\\s+", " ").trim();
+        if (clean.isBlank()) {
+            return "";
+        }
+        String lower = clean.toLowerCase().replace('ё', 'е');
+        if (lower.contains("http://") || lower.contains("https://") || lower.contains("www.")) {
+            return "";
+        }
+        if (lower.contains("конкурент") || lower.contains("лучше чем") || lower.contains("хуже чем")) {
+            return "";
+        }
+        return limit(clean, charLimit);
+    }
+
     private List<String> mergeSafetyNotes(List<String> safetyNotes, List<String> clientMustConfirm) {
         List<String> result = new ArrayList<>();
         addAll(result, safetyNotes);
@@ -1444,6 +2210,9 @@ public class AiSingleReviewDraftFactory {
         if (clean.isBlank() || containsPromptLeakage(clean) || looksLikeTechnicalNote(clean)) {
             return "";
         }
+        if (containsExperienceFocusQuestionLeakage(clean) || containsAwkwardPromptLikePhrase(clean)) {
+            return "";
+        }
         String lower = clean.toLowerCase().replace('ё', 'е');
         if (lower.contains("по авто-сервис")
                 || lower.contains("по автосервис")
@@ -1461,18 +2230,51 @@ public class AiSingleReviewDraftFactory {
 
     private ReputationBatchReviewDraftResult keepOnlyUsableBatchDrafts(
             ReputationBatchReviewDraftResult result,
-            List<ReviewGenerationSlot> slots
+            List<ReviewGenerationSlot> slots,
+            ReviewGenerationBrief brief,
+            Map<Long, BatchNarrativeMode> narrativeModes
     ) {
+        Map<Long, ReviewGenerationSlot> slotById = new LinkedHashMap<>();
+        for (ReviewGenerationSlot slot : slots) {
+            if (slot.reviewId() != null) {
+                slotById.putIfAbsent(slot.reviewId(), slot);
+            }
+        }
         Set<Long> allowedIds = slots.stream()
                 .map(ReviewGenerationSlot::reviewId)
                 .filter(id -> id != null)
                 .collect(java.util.stream.Collectors.toSet());
-        List<ReputationBatchReviewDraftItem> drafts = result.drafts().stream()
-                .filter(item -> item.reviewId() != null && allowedIds.contains(item.reviewId()))
-                .filter(item -> item.draft() != null && !item.draft().isBlank())
-                .filter(item -> !containsPromptLeakage(item.draft()))
-                .filter(item -> !looksLikeTechnicalNote(item.draft()))
-                .toList();
+        Map<String, List<Long>> rejectedIdsByReason = new LinkedHashMap<>();
+        List<ReputationBatchReviewDraftItem> prelimDrafts = new ArrayList<>();
+        for (ReputationBatchReviewDraftItem item : result.drafts()) {
+            ReviewGenerationSlot slot = item.reviewId() == null ? null : slotById.get(item.reviewId());
+            ReputationBatchReviewDraftItem normalizedItem = normalizeAlternativeChoiceDraft(item, slot, result.companyName());
+            String rejectionReason = batchDraftRejectionReason(normalizedItem, allowedIds, slotById, brief, narrativeModes);
+            if (rejectionReason == null) {
+                prelimDrafts.add(normalizedItem);
+            } else {
+                addBatchDraftRejection(rejectedIdsByReason, rejectionReason, normalizedItem.reviewId());
+            }
+        }
+        List<ReputationBatchReviewDraftItem> drafts = keepDiverseBatchDrafts(prelimDrafts, slotById);
+        if (drafts.size() < prelimDrafts.size()) {
+            Set<Long> keptIds = drafts.stream()
+                    .map(ReputationBatchReviewDraftItem::reviewId)
+                    .filter(id -> id != null)
+                    .collect(java.util.stream.Collectors.toSet());
+            prelimDrafts.stream()
+                    .filter(item -> item.reviewId() != null && !keptIds.contains(item.reviewId()))
+                    .forEach(item -> addBatchDraftRejection(rejectedIdsByReason, "duplicate_weak_detail", item.reviewId()));
+        }
+        if (!rejectedIdsByReason.isEmpty()) {
+            log.info(
+                    "OPENAI_BATCH_FILTER_RESULT companyId={} parsedDrafts={} acceptedDrafts={} rejected={}",
+                    result.companyId(),
+                    result.drafts().size(),
+                    drafts.size(),
+                    rejectedIdsByReason
+            );
+        }
         return new ReputationBatchReviewDraftResult(
                 result.companyId(),
                 result.companyName(),
@@ -1484,6 +2286,625 @@ public class AiSingleReviewDraftFactory {
                 result.safetyNotes(),
                 result.generatedAt()
         );
+    }
+
+    private ReputationBatchReviewDraftItem normalizeAlternativeChoiceDraft(
+            ReputationBatchReviewDraftItem item,
+            ReviewGenerationSlot slot,
+            String companyName
+    ) {
+        if (item == null || item.draft() == null || item.draft().isBlank() || slot == null) {
+            return item;
+        }
+        AlternativeChoice choice = alternativeChoice(slot);
+        if (choice == null) {
+            return item;
+        }
+        String draft = item.draft();
+        String normalized = draft;
+        for (String phrase : choice.phrases()) {
+            normalized = normalized.replaceAll("(?iu)" + Pattern.quote(phrase), choice.chosen());
+        }
+        if (normalized.equals(draft)) {
+            return item;
+        }
+        List<String> notes = new ArrayList<>(item.safetyNotes());
+        notes.add("В черновике выбран один вариант из альтернатив: клиент должен подтвердить, что заказывал именно " + choice.chosen() + ".");
+        List<String> facts = new ArrayList<>(item.sourceFacts());
+        facts.add(choice.chosen());
+        return new ReputationBatchReviewDraftItem(
+                item.reviewId(),
+                item.idea(),
+                cleanGeneratedText(normalized, companyName),
+                facts,
+                notes
+        );
+    }
+
+    private AlternativeChoice alternativeChoice(ReviewGenerationSlot slot) {
+        String text = batchSlotText(slot).toLowerCase(java.util.Locale.ROOT).replace('ё', 'е');
+        if (text.contains("фотоовал") && text.contains("фото на стекле")) {
+            return new AlternativeChoice(
+                    "фотоовал",
+                    List.of("фотоовал или фото на стекле", "фотоовал/фото на стекле")
+            );
+        }
+        if (text.contains("фотоовал") && text.contains("портрет")) {
+            return new AlternativeChoice(
+                    "фотоовал",
+                    List.of("фотоовал или портрет", "фотоовал/портрет")
+            );
+        }
+        if (text.contains("стартер") && text.contains("генератор")) {
+            return new AlternativeChoice(
+                    "ремонт стартера",
+                    List.of("ремонт стартера или генератора", "ремонте стартера или генератора", "стартер или генератор")
+            );
+        }
+        if (text.contains("двигател") && text.contains("гбц")) {
+            return new AlternativeChoice(
+                    "ремонт двигателя",
+                    List.of("ремонт двигателя или гбц", "ремонте двигателя или гбц", "двигатель или гбц")
+            );
+        }
+        if (text.contains("семейн") && text.contains("двойн") && text.contains("памятник")) {
+            return new AlternativeChoice(
+                    "семейный памятник",
+                    List.of("семейный/двойной памятник", "семейный или двойной памятник")
+            );
+        }
+        return null;
+    }
+
+    private String batchDraftRejectionReason(
+            ReputationBatchReviewDraftItem item,
+            Set<Long> allowedIds,
+            Map<Long, ReviewGenerationSlot> slotById,
+            ReviewGenerationBrief brief,
+            Map<Long, BatchNarrativeMode> narrativeModes
+    ) {
+        if (item.reviewId() == null) {
+            return "missing_review_id";
+        }
+        if (!allowedIds.contains(item.reviewId())) {
+            return "unexpected_review_id";
+        }
+        if (item.draft() == null || item.draft().isBlank()) {
+            return "blank_draft";
+        }
+        if (containsPromptLeakage(item.draft())) {
+            return "prompt_leakage";
+        }
+        if (looksLikeTechnicalNote(item.draft())) {
+            return "technical_note";
+        }
+        if (containsExperienceFocusQuestionLeakage(item.draft())) {
+            return "experience_focus_question_leakage";
+        }
+        if (containsAwkwardPromptLikePhrase(item.draft())) {
+            return "awkward_prompt_phrase";
+        }
+        ReviewGenerationSlot slot = slotById.get(item.reviewId());
+        if (containsUnprovidedAutoModel(item.draft(), slot, brief)) {
+            return "unprovided_auto_model";
+        }
+        if (containsConflictingAutoServiceTerms(item.draft(), slot)) {
+            return "conflicting_auto_terms";
+        }
+        BatchNarrativeMode mode = narrativeModes == null ? null : narrativeModes.get(item.reviewId());
+        if (!matchesSlotRequiredIntent(item.draft(), slot, mode)) {
+            return "slot_intent_mismatch";
+        }
+        if (!matchesRequiredMustCover(item.draft(), slot, mode)) {
+            return "must_cover_missing";
+        }
+        return null;
+    }
+
+    private void addBatchDraftRejection(Map<String, List<Long>> rejectedIdsByReason, String reason, Long reviewId) {
+        rejectedIdsByReason.computeIfAbsent(reason, ignored -> new ArrayList<>()).add(reviewId);
+    }
+
+    private List<ReputationBatchReviewDraftItem> keepDiverseBatchDrafts(
+            List<ReputationBatchReviewDraftItem> drafts,
+            Map<Long, ReviewGenerationSlot> slotById
+    ) {
+        if (drafts == null || drafts.size() <= 1) {
+            return drafts == null ? List.of() : drafts;
+        }
+        Map<String, Integer> weakDetailCounts = new LinkedHashMap<>();
+        List<ReputationBatchReviewDraftItem> result = new ArrayList<>();
+        for (ReputationBatchReviewDraftItem item : drafts) {
+            List<String> weakKeys = weakRepeatedDetailKeys(item.draft());
+            ReviewGenerationSlot slot = slotById == null ? null : slotById.get(item.reviewId());
+            boolean repeatsWeakDetail = weakKeys.stream()
+                    .anyMatch(key -> weakDetailCounts.getOrDefault(key, 0) > 0 && !slotStronglyRequiresWeakDetail(slot, key));
+            if (repeatsWeakDetail) {
+                continue;
+            }
+            result.add(item);
+            weakKeys.forEach(key -> weakDetailCounts.put(key, weakDetailCounts.getOrDefault(key, 0) + 1));
+        }
+        return result;
+    }
+
+    private List<String> weakRepeatedDetailKeys(String draft) {
+        String clean = draft == null ? "" : draft.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isBlank()) {
+            return List.of();
+        }
+        List<String> keys = new ArrayList<>();
+        if (clean.matches(".*(?:посмотр\\S*|сравн\\S*|свер\\S*)\\s+(?:образц\\S*|материал\\S*|выставк\\S*|вариант\\S*).*")
+                || clean.matches(".*(?:образц\\S*|материал\\S*|выставк\\S*)\\s+(?:камн\\S*|гранит\\S*|оформлен\\S*).*")) {
+            keys.add("monument_material_samples");
+        }
+        if (clean.matches(".*\\b(?:сначала|потом|после этого)\\b.*\\b(?:сначала|потом|после этого)\\b.*")
+                && clean.matches(".*\\b(?:объяснил\\S*|согласовал\\S*|уточнил\\S*|показал\\S*)\\b.*")) {
+            keys.add("linear_process_chain");
+        }
+        return keys.stream().distinct().toList();
+    }
+
+    private boolean slotStronglyRequiresWeakDetail(ReviewGenerationSlot slot, String key) {
+        if (slot == null || key == null || key.isBlank()) {
+            return false;
+        }
+        String slotText = normalizedAutoConflictText(batchSlotText(slot));
+        if ("monument_material_samples".equals(key)) {
+            return slotText.contains("образц")
+                    || slotText.contains("материал")
+                    || slotText.contains("выставк")
+                    || (slotText.contains("выбор") && (slotText.contains("гранит") || slotText.contains("камн")));
+        }
+        return false;
+    }
+
+    private boolean containsExperienceFocusQuestionLeakage(String draft) {
+        String clean = draft == null ? "" : draft.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isBlank()) {
+            return false;
+        }
+        return clean.contains("было ли ")
+                || clean.contains("были ли ")
+                || clean.contains("была ли ")
+                || clean.contains("присылали ли ")
+                || clean.contains("показывали ли ")
+                || clean.contains("согласовывали ли ")
+                || clean.contains("объясняли ли ")
+                || clean.contains("можно ли было ")
+                || clean.contains("как согласовали стоимость")
+                || clean.contains("как согласовали сроки")
+                || clean.contains("как согласовали работы")
+                || clean.contains("как объяснили результат")
+                || clean.contains("какие детали меняли, сколько заняло времени");
+    }
+
+    private boolean containsAwkwardPromptLikePhrase(String draft) {
+        String clean = draft == null ? "" : draft.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isBlank()) {
+            return false;
+        }
+        return clean.contains("с работе ")
+                || clean.contains("с изготовление ")
+                || clean.contains("с ремонте ")
+                || clean.contains("отдельно разобрали:")
+                || clean.contains("обсудили задачу:")
+                || clean.contains("сначала обсудили задачу")
+                || clean.contains("обсудили тему:")
+                || clean.contains("сначала обсудили тему")
+                || clean.contains("обозначили тему")
+                || clean.contains("потом отдельно уточнили")
+                || clean.contains("основную тему обозначил")
+                || clean.contains("основную тему обозначили")
+                || clean.contains("практические детали объяснили нормальным языком")
+                || clean.contains("решение не выглядело выбором наугад")
+                || clean.contains("дали понятные ориентиры:")
+                || clean.matches(".*\\b(?:обсудили|обсуждали|разобрали|уточнили|обозначили)\\s+(?:задачу|тему|вопрос)\\s*:.*")
+                || clean.matches(".*\\b(?:обсудили|обсуждали|уточнили|разобрали)\\s+(?:детские\\s+квесты|хоррор-?квесты|квесты\\s+с\\s+актерами|квесты\\s+с\\s+актёрами)(?:\\.|,|$).*")
+                || clean.matches(".*(?:^|\\s)фото\\s+(стойк|шаров|ступич|рулев|опорн|втулк|сайлент).*")
+                || clean.matches(".*(?:^|\\s)по\\s+(семейный|двойной|портретная|механизированная|полусухая|комплексное|изготовление)(?=$|\\s|/).*");
+    }
+
+    private boolean containsUnprovidedAutoModel(String draft, ReviewGenerationSlot slot, ReviewGenerationBrief brief) {
+        if (!shouldCheckUnprovidedAutoModel(slot, brief)) {
+            return false;
+        }
+        List<String> mentionedModels = autoModelsFromSourceText(draft);
+        if (mentionedModels.isEmpty()) {
+            return false;
+        }
+        String allowedSource = slot == null ? "" : batchSlotText(slot);
+        String allowedNormalized = normalizedAutoModelText(allowedSource);
+        return mentionedModels.stream()
+                .map(this::normalizedAutoModelText)
+                .anyMatch(model -> !allowedNormalized.contains(model));
+    }
+
+    private boolean shouldCheckUnprovidedAutoModel(ReviewGenerationSlot slot, ReviewGenerationBrief brief) {
+        String businessType = normalizedAutoConflictText(brief == null ? "" : brief.businessType());
+        if ("auto_service".equals(businessType)) {
+            return true;
+        }
+        String briefText = normalizedAutoConflictText(briefAutoContextText(brief));
+        String slotText = normalizedAutoConflictText(slot == null ? "" : batchSlotText(slot));
+        return hasExplicitAutoBusinessSignal(briefText) || looksLikeAutoReviewSlot(slotText);
+    }
+
+    private String briefAutoContextText(ReviewGenerationBrief brief) {
+        if (brief == null) {
+            return "";
+        }
+        List<String> values = new ArrayList<>();
+        values.add(brief.businessType());
+        values.add(brief.category());
+        addAll(values, brief.services());
+        addAll(values, brief.products());
+        addAll(values, brief.reviewIdeas());
+        addAll(values, brief.allowedScenarioTypes());
+        return String.join(" ", values);
+    }
+
+    private boolean hasExplicitAutoBusinessSignal(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return text.contains("автосервис")
+                || text.contains("авто-сервис")
+                || text.contains("автомоб")
+                || text.contains("ремонт авто")
+                || text.contains("ремонт машин")
+                || text.contains("диагностик авто")
+                || text.contains("диагностик машин")
+                || text.contains("подготовка авто")
+                || text.contains("подготовка машин");
+    }
+
+    private boolean looksLikeAutoReviewSlot(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        if (hasExplicitAutoBusinessSignal(text)) {
+            return true;
+        }
+        if (containsAnyAutoTerm(text, AUTO_CHASSIS_TERMS) || containsAnyAutoTerm(text, AUTO_ENGINE_TERMS)) {
+            return true;
+        }
+        if (containsAnyAutoTerm(text, List.of(
+                "стартер", "аккумулятор", "клемм", "реле стартера",
+                "щетк генератор", "щетки генератор", "ремень генератор",
+                "зарядка генератор", "просадка напряж"
+        ))) {
+            return true;
+        }
+        return text.contains("комплексное то")
+                || text.contains("плановое то")
+                || text.contains("подбор запчаст")
+                || text.contains("запчасти для авто")
+                || text.contains("запчасти для машин")
+                || text.contains("тормозные колод")
+                || text.contains("давление в шинах")
+                || text.contains("масло и фильтр");
+    }
+
+    private boolean containsConflictingAutoServiceTerms(String draft, ReviewGenerationSlot slot) {
+        if (slot == null || draft == null || draft.isBlank()) {
+            return false;
+        }
+        String slotText = normalizedAutoConflictText(batchSlotText(slot));
+        String draftText = normalizedAutoConflictText(draft);
+        if (!looksLikeAutoRepairSlot(slotText)) {
+            return false;
+        }
+        return hasUnexpectedAutoTermGroup(draftText, slotText, AUTO_CHASSIS_TERMS)
+                || hasUnexpectedAutoTermGroup(draftText, slotText, AUTO_ELECTRIC_TERMS)
+                || hasUnexpectedAutoTermGroup(draftText, slotText, AUTO_ENGINE_TERMS);
+    }
+
+    private boolean looksLikeAutoRepairSlot(String slotText) {
+        return containsAnyAutoTerm(slotText, AUTO_CHASSIS_TERMS)
+                || containsAnyAutoTerm(slotText, AUTO_ELECTRIC_TERMS)
+                || containsAnyAutoTerm(slotText, AUTO_ENGINE_TERMS);
+    }
+
+    private boolean hasUnexpectedAutoTermGroup(String draftText, String slotText, List<String> terms) {
+        return containsAnyAutoTerm(draftText, terms) && !containsAnyAutoTerm(slotText, terms);
+    }
+
+    private boolean containsAnyAutoTerm(String text, List<String> terms) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return terms.stream().anyMatch(text::contains);
+    }
+
+    private String normalizedAutoConflictText(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean matchesSlotRequiredIntent(String draft, ReviewGenerationSlot slot, BatchNarrativeMode mode) {
+        if (slot == null || draft == null || draft.isBlank()) {
+            return true;
+        }
+        String cleanDraft = normalizedIntentText(draft);
+        if (cleanDraft.isBlank()) {
+            return false;
+        }
+        if (isLightNarrativeMode(mode)) {
+            return matchesLightSlotIntent(draft, slot);
+        }
+
+        List<String> primaryAnchors = new ArrayList<>();
+        primaryAnchors.add(slot.service());
+        primaryAnchors.add(slot.product());
+        primaryAnchors.add(slot.extraDetail());
+        primaryAnchors.add(topicBeforeColon(slot.theme()));
+        if (slot.mustUse() != null && !slot.mustUse().isEmpty()) {
+            primaryAnchors.add(slot.mustUse().getFirst());
+        }
+
+        List<String> primarySignals = intentSignals(primaryAnchors);
+        if (!primarySignals.isEmpty()) {
+            return primarySignals.stream().anyMatch(cleanDraft::contains);
+        }
+
+        List<String> fallbackAnchors = new ArrayList<>();
+        addAll(fallbackAnchors, slot.mustUse());
+        addAll(fallbackAnchors, slot.mayUse());
+        List<String> fallbackSignals = intentSignals(fallbackAnchors);
+        return fallbackSignals.isEmpty() || fallbackSignals.stream().anyMatch(cleanDraft::contains);
+    }
+
+    private boolean matchesRequiredMustCover(String draft, ReviewGenerationSlot slot, BatchNarrativeMode mode) {
+        if (slot == null || slot.mustUse() == null || slot.mustUse().isEmpty()) {
+            return true;
+        }
+        String cleanDraft = normalizedIntentText(draft);
+        if (cleanDraft.isBlank()) {
+            return false;
+        }
+        List<String> concreteMusts = new ArrayList<>();
+        List<String> signalSources = new ArrayList<>();
+        for (String must : slot.mustUse()) {
+            if (must == null || must.isBlank() || looksLikeLocationOnly(must)) {
+                continue;
+            }
+            if (looksLikeConcreteMustCoverName(must)) {
+                concreteMusts.add(normalizedIntentText(must));
+            }
+            signalSources.add(must);
+        }
+        if (concreteMusts.stream().anyMatch(cleanDraft::contains)) {
+            return true;
+        }
+        List<String> signals = intentSignals(signalSources);
+        if (!signals.isEmpty()) {
+            return signals.stream().anyMatch(cleanDraft::contains);
+        }
+        if (isLightNarrativeMode(mode)) {
+            return concreteMusts.isEmpty();
+        }
+        for (String concreteMust : concreteMusts) {
+            if (!concreteMust.isBlank() && cleanDraft.contains(concreteMust)) {
+                return true;
+            }
+        }
+        return concreteMusts.isEmpty();
+    }
+
+    private boolean isLightNarrativeMode(BatchNarrativeMode mode) {
+        if (mode == null || mode.requiredDepth() == null) {
+            return false;
+        }
+        return mode.requiredDepth().startsWith("light:");
+    }
+
+    private boolean matchesLightSlotIntent(String draft, ReviewGenerationSlot slot) {
+        String cleanDraft = normalizedIntentText(draft);
+        String slotText = normalizedAutoConflictText(batchSlotText(slot));
+        List<String> primarySignals = intentSignals(List.of(slot.service(), slot.product(), slot.extraDetail()));
+        if (requiresSpecificLightIntent(slotText) && !primarySignals.isEmpty()) {
+            return primarySignals.stream().anyMatch(cleanDraft::contains);
+        }
+        if (!primarySignals.isEmpty() && primarySignals.stream().anyMatch(cleanDraft::contains)) {
+            return true;
+        }
+        if (slotText.contains("квест") || slotText.contains("лазертаг") || slotText.contains("праздник")
+                || slotText.contains("аниматор") || slotText.contains("актер") || slotText.contains("актёр")) {
+            return containsAnyNormalized(cleanDraft, List.of("квест", "игр", "праздник", "дет", "команд", "актер", "актер", "аниматор", "чай"));
+        }
+        if (looksLikeAutoRepairSlot(slotText)
+                || slotText.contains("авто") || slotText.contains("машин") || slotText.contains("запчаст")
+                || slotText.contains("масл") || slotText.contains("то")) {
+            return containsAnyNormalized(cleanDraft, List.of("машин", "авто", "сервис", "ремонт", "то", "диагност", "запчаст", "масл", "ходов", "стартер", "двигател"));
+        }
+        if (slotText.contains("штукатур") || slotText.contains("стяжк") || slotText.contains("white box")
+                || slotText.contains("квартир") || slotText.contains("ремонт")) {
+            return containsAnyNormalized(cleanDraft, List.of("ремонт", "квартир", "объект", "стен", "стяжк", "штукатур", "мастер", "whitebox"));
+        }
+        if (slotText.contains("памятник") || slotText.contains("гранит") || slotText.contains("фотоовал")) {
+            return containsAnyNormalized(cleanDraft, List.of("памятник", "заказ", "камн", "гранит", "портрет", "фото"));
+        }
+        return true;
+    }
+
+    private boolean requiresSpecificLightIntent(String slotText) {
+        if (slotText == null || slotText.isBlank()) {
+            return false;
+        }
+        return slotText.contains("стяжк")
+                || slotText.contains("штукатур")
+                || slotText.contains("white box")
+                || slotText.contains("памятник")
+                || slotText.contains("гранит")
+                || slotText.contains("фотоовал")
+                || slotText.contains("фото на стекле")
+                || slotText.contains("маникюр")
+                || slotText.contains("ногт")
+                || slotText.contains("наращив")
+                || slotText.contains("моделир")
+                || slotText.contains("курс")
+                || slotText.contains("обучен");
+    }
+
+    private boolean containsAnyNormalized(String normalizedText, List<String> rawSignals) {
+        if (normalizedText == null || normalizedText.isBlank()) {
+            return false;
+        }
+        return rawSignals.stream()
+                .map(this::normalizedIntentText)
+                .anyMatch(normalizedText::contains);
+    }
+
+    private boolean looksLikeConcreteMustCoverName(String value) {
+        String clean = value == null ? "" : value
+                .replaceAll("[«»\"“”]", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (clean.isBlank() || clean.length() > 42 || clean.contains(",") || clean.contains("/")) {
+            return false;
+        }
+        String lower = clean.toLowerCase().replace('ё', 'е');
+        if (lower.matches(".*\\b(квесты|детские|хоррор|актер|актёр|аниматор|дни рождения|чайная зона|замер|смета|ремонт|диагност|подбор|запчаст|работа|изготовление|полусухая|механизированная|первичная|подготовка|дорога|наличии|заказ)\\b.*")) {
+            return false;
+        }
+        return value.contains("«")
+                || clean.matches("(?U)[\\p{Lu}A-Z0-9][\\p{L}0-9+-]*(?:\\s+[\\p{Lu}A-Z0-9][\\p{L}0-9+-]*){0,2}");
+    }
+
+    private String topicBeforeColon(String value) {
+        String clean = value == null ? "" : value.trim();
+        int colon = firstColonIndex(clean);
+        return colon > 0 ? clean.substring(0, colon).trim() : clean;
+    }
+
+    private List<String> intentSignals(List<String> values) {
+        List<String> signals = new ArrayList<>();
+        if (values == null) {
+            return signals;
+        }
+        for (String value : values) {
+            String clean = value == null ? "" : value.toLowerCase()
+                    .replace('ё', 'е')
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (clean.isBlank() || looksLikeLocationOnly(clean)) {
+                continue;
+            }
+            if (clean.contains("полусух") || clean.contains("стяжк")) {
+                signals.addAll(List.of("полусух", "стяжк"));
+            }
+            if (clean.contains("механизирован") || clean.contains("штукатур")) {
+                signals.addAll(List.of("механизирован", "штукатур"));
+            }
+            if (clean.contains("white box") || clean.contains("вайт бокс")) {
+                signals.addAll(List.of("whitebox", "вайтбокс", "профильн", "мастер", "перегород", "подготовкстен"));
+            }
+            if (clean.contains("коммуникац") || clean.contains("менеджер") || clean.contains("прораб")
+                    || clean.contains("график") || clean.contains("изменен")) {
+                signals.addAll(List.of("коммуникац", "менеджер", "прораб", "график", "соглас", "отвеч"));
+            }
+            if (clean.contains("замер") || clean.contains("смет")) {
+                signals.addAll(List.of("замер", "смет"));
+            }
+            if (clean.contains("приемк") || clean.contains("приёмк")) {
+                signals.addAll(List.of("приемк", "приемк"));
+            }
+            if (clean.contains("договор") || clean.contains("безнал")) {
+                signals.addAll(List.of("договор", "безнал"));
+            }
+            if (clean.contains("крупн") && clean.contains("площад")) {
+                signals.addAll(List.of("крупн", "площад", "объект"));
+            }
+            if (clean.contains("ходов") || clean.contains("подвес") || clean.contains("стук") || clean.contains("скрип")
+                    || clean.contains("управляем") || clean.contains("рулев")) {
+                signals.addAll(List.of("ходов", "подвес", "стук", "скрип", "рулев", "шаров", "стойк", "втулк", "сайлент", "ступич", "опорн"));
+            }
+            if (clean.contains("первичн") || clean.contains("диагност")) {
+                signals.addAll(List.of("первичн", "диагност"));
+            }
+            if (clean.contains("масл") || clean.contains("то") || clean.contains("фильтр")) {
+                signals.addAll(List.of("масл", "фильтр", "расходник", " то "));
+            }
+            if (clean.contains("двигател") || clean.contains("гбц") || clean.contains("дефектов")) {
+                signals.addAll(List.of("двигател", "гбц", "дефектов", "свеч", "катуш", "грм"));
+            }
+            if (clean.contains("стартер") || clean.contains("генератор") || clean.contains("аккумулятор")) {
+                signals.addAll(List.of("стартер", "генератор", "аккумулятор", "клемм", "масса"));
+            }
+            if (clean.contains("запчаст")) {
+                signals.addAll(List.of("запчаст", "детал", "налич", "заказ"));
+            }
+            if (clean.contains("дальн") || clean.contains("поезд") || clean.contains("дорог")) {
+                signals.addAll(List.of("дальн", "поезд", "дорог", "трасс"));
+            }
+            if (clean.contains("ожидан") || clean.contains("клиентск") || clean.contains("зон")) {
+                signals.addAll(List.of("ожидан", "ждал", "зон", "вопрос"));
+            }
+            if (clean.contains("памятник") || clean.contains("гранит") || clean.contains("фотоовал") || clean.contains("гравиров")) {
+                signals.addAll(List.of("памятник", "гранит", "фотоовал", "гравиров", "портрет", "макет", "камн"));
+            }
+            if (clean.contains("квест") || clean.contains("лазертаг") || clean.contains("праздник") || clean.contains("аниматор")) {
+                signals.addAll(List.of("квест", "лазертаг", "праздник", "аниматор", "чайнойзон"));
+            }
+            if (clean.contains("администратор") || clean.contains("брон") || clean.contains("предоплат")
+                    || clean.contains("возврат") || clean.contains("тайминг") || clean.contains("правил")
+                    || clean.contains("оплат") || clean.contains("цен")) {
+                signals.addAll(List.of("администратор", "брон", "предоплат", "возврат", "тайминг", "правил", "оплат", "цен", "услов"));
+            }
+            if (clean.contains("хоррор") || clean.contains("страш") || clean.contains("контакт")
+                    || clean.contains("возраст")) {
+                signals.addAll(List.of("хоррор", "страш", "контакт", "возраст", "актер", "актер"));
+            }
+            if (clean.contains("филиал") || clean.contains("вывеск") || clean.contains("вход")
+                    || clean.contains("парков") || clean.contains("навигац")) {
+                signals.addAll(List.of("филиал", "вывеск", "вход", "парков", "навигац", "нашли", "добрат"));
+            }
+            if (clean.contains("маникюр") || clean.contains("ногт") || clean.contains("наращив")
+                    || clean.contains("моделир") || clean.contains("педикюр") || clean.contains("покрыт")
+                    || clean.contains("укреплен") || clean.contains("коррекц")) {
+                signals.addAll(List.of("маникюр", "ногт", "наращив", "моделир", "педикюр", "покрыт", "укреплен", "коррекц", "форма", "аккурат", "носк"));
+            }
+            if (clean.contains("курс") || clean.contains("обучен") || clean.contains("преподав")
+                    || clean.contains("практик") || clean.contains("моделях") || clean.contains("ошибк")) {
+                signals.addAll(List.of("курс", "обучен", "преподав", "практик", "модел", "ошибк", "занят", "учеб"));
+            }
+            if (clean.contains("студи") || clean.contains("рабоч") || clean.contains("советск")) {
+                signals.addAll(List.of("студи", "рабоч", "мест", "советск", "чист", "атмосфер"));
+            }
+        }
+        return signals.stream()
+                .map(this::normalizedIntentText)
+                .filter(value -> value.length() >= 3)
+                .distinct()
+                .toList();
+    }
+
+    private boolean looksLikeLocationOnly(String value) {
+        String clean = value == null ? "" : value.toLowerCase().replace('ё', 'е');
+        return clean.matches(".*\\b(район|мжк|улиц|проспект|город|владивосток|новосибирск|ставропол|иркутск|ангарск)\\b.*")
+                && !clean.matches(".*(диагност|ремонт|замен|подбор|стяжк|штукатур|памятник|квест|курс|маникюр|охран).*");
+    }
+
+    private String normalizedIntentText(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("[^\\p{L}\\p{N}]+", "");
     }
 
     private String cleanGeneratedText(String value) {
@@ -1675,6 +3096,81 @@ public class AiSingleReviewDraftFactory {
         return clean.length() <= limit ? clean : clean.substring(0, limit).trim();
     }
 
+    private String shortLogText(String value) {
+        return limit(value, 180);
+    }
+
+    private List<Long> slotIds(List<ReviewGenerationSlot> slots) {
+        if (slots == null) {
+            return List.of();
+        }
+        return slots.stream()
+                .map(ReviewGenerationSlot::reviewId)
+                .toList();
+    }
+
+    private record AlternativeChoice(String chosen, List<String> phrases) {
+    }
+
+    private record BatchWritingGuide(
+            List<String> categoryLanguage,
+            List<String> termHints,
+            List<BatchIdeaWritingGuide> ideaExpansion,
+            List<String> diversityWarnings,
+            List<String> safetyNotes
+    ) {
+        private BatchWritingGuide {
+            categoryLanguage = categoryLanguage == null ? List.of() : categoryLanguage;
+            termHints = termHints == null ? List.of() : termHints;
+            ideaExpansion = ideaExpansion == null ? List.of() : ideaExpansion;
+            diversityWarnings = diversityWarnings == null ? List.of() : diversityWarnings;
+            safetyNotes = safetyNotes == null ? List.of() : safetyNotes;
+        }
+
+        private static BatchWritingGuide empty() {
+            return new BatchWritingGuide(List.of(), List.of(), List.of(), List.of(), List.of());
+        }
+
+        private boolean isEmpty() {
+            return categoryLanguage.isEmpty()
+                    && termHints.isEmpty()
+                    && ideaExpansion.isEmpty()
+                    && diversityWarnings.isEmpty()
+                    && safetyNotes.isEmpty();
+        }
+    }
+
+    private record BatchIdeaWritingGuide(
+            Long reviewId,
+            List<String> angles,
+            List<String> decisionCriteria,
+            List<String> naturalDetails,
+            List<String> avoidClaims
+    ) {
+        private BatchIdeaWritingGuide {
+            angles = angles == null ? List.of() : angles;
+            decisionCriteria = decisionCriteria == null ? List.of() : decisionCriteria;
+            naturalDetails = naturalDetails == null ? List.of() : naturalDetails;
+            avoidClaims = avoidClaims == null ? List.of() : avoidClaims;
+        }
+
+        private boolean isEmpty() {
+            return angles.isEmpty()
+                    && decisionCriteria.isEmpty()
+                    && naturalDetails.isEmpty()
+                    && avoidClaims.isEmpty();
+        }
+    }
+
+    private record BatchNarrativeMode(
+            String key,
+            String instruction,
+            String detailBudget,
+            String requiredDepth,
+            String processVerbPolicy
+    ) {
+    }
+
     private record PromptVariant(
             String structure,
             String voice,
@@ -1699,6 +3195,52 @@ public class AiSingleReviewDraftFactory {
                     COMMON_PHRASE_POLICIES.get(random.nextInt(COMMON_PHRASE_POLICIES.size())),
                     TEMPERATURES.get(random.nextInt(TEMPERATURES.size()))
             );
+        }
+    }
+
+    private final class BatchExampleDetailsPicker {
+        private final String variationNonce;
+
+        private BatchExampleDetailsPicker(String variationNonce) {
+            this.variationNonce = variationNonce == null ? "" : variationNonce;
+        }
+
+        private List<String> detailsFor(ReviewGenerationSlot slot, List<String> details) {
+            List<String> clean = details == null
+                    ? List.of()
+                    : details.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
+            if (clean.isEmpty()) {
+                return List.of();
+            }
+            String previous = normalizedExampleText(slot == null ? "" : slot.previousDraft());
+            List<String> fresh = orderedForSlot(slot, clean).stream()
+                    .filter(candidate -> !previous.contains(normalizedExampleText(candidate)))
+                    .toList();
+            return fresh.isEmpty() ? orderedForSlot(slot, clean) : fresh;
+        }
+
+        private List<String> orderedForSlot(ReviewGenerationSlot slot, List<String> values) {
+            if (values == null || values.isEmpty()) {
+                return List.of();
+            }
+            int offset = Math.floorMod((variationNonce + "|" + (slot == null ? "" : slot.reviewId())).hashCode(), values.size());
+            List<String> result = new ArrayList<>(values.size());
+            for (int index = 0; index < values.size(); index++) {
+                result.add(values.get((offset + index) % values.size()));
+            }
+            return result;
+        }
+
+        private String normalizedExampleText(String value) {
+            return value == null
+                    ? ""
+                    : value.toLowerCase()
+                    .replace('ё', 'е')
+                    .replaceAll("[^\\p{L}\\p{N}]+", "");
         }
     }
 

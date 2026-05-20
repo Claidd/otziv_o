@@ -1,6 +1,7 @@
 package com.hunt.otziv.reputationai.api;
 
 import com.hunt.otziv.reputationai.api.dto.ReputationContentPackRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationDeepReviewIdeasUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.OpenAiProviderDiagnostics;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiModelProfile;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiStatus;
@@ -305,6 +306,23 @@ public class ReputationAiController {
             @RequestParam(defaultValue = "10") int limit
     ) {
         return deepCompanyResearchJobService.history(companyId, limit);
+    }
+
+    @PutMapping("/companies/{companyId}/deep-research/jobs/{jobId}/review-ideas")
+    public DeepCompanyResearchJobStatus updateDeepResearchReviewIdeas(
+            @PathVariable Long companyId,
+            @PathVariable Long jobId,
+            @RequestBody(required = false) ReputationDeepReviewIdeasUpdateRequest request
+    ) {
+        try {
+            return deepCompanyResearchJobService.updateReviewIdeas(
+                    companyId,
+                    jobId,
+                    request == null ? List.of() : request.reviewIdeas()
+            );
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
     }
 
     @GetMapping(value = "/companies/{companyId}/deep-research/jobs/latest/export", produces = "text/markdown;charset=UTF-8")

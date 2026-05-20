@@ -17,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -111,6 +114,52 @@ public class DeepCompanyResearchJobService {
         return jobRepository.findById(jobId)
                 .filter(entity -> companyId.equals(entity.getCompanyId()))
                 .map(this::toStatus);
+    }
+
+    public DeepCompanyResearchJobStatus updateReviewIdeas(Long companyId, Long jobId, List<String> reviewIdeas) {
+        if (companyId == null || jobId == null) {
+            throw new IllegalStateException("Не выбран отчёт для обновления идей отзывов.");
+        }
+        List<String> normalizedIdeas = normalizeReviewIdeas(reviewIdeas);
+        if (normalizedIdeas.isEmpty()) {
+            throw new IllegalStateException("Оставьте хотя бы одну идею для отзывов.");
+        }
+
+        return transactionTemplate.execute(status -> {
+            ReputationDeepReportJobEntity entity = jobRepository.findById(jobId)
+                    .orElseThrow(() -> new IllegalStateException("Глубокий отчёт не найден."));
+            if (!companyId.equals(entity.getCompanyId())) {
+                throw new IllegalStateException("Глубокий отчёт принадлежит другой компании.");
+            }
+            DeepCompanyResearchReport report = readReport(entity.getReportJson());
+            if (report == null) {
+                throw new IllegalStateException("В задаче нет готового отчёта для редактирования идей.");
+            }
+
+            List<DeepCompanyResearchReport.Section> sections = withReviewIdeasSection(report.sections(), normalizedIdeas);
+            String markdown = sectionsToMarkdown(sections);
+            DeepCompanyResearchReport updatedReport = new DeepCompanyResearchReport(
+                    report.companyId(),
+                    report.companyName(),
+                    report.city(),
+                    report.provider(),
+                    report.model(),
+                    report.responseId(),
+                    markdown,
+                    sections,
+                    report.sources(),
+                    report.warnings(),
+                    report.qualityChecks(),
+                    report.factSnapshot(),
+                    normalizedIdeas,
+                    report.createdAt()
+            );
+
+            entity.setReportJson(writeJson(updatedReport));
+            entity.setReportMarkdown(markdown);
+            jobRepository.save(entity);
+            return toStatus(entity);
+        });
     }
 
     public List<DeepCompanyResearchJobStatus> history(Long companyId, int limit) {
@@ -352,6 +401,80 @@ public class DeepCompanyResearchJobService {
             message = exception.getClass().getSimpleName();
         }
         return message.length() <= 1000 ? message : message.substring(0, 1000);
+    }
+
+    private List<String> normalizeReviewIdeas(List<String> reviewIdeas) {
+        if (reviewIdeas == null || reviewIdeas.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (String reviewIdea : reviewIdeas) {
+            String clean = reviewIdea == null ? "" : reviewIdea
+                    .replaceFirst("^\\s*(?:\\d+[.)]|[-*])\\s+", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (!clean.isBlank()) {
+                normalized.add(clean);
+            }
+            if (normalized.size() >= 30) {
+                break;
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private List<DeepCompanyResearchReport.Section> withReviewIdeasSection(
+            List<DeepCompanyResearchReport.Section> sections,
+            List<String> reviewIdeas
+    ) {
+        List<DeepCompanyResearchReport.Section> result = new ArrayList<>();
+        DeepCompanyResearchReport.Section ideasSection = new DeepCompanyResearchReport.Section(
+                "Идеи для отзывов",
+                reviewIdeasMarkdown(reviewIdeas)
+        );
+        boolean replaced = false;
+        for (DeepCompanyResearchReport.Section section : sections == null ? List.<DeepCompanyResearchReport.Section>of() : sections) {
+            if (isReviewIdeasSection(section.title())) {
+                if (!replaced) {
+                    result.add(ideasSection);
+                    replaced = true;
+                }
+                continue;
+            }
+            result.add(section);
+        }
+        if (!replaced) {
+            result.add(ideasSection);
+        }
+        return result;
+    }
+
+    private boolean isReviewIdeasSection(String title) {
+        String clean = title == null ? "" : title.toLowerCase(Locale.ROOT);
+        return clean.contains("иде")
+                && clean.contains("отзыв")
+                && !clean.matches(".*(пост|faq|карточ|контент|коммент|дозбор|спросить|уточн).*");
+    }
+
+    private String reviewIdeasMarkdown(List<String> reviewIdeas) {
+        StringBuilder result = new StringBuilder();
+        for (int index = 0; index < reviewIdeas.size(); index++) {
+            result.append(index + 1).append(". ").append(reviewIdeas.get(index)).append('\n');
+        }
+        return result.toString().trim();
+    }
+
+    private String sectionsToMarkdown(List<DeepCompanyResearchReport.Section> sections) {
+        StringBuilder result = new StringBuilder();
+        for (DeepCompanyResearchReport.Section section : sections == null ? List.<DeepCompanyResearchReport.Section>of() : sections) {
+            if (!section.title().isBlank()) {
+                result.append("## ").append(section.title()).append("\n\n");
+            }
+            if (!section.body().isBlank()) {
+                result.append(section.body()).append("\n\n");
+            }
+        }
+        return result.toString().trim();
     }
 
     private record JobRunInput(Long companyId, ReputationResearchRequest request) {

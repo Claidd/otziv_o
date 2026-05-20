@@ -71,7 +71,19 @@
           [class.archive-order-card--stored]="isArchiveSource(order)"
         >
           <header>
-            <strong>{{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}</strong>
+            @if (archiveOrderFilialUrl(order); as filialUrl) {
+              <a
+                class="archive-card-title"
+                [href]="filialUrl"
+                target="_blank"
+                rel="noopener"
+                [title]="archiveOrderTitle(order)"
+              >
+                {{ archiveOrderTitle(order) }}
+              </a>
+            } @else {
+              <strong>{{ archiveOrderTitle(order) }}</strong>
+            }
             <small>#{{ order.id }}</small>
           </header>
 
@@ -163,6 +175,16 @@
     </section>
 
     <footer class="archive-pager">
+      <button
+        type="button"
+        class="icon-button sort-toggle"
+        (click)="toggleSortDirection()"
+        [disabled]="loading()"
+        [title]="sortTitle()"
+        [attr.aria-label]="sortTitle()"
+      >
+        <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+      </button>
       <button type="button" class="icon-button" (click)="previousPage()" [disabled]="ordersPage().first || loading()" title="Предыдущая">
         <span class="material-icons-sharp">chevron_left</span>
       </button>

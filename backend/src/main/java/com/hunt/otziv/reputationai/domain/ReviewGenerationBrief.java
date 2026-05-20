@@ -28,7 +28,7 @@ public record ReviewGenerationBrief(
         products = clean(products, 18);
         prices = clean(prices, 12);
         advantages = clean(advantages, 18);
-        reviewIdeas = clean(reviewIdeas, 24);
+        reviewIdeas = clean(reviewIdeas, 30);
         travelFromCenter = clean(travelFromCenter, 8);
         employees = clean(employees, 10);
         amenities = clean(amenities, 12);
