@@ -31,6 +31,8 @@ public class TelegramService extends TelegramLongPollingBot {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
+    private static final int SEND_ATTEMPTS = 3;
+    private static final long SEND_RETRY_DELAY_MS = 1_500L;
 
     private final String botUsername;
     private final List<Long> adminChatIds;
@@ -97,20 +99,20 @@ public class TelegramService extends TelegramLongPollingBot {
         switch (messageText) {
             case "1":
                 if ("ROLE_ADMIN".equals(role)) {
-                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "Markdown");
+                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "HTML");
                 } else if ("ROLE_OWNER".equals(role)) {
-                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)), "Markdown");
+                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMapToOwner(userId)), "HTML");
                 } else if ("ROLE_MANAGER".equals(role)) {
-                    sendMessage(chatId, personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)), "Markdown");
+                    sendMessage(chatId, personalService.displayResultToManager(personalService.getPersonalsAndCountToMapToManager(userId)), "HTML");
                 } else if ("ROLE_WORKER".equals(role)) {
-                    sendMessage(chatId, personalService.displayResultToWorker(personalService.getPersonalsAndCountToMapToWorker(userId)), "Markdown");
+                    sendMessage(chatId, personalService.displayResultToWorker(personalService.getPersonalsAndCountToMapToWorker(userId)), "HTML");
                 } else {
                     sendMessage(chatId, "У вас нет доступа", "Markdown");
                 }
                 break;
             case "2":
                 if ("ROLE_ADMIN".equals(role) || "ROLE_OWNER".equals(role)) {
-                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "Markdown");
+                    sendMessage(chatId, personalService.displayResult(personalService.getPersonalsAndCountToMap()), "HTML");
                 } else {
                     sendMessage(chatId, "У вас нет доступа", "Markdown");
                 }
@@ -156,35 +158,74 @@ public class TelegramService extends TelegramLongPollingBot {
             message.setParseMode(parseMode);
         }
 
+        for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+            try {
+                executeTelegramMessage(message);
+                if (attempt > 1) {
+                    log.info("Telegram-сообщение отправлено chatId={} после повтора {}", chatId, attempt);
+                } else {
+                    log.info("Telegram-сообщение отправлено chatId={}", chatId);
+                }
+                return true;
+            } catch (TelegramApiRequestException e) {
+                if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
+                    log.warn("Telegram-бот заблокирован пользователем. ChatId: {}", chatId);
+                } else if (isNotFound(e)) {
+                    log.warn("Telegram-сообщение не отправлено chatId={}: Telegram вернул 404. Проверьте TELEGRAM_BOT_TOKEN и proxy. Ошибка: {}", chatId, e.getMessage());
+                } else {
+                    log.error("Telegram API ошибка для chatId={}: {}", chatId, e.getApiResponse(), e);
+                }
+                return false;
+            } catch (TelegramApiException e) {
+                if (handleRetryableSendException(chatId, attempt, e)) {
+                    continue;
+                }
+                if (!isTransientNetworkException(e)) {
+                    log.error("Ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
+                }
+                return false;
+            } catch (Exception e) {
+                if (handleRetryableSendException(chatId, attempt, e)) {
+                    continue;
+                }
+                if (!isTransientNetworkException(e)) {
+                    log.error("Неизвестная ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    void executeTelegramMessage(SendMessage message) throws TelegramApiException {
+        execute(message);
+    }
+
+    private boolean handleRetryableSendException(long chatId, int attempt, Exception exception) {
+        if (!isTransientNetworkException(exception)) {
+            return false;
+        }
+
+        if (attempt >= SEND_ATTEMPTS) {
+            log.warn("Telegram-сообщение временно не отправлено chatId={} после {} попыток: {}",
+                    chatId, SEND_ATTEMPTS, concise(exception));
+            log.debug("Telegram send transient exception", exception);
+            return false;
+        }
+
+        long delayMillis = SEND_RETRY_DELAY_MS * attempt;
+        log.warn("Telegram-сообщение временно не отправлено chatId={} попытка {}/{}: {}. Повтор через {} ms",
+                chatId, attempt, SEND_ATTEMPTS, concise(exception), delayMillis);
+        log.debug("Telegram send transient exception", exception);
+        sleepBeforeRetry(delayMillis);
+        return true;
+    }
+
+    void sleepBeforeRetry(long delayMillis) {
         try {
-            execute(message);
-            log.info("Telegram-сообщение отправлено chatId={}", chatId);
-            return true;
-        } catch (TelegramApiRequestException e) {
-            if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
-                log.warn("Telegram-бот заблокирован пользователем. ChatId: {}", chatId);
-            } else if (isNotFound(e)) {
-                log.warn("Telegram-сообщение не отправлено chatId={}: Telegram вернул 404. Проверьте TELEGRAM_BOT_TOKEN и proxy. Ошибка: {}", chatId, e.getMessage());
-            } else {
-                log.error("Telegram API ошибка для chatId={}: {}", chatId, e.getApiResponse(), e);
-            }
-            return false;
-        } catch (TelegramApiException e) {
-            if (isTransientNetworkException(e)) {
-                log.warn("Telegram-сообщение временно не отправлено chatId={}: {}", chatId, concise(e));
-                log.debug("Telegram send transient exception", e);
-            } else {
-                log.error("Ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
-            }
-            return false;
-        } catch (Exception e) {
-            if (isTransientNetworkException(e)) {
-                log.warn("Telegram-сообщение временно не отправлено chatId={}: {}", chatId, concise(e));
-                log.debug("Telegram send transient exception", e);
-            } else {
-                log.error("Неизвестная ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
-            }
-            return false;
+            Thread.sleep(delayMillis);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
         }
     }
 

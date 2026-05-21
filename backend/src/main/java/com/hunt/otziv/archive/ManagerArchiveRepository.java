@@ -50,6 +50,7 @@ class ManagerArchiveRepository {
                 .addValue("limit", pageSize)
                 .addValue("offset", Math.max(pageNumber, 0) * pageSize);
         String direction = orderDirection(sortDirection);
+        String orderBy = "ORDER BY sort_at " + direction + ", order_id " + direction;
 
         return jdbc.query("""
                 WITH archive_page AS (
@@ -59,7 +60,7 @@ class ManagerArchiveRepository {
                         UNION ALL
                 """ + liveClosedOrderPageKeysSelect(scope, mode, keyword) + """
                     ) archive_keys
-                    ORDER BY sort_at """ + direction + ", order_id " + direction + """
+                    """ + orderBy + """
                     LIMIT :limit OFFSET :offset
                 )
                 SELECT *
@@ -68,7 +69,7 @@ class ManagerArchiveRepository {
                     UNION ALL
                 """ + liveClosedOrdersSelectFromPage() + """
                 ) archive_union
-                ORDER BY sort_at """ + direction + ", order_id " + direction + """
+                """ + orderBy + """
                 """, params, (rs, rowNum) -> orderListItem(rs));
     }
 

@@ -144,6 +144,15 @@ public class Company {
     @Column(name = "company_telegram_group_chat_id")
     private Long telegramGroupChatId;
 
+    @Column(name = "company_max_group_chat_id")
+    private Long maxGroupChatId;
+
+    @Column(name = "company_max_link_user_id")
+    private Long maxLinkUserId;
+
+    @Column(name = "company_max_link_requested_at")
+    private LocalDateTime maxLinkRequestedAt;
+
 
 
 

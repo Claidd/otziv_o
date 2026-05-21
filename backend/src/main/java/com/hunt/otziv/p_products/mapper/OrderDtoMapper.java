@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -41,9 +42,11 @@ import java.util.stream.Collectors;
 public class OrderDtoMapper {
 
     private final TelegramGroupLinkService telegramGroupLinkService;
+    private final MaxGroupLinkService maxGroupLinkService;
 
-    public OrderDtoMapper(TelegramGroupLinkService telegramGroupLinkService) {
+    public OrderDtoMapper(TelegramGroupLinkService telegramGroupLinkService, MaxGroupLinkService maxGroupLinkService) {
         this.telegramGroupLinkService = telegramGroupLinkService;
+        this.maxGroupLinkService = maxGroupLinkService;
     }
 
     public List<OrderDTOList> toBoardDTOList(List<Order> orders) {
@@ -83,6 +86,9 @@ public class OrderDtoMapper {
                 .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
                 .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
                 .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
+                .maxGroupChatId(order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null)
+                .maxGroupLinked(order.getCompany() != null && maxGroupLinkService.isMaxGroupLinked(order.getCompany()))
+                .maxBotInviteUrl(order.getCompany() != null ? maxGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .companyTelephone(order.getCompany() != null ? safeString(order.getCompany().getTelephone()) : "")
                 .managerPayText(order.getManager() != null ? safeString(order.getManager().getPayText()) : "")
                 .amount(order.getAmount())
@@ -112,7 +118,7 @@ public class OrderDtoMapper {
         }
 
         LocalDate now = LocalDate.now();
-        LocalDate changedDate = rowLocalDate(row, 21);
+        LocalDate changedDate = rowLocalDate(row, 22);
         long daysDifference = ChronoUnit.DAYS.between(changedDate != null ? changedDate : now, now);
 
         return OrderDTOList.builder()
@@ -130,20 +136,23 @@ public class OrderDtoMapper {
                 .telegramGroupChatId(rowLong(row, 11))
                 .telegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(rowLong(row, 11)))
                 .telegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(rowLong(row, 1), rowString(row, 10, ""), rowLong(row, 11)))
-                .companyTelephone(rowString(row, 12, ""))
-                .managerPayText(rowString(row, 13, ""))
-                .amount(rowInteger(row, 14))
-                .counter(rowInteger(row, 15))
-                .waitingForClient(rowBoolean(row, 16))
-                .workerUserFio(rowString(row, 17, ""))
-                .categoryTitle(rowString(row, 18, "Не выбрано"))
-                .subCategoryTitle(rowString(row, 19, "Не выбрано"))
-                .created(rowLocalDate(row, 20))
+                .maxGroupChatId(rowLong(row, 12))
+                .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(rowLong(row, 12)))
+                .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(rowLong(row, 1), rowString(row, 10, ""), rowLong(row, 12)))
+                .companyTelephone(rowString(row, 13, ""))
+                .managerPayText(rowString(row, 14, ""))
+                .amount(rowInteger(row, 15))
+                .counter(rowInteger(row, 16))
+                .waitingForClient(rowBoolean(row, 17))
+                .workerUserFio(rowString(row, 18, ""))
+                .categoryTitle(rowString(row, 19, "Не выбрано"))
+                .subCategoryTitle(rowString(row, 20, "Не выбрано"))
+                .created(rowLocalDate(row, 21))
                 .changed(changedDate)
-                .payDay(rowLocalDate(row, 22))
+                .payDay(rowLocalDate(row, 23))
                 .dayToChangeStatusAgo(daysDifference)
-                .orderComments(rowString(row, 23, "нет заметок"))
-                .firstOrderForCompany(rowBoolean(row, 24))
+                .orderComments(rowString(row, 24, "нет заметок"))
+                .firstOrderForCompany(rowBoolean(row, 25))
                 .build();
     }
 
@@ -192,6 +201,9 @@ public class OrderDtoMapper {
                 .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
                 .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
                 .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
+                .maxGroupChatId(order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null)
+                .maxGroupLinked(order.getCompany() != null && maxGroupLinkService.isMaxGroupLinked(order.getCompany()))
+                .maxBotInviteUrl(order.getCompany() != null ? maxGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .build();
     }
 
@@ -231,6 +243,9 @@ public class OrderDtoMapper {
                 .telegramGroupChatId(company.getTelegramGroupChatId())
                 .telegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company))
                 .telegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company))
+                .maxGroupChatId(company.getMaxGroupChatId())
+                .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
+                .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
                 .build();
     }
 
@@ -382,6 +397,9 @@ public class OrderDtoMapper {
                 .telegramGroupChatId(order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null)
                 .telegramGroupLinked(order.getCompany() != null && telegramGroupLinkService.isTelegramGroupLinked(order.getCompany()))
                 .telegramBotInviteUrl(order.getCompany() != null ? telegramGroupLinkService.buildInviteUrl(order.getCompany()) : "")
+                .maxGroupChatId(order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null)
+                .maxGroupLinked(order.getCompany() != null && maxGroupLinkService.isMaxGroupLinked(order.getCompany()))
+                .maxBotInviteUrl(order.getCompany() != null ? maxGroupLinkService.buildInviteUrl(order.getCompany()) : "")
                 .build();
     }
 

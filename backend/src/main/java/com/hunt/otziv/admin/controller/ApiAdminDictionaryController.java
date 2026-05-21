@@ -24,6 +24,9 @@ import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
+import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsRequest;
+import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsResponse;
+import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -77,6 +80,7 @@ public class ApiAdminDictionaryController {
     private final PromoTextRepository promoTextRepository;
     private final PromoTextAssignmentRepository promoTextAssignmentRepository;
     private final AppSettingService appSettingService;
+    private final TelegramReportScheduleSettingsService telegramReportScheduleSettingsService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -518,6 +522,24 @@ public class ApiAdminDictionaryController {
                 lookaheadDays
         );
         return new NagulSettingsResponse(savedCooldownMinutes, savedLookaheadDays);
+    }
+
+    @GetMapping("/settings/telegram-reports")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public TelegramReportScheduleSettingsResponse getTelegramReportSettings() {
+        return telegramReportScheduleSettingsService.settings();
+    }
+
+    @PutMapping("/settings/telegram-reports")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public TelegramReportScheduleSettingsResponse updateTelegramReportSettings(
+            @RequestBody TelegramReportScheduleSettingsRequest request
+    ) {
+        try {
+            return telegramReportScheduleSettingsService.updateSettings(request);
+        } catch (IllegalArgumentException exception) {
+            throw badRequest(exception.getMessage());
+        }
     }
 
     private List<Category> uniqueCategories(List<Category> categories) {

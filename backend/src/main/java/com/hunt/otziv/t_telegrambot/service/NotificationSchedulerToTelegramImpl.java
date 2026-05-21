@@ -6,11 +6,20 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import java.time.Clock;
+import java.time.DateTimeException;
+import java.time.Duration;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -18,19 +27,38 @@ import java.util.stream.Stream;
 @Slf4j
 @RequiredArgsConstructor
 public class NotificationSchedulerToTelegramImpl implements NotificationSchedulerToTelegram{
+    private static final Duration DEFAULT_CATCH_UP_WINDOW = Duration.ofMinutes(15);
+
     private final TelegramService telegramService;
     private final UserService userService;
     private final PersonalService personalService;
+    private final TelegramReportScheduleSettingsService reportScheduleSettingsService;
+    private final AtomicReference<String> lastDecisionLogKey = new AtomicReference<>("");
+    private Clock clock = Clock.systemDefaultZone();
 
-    // каждый день в 9:25
-    @Scheduled(cron = "0 30 11 * * *")
+    @Value("${telegram.reports.schedule.catch-up-window:PT15M}")
+    private Duration catchUpWindow = DEFAULT_CATCH_UP_WINDOW;
+
+    @Scheduled(
+            fixedDelayString = "${telegram.reports.schedule.poll-delay-ms:30000}",
+            initialDelayString = "${telegram.reports.schedule.initial-delay-ms:30000}"
+    )
+    public void sendConfiguredDailyReports() {
+        try {
+            TelegramReportScheduleSettingsResponse settings = reportScheduleSettingsService.settings();
+            sendConfiguredReportIfDue(settings, ReportKind.MORNING);
+            sendConfiguredReportIfDue(settings, ReportKind.EVENING);
+        } catch (RuntimeException exception) {
+            log.error("Telegram report schedule failed", exception);
+        }
+    }
+
     public void sendDailyReport() {
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
         sendOnlyAdminReport(794146111L, userDataMap);
-        telegramService.sendMessage(794146111L, "Доброе утро! Отчёт за сегодня готов", "Markdown");
+        telegramService.sendMessage(794146111L, "Доброе утро! Отчёт за сегодня готов", "HTML");
     }
 
-    @Scheduled(cron = "0 00 22 * * *") // каждый день в 9:25
     public void sendDailyReportToWorkers() {
         Map<String, Long> workersTelegramIDs = userService.getAllWorkers();
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
@@ -38,6 +66,144 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
         sendWorkerReports(workersTelegramIDs, userDataMap);
         sendOwnerReports(userDataMap);
         sendAdminReport(workersTelegramIDs, userDataMap);
+    }
+
+    private void sendConfiguredReportIfDue(TelegramReportScheduleSettingsResponse settings, ReportKind kind) {
+        ScheduledTelegramReportDecision decision = scheduledDecision(settings, kind);
+        if (decision.type() == ScheduledTelegramReportDecisionType.NOT_DUE) {
+            return;
+        }
+
+        if (decision.type() == ScheduledTelegramReportDecisionType.MISSED_WINDOW) {
+            logMissedWindowOnce(decision, kind);
+            return;
+        }
+
+        boolean claimed = kind == ReportKind.MORNING
+                ? reportScheduleSettingsService.claimMorningRun(decision.runKey())
+                : reportScheduleSettingsService.claimEveningRun(decision.runKey());
+        if (!claimed) {
+            logAlreadyClaimedOnce(decision, kind);
+            return;
+        }
+
+        log.info(
+                "Telegram {} report starting: runKey={} scheduledAt={} now={} deadline={}",
+                kind.logName(),
+                decision.runKey(),
+                decision.scheduledAt(),
+                decision.now(),
+                decision.deadline()
+        );
+        if (kind == ReportKind.MORNING) {
+            sendDailyReport();
+        } else {
+            sendDailyReportToWorkers();
+        }
+    }
+
+    ScheduledTelegramReportDecision scheduledDecision(TelegramReportScheduleSettingsResponse settings, ReportKind kind) {
+        ZoneId zoneId = zoneId(settings);
+        return scheduledDecision(settings, kind, ZonedDateTime.now(clock).withZoneSameInstant(zoneId));
+    }
+
+    ScheduledTelegramReportDecision scheduledDecision(
+            TelegramReportScheduleSettingsResponse settings,
+            ReportKind kind,
+            ZonedDateTime now
+    ) {
+        if (settings == null || !kind.enabled(settings)) {
+            return ScheduledTelegramReportDecision.notDue();
+        }
+
+        try {
+            String timeValue = kind.time(settings);
+            if (timeValue == null || timeValue.isBlank()) {
+                return ScheduledTelegramReportDecision.notDue();
+            }
+            ZoneId zoneId = ZoneId.of(settings.zone());
+            LocalTime scheduleTime = LocalTime.parse(timeValue.trim()).truncatedTo(ChronoUnit.MINUTES);
+            ZonedDateTime zonedNow = now.withZoneSameInstant(zoneId);
+            ZonedDateTime scheduledAt = zonedNow.toLocalDate().atTime(scheduleTime).atZone(zoneId);
+            Duration window = normalizedCatchUpWindow();
+            ZonedDateTime deadline = scheduledAt.plus(window);
+            String runKey = zonedNow.toLocalDate() + " " + kind.key() + " " + scheduleTime + " " + zoneId;
+
+            if (zonedNow.isBefore(scheduledAt)) {
+                return ScheduledTelegramReportDecision.notDue();
+            }
+            if (zonedNow.isAfter(deadline)) {
+                return new ScheduledTelegramReportDecision(
+                        ScheduledTelegramReportDecisionType.MISSED_WINDOW,
+                        runKey,
+                        scheduledAt,
+                        zonedNow,
+                        deadline
+                );
+            }
+
+            return new ScheduledTelegramReportDecision(
+                    ScheduledTelegramReportDecisionType.DUE,
+                    runKey,
+                    scheduledAt,
+                    zonedNow,
+                    deadline
+            );
+        } catch (DateTimeException exception) {
+            log.warn("Telegram {} report has invalid runtime schedule: {}", kind.logName(), exception.getMessage());
+            return ScheduledTelegramReportDecision.notDue();
+        }
+    }
+
+    void setClock(Clock clock) {
+        this.clock = clock == null ? Clock.systemDefaultZone() : clock;
+    }
+
+    void setCatchUpWindow(Duration catchUpWindow) {
+        this.catchUpWindow = catchUpWindow;
+    }
+
+    private ZoneId zoneId(TelegramReportScheduleSettingsResponse settings) {
+        if (settings == null || settings.zone() == null || settings.zone().isBlank()) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(settings.zone());
+        } catch (DateTimeException exception) {
+            return ZoneId.systemDefault();
+        }
+    }
+
+    private Duration normalizedCatchUpWindow() {
+        if (catchUpWindow == null || catchUpWindow.isNegative() || catchUpWindow.isZero()) {
+            return DEFAULT_CATCH_UP_WINDOW;
+        }
+        return catchUpWindow;
+    }
+
+    private void logMissedWindowOnce(ScheduledTelegramReportDecision decision, ReportKind kind) {
+        String key = "missed:" + kind.key() + ":" + decision.runKey();
+        if (!key.equals(lastDecisionLogKey.getAndSet(key))) {
+            log.info(
+                    "Telegram {} report skipped: scheduledAt={} now={} deadline={} catchUpWindow={}",
+                    kind.logName(),
+                    decision.scheduledAt(),
+                    decision.now(),
+                    decision.deadline(),
+                    normalizedCatchUpWindow()
+            );
+        }
+    }
+
+    private void logAlreadyClaimedOnce(ScheduledTelegramReportDecision decision, ReportKind kind) {
+        String key = "claimed:" + kind.key() + ":" + decision.runKey();
+        if (!key.equals(lastDecisionLogKey.getAndSet(key))) {
+            log.info(
+                    "Telegram {} report skipped: runKey={} has already been claimed",
+                    kind.logName(),
+                    decision.runKey()
+            );
+        }
     }
 
 
@@ -99,7 +265,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
     private void sendMessageSafe(Long chatId, String message, String who) {
         try {
-            telegramService.sendMessage(chatId, message, "Markdown");
+            telegramService.sendMessage(chatId, message, "HTML");
         } catch (Exception e) {
             log.error("Ошибка отправки Telegram-сообщения для {}: {}", who, e.getMessage());
         }
@@ -108,20 +274,88 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private String generateMessageByRole(String role, String fio, UserData userData, Map<String, UserData> result) {
         switch (role) {
             case "ROLE_MANAGER":
-                return "Ежедневная сводка: " + "\n" + "(везде должен быть 0)" + "\n\n" +
-//                        fio + ": " + userData.getSalary()+ " руб. " +
-                        "Лиды: " + userData.getLeadsNew() + "\n" +
-                        "В проверку: " + userData.getOrderToCheck() + " На проверке: " + userData.getOrderInCheck()  + "\n" +
-                        "Опубликовано: " + userData.getOrderInPublished() + " Выставлен счет: " + userData.getOrderInWaitingPay1() + "\n" +
-                        "Напоминание: " + userData.getOrderInWaitingPay2() + " Не оплачено: " + userData.getOrderNoPay() + "\n\n"  +
-                        "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders() + "\n" +
-                        "Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+                return "📌 <b>Ежедневная сводка</b>\n\n" +
+                        "👤 <b>" + escapeHtml(fio) + "</b>\n" +
+                        "Контроль: в норме все показатели 0.\n\n" +
+                        "Лиды: <b>" + safeLong(userData.getLeadsNew()) + "</b>\n" +
+                        "Проверка: в проверку <b>" + safeLong(userData.getOrderToCheck()) +
+                        "</b>, на проверке <b>" + safeLong(userData.getOrderInCheck()) + "</b>\n" +
+                        "Опубликовано: <b>" + safeLong(userData.getOrderInPublished()) + "</b>\n" +
+                        "Оплата: счёт <b>" + safeLong(userData.getOrderInWaitingPay1()) +
+                        "</b>, напоминание <b>" + safeLong(userData.getOrderInWaitingPay2()) +
+                        "</b>, не оплачено <b>" + safeLong(userData.getOrderNoPay()) + "</b>\n" +
+                        "Заказы: новые <b>" + safeLong(userData.getNewOrders()) +
+                        "</b>, коррекция <b>" + safeLong(userData.getCorrectOrders()) + "</b>\n" +
+                        "Выгул: <b>" + safeLong(userData.getInVigul()) +
+                        "</b> | публикация: <b>" + safeLong(userData.getInPublish()) + "</b>";
             case "ROLE_WORKER":
-                return "Ежедневная сводка: " + "\n" + "(везде должен быть 0)" + "\n\n" +
-                        "Новых - " + userData.getNewOrders() + " Коррекция - " + userData.getCorrectOrders() + "\n" +
-                        "Выгул - " + userData.getInVigul() + " Публикация - " + userData.getInPublish();
+                return "📌 <b>Ежедневная сводка</b>\n\n" +
+                        "👷 <b>" + escapeHtml(fio) + "</b>\n" +
+                        "Контроль: в норме все показатели 0.\n\n" +
+                        "Заказы: новые <b>" + safeLong(userData.getNewOrders()) +
+                        "</b>, коррекция <b>" + safeLong(userData.getCorrectOrders()) + "</b>\n" +
+                        "Выгул: <b>" + safeLong(userData.getInVigul()) +
+                        "</b> | публикация: <b>" + safeLong(userData.getInPublish()) + "</b>";
             default:
-                return "Здравствуйте, " + fio + "!";
+                return "Здравствуйте, " + escapeHtml(fio) + "!";
+        }
+    }
+
+    private long safeLong(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
+    enum ReportKind {
+        MORNING("morning", "morning"),
+        EVENING("evening", "evening");
+
+        private final String key;
+        private final String logName;
+
+        ReportKind(String key, String logName) {
+            this.key = key;
+            this.logName = logName;
+        }
+
+        String key() {
+            return key;
+        }
+
+        String logName() {
+            return logName;
+        }
+
+        boolean enabled(TelegramReportScheduleSettingsResponse settings) {
+            return this == MORNING ? settings.morningEnabled() : settings.eveningEnabled();
+        }
+
+        String time(TelegramReportScheduleSettingsResponse settings) {
+            return this == MORNING ? settings.morningTime() : settings.eveningTime();
+        }
+    }
+
+    enum ScheduledTelegramReportDecisionType {
+        NOT_DUE,
+        DUE,
+        MISSED_WINDOW
+    }
+
+    record ScheduledTelegramReportDecision(
+            ScheduledTelegramReportDecisionType type,
+            String runKey,
+            ZonedDateTime scheduledAt,
+            ZonedDateTime now,
+            ZonedDateTime deadline
+    ) {
+        static ScheduledTelegramReportDecision notDue() {
+            return new ScheduledTelegramReportDecision(ScheduledTelegramReportDecisionType.NOT_DUE, "", null, null, null);
         }
     }
 

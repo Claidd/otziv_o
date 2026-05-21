@@ -1554,30 +1554,30 @@ export class OrderDetailsComponent {
     }
 
     const key = `review-help-${review.id}`;
-    this.mutationKey.set(key);
-    this.error.set(null);
+    const fieldKey = this.reviewFieldKey(review, 'text');
+    this.runDetailsMutation(
+      key,
+      this.managerApi.createReviewHelpDraftForCard(orderId, review.id),
+      'Текст сохранён',
+      'AI-помощник записал текст в карточку',
+      () => {
+        this.clearReviewFieldDraft(review, 'text');
+        this.expandedReviewTextIds.update((items) => ({
+          ...items,
+          [review.id]: true
+        }));
+        this.savedReviewFieldKey.set(fieldKey);
+        window.setTimeout(() => {
+          if (this.savedReviewFieldKey() === fieldKey) {
+            this.savedReviewFieldKey.set(null);
+          }
 
-    this.managerApi.createReviewHelpDraft(orderId, review.id, {
-      deepReportJobId: this.companyReportJob()?.jobId ?? null,
-      contentPackJobId: null,
-      idea: this.reviewHelpIdea(details, review),
-      style: 'живой, естественный, без одинаковых заходов и канцелярита',
-      authorType: 'нейтральный клиент',
-      emojiMode: 'без смайлов',
-      manualNotes: this.reviewHelpManualNotes(details, review),
-      length: 'medium',
-      contentPackProfile: 'quality',
-      targetReviewId: review.id,
-      previousDraft: this.reviewFieldValue(review, 'text'),
-      orderContext: this.reviewHelpFrontendContext(details, review)
-    }).subscribe({
-      next: (result) => this.saveReviewHelpDraft(review, result),
-      error: (err) => {
-        const message = this.errorMessage(err, 'Не удалось подготовить текст отзыва');
-        this.mutationKey.set(null);
-        this.toastService.error('Помощь не сработала', message);
+          if (this.editingReviewFieldKey() === fieldKey) {
+            this.editingReviewFieldKey.set(null);
+          }
+        }, 1000);
       }
-    });
+    );
   }
 
   canEditRecoveryTask(task: ReviewRecoveryTaskItem): boolean {

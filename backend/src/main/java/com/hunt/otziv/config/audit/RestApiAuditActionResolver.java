@@ -274,6 +274,8 @@ public class RestApiAuditActionResolver {
         put(actions, "DELETE", "/api/admin/phones/{id}", "удаление телефона оператора {id}");
         put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
+        put(actions, "GET", "/api/admin/settings/telegram-reports", "загрузка настроек Telegram-рассылок");
+        put(actions, "PUT", "/api/admin/settings/telegram-reports", "редактирование настроек Telegram-рассылок");
         put(actions, "POST", "/api/admin/analytics/aggregates/rebuild-month", "пересчет аналитики за месяц {month}");
         put(actions, "GET", "/api/admin/analytics/aggregates/source-range", "проверка доступного периода данных для аналитики");
         put(actions, "GET", "/api/admin/analytics/aggregates/compare-admin-month", "сверка аналитики за месяц {month}");
@@ -330,6 +332,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/recovery-tasks", "создание восстановления отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/help-draft", "создание AI-помощи для отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/help-drafts", "создание AI-помощи для одного отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/help-drafts", "создание AI-помощи для всех отзывов заказа {orderId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "редактирование восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/complete", "выполнение восстановления {taskId}");

@@ -67,6 +67,16 @@ export interface AdminNagulSettings {
   lookaheadDays: number;
 }
 
+export interface AdminTelegramReportScheduleSettings {
+  morningEnabled: boolean;
+  morningTime: string;
+  eveningEnabled: boolean;
+  eveningTime: string;
+  zone: string;
+  morningLastRunKey: string;
+  eveningLastRunKey: string;
+}
+
 export interface PromoButtonSlot {
   section: string;
   sectionTitle: string;
@@ -173,6 +183,14 @@ export interface ManagerTextRequest {
 export interface NagulSettingsRequest {
   cooldownMinutes: number;
   lookaheadDays: number;
+}
+
+export interface TelegramReportScheduleSettingsRequest {
+  morningEnabled: boolean;
+  morningTime: string;
+  eveningEnabled: boolean;
+  eveningTime: string;
+  zone: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -344,6 +362,16 @@ export class AdminDictionariesApi {
 
   updateNagulSettings(request: NagulSettingsRequest): Observable<AdminNagulSettings> {
     return this.http.put<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`, request);
+  }
+
+  getTelegramReportSettings(): Observable<AdminTelegramReportScheduleSettings> {
+    return this.http.get<AdminTelegramReportScheduleSettings>(`${this.baseUrl}/settings/telegram-reports`);
+  }
+
+  updateTelegramReportSettings(
+    request: TelegramReportScheduleSettingsRequest
+  ): Observable<AdminTelegramReportScheduleSettings> {
+    return this.http.put<AdminTelegramReportScheduleSettings>(`${this.baseUrl}/settings/telegram-reports`, request);
   }
 
   private keywordParams(keyword: string): HttpParams {

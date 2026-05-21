@@ -91,6 +91,12 @@ public class OrderDTOList {
 
     private String telegramBotInviteUrl;
 
+    private Long maxGroupChatId;
+
+    private boolean maxGroupLinked;
+
+    private String maxBotInviteUrl;
+
 
 //    private Integer amount;
 //

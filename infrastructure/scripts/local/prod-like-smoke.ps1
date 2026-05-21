@@ -864,6 +864,8 @@ if (-not $UseConfiguredOutboundProxy) {
     $env:OPENAI_PROXY_ENABLED = "false"
     $env:WHATSAPP_PROXY_ENABLED = "false"
     $env:WHATSAPP_PROXY_HOST = ""
+    $env:MAX_PROXY_ENABLED = "false"
+    $env:MAX_PROXY_HOST = ""
 
     $telegramProxyHost = Get-EnvValue -Path $envPath -Name "TELEGRAM_PROXY_HOST"
     if ([string]::IsNullOrWhiteSpace($telegramProxyHost)) {
@@ -880,12 +882,12 @@ if (-not $UseConfiguredOutboundProxy) {
     if ([string]::IsNullOrWhiteSpace($telegramProxyHost)) {
         $env:TELEGRAM_PROXY_ENABLED = "false"
         $env:TELEGRAM_PROXY_HOST = ""
-        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI, Telegram and WhatsApp. Pass -UseConfiguredOutboundProxy to use proxy values from the env file."
+        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI, Telegram, WhatsApp and MAX. Pass -UseConfiguredOutboundProxy to use proxy values from the env file."
     } else {
         $env:TELEGRAM_PROXY_ENABLED = "true"
         $env:TELEGRAM_PROXY_HOST = $telegramProxyHost
         $env:TELEGRAM_PROXY_PORT = $telegramProxyPort
-        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI and WhatsApp; Telegram uses the configured local Docker proxy ${telegramProxyHost}:$telegramProxyPort because Docker does not inherit the host VPN route."
+        Write-Host "Local prod-like smoke uses direct outbound routes for OpenAI, WhatsApp and MAX; Telegram uses the configured local Docker proxy ${telegramProxyHost}:$telegramProxyPort because Docker does not inherit the host VPN route."
     }
 }
 

@@ -126,6 +126,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             o.sum,
             c.urlChat,
             c.telegramGroupChatId,
+            c.maxGroupChatId,
             c.telephone,
             m.payText,
             o.amount,

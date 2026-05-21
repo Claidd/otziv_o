@@ -306,14 +306,6 @@ public class AiSingleReviewDraftFactory {
             "машину отдали в нормальном состоянии"
     );
 
-    private static final List<String> STYLE_MINING_TASKS = List.of(
-            "найти 2-3 живых публичных отзыва по похожей нише и взять только ритм: как начинается, где бытовая деталь, как заканчивается",
-            "посмотреть отзывы на картах по похожей услуге и выделить 2-3 разных композиции: короткая благодарность, осторожная проверка, история с результатом",
-            "подсмотреть разговорные обороты в реальных отзывах по категории, но не копировать фразы дословно",
-            "сравнить, как люди пишут короткие и средние отзывы по этой теме: что обычно упоминают первым и чем завершают",
-            "найти не рекламные, а обычные отзывы с умеренным тоном; взять только структуру и естественный темп речи"
-    );
-
     private static final List<String> COMMON_PHRASE_POLICIES = List.of(
             "общие фразы можно использовать, но максимум одну и только если она звучит уместно",
             "если просится фраза про понятное объяснение, вырази её бытовым образом, не тем же оборотом",
@@ -472,21 +464,15 @@ public class AiSingleReviewDraftFactory {
                 );
                 return Optional.empty();
             }
-            ReputationSingleReviewDraftResult polished = polishResult(companyId, deepReportJobId, contentPackJobId, pack, request, selectedIdea, fallbackFacts, result, variant)
-                    .orElse(result);
-            if (needsSpecificityRepair(polished, request, selectedIdea, fallbackFacts)) {
-                return repairResult(companyId, deepReportJobId, contentPackJobId, pack, request, selectedIdea, fallbackFacts, polished, variant)
-                        .or(() -> Optional.of(polished));
-            }
             log.info(
                     "OPENAI_SINGLE_ACCEPTED companyId={} reviewId={} provider={} model={} draftChars={}",
                     companyId,
                     request.targetReviewId(),
-                    polished.provider(),
-                    polished.model(),
-                    polished.draft().length()
+                    result.provider(),
+                    result.model(),
+                    result.draft().length()
             );
-            return Optional.of(polished);
+            return Optional.of(result);
         } catch (Exception exception) {
             log.warn("AI single review draft generation failed: {}", exception.getMessage());
             log.info(
@@ -526,9 +512,8 @@ public class AiSingleReviewDraftFactory {
         try {
             BatchWritingGuide writingGuide = BatchWritingGuide.empty();
             String variationNonce = Long.toUnsignedString(ThreadLocalRandom.current().nextLong());
-            Map<Long, BatchNarrativeMode> narrativeModes = batchNarrativeModes(slots, variationNonce);
             String systemPrompt = batchSystemPrompt();
-            String userPrompt = batchUserPrompt(request, brief, slots, variant, writingGuide, variationNonce, narrativeModes);
+            String userPrompt = batchUserPrompt(request, brief, slots, variant, writingGuide, variationNonce);
             log.info("""
                     AI batch review draft prompt
                     ===== SYSTEM =====
@@ -587,7 +572,6 @@ public class AiSingleReviewDraftFactory {
                     response.text()
             );
             int parsedDrafts = result.drafts().size();
-            result = keepOnlyUsableBatchDrafts(result, slots, brief, narrativeModes);
             log.info(
                     "OPENAI_BATCH_RESULT companyId={} provider={} model={} parsedDrafts={} acceptedDrafts={} droppedDrafts={} acceptedIds={}",
                     companyId,
@@ -595,7 +579,7 @@ public class AiSingleReviewDraftFactory {
                     result.model(),
                     parsedDrafts,
                     result.drafts().size(),
-                    Math.max(0, parsedDrafts - result.drafts().size()),
+                    0,
                     result.drafts().stream().map(ReputationBatchReviewDraftItem::reviewId).toList()
             );
             if (result.drafts().isEmpty()) {
@@ -734,12 +718,11 @@ public class AiSingleReviewDraftFactory {
     private String draftSystemPrompt() {
         return """
                 Ты пишешь черновик отзыва от лица обычного клиента.
-                Используй тему отзыва, выжимку по компании и шаблонные детали из specificity.
-                Подтверждённые факты бери из companyDigest и orderContext. Шаблонные товары, услуги, автоузлы и запчасти можно использовать из templateCandidateDetails или из web search как кандидаты для выбора клиентом.
+                Используй тему отзыва, выжимку по компании и конкретный контекст заказа.
+                Подтверждённые факты бери из companyDigest и orderContext.
                 Марку или модель автомобиля используй только если она явно есть во входных данных. Если модели нет, пиши нейтрально: машина, авто, автомобиль.
-                Не придумывай подтверждённые цены, имена мастеров, адреса, сроки и гарантии. Шаблонные детали не выдавай за подтверждённый факт.
+                Не придумывай цены, имена мастеров, адреса, сроки и гарантии.
                 Название компании - это только справочный контекст. Не используй название компании в draft. Город, район или адрес упоминай только если это часть реального клиентского опыта по дороге/локации.
-                Можно использовать web search для изучения речевых паттернов и типовых сочетаний товара/услуги/авто/запчасти по похожей нише. Не копируй чужие отзывы дословно.
                 Отзыв должен звучать живо, не как рекламный текст и не как инструкция для клиента.
                 Каждый новый вариант должен менять композицию, первое предложение и набор использованных деталей.
                 Не используй квадратные скобки, заглушки, markdown и пояснения.
@@ -751,7 +734,7 @@ public class AiSingleReviewDraftFactory {
         return """
                 Ты редактор пользовательских отзывов.
                 Перепиши черновик так, чтобы он звучал естественнее и отличался структурой от типового текста.
-                Сохрани смысл, тему и подтверждённые факты. Можно добавлять шаблонные товары/услуги/автоузлы/запчасти только из specificity.templateCandidateDetails и помечать их в safetyNotes для проверки клиентом.
+                Сохрани смысл, тему и подтверждённые факты. Не добавляй новые товары, услуги, автоузлы, запчасти, цены и имена.
                 Марку или модель автомобиля не добавляй, если её нет во входных данных.
                 Убери канцелярит, рекламность, название компании, лишний адрес и одинаковые связки.
                 Если черновик построен как "причина - проверили - объяснили - итог", перестрой порядок.
@@ -767,26 +750,21 @@ public class AiSingleReviewDraftFactory {
                 Не делай серию по шаблону "обратился/заехал - сделали - объяснили - итог".
                 Не вставляй название компании в draft вообще. Адрес используй только если карточка прямо про дорогу, вход или локацию.
                 Подтверждённые факты бери только из reviewGenerationBrief и конкретного reviewSlot.
-                Используй reviewGenerationBrief.businessType и allowedScenarioTypes как мягкую отраслевую подсказку. Если theme/mustCover/mayCover задают конкретную ситуацию, следуй им.
-                У каждой карточки есть theme, mustCover, mayCover и иногда exampleDetails. Draft этой карточки должен естественно покрыть тему, 1-3 детали из mustCover/mayCover и минимум одну деталь из exampleDetails, если этот список есть.
-                Если у карточки есть experienceFocus, это обязательный фокус истории. Не своди такую идею к названию услуги/товара: раскрой минимум один нюанс из experienceFocus как клиентский опыт, но не копируй формулировку experienceFocus дословно.
-                Если theme или experienceFocus перечисляет варианты через "или" (фотоовал/фото на стекле, стартер/генератор и т.п.), клиент в отзыве должен выглядеть так, будто знает, что именно заказывал: выбери один уместный вариант для draft и добавь выбранный вариант в clientMustConfirm и safetyNotes, если он не подтверждён отдельно.
-                exampleDetails — шаблонные детали для конкретики, а не подтверждённые факты клиента. Для автосервиса это могут быть узлы, работы, симптомы и запчасти. Марку или модель автомобиля не придумывай: используй её только если она уже есть в reviewSlot без previousDraftToAvoid.
-                Если в mustCover/mayCover есть конкретное название квеста, товара, пакета, услуги, длительность или стоимость, используй это в draft естественно хотя бы в части карточек.
-                Если во входе есть конкретная цена из reviewGenerationBrief.prices или mustCover/mayCover, это входной факт: можно использовать одну подходящую цену в draft, но добавь её в clientMustConfirm/safetyNotes как деталь для проверки перед публикацией.
+                Используй reviewGenerationBrief.businessType как мягкую отраслевую подсказку. Если theme/mustCover/mayCover задают конкретную ситуацию, следуй им.
+                У каждой карточки есть theme, mustCover и mayCover. Draft этой карточки должен естественно покрыть тему и не обязан перечислять всё.
+                Если в mustCover/mayCover есть конкретное название квеста, товара, пакета, услуги, длительность или стоимость, используй это только когда оно подходит теме карточки.
+                Если используешь точную цену из входа, добавь её в clientMustConfirm/safetyNotes как деталь для проверки перед публикацией.
                 Не используй topic/theme/mustCover как ярлыки задания: запрещены фразы вроде "обсудили задачу: конкретный филиал", "уточнили хоррор-квесты", "обозначили тему".
-                openingInstruction задаёт не только первую фразу, а вход всей мини-истории: первое предложение открывает ситуацию, следующие предложения должны связно развить этот вход через тему, одну деталь и итог.
                 Проверяй связность синтаксиса и разговорную манеру: не склеивай разные подсказки через двоеточия, не делай список полей, не обрывай вступление отдельной строкой.
-                Поля reviewGenerationBrief, reviewSlots, theme, mustCover, mayCover, exampleDetails, clientMustConfirm, openingInstruction, lengthInstruction и toneInstruction — это внутренние подсказки. В draft должен попасть только клиентский опыт.
+                Поля reviewGenerationBrief, reviewSlots, theme, mustCover, mayCover и clientMustConfirm — это внутренние подсказки. В draft должен попасть только клиентский опыт.
                 Ответ должен быть одним JSON-объектом строго такой формы: {"drafts":[{"reviewId":число,"draft":"текст","sourceFacts":["использованные факты"],"clientMustConfirm":["что проверить клиенту"],"safetyNotes":["что проверить"]}],"safetyNotes":["общие предупреждения"]}.
                 Не добавляй поля вне этой схемы.
                 В draft запрещено писать название компании из reviewGenerationBrief.company. Используй услугу, ситуацию и результат без бренда.
                 Не используй в draft служебные фразы и ярлыки задания: "По теме", "Отзыв для карточки", "товар/услуга:", "категория:", "цена:", "нужно написать", "Главный вывод", "Главный якорь", "акцент из отчёта".
                 Не копируй в draft аналитические заголовки отчёта: "Смешанный бизнес", "Операционный профиль", "Клиентский путь", "Репутационный вывод", "в отзывах упоминается".
                 Используй смысл подсказок естественно: как клиентский опыт, а не как перечисление полей.
-                Шаблонные товары, услуги, автоузлы и запчасти используй из exampleDetails/mustCover/mayCover; если это личная деталь клиента, добавь её в clientMustConfirm и safetyNotes.
+                Не добавляй шаблонные товары, услуги, автоузлы и запчасти сверх входных данных.
                 Не выдумывай марку или модель авто. Если модель не дана явно, пиши "машина", "авто" или "автомобиль".
-                Можно добавить одну уместную бытовую деталь для живости: торт, пицца, одноразовая посуда, пакет с угощениями, дорога после работы, ожидание в зоне, если это совместимо с темой. Такие детали не являются подтверждёнными фактами: добавь их в clientMustConfirm и safetyNotes.
                 Не придумывай имена, возраст, количество участников, точные цены, сроки, гарантии, медицинские результаты и сотрудников. Если такой точной детали нет во входе, не используй её.
                 Не копируй previousDraft и не повторяй слабые общие фразы в каждом отзыве. Не начинай два текста одинаковыми словами.
                 Верни только валидный JSON без markdown.
@@ -796,8 +774,7 @@ public class AiSingleReviewDraftFactory {
     private String batchWritingGuideSystemPrompt() {
         return """
                 Ты готовишь справочник для автора отзывов, а не сами отзывы.
-                Можно использовать web search только для типовой лексики категории, речевых паттернов, терминов, критериев выбора и способов раскрытия тем.
-                Не ищи и не добавляй факты о конкретной компании, конкурентах, ценах, адресах, сотрудниках, гарантиях или обещаниях.
+                Используй только входные данные. Не добавляй факты о конкретной компании, конкурентах, ценах, адресах, сотрудниках, гарантиях или обещаниях.
                 Не называй бренды конкурентов и не сравнивай компании.
                 Если тема про автосервис, не назначай марки и модели авто: можно объяснять только узлы, симптомы, работы и запчасти.
                 Если тема содержит варианты через "или", в draft выбери один конкретный вариант, а неподтверждённость выбранного варианта вынеси в clientMustConfirm/safetyNotes.
@@ -818,7 +795,6 @@ public class AiSingleReviewDraftFactory {
         payload.put("companyDigest", companyDigest(deepReport, pack, fallbackFacts, request.orderContext(), selectedIdea));
         payload.put("selectors", selectors(request, variant));
         payload.put("specificity", specificityPayload(request, selectedIdea, fallbackFacts));
-        payload.put("webStyleMining", webStyleMining(selectedIdea, pack, variant));
         payload.put("previousDraftToAvoid", limit(cleanPreviousDraft(request.previousDraft()), 900));
         payload.put("rules", generationRules());
         return "Напиши один отзыв по теме и выжимке. Ответ JSON: idea, draft, sourceFacts, safetyNotes.\n"
@@ -831,36 +807,18 @@ public class AiSingleReviewDraftFactory {
             List<ReviewGenerationSlot> slots,
             PromptVariant variant,
             BatchWritingGuide writingGuide,
-            String variationNonce,
-            Map<Long, BatchNarrativeMode> narrativeModes
+            String variationNonce
     ) throws Exception {
         List<Map<String, Object>> items = new ArrayList<>();
-        BatchExampleDetailsPicker exampleDetailsPicker = new BatchExampleDetailsPicker(variationNonce);
         for (ReviewGenerationSlot slot : slots) {
-            BatchNarrativeMode narrativeMode = narrativeModeForSlot(narrativeModes, slot);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("reviewId", slot.reviewId());
             item.put("theme", slot.theme());
             item.put("mustCover", conciseSlotFacts(slot.mustUse(), 4, 105));
             item.put("mayCover", conciseSlotFacts(slot.mayUse(), 7, 105));
-            List<String> experienceFocus = ideaExperienceFocus(slot.theme());
-            if (!experienceFocus.isEmpty()) {
-                item.put("experienceFocus", experienceFocus);
-            }
-            List<String> exampleDetails = batchExampleDetails(brief, slot, exampleDetailsPicker);
-            if (!exampleDetails.isEmpty()) {
-                item.put("exampleDetails", exampleDetails);
-            }
             item.put("clientMustConfirm", conciseSlotFacts(slot.clientMustConfirm(), 6, 120));
             item.put("previousDraftToAvoid", limit(cleanPreviousDraft(slot.previousDraft()), 700));
-            item.put("openingInstruction", slot.structure());
-            item.put("lengthInstruction", lengthInstructionForMode(slot, narrativeMode));
             item.put("toneInstruction", slot.tone());
-            item.put("narrativeMode", narrativeMode.key());
-            item.put("narrativeInstruction", narrativeMode.instruction());
-            item.put("detailBudget", narrativeMode.detailBudget());
-            item.put("requiredDepth", narrativeMode.requiredDepth());
-            item.put("processVerbPolicy", narrativeMode.processVerbPolicy());
             items.add(item);
         }
 
@@ -890,46 +848,34 @@ public class AiSingleReviewDraftFactory {
                 "authorType", request.authorType(),
                 "emojiMode", emojiInstruction(request.emojiMode()),
                 "length", "смешанная: часть коротких, часть средних, без одинакового размера",
-                "shortReviewCadence", "каждая 2-3 карточка должна быть короткой: 1 предложение или максимум 2 короткие фразы",
                 "globalStructure", variant.structure(),
                 "globalVoice", variant.voice(),
                 "variationNonce", variationNonce,
-                "variationInstruction", "при повторной генерации меняй шаблонные товары, детали, narrativeMode и первый ход относительно previousDraftToAvoid"
+                "variationInstruction", "при повторной генерации меняй первое предложение и порядок мыслей относительно previousDraftToAvoid"
         ));
         payload.put("reviewSlots", items);
         payload.put("batchRules", List.of(
                 "Внутри каждого drafts[] обязательно верни reviewId, draft, sourceFacts, clientMustConfirm и safetyNotes.",
                 "Верни draft для каждого reviewId из reviewSlots, не пропускай карточки.",
-                "narrativeMode обязателен для исполнения: разные карточки должны звучать как разные жанры отзывов, а не как один шаблон с разными фактами.",
                 "Не нормализуй все drafts к формуле 'причина -> показали -> согласовали -> объяснили -> итог'. Такая формула допустима максимум для одной карточки в пачке.",
-                "Длина и подробность определяются прежде всего detailBudget/requiredDepth/processVerbPolicy конкретного slot; lengthInstruction вторичен.",
-                "Для режимов с requiredDepth=light можно писать очень коротко: достаточно одного сигнала темы и живого впечатления, без полного раскрытия процесса.",
-                "Для режимов с requiredDepth=medium/full раскрывай тему глубже, но каждый раз другой композицией и без одинаковой цепочки действий.",
                 "У соседних отзывов не должно быть одинакового начала, одинаковой концовки, одинаковой формулы или одинакового набора глаголов процесса.",
-                "В каждом draft покрой смысл slot.theme и совместимую деталь из slot.mustCover/mayCover, но не обязан перечислять всё, если narrativeMode просит короткий отзыв.",
-                "Если slot.experienceFocus не пустой, в full/medium режимах раскрой хотя бы один его нюанс; в light-режимах достаточно намека или короткого результата. Не копируй вопросные формулировки вроде 'было ли', 'присылали ли', 'как согласовали'.",
+                "В каждом draft покрой смысл slot.theme и одну совместимую деталь из slot.mustCover/mayCover, если такая деталь действительно подходит.",
                 "Если есть writingGuide, используй его только как подсказку по языку ниши, раскрытию темы и разнообразию. Не считай writingGuide подтверждёнными фактами компании или клиента.",
                 "Не копируй writingGuide дословно в draft; превращай подсказки в естественный опыт клиента.",
-                "Если slot.theme или slot.experienceFocus даёт список вариантов через 'или', в draft выбери один конкретный вариант, чтобы клиент не выглядел неуверенным в собственном заказе; выбранный вариант добавь в clientMustConfirm и safetyNotes, если он не подтверждён отдельно.",
-                "Если slot.exampleDetails не пустой, обязательно используй минимум одну деталь оттуда в draft; для автосервиса бери узел, работу, симптом или запчасть, но не придумывай модель авто.",
-                "Если previousDraftToAvoid уже содержит марку авто, товар или конкретную деталь из exampleDetails, не повторяй её в draft этой карточки.",
                 "Для автосервиса марку или модель авто используй только если она явно есть в slot.theme/service/product/extraDetail/mustCover/mayCover.",
                 "Не пиши мета-фразы по структуре задания: 'обсудили задачу: ...', 'обозначили тему', 'уточнили хоррор-квесты/детские квесты'. Это не клиентский опыт.",
                 "Если mustCover/mayCover содержит длинный список через запятые или обрезанный фрагмент, не копируй список в draft; выбери только совместимую конкретную деталь или вынеси её в clientMustConfirm/safetyNotes.",
-                "Если взял деталь из exampleDetails, добавь её в clientMustConfirm и safetyNotes.",
                 "Если в slot.mustCover/mayCover есть название товара, квеста, пакета, длительность или цена, не обходи это общей фразой; используй конкретику естественно.",
                 "Если используешь точную цену из входа, добавь её в clientMustConfirm и safetyNotes: цена должна быть актуальна на момент публикации.",
-                "Можно добавить одну бытовую деталь для естественности: торт, пицца, одноразовая посуда, угощения, дорога после работы, ожидание, если она совместима с темой; добавь её в clientMustConfirm и safetyNotes.",
                 "Не выдумывай точные имена, возраст, количество участников, цены, сроки, гарантии и сотрудников, если их нет во входе.",
                 "businessType и allowedScenarioTypes только помогают выбрать лексику; тема карточки, mustCover и mayCover важнее.",
                 "Не пиши название компании из reviewGenerationBrief.company в draft.",
                 "Не начинай draft с пересказа служебной темы. Сразу пиши сам отзыв от лица клиента.",
                 "Не выводи в draft reviewId, названия полей, цену как поле, категорию как поле или формулировки задания.",
                 "Не используй аналитические слова из отчёта: Смешанный бизнес, Операционный профиль, Клиентский путь, Репутационный вывод, позиционировать.",
-                "Выполни openingInstruction, lengthInstruction и toneInstruction для каждой карточки.",
-                "openingInstruction должен быть раскрыт всем текстом: первая фраза задаёт вход, следующие фразы продолжают тот же смысл, а не перескакивают к другой служебной подсказке.",
+                "Учитывай toneInstruction для каждой карточки, но не вставляй его в текст явно.",
                 "Перед финальным JSON мысленно проверь сочетание фраз, синтаксис и разговорную манеру: отзыв должен звучать как единая история, а не набор пунктов.",
-                "sourceFacts должны быть короткими использованными фактами, а не служебными полями. Шаблонные детали из exampleDetails помечай как требующие проверки."
+                "sourceFacts должны быть короткими использованными фактами, а не служебными полями."
         ));
         return "Напиши разные отзывы пачкой по чистой выжимке и слотам. Ответ JSON строго по схеме из system prompt.\n"
                 + objectMapper.writeValueAsString(payload);
@@ -1072,12 +1018,11 @@ public class AiSingleReviewDraftFactory {
         payload.put("specificity", specificityPayload(request, selectedIdea, fallbackFacts));
         payload.put("rules", List.of(
                 "Сохрани факты и общий смысл.",
-                "Подтверждённые факты не меняй. Шаблонные детали можно добавлять из templateCandidateDetails, если они подходят теме.",
+                "Подтверждённые факты не меняй. Новые товары, услуги, автоузлы и запчасти не добавляй.",
                 "Сделай текст менее вылизанным: допускается чуть разговорная, неровная фраза.",
                 "Не начинай с 'Заехал', 'Обратился', 'В машине появилась', если это уже звучит шаблонно.",
                 "commonPhrasesCanUseSparingly из specificity можно использовать, но не делай их основой каждого отзыва.",
-                "Сохрани или добавь хотя бы одну конкретную деталь из availableSpecificDetails или templateCandidateDetails.",
-                "Если добавляешь шаблонный товар, услугу, автоузел или запчасть, safetyNotes должен сказать клиенту проверить эту подстановку перед публикацией.",
+                "Сохрани хотя бы одну конкретную деталь из availableSpecificDetails, если она есть.",
                 "Марку или модель автомобиля не добавляй, если её нет во входных данных.",
                 "Если previousDraftToAvoid не пустой, новый draft должен заметно отличаться от него первым предложением, порядком мыслей и финалом.",
                 "Ответ верни JSON с теми же полями: idea, draft, sourceFacts, safetyNotes."
@@ -1102,11 +1047,10 @@ public class AiSingleReviewDraftFactory {
         payload.put("rules", List.of(
                 "Перепиши draftToFix заметно иначе, но только на основе usedFacts, orderContext и reviewTopic.",
                 "commonPhrasesCanUseSparingly можно оставить точечно, но не повторяй те же связки, если они уже есть в draftToFix или previousDraftToAvoid.",
-                "Используй 1-2 конкретные детали из availableSpecificDetails или templateCandidateDetails.",
+                "Используй 1-2 конкретные детали из availableSpecificDetails, если они есть.",
                 "Если точной марки автомобиля нет во входных данных, не придумывай её; пиши машина, авто или автомобиль.",
-                "Если точной запчасти нет во входных данных, можно поставить шаблонную запчасть из templateCandidateDetails, подходящую теме.",
+                "Если точной запчасти нет во входных данных, не придумывай её.",
                 "Не добавляй цены, сроки, гарантии и имена мастеров без входных данных.",
-                "Если используешь шаблонную подстановку, явно добавь в safetyNotes, что клиент должен выбрать/подтвердить эту деталь.",
                 "Сделай одно предложение с новым углом: бытовая причина, неловкость, сомнение, результат или сравнение с прошлым разом.",
                 "Ответ верни JSON с полями idea, draft, sourceFacts, safetyNotes."
         ));
@@ -1127,27 +1071,6 @@ public class AiSingleReviewDraftFactory {
         selectors.put("openingPolicy", variant.openingPolicy());
         selectors.put("commonPhrasePolicy", variant.commonPhrasePolicy());
         return selectors;
-    }
-
-    private Map<String, Object> webStyleMining(
-            String selectedIdea,
-            ReputationContentPack pack,
-            PromptVariant variant
-    ) {
-        ResearchSnapshot snapshot = pack.researchSnapshot();
-        String category = firstNonBlank(snapshot.subCategory(), snapshot.category(), pack.companyProfile().category(), "услуги");
-        Map<String, Object> mining = new LinkedHashMap<>();
-        mining.put("enabled", true);
-        mining.put("task", variant.styleMiningTask());
-        mining.put("searchQueryHint", "живые отзывы " + category + " " + limit(selectedIdea, 80));
-        mining.put("rules", List.of(
-                "Используй web search только чтобы понять типичные формы реальных отзывов: начало, длину, ритм, бытовые детали.",
-                "Не копируй чужие тексты и фразы дословно.",
-                "Можно брать типовые категории марок, товаров, услуг, узлов и запчастей как шаблонные кандидаты, если они подходят теме.",
-                "Не бери из найденных отзывов чужие цены, имена мастеров, адреса, сроки, гарантии и уникальные личные истории.",
-                "Итоговый draft должен смешивать наши данные из companyDigest/orderContext/reviewTopic и шаблонные детали как кандидаты для выбора клиентом."
-        ));
-        return mining;
     }
 
     private Map<String, Object> companyDigest(
@@ -1557,16 +1480,14 @@ public class AiSingleReviewDraftFactory {
                 "Если в теме есть жизненная ситуация, развивай её, но не превращай отзыв в фантазию без опоры на факты.",
                 "Не пиши одинаковую схему 'заехал - проверили - посоветовали - уехал'. Меняй порядок подачи, первое предложение и финальную мысль.",
                 "commonPhrasesCanUseSparingly из specificity разрешены, но не должны повторяться в каждом отзыве и заменять конкретику.",
-                "Используй хотя бы одну конкретную услугу, товар, симптом, автоузел или запчасть из availableSpecificDetails или templateCandidateDetails.",
+                "Используй конкретику только из availableSpecificDetails, companyDigest или orderContext.",
                 "Марку или модель автомобиля используй только если она явно есть во входных данных; если её нет, пиши нейтрально: машина, авто, автомобиль.",
-                "Если точной детали нет во входных данных, можно использовать шаблонную подстановку из templateCandidateDetails или webStyleMining, но safetyNotes должен сказать клиенту проверить её.",
                 "Цены, сроки, гарантии, имена мастеров и точные адреса не делай шаблонными подстановками.",
                 "Не делай текст идеальным: допустимы простые фразы, короткие вставки вроде 'если честно', 'ну', 'по итогу', но без перебора.",
-                "Используй webStyleMining как источник композиции, живого ритма и типовых шаблонных деталей.",
                 "Если previousDraftToAvoid не пустой, новый draft должен заметно отличаться от него.",
                 "Не называй текст черновиком и не проси клиента что-то дописать.",
-                "sourceFacts верни использованные подтверждённые факты и шаблонные детали. Шаблонные детали помечай как 'Шаблонная деталь для проверки: ...'.",
-                "safetyNotes верни коротко: что клиенту стоит проверить перед публикацией, особенно товары, услуги и запчасти из шаблона."
+                "sourceFacts верни использованные подтверждённые факты.",
+                "safetyNotes верни коротко: что клиенту стоит проверить перед публикацией."
         );
     }
 
@@ -1579,12 +1500,11 @@ public class AiSingleReviewDraftFactory {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("availableSpecificDetails", specificDetails);
         payload.put("commercialDetails", availableCommercialDetails(selectedIdea, request.orderContext(), fallbackFacts));
-        payload.put("templateCandidateDetails", templateCandidateDetails(selectedIdea, request.orderContext(), fallbackFacts));
         payload.put("commonPhrasesCanUseSparingly", COMMON_REVIEW_PHRASES);
         payload.put("missingClientDetails", missingClientDetails(selectedIdea, request.orderContext(), fallbackFacts));
         payload.put("instruction", specificDetails.isEmpty()
-                ? "Если подтверждённых клиентских деталей мало, используй templateCandidateDetails как шаблонные подстановки для выбора клиентом, но не придумывай марку или модель авто."
-                : "В draft нужна видимая конкретика из availableSpecificDetails или templateCandidateDetails. Общие фразы допустимы только как фон.");
+                ? "Если подтверждённых клиентских деталей мало, пиши осторожно и не выдумывай товар, услугу, марку или модель авто."
+                : "В draft нужна видимая конкретика из availableSpecificDetails. Общие фразы допустимы только как фон.");
         return payload;
     }
 
@@ -3176,7 +3096,6 @@ public class AiSingleReviewDraftFactory {
             String voice,
             String anchorPolicy,
             String openingPolicy,
-            String styleMiningTask,
             String commonPhrasePolicy,
             double temperature
     ) {
@@ -3191,7 +3110,6 @@ public class AiSingleReviewDraftFactory {
                     voice,
                     ANCHOR_POLICIES.get(random.nextInt(ANCHOR_POLICIES.size())),
                     OPENING_POLICIES.get(random.nextInt(OPENING_POLICIES.size())),
-                    STYLE_MINING_TASKS.get(random.nextInt(STYLE_MINING_TASKS.size())),
                     COMMON_PHRASE_POLICIES.get(random.nextInt(COMMON_PHRASE_POLICIES.size())),
                     TEMPERATURES.get(random.nextInt(TEMPERATURES.size()))
             );

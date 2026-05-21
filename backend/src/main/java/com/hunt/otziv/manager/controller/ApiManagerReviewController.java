@@ -492,6 +492,104 @@ public class ApiManagerReviewController {
         }
     }
 
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/help-drafts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public OrderDetailsResponse createReviewHelpDraftFromBatch(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Authentication authentication
+    ) {
+        if (reviewHelpDraftLocks.putIfAbsent(orderId, Boolean.TRUE) != null) {
+            log.info("REVIEW_HELP_DRAFT_SINGLE_DUPLICATE orderId={} reviewId={} reason=already_running", orderId, reviewId);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь уже готовит тексты для этого заказа");
+        }
+
+        try {
+            OrderDetailsResponse details = managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+            if (!isNewOrderStatus(details.status())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь доступна только для заказа в статусе Новый");
+            }
+            if (details.companyId() == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания заказа не найдена");
+            }
+
+            ReviewDetailsResponse review = details.reviews().stream()
+                    .filter(item -> Objects.equals(item.id(), reviewId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе"));
+            ReputationBatchReviewDraftTarget target = new ReputationBatchReviewDraftTarget(
+                    review.id(),
+                    batchReviewHelpIdea(details, review),
+                    review.text(),
+                    orderReviewHelpContext(details, review)
+            );
+            log.info(
+                    "REVIEW_HELP_DRAFT_SINGLE_TARGET orderId={} companyId={} reviewId={} idea=\"{}\"",
+                    orderId,
+                    details.companyId(),
+                    reviewId,
+                    limit(target.idea(), 180)
+            );
+
+            ReputationBatchReviewDraftRequest request = new ReputationBatchReviewDraftRequest(
+                    null,
+                    null,
+                    "живой, естественный, разные тона и структуры без одинаковых заходов",
+                    "разные обычные клиенты",
+                    "без смайлов",
+                    "",
+                    "mixed",
+                    "economy",
+                    List.of(target)
+            );
+
+            ReputationBatchReviewDraftResult result;
+            try {
+                result = reputationSingleReviewDraftService.generateBatch(details.companyId(), request);
+            } catch (IllegalStateException exception) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+            }
+
+            int saved = 0;
+            for (ReputationBatchReviewDraftItem draft : result.drafts()) {
+                if (!Objects.equals(draft.reviewId(), reviewId) || isBlank(draft.draft())) {
+                    continue;
+                }
+                if (reviewService.updateReviewText(orderId, reviewId, draft.draft())) {
+                    saved++;
+                }
+            }
+            if (saved == 0) {
+                if (result.drafts().isEmpty()) {
+                    throw new ResponseStatusException(
+                            HttpStatus.SERVICE_UNAVAILABLE,
+                            firstNonBlank(
+                                    result.safetyNotes().stream().findFirst().orElse(""),
+                                    "OpenAI не вернул текст для карточки заказа. Проверьте маршрут до OpenAI/proxy и повторите запрос."
+                            )
+                    );
+                }
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "AI-помощь вернула текст, но не удалось сохранить его в карточку заказа"
+                );
+            }
+            log.info(
+                    "REVIEW_HELP_DRAFT_SINGLE_SAVED orderId={} companyId={} reviewId={} returnedDrafts={} provider={} model={}",
+                    orderId,
+                    details.companyId(),
+                    reviewId,
+                    result.drafts().size(),
+                    result.provider(),
+                    result.model()
+            );
+
+            return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+        } finally {
+            reviewHelpDraftLocks.remove(orderId);
+        }
+    }
+
     @PostMapping("/orders/{orderId}/reviews/help-drafts")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse createReviewHelpDrafts(

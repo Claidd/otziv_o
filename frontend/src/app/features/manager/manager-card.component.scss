@@ -119,12 +119,12 @@
   text-decoration: none;
 }
 
-.manager-card header a.telegram-bot-link-pending,
-.phone-row a.telegram-bot-link-pending {
+.manager-card header a.chat-bot-link-pending,
+.phone-row a.chat-bot-link-pending {
   color: var(--otziv-danger);
 }
 
-.phone-row a.telegram-bot-link-pending {
+.phone-row a.chat-bot-link-pending {
   border-color: rgba(207, 64, 64, 0.36);
   background: rgba(207, 64, 64, 0.08);
 }

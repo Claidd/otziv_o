@@ -117,4 +117,10 @@ public class CompanyDTO {
 
     private String telegramBotInviteUrl;
 
+    private Long maxGroupChatId;
+
+    private boolean maxGroupLinked;
+
+    private String maxBotInviteUrl;
+
 }

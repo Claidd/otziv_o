@@ -55,6 +55,12 @@ public class CompanyListDTO {
 
     private String telegramBotInviteUrl;
 
+    private Long maxGroupChatId;
+
+    private boolean maxGroupLinked;
+
+    private String maxBotInviteUrl;
+
     private int nextOrderRequestsCount;
 
     private int failedNextOrderRequestsCount;

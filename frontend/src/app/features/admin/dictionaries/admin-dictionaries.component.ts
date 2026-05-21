@@ -13,6 +13,7 @@ import {
   AdminProduct,
   AdminPromoText,
   AdminSubCategory,
+  AdminTelegramReportScheduleSettings,
   BotImportResponse,
   BotRequest,
   BotsResponse,
@@ -27,6 +28,7 @@ import {
   ProductsResponse,
   PromoTextRequest,
   SubCategoryRequest,
+  TelegramReportScheduleSettingsRequest,
   TitleRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
@@ -56,6 +58,11 @@ type DictionaryMetric = {
   value: number;
   icon: string;
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink';
+};
+
+type DictionarySettingsResponse = {
+  nagulSettings: AdminNagulSettings;
+  telegramReportSettings: AdminTelegramReportScheduleSettings;
 };
 
 const PROMO_TEXT_LABELS: Record<number, string> = {
@@ -133,6 +140,7 @@ export class AdminDictionariesComponent {
   readonly promoButtons = signal<PromoButtonSlot[]>([]);
   readonly selectedPromoManagerId = signal<number | null>(null);
   readonly nagulSettings = signal<AdminNagulSettings | null>(null);
+  readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -207,7 +215,12 @@ export class AdminDictionariesComponent {
 
   readonly settingsForm = this.fb.nonNullable.group({
     nagulCooldownMinutes: [60, [Validators.required, Validators.min(0), Validators.max(1440)]],
-    nagulLookaheadDays: [60, [Validators.required, Validators.min(0), Validators.max(365)]]
+    nagulLookaheadDays: [60, [Validators.required, Validators.min(0), Validators.max(365)]],
+    morningReportEnabled: [true],
+    morningReportTime: ['11:30', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
+    eveningReportEnabled: [true],
+    eveningReportTime: ['22:00', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
+    telegramReportZone: ['Asia/Irkutsk', Validators.required]
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
@@ -257,7 +270,7 @@ export class AdminDictionariesComponent {
       case 'managerTexts':
         return this.managerTexts().length;
       case 'settings':
-        return this.nagulSettings() ? 1 : 0;
+        return this.settingsTotal();
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => {
@@ -280,7 +293,8 @@ export class AdminDictionariesComponent {
       { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
-      { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' }
+      { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
+      { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' }
     ];
   });
 
@@ -316,9 +330,21 @@ export class AdminDictionariesComponent {
         bots: this.dictionariesApi.getBots(),
         promoTexts: this.dictionariesApi.getPromoTextManagement(),
         managerTexts: this.dictionariesApi.getManagerTexts(),
-        nagulSettings: this.dictionariesApi.getNagulSettings()
+        nagulSettings: this.dictionariesApi.getNagulSettings(),
+        telegramReportSettings: this.dictionariesApi.getTelegramReportSettings()
       }).subscribe({
-        next: ({ categories, subCategories, cities, products, phones, bots, promoTexts, managerTexts, nagulSettings }) => {
+        next: ({
+          categories,
+          subCategories,
+          cities,
+          products,
+          phones,
+          bots,
+          promoTexts,
+          managerTexts,
+          nagulSettings,
+          telegramReportSettings
+        }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
           this.cities.set(cities);
@@ -329,6 +355,7 @@ export class AdminDictionariesComponent {
           this.applyPromoManagement(promoTexts);
           this.managerTexts.set(managerTexts);
           this.applyNagulSettings(nagulSettings);
+          this.applyTelegramReportSettings(telegramReportSettings);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -358,6 +385,7 @@ export class AdminDictionariesComponent {
         this.promoButtons.set([]);
         this.selectedPromoManagerId.set(null);
         this.nagulSettings.set(null);
+        this.telegramReportSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -391,7 +419,7 @@ export class AdminDictionariesComponent {
     }
 
     if (this.activeTab() === 'settings') {
-      this.applyNagulSettings(this.nagulSettings() ?? { cooldownMinutes: 60, lookaheadDays: 60 });
+      this.resetSettingsForm();
       return;
     }
 
@@ -618,7 +646,12 @@ export class AdminDictionariesComponent {
     });
     this.settingsForm.reset({
       nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
-      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60
+      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
+      morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
+      morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
+      eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
+      eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
+      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk'
     });
   }
 
@@ -737,7 +770,7 @@ export class AdminDictionariesComponent {
         this.saveManagerText();
         return;
       case 'settings':
-        this.saveNagulSettings();
+        this.saveSettings();
         return;
     }
   }
@@ -829,8 +862,12 @@ export class AdminDictionariesComponent {
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
-      settings: this.nagulSettings() ? 1 : 0
+      settings: this.settingsTotal()
     }[tab];
+  }
+
+  settingsTotal(): number {
+    return (this.nagulSettings() ? 1 : 0) + (this.telegramReportSettings() ? 1 : 0);
   }
 
   categoryTitle(category?: DictionaryOption | null): string {
@@ -871,7 +908,7 @@ export class AdminDictionariesComponent {
     }
 
     if (this.activeTab() === 'settings') {
-      return 'Выгул';
+      return 'Рассылки и выгул';
     }
 
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
@@ -1117,7 +1154,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -1144,12 +1181,15 @@ export class AdminDictionariesComponent {
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
       case 'settings':
-        request = this.dictionariesApi.getNagulSettings();
+        request = forkJoin({
+          nagulSettings: this.dictionariesApi.getNagulSettings(),
+          telegramReportSettings: this.dictionariesApi.getTelegramReportSettings()
+        });
         break;
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -1180,9 +1220,12 @@ export class AdminDictionariesComponent {
           case 'managerTexts':
             this.managerTexts.set(response as AdminManagerText[]);
             break;
-          case 'settings':
-            this.applyNagulSettings(response as AdminNagulSettings);
+          case 'settings': {
+            const payload = response as DictionarySettingsResponse;
+            this.applyNagulSettings(payload.nagulSettings);
+            this.applyTelegramReportSettings(payload.telegramReportSettings);
             break;
+          }
         }
 
         this.loading.set(false);
@@ -1425,24 +1468,40 @@ export class AdminDictionariesComponent {
     });
   }
 
-  private saveNagulSettings(): void {
+  private saveSettings(): void {
     if (this.settingsForm.invalid) {
       this.settingsForm.markAllAsTouched();
       return;
     }
 
-    const cooldownMinutes = Number(this.settingsForm.controls.nagulCooldownMinutes.value ?? 0);
-    const lookaheadDays = Number(this.settingsForm.controls.nagulLookaheadDays.value ?? 60);
-    const request: NagulSettingsRequest = { cooldownMinutes, lookaheadDays };
+    const raw = this.settingsForm.getRawValue();
+    const nagulRequest: NagulSettingsRequest = {
+      cooldownMinutes: Number(raw.nagulCooldownMinutes ?? 0),
+      lookaheadDays: Number(raw.nagulLookaheadDays ?? 60)
+    };
+    const telegramRequest: TelegramReportScheduleSettingsRequest = {
+      morningEnabled: raw.morningReportEnabled,
+      morningTime: raw.morningReportTime,
+      eveningEnabled: raw.eveningReportEnabled,
+      eveningTime: raw.eveningReportTime,
+      zone: raw.telegramReportZone.trim()
+    };
 
     this.saving.set(true);
     this.error.set(null);
 
-    this.dictionariesApi.updateNagulSettings(request).subscribe({
-      next: (saved) => {
+    forkJoin({
+      nagulSettings: this.dictionariesApi.updateNagulSettings(nagulRequest),
+      telegramReportSettings: this.dictionariesApi.updateTelegramReportSettings(telegramRequest)
+    }).subscribe({
+      next: ({ nagulSettings, telegramReportSettings }) => {
         this.saving.set(false);
-        this.applyNagulSettings(saved);
-        this.toastService.success('Настройки сохранены', `${saved.cooldownMinutes} мин, ${saved.lookaheadDays} дн. в выдаче`);
+        this.applyNagulSettings(nagulSettings);
+        this.applyTelegramReportSettings(telegramReportSettings);
+        this.toastService.success(
+          'Настройки сохранены',
+          `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, ${nagulSettings.lookaheadDays} дн.`
+        );
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось сохранить настройки');
@@ -1629,9 +1688,32 @@ export class AdminDictionariesComponent {
 
   private applyNagulSettings(response: AdminNagulSettings): void {
     this.nagulSettings.set(response);
-    this.settingsForm.setValue({
+    this.settingsForm.patchValue({
       nagulCooldownMinutes: response.cooldownMinutes,
       nagulLookaheadDays: response.lookaheadDays
+    });
+  }
+
+  private applyTelegramReportSettings(response: AdminTelegramReportScheduleSettings): void {
+    this.telegramReportSettings.set(response);
+    this.settingsForm.patchValue({
+      morningReportEnabled: response.morningEnabled,
+      morningReportTime: response.morningTime,
+      eveningReportEnabled: response.eveningEnabled,
+      eveningReportTime: response.eveningTime,
+      telegramReportZone: response.zone
+    });
+  }
+
+  private resetSettingsForm(): void {
+    this.settingsForm.reset({
+      nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
+      nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
+      morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
+      morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
+      eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
+      eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
+      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk'
     });
   }
 

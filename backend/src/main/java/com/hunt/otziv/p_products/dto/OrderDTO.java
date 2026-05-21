@@ -70,4 +70,10 @@ public class OrderDTO {
     private boolean telegramGroupLinked;
 
     private String telegramBotInviteUrl;
+
+    private Long maxGroupChatId;
+
+    private boolean maxGroupLinked;
+
+    private String maxBotInviteUrl;
 }

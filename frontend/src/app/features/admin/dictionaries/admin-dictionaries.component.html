@@ -456,6 +456,36 @@
                       <span>{{ nagulSettings()?.lookaheadDays === 0 ? 'только сегодня' : 'вперёд от сегодня' }}</span>
                     </td>
                   </tr>
+                  <tr>
+                    <td>
+                      <strong>Утренняя Telegram-рассылка</strong>
+                      <span>Админский отчёт за сегодня</span>
+                    </td>
+                    <td>
+                      <strong>{{ telegramReportSettings()?.morningEnabled ? (telegramReportSettings()?.morningTime ?? '11:30') : 'выключена' }}</strong>
+                      <span>{{ telegramReportSettings()?.zone ?? 'Asia/Irkutsk' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Вечерняя Telegram-рассылка</strong>
+                      <span>Отчёты специалистам, владельцам и админу</span>
+                    </td>
+                    <td>
+                      <strong>{{ telegramReportSettings()?.eveningEnabled ? (telegramReportSettings()?.eveningTime ?? '22:00') : 'выключена' }}</strong>
+                      <span>{{ telegramReportSettings()?.zone ?? 'Asia/Irkutsk' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Последние запуски</strong>
+                      <span>Защита от повторной отправки за один слот</span>
+                    </td>
+                    <td>
+                      <strong>{{ telegramReportSettings()?.morningLastRunKey || 'утро: нет' }}</strong>
+                      <span>{{ telegramReportSettings()?.eveningLastRunKey || 'вечер: нет' }}</span>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             }
@@ -883,23 +913,54 @@
 
           @case ('settings') {
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
-              <label>
-                <span>Время между выгулами, минут</span>
-                <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes">
-              </label>
+              <div class="settings-section">
+                <h3>Выгул</h3>
+                <label>
+                  <span>Время между выгулами, минут</span>
+                  <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes">
+                </label>
 
-              <label>
-                <span>Горизонт выдачи выгула, дней</span>
-                <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
-              </label>
+                <label>
+                  <span>Горизонт выдачи выгула, дней</span>
+                  <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
+                </label>
+              </div>
+
+              <div class="settings-section">
+                <h3>Telegram-рассылки</h3>
+                <label class="checkbox">
+                  <input type="checkbox" formControlName="morningReportEnabled">
+                  <span>Утренняя рассылка включена</span>
+                </label>
+
+                <label>
+                  <span>Время утренней рассылки</span>
+                  <input type="time" formControlName="morningReportTime">
+                </label>
+
+                <label class="checkbox">
+                  <input type="checkbox" formControlName="eveningReportEnabled">
+                  <span>Вечерняя рассылка включена</span>
+                </label>
+
+                <label>
+                  <span>Время вечерней рассылки</span>
+                  <input type="time" formControlName="eveningReportTime">
+                </label>
+
+                <label>
+                  <span>Часовой пояс</span>
+                  <input type="text" formControlName="telegramReportZone" placeholder="Asia/Irkutsk">
+                </label>
+              </div>
 
               <p class="settings-hint">
-                Значения применяются сразу после сохранения. Если поставить 0 минут, специалист сможет делать выгул без паузы.
-                Если поставить 0 дней, в «Выгул» попадут только отзывы с датой до сегодняшнего дня.
+                Значения применяются сразу после сохранения. Дефолт расписания сохранён как раньше: 11:30 утром и 22:00 вечером.
+                Если поставить 0 минут, специалист сможет делать выгул без паузы.
               </p>
 
               @if (settingsForm.invalid && settingsForm.touched) {
-                <p class="error compact">Укажите паузу от 0 до 1440 минут и горизонт от 0 до 365 дней.</p>
+                <p class="error compact">Проверьте паузу, горизонт, время рассылок и часовой пояс.</p>
               }
 
               <div class="actions">

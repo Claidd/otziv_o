@@ -6,6 +6,7 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -32,7 +33,11 @@ import static org.mockito.Mockito.mock;
 
 class OrderDtoMapperTest {
 
-    private final OrderDtoMapper mapper = new OrderDtoMapper(new TelegramGroupLinkService(mock(CompanyRepository.class)));
+    private final CompanyRepository companyRepository = mock(CompanyRepository.class);
+    private final OrderDtoMapper mapper = new OrderDtoMapper(
+            new TelegramGroupLinkService(companyRepository),
+            new MaxGroupLinkService(companyRepository)
+    );
 
     @Test
     void toBoardDTOMapsOrderForManagerBoard() {
@@ -80,6 +85,7 @@ class OrderDtoMapperTest {
                 "В работе",
                 new BigDecimal("300.00"),
                 "https://chat.example",
+                null,
                 null,
                 "79000000000",
                 "pay text",

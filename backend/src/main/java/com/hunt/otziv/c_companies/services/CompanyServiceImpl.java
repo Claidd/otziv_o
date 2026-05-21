@@ -17,6 +17,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
@@ -82,6 +83,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final OperatorService operatorService;
     private final TelegramService telegramService;
     private final TelegramGroupLinkService telegramGroupLinkService;
+    private final MaxGroupLinkService maxGroupLinkService;
     private final NextOrderRequestRepository nextOrderRequestRepository;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
@@ -741,6 +743,9 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setTelegramGroupChatId(company.getTelegramGroupChatId());
             companyDTO.setTelegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company));
             companyDTO.setTelegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company));
+            companyDTO.setMaxGroupChatId(company.getMaxGroupChatId());
+            companyDTO.setMaxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company));
+            companyDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -787,6 +792,9 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setTelegramGroupChatId(company.getTelegramGroupChatId());
             companyListDTO.setTelegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company));
             companyListDTO.setTelegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company));
+            companyListDTO.setMaxGroupChatId(company.getMaxGroupChatId());
+            companyListDTO.setMaxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company));
+            companyListDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
             companyListDTO.setCountFilials(company.getFilial() == null ? 0 : company.getFilial().size());
             companyListDTO.setUrlFilial(firstFilial != null && firstFilial.getUrl() != null ? firstFilial.getUrl() : "пусто");
             companyListDTO.setStatus(company.getStatus() != null ? company.getStatus().getTitle() : "");
@@ -938,6 +946,13 @@ public class CompanyServiceImpl implements CompanyService{
                 .filials(convertToFilialDTOList(company.getFilial()))
                 .categoryCompany(convertToCategoryDto(company.getCategoryCompany()))
                 .subCategory(convertToSubCategoryDto(company.getSubCategory()))
+                .groupId(company.getGroupId())
+                .telegramGroupChatId(company.getTelegramGroupChatId())
+                .telegramGroupLinked(telegramGroupLinkService.isTelegramGroupLinked(company))
+                .telegramBotInviteUrl(telegramGroupLinkService.buildInviteUrl(company))
+                .maxGroupChatId(company.getMaxGroupChatId())
+                .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
+                .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
                 .build();
     }
 

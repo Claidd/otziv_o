@@ -10,6 +10,13 @@ public class AppSettingService {
 
     public static final String NAGUL_COOLDOWN_MINUTES = "nagul.cooldown.minutes";
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";
+    public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
+    public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
+    public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";
+    public static final String TELEGRAM_REPORTS_EVENING_ENABLED = "telegram.reports.evening.enabled";
+    public static final String TELEGRAM_REPORTS_EVENING_TIME = "telegram.reports.evening.time";
+    public static final String TELEGRAM_REPORTS_EVENING_LAST_RUN_KEY = "telegram.reports.evening.last-run-key";
+    public static final String TELEGRAM_REPORTS_ZONE = "telegram.reports.zone";
     public static final String ARCHIVE_ORDERS_RETENTION_DAYS = "archive.orders.retention.days";
     public static final String ARCHIVE_ORDERS_BATCH_SIZE = "archive.orders.batch.size";
     public static final String ARCHIVE_ORDERS_APPLY_ENABLED = "archive.orders.apply.enabled";

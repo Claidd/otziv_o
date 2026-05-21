@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -39,6 +40,9 @@ class OrderStatusNotificationServiceTest {
 
     @Mock
     private TelegramService telegramService;
+
+    @Mock
+    private MaxBotClient maxBotClient;
 
     @Test
     void sendMessageToGroupSetsSuccessStatusWhenWhatsAppReturnsOk() {
@@ -141,7 +145,8 @@ class OrderStatusNotificationServiceTest {
                 orderRepository,
                 orderStatusService,
                 whatsAppService,
-                telegramService
+                telegramService,
+                maxBotClient
         );
     }
 

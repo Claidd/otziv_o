@@ -234,6 +234,8 @@ try {
         Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_ENABLED" -Value "true"
         Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_HOST" -Value $outboundProxyHost
         Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_PORT" -Value $outboundProxyPort
+        Set-EnvFileValue -Path $stageEnv -Name "MAX_PROXY_ENABLED" -Value "false"
+        Set-EnvFileValue -Path $stageEnv -Name "MAX_PROXY_HOST" -Value ""
     }
 
     if (Test-Path -LiteralPath $bundlePath) {
@@ -412,6 +414,8 @@ set_env TELEGRAM_PROXY_PORT "`$outbound_proxy_port"
 set_env WHATSAPP_PROXY_ENABLED "true"
 set_env WHATSAPP_PROXY_HOST "`$outbound_proxy_host"
 set_env WHATSAPP_PROXY_PORT "`$outbound_proxy_port"
+set_env MAX_PROXY_ENABLED "false"
+set_env MAX_PROXY_HOST ""
 
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +

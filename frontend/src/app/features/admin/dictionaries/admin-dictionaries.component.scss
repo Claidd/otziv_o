@@ -435,6 +435,7 @@ tr.selected td {
 .editor-card input[type='number'],
 .editor-card input[type='date'],
 .editor-card input[type='datetime-local'],
+.editor-card input[type='time'],
 .editor-card textarea,
 .editor-card select,
 .category-form input[type='text'],
@@ -462,6 +463,20 @@ tr.selected td {
 
 .settings-form {
   align-content: start;
+}
+
+.settings-section {
+  display: grid;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(103, 116, 131, 0.12);
+  padding-bottom: 0.95rem;
+}
+
+.settings-section h3 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 0.95rem;
+  line-height: 1.2;
 }
 
 .settings-hint {

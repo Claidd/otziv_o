@@ -5,6 +5,7 @@ import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
@@ -75,6 +76,9 @@ class CompanyServiceImplTest {
     private TelegramGroupLinkService telegramGroupLinkService;
 
     @Mock
+    private MaxGroupLinkService maxGroupLinkService;
+
+    @Mock
     private NextOrderRequestRepository nextOrderRequestRepository;
 
     @Test
@@ -112,6 +116,7 @@ class CompanyServiceImplTest {
                 operatorService,
                 telegramService,
                 telegramGroupLinkService,
+                maxGroupLinkService,
                 nextOrderRequestRepository
         );
     }

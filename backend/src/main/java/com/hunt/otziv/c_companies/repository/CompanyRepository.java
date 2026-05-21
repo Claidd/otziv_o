@@ -499,4 +499,6 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     WHERE c.groupId = :groupId
 """)
     Optional<Company> findByGroupId(String groupId);
+
+    Optional<Company> findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(Long maxLinkUserId);
 }

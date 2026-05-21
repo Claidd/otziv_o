@@ -12,7 +12,7 @@
   <header>
     <a
       [href]="orderHeaderUrl()"
-      [class.telegram-bot-link-pending]="needsTelegramBot()"
+      [class.chat-bot-link-pending]="needsChatBot()"
       target="_blank"
       rel="noopener"
     >
@@ -46,7 +46,7 @@
   <div class="phone-row">
     <a
       [href]="orderChatUrl()"
-      [class.telegram-bot-link-pending]="needsTelegramBot()"
+      [class.chat-bot-link-pending]="needsChatBot()"
       target="_blank"
       rel="noopener"
     >

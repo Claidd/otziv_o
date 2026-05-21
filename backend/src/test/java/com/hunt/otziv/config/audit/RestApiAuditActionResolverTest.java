@@ -225,6 +225,7 @@ class RestApiAuditActionResolverTest {
                 arguments("POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва 8"),
                 arguments("POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/recovery-tasks", "создание восстановления отзыва 25"),
                 arguments("POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/help-draft", "создание AI-помощи для отзыва 25"),
+                arguments("POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/help-drafts", "создание AI-помощи для одного отзыва 25"),
                 arguments("POST", "/api/manager/orders/{orderId}/reviews/help-drafts", "создание AI-помощи для всех отзывов заказа 17"),
                 arguments("PUT", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "редактирование восстановления 8"),
                 arguments("POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/complete", "выполнение восстановления 8"),

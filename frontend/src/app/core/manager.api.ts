@@ -186,6 +186,9 @@ export interface CompanyCardItem {
   telegramGroupChatId?: number | null;
   telegramGroupLinked?: boolean;
   telegramBotInviteUrl?: string;
+  maxGroupChatId?: number | null;
+  maxGroupLinked?: boolean;
+  maxBotInviteUrl?: string;
   nextOrderRequestsCount?: number;
   failedNextOrderRequestsCount?: number;
   nextOrderRequestFilialTitle?: string;
@@ -228,6 +231,9 @@ export interface OrderCardItem {
   telegramGroupChatId?: number | null;
   telegramGroupLinked?: boolean;
   telegramBotInviteUrl?: string;
+  maxGroupChatId?: number | null;
+  maxGroupLinked?: boolean;
+  maxBotInviteUrl?: string;
 }
 
 export interface ManagerMetric {
@@ -843,6 +849,13 @@ export class ManagerApi {
   createReviewHelpDrafts(orderId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/help-drafts`,
+      {}
+    );
+  }
+
+  createReviewHelpDraftForCard(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/help-drafts`,
       {}
     );
   }

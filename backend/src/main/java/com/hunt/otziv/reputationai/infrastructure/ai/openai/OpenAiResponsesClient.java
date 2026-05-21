@@ -238,11 +238,6 @@ public class OpenAiResponsesClient {
         if (!isBlank(options.reasoningEffort())) {
             body.put("reasoning", Map.of("effort", options.reasoningEffort()));
         }
-        body.put("tools", List.of(Map.of(
-                "type", "web_search_preview",
-                "search_context_size", "low"
-        )));
-        body.put("max_tool_calls", 3);
         if (request.jsonObject()) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",

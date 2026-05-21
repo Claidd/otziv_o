@@ -11,7 +11,7 @@ import {
   managerOrderChatUrl,
   managerOrderDetailsUrl,
   managerOrderHeaderUrl,
-  managerOrderNeedsTelegramBot,
+  managerOrderNeedsChatBot,
   managerOrderReviewUrl,
   managerPayableOrderSum,
   managerProgress,
@@ -58,8 +58,8 @@ export class ManagerOrderCardComponent implements OnDestroy {
     return this.cleanUrl(managerOrderHeaderUrl(this.order));
   }
 
-  needsTelegramBot(): boolean {
-    return managerOrderNeedsTelegramBot(this.order);
+  needsChatBot(): boolean {
+    return managerOrderNeedsChatBot(this.order);
   }
 
   orderDetailsUrl(): string {

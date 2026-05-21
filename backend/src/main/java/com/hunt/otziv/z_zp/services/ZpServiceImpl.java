@@ -82,7 +82,7 @@ public class ZpServiceImpl implements ZpService{
                 .filter(obj -> {
                     String role = (String) obj[2];
                     // Фильтруем только по ролям
-                    return "ROLE_MANAGER".equals(role) || "ROLE_WORKER".equals(role);
+                    return "ROLE_MANAGER".equals(role) || "ROLE_WORKER".equals(role) || "ROLE_MARKETOLOG".equals(role);
                 })
                 .sorted(Comparator.comparing((Object[] obj) -> {
                                     String role = (String) obj[2];

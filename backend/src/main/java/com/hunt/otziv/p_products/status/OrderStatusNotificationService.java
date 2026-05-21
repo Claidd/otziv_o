@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.status;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -24,6 +25,7 @@ public class OrderStatusNotificationService {
     private final OrderStatusService orderStatusService;
     private final WhatsAppService whatsAppService;
     private final TelegramService telegramService;
+    private final MaxBotClient maxBotClient;
 
     public boolean sendMessageToGroup(
             String title,
@@ -49,6 +51,7 @@ public class OrderStatusNotificationService {
         log.info("🔹 Клиент WhatsApp: {}", clientId);
         log.info("🔹 Группа WhatsApp: {}", groupId);
         log.info("🔹 Группа Telegram: {}", telegramGroupChatId(order));
+        log.info("🔹 Группа MAX: {}", maxGroupChatId(order));
         log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
 
         String appliedStatus;
@@ -56,8 +59,10 @@ public class OrderStatusNotificationService {
             appliedStatus = sendToWhatsAppOrFallback(title, order, clientId, groupId, message, successStatus);
         } else if (telegramGroupChatId(order) != null) {
             appliedStatus = sendToTelegramOrFallback(title, order, telegramGroupChatId(order), message, successStatus);
+        } else if (maxGroupChatId(order) != null) {
+            appliedStatus = sendToMaxOrFallback(title, order, maxGroupChatId(order), message, successStatus);
         } else {
-            log.warn("⚠️ У компании {} отсутствуют WhatsApp groupId и Telegram group chatId. Статус выставлен без отправки сообщений",
+            log.warn("⚠️ У компании {} отсутствуют WhatsApp groupId, Telegram group chatId и MAX group chatId. Статус выставлен без отправки сообщений",
                     companyTitle(order));
             appliedStatus = applyFallbackStatus(title, order);
         }
@@ -102,6 +107,23 @@ public class OrderStatusNotificationService {
         }
 
         log.warn("⚠️ Сообщение в Telegram-группу {} не отправлено", telegramChatId);
+        notifyManagerAboutFallback(title, order);
+        return applyFallbackStatus(title, order);
+    }
+
+    private String sendToMaxOrFallback(
+            String title,
+            Order order,
+            Long maxChatId,
+            String message,
+            String successStatus
+    ) {
+        boolean sent = maxBotClient.sendMessageToChat(maxChatId, message);
+        if (sent) {
+            return applySuccessStatus(successStatus, order, "MAX");
+        }
+
+        log.warn("⚠️ Сообщение в MAX-группу {} не отправлено", maxChatId);
         notifyManagerAboutFallback(title, order);
         return applyFallbackStatus(title, order);
     }
@@ -171,6 +193,10 @@ public class OrderStatusNotificationService {
 
     private Long telegramGroupChatId(Order order) {
         return order != null && order.getCompany() != null ? order.getCompany().getTelegramGroupChatId() : null;
+    }
+
+    private Long maxGroupChatId(Order order) {
+        return order != null && order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null;
     }
 
     private boolean hasText(String value) {

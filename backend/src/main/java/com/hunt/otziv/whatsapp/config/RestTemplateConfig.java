@@ -50,6 +50,26 @@ public class RestTemplateConfig {
         return new RestTemplate(requestFactory);
     }
 
+    @Bean(name = "maxBotRestTemplate")
+    public RestTemplate maxBotRestTemplate(
+            @Value("${app.http-client.connect-timeout:5s}") Duration connectTimeout,
+            @Value("${app.http-client.read-timeout:30s}") Duration readTimeout,
+            @Value("${max.bot.proxy.enabled:false}") boolean proxyEnabled,
+            @Value("${max.bot.proxy.host:}") String proxyHost,
+            @Value("${max.bot.proxy.port:8888}") int proxyPort
+    ) {
+        SimpleClientHttpRequestFactory requestFactory;
+        if (proxyEnabled && proxyHost != null && !proxyHost.isBlank()) {
+            requestFactory = new SelectiveProxyClientHttpRequestFactory(proxyHost, proxyPort);
+        } else {
+            requestFactory = new SimpleClientHttpRequestFactory();
+        }
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
+
+        return new RestTemplate(requestFactory);
+    }
+
     private static class SelectiveProxyClientHttpRequestFactory extends SimpleClientHttpRequestFactory {
         private final Proxy proxy;
 

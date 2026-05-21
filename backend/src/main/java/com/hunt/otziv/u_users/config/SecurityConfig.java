@@ -202,6 +202,7 @@ public class SecurityConfig {
                 "/api/manager/orders/*/bad-review-tasks/*/change-bot",
                 "/api/manager/orders/*/reviews/*/recovery-tasks",
                 "/api/manager/orders/*/reviews/*/help-draft",
+                "/api/manager/orders/*/reviews/*/help-drafts",
                 "/api/manager/orders/*/recovery-tasks/*/complete"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/recovery-batches/*/client-notified").hasAnyRole("ADMIN", "OWNER", "MANAGER");

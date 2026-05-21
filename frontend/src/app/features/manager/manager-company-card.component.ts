@@ -7,7 +7,7 @@ import {
   managerCompanyHeaderUrl,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
-  managerCompanyNeedsTelegramBot,
+  managerCompanyNeedsChatBot,
   managerCompanyOrderUrl,
   managerHasMeaningfulNote,
   trackManagerAction
@@ -57,8 +57,8 @@ export class ManagerCompanyCardComponent {
     return !!this.companyHeaderUrl();
   }
 
-  needsTelegramBot(): boolean {
-    return managerCompanyNeedsTelegramBot(this.company);
+  needsChatBot(): boolean {
+    return managerCompanyNeedsChatBot(this.company);
   }
 
   companyPhoneLabel(): string {
