@@ -44,11 +44,41 @@ ADMIN_USER="${KEYCLOAK_ADMIN:-$(env_value KEYCLOAK_ADMIN)}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-$(env_value KEYCLOAK_ADMIN_PASSWORD)}"
 BACKEND_CLIENT_ID="${KEYCLOAK_ADMIN_CLIENT_ID:-$(env_value KEYCLOAK_ADMIN_CLIENT_ID)}"
 BACKEND_CLIENT_SECRET="${KEYCLOAK_ADMIN_CLIENT_SECRET:-$(env_value KEYCLOAK_ADMIN_CLIENT_SECRET)}"
+MOBILE_CLIENT_ID="${OTZIV_MOBILE_CLIENT_ID:-$(env_value OTZIV_MOBILE_CLIENT_ID)}"
+MOBILE_NATIVE_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_REDIRECT_URI)}"
+MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI)}"
 
 APP_BASE_URL="${APP_BASE_URL:-https://o-ogo.ru}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-https://o-ogo.ru/keycloak}"
 REALM="${REALM:-otziv}"
 BACKEND_CLIENT_ID="${BACKEND_CLIENT_ID:-otziv-backend}"
+MOBILE_CLIENT_ID="${MOBILE_CLIENT_ID:-otziv-mobile}"
+MOBILE_NATIVE_REDIRECT_URI="${MOBILE_NATIVE_REDIRECT_URI:-otziv://auth/callback}"
+MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-otziv://logout}"
+
+ALT_APP_BASE_URL=""
+case "$APP_BASE_URL" in
+  http://localhost|http://localhost:*|http://localhost/*) ALT_APP_BASE_URL="http://127.0.0.1${APP_BASE_URL#http://localhost}" ;;
+  http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*) ALT_APP_BASE_URL="http://localhost${APP_BASE_URL#http://127.0.0.1}" ;;
+  https://localhost|https://localhost:*|https://localhost/*) ALT_APP_BASE_URL="https://127.0.0.1${APP_BASE_URL#https://localhost}" ;;
+  https://127.0.0.1|https://127.0.0.1:*|https://127.0.0.1/*) ALT_APP_BASE_URL="https://localhost${APP_BASE_URL#https://127.0.0.1}" ;;
+esac
+
+if [ -n "$ALT_APP_BASE_URL" ] && [ "$ALT_APP_BASE_URL" != "$APP_BASE_URL" ]; then
+  FRONTEND_REDIRECT_URIS="[\"$APP_BASE_URL/*\",\"$ALT_APP_BASE_URL/*\"]"
+  FRONTEND_WEB_ORIGINS="[\"$APP_BASE_URL\",\"$ALT_APP_BASE_URL\"]"
+  FRONTEND_LOGOUT_REDIRECT_URIS="$APP_BASE_URL/*##$ALT_APP_BASE_URL/*"
+  MOBILE_REDIRECT_URIS="[\"$APP_BASE_URL/auth/callback\",\"$ALT_APP_BASE_URL/auth/callback\",\"$MOBILE_NATIVE_REDIRECT_URI\"]"
+  MOBILE_WEB_ORIGINS="[\"$APP_BASE_URL\",\"$ALT_APP_BASE_URL\",\"http://localhost\",\"capacitor://localhost\"]"
+  MOBILE_LOGOUT_REDIRECT_URIS="$APP_BASE_URL/login##$ALT_APP_BASE_URL/login##$MOBILE_NATIVE_LOGOUT_REDIRECT_URI"
+else
+  FRONTEND_REDIRECT_URIS="[\"$APP_BASE_URL/*\"]"
+  FRONTEND_WEB_ORIGINS="[\"$APP_BASE_URL\"]"
+  FRONTEND_LOGOUT_REDIRECT_URIS="$APP_BASE_URL/*"
+  MOBILE_REDIRECT_URIS="[\"$APP_BASE_URL/auth/callback\",\"$MOBILE_NATIVE_REDIRECT_URI\"]"
+  MOBILE_WEB_ORIGINS="[\"$APP_BASE_URL\",\"http://localhost\",\"capacitor://localhost\"]"
+  MOBILE_LOGOUT_REDIRECT_URIS="$APP_BASE_URL/login##$MOBILE_NATIVE_LOGOUT_REDIRECT_URI"
+fi
 
 if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASSWORD" ]; then
   echo "KEYCLOAK_ADMIN and KEYCLOAK_ADMIN_PASSWORD must be set in $ENV_FILE." >&2
@@ -91,15 +121,118 @@ frontend_client_uuid="$(
 
 if [ -n "$frontend_client_uuid" ] && [ "$frontend_client_uuid" != "id" ]; then
   kc update "clients/$frontend_client_uuid" -r "$REALM" \
-    -s "redirectUris=[\"$APP_BASE_URL/*\"]" \
-    -s "webOrigins=[\"$APP_BASE_URL\"]"
+    -s "redirectUris=$FRONTEND_REDIRECT_URIS" \
+    -s "webOrigins=$FRONTEND_WEB_ORIGINS"
 
   kc update "clients/$frontend_client_uuid" -r "$REALM" \
     -s "attributes.\"pkce.code.challenge.method\"=S256" \
-    -s "attributes.\"post.logout.redirect.uris\"=$APP_BASE_URL/*" \
+    -s "attributes.\"post.logout.redirect.uris\"=$FRONTEND_LOGOUT_REDIRECT_URIS" \
     || echo "Warning: could not update optional frontend client attributes." >&2
 else
   echo "Warning: frontend Keycloak client otziv-frontend was not found." >&2
+fi
+
+mobile_client_uuid="$(
+  kc get clients -r "$REALM" -q clientId="$MOBILE_CLIENT_ID" --fields id --format csv --noquotes \
+    | tr -d '\r' \
+    | tail -n 1
+)"
+
+if [ -z "$mobile_client_uuid" ] || [ "$mobile_client_uuid" = "id" ]; then
+  kc create clients -r "$REALM" \
+    -s "clientId=$MOBILE_CLIENT_ID" \
+    -s name="Otziv Mobile App" \
+    -s description="Ionic Capacitor mobile application" \
+    -s protocol=openid-connect \
+    -s enabled=true \
+    -s publicClient=true \
+    -s standardFlowEnabled=true \
+    -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false \
+    -s serviceAccountsEnabled=false \
+    -s frontchannelLogout=true
+
+  mobile_client_uuid="$(
+    kc get clients -r "$REALM" -q clientId="$MOBILE_CLIENT_ID" --fields id --format csv --noquotes \
+      | tr -d '\r' \
+      | tail -n 1
+  )"
+fi
+
+if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
+  kc update "clients/$mobile_client_uuid" -r "$REALM" \
+    -s enabled=true \
+    -s publicClient=true \
+    -s standardFlowEnabled=true \
+    -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false \
+    -s serviceAccountsEnabled=false \
+    -s frontchannelLogout=true \
+    -s "redirectUris=$MOBILE_REDIRECT_URIS" \
+    -s "webOrigins=$MOBILE_WEB_ORIGINS"
+
+  kc update "clients/$mobile_client_uuid" -r "$REALM" \
+    -s "attributes.\"pkce.code.challenge.method\"=S256" \
+    -s "attributes.\"post.logout.redirect.uris\"=$MOBILE_LOGOUT_REDIRECT_URIS" \
+    || echo "Warning: could not update optional mobile client attributes." >&2
+
+  mobile_roles_mapper_id="$(
+    kc get "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+      --fields id,name --format csv --noquotes \
+      | tr -d '\r' \
+      | awk -F, '$2 == "realm roles" { print $1; exit }'
+  )"
+
+  if [ -n "$mobile_roles_mapper_id" ]; then
+    kc update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_roles_mapper_id" -r "$REALM" \
+      -s name="realm roles" \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-usermodel-realm-role-mapper \
+      -s "config.\"multivalued\"=true" \
+      -s "config.\"userinfo.token.claim\"=true" \
+      -s "config.\"id.token.claim\"=true" \
+      -s "config.\"access.token.claim\"=true" \
+      -s "config.\"claim.name\"=roles" \
+      -s "config.\"jsonType.label\"=String"
+  else
+    kc create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+      -s name="realm roles" \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-usermodel-realm-role-mapper \
+      -s "config.\"multivalued\"=true" \
+      -s "config.\"userinfo.token.claim\"=true" \
+      -s "config.\"id.token.claim\"=true" \
+      -s "config.\"access.token.claim\"=true" \
+      -s "config.\"claim.name\"=roles" \
+      -s "config.\"jsonType.label\"=String"
+  fi
+
+  mobile_audience_mapper_id="$(
+    kc get "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+      --fields id,name --format csv --noquotes \
+      | tr -d '\r' \
+      | awk -F, '$2 == "backend audience" { print $1; exit }'
+  )"
+
+  if [ -n "$mobile_audience_mapper_id" ]; then
+    kc update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_audience_mapper_id" -r "$REALM" \
+      -s name="backend audience" \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-audience-mapper \
+      -s "config.\"included.client.audience\"=$BACKEND_CLIENT_ID" \
+      -s "config.\"id.token.claim\"=false" \
+      -s "config.\"access.token.claim\"=true"
+  else
+    kc create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+      -s name="backend audience" \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-audience-mapper \
+      -s "config.\"included.client.audience\"=$BACKEND_CLIENT_ID" \
+      -s "config.\"id.token.claim\"=false" \
+      -s "config.\"access.token.claim\"=true"
+  fi
+else
+  echo "Warning: mobile Keycloak client $MOBILE_CLIENT_ID was not found and could not be created." >&2
 fi
 
 backend_client_uuid="$(

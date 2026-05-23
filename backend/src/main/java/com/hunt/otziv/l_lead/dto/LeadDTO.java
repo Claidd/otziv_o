@@ -22,6 +22,19 @@ public class LeadDTO {
     @NotEmpty(message = "Номер не может быть пустым")
     private String telephoneLead;
 
+    private String companyName;
+    private String phones;
+    private String mobilePhones;
+    private String whatsappPhones;
+    private String emails;
+    private String websites;
+    private String vkUrl;
+    private String telegramUrl;
+    private String industries;
+    private String companyType;
+    private String region;
+    private String address;
+
     //    город по которому шла рассылка
     @NotEmpty(message = "Город не может быть пустым")
     private String cityLead;

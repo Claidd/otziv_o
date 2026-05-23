@@ -159,6 +159,9 @@ Invoke-External -FilePath "docker" -Arguments @("save", "-o", $imagesTarPath, $a
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docker-compose.yaml"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "whatsapp"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
@@ -233,6 +236,22 @@ compose() {
   fi
 }
 
+require_compose_service() {
+  service_name="`$1"
+  services="`$(compose config --services 2>&1)" || {
+    printf '%s\n' "`$services" >&2
+    echo "Failed to evaluate production compose services." >&2
+    exit 1
+  }
+
+  if ! printf '%s\n' "`$services" | grep -Fxq "`$service_name"; then
+    echo "Required production compose service is missing: `$service_name" >&2
+    echo "Available production compose services:" >&2
+    printf '%s\n' "`$services" >&2
+    exit 1
+  fi
+}
+
 set_env() {
   key="`$1"
   value="`$2"
@@ -300,6 +319,9 @@ if [ "`$uploaded_env" != "1" ]; then
 fi
 
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
+set_env MAX_BOT_WEBHOOK_UPDATE_TYPES "bot_started,bot_added,message_created"
+set_env MAX_BOT_LONG_POLLING_ENABLED "false"
 set_env KEYCLOAK_PUBLIC_URL "https://o-ogo.ru/keycloak"
 set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
 set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
@@ -311,7 +333,10 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 docker load -i "`$images_tar"
 rm -f "`$images_tar"
 
+require_compose_service whatsapp_lika
+require_compose_service whatsapp_vika
 compose down --remove-orphans || true
+compose build whatsapp_lika whatsapp_vika
 compose up -d --remove-orphans
 infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps

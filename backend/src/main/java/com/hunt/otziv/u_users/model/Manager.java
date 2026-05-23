@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.payments.PaymentProfile;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -51,6 +52,10 @@ public class Manager {
     // Клиент Id в Whatsapp
     @Column(name = "group_id")
     private String groupId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_profile_id")
+    private PaymentProfile paymentProfile;
 
     @OneToMany(mappedBy = "manager", fetch = FetchType.LAZY)
     private Set<Company> companies;

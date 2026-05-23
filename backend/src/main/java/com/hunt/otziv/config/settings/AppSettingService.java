@@ -17,6 +17,10 @@ public class AppSettingService {
     public static final String TELEGRAM_REPORTS_EVENING_TIME = "telegram.reports.evening.time";
     public static final String TELEGRAM_REPORTS_EVENING_LAST_RUN_KEY = "telegram.reports.evening.last-run-key";
     public static final String TELEGRAM_REPORTS_ZONE = "telegram.reports.zone";
+    public static final String WHATSAPP_GROUP_SYNC_ENABLED = "whatsapp.group-sync.enabled";
+    public static final String WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES = "whatsapp.group-sync.interval-minutes";
+    public static final String WHATSAPP_GROUP_SYNC_LAST_RUN_AT = "whatsapp.group-sync.last-run-at";
+    public static final String WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT = "whatsapp.group-sync.last-linked-count";
     public static final String ARCHIVE_ORDERS_RETENTION_DAYS = "archive.orders.retention.days";
     public static final String ARCHIVE_ORDERS_BATCH_SIZE = "archive.orders.batch.size";
     public static final String ARCHIVE_ORDERS_APPLY_ENABLED = "archive.orders.apply.enabled";

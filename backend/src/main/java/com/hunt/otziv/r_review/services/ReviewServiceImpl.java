@@ -1390,11 +1390,16 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public Map<String, Pair<Long, Long>> getAllPublishAndVigul(LocalDate firstDayOfMonth, LocalDate localDate) {
-        return reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2)).stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> Pair.of(((Number) row[2]).longValue(), ((Number) row[1]).longValue())
-                ));
+        Map<String, Pair<Long, Long>> result = new HashMap<>();
+        for (Object[] row : reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2))) {
+            String fio = (String) row[0];
+            Pair<Long, Long> counts = Pair.of(((Number) row[2]).longValue(), ((Number) row[1]).longValue());
+            result.merge(fio, counts, (left, right) -> Pair.of(
+                    left.getFirst() + right.getFirst(),
+                    left.getSecond() + right.getSecond()
+            ));
+        }
+        return result;
     }
 
     @Override

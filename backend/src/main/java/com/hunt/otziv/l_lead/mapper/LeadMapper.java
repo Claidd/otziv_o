@@ -16,6 +16,18 @@ public class LeadMapper {
     public LeadDtoTransfer toDtoTransfer(Lead lead) {
         return LeadDtoTransfer.builder()
                 .telephoneLead(lead.getTelephoneLead())
+                .companyName(lead.getCompanyName())
+                .phones(lead.getPhones())
+                .mobilePhones(lead.getMobilePhones())
+                .whatsappPhones(lead.getWhatsappPhones())
+                .emails(lead.getEmails())
+                .websites(lead.getWebsites())
+                .vkUrl(lead.getVkUrl())
+                .telegramUrl(lead.getTelegramUrl())
+                .industries(lead.getIndustries())
+                .companyType(lead.getCompanyType())
+                .region(lead.getRegion())
+                .address(lead.getAddress())
                 .cityLead(lead.getCityLead())
                 .commentsLead(lead.getCommentsLead())
                 .lidStatus(lead.getLidStatus())
@@ -35,6 +47,18 @@ public class LeadMapper {
         return LeadUpdateDto.builder()
                 .leadId(lead.getId())
                 .telephoneLead(lead.getTelephoneLead())
+                .companyName(lead.getCompanyName())
+                .phones(lead.getPhones())
+                .mobilePhones(lead.getMobilePhones())
+                .whatsappPhones(lead.getWhatsappPhones())
+                .emails(lead.getEmails())
+                .websites(lead.getWebsites())
+                .vkUrl(lead.getVkUrl())
+                .telegramUrl(lead.getTelegramUrl())
+                .industries(lead.getIndustries())
+                .companyType(lead.getCompanyType())
+                .region(lead.getRegion())
+                .address(lead.getAddress())
                 .cityLead(lead.getCityLead())
                 .commentsLead(lead.getCommentsLead())
                 .lidStatus(lead.getLidStatus())
@@ -57,6 +81,18 @@ public class LeadMapper {
                          TelephoneRepository telephoneRepository) {
         return Lead.builder()
                 .telephoneLead(dto.getTelephoneLead())
+                .companyName(dto.getCompanyName())
+                .phones(dto.getPhones())
+                .mobilePhones(dto.getMobilePhones())
+                .whatsappPhones(dto.getWhatsappPhones())
+                .emails(dto.getEmails())
+                .websites(dto.getWebsites())
+                .vkUrl(dto.getVkUrl())
+                .telegramUrl(dto.getTelegramUrl())
+                .industries(dto.getIndustries())
+                .companyType(dto.getCompanyType())
+                .region(dto.getRegion())
+                .address(dto.getAddress())
                 .cityLead(dto.getCityLead())
                 .commentsLead(dto.getCommentsLead())
                 .lidStatus(dto.getLidStatus())
@@ -81,6 +117,18 @@ public class LeadMapper {
                              TelephoneRepository telephoneRepository) {
 
         lead.setTelephoneLead(dto.getTelephoneLead()); // <-- меняет телефон
+        lead.setCompanyName(dto.getCompanyName());
+        lead.setPhones(dto.getPhones());
+        lead.setMobilePhones(dto.getMobilePhones());
+        lead.setWhatsappPhones(dto.getWhatsappPhones());
+        lead.setEmails(dto.getEmails());
+        lead.setWebsites(dto.getWebsites());
+        lead.setVkUrl(dto.getVkUrl());
+        lead.setTelegramUrl(dto.getTelegramUrl());
+        lead.setIndustries(dto.getIndustries());
+        lead.setCompanyType(dto.getCompanyType());
+        lead.setRegion(dto.getRegion());
+        lead.setAddress(dto.getAddress());
         lead.setCityLead(dto.getCityLead());
         lead.setCommentsLead(dto.getCommentsLead());
         lead.setLidStatus(dto.getLidStatus());
@@ -105,6 +153,18 @@ public class LeadMapper {
                                         TelephoneRepository telephoneRepository) {
 
         // телефон НЕ трогаем
+        lead.setCompanyName(dto.getCompanyName());
+        lead.setPhones(dto.getPhones());
+        lead.setMobilePhones(dto.getMobilePhones());
+        lead.setWhatsappPhones(dto.getWhatsappPhones());
+        lead.setEmails(dto.getEmails());
+        lead.setWebsites(dto.getWebsites());
+        lead.setVkUrl(dto.getVkUrl());
+        lead.setTelegramUrl(dto.getTelegramUrl());
+        lead.setIndustries(dto.getIndustries());
+        lead.setCompanyType(dto.getCompanyType());
+        lead.setRegion(dto.getRegion());
+        lead.setAddress(dto.getAddress());
         lead.setCityLead(dto.getCityLead());
         lead.setCommentsLead(dto.getCommentsLead());
         lead.setLidStatus(dto.getLidStatus());
@@ -128,6 +188,18 @@ public class LeadMapper {
                                          TelephoneRepository telephoneRepository) {
 
         if (dto.getTelephoneLead() != null) lead.setTelephoneLead(dto.getTelephoneLead());
+        if (dto.getCompanyName() != null) lead.setCompanyName(dto.getCompanyName());
+        if (dto.getPhones() != null) lead.setPhones(dto.getPhones());
+        if (dto.getMobilePhones() != null) lead.setMobilePhones(dto.getMobilePhones());
+        if (dto.getWhatsappPhones() != null) lead.setWhatsappPhones(dto.getWhatsappPhones());
+        if (dto.getEmails() != null) lead.setEmails(dto.getEmails());
+        if (dto.getWebsites() != null) lead.setWebsites(dto.getWebsites());
+        if (dto.getVkUrl() != null) lead.setVkUrl(dto.getVkUrl());
+        if (dto.getTelegramUrl() != null) lead.setTelegramUrl(dto.getTelegramUrl());
+        if (dto.getIndustries() != null) lead.setIndustries(dto.getIndustries());
+        if (dto.getCompanyType() != null) lead.setCompanyType(dto.getCompanyType());
+        if (dto.getRegion() != null) lead.setRegion(dto.getRegion());
+        if (dto.getAddress() != null) lead.setAddress(dto.getAddress());
         if (dto.getCityLead() != null) lead.setCityLead(dto.getCityLead());
         if (dto.getCommentsLead() != null) lead.setCommentsLead(dto.getCommentsLead());
         if (dto.getLidStatus() != null) lead.setLidStatus(dto.getLidStatus());
@@ -151,6 +223,18 @@ public class LeadMapper {
                                       TelephoneRepository telephoneRepository) {
         return Lead.builder()
                 .telephoneLead(dto.getTelephoneLead())
+                .companyName(dto.getCompanyName())
+                .phones(dto.getPhones())
+                .mobilePhones(dto.getMobilePhones())
+                .whatsappPhones(dto.getWhatsappPhones())
+                .emails(dto.getEmails())
+                .websites(dto.getWebsites())
+                .vkUrl(dto.getVkUrl())
+                .telegramUrl(dto.getTelegramUrl())
+                .industries(dto.getIndustries())
+                .companyType(dto.getCompanyType())
+                .region(dto.getRegion())
+                .address(dto.getAddress())
                 .cityLead(dto.getCityLead())
                 .commentsLead(dto.getCommentsLead())
                 .lidStatus(dto.getLidStatus())

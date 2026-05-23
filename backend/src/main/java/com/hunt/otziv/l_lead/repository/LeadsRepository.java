@@ -81,6 +81,22 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("select l.telephoneLead from Lead l where l.telephoneLead in :telephoneLeads")
     List<String> findExistingTelephoneLeads(@Param("telephoneLeads") Collection<String> telephoneLeads);
 
+    @Query("""
+            SELECT l.telephoneLead AS telephoneLead,
+                   l.phones AS phones,
+                   l.mobilePhones AS mobilePhones,
+                   l.whatsappPhones AS whatsappPhones
+            FROM Lead l
+            """)
+    List<LeadPhoneProjection> findAllLeadPhonesForDuplicateScan();
+
+    interface LeadPhoneProjection {
+        String getTelephoneLead();
+        String getPhones();
+        String getMobilePhones();
+        String getWhatsappPhones();
+    }
+
     @Query("select l from Lead l where l.lidStatus = :status")
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findAllByLidStatus(String status, Pageable pageable);
@@ -203,12 +219,323 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCase(String keyword, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCase(String keyword);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+           OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+    """)
+    long countByKeyword(@Param("keyword") String keyword);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndKeyword(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndKeyword(
+            @Param("status") String status,
+            @Param("keyword") String keyword);
+
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndManager(String keyword, Manager manager);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.manager = :manager
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByKeywordAndManager(
+            @Param("keyword") String keyword,
+            @Param("manager") Manager manager,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.manager = :manager
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByKeywordAndManager(
+            @Param("keyword") String keyword,
+            @Param("manager") Manager manager);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager = :manager
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndKeywordAndManager(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("manager") Manager manager,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager = :manager
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndKeywordAndManager(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("manager") Manager manager);
+
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndMarketolog(String keyword, Marketolog marketolog);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.marketolog = :marketolog
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByKeywordAndMarketolog(
+            @Param("keyword") String keyword,
+            @Param("marketolog") Marketolog marketolog,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.marketolog = :marketolog
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByKeywordAndMarketolog(
+            @Param("keyword") String keyword,
+            @Param("marketolog") Marketolog marketolog);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.marketolog = :marketolog
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndKeywordAndMarketolog(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("marketolog") Marketolog marketolog,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.marketolog = :marketolog
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndKeywordAndMarketolog(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("marketolog") Marketolog marketolog);
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager, Pageable pageable);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManager(String status, String keyword, Manager manager);
@@ -229,6 +556,114 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(String keyword, List<Manager> managers, Pageable pageable);
     long countByTelephoneLeadContainingIgnoreCaseAndManagerIn(String keyword, Collection<Manager> managers);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.manager IN :managers
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByKeywordAndManagerToOwner(
+            @Param("keyword") String keyword,
+            @Param("managers") List<Manager> managers,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.manager IN :managers
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByKeywordAndManagerIn(
+            @Param("keyword") String keyword,
+            @Param("managers") Collection<Manager> managers);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndKeywordAndManagerIn(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("managers") List<Manager> managers,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndKeywordAndManagerIn(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("managers") Collection<Manager> managers);
 
 
     @Query("SELECT l FROM Lead l WHERE l.lidStatus = :status AND LOWER(l.telephoneLead) LIKE LOWER(concat('%', :keyword, '%')) AND l.manager IN :managers")
@@ -259,6 +694,122 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     long countByLidStatusAndManagerAndDateNewTryLessThanEqual(String status, Manager manager, LocalDate dateNewTry);
     long countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerAndDateNewTryLessThanEqual(
             String status, String keyword, Manager manager, LocalDate dateNewTry);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager = :manager
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("manager") Manager manager,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager = :manager
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("manager") Manager manager,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword);
 
     List<Lead> findByUpdateStatusAfter(LocalDateTime since);
 
@@ -315,9 +866,21 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
     List<Lead> findByUpdateStatusAfter(LocalDate localDate);
 
-    @Query("SELECT l FROM Lead l WHERE l.operator = :operator AND " +
-            "(LOWER(l.telephoneLead) LIKE LOWER(:keyword)) AND " +
-            "(l.lidStatus = 'Новый' OR l.lidStatus = 'Отправленный' OR l.lidStatus = 'В работу')")
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.operator = :operator
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+          AND (l.lidStatus = 'Новый' OR l.lidStatus = 'Отправленный' OR l.lidStatus = 'В работу')
+    """)
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> getAllLeadsToOperatorAll(
             @Param("operator") Operator operator,
@@ -329,7 +892,16 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
         LEFT JOIN l.telephone t
         WHERE (l.operator = :operator OR t.telephoneOperator = :operator)
           AND l.lidStatus IN :statuses
-          AND LOWER(l.telephoneLead) LIKE LOWER(:keyword)
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
     """)
     @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
     Page<Lead> getSentLeadsByOperator(
@@ -341,7 +913,16 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("""
         SELECT DISTINCT l FROM Lead l
         LEFT JOIN l.telephone t
-        WHERE LOWER(l.telephoneLead) LIKE LOWER(:keyword)
+        WHERE (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
           AND (
             (t.id = :telephoneId AND l.lidStatus = :newStatus)
             OR ((l.operator = :operator OR t.telephoneOperator = :operator) AND l.lidStatus IN :sentStatuses)

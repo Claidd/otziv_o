@@ -8,6 +8,7 @@ import type {
   ManagerOption
 } from '../../core/manager.api';
 import {
+  managerChatBindingWarningForValues,
   managerOptionLabel,
   trackManagerOption
 } from './manager-board.config';
@@ -35,7 +36,8 @@ type CompanyFilialEditDraft = CompanyFilialUpdateRequest & {
 @Component({
   selector: 'app-manager-company-edit-modal',
   imports: [FormsModule],
-  templateUrl: './manager-company-edit-modal.component.html'
+  templateUrl: './manager-company-edit-modal.component.html',
+  styleUrl: './manager-company-edit-modal.component.scss'
 })
 export class ManagerCompanyEditModalComponent {
   @Input() loading = false;
@@ -117,6 +119,19 @@ export class ManagerCompanyEditModalComponent {
 
   optionLabel(option: ManagerOption): string {
     return managerOptionLabel(option);
+  }
+
+  chatBindingWarning(): string {
+    if (!this.company || !this.draft) {
+      return '';
+    }
+
+    return managerChatBindingWarningForValues(
+      this.draft.urlChat,
+      this.company.groupId,
+      this.company.telegramGroupChatId,
+      this.company.maxGroupChatId
+    );
   }
 
   trackOption(index: number, option: ManagerOption): number {

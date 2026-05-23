@@ -262,6 +262,42 @@ body.otziv-dark-theme app-admin-layout {
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
+.whatsapp-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  min-height: 1.35rem;
+  border: 1px solid rgba(117, 143, 184, 0.32);
+  border-radius: 999px;
+  padding: 0 0.48rem;
+  color: var(--otziv-primary);
+  background: rgba(121, 151, 191, 0.1);
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.whatsapp-profile-badge:hover,
+.whatsapp-profile-badge.active {
+  color: white;
+  background: var(--otziv-primary);
+}
+
+.whatsapp-profile-badge .material-icons-sharp {
+  font-size: 0.88rem;
+}
+
+.whatsapp-profile-badge strong {
+  font-size: 0.58rem;
+}
+
+body.otziv-dark-theme .whatsapp-profile-badge {
+  border-color: rgba(149, 164, 190, 0.26);
+  background: rgba(121, 151, 191, 0.16);
+}
+
 .mobile-start-nav {
   display: none;
 }
@@ -390,6 +426,22 @@ button.login-pill.logout {
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
   text-align: center;
+}
+
+.profile-card-meta {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.profile-card-meta p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-card img {
@@ -624,6 +676,22 @@ button.login-pill.logout {
     padding-bottom: 1.25rem;
   }
 
+  .admin-layout.right-panel-default .admin-right {
+    display: block;
+    position: static;
+    grid-column: 2;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    overflow: visible;
+    padding: 0 0 1.25rem;
+  }
+
+  .admin-layout.right-panel-default .admin-right .right-nav {
+    display: none;
+  }
+
   .admin-layout.sidebar-hidden .mobile-start-nav {
     position: static;
     order: 1;
@@ -685,24 +753,29 @@ button.login-pill.logout {
     -webkit-line-clamp: 2;
   }
 
-  .admin-layout.sidebar-hidden .profile-card {
+  .admin-layout.sidebar-hidden .profile-card,
+  .admin-layout.right-panel-default .profile-card {
     margin-top: 0;
     padding: 0.85rem 1rem;
     border-radius: 1.2rem;
   }
 
   .admin-layout.sidebar-hidden .notification,
-  .admin-layout.sidebar-hidden .home-link {
+  .admin-layout.sidebar-hidden .home-link,
+  .admin-layout.right-panel-default .notification,
+  .admin-layout.right-panel-default .home-link {
     border-radius: 1rem;
     padding: 0.72rem 0.85rem;
   }
 
-  .admin-layout.sidebar-hidden .profile-card img {
+  .admin-layout.sidebar-hidden .profile-card img,
+  .admin-layout.right-panel-default .profile-card img {
     width: 4.55rem;
     height: 4.55rem;
   }
 
-  .admin-layout.sidebar-hidden .reminders {
+  .admin-layout.sidebar-hidden .reminders,
+  .admin-layout.right-panel-default .reminders {
     margin-top: 0.75rem;
   }
 }
@@ -745,6 +818,17 @@ button.login-pill.logout {
     padding: 0 0 1.25rem;
   }
 
+  .admin-layout.right-panel-default .admin-right {
+    display: block;
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    overflow: visible;
+    padding: 0 0 1.25rem;
+  }
+
   .admin-layout.sidebar-hidden .mobile-start-nav {
     display: flex;
     order: 1;
@@ -756,7 +840,8 @@ button.login-pill.logout {
     padding: 0 0.35rem;
   }
 
-  .admin-layout.sidebar-hidden .admin-right .right-nav {
+  .admin-layout.sidebar-hidden .admin-right .right-nav,
+  .admin-layout.right-panel-default .admin-right .right-nav {
     display: none;
   }
 
@@ -764,24 +849,29 @@ button.login-pill.logout {
     margin-right: 0;
   }
 
-  .admin-layout.sidebar-hidden .profile-card {
+  .admin-layout.sidebar-hidden .profile-card,
+  .admin-layout.right-panel-default .profile-card {
     margin-top: 0.45rem;
     padding: 0.85rem 1rem;
     border-radius: 1.2rem;
   }
 
   .admin-layout.sidebar-hidden .notification,
-  .admin-layout.sidebar-hidden .home-link {
+  .admin-layout.sidebar-hidden .home-link,
+  .admin-layout.right-panel-default .notification,
+  .admin-layout.right-panel-default .home-link {
     border-radius: 1rem;
     padding: 0.72rem 0.85rem;
   }
 
-  .admin-layout.sidebar-hidden .profile-card img {
+  .admin-layout.sidebar-hidden .profile-card img,
+  .admin-layout.right-panel-default .profile-card img {
     width: 4.55rem;
     height: 4.55rem;
   }
 
-  .admin-layout.sidebar-hidden .reminders {
+  .admin-layout.sidebar-hidden .reminders,
+  .admin-layout.right-panel-default .reminders {
     margin-top: 0.75rem;
   }
 

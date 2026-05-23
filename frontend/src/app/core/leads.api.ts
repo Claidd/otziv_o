@@ -13,6 +13,18 @@ export interface LeadPerson {
 export interface LeadItem {
   id: number;
   telephoneLead: string;
+  companyName?: string;
+  phones?: string;
+  mobilePhones?: string;
+  whatsappPhones?: string;
+  emails?: string;
+  websites?: string;
+  vkUrl?: string;
+  telegramUrl?: string;
+  industries?: string;
+  companyType?: string;
+  region?: string;
+  address?: string;
   cityLead: string;
   commentsLead?: string;
   lidStatus: string;
@@ -75,6 +87,18 @@ export interface LeadEditOptions {
 
 export interface LeadCreateRequest {
   telephoneLead: string;
+  companyName?: string;
+  phones?: string;
+  mobilePhones?: string;
+  whatsappPhones?: string;
+  emails?: string;
+  websites?: string;
+  vkUrl?: string;
+  telegramUrl?: string;
+  industries?: string;
+  companyType?: string;
+  region?: string;
+  address?: string;
   cityLead: string;
   commentsLead?: string;
   managerId?: number | null;
@@ -82,6 +106,18 @@ export interface LeadCreateRequest {
 
 export interface LeadUpdateRequest {
   telephoneLead: string;
+  companyName?: string;
+  phones?: string;
+  mobilePhones?: string;
+  whatsappPhones?: string;
+  emails?: string;
+  websites?: string;
+  vkUrl?: string;
+  telegramUrl?: string;
+  industries?: string;
+  companyType?: string;
+  region?: string;
+  address?: string;
   cityLead: string;
   commentsLead?: string;
   lidStatus: string;
@@ -95,8 +131,23 @@ export interface LeadImportResponse {
   totalRows: number;
   added: number;
   skippedDuplicates: number;
+  skippedWithoutPhones: number;
   skippedInvalid: number;
   errors: string[];
+  managerAssignments: LeadImportManagerAssignment[];
+}
+
+export interface LeadImportManagerAssignment {
+  managerId: number;
+  managerName: string;
+  added: number;
+}
+
+export interface LeadImportRequest {
+  file: File;
+  managerIds: number[];
+  operatorId?: number | null;
+  marketologId?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -130,9 +181,16 @@ export class LeadsApi {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/leads/${id}`);
   }
 
-  importLeads(file: File): Observable<LeadImportResponse> {
+  importLeads(request: LeadImportRequest): Observable<LeadImportResponse> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', request.file);
+    request.managerIds.forEach((managerId) => formData.append('managerIds', String(managerId)));
+    if (request.operatorId != null) {
+      formData.append('operatorId', String(request.operatorId));
+    }
+    if (request.marketologId != null) {
+      formData.append('marketologId', String(request.marketologId));
+    }
     return this.http.post<LeadImportResponse>(`${appEnvironment.apiBaseUrl}/api/leads/file-import`, formData);
   }
 

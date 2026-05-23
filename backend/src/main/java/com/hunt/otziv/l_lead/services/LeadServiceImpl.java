@@ -87,6 +87,18 @@ public class LeadServiceImpl implements LeadService {
 
         Lead lead = Lead.builder()
                 .telephoneLead(normalizedPhone)
+                .companyName(leadDTO.getCompanyName())
+                .phones(leadDTO.getPhones())
+                .mobilePhones(leadDTO.getMobilePhones())
+                .whatsappPhones(leadDTO.getWhatsappPhones())
+                .emails(leadDTO.getEmails())
+                .websites(leadDTO.getWebsites())
+                .vkUrl(leadDTO.getVkUrl())
+                .telegramUrl(leadDTO.getTelegramUrl())
+                .industries(leadDTO.getIndustries())
+                .companyType(leadDTO.getCompanyType())
+                .region(leadDTO.getRegion())
+                .address(leadDTO.getAddress())
                 .cityLead(leadDTO.getCityLead())
                 .commentsLead(leadDTO.getCommentsLead())
                 .lidStatus(LeadStatus.NEW.title)
@@ -123,6 +135,67 @@ public class LeadServiceImpl implements LeadService {
             saveLead.setTelephoneLead(normalizedPhone);
             isChanged = true;
             log.info("Обновили телефон");
+        }
+
+        if (!Objects.equals(leadDTO.getCompanyName(), saveLead.getCompanyName())){
+            saveLead.setCompanyName(leadDTO.getCompanyName());
+            isChanged = true;
+            log.info("Обновили название компании");
+        }
+        if (!Objects.equals(leadDTO.getPhones(), saveLead.getPhones())){
+            saveLead.setPhones(leadDTO.getPhones());
+            isChanged = true;
+            log.info("Обновили телефоны");
+        }
+        if (!Objects.equals(leadDTO.getMobilePhones(), saveLead.getMobilePhones())){
+            saveLead.setMobilePhones(leadDTO.getMobilePhones());
+            isChanged = true;
+            log.info("Обновили мобильные телефоны");
+        }
+        if (!Objects.equals(leadDTO.getWhatsappPhones(), saveLead.getWhatsappPhones())){
+            saveLead.setWhatsappPhones(leadDTO.getWhatsappPhones());
+            isChanged = true;
+            log.info("Обновили WhatsApp телефоны");
+        }
+        if (!Objects.equals(leadDTO.getEmails(), saveLead.getEmails())){
+            saveLead.setEmails(leadDTO.getEmails());
+            isChanged = true;
+            log.info("Обновили email");
+        }
+        if (!Objects.equals(leadDTO.getWebsites(), saveLead.getWebsites())){
+            saveLead.setWebsites(leadDTO.getWebsites());
+            isChanged = true;
+            log.info("Обновили сайты");
+        }
+        if (!Objects.equals(leadDTO.getVkUrl(), saveLead.getVkUrl())){
+            saveLead.setVkUrl(leadDTO.getVkUrl());
+            isChanged = true;
+            log.info("Обновили VK");
+        }
+        if (!Objects.equals(leadDTO.getTelegramUrl(), saveLead.getTelegramUrl())){
+            saveLead.setTelegramUrl(leadDTO.getTelegramUrl());
+            isChanged = true;
+            log.info("Обновили Telegram");
+        }
+        if (!Objects.equals(leadDTO.getIndustries(), saveLead.getIndustries())){
+            saveLead.setIndustries(leadDTO.getIndustries());
+            isChanged = true;
+            log.info("Обновили отрасли");
+        }
+        if (!Objects.equals(leadDTO.getCompanyType(), saveLead.getCompanyType())){
+            saveLead.setCompanyType(leadDTO.getCompanyType());
+            isChanged = true;
+            log.info("Обновили тип компании");
+        }
+        if (!Objects.equals(leadDTO.getRegion(), saveLead.getRegion())){
+            saveLead.setRegion(leadDTO.getRegion());
+            isChanged = true;
+            log.info("Обновили регион");
+        }
+        if (!Objects.equals(leadDTO.getAddress(), saveLead.getAddress())){
+            saveLead.setAddress(leadDTO.getAddress());
+            isChanged = true;
+            log.info("Обновили адрес");
         }
 
         /*Проверяем не равен ли мейл предыдущему, если нет, то меняем флаг на тру*/
@@ -251,7 +324,7 @@ public class LeadServiceImpl implements LeadService {
         keywords = normalizeKeyword(keywords);
         Pageable pageable = leadPageable(pageNumber, pageSize, sortDirection);
         if (!keywords.isEmpty()) {
-            return toDtoPage(findLeadsByKeyword(keywords, principal, pageable), pageable);
+            return toDtoPage(findLeadsByStatusAndKeyword(status, keywords, principal, pageable), pageable);
         }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
@@ -314,7 +387,7 @@ public class LeadServiceImpl implements LeadService {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
         if (!keyword.isEmpty()) {
-            return countLeadsByKeyword(keyword, principal);
+            return countLeadsByStatusAndKeyword(status, keyword, principal);
         }
         if ("ROLE_ADMIN".equals(userRole)) {
             return keyword.isEmpty()
@@ -358,7 +431,7 @@ public class LeadServiceImpl implements LeadService {
         keywords = normalizeKeyword(keywords);
         Pageable pageable = leadPageable(pageNumber, pageSize, sortDirection);
         if (!keywords.isEmpty()) {
-            return toDtoPage(findLeadsByKeyword(keywords, principal, pageable), pageable);
+            return toDtoPage(findLeadsByStatusAndKeyword(status, keywords, principal, pageable), pageable);
         }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
@@ -424,7 +497,7 @@ public class LeadServiceImpl implements LeadService {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
         if (!keyword.isEmpty()) {
-            return countLeadsByKeyword(keyword, principal);
+            return countLeadsByStatusAndKeyword(status, keyword, principal);
         }
         if ("ROLE_ADMIN".equals(userRole)) {
             return keyword.isEmpty()
@@ -541,10 +614,10 @@ public class LeadServiceImpl implements LeadService {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by(dateDirectionForDaysAgo(sortDirection), "dateNewTry"));
-        if (!keyword.isEmpty()) {
-            return toDtoPage(findLeadsByKeyword(keyword, principal, pageable), pageable);
-        }
         LocalDate today = LocalDate.now();
+        if (!keyword.isEmpty()) {
+            return toDtoPage(findLeadsToDateReSendByKeyword(status, keyword, today, principal, pageable), pageable);
+        }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
@@ -596,10 +669,10 @@ public class LeadServiceImpl implements LeadService {
     public long countLeadsToDateReSend(String status, String keywords, Principal principal) {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
-        if (!keyword.isEmpty()) {
-            return countLeadsByKeyword(keyword, principal);
-        }
         LocalDate today = LocalDate.now();
+        if (!keyword.isEmpty()) {
+            return countLeadsToDateReSendByKeyword(status, keyword, today, principal);
+        }
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             return keyword.isEmpty()
                     ? leadsRepository.countByLidStatusAndDateNewTryLessThanEqual(status, today)
@@ -637,7 +710,7 @@ public class LeadServiceImpl implements LeadService {
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
             log.debug("Зашли список лидов без статуса для админа/владельца");
             if (!keyword.isEmpty()){
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCase(keyword,pageable);
+                leadsPage = leadsRepository.searchByKeyword(keywordPattern(keyword), pageable);
             }
             else leadsPage = leadsRepository.findAll(pageable);
             leadDTOs = leadsPage.getContent()
@@ -652,7 +725,7 @@ public class LeadServiceImpl implements LeadService {
             log.debug("Зашли список лидов без статуса для менеджера");
             Manager manager = currentManager(principal);
             if (!keyword.isEmpty()){
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keyword, manager,pageable);
+                leadsPage = leadsRepository.searchByKeywordAndManager(keywordPattern(keyword), manager, pageable);
             }
             else leadsPage = leadsRepository.findAllByManager(manager,pageable);
             leadDTOs = leadsPage.getContent()
@@ -688,53 +761,138 @@ public class LeadServiceImpl implements LeadService {
         if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
             return keyword.isEmpty()
                     ? leadsRepository.count()
-                    : leadsRepository.countByTelephoneLeadContainingIgnoreCase(keyword);
+                    : leadsRepository.countByKeyword(keywordPattern(keyword));
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             Manager manager = currentManager(principal);
             return keyword.isEmpty()
                     ? leadsRepository.countByManager(manager)
-                    : leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManager(keyword, manager);
+                    : leadsRepository.countByKeywordAndManager(keywordPattern(keyword), manager);
         }
         return 0;
     }
 
     private Page<Lead> findLeadsByKeyword(String keyword, Principal principal, Pageable pageable) {
         String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
         if ("ROLE_ADMIN".equals(userRole)) {
-            return leadsRepository.findByTelephoneLeadContainingIgnoreCase(keyword, pageable);
+            return leadsRepository.searchByKeyword(pattern, pageable);
         }
         if ("ROLE_OWNER".equals(userRole)) {
             List<Manager> managerList = currentOwnerManagers(principal);
             return managerList.isEmpty()
                     ? Page.empty(pageable)
-                    : leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keyword, managerList, pageable);
+                    : leadsRepository.searchByKeywordAndManagerToOwner(pattern, managerList, pageable);
         }
         if ("ROLE_MANAGER".equals(userRole)) {
-            return leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManager(keyword, currentManager(principal), pageable);
+            return leadsRepository.searchByKeywordAndManager(pattern, currentManager(principal), pageable);
         }
         if ("ROLE_MARKETOLOG".equals(userRole)) {
-            return leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndMarketolog(keyword, currentMarketolog(principal), pageable);
+            return leadsRepository.searchByKeywordAndMarketolog(pattern, currentMarketolog(principal), pageable);
         }
         return Page.empty(pageable);
     }
 
     private long countLeadsByKeyword(String keyword, Principal principal) {
         String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
         if ("ROLE_ADMIN".equals(userRole)) {
-            return leadsRepository.countByTelephoneLeadContainingIgnoreCase(keyword);
+            return leadsRepository.countByKeyword(pattern);
         }
         if ("ROLE_OWNER".equals(userRole)) {
             List<Manager> managerList = currentOwnerManagers(principal);
             return managerList.isEmpty()
                     ? 0
-                    : leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManagerIn(keyword, managerList);
+                    : leadsRepository.countByKeywordAndManagerIn(pattern, managerList);
         }
         if ("ROLE_MANAGER".equals(userRole)) {
-            return leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManager(keyword, currentManager(principal));
+            return leadsRepository.countByKeywordAndManager(pattern, currentManager(principal));
         }
         if ("ROLE_MARKETOLOG".equals(userRole)) {
-            return leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndMarketolog(keyword, currentMarketolog(principal));
+            return leadsRepository.countByKeywordAndMarketolog(pattern, currentMarketolog(principal));
+        }
+        return 0;
+    }
+
+    private Page<Lead> findLeadsByStatusAndKeyword(String status, String keyword, Principal principal, Pageable pageable) {
+        String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            return leadsRepository.searchByStatusAndKeyword(status, pattern, pageable);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = currentOwnerManagers(principal);
+            return managerList.isEmpty()
+                    ? Page.empty(pageable)
+                    : leadsRepository.searchByStatusAndKeywordAndManagerIn(status, pattern, managerList, pageable);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.searchByStatusAndKeywordAndManager(status, pattern, currentManager(principal), pageable);
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            return leadsRepository.searchByStatusAndKeywordAndMarketolog(status, pattern, currentMarketolog(principal), pageable);
+        }
+        return Page.empty(pageable);
+    }
+
+    private long countLeadsByStatusAndKeyword(String status, String keyword, Principal principal) {
+        String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            return leadsRepository.countByStatusAndKeyword(status, pattern);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            List<Manager> managerList = currentOwnerManagers(principal);
+            return managerList.isEmpty()
+                    ? 0
+                    : leadsRepository.countByStatusAndKeywordAndManagerIn(status, pattern, managerList);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.countByStatusAndKeywordAndManager(status, pattern, currentManager(principal));
+        }
+        if ("ROLE_MARKETOLOG".equals(userRole)) {
+            return leadsRepository.countByStatusAndKeywordAndMarketolog(status, pattern, currentMarketolog(principal));
+        }
+        return 0;
+    }
+
+    private Page<Lead> findLeadsToDateReSendByKeyword(
+            String status,
+            String keyword,
+            LocalDate dateNewTry,
+            Principal principal,
+            Pageable pageable
+    ) {
+        String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            return leadsRepository.searchByStatusAndDateNewTryLessThanEqualAndKeyword(status, dateNewTry, pattern, pageable);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.searchByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
+                    status,
+                    currentManager(principal),
+                    dateNewTry,
+                    pattern,
+                    pageable
+            );
+        }
+        return Page.empty(pageable);
+    }
+
+    private long countLeadsToDateReSendByKeyword(String status, String keyword, LocalDate dateNewTry, Principal principal) {
+        String userRole = getRole(principal);
+        String pattern = keywordPattern(keyword);
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+            return leadsRepository.countByStatusAndDateNewTryLessThanEqualAndKeyword(status, dateNewTry, pattern);
+        }
+        if ("ROLE_MANAGER".equals(userRole)) {
+            return leadsRepository.countByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
+                    status,
+                    currentManager(principal),
+                    dateNewTry,
+                    pattern
+            );
         }
         return 0;
     }
@@ -765,6 +923,10 @@ public class LeadServiceImpl implements LeadService {
 
     private String normalizeKeyword(String keywords) {
         return keywords == null ? "" : keywords.trim();
+    }
+
+    private String keywordPattern(String keyword) {
+        return "%" + normalizeKeyword(keyword).toLowerCase(Locale.ROOT) + "%";
     }
 
     private User currentUser(Principal principal) {
@@ -1129,6 +1291,18 @@ public class LeadServiceImpl implements LeadService {
             return LeadDTO.builder()
                     .id(lead.getId())
                     .telephoneLead(lead.getTelephoneLead())
+                    .companyName(lead.getCompanyName())
+                    .phones(lead.getPhones())
+                    .mobilePhones(lead.getMobilePhones())
+                    .whatsappPhones(lead.getWhatsappPhones())
+                    .emails(lead.getEmails())
+                    .websites(lead.getWebsites())
+                    .vkUrl(lead.getVkUrl())
+                    .telegramUrl(lead.getTelegramUrl())
+                    .industries(lead.getIndustries())
+                    .companyType(lead.getCompanyType())
+                    .region(lead.getRegion())
+                    .address(lead.getAddress())
                     .cityLead(lead.getCityLead())
                     .lidStatus(lead.getLidStatus())
                     .commentsLead(lead.getCommentsLead())
@@ -1147,6 +1321,18 @@ public class LeadServiceImpl implements LeadService {
             return LeadDTO.builder()
                     .id(lead.getId())
                     .telephoneLead(lead.getTelephoneLead())
+                    .companyName(lead.getCompanyName())
+                    .phones(lead.getPhones())
+                    .mobilePhones(lead.getMobilePhones())
+                    .whatsappPhones(lead.getWhatsappPhones())
+                    .emails(lead.getEmails())
+                    .websites(lead.getWebsites())
+                    .vkUrl(lead.getVkUrl())
+                    .telegramUrl(lead.getTelegramUrl())
+                    .industries(lead.getIndustries())
+                    .companyType(lead.getCompanyType())
+                    .region(lead.getRegion())
+                    .address(lead.getAddress())
                     .cityLead(lead.getCityLead())
                     .lidStatus(lead.getLidStatus())
                     .commentsLead(lead.getCommentsLead())
@@ -1291,6 +1477,18 @@ public class LeadServiceImpl implements LeadService {
             Lead lead = existing.get();
 
             lead.setTelephoneLead(incomingLead.getTelephoneLead());
+            lead.setCompanyName(incomingLead.getCompanyName());
+            lead.setPhones(incomingLead.getPhones());
+            lead.setMobilePhones(incomingLead.getMobilePhones());
+            lead.setWhatsappPhones(incomingLead.getWhatsappPhones());
+            lead.setEmails(incomingLead.getEmails());
+            lead.setWebsites(incomingLead.getWebsites());
+            lead.setVkUrl(incomingLead.getVkUrl());
+            lead.setTelegramUrl(incomingLead.getTelegramUrl());
+            lead.setIndustries(incomingLead.getIndustries());
+            lead.setCompanyType(incomingLead.getCompanyType());
+            lead.setRegion(incomingLead.getRegion());
+            lead.setAddress(incomingLead.getAddress());
             lead.setCityLead(incomingLead.getCityLead());
             lead.setCommentsLead(incomingLead.getCommentsLead());
             lead.setLidStatus(incomingLead.getLidStatus());

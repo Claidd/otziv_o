@@ -53,5 +53,34 @@ class WhatsAppServiceTest {
         assertTrue(result.contains("\"code\":\"unknown_client\""));
         assertTrue(result.contains("whatsapp_lika"));
     }
+
+    @Test
+    void getClientStatus_returnsQrFromGateway() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_lika");
+        config.setUrl("http://whatsapp_lika:3000");
+
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.getForEntity("http://whatsapp_lika:3000/health", String.class))
+                .thenReturn(ResponseEntity.ok("{\"clientId\":\"whatsapp_lika\",\"ready\":false,\"authenticated\":false,\"state\":\"qr\",\"hasQr\":true}"));
+        when(restTemplate.getForEntity("http://whatsapp_lika:3000/qr", String.class))
+                .thenReturn(ResponseEntity.ok("{\"clientId\":\"whatsapp_lika\",\"ready\":false,\"authenticated\":false,\"state\":\"qr\",\"hasQr\":true,\"qrDataUrl\":\"data:image/png;base64,abc\"}"));
+
+        var status = service.getClientStatus("whatsapp_lika");
+
+        assertTrue(status.configured());
+        assertTrue(status.hasQr());
+        assertTrue(status.qrDataUrl().contains("data:image/png"));
+    }
+
+    @Test
+    void getClientStatus_unknownClientIsNotConfigured() {
+        when(properties.getClients()).thenReturn(List.of());
+
+        var status = service.getClientStatus("whatsapp_lika");
+
+        assertTrue(!status.configured());
+        assertTrue(status.message().contains("whatsapp_lika"));
+    }
 }
 

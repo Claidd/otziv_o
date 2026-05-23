@@ -59,6 +59,42 @@ public class Lead {
     @Column(name = "telephone_lead", length = 20, nullable = false, unique = true)
     private String telephoneLead;
 
+    @Column(name = "company_name", length = 500)
+    private String companyName;
+
+    @Column(name = "phones", columnDefinition = "TEXT")
+    private String phones;
+
+    @Column(name = "mobile_phones", columnDefinition = "TEXT")
+    private String mobilePhones;
+
+    @Column(name = "whatsapp_phones", columnDefinition = "TEXT")
+    private String whatsappPhones;
+
+    @Column(name = "emails", columnDefinition = "TEXT")
+    private String emails;
+
+    @Column(name = "websites", columnDefinition = "TEXT")
+    private String websites;
+
+    @Column(name = "vk_url", columnDefinition = "TEXT")
+    private String vkUrl;
+
+    @Column(name = "telegram_url", columnDefinition = "TEXT")
+    private String telegramUrl;
+
+    @Column(name = "industries", columnDefinition = "TEXT")
+    private String industries;
+
+    @Column(name = "company_type", columnDefinition = "TEXT")
+    private String companyType;
+
+    @Column(name = "region", length = 255)
+    private String region;
+
+    @Column(name = "address", columnDefinition = "TEXT")
+    private String address;
+
     //    город по которому шла рассылка
     @Column(name = "city_lead", length = 50, nullable = false)
     private String cityLead;

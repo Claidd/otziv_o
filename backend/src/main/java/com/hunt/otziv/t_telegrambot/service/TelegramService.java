@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
@@ -65,6 +67,10 @@ public class TelegramService extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         long startTime = System.nanoTime();
+        if (update != null && update.hasMyChatMember()) {
+            handleMyChatMemberUpdate(update);
+            return;
+        }
         if (update == null || !update.hasMessage() || !update.getMessage().hasText()) {
             return;
         }
@@ -126,6 +132,43 @@ public class TelegramService extends TelegramLongPollingBot {
         }
 
         checkTimeMethod("Время выполнения запроса для Telegram: ", startTime);
+    }
+
+    private void handleMyChatMemberUpdate(Update update) {
+        if (telegramGroupLinkService == null) {
+            return;
+        }
+
+        ChatMemberUpdated memberUpdate = update.getMyChatMember();
+        if (!isBotAddedToChat(memberUpdate) || memberUpdate.getChat() == null || memberUpdate.getChat().getId() == null) {
+            return;
+        }
+
+        long chatId = memberUpdate.getChat().getId();
+        Optional<String> response = telegramGroupLinkService.handleBotAddedToGroup(
+                chatId,
+                memberUpdate.getChat().getUserName(),
+                memberUpdate.getChat().getTitle()
+        );
+        response.ifPresent(message -> sendMessage(chatId, message));
+    }
+
+    private boolean isBotAddedToChat(ChatMemberUpdated memberUpdate) {
+        if (memberUpdate == null) {
+            return false;
+        }
+
+        String newStatus = statusOf(memberUpdate.getNewChatMember());
+        String oldStatus = statusOf(memberUpdate.getOldChatMember());
+        return isActiveBotStatus(newStatus) && !isActiveBotStatus(oldStatus);
+    }
+
+    private boolean isActiveBotStatus(String status) {
+        return "member".equals(status) || "administrator".equals(status) || "creator".equals(status);
+    }
+
+    private String statusOf(ChatMember chatMember) {
+        return chatMember == null ? "" : chatMember.getStatus();
     }
 
     public boolean sendMessage(long chatId, String text) {

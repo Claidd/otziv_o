@@ -42,6 +42,9 @@ export type SelectedCompany = {
   title: string;
 };
 
+export type ManagerChatBotInviteKind = 'telegram' | 'max' | null;
+export type ManagerChatPlatform = 'whatsapp' | 'telegram' | 'max' | 'unknown';
+
 export type ManagerHistoryView = {
   activeSection: ManagerSection;
   companyStatus: string;
@@ -83,7 +86,7 @@ export const MANAGER_ORDER_ACTIONS: StatusAction[] = [
 
 export const MANAGER_PAGE_SIZE_OPTIONS = [5, 10, 15];
 const ALL_STATUS = 'Все';
-const WORKING_STATUS_LABEL = 'Рабочие';
+const WORKING_STATUS_LABEL = 'Все';
 
 export const EMPTY_MANAGER_COMPANY_PAGE: ManagerPage<CompanyCardItem> = {
   content: [],
@@ -235,6 +238,32 @@ export function managerOrderNeedsChatBot(order: OrderCardItem): boolean {
   return Boolean(managerChatBotInviteUrl(order));
 }
 
+export function managerCompanyChatBotInviteKind(company: CompanyCardItem): ManagerChatBotInviteKind {
+  return managerChatBotInviteKind(company);
+}
+
+export function managerOrderChatBotInviteKind(order: OrderCardItem): ManagerChatBotInviteKind {
+  return managerChatBotInviteKind(order);
+}
+
+export function managerCompanyChatBindingWarning(company: CompanyCardItem): string {
+  return managerChatBindingWarningForValues(
+    company.urlChat,
+    company.groupId,
+    company.telegramGroupChatId,
+    company.maxGroupChatId
+  );
+}
+
+export function managerOrderChatBindingWarning(order: OrderCardItem): string {
+  return managerChatBindingWarningForValues(
+    order.companyUrlChat,
+    order.groupId,
+    order.telegramGroupChatId,
+    order.maxGroupChatId
+  );
+}
+
 export function managerCompanyHeaderUrl(company: CompanyCardItem): string {
   return managerChatBotInviteUrl(company) || company.urlChat || managerCompanyFilialUrl(company);
 }
@@ -243,8 +272,72 @@ export function managerOrderHeaderUrl(order: OrderCardItem): string {
   return managerChatBotInviteUrl(order) || order.companyUrlChat || managerOrderDetailsUrl(order);
 }
 
-function managerChatBotInviteUrl(item: CompanyCardItem | OrderCardItem): string {
+export function managerChatBotInviteUrl(item: CompanyCardItem | OrderCardItem): string {
   return (item.telegramBotInviteUrl ?? '').trim() || (item.maxBotInviteUrl ?? '').trim();
+}
+
+export function managerChatBotInviteKind(item: CompanyCardItem | OrderCardItem): ManagerChatBotInviteKind {
+  if ((item.telegramBotInviteUrl ?? '').trim()) {
+    return 'telegram';
+  }
+
+  if ((item.maxBotInviteUrl ?? '').trim()) {
+    return 'max';
+  }
+
+  return null;
+}
+
+export function managerChatBindingWarningForValues(
+  chatUrl?: string | null,
+  whatsappGroupId?: string | null,
+  telegramGroupChatId?: number | null,
+  maxGroupChatId?: number | null
+): string {
+  const platform = managerChatPlatformFromUrl(chatUrl);
+  if (platform === 'unknown') {
+    return (chatUrl ?? '').trim() ? 'Мессенджер по ссылке не распознан' : '';
+  }
+
+  if (platform === 'whatsapp' && !(whatsappGroupId ?? '').trim()) {
+    return 'WhatsApp-группа не привязана';
+  }
+
+  if (platform === 'telegram' && telegramGroupChatId == null) {
+    return 'Telegram-группа не привязана';
+  }
+
+  if (platform === 'max' && maxGroupChatId == null) {
+    return 'MAX-группа не привязана';
+  }
+
+  return '';
+}
+
+export function managerChatPlatformFromUrl(chatUrl?: string | null): ManagerChatPlatform {
+  const value = (chatUrl ?? '').trim().toLocaleLowerCase('en-US');
+  if (!value) {
+    return 'unknown';
+  }
+
+  if (value.includes('chat.whatsapp.com/')) {
+    return 'whatsapp';
+  }
+
+  if (
+    value.includes('t.me/')
+    || value.includes('telegram.me/')
+    || value.includes('telegram.dog/')
+    || value.startsWith('tg://')
+  ) {
+    return 'telegram';
+  }
+
+  if (value.includes('max.ru/') || value.includes('web.max.ru/')) {
+    return 'max';
+  }
+
+  return 'unknown';
 }
 
 export function managerCompanyFilialUrl(company: CompanyCardItem): string {

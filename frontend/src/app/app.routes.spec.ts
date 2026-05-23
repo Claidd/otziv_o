@@ -12,6 +12,9 @@ describe('routes', () => {
       '',
       'register-client',
       'legacy-migration',
+      'pay/success',
+      'pay/fail',
+      'pay/:token',
       'leads',
       'operator',
       'manager',
@@ -23,6 +26,7 @@ describe('routes', () => {
       'admin/score',
       'admin/analyse',
       'admin/archive',
+      'admin/tbank-payments',
       'admin/user-info/:userId',
       'admin/dictionaries/phones',
       'admin/dictionaries',
@@ -67,6 +71,7 @@ describe('routes', () => {
       ['training', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
       ['admin/analyse', ['ADMIN', 'OWNER']],
       ['admin/archive', ['ADMIN', 'OWNER']],
+      ['admin/tbank-payments', ['ADMIN']],
       ['admin/dictionaries/phones', ['ADMIN', 'OWNER']],
       ['admin/dictionaries', ['ADMIN', 'OWNER', 'MANAGER']]
     ];

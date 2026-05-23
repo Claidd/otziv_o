@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+import java.util.Objects;
+
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.hasDetails;
 
 @Service
@@ -35,8 +38,8 @@ public class OrderStatusNotificationService {
             String message,
             String successStatus
     ) {
-        sendMessageToClientChat(title, order, clientId, groupId, message, successStatus);
-        return true;
+        String appliedStatus = sendMessageToClientChat(title, order, clientId, groupId, message, successStatus);
+        return Objects.equals(appliedStatus, successStatus);
     }
 
     public String sendMessageToClientChat(
@@ -50,20 +53,29 @@ public class OrderStatusNotificationService {
         log.info("📨 Отправка сообщения в клиентский чат:");
         log.info("🔹 Клиент WhatsApp: {}", clientId);
         log.info("🔹 Группа WhatsApp: {}", groupId);
-        log.info("🔹 Группа Telegram: {}", telegramGroupChatId(order));
-        log.info("🔹 Группа MAX: {}", maxGroupChatId(order));
+        Long telegramChatId = telegramGroupChatId(order);
+        Long maxChatId = maxGroupChatId(order);
+        log.info("🔹 Группа Telegram: {}", telegramChatId);
+        log.info("🔹 Группа MAX: {}", maxChatId);
         log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
 
+        ChatPlatform activePlatform = activeChatPlatform(order);
+        log.info("🔹 Активный канал по ссылке: {}", activePlatform);
+
+        String sentChannel = switch (activePlatform) {
+            case WHATSAPP -> hasText(groupId) ? sendToWhatsApp(clientId, groupId, message) : missingActiveChannel("WhatsApp", order);
+            case TELEGRAM -> telegramChatId != null ? sendToTelegram(telegramChatId, message) : missingActiveChannel("Telegram", order);
+            case MAX -> maxChatId != null ? sendToMax(maxChatId, message) : missingActiveChannel("MAX", order);
+            case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
+        };
+
         String appliedStatus;
-        if (hasText(groupId)) {
-            appliedStatus = sendToWhatsAppOrFallback(title, order, clientId, groupId, message, successStatus);
-        } else if (telegramGroupChatId(order) != null) {
-            appliedStatus = sendToTelegramOrFallback(title, order, telegramGroupChatId(order), message, successStatus);
-        } else if (maxGroupChatId(order) != null) {
-            appliedStatus = sendToMaxOrFallback(title, order, maxGroupChatId(order), message, successStatus);
+        if (sentChannel != null) {
+            appliedStatus = applySuccessStatus(successStatus, order, sentChannel);
         } else {
-            log.warn("⚠️ У компании {} отсутствуют WhatsApp groupId, Telegram group chatId и MAX group chatId. Статус выставлен без отправки сообщений",
-                    companyTitle(order));
+            log.warn("⚠️ Сообщение компании {} не отправлено в активный клиентский мессенджер. Статус останется: {}",
+                    companyTitle(order), title);
+            notifyManagerAboutFallback(title, order);
             appliedStatus = applyFallbackStatus(title, order);
         }
 
@@ -74,58 +86,72 @@ public class OrderStatusNotificationService {
         return appliedStatus;
     }
 
-    private String sendToWhatsAppOrFallback(
-            String title,
-            Order order,
+    private String missingActiveChannel(String channel, Order order) {
+        log.warn("⚠️ Активный канал {} для компании {} не готов: нет подходящего chatId или ссылка не распознана",
+                channel, companyTitle(order));
+        return null;
+    }
+
+    private String sendToWhatsApp(
             String clientId,
             String groupId,
-            String message,
-            String successStatus
+            String message
     ) {
-        WhatsAppSendResult result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
+        WhatsAppSendResult result;
+        try {
+            result = WhatsAppSendResult.parse(whatsAppService.sendMessageToGroup(clientId, groupId, message));
+        } catch (Exception e) {
+            log.warn("⚠️ Ошибка при отправке сообщения в WhatsApp-группу {}", groupId, e);
+            return null;
+        }
 
         if (result.isOk()) {
-            return applySuccessStatus(successStatus, order, "WhatsApp");
+            return "WhatsApp";
         }
 
         log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: code={}, error={}",
                 result.code(), result.displayError());
-        notifyManagerAboutFallback(title, order);
-        return applyFallbackStatus(title, order);
+        return null;
     }
 
-    private String sendToTelegramOrFallback(
-            String title,
-            Order order,
+    private String sendToTelegram(
             Long telegramChatId,
-            String message,
-            String successStatus
+            String message
     ) {
-        boolean sent = telegramService.sendMessage(telegramChatId, message);
+        boolean sent;
+        try {
+            sent = telegramService.sendMessage(telegramChatId, message);
+        } catch (Exception e) {
+            log.warn("⚠️ Ошибка при отправке сообщения в Telegram-группу {}", telegramChatId, e);
+            return null;
+        }
+
         if (sent) {
-            return applySuccessStatus(successStatus, order, "Telegram");
+            return "Telegram";
         }
 
         log.warn("⚠️ Сообщение в Telegram-группу {} не отправлено", telegramChatId);
-        notifyManagerAboutFallback(title, order);
-        return applyFallbackStatus(title, order);
+        return null;
     }
 
-    private String sendToMaxOrFallback(
-            String title,
-            Order order,
+    private String sendToMax(
             Long maxChatId,
-            String message,
-            String successStatus
+            String message
     ) {
-        boolean sent = maxBotClient.sendMessageToChat(maxChatId, message);
+        boolean sent;
+        try {
+            sent = maxBotClient.sendMessageToChat(maxChatId, message);
+        } catch (Exception e) {
+            log.warn("⚠️ Ошибка при отправке сообщения в MAX-группу {}", maxChatId, e);
+            return null;
+        }
+
         if (sent) {
-            return applySuccessStatus(successStatus, order, "MAX");
+            return "MAX";
         }
 
         log.warn("⚠️ Сообщение в MAX-группу {} не отправлено", maxChatId);
-        notifyManagerAboutFallback(title, order);
-        return applyFallbackStatus(title, order);
+        return null;
     }
 
     private String applySuccessStatus(String successStatus, Order order, String channel) {
@@ -136,7 +162,7 @@ public class OrderStatusNotificationService {
 
     private String applyFallbackStatus(String title, Order order) {
         order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-        log.info("🔄 Статус заказа установлен вручную: {}", title);
+        log.info("🔄 Статус заказа оставлен/установлен без клиентской отправки: {}", title);
         return title;
     }
 
@@ -199,7 +225,39 @@ public class OrderStatusNotificationService {
         return order != null && order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null;
     }
 
+    private ChatPlatform activeChatPlatform(Order order) {
+        if (order == null || order.getCompany() == null) {
+            return ChatPlatform.UNKNOWN;
+        }
+
+        String value = order.getCompany().getUrlChat();
+        if (!hasText(value)) {
+            return ChatPlatform.UNKNOWN;
+        }
+
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.matches("^(?:https?://)?chat\\.whatsapp\\.com/.+")) {
+            return ChatPlatform.WHATSAPP;
+        }
+        if (normalized.matches("^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/.+")
+                || normalized.startsWith("tg://resolve?")) {
+            return ChatPlatform.TELEGRAM;
+        }
+        if (normalized.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+")) {
+            return ChatPlatform.MAX;
+        }
+
+        return ChatPlatform.UNKNOWN;
+    }
+
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private enum ChatPlatform {
+        WHATSAPP,
+        TELEGRAM,
+        MAX,
+        UNKNOWN
     }
 }

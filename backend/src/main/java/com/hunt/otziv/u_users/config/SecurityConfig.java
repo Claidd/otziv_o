@@ -157,6 +157,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated();
         auth.requestMatchers("/api/metric-snapshots", "/api/metric-snapshots/**").authenticated();
         auth.requestMatchers("/api/cabinet/profile").authenticated();
+        auth.requestMatchers("/api/cabinet/whatsapp").hasRole("MANAGER");
         auth.requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/cabinet/score").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG");
@@ -219,6 +220,8 @@ public class SecurityConfig {
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
+        auth.requestMatchers("/api/payments/public/**").permitAll();
+        auth.requestMatchers(HttpMethod.POST, "/api/payments/tbank/webhook").permitAll();
         auth.requestMatchers("/webhook", "/webhook/**").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/leads/import").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/leads/sync").permitAll();

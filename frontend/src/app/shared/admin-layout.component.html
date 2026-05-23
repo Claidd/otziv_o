@@ -1,4 +1,9 @@
-<div class="admin-layout" [class.sidebar-hidden]="!displaySidebar()">
+<div
+  class="admin-layout"
+  [class.sidebar-hidden]="!displaySidebar()"
+  [class.right-panel-default]="rightPanelMode === 'default'"
+  [class.right-panel-custom]="rightPanelMode === 'custom'"
+>
   @if (displaySidebar()) {
   <aside class="admin-sidebar">
     <a class="brand" routerLink="/">
@@ -138,7 +143,15 @@
           [alt]="profileImageUrl ? profileImageAlt : 'Компания О!'"
         >
         <h2>{{ profileImageUrl ? username() : 'Компания О!' }}</h2>
-        <p>{{ profileImageUrl ? primaryRole() : 'PR, тексты, реклама и карточки компаний' }}</p>
+        <div class="profile-card-meta">
+          <p>{{ profileImageUrl ? primaryRole() : 'PR, тексты, реклама и карточки компаний' }}</p>
+          @if (profileImageUrl && canOpenWhatsAppBinding()) {
+            <a class="whatsapp-profile-badge" routerLink="/cabinet/whatsapp" [class.active]="active === 'whatsapp-bind'" title="QR-код WhatsApp">
+              <span class="material-icons-sharp">qr_code_2</span>
+              <strong>WhatsApp</strong>
+            </a>
+          }
+        </div>
       </article>
 
       <app-personal-reminders mode="full" />

@@ -143,6 +143,9 @@ function Invoke-PublicFrontendSmoke {
         @{ Path = "/contacts"; Name = "contacts" },
         @{ Path = "/receipt-consent"; Name = "receipt consent" },
         @{ Path = "/pay"; Name = "pay form" },
+        @{ Path = "/pay/success"; Name = "payment success" },
+        @{ Path = "/pay/fail"; Name = "payment fail" },
+        @{ Path = "/pay/demo-token"; Name = "tokenized pay form" },
         @{ Path = "/uslugi"; Name = "services redirect alias" },
         @{ Path = "/oplata"; Name = "payment redirect alias" }
     )
@@ -150,6 +153,50 @@ function Invoke-PublicFrontendSmoke {
     foreach ($route in $routes) {
         Assert-FrontendShellRoute -BaseUrl $BaseUrl -Path $route.Path -Name $route.Name
     }
+}
+
+function Convert-EnvBool {
+    param(
+        [AllowNull()][string]$Value,
+        [Parameter(Mandatory = $true)][bool]$Default
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $Default
+    }
+
+    return $Value.Equals("true", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Invoke-TbankPaymentConfigSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$BaseUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath
+    )
+
+    Write-Host "Running T-Bank payment config smoke..."
+    $url = "$($BaseUrl.TrimEnd('/'))/api/payments/public/tbank-status"
+    $status = Invoke-RestMethod -Uri $url -TimeoutSec 20
+
+    $expectedEnabled = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_ENABLED") -Default $false
+    $expectedManagerUi = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED") -Default $false
+    $expectedApplyConfirmed = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS") -Default $false
+    $expectedBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_BASE_URL"
+
+    if ($status.enabled -ne $expectedEnabled) {
+        throw "T-Bank enabled flag mismatch: expected $expectedEnabled, got $($status.enabled)."
+    }
+    if ($status.managerUiEnabled -ne $expectedManagerUi) {
+        throw "T-Bank manager UI flag mismatch: expected $expectedManagerUi, got $($status.managerUiEnabled)."
+    }
+    if ($status.applyConfirmedPayments -ne $expectedApplyConfirmed) {
+        throw "T-Bank apply-confirmed flag mismatch: expected $expectedApplyConfirmed, got $($status.applyConfirmedPayments)."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($expectedBaseUrl) -and $status.baseUrl -ne $expectedBaseUrl.TrimEnd("/")) {
+        throw "T-Bank base URL mismatch: expected $expectedBaseUrl, got $($status.baseUrl)."
+    }
+
+    Write-Host "T-Bank config OK: enabled=$($status.enabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
 }
 
 function Get-KeycloakServiceAccountToken {
@@ -221,6 +268,150 @@ function Get-KeycloakAdminToken {
     }
 
     return $response.access_token
+}
+
+function Invoke-KeycloakAdminCli {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $output = & docker @($ComposeArguments + @("exec", "-T", "keycloak", "/opt/keycloak/bin/kcadm.sh") + $Arguments) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "kcadm command failed: $($Arguments -join ' '): $text"
+    }
+
+    return @($output | ForEach-Object { $_.ToString() })
+}
+
+function Get-KeycloakLoopbackBaseUrls {
+    param([Parameter(Mandatory = $true)][string[]]$BaseUrls)
+
+    $result = [System.Collections.Generic.List[string]]::new()
+    foreach ($baseUrl in $BaseUrls) {
+        if ([string]::IsNullOrWhiteSpace($baseUrl)) {
+            continue
+        }
+
+        $normalized = $baseUrl.TrimEnd("/")
+        if (-not $result.Contains($normalized)) {
+            [void]$result.Add($normalized)
+        }
+
+        try {
+            $uri = [Uri]$normalized
+        } catch {
+            continue
+        }
+
+        $uriHost = $uri.Host.ToLowerInvariant()
+        $alternateHost = if ($uriHost -eq "localhost") {
+            "127.0.0.1"
+        } elseif ($uriHost -eq "127.0.0.1") {
+            "localhost"
+        } else {
+            $null
+        }
+
+        if ([string]::IsNullOrWhiteSpace($alternateHost)) {
+            continue
+        }
+
+        $port = if ($uri.IsDefaultPort) { "" } else { ":$($uri.Port)" }
+        $path = $uri.AbsolutePath.TrimEnd("/")
+        if ($path -eq "/") {
+            $path = ""
+        }
+
+        $alternateUrl = "$($uri.Scheme)://$alternateHost$port$path"
+        if (-not $result.Contains($alternateUrl)) {
+            [void]$result.Add($alternateUrl)
+        }
+    }
+
+    return $result.ToArray()
+}
+
+function Update-KeycloakFrontendLoopbackRedirects {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string]$BaseUrl
+    )
+
+    $realm = Get-KeycloakRealm -EnvPath $EnvPath
+    $adminUser = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN"
+    $adminPassword = Get-EnvValue -Path $EnvPath -Name "KEYCLOAK_ADMIN_PASSWORD"
+    if ([string]::IsNullOrWhiteSpace($adminUser) -or [string]::IsNullOrWhiteSpace($adminPassword)) {
+        throw "KEYCLOAK_ADMIN and KEYCLOAK_ADMIN_PASSWORD must be set for local Keycloak client sync."
+    }
+
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        try {
+            Invoke-KeycloakAdminCli -ComposeArguments $ComposeArguments -Arguments @(
+                "config", "credentials",
+                "--server", "http://localhost:8080/keycloak",
+                "--realm", "master",
+                "--user", $adminUser,
+                "--password", $adminPassword
+            ) | Out-Null
+            break
+        } catch {
+            if ($attempt -eq 30) {
+                throw
+            }
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    $clientLines = Invoke-KeycloakAdminCli -ComposeArguments $ComposeArguments -Arguments @(
+        "get", "clients",
+        "-r", $realm,
+        "-q", "clientId=otziv-frontend",
+        "--fields", "id",
+        "--format", "csv",
+        "--noquotes"
+    )
+    $frontendClientUuid = ($clientLines |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_ -ne "id" } |
+        Select-Object -Last 1)
+
+    if ([string]::IsNullOrWhiteSpace($frontendClientUuid)) {
+        Write-Warning "Keycloak frontend client otziv-frontend was not found; skipping local redirect sync."
+        return
+    }
+
+    $appBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_APP_BASE_URL"
+    if ([string]::IsNullOrWhiteSpace($appBaseUrl)) {
+        $appBaseUrl = $BaseUrl
+    }
+
+    $baseUrls = Get-KeycloakLoopbackBaseUrls -BaseUrls @($appBaseUrl, $BaseUrl)
+    $redirectUris = @($baseUrls | ForEach-Object { "$_/*" })
+    $logoutRedirectUris = $redirectUris -join "##"
+
+    Write-Host "Applying Keycloak frontend origins: $($baseUrls -join ', ')."
+    $adminToken = Get-KeycloakAdminToken -RootUrl $BaseUrl -EnvPath $EnvPath
+    $adminHeaders = @{ Authorization = "Bearer $adminToken" }
+    $apiRoot = "$($BaseUrl.TrimEnd('/'))/keycloak/admin/realms/$realm"
+    $client = Invoke-RestMethod -Uri "$apiRoot/clients/$frontendClientUuid" -Headers $adminHeaders -TimeoutSec 30
+    $attributes = @{}
+    if ($null -ne $client.attributes) {
+        foreach ($property in $client.attributes.PSObject.Properties) {
+            $attributes[$property.Name] = $property.Value
+        }
+    }
+
+    $attributes["pkce.code.challenge.method"] = "S256"
+    $attributes["post.logout.redirect.uris"] = $logoutRedirectUris
+    $client.redirectUris = $redirectUris
+    $client.webOrigins = $baseUrls
+    $client.attributes = $attributes
+
+    $body = $client | ConvertTo-Json -Depth 20
+    Invoke-RestMethod -Uri "$apiRoot/clients/$frontendClientUuid" -Method Put -Headers $adminHeaders -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
 }
 
 function Get-KeycloakClientCredentialsToken {
@@ -914,6 +1105,15 @@ if ($WithDbAdmin) {
 }
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
 
+$localServices = & docker @($composeArgs + @("config", "--services"))
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to list compose services"
+}
+$blockedWhatsAppServices = @($localServices | Where-Object { $_ -in @("whatsapp_lika", "whatsapp_vika") })
+if ($blockedWhatsAppServices.Count -gt 0) {
+    throw "Local prod-like compose must not start WhatsApp services: $($blockedWhatsAppServices -join ', ')"
+}
+
 if ($OfflineAppBuild) {
     Invoke-OfflineAppBuild -RepoRoot $repoRoot -EnvPath $envPath
 }
@@ -950,8 +1150,10 @@ try {
 
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
+    Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
+    Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
     if ($WithReputationAiSmoke) {
         Invoke-ReputationAiSmoke `
             -RootUrl $BaseUrl `

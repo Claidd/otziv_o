@@ -44,6 +44,15 @@ type LeadMetric = {
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
 };
 
+type LeadCategoryPopover = 'industries' | 'companyType';
+
+type LeadContactLink = {
+  key: string;
+  label: string;
+  url: string;
+  title: string;
+};
+
 type CompanyCreateContext = {
   source: CompanyCreateSource;
   leadId: number | null;
@@ -103,9 +112,13 @@ export class LeadsBoardComponent {
   readonly editError = signal<string | null>(null);
   readonly importModalOpen = signal(false);
   readonly importFile = signal<File | null>(null);
+  readonly importManagerIds = signal<number[]>([]);
+  readonly importOperatorId = signal<number | null>(null);
+  readonly importMarketologId = signal<number | null>(null);
   readonly importResult = signal<LeadImportResponse | null>(null);
   readonly importError = signal<string | null>(null);
   readonly importing = signal(false);
+  readonly leadCategoryPopover = signal<{ leadId: number; field: LeadCategoryPopover } | null>(null);
 
   readonly currentPage = computed(() => this.pageFor(this.activeBucket()));
   readonly currentLeads = computed(() => this.currentPage().content);
@@ -347,6 +360,18 @@ export class LeadsBoardComponent {
   openCreateModal(): void {
     this.createDraft.set({
       telephoneLead: '',
+      companyName: '',
+      phones: '',
+      mobilePhones: '',
+      whatsappPhones: '',
+      emails: '',
+      websites: '',
+      vkUrl: '',
+      telegramUrl: '',
+      industries: '',
+      companyType: '',
+      region: '',
+      address: '',
       cityLead: '',
       commentsLead: '',
       managerId: null
@@ -385,6 +410,18 @@ export class LeadsBoardComponent {
 
     this.leadsApi.createLead({
       telephoneLead: draft.telephoneLead.trim(),
+      companyName: this.cleanText(draft.companyName),
+      phones: this.cleanText(draft.phones),
+      mobilePhones: this.cleanText(draft.mobilePhones),
+      whatsappPhones: this.cleanText(draft.whatsappPhones),
+      emails: this.cleanText(draft.emails),
+      websites: this.cleanText(draft.websites),
+      vkUrl: this.cleanText(draft.vkUrl),
+      telegramUrl: this.cleanText(draft.telegramUrl),
+      industries: this.cleanText(draft.industries),
+      companyType: this.cleanText(draft.companyType),
+      region: this.cleanText(draft.region),
+      address: this.cleanText(draft.address),
       cityLead: draft.cityLead.trim(),
       commentsLead: draft.commentsLead?.trim(),
       managerId: this.canChooseCreateManager() ? draft.managerId ?? null : null
@@ -429,8 +466,15 @@ export class LeadsBoardComponent {
 
     this.importModalOpen.set(true);
     this.importFile.set(null);
+    this.importManagerIds.set([]);
+    this.importOperatorId.set(null);
+    this.importMarketologId.set(null);
     this.importResult.set(null);
     this.importError.set(null);
+    this.loadEditOptions(
+      () => this.setDefaultImportManagers(),
+      (message) => this.importError.set(message)
+    );
   }
 
   closeLeadImport(): void {
@@ -440,6 +484,9 @@ export class LeadsBoardComponent {
 
     this.importModalOpen.set(false);
     this.importFile.set(null);
+    this.importManagerIds.set([]);
+    this.importOperatorId.set(null);
+    this.importMarketologId.set(null);
     this.importError.set(null);
   }
 
@@ -450,10 +497,38 @@ export class LeadsBoardComponent {
     this.importError.set(null);
   }
 
+  toggleImportManager(managerId: number, checked: boolean): void {
+    this.importManagerIds.update((managerIds) => {
+      if (checked) {
+        return managerIds.includes(managerId) ? managerIds : [...managerIds, managerId];
+      }
+      return managerIds.filter((id) => id !== managerId);
+    });
+    this.importResult.set(null);
+  }
+
+  isImportManagerSelected(managerId: number): boolean {
+    return this.importManagerIds().includes(managerId);
+  }
+
+  setImportOperatorId(value: unknown): void {
+    this.importOperatorId.set(this.numberOrNull(value));
+    this.importResult.set(null);
+  }
+
+  setImportMarketologId(value: unknown): void {
+    this.importMarketologId.set(this.numberOrNull(value));
+    this.importResult.set(null);
+  }
+
   uploadLeadImport(): void {
     const file = this.importFile();
     if (!file || this.importing()) {
       this.importError.set('Выберите CSV или Excel-файл.');
+      return;
+    }
+    if (this.importManagerIds().length === 0) {
+      this.importError.set('Выберите хотя бы одного менеджера.');
       return;
     }
 
@@ -461,7 +536,12 @@ export class LeadsBoardComponent {
     this.importError.set(null);
     this.importResult.set(null);
 
-    this.leadsApi.importLeads(file).subscribe({
+    this.leadsApi.importLeads({
+      file,
+      managerIds: this.importManagerIds(),
+      operatorId: this.importOperatorId(),
+      marketologId: this.importMarketologId()
+    }).subscribe({
       next: (result) => {
         this.importing.set(false);
         this.importResult.set(result);
@@ -480,8 +560,17 @@ export class LeadsBoardComponent {
 
   importResultMessage(result: LeadImportResponse): string {
     const duplicateText = result.skippedDuplicates ? `, дублей пропущено: ${result.skippedDuplicates}` : '';
+    const withoutPhonesText = result.skippedWithoutPhones ? `, без телефонов: ${result.skippedWithoutPhones}` : '';
     const invalidText = result.skippedInvalid ? `, строк с ошибками: ${result.skippedInvalid}` : '';
-    return `Добавлено: ${result.added}${duplicateText}${invalidText}`;
+    const managersText = result.managerAssignments.length
+      ? `, менеджеров: ${result.managerAssignments.length}`
+      : '';
+    return `Добавлено: ${result.added}${duplicateText}${withoutPhonesText}${invalidText}${managersText}`;
+  }
+
+  importAssignmentLabel(managerId: number, managerName: string): string {
+    const name = managerName?.trim();
+    return name && name !== `ID ${managerId}` ? `${name} / ID ${managerId}` : `ID ${managerId}`;
   }
 
   closeCompanyCreate(): void {
@@ -503,6 +592,18 @@ export class LeadsBoardComponent {
     this.editLead.set(lead);
     this.editDraft.set({
       telephoneLead: lead.telephoneLead,
+      companyName: lead.companyName ?? '',
+      phones: lead.phones ?? '',
+      mobilePhones: lead.mobilePhones ?? '',
+      whatsappPhones: lead.whatsappPhones ?? '',
+      emails: lead.emails ?? '',
+      websites: lead.websites ?? '',
+      vkUrl: lead.vkUrl ?? '',
+      telegramUrl: lead.telegramUrl ?? '',
+      industries: lead.industries ?? '',
+      companyType: lead.companyType ?? '',
+      region: lead.region ?? '',
+      address: lead.address ?? '',
       cityLead: lead.cityLead,
       commentsLead: this.commentFor(lead),
       lidStatus: lead.lidStatus,
@@ -554,9 +655,27 @@ export class LeadsBoardComponent {
     this.editSaving.set(true);
     this.editError.set(null);
 
+    const trimmedDraft: LeadUpdateRequest = {
+      ...draft,
+      telephoneLead: draft.telephoneLead.trim(),
+      companyName: this.cleanText(draft.companyName),
+      phones: this.cleanText(draft.phones),
+      mobilePhones: this.cleanText(draft.mobilePhones),
+      whatsappPhones: this.cleanText(draft.whatsappPhones),
+      emails: this.cleanText(draft.emails),
+      websites: this.cleanText(draft.websites),
+      vkUrl: this.cleanText(draft.vkUrl),
+      telegramUrl: this.cleanText(draft.telegramUrl),
+      industries: this.cleanText(draft.industries),
+      companyType: this.cleanText(draft.companyType),
+      region: this.cleanText(draft.region),
+      address: this.cleanText(draft.address),
+      cityLead: draft.cityLead.trim(),
+      commentsLead: draft.commentsLead?.trim()
+    };
     const request: LeadUpdateRequest = this.canEditLeadTelephone()
-      ? draft
-      : { ...draft, telephoneId: undefined };
+      ? trimmedDraft
+      : { ...trimmedDraft, telephoneId: undefined };
 
     this.leadsApi.updateLead(lead.id, request).subscribe({
       next: (updatedLead) => {
@@ -608,6 +727,78 @@ export class LeadsBoardComponent {
 
   optionLabel(option: LeadPersonOption): string {
     return option.fio || option.username || (option.email ? option.email : `ID ${option.id}`);
+  }
+
+  leadTitle(lead: LeadItem): string {
+    return lead.companyName?.trim() || lead.lidStatus || '-';
+  }
+
+  leadSubtitle(lead: LeadItem): string {
+    return lead.companyName?.trim() ? `${lead.lidStatus || '-'} / #${lead.id}` : `#${lead.id}`;
+  }
+
+  hasLeadLocationRow(lead: LeadItem): boolean {
+    return Boolean(this.leadRegionLabel(lead) || this.leadAddressLabel(lead));
+  }
+
+  leadRegionLabel(lead: LeadItem): string {
+    return lead.region?.trim() ?? '';
+  }
+
+  leadAddressLabel(lead: LeadItem): string {
+    return lead.address?.trim() ?? '';
+  }
+
+  hasLeadCategoryRow(lead: LeadItem): boolean {
+    return Boolean(this.leadCategoryLabel(lead) || this.leadSubCategoryLabel(lead));
+  }
+
+  leadCategoryLabel(lead: LeadItem): string {
+    return this.firstMultiValue(lead.industries);
+  }
+
+  leadSubCategoryLabel(lead: LeadItem): string {
+    return this.firstMultiValue(lead.companyType);
+  }
+
+  toggleLeadCategoryPopover(lead: LeadItem, field: LeadCategoryPopover): void {
+    this.leadCategoryPopover.update((current) => current?.leadId === lead.id && current.field === field
+      ? null
+      : { leadId: lead.id, field }
+    );
+  }
+
+  isLeadCategoryPopoverOpen(lead: LeadItem, field: LeadCategoryPopover): boolean {
+    const current = this.leadCategoryPopover();
+    return current?.leadId === lead.id && current.field === field;
+  }
+
+  leadCategoryPopoverText(lead: LeadItem): string | null {
+    const current = this.leadCategoryPopover();
+    if (current?.leadId !== lead.id) {
+      return null;
+    }
+
+    const value = current.field === 'industries' ? lead.industries : lead.companyType;
+    return value?.trim() || null;
+  }
+
+  leadContactLinks(lead: LeadItem): LeadContactLink[] {
+    const email = this.firstMultiValue(lead.emails);
+    const website = this.firstMultiValue(lead.websites);
+    const vk = this.firstMultiValue(lead.vkUrl);
+    const telegram = this.firstMultiValue(lead.telegramUrl);
+
+    return [
+      email ? { key: 'email', label: 'почта', url: `mailto:${email}`, title: email } : null,
+      website ? { key: 'site', label: 'сайт', url: this.externalUrl(website), title: website } : null,
+      vk ? { key: 'vk', label: 'ВК', url: this.externalUrl(vk), title: vk } : null,
+      telegram ? { key: 'tg', label: 'ТГ', url: this.telegramLink(telegram), title: telegram } : null
+    ].filter((link): link is LeadContactLink => link !== null);
+  }
+
+  trackLeadContactLink(_index: number, link: LeadContactLink): string {
+    return link.key;
   }
 
   trackLead(_index: number, lead: LeadItem): number {
@@ -673,6 +864,19 @@ export class LeadsBoardComponent {
     }
 
     this.setCreateField('managerId', managerId);
+  }
+
+  private setDefaultImportManagers(): void {
+    if (this.importManagerIds().length > 0) {
+      return;
+    }
+
+    const managers = this.managerOptions();
+    const preferred = managers
+      .filter((manager) => manager.id === 2 || manager.id === 3)
+      .map((manager) => manager.id);
+    const fallback = managers.slice(0, 2).map((manager) => manager.id);
+    this.importManagerIds.set(preferred.length > 0 ? preferred : fallback);
   }
 
   private mergeCommentDrafts(board: LeadBoard): void {
@@ -754,5 +958,41 @@ export class LeadsBoardComponent {
 
   private errorMessage(err: unknown, fallback: string): string {
     return apiErrorMessage(err, fallback);
+  }
+
+  private cleanText(value?: string): string | undefined {
+    const cleanValue = value?.trim() ?? '';
+    return cleanValue || undefined;
+  }
+
+  private firstMultiValue(value?: string): string {
+    return value
+      ?.split(/[,;\r\n]+/)
+      .map((part) => part.trim())
+      .find(Boolean) ?? '';
+  }
+
+  private externalUrl(value: string): string {
+    const trimmed = value.trim();
+    if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) {
+      return trimmed;
+    }
+    return `https://${trimmed}`;
+  }
+
+  private telegramLink(value: string): string {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('@')) {
+      return `https://t.me/${trimmed.slice(1)}`;
+    }
+    return this.externalUrl(trimmed);
+  }
+
+  private numberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 }

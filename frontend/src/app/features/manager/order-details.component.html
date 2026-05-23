@@ -583,6 +583,31 @@
       }
 
       <section class="mobile-order-details-side" aria-label="Сводка заказа">
+        @if (canShowPaymentLinkAction()) {
+          <article class="side-note-card payment-link-card">
+            <header>
+              <div>
+                <span>Т-Банк</span>
+                <h2>Ссылка на оплату</h2>
+              </div>
+              <small>{{ paymentLinkModeLabel() }}</small>
+            </header>
+            @if (paymentLink(); as link) {
+              <a [href]="link.url" target="_blank" rel="noopener">{{ link.url }}</a>
+            }
+            <div class="details-actions">
+              <button
+                type="button"
+                (click)="createPaymentLink()"
+                [disabled]="isMutating('payment-link')"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'payment-link' ? 'check' : 'link' }}</span>
+                {{ isMutating('payment-link') ? 'Создаю...' : copied() === 'payment-link' ? 'Скопировано' : 'Ссылка на оплату' }}
+              </button>
+            </div>
+          </article>
+        }
+
         @if (badReviewTasks().length > 0) {
           <details class="task-foldout bad-review-task-list">
             <summary>
@@ -860,6 +885,31 @@
 
   <section admin-right-content class="order-details-side">
     @if (details(); as details) {
+      @if (canShowPaymentLinkAction()) {
+        <article class="side-note-card payment-link-card">
+          <header>
+            <div>
+              <span>Т-Банк</span>
+              <h2>Ссылка на оплату</h2>
+            </div>
+            <small>{{ paymentLinkModeLabel() }}</small>
+          </header>
+          @if (paymentLink(); as link) {
+            <a [href]="link.url" target="_blank" rel="noopener">{{ link.url }}</a>
+          }
+          <div class="details-actions">
+            <button
+              type="button"
+              (click)="createPaymentLink()"
+              [disabled]="isMutating('payment-link')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'payment-link' ? 'check' : 'link' }}</span>
+              {{ isMutating('payment-link') ? 'Создаю...' : copied() === 'payment-link' ? 'Скопировано' : 'Ссылка на оплату' }}
+            </button>
+          </div>
+        </article>
+      }
+
       @if (badReviewTasks().length > 0) {
         <details class="task-foldout bad-review-task-list">
           <summary>

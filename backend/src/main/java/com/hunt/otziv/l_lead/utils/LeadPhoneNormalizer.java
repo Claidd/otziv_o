@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.utils;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -14,9 +15,13 @@ public final class LeadPhoneNormalizer {
             return "";
         }
 
-        String digits = phone.replaceAll("\\D", "");
+        String source = phone.trim();
+        String plainScientific = plainScientificNumber(source);
+        String digits = plainScientific.isBlank()
+                ? source.replaceAll("\\D", "")
+                : plainScientific.replaceAll("\\D", "");
         if (digits.isBlank()) {
-            return phone.trim();
+            return source;
         }
 
         if (digits.length() == 10 && digits.startsWith("9")) {
@@ -28,6 +33,22 @@ public final class LeadPhoneNormalizer {
         }
 
         return digits;
+    }
+
+    private static String plainScientificNumber(String value) {
+        String normalized = value
+                .replace("\u00A0", "")
+                .replace(" ", "")
+                .replace(',', '.');
+        if (!normalized.matches("[+-]?\\d+(\\.\\d+)?[eE][+-]?\\d+")) {
+            return "";
+        }
+
+        try {
+            return new BigDecimal(normalized).toPlainString();
+        } catch (NumberFormatException exception) {
+            return "";
+        }
     }
 
     public static List<String> variants(String phone) {

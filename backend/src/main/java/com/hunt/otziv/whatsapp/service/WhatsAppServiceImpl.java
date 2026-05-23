@@ -1,8 +1,11 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
+import com.hunt.otziv.whatsapp.dto.WhatsAppClientStatusDto;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.exception.WhatsAppConfigurationException;
@@ -21,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -188,8 +192,168 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         }
     }
 
+    @Override
+    public List<WhatsAppGroupInfo> listGroups(String clientId) {
+        try {
+            String url = baseUrl(clientId) + "/groups";
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            return parseGroups(response.getBody());
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp-группы не запрошены: {}", e.getMessage());
+            return List.of();
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                log.debug("WhatsApp-клиент {} не поддерживает GET /groups", clientId);
+            } else {
+                log.warn("WhatsApp API вернул HTTP {} при запросе групп клиента {}. Ответ: {}",
+                        e.getStatusCode().value(), clientId, e.getResponseBodyAsString());
+            }
+            return List.of();
+        } catch (ResourceAccessException e) {
+            log.debug("WhatsApp-клиент {} недоступен при запросе групп: {}", clientId, e.getMessage());
+            return List.of();
+        } catch (Exception e) {
+            log.warn("Не удалось получить WhatsApp-группы клиента {}: {}", clientId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public WhatsAppClientStatusDto getClientStatus(String clientId) {
+        try {
+            String baseUrl = baseUrl(clientId);
+            JsonNode health = getJson(baseUrl + "/health").orElse(MAPPER.createObjectNode());
+            JsonNode qr = shouldFetchQr(health)
+                    ? getJsonAllowingNotFound(baseUrl + "/qr").orElse(null)
+                    : null;
+
+            return statusFrom(clientId, health, qr);
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp QR status unavailable: {}", e.getMessage());
+            return WhatsAppClientStatusDto.unconfigured(clientId, e.getMessage());
+        } catch (ResourceAccessException e) {
+            String message = "WhatsApp-клиент недоступен: " + e.getMessage();
+            log.warn("{} ({})", message, clientId);
+            return WhatsAppClientStatusDto.unavailable(clientId, message);
+        } catch (Exception e) {
+            String message = "Не удалось получить статус WhatsApp: " + e.getMessage();
+            log.warn("{} ({})", message, clientId);
+            return WhatsAppClientStatusDto.unavailable(clientId, message);
+        }
+    }
+
+    private Optional<JsonNode> getJson(String url) throws JsonProcessingException {
+        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String body = response.getBody();
+        return hasText(body) ? Optional.of(MAPPER.readTree(body)) : Optional.empty();
+    }
+
+    private Optional<JsonNode> getJsonAllowingNotFound(String url) throws JsonProcessingException {
+        try {
+            return getJson(url);
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404 && hasText(e.getResponseBodyAsString())) {
+                return Optional.of(MAPPER.readTree(e.getResponseBodyAsString()));
+            }
+            throw e;
+        }
+    }
+
+    private boolean shouldFetchQr(JsonNode health) {
+        return !booleanField(health, "ready") || booleanField(health, "hasQr");
+    }
+
+    private WhatsAppClientStatusDto statusFrom(String clientId, JsonNode health, JsonNode qr) {
+        JsonNode source = qr != null && hasText(textField(qr, "qrDataUrl", null)) ? qr : health;
+        String message = firstText(source, "message");
+        if (!hasText(message) && qr != null) {
+            message = firstText(qr, "message");
+        }
+
+        return new WhatsAppClientStatusDto(
+                textField(source, "clientId", clientId),
+                true,
+                booleanField(source, "ready"),
+                booleanField(source, "authenticated"),
+                textField(source, "state", "unknown"),
+                textField(source, "lastQrAt", null),
+                textField(source, "lastReadyAt", null),
+                textField(source, "lastError", null),
+                booleanField(source, "hasQr"),
+                textField(source, "qrDataUrl", null),
+                message
+        );
+    }
+
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private List<WhatsAppGroupInfo> parseGroups(String rawBody) throws JsonProcessingException {
+        if (!hasText(rawBody)) {
+            return List.of();
+        }
+
+        JsonNode groupsNode = groupsNode(MAPPER.readTree(rawBody));
+        if (groupsNode == null || !groupsNode.isArray()) {
+            return List.of();
+        }
+
+        List<WhatsAppGroupInfo> groups = new ArrayList<>();
+        for (JsonNode groupNode : groupsNode) {
+            String groupId = firstText(groupNode, "groupId", "id", "chatId", "jid");
+            if (!hasText(groupId)) {
+                continue;
+            }
+
+            groups.add(new WhatsAppGroupInfo(
+                    groupId,
+                    firstText(groupNode, "name", "title", "subject"),
+                    firstText(groupNode, "inviteLink", "inviteCode", "invite", "link", "url")
+            ));
+        }
+        return groups;
+    }
+
+    private JsonNode groupsNode(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        if (root.isArray()) {
+            return root;
+        }
+        for (String field : List.of("groups", "data", "chats")) {
+            JsonNode node = root.path(field);
+            if (node.isArray()) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    private String firstText(JsonNode node, String... fields) {
+        if (node == null || !node.isObject()) {
+            return "";
+        }
+        for (String field : fields) {
+            JsonNode value = node.path(field);
+            if (value.isTextual() && hasText(value.asText())) {
+                return value.asText().trim();
+            }
+        }
+        return "";
+    }
+
+    private String textField(JsonNode node, String field, String fallback) {
+        if (node == null || !node.isObject()) {
+            return fallback;
+        }
+        JsonNode value = node.path(field);
+        return value.isTextual() && hasText(value.asText()) ? value.asText().trim() : fallback;
+    }
+
+    private boolean booleanField(JsonNode node, String field) {
+        return node != null && node.path(field).asBoolean(false);
     }
 
 //    @Override

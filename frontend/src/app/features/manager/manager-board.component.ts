@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
@@ -33,12 +33,15 @@ import {
   MANAGER_ORDER_ACTIONS,
   MANAGER_PAGE_SIZE_OPTIONS,
   MANAGER_SECTIONS,
+  ManagerChatBotInviteKind,
   ManagerHistoryView,
   MobileNavLink,
   PromoItem,
   SelectedCompany,
   StatusAction,
   managerBoardTitle,
+  managerChatBotInviteKind,
+  managerChatBotInviteUrl,
   managerErrorMessage,
   managerLayoutTitle,
   managerOrderActions,
@@ -78,6 +81,13 @@ type CompanyCreateContext = {
   leadId: number | null;
 };
 
+type ChatBotLinkPlatform = Exclude<ManagerChatBotInviteKind, null>;
+
+type ChatBotLinkPoll = {
+  startedAt: number;
+  platform: ChatBotLinkPlatform;
+};
+
 @Component({
   selector: 'app-manager-board',
   imports: [
@@ -96,7 +106,7 @@ type CompanyCreateContext = {
   templateUrl: './manager-board.component.html',
   styleUrl: './manager-board.component.scss'
 })
-export class ManagerBoardComponent {
+export class ManagerBoardComponent implements OnDestroy {
   private readonly historyStateKey = MANAGER_HISTORY_STATE_KEY;
   private readonly managerApi = inject(ManagerApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
@@ -107,6 +117,11 @@ export class ManagerBoardComponent {
   private readonly emptyCompanyPage = EMPTY_MANAGER_COMPANY_PAGE;
   private readonly emptyOrderPage = EMPTY_MANAGER_ORDER_PAGE;
   private readonly overdueAlertStorageKeyPrefix = 'otziv-manager-overdue-alert:v2';
+  private readonly chatBotLinkPollDelayMs = 8000;
+  private readonly chatBotLinkPollTimeoutMs = 90000;
+  private readonly chatBotLinkPolls = new Map<number, ChatBotLinkPoll>();
+  private readonly chatBotLinkPollTimers = new Map<number, number>();
+  private chatBotLinkRefreshInFlight = false;
 
   readonly sections = MANAGER_SECTIONS;
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
@@ -230,6 +245,14 @@ export class ManagerBoardComponent {
     this.loadDailyOverdueReminder();
   }
 
+  ngOnDestroy(): void {
+    for (const timer of this.chatBotLinkPollTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    this.chatBotLinkPollTimers.clear();
+    this.chatBotLinkPolls.clear();
+  }
+
   @HostListener('window:popstate', ['$event'])
   restoreHistoryState(event: PopStateEvent): void {
     const view = managerReadHistoryView(event.state, this.historyStateKey);
@@ -240,6 +263,13 @@ export class ManagerBoardComponent {
 
     this.applyHistoryView(view);
     this.loadBoard();
+  }
+
+  @HostListener('window:focus')
+  refreshPendingChatBotLinks(): void {
+    if (this.chatBotLinkPolls.size > 0) {
+      this.reloadBoardForChatBotLinks();
+    }
   }
 
   loadBoard(): void {
@@ -468,6 +498,37 @@ export class ManagerBoardComponent {
 
   openCompanyEdit(company: CompanyCardItem): void {
     this.companyFacade.openCompanyEdit(company);
+  }
+
+  handleChatBotInviteOpened(company: CompanyCardItem): void {
+    this.startChatBotLinkPoll(company.id, company.title, company);
+  }
+
+  handleOrderChatBotInviteOpened(order: OrderCardItem): void {
+    if (!order.companyId) {
+      return;
+    }
+
+    this.startChatBotLinkPoll(order.companyId, order.companyTitle, order);
+  }
+
+  private startChatBotLinkPoll(companyId: number, title: string | null | undefined, item: CompanyCardItem | OrderCardItem): void {
+    if (!this.itemNeedsChatBot(item)) {
+      return;
+    }
+
+    const platform = managerChatBotInviteKind(item);
+    if (!platform) {
+      return;
+    }
+
+    const alreadyWaiting = this.chatBotLinkPolls.has(companyId);
+    this.chatBotLinkPolls.set(companyId, { startedAt: Date.now(), platform });
+    this.scheduleChatBotLinkRefresh(companyId, this.chatBotLinkPollDelayMs);
+
+    if (!alreadyWaiting) {
+      this.showChatBotInviteToast(platform, managerChatBotInviteUrl(item), title || `Компания #${companyId}`);
+    }
   }
 
   openManualCompanyCreate(): void {
@@ -740,6 +801,157 @@ export class ManagerBoardComponent {
 
   private patchBoard(updater: (board: ManagerBoard) => ManagerBoard): void {
     this.board.update((board) => board ? updater(board) : board);
+  }
+
+  private reloadBoardForChatBotLinks(): void {
+    if (this.chatBotLinkRefreshInFlight) {
+      return;
+    }
+
+    this.chatBotLinkRefreshInFlight = true;
+    this.managerApi.getBoard({
+      section: this.activeSection(),
+      status: this.activeStatus(),
+      keyword: this.keyword(),
+      companyId: this.activeSection() === 'orders' ? this.selectedCompany()?.id : undefined,
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection()
+    }).subscribe({
+      next: (board) => {
+        this.board.set(board);
+        this.chatBotLinkRefreshInFlight = false;
+        this.updateChatBotLinkPolls(board);
+      },
+      error: () => {
+        this.chatBotLinkRefreshInFlight = false;
+        this.reschedulePendingChatBotLinkPolls();
+      }
+    });
+  }
+
+  private updateChatBotLinkPolls(board: ManagerBoard): void {
+    const now = Date.now();
+
+    for (const [companyId, poll] of this.chatBotLinkPolls.entries()) {
+      const item = this.visibleChatBotItem(board, companyId);
+      if (item && !this.itemNeedsChatBot(item)) {
+        this.clearChatBotLinkPoll(companyId);
+        this.toastService.success(this.chatBotLinkedTitle(poll.platform), this.chatBotItemTitle(item, companyId));
+        continue;
+      }
+
+      if (now - poll.startedAt >= this.chatBotLinkPollTimeoutMs) {
+        this.clearChatBotLinkPoll(companyId);
+        continue;
+      }
+
+      this.scheduleChatBotLinkRefresh(companyId, this.chatBotLinkPollDelayMs);
+    }
+  }
+
+  private reschedulePendingChatBotLinkPolls(): void {
+    for (const companyId of this.chatBotLinkPolls.keys()) {
+      this.scheduleChatBotLinkRefresh(companyId, this.chatBotLinkPollDelayMs);
+    }
+  }
+
+  private scheduleChatBotLinkRefresh(companyId: number, delayMs: number): void {
+    const existingTimer = this.chatBotLinkPollTimers.get(companyId);
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      this.chatBotLinkPollTimers.delete(companyId);
+      if (this.chatBotLinkPolls.has(companyId)) {
+        this.reloadBoardForChatBotLinks();
+      }
+    }, delayMs);
+    this.chatBotLinkPollTimers.set(companyId, timer);
+  }
+
+  private clearChatBotLinkPoll(companyId: number): void {
+    const timer = this.chatBotLinkPollTimers.get(companyId);
+    if (timer) {
+      window.clearTimeout(timer);
+    }
+
+    this.chatBotLinkPollTimers.delete(companyId);
+    this.chatBotLinkPolls.delete(companyId);
+  }
+
+  private itemNeedsChatBot(item: CompanyCardItem | OrderCardItem): boolean {
+    return Boolean((item.telegramBotInviteUrl ?? '').trim() || (item.maxBotInviteUrl ?? '').trim());
+  }
+
+  private visibleChatBotItem(board: ManagerBoard, companyId: number): CompanyCardItem | OrderCardItem | undefined {
+    return (board.companies.content ?? []).find((company) => company.id === companyId)
+      ?? (board.orders.content ?? []).find((order) => order.companyId === companyId);
+  }
+
+  private chatBotItemTitle(item: CompanyCardItem | OrderCardItem, companyId: number): string {
+    if ('title' in item) {
+      return item.title || `Компания #${companyId}`;
+    }
+
+    return item.companyTitle || `Компания #${companyId}`;
+  }
+
+  private chatBotLinkedTitle(platform: ChatBotLinkPlatform): string {
+    return platform === 'max' ? 'MAX-группа привязана' : 'Telegram-группа привязана';
+  }
+
+  private showChatBotInviteToast(platform: ChatBotLinkPlatform, inviteUrl: string, title: string): void {
+    if (platform === 'max') {
+      const startCommand = this.maxStartCommand(inviteUrl);
+      const webStartUrl = this.maxWebStartUrl(inviteUrl);
+      this.toastService.warning(
+        'MAX: привязка группы',
+        'Сначала попробуйте основную MAX-ссылку. Если кнопка запуска не сработала, откройте этот же запуск через MAX Web или скопируйте /start.',
+        [
+          ...(startCommand ? [{
+            label: 'Скопировать /start',
+            callback: () => void this.copyText(startCommand, 'max-start', 'Команда MAX скопирована')
+          }] : []),
+          ...(webStartUrl ? [{
+            label: 'Открыть через MAX Web',
+            href: webStartUrl
+          }] : []),
+          {
+            label: 'Скопировать ссылку',
+            callback: () => void this.copyText(inviteUrl, 'max-link', 'Ссылка MAX скопирована')
+          }
+        ]
+      );
+      return;
+    }
+
+    this.toastService.info(
+      'Жду привязку Telegram',
+      `После выбора группы карточка "${title}" обновится сама, текущая страница останется на месте.`
+    );
+  }
+
+  private maxStartCommand(inviteUrl: string): string {
+    try {
+      const url = new URL(inviteUrl);
+      const payload = (url.searchParams.get('start') ?? '').trim();
+      return payload ? `/start ${payload}` : '';
+    } catch {
+      return '';
+    }
+  }
+
+  private maxWebStartUrl(inviteUrl: string): string {
+    try {
+      const url = new URL(inviteUrl);
+      url.protocol = 'https:';
+      url.hostname = 'web.max.ru';
+      return url.toString();
+    } catch {
+      return '';
+    }
   }
 
   private errorMessage(err: unknown, fallback: string): string {

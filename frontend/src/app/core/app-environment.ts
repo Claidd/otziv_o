@@ -1,7 +1,10 @@
+const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const LOCAL_ANGULAR_DEV_PORTS = new Set(['4200']);
+
 const isLocalAngularDevServer =
   typeof window !== 'undefined' &&
-  window.location.hostname === 'localhost' &&
-  window.location.port === '4200';
+  LOCAL_DEV_HOSTS.has(window.location.hostname) &&
+  LOCAL_ANGULAR_DEV_PORTS.has(window.location.port);
 
 const metricsDashboardPath =
   '/d/otziv-backend-performance/otziv-backend3a-proizvoditel-nost--i-logi?orgId=1&refresh=5s&from=now-15m&to=now';

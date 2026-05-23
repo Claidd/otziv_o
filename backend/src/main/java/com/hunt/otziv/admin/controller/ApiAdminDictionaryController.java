@@ -14,6 +14,8 @@ import com.hunt.otziv.c_categories.repository.ProductCategoryRepository;
 import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.model.PromoText;
@@ -32,6 +34,9 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupSyncSettingsRequest;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupSyncSettingsResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.HttpStatus;
@@ -81,6 +86,8 @@ public class ApiAdminDictionaryController {
     private final PromoTextAssignmentRepository promoTextAssignmentRepository;
     private final AppSettingService appSettingService;
     private final TelegramReportScheduleSettingsService telegramReportScheduleSettingsService;
+    private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -540,6 +547,36 @@ public class ApiAdminDictionaryController {
         } catch (IllegalArgumentException exception) {
             throw badRequest(exception.getMessage());
         }
+    }
+
+    @GetMapping("/settings/whatsapp-group-sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public WhatsAppGroupSyncSettingsResponse getWhatsAppGroupSyncSettings() {
+        return whatsAppGroupLinkSyncService.settings();
+    }
+
+    @PutMapping("/settings/whatsapp-group-sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public WhatsAppGroupSyncSettingsResponse updateWhatsAppGroupSyncSettings(
+            @RequestBody WhatsAppGroupSyncSettingsRequest request
+    ) {
+        try {
+            return whatsAppGroupLinkSyncService.updateSettings(request);
+        } catch (IllegalArgumentException exception) {
+            throw badRequest(exception.getMessage());
+        }
+    }
+
+    @PostMapping("/settings/whatsapp-group-sync/run")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public WhatsAppGroupSyncSettingsResponse runWhatsAppGroupSync() {
+        return whatsAppGroupLinkSyncService.runNow();
+    }
+
+    @PostMapping("/settings/shared-chat-links/sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public SharedChatLinkSyncResponse runSharedChatLinkSync() {
+        return sharedChatLinkSyncService.syncSharedChatIds();
     }
 
     private List<Category> uniqueCategories(List<Category> categories) {

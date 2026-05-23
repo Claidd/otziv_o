@@ -276,6 +276,9 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
         put(actions, "GET", "/api/admin/settings/telegram-reports", "загрузка настроек Telegram-рассылок");
         put(actions, "PUT", "/api/admin/settings/telegram-reports", "редактирование настроек Telegram-рассылок");
+        put(actions, "GET", "/api/admin/settings/whatsapp-group-sync", "загрузка настроек синхронизации WhatsApp-групп");
+        put(actions, "PUT", "/api/admin/settings/whatsapp-group-sync", "редактирование настроек синхронизации WhatsApp-групп");
+        put(actions, "POST", "/api/admin/settings/whatsapp-group-sync/run", "ручной запуск синхронизации WhatsApp-групп");
         put(actions, "POST", "/api/admin/analytics/aggregates/rebuild-month", "пересчет аналитики за месяц {month}");
         put(actions, "GET", "/api/admin/analytics/aggregates/source-range", "проверка доступного периода данных для аналитики");
         put(actions, "GET", "/api/admin/analytics/aggregates/compare-admin-month", "сверка аналитики за месяц {month}");

@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -278,21 +279,31 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void toCheckWithoutGroupSetsStatusWithoutSendingWhatsApp() throws Exception {
+    void toCheckWithoutClientDeliveryKeepsToCheckStatusAndReturnsFalse() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(5L, "Новый", "Компания", " ");
         OrderStatus toCheck = status("В проверку");
 
         when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
         when(textService.findById(5)).thenReturn("Проверьте отзывы");
-        when(orderStatusService.getOrderStatusByTitle("В проверку")).thenReturn(toCheck);
+        when(orderStatusNotificationService.sendMessageToGroup(
+                eq("В проверку"),
+                same(order),
+                eq("client"),
+                eq(" "),
+                contains("Проверьте отзывы"),
+                eq("На проверке")
+        )).thenAnswer(invocation -> {
+            order.setStatus(toCheck);
+            return false;
+        });
 
-        assertTrue(service.changeStatusForOrder(5L, "В проверку"));
+        assertFalse(service.changeStatusForOrder(5L, "В проверку"));
 
         assertSame(toCheck, order.getStatus());
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "В проверку");
-        verify(orderStatusNotificationService, never()).sendMessageToGroup(
+        verify(orderStatusNotificationService).sendMessageToGroup(
                 eq("В проверку"),
                 same(order),
                 eq("client"),
@@ -300,7 +311,7 @@ class OrderStatusTransitionServiceTest {
                 contains("Проверьте отзывы"),
                 eq("На проверке")
         );
-        verify(orderRepository).save(order);
+        verify(orderRepository, never()).save(order);
     }
 
     @Test

@@ -10,8 +10,10 @@
       <a
         [href]="companyHeaderUrl()"
         [class.chat-bot-link-pending]="needsChatBot()"
+        [title]="chatLinkTitle()"
         target="_blank"
         rel="noopener"
+        (click)="handleChatLinkClick()"
       >
         {{ company.title || 'Без названия' }}
       </a>
@@ -33,8 +35,10 @@
     <a
       [href]="companyChatUrl()"
       [class.chat-bot-link-pending]="needsChatBot()"
+      [title]="chatLinkTitle()"
       target="_blank"
       rel="noopener"
+      (click)="handleChatLinkClick()"
     >
       {{ companyPhoneLabel() }}
     </a>
@@ -42,6 +46,13 @@
       {{ copied === 'телефон' ? '✓' : 'T' }}
     </button>
   </div>
+
+  @if (chatBindingWarning(); as warning) {
+    <div class="chat-link-warning" [title]="warning">
+      <span class="material-icons-sharp">warning</span>
+      <span>{{ warning }}</span>
+    </div>
+  }
 
   <div class="meta-row">
     <span>{{ company.status || '-' }}</span>

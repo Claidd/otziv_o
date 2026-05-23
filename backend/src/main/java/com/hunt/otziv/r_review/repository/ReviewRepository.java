@@ -642,35 +642,68 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     boolean existsActiveNagulReviews(@Param("worker") Worker worker,
                                      @Param("date") LocalDate date);
 
-    @Query("""
+    @Query(value = """
         SELECT
-            u.fio AS fio,
-            COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews,
-            COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter <= 2 THEN 1 ELSE NULL END) AS vigulCount
-        FROM Review r
-        LEFT JOIN r.worker w
-        LEFT JOIN w.user u
-        WHERE r.publish = false
-          AND r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2
-          AND u.fio IS NOT NULL
-        GROUP BY u.fio
+            aggregated.fio AS fio,
+            SUM(aggregated.total_reviews) AS totalReviews,
+            SUM(aggregated.vigul_count) AS vigulCount
+        FROM (
+            SELECT
+                u.fio AS fio,
+                worker_stats.total_reviews AS total_reviews,
+                worker_stats.vigul_count AS vigul_count
+            FROM (
+                SELECT
+                    r.review_worker AS worker_id,
+                    COUNT(CASE WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS total_reviews,
+                    COUNT(CASE
+                        WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
+                         AND r.review_vigul = 0
+                         AND b.bot_counter <= 2
+                        THEN 1 ELSE NULL
+                    END) AS vigul_count
+                FROM reviews r
+                JOIN bots b ON b.bot_id = r.review_bot
+                WHERE r.review_publish = 0
+                  AND r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
+                  AND r.review_worker IS NOT NULL
+                GROUP BY r.review_worker
+            ) worker_stats
+            JOIN workers w ON w.worker_id = worker_stats.worker_id
+            JOIN users u ON u.id = w.user_id
+            WHERE u.fio IS NOT NULL
 
-        UNION ALL
+            UNION ALL
 
-        SELECT
-            mu.fio AS fio,
-            COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS totalReviews,
-            COUNT(CASE WHEN r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2 AND r.vigul = false AND r.bot.counter <= 2 THEN 1 ELSE NULL END) AS vigulCount
-        FROM Review r
-        LEFT JOIN r.orderDetails od
-        LEFT JOIN od.order o
-        LEFT JOIN o.manager m
-        LEFT JOIN m.user mu
-        WHERE r.publish = false
-          AND r.publishedDate BETWEEN :firstDayOfMonth AND :localDate2
-          AND mu.fio IS NOT NULL
-        GROUP BY mu.fio
-    """)
+            SELECT
+                u.fio AS fio,
+                manager_stats.total_reviews AS total_reviews,
+                manager_stats.vigul_count AS vigul_count
+            FROM (
+                SELECT
+                    o.order_manager AS manager_id,
+                    COUNT(CASE WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS total_reviews,
+                    COUNT(CASE
+                        WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
+                         AND r.review_vigul = 0
+                         AND b.bot_counter <= 2
+                        THEN 1 ELSE NULL
+                    END) AS vigul_count
+                FROM reviews r
+                JOIN bots b ON b.bot_id = r.review_bot
+                JOIN order_details od ON od.order_detail_id = r.review_order_details
+                JOIN orders o ON o.order_id = od.order_detail_order
+                WHERE r.review_publish = 0
+                  AND r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
+                  AND o.order_manager IS NOT NULL
+                GROUP BY o.order_manager
+            ) manager_stats
+            JOIN managers m ON m.manager_id = manager_stats.manager_id
+            JOIN users u ON u.id = m.user_id
+            WHERE u.fio IS NOT NULL
+        ) aggregated
+        GROUP BY aggregated.fio
+    """, nativeQuery = true)
     List<Object[]> findAllByPublishAndVigul(@Param("firstDayOfMonth") LocalDate firstDayOfMonth,
                                             @Param("localDate") LocalDate localDate,
                                             @Param("localDate2") LocalDate localDate2);

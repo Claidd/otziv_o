@@ -5,8 +5,11 @@ import type { OrderCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
+  ManagerChatBotInviteKind,
   SelectedCompany,
   StatusAction,
+  managerOrderChatBindingWarning,
+  managerOrderChatBotInviteKind,
   managerHasMeaningfulNote,
   managerOrderChatUrl,
   managerOrderDetailsUrl,
@@ -45,6 +48,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
   @Output() readonly statusUpdated = new EventEmitter<StatusAction>();
   @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
+  @Output() readonly chatBotInviteOpened = new EventEmitter<void>();
 
   ngOnDestroy(): void {
     this.clearUnchangedCityTimer();
@@ -60,6 +64,38 @@ export class ManagerOrderCardComponent implements OnDestroy {
 
   needsChatBot(): boolean {
     return managerOrderNeedsChatBot(this.order);
+  }
+
+  chatBotInviteKind(): ManagerChatBotInviteKind {
+    return managerOrderChatBotInviteKind(this.order);
+  }
+
+  chatLinkTitle(): string {
+    const warning = this.chatBindingWarning();
+    if (warning) {
+      return warning;
+    }
+
+    const kind = this.chatBotInviteKind();
+    if (kind === 'max') {
+      return 'Открыть MAX-бота. Если кнопка в MAX не запускается, используйте подсказку с командой /start.';
+    }
+
+    if (kind === 'telegram') {
+      return 'Добавить Telegram-бота в группу компании';
+    }
+
+    return this.order.companyUrlChat ? 'Открыть чат компании' : 'Позвонить компании';
+  }
+
+  chatBindingWarning(): string {
+    return managerOrderChatBindingWarning(this.order);
+  }
+
+  handleChatLinkClick(): void {
+    if (this.needsChatBot()) {
+      this.chatBotInviteOpened.emit();
+    }
   }
 
   orderDetailsUrl(): string {

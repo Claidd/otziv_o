@@ -95,6 +95,58 @@ class OtzivOApplicationTests {
 	}
 
 	@Test
+	void telegramReviewReportAggregateExecutesAndMergesOwnershipPaths() {
+		LocalDate reportDate = LocalDate.of(2026, 5, 22);
+		LocalDate firstDayOfMonth = reportDate.withDayOfMonth(1);
+		String fio = "Report Merge User";
+
+		jdbcTemplate.update("""
+			INSERT INTO users (username, password, fio, email, phone_number, active, create_time)
+			VALUES ('report_worker', 'password', ?, 'report_worker@example.test', '+79000000001', 1, ?)
+		""", fio, reportDate);
+		Long workerUserId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		jdbcTemplate.update("INSERT INTO workers (user_id) VALUES (?)", workerUserId);
+		Long workerId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		jdbcTemplate.update("""
+			INSERT INTO users (username, password, fio, email, phone_number, active, create_time)
+			VALUES ('report_manager', 'password', ?, 'report_manager@example.test', '+79000000002', 1, ?)
+		""", fio, reportDate);
+		Long managerUserId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		jdbcTemplate.update("INSERT INTO managers (user_id) VALUES (?)", managerUserId);
+		Long managerId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		jdbcTemplate.update("""
+			INSERT INTO bots (bot_login, bot_password, bot_fio, bot_counter, bot_active)
+			VALUES ('report_bot', 'password', 'Report Bot', 1, 1)
+		""");
+		Long botId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		jdbcTemplate.update("INSERT INTO orders (order_manager) VALUES (?)", managerId);
+		Long orderId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		byte[] detailId = uuidBytes(UUID.fromString("00000000-0000-0000-0000-000000000099"));
+		jdbcTemplate.update("""
+			INSERT INTO order_details (order_detail_id, order_detail_order)
+			VALUES (?, ?)
+		""", detailId, orderId);
+
+		jdbcTemplate.update("""
+			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_worker, review_bot)
+			VALUES ('worker report review', 0, ?, 0, ?, ?)
+		""", reportDate, workerId, botId);
+		jdbcTemplate.update("""
+			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_order_details, review_bot)
+			VALUES ('manager report review', 0, ?, 0, ?, ?)
+		""", reportDate, detailId, botId);
+
+		var result = reviewService.getAllPublishAndVigul(firstDayOfMonth, reportDate);
+
+		assertThat(result).containsKey(fio);
+		assertThat(result.get(fio).getFirst()).isEqualTo(2L);
+		assertThat(result.get(fio).getSecond()).isEqualTo(2L);
+	}
+
+	@Test
 	void countUnpublishedNotArchiveIncludesOrphansAndExcludesArchiveOrders() {
 		long before = reviewRepository.countUnpublishedNotArchive();
 

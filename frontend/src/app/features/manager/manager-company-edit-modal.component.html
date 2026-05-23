@@ -61,6 +61,13 @@
               >
             </label>
 
+            @if (chatBindingWarning(); as warning) {
+              <div class="chat-binding-warning lead-edit-field--wide" [title]="warning">
+                <span class="material-icons-sharp">warning</span>
+                <span>{{ warning }}</span>
+              </div>
+            }
+
             <label class="lead-edit-field lead-edit-field--wide">
               <span>Официальный сайт</span>
               <input

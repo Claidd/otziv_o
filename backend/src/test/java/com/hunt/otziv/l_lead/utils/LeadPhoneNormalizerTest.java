@@ -28,4 +28,10 @@ class LeadPhoneNormalizerTest {
                 LeadPhoneNormalizer.variants("8 (902) 123-45-67")
         );
     }
+
+    @Test
+    void normalizeConvertsScientificExcelPhoneTextToPlainDigits() {
+        assertEquals("79100000000", LeadPhoneNormalizer.normalize("7,91E+10"));
+        assertEquals("79181234567", LeadPhoneNormalizer.normalize("7.9181234567E+10"));
+    }
 }

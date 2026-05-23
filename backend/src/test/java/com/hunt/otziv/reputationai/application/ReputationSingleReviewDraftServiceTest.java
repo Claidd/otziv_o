@@ -771,12 +771,18 @@ class ReputationSingleReviewDraftServiceTest {
                 .extracting(ReputationBatchReviewDraftItem::reviewId)
                 .containsExactly(172137L, 172138L, 172139L);
         assertThat(result.drafts().get(2).safetyNotes())
-                .anyMatch(note -> note.contains("Короткий локальный rescue fallback"));
+                .anyMatch(note -> note.contains("Короткий локальный отзыв по регулярному ритму пачки"));
         assertThat(result.drafts().get(2).draft())
                 .isNotBlank()
-                .contains("спасибо");
+                .contains("Спасибо, заказывали")
+                .contains("всё хорошо, спасибо");
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        ArgumentCaptor<List<ReviewGenerationSlot>> slotsCaptor = ArgumentCaptor.forClass((Class) List.class);
         verify(aiSingleReviewDraftFactory, org.mockito.Mockito.times(1))
-                .createBatch(any(), any(), any(), any(), any(), any(), any());
+                .createBatch(any(), any(), any(), any(), any(), any(), slotsCaptor.capture());
+        assertThat(slotsCaptor.getValue())
+                .extracting(ReviewGenerationSlot::reviewId)
+                .containsExactly(172137L, 172138L);
     }
 
     @Test
@@ -828,8 +834,11 @@ class ReputationSingleReviewDraftServiceTest {
                 .extracting(ReputationBatchReviewDraftItem::reviewId)
                 .containsExactly(172137L, 172138L, 172139L);
         assertThat(result.drafts().stream()
-                .filter(item -> item.safetyNotes().stream().anyMatch(note -> note.contains("Короткий локальный rescue fallback")))
+                .filter(item -> item.safetyNotes().stream().anyMatch(note -> note.contains("Короткий локальный")))
                 .count()).isEqualTo(2);
+        assertThat(result.drafts().stream()
+                .filter(item -> item.safetyNotes().stream().anyMatch(note -> note.contains("регулярному ритму пачки")))
+                .count()).isEqualTo(1);
         verify(aiSingleReviewDraftFactory, org.mockito.Mockito.times(1))
                 .createBatch(any(), any(), any(), any(), any(), any(), any());
         verify(aiSingleReviewDraftFactory, org.mockito.Mockito.never())

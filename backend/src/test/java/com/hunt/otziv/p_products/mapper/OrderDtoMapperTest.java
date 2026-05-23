@@ -6,6 +6,7 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -36,7 +37,7 @@ class OrderDtoMapperTest {
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final OrderDtoMapper mapper = new OrderDtoMapper(
             new TelegramGroupLinkService(companyRepository),
-            new MaxGroupLinkService(companyRepository)
+            new MaxGroupLinkService(companyRepository, mock(MaxBotClient.class))
     );
 
     @Test

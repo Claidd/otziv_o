@@ -330,6 +330,37 @@
   text-overflow: ellipsis;
 }
 
+.chat-link-warning {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 1.72rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  overflow: hidden;
+  border: 1px solid rgba(214, 159, 43, 0.36);
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  color: #8a6416;
+  background: rgba(255, 244, 214, 0.86);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.chat-link-warning .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.chat-link-warning span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .category-row {
   flex-wrap: wrap;
   overflow: visible;
@@ -642,6 +673,11 @@
     min-height: 3.75rem;
     padding: 0.7rem 0.8rem;
     font-size: 0.86rem;
+  }
+
+  .chat-link-warning {
+    min-height: 2.1rem;
+    font-size: 0.76rem;
   }
 }
 

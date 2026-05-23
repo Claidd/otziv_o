@@ -80,6 +80,15 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     List<Manager> findAllWithUserAndImage();
 
     @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    LEFT JOIN FETCH m.paymentProfile
+    ORDER BY m.id
+""")
+    List<Manager> findAllForPaymentProfileAssignments();
+
+    @Query("""
     SELECT m.user.id
     FROM Manager m
     WHERE m.id IN :managerIds

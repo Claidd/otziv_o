@@ -32,7 +32,8 @@ docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/ke
 docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh get realms/otziv --fields accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan
 ```
 
-Local Angular development still talks to Keycloak directly on `http://localhost:8180`. For production behind nginx, set:
+Local Angular development on `localhost:4200` still talks to Keycloak directly on `http://localhost:8180`.
+Prod-like local nginx on `localhost:8088` and production both use the proxied `/keycloak` path. For production behind nginx, set:
 
 ```env
 KC_HTTP_RELATIVE_PATH=/keycloak

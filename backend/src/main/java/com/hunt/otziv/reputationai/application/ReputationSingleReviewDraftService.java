@@ -113,27 +113,39 @@ public class ReputationSingleReviewDraftService {
         );
         List<ReviewGenerationSlot> slots = reviewGenerationSlots(brief, safeRequest.targets());
         List<AiSingleReviewDraftFactory.BatchDraftTarget> targets = batchTargets(slots);
+        List<AiSingleReviewDraftFactory.BatchDraftTarget> plannedShortTargets = plannedShortFallbackTargets(
+                targets,
+                aiSingleReviewDraftFactory.isOpenAiAvailable()
+        );
+        Set<Long> plannedShortIds = targetIdsSet(plannedShortTargets);
+        List<ReviewGenerationSlot> openAiSlots = slotsWithoutIds(slots, plannedShortIds);
+        List<AiSingleReviewDraftFactory.BatchDraftTarget> openAiTargets = targetsWithoutIds(targets, plannedShortIds);
 
         log.info(
-                "REVIEW_BATCH_START companyId={} targets={} openAiAvailable={} targetIds={}",
+                "REVIEW_BATCH_START companyId={} targets={} openAiTargets={} plannedShortTargets={} openAiAvailable={} targetIds={} plannedShortIds={}",
                 companyId,
                 targets.size(),
+                openAiTargets.size(),
+                plannedShortTargets.size(),
                 aiSingleReviewDraftFactory.isOpenAiAvailable(),
-                targets.stream().map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId).toList()
+                targets.stream().map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId).toList(),
+                plannedShortTargets.stream().map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId).toList()
         );
 
-        Optional<ReputationBatchReviewDraftResult> aiBatch = aiSingleReviewDraftFactory.createBatch(
+        Optional<ReputationBatchReviewDraftResult> aiBatch = openAiSlots.isEmpty()
+                ? Optional.empty()
+                : aiSingleReviewDraftFactory.createBatch(
                         companyId,
                         reportEnvelope.jobId(),
                         packEnvelope.jobId(),
                         packEnvelope.pack(),
                         safeRequest,
                         brief,
-                        slots
+                        openAiSlots
                 );
         ReputationBatchReviewDraftResult generated;
         if (aiBatch.isPresent()) {
-            generated = aiBatch.orElseThrow();
+            generated = keepOnlyTargetDrafts(aiBatch.orElseThrow(), openAiTargets);
             log.info(
                     "REVIEW_BATCH_ROUTE source=openai companyId={} acceptedDrafts={} acceptedIds={}",
                     companyId,
@@ -146,6 +158,35 @@ public class ReputationSingleReviewDraftService {
                     "REVIEW_BATCH_ROUTE source=openai_empty companyId={} reason=openai_unavailable_empty_or_all_rejected targetIds={}",
                     companyId,
                     targets.stream().map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId).toList()
+            );
+        }
+        if (!plannedShortTargets.isEmpty() && !hasOpenAiTransportFailure(generated)) {
+            ReputationBatchReviewDraftResult plannedShortResult = shortFallbackBatchResult(
+                    companyId,
+                    reportEnvelope,
+                    packEnvelope,
+                    safeRequest,
+                    brief,
+                    plannedShortTargets,
+                    generated,
+                    "Часть карточек заранее сделана короткими локальными отзывами, чтобы каждая 2-3 карточка не раздувалась моделью.",
+                    "Короткий локальный отзыв по регулярному ритму пачки: карточка не отправлялась в общую AI-генерацию.",
+                    true
+            );
+            generated = mergeOpenAiBatchResults(generated, plannedShortResult, targets);
+            log.info(
+                    "REVIEW_BATCH_PLANNED_SHORT_RESULT source=short_fallback_planned companyId={} shortDrafts={} shortIds={} baseProvider={} baseModel={}",
+                    companyId,
+                    plannedShortResult.drafts().size(),
+                    plannedShortResult.drafts().stream().map(ReputationBatchReviewDraftItem::reviewId).toList(),
+                    generated.provider(),
+                    generated.model()
+            );
+        } else if (!plannedShortTargets.isEmpty()) {
+            log.info(
+                    "REVIEW_BATCH_PLANNED_SHORT_SKIPPED source=short_fallback_planned companyId={} shortIds={} reason=openai_transport_error",
+                    companyId,
+                    plannedShortTargets.stream().map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId).toList()
             );
         }
         List<Long> missingIds = missingTargetIds(targets, generated);
@@ -166,7 +207,10 @@ public class ReputationSingleReviewDraftService {
                     safeRequest,
                     brief,
                     fallbackTargets,
-                    generated
+                    generated,
+                    "Для части карточек OpenAI не вернул подходящий текст: недостающие карточки закрыты коротким локальным rescue fallback.",
+                    "Короткий локальный rescue fallback: OpenAI не вернул подходящий текст для этой карточки.",
+                    false
             );
             generated = mergeOpenAiBatchResults(generated, shortFallbackResult, targets);
             log.info(
@@ -2890,6 +2934,88 @@ public class ReputationSingleReviewDraftService {
                 .toList();
     }
 
+    private List<AiSingleReviewDraftFactory.BatchDraftTarget> plannedShortFallbackTargets(
+            List<AiSingleReviewDraftFactory.BatchDraftTarget> targets,
+            boolean openAiAvailable
+    ) {
+        if (!openAiAvailable || targets == null || targets.size() < 2) {
+            return List.of();
+        }
+        List<AiSingleReviewDraftFactory.BatchDraftTarget> result = new ArrayList<>();
+        for (int index = 0; index < targets.size(); index++) {
+            if (isPlannedShortIndex(index, targets.size())) {
+                result.add(targets.get(index));
+            }
+        }
+        return result;
+    }
+
+    private boolean isPlannedShortIndex(int zeroBasedIndex, int total) {
+        int position = zeroBasedIndex + 1;
+        if (total == 2) {
+            return position == 2;
+        }
+        return position % 3 == 0;
+    }
+
+    private Set<Long> targetIdsSet(List<AiSingleReviewDraftFactory.BatchDraftTarget> targets) {
+        if (targets == null || targets.isEmpty()) {
+            return Set.of();
+        }
+        return targets.stream()
+                .map(AiSingleReviewDraftFactory.BatchDraftTarget::reviewId)
+                .filter(id -> id != null)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private List<ReviewGenerationSlot> slotsWithoutIds(List<ReviewGenerationSlot> slots, Set<Long> excludedIds) {
+        if (slots == null || slots.isEmpty() || excludedIds == null || excludedIds.isEmpty()) {
+            return slots == null ? List.of() : slots;
+        }
+        return slots.stream()
+                .filter(slot -> slot.reviewId() == null || !excludedIds.contains(slot.reviewId()))
+                .toList();
+    }
+
+    private List<AiSingleReviewDraftFactory.BatchDraftTarget> targetsWithoutIds(
+            List<AiSingleReviewDraftFactory.BatchDraftTarget> targets,
+            Set<Long> excludedIds
+    ) {
+        if (targets == null || targets.isEmpty() || excludedIds == null || excludedIds.isEmpty()) {
+            return targets == null ? List.of() : targets;
+        }
+        return targets.stream()
+                .filter(target -> target.reviewId() == null || !excludedIds.contains(target.reviewId()))
+                .toList();
+    }
+
+    private ReputationBatchReviewDraftResult keepOnlyTargetDrafts(
+            ReputationBatchReviewDraftResult result,
+            List<AiSingleReviewDraftFactory.BatchDraftTarget> targets
+    ) {
+        Set<Long> allowedIds = targetIdsSet(targets);
+        if (result == null || result.drafts().isEmpty() || allowedIds.isEmpty()) {
+            return result;
+        }
+        List<ReputationBatchReviewDraftItem> drafts = result.drafts().stream()
+                .filter(item -> item.reviewId() == null || allowedIds.contains(item.reviewId()))
+                .toList();
+        if (drafts.size() == result.drafts().size()) {
+            return result;
+        }
+        return new ReputationBatchReviewDraftResult(
+                result.companyId(),
+                result.companyName(),
+                result.deepReportJobId(),
+                result.contentPackJobId(),
+                result.provider(),
+                result.model(),
+                drafts,
+                result.safetyNotes(),
+                result.generatedAt()
+        );
+    }
+
     private ReputationBatchReviewDraftResult shortFallbackBatchResult(
             Long companyId,
             ReportEnvelope reportEnvelope,
@@ -2897,13 +3023,16 @@ public class ReputationSingleReviewDraftService {
             ReputationBatchReviewDraftRequest request,
             ReviewGenerationBrief brief,
             List<AiSingleReviewDraftFactory.BatchDraftTarget> targets,
-            ReputationBatchReviewDraftResult generated
+            ReputationBatchReviewDraftResult generated,
+            String batchSafetyNote,
+            String itemSafetyNote,
+            boolean plannedShortStyle
     ) {
         List<ReputationBatchReviewDraftItem> drafts = targets.stream()
-                .map(target -> shortFallbackBatchItem(reportEnvelope, packEnvelope, request, brief, target))
+                .map(target -> shortFallbackBatchItem(reportEnvelope, packEnvelope, request, brief, target, itemSafetyNote, plannedShortStyle))
                 .toList();
         List<String> safetyNotes = new ArrayList<>(generated.safetyNotes());
-        safetyNotes.add("Для части карточек OpenAI не вернул подходящий текст: недостающие карточки закрыты коротким локальным rescue fallback.");
+        safetyNotes.add(batchSafetyNote);
         return new ReputationBatchReviewDraftResult(
                 companyId,
                 firstNonBlank(generated.companyName(), packEnvelope.pack().researchSnapshot().companyName(), reportEnvelope.report().companyName(), "компания"),
@@ -2922,12 +3051,16 @@ public class ReputationSingleReviewDraftService {
             PackEnvelope packEnvelope,
             ReputationBatchReviewDraftRequest request,
             ReviewGenerationBrief brief,
-            AiSingleReviewDraftFactory.BatchDraftTarget target
+            AiSingleReviewDraftFactory.BatchDraftTarget target,
+            String itemSafetyNote,
+            boolean plannedShortStyle
     ) {
         String rawIdea = firstNonBlank(cleanReviewIdeaText(target.idea()), target.requiredAnchor(), "услуга компании");
         List<String> sourceFacts = localReviewFacts(target.facts(), rawIdea);
         String company = firstNonBlank(packEnvelope.pack().researchSnapshot().companyName(), reportEnvelope.report().companyName(), "");
-        String draft = shortFallbackDraft(brief, rawIdea, sourceFacts, target.reviewId());
+        String draft = plannedShortStyle
+                ? plannedShortFallbackDraft(brief, rawIdea, sourceFacts, target.reviewId())
+                : shortFallbackDraft(brief, rawIdea, sourceFacts, target.reviewId());
         draft = cleanGeneratedLocalDraft(draft, company);
         draft = applyEmojiMode(draft, request.emojiMode());
         return new ReputationBatchReviewDraftItem(
@@ -2936,10 +3069,119 @@ public class ReputationSingleReviewDraftService {
                 draft,
                 sourceFacts,
                 List.of(
-                        "Короткий локальный rescue fallback: OpenAI не вернул подходящий текст для этой карточки.",
+                        itemSafetyNote,
                         "Перед публикацией клиент должен проверить, что реальный опыт совпадает с однофразовым текстом."
                 )
         );
+    }
+
+    private String plannedShortFallbackDraft(
+            ReviewGenerationBrief brief,
+            String rawIdea,
+            List<String> sourceFacts,
+            Long reviewId
+    ) {
+        String topic = shortTopic(bestShortFallbackTopic(brief, rawIdea, sourceFacts, reviewId));
+        if (topic.isBlank()) {
+            topic = "услугу";
+        }
+        return "Спасибо, заказывали " + shortAccusativeTopic(topic) + ", всё хорошо, спасибо.";
+    }
+
+    private String bestShortFallbackTopic(
+            ReviewGenerationBrief brief,
+            String rawIdea,
+            List<String> sourceFacts,
+            Long reviewId
+    ) {
+        String context = (rawIdea + " " + String.join(" ", sourceFacts == null ? List.of() : sourceFacts));
+        String service = brief == null ? "" : firstNonBlank(
+                pickMatching(brief.services(), context),
+                pick(brief.services(), reviewId == null ? 0 : Math.abs(reviewId.hashCode()))
+        );
+        String product = brief == null ? "" : firstNonBlank(
+                pickMatching(brief.products(), context),
+                pick(brief.products(), reviewId == null ? 0 : Math.abs(reviewId.hashCode()))
+        );
+        return firstNonBlank(
+                firstConcreteShortFact(sourceFacts),
+                product,
+                service,
+                rawIdea
+        );
+    }
+
+    private String firstConcreteShortFact(List<String> sourceFacts) {
+        if (sourceFacts == null || sourceFacts.isEmpty()) {
+            return "";
+        }
+        return sourceFacts.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .filter(value -> !hasPrice(value))
+                .map(this::cleanReviewInputText)
+                .filter(value -> !value.isBlank())
+                .filter(value -> value.length() <= 90)
+                .findFirst()
+                .orElse("");
+    }
+
+    private String lowerFirst(String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.isBlank()) {
+            return "";
+        }
+        return clean.substring(0, 1).toLowerCase(Locale.ROOT) + clean.substring(1);
+    }
+
+    private String shortAccusativeTopic(String value) {
+        String clean = lowerFirst(shortTopic(value));
+        if (clean.isBlank()) {
+            return "услугу";
+        }
+        clean = clean
+                .replaceAll("(?iu)\\bдни рождения\\b", "день рождения")
+                .replaceAll("(?iu)\\bдетские квесты\\b", "детский квест")
+                .replaceAll("(?iu)\\bквесты с актерами\\b", "квест с актерами")
+                .replaceAll("(?iu)\\bквесты с актёрами\\b", "квест с актёрами")
+                .replaceAll("(?iu)\\bхоррор-квесты\\b", "хоррор-квест");
+        String lower = normalizeLocalTopic(clean);
+        if (lower.contains("первичная диагностика")) {
+            return clean.replaceAll("(?iu)первичная диагностика", "первичную диагностику");
+        }
+        if (lower.contains("диагностика подвески")) {
+            return clean.replaceAll("(?iu)диагностика подвески", "диагностику подвески");
+        }
+        if (lower.contains("замена масла")) {
+            return clean.replaceAll("(?iu)замена масла", "замену масла");
+        }
+        if (lower.contains("полусухая стяжка")) {
+            return clean.replaceAll("(?iu)полусухая стяжка", "полусухую стяжку");
+        }
+        if (lower.contains("механизированная штукатурка")) {
+            return clean.replaceAll("(?iu)механизированная штукатурка", "механизированную штукатурку");
+        }
+        if (clean.endsWith("ая")) {
+            return clean.substring(0, clean.length() - 2) + "ую";
+        }
+        if (clean.endsWith("яя")) {
+            return clean.substring(0, clean.length() - 2) + "юю";
+        }
+        if (clean.endsWith("ка")) {
+            return clean.substring(0, clean.length() - 2) + "ку";
+        }
+        if (clean.endsWith("га")) {
+            return clean.substring(0, clean.length() - 2) + "гу";
+        }
+        if (clean.endsWith("ха")) {
+            return clean.substring(0, clean.length() - 2) + "ху";
+        }
+        if (clean.endsWith("а")) {
+            return clean.substring(0, clean.length() - 1) + "у";
+        }
+        if (clean.endsWith("я")) {
+            return clean.substring(0, clean.length() - 1) + "ю";
+        }
+        return clean;
     }
 
     private String shortFallbackDraft(
@@ -3031,7 +3273,7 @@ public class ReputationSingleReviewDraftService {
         }
         return (int) result.drafts().stream()
                 .filter(item -> item.safetyNotes().stream()
-                        .anyMatch(note -> note != null && note.contains("Короткий локальный rescue fallback")))
+                        .anyMatch(note -> note != null && note.contains("Короткий локальный")))
                 .count();
     }
 

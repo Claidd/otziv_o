@@ -18,6 +18,8 @@ import {
   ReviewRecoveryTaskItem,
   ReviewUpdateRequest
 } from '../../core/manager.api';
+import { PaymentsApi } from '../../core/payments.api';
+import type { ManagerPaymentLinkResponse, TbankPaymentStatus } from '../../core/payments.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -79,6 +81,7 @@ export class OrderDetailsComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
+  private readonly paymentsApi = inject(PaymentsApi);
   private readonly deepReportMonitor = inject(ReputationDeepReportMonitorService);
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
@@ -122,6 +125,8 @@ export class OrderDetailsComponent {
   readonly companyReportVisible = signal(false);
   readonly companyReportLoading = signal(false);
   readonly companyReportError = signal<string | null>(null);
+  readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
+  readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
   readonly browserOnline = signal(this.readBrowserOnline());
 
@@ -159,6 +164,13 @@ export class OrderDetailsComponent {
     ?? null);
   readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
   readonly companyReportBusy = computed(() => this.companyReportLoading() || this.isActiveCompanyReport(this.companyReportJob()));
+  readonly canShowPaymentLinkAction = computed(() => {
+    const status = this.tbankStatus();
+    return !!this.details()
+      && !!status?.managerUiEnabled
+      && !!status.paymentLinksEnabled
+      && this.auth.hasRealmRole('ADMIN');
+  });
   readonly activeReviewFieldEdit = computed<ActiveOrderReviewFieldEdit | null>(() => {
     const key = this.editingReviewFieldKey();
     const details = this.details();
@@ -187,6 +199,7 @@ export class OrderDetailsComponent {
 
   constructor() {
     this.updateMobileReviewLayout();
+    this.loadTbankStatus();
     effect(() => {
       const job = this.deepReportMonitor.currentJob();
       queueMicrotask(() => this.applyMonitoredCompanyReportJob(job));
@@ -340,6 +353,42 @@ export class OrderDetailsComponent {
     this.startCompanyReport(true);
   }
 
+  createPaymentLink(): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canShowPaymentLinkAction() || this.isMutating('payment-link')) {
+      return;
+    }
+
+    this.mutationKey.set('payment-link');
+    this.error.set(null);
+    this.paymentsApi.createOrderPaymentLink(orderId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.paymentLink.set(response);
+          this.mutationKey.set(null);
+          void this.copyText(response.copyText || response.url, 'payment-link', 'Ссылка на оплату скопирована');
+        },
+        error: (err) => {
+          const message = this.errorMessage(err, 'Не удалось создать ссылку на оплату');
+          this.mutationKey.set(null);
+          this.error.set(message);
+          this.toastService.error('Ссылка не создана', message);
+        }
+      });
+  }
+
+  paymentLinkModeLabel(): string {
+    const status = this.tbankStatus();
+    if (!status) {
+      return 'Проверка';
+    }
+    if (!status.enabled) {
+      return 'Тест выключен';
+    }
+    return status.applyConfirmedPayments ? 'Боевой учет' : 'Тест без учета';
+  }
+
   companyReportActionLabel(): string {
     if (this.companyReportLoading()) {
       return 'Проверяю';
@@ -415,6 +464,15 @@ export class OrderDetailsComponent {
         }
       }
     });
+  }
+
+  private loadTbankStatus(): void {
+    this.paymentsApi.getTbankStatus()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (status) => this.tbankStatus.set(status),
+        error: () => this.tbankStatus.set(null)
+      });
   }
 
   private startCompanyReport(refresh = false): void {

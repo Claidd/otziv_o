@@ -32,7 +32,9 @@ export class AuthService {
         onLoad: 'check-sso',
         pkceMethod: 'S256',
         responseMode: 'query',
-        checkLoginIframe: false
+        checkLoginIframe: false,
+        silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+        silentCheckSsoFallback: false
       });
 
       this.initialized = true;
@@ -43,9 +45,9 @@ export class AuthService {
         this.clearSession('anonymous');
       }
     } catch (error) {
-      this.status.set('error');
+      this.initialized = true;
       this.error.set(this.getErrorMessage(error));
-      throw error;
+      this.clearSession('anonymous');
     }
   }
 

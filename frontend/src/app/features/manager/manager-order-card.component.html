@@ -13,8 +13,10 @@
     <a
       [href]="orderHeaderUrl()"
       [class.chat-bot-link-pending]="needsChatBot()"
+      [title]="chatLinkTitle()"
       target="_blank"
       rel="noopener"
+      (click)="handleChatLinkClick()"
     >
       {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
     </a>
@@ -47,8 +49,10 @@
     <a
       [href]="orderChatUrl()"
       [class.chat-bot-link-pending]="needsChatBot()"
+      [title]="chatLinkTitle()"
       target="_blank"
       rel="noopener"
+      (click)="handleChatLinkClick()"
     >
       {{ orderPhoneLabel() }}
     </a>
@@ -58,6 +62,13 @@
       </button>
     }
   </div>
+
+  @if (chatBindingWarning(); as warning) {
+    <div class="chat-link-warning" [title]="warning">
+      <span class="material-icons-sharp">warning</span>
+      <span>{{ warning }}</span>
+    </div>
+  }
 
   <div class="card-actions order-links">
     <button type="button" (click)="copyTextRequested.emit('review')">

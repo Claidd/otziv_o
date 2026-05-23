@@ -139,6 +139,7 @@
             (ordersOpened)="openCompanyOrders(company)"
             (allOrdersOpened)="openAllOrders()"
             (editOpened)="openCompanyEdit(company)"
+            (chatBotInviteOpened)="handleChatBotInviteOpened(company)"
           />
         } @empty {
           <div class="empty">
@@ -163,6 +164,7 @@
             (statusUpdated)="updateOrderStatus(order, $event)"
             (clientWaitingToggled)="toggleOrderClientWaiting(order)"
             (editOpened)="openOrderEdit(order)"
+            (chatBotInviteOpened)="handleOrderChatBotInviteOpened(order)"
           />
         } @empty {
           <div class="empty">

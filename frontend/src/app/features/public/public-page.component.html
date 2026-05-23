@@ -1,87 +1,127 @@
-<app-admin-layout [title]="page().title" [active]="pageKey()" [rightPanelMode]="'custom'">
-  <section class="public-hero" aria-labelledby="public-page-title">
-    <div>
-      <p class="eyebrow">{{ page().eyebrow }}</p>
-      <h2 id="public-page-title">{{ page().title }}</h2>
-      <p>{{ page().lead }}</p>
-    </div>
-    <aside>
-      <span class="material-icons-sharp" aria-hidden="true">verified</span>
-      <strong>{{ page().accent }}</strong>
-    </aside>
-  </section>
+<app-admin-layout [title]="page().title" [active]="pageKey()" [rightPanelMode]="'custom'" [class.public-pay-layout]="pageKey() === 'pay'">
+  @if (pageKey() !== 'pay') {
+    <section class="public-hero" aria-labelledby="public-page-title">
+      <div>
+        <p class="eyebrow">{{ page().eyebrow }}</p>
+        <h2 id="public-page-title">{{ page().title }}</h2>
+        <p>{{ page().lead }}</p>
+      </div>
+      <aside>
+        <span class="material-icons-sharp" aria-hidden="true">verified</span>
+        <strong>{{ page().accent }}</strong>
+      </aside>
+    </section>
 
-  <nav class="public-nav" aria-label="Публичные разделы сайта">
-    @for (link of publicLinks; track link.href) {
-      <a [routerLink]="link.href" [class.active]="isActiveLink(link)">
-        <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
-        <span>{{ link.label }}</span>
-      </a>
-    }
-  </nav>
+    <nav class="public-nav" aria-label="Публичные разделы сайта">
+      @for (link of publicLinks; track link.href) {
+        <a [routerLink]="link.href" [class.active]="isActiveLink(link)">
+          <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+          <span>{{ link.label }}</span>
+        </a>
+      }
+    </nav>
+  }
 
   @if (pageKey() === 'pay') {
-    <section class="pay-grid">
-      <form class="pay-form" (ngSubmit)="preparePayment()" aria-label="Форма оплаты">
-        <label>
-          <span>Сумма, руб.</span>
-          <input
-            type="number"
-            name="amount"
-            min="1"
-            step="1"
-            inputmode="numeric"
-            [(ngModel)]="paymentDraft.amount"
-            placeholder="Например, 4800"
-          >
-        </label>
+    <section class="public-pay-shell">
+      <section class="public-payment-widget" aria-label="Оплата услуги">
+        <header class="public-payment-head">
+          <div>
+            <span class="merchant-name">Компания О!</span>
+            <strong>{{ paymentAmountLabel() }}</strong>
+            <small>{{ paymentServiceName }}</small>
+          </div>
+          <span class="brand-mark" aria-hidden="true">О!</span>
+        </header>
 
-        <label>
-          <span>E-mail для электронного чека</span>
-          <input
-            type="email"
-            name="email"
-            autocomplete="email"
-            [(ngModel)]="paymentDraft.email"
-            placeholder="client@example.ru"
-          >
-        </label>
-
-        <label class="wide">
-          <span>Комментарий к платежу</span>
-          <textarea
-            name="comment"
-            rows="4"
-            [(ngModel)]="paymentDraft.comment"
-            placeholder="Номер заказа, название компании или согласованная услуга"
-          ></textarea>
-        </label>
-
-        <label class="consent wide">
-          <input type="checkbox" name="offerConsent" [(ngModel)]="paymentDraft.offerConsent">
-          <span>Согласен с публичной офертой и политикой обработки персональных данных.</span>
-        </label>
-
-        <label class="consent wide">
-          <input type="checkbox" name="receiptConsent" [(ngModel)]="paymentDraft.receiptConsent">
-          <span>Согласен получить электронный кассовый чек на указанный e-mail.</span>
-        </label>
-
-        <div class="pay-actions wide">
-          <button type="submit" [disabled]="!canPreparePayment()">
-            <span class="material-icons-sharp" aria-hidden="true">arrow_forward</span>
-            Продолжить к оплате
+        <article class="quick-pay-card">
+          <div class="method-title">
+            <div>
+              <h2>T-Pay</h2>
+              <p>Быстрая оплата через защищенную форму банка</p>
+            </div>
+            <span>Черновик</span>
+          </div>
+          <button class="quick-pay-button" type="button" [disabled]="!canPreparePayment()" (click)="preparePayment()">
+            <span class="material-icons-sharp" aria-hidden="true">check_circle</span>
+            Pay
           </button>
-          @if (paymentStatus()) {
-            <p>{{ paymentStatus() }}</p>
-          }
-        </div>
-      </form>
+        </article>
 
-      <section class="public-card pay-note">
-        <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
-        <h3>Что будет дальше</h3>
-        <p>После подключения эквайринга форма создаст платеж через API Т-Банка и откроет безопасную платежную страницу банка.</p>
+        <article class="bank-card">
+          <header>
+            <h2>По карте или СБП</h2>
+            <span>
+              <span class="material-icons-sharp" aria-hidden="true">lock</span>
+              банк
+            </span>
+          </header>
+
+          <form class="public-checkout-form" (ngSubmit)="preparePayment()" aria-label="Форма оплаты">
+            <label class="amount-field">
+              <span>Сумма, руб.</span>
+              <input
+                type="number"
+                name="amount"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                [(ngModel)]="paymentDraft.amount"
+                placeholder="Например, 4800"
+              >
+            </label>
+
+            <label class="email-field">
+              <span>E-mail для электронного чека</span>
+              <input
+                type="email"
+                name="email"
+                autocomplete="email"
+                [(ngModel)]="paymentDraft.email"
+                placeholder="client@example.ru"
+              >
+            </label>
+
+            <label class="comment-field">
+              <span>Комментарий к платежу</span>
+              <textarea
+                name="comment"
+                rows="3"
+                [(ngModel)]="paymentDraft.comment"
+                [placeholder]="paymentServiceName"
+              ></textarea>
+            </label>
+
+            <div class="consent-stack">
+              <label class="consent">
+                <input type="checkbox" name="offerConsent" [(ngModel)]="paymentDraft.offerConsent">
+                <span>Согласен с <a routerLink="/offer">публичной офертой</a> и <a routerLink="/privacy">политикой персональных данных</a>.</span>
+              </label>
+
+              <label class="consent">
+                <input type="checkbox" name="receiptConsent" [(ngModel)]="paymentDraft.receiptConsent">
+                <span>Согласен получить <a routerLink="/receipt-consent">электронный чек</a> на указанный e-mail.</span>
+              </label>
+            </div>
+
+            <button class="primary-pay-button" type="submit" [disabled]="!canPreparePayment()">
+              <span class="material-icons-sharp" aria-hidden="true">payments</span>
+              Оплатить
+            </button>
+
+            @if (paymentStatus()) {
+              <p class="pay-message">{{ paymentStatus() }}</p>
+            }
+
+            <div class="payment-badges" aria-label="Способы оплаты">
+              <span>МИР</span>
+              <span>VISA</span>
+              <span>Mastercard</span>
+              <span>СБП</span>
+              <span>Без НДС</span>
+            </div>
+          </form>
+        </article>
       </section>
     </section>
   } @else {

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.time.DayOfWeek;
@@ -35,6 +36,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -156,6 +158,23 @@ class ReviewServiceImplTest {
 
         assertEquals(false, review.isVigul());
         verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void getAllPublishAndVigulMergesDuplicateFioRows() {
+        LocalDate firstDayOfMonth = LocalDate.of(2026, 5, 1);
+        LocalDate localDate = LocalDate.of(2026, 5, 22);
+        when(reviewRepository.findAllByPublishAndVigul(firstDayOfMonth, localDate, localDate.plusDays(2)))
+                .thenReturn(List.of(
+                        new Object[]{"Same User", 10L, 2L},
+                        new Object[]{"Same User", 4L, 1L}
+                ));
+
+        Map<String, Pair<Long, Long>> result = reviewService.getAllPublishAndVigul(firstDayOfMonth, localDate);
+
+        Pair<Long, Long> counts = result.get("Same User");
+        assertEquals(3L, counts.getFirst());
+        assertEquals(14L, counts.getSecond());
     }
 
     @Test

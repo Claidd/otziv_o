@@ -10,6 +10,7 @@
 - `phpmyadmin` - выключен по умолчанию, включается только профилем `db-admin` и доступен через SSH-туннель `127.0.0.1:6571`.
 - `keycloak-postgres` и `keycloak` - отдельная БД и Keycloak realm `otziv`.
 - `app` - Spring Boot backend с `SPRING_PROFILES_ACTIVE=prod`.
+- `whatsapp_lika` и `whatsapp_vika` - внутренние WhatsApp Web шлюзы для менеджерских аккаунтов.
 - `nginx` - публичная точка входа на `80/443`, Angular SPA, backend, Keycloak и Grafana.
 - `prometheus`, `loki`, `alloy`, `grafana` - метрики, логи контейнеров и дашборды.
 - `certbot` - ручной выпуск и продление сертификатов Let's Encrypt.
@@ -26,6 +27,7 @@
 - `backend/src/main/resources/application.yaml` и `application.properties` - базовая конфигурация Spring Boot.
 - `backend/src/main/resources/application-prod.properties` - Spring Boot prod profile.
 - `frontend/Dockerfile` - сборка Angular и Nginx runtime.
+- `Dockerfile.whatsapp` и `whatsapp/` - Node.js шлюз на `whatsapp-web.js`.
 - `infrastructure/nginx/prod.conf` - TLS reverse proxy.
 - `infrastructure/keycloak/realm-config.prod.json` - production realm import.
 - `infrastructure/loki/loki-config.yaml` - Loki retention/storage.
@@ -88,6 +90,102 @@ CERTBOT_DRY_RUN=false
 docker compose -f docker-compose.yaml --env-file .env.prod pull
 docker compose -f docker-compose.yaml --env-file .env.prod up -d
 ```
+
+## MAX webhook
+
+Для production MAX рекомендует Webhook вместо Long Polling. В приложении endpoint уже готов:
+
+```text
+https://o-ogo.ru/webhook/max
+```
+
+Перед регистрацией проверь, что в env-файле заполнены:
+
+```env
+OTZIV_APP_BASE_URL=https://o-ogo.ru
+MAX_BOT_TOKEN=...
+MAX_BOT_USERNAME=id380124742639_bot
+MAX_BOT_WEBHOOK_SECRET=...
+MAX_BOT_LONG_POLLING_ENABLED=false
+```
+
+При старте production backend сам зарегистрирует подписку в MAX, если `MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED` не выключен. Обычно руками запускать ничего не нужно.
+
+Ручная проверка или повторная регистрация на случай аварийной диагностики:
+
+```powershell
+.\infrastructure\scripts\prod\register-max-webhook.ps1 -EnvFile .env.prod
+```
+
+Если нужно посмотреть текущие подписки:
+
+```powershell
+.\infrastructure\scripts\prod\register-max-webhook.ps1 -EnvFile .env.prod -ListOnly
+```
+
+Если MAX уже хранит старую подписку на тот же URL и её нужно заменить:
+
+```powershell
+.\infrastructure\scripts\prod\register-max-webhook.ps1 -EnvFile .env.prod -DeleteExisting
+```
+
+Backend и скрипт подписывают бота на события `bot_started`, `bot_added`, `message_created` и передают `MAX_BOT_WEBHOOK_SECRET`; backend сверяет его с заголовком `X-Max-Bot-Api-Secret`.
+
+## WhatsApp gateway
+
+В prod поднимаются два внутренних WhatsApp-клиента:
+
+```text
+whatsapp_lika -> http://whatsapp_lika:3000, role=manager
+whatsapp_vika -> http://whatsapp_vika:3000, role=manager
+```
+
+Они не требуют Keycloak, потому что не являются пользовательским интерфейсом. Контейнеры доступны только во внутренней Docker-сети, а входящие webhook-запросы в backend можно защитить общим секретом:
+
+```env
+WHATSAPP_WEBHOOK_SECRET=<long-random-value>
+```
+
+Backend получает список клиентов из compose-переменных:
+
+```env
+WHATSAPP_CLIENTS_0_ID=whatsapp_lika
+WHATSAPP_CLIENTS_0_URL=http://whatsapp_lika:3000
+WHATSAPP_CLIENTS_0_ROLE=manager
+WHATSAPP_CLIENTS_1_ID=whatsapp_vika
+WHATSAPP_CLIENTS_1_URL=http://whatsapp_vika:3000
+WHATSAPP_CLIENTS_1_ROLE=manager
+```
+
+В compose для этих значений уже есть дефолты, поэтому для стандартного запуска их можно не дублировать в env-файле.
+
+Backend-level health monitor for WhatsApp is disabled by default:
+
+```env
+WHATSAPP_HEALTH_MONITOR_ENABLED=false
+WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED=false
+```
+
+Обычно достаточно Docker `healthcheck` и `restart: unless-stopped`. Включать `WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED=true` стоит только если backend-контейнеру осознанно дали доступ к Docker CLI.
+
+Первичная авторизация делается один раз на каждый контейнер. Менеджер может открыть QR из интерфейса: правая панель -> кнопка `WhatsApp` -> страница `/cabinet/whatsapp`. Если интерфейс недоступен, на VPS открой логи и отсканируй QR:
+
+```sh
+docker compose -f docker-compose.yaml --env-file .env logs -f whatsapp_lika
+docker compose -f docker-compose.yaml --env-file .env logs -f whatsapp_vika
+```
+
+В prod-like локальном запуске `whatsapp_lika` и `whatsapp_vika` намеренно не поднимаются: реальные WhatsApp Web-сессии держим только на проде. Локальная QR-страница будет работать только если вручную подключить внешний тестовый gateway и прописать `WHATSAPP_CLIENTS_*`.
+
+Prod deploy-скрипты отдельно собирают `whatsapp_lika` и `whatsapp_vika`; если эти сервисы убрать из production compose, деплой остановится на этапе сборки WhatsApp-контейнеров.
+
+После авторизации автосинхронизация WhatsApp-групп в разделе "Справочники" будет ходить в `GET /groups`, сравнивать invite-code с `company_url_chat` и сохранять `company_group_id`. В логах успешная проверка выглядит примерно так:
+
+```text
+WhatsApp group sync finished source=scheduled clients=2 groups=18 linked=3
+```
+
+Отправка сообщений идет так: заказ берет `manager.clientId`, компания берет `company.groupId`, backend вызывает `/send-group` у нужного WhatsApp-контейнера. Ответы из личных чатов приходят в `/webhook/whatsapp-reply`, ответы из групп - в `/webhook/whatsapp-group-reply`.
 
 ## Временный доступ к phpMyAdmin
 

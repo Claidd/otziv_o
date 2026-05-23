@@ -3,6 +3,9 @@ import {
   MANAGER_ORDER_ACTIONS,
   MANAGER_SECTIONS,
   managerBoardTitle,
+  managerChatBindingWarningForValues,
+  managerChatPlatformFromUrl,
+  managerCompanyChatBindingWarning,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
   managerCompanyOrderUrl,
@@ -11,6 +14,7 @@ import {
   managerLayoutTitle,
   managerOptionLabel,
   managerOrderActions,
+  managerOrderChatBindingWarning,
   managerOrderPaymentCopyText,
   managerOrderChatUrl,
   managerOrderDetailsUrl,
@@ -57,13 +61,13 @@ function order(overrides: Partial<OrderCardItem> = {}): OrderCardItem {
 
 describe('manager-board config helpers', () => {
   it('keeps titles and status labels stable', () => {
-    expect(managerBoardTitle('companies', 'Все', null)).toBe('Компании - Рабочие');
+    expect(managerBoardTitle('companies', 'Все', null)).toBe('Компании - Все');
     expect(managerBoardTitle('companies', 'Бан', null)).toBe('Бан');
     expect(managerBoardTitle('orders', 'Все', { id: 2, title: 'Acme' })).toBe('Заказы - Acme');
-    expect(managerLayoutTitle('companies', 'Все', null)).toBe('Компании - Рабочие');
+    expect(managerLayoutTitle('companies', 'Все', null)).toBe('Компании - Все');
     expect(managerLayoutTitle('orders', 'Оплачено', null)).toBe('Заказы - Оплачено');
-    expect(managerStatusOptionLabel('Все', null)).toBe('Рабочие');
-    expect(managerStatusOptionLabel('Все', 5)).toBe('Рабочие: 5');
+    expect(managerStatusOptionLabel('Все', null)).toBe('Все');
+    expect(managerStatusOptionLabel('Все', 5)).toBe('Все: 5');
     expect(managerStatusOptionLabel('Оплачено', 3)).toBe('Оплачено: 3');
   });
 
@@ -173,6 +177,33 @@ describe('manager-board config helpers', () => {
       .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5');
     expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
     expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/manager/orders/9/4');
+  });
+
+  it('detects active chat channel binding problems from the current link', () => {
+    expect(managerChatPlatformFromUrl('https://chat.whatsapp.com/abc')).toBe('whatsapp');
+    expect(managerChatPlatformFromUrl('https://t.me/+abc')).toBe('telegram');
+    expect(managerChatPlatformFromUrl('https://max.ru/join/abc')).toBe('max');
+    expect(managerChatPlatformFromUrl('https://example.com/chat')).toBe('unknown');
+    expect(managerCompanyChatBindingWarning(company({
+      urlChat: 'https://chat.whatsapp.com/abc',
+      groupId: ''
+    }))).toBe('WhatsApp-группа не привязана');
+    expect(managerOrderChatBindingWarning(order({
+      companyUrlChat: 'https://t.me/+abc',
+      telegramGroupChatId: null
+    }))).toBe('Telegram-группа не привязана');
+    expect(managerChatBindingWarningForValues(
+      'https://max.ru/join/abc',
+      undefined,
+      undefined,
+      -74924486091383
+    )).toBe('');
+    expect(managerChatBindingWarningForValues(
+      'https://t.me/+abc',
+      '120363111111111111@g.us',
+      null,
+      -74924486091383
+    )).toBe('Telegram-группа не привязана');
   });
 
   it('extracts API error messages and tracks lists by stable identifiers', () => {

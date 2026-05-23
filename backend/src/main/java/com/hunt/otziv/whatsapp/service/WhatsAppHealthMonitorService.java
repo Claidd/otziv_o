@@ -8,6 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+
 @Slf4j
 @Service
 public class WhatsAppHealthMonitorService {
@@ -23,9 +25,28 @@ public class WhatsAppHealthMonitorService {
         this.restTemplate = restTemplate;
     }
 
-    @Scheduled(fixedDelay = 720000) // каждый 60 секунд
+    @Scheduled(
+            fixedDelayString = "${whatsapp.health-monitor.fixed-delay-ms:720000}",
+            initialDelayString = "${whatsapp.health-monitor.initial-delay-ms:120000}"
+    )
     public void checkAllClientsHealth() {
-        for (WhatsAppProperties.ClientConfig client : properties.getClients()) {
+        WhatsAppProperties.HealthMonitor monitor = properties.getHealthMonitor();
+        if (monitor == null || !monitor.isEnabled()) {
+            return;
+        }
+
+        List<WhatsAppProperties.ClientConfig> clients = properties.getClients() != null
+                ? properties.getClients()
+                : List.of();
+        if (clients.isEmpty()) {
+            log.debug("WhatsApp health monitor skipped: no configured clients");
+            return;
+        }
+
+        for (WhatsAppProperties.ClientConfig client : clients) {
+            if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
+                continue;
+            }
             checkHealthForClient(client);
         }
     }
@@ -39,25 +60,41 @@ public class WhatsAppHealthMonitorService {
             ResponseEntity<String> response = restTemplate.getForEntity(healthUrl, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
-                log.warn("❗ WhatsApp клиент '{}' недоступен, перезапускаем...", client.getId());
-                restartWhatsAppContainer(client.getId());
+                handleUnavailableClient(client.getId(), "status=" + response.getStatusCode());
             } else {
-                log.info("✅ WhatsApp клиент '{}' доступен", client.getId());
+                log.debug("WhatsApp client '{}' is healthy", client.getId());
             }
         } catch (Exception e) {
-            log.error("❌ Ошибка при проверке {}: {}", client.getId(), e.getMessage());
-            restartWhatsAppContainer(client.getId());
+            handleUnavailableClient(client.getId(), e.getMessage());
         }
+    }
+
+    private void handleUnavailableClient(String clientId, String reason) {
+        if (!properties.getHealthMonitor().isRestartEnabled()) {
+            log.warn("WhatsApp client '{}' health check failed: {}. Docker restart is disabled", clientId, reason);
+            return;
+        }
+
+        log.warn("WhatsApp client '{}' is unavailable: {}. Restarting container...", clientId, reason);
+        restartWhatsAppContainer(clientId);
     }
 
     private void restartWhatsAppContainer(String containerName) {
         try {
-            Process process = Runtime.getRuntime().exec("docker restart " + containerName);
-            process.waitFor();
-            log.info("♻️ Перезапущен контейнер: {}", containerName);
+            Process process = new ProcessBuilder("docker", "restart", containerName).start();
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                log.info("Restarted WhatsApp container: {}", containerName);
+            } else {
+                log.error("Docker restart for WhatsApp container {} exited with code {}", containerName, exitCode);
+            }
         } catch (Exception e) {
-            log.error("❌ Не удалось перезапустить контейнер {}: {}", containerName, e.getMessage());
+            log.error("Failed to restart WhatsApp container {}: {}", containerName, e.getMessage());
         }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }
 

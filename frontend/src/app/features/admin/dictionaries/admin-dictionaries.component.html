@@ -478,6 +478,30 @@
                   </tr>
                   <tr>
                     <td>
+                      <strong>WhatsApp автосинхронизация</strong>
+                      <span>Поиск groupId по invite-ссылкам из карточек компаний</span>
+                    </td>
+                    <td>
+                      <strong>{{ whatsAppGroupSyncSettings()?.enabled ? 'включена' : 'выключена' }}</strong>
+                      <span>каждые {{ whatsAppGroupSyncSettings()?.intervalMinutes ?? 30 }} мин.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Последняя WhatsApp-проверка</strong>
+                      <span>Сколько групп привязалось за последний запуск</span>
+                    </td>
+                    <td>
+                      @if (whatsAppGroupSyncSettings()?.lastRunAt; as lastRunAt) {
+                        <strong>{{ lastRunAt | date:'dd.MM.yyyy HH:mm' }}</strong>
+                      } @else {
+                        <strong>ещё не запускалась</strong>
+                      }
+                      <span>новых привязок: {{ whatsAppGroupSyncSettings()?.lastLinkedCount ?? 0 }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
                       <strong>Последние запуски</strong>
                       <span>Защита от повторной отправки за один слот</span>
                     </td>
@@ -954,13 +978,69 @@
                 </label>
               </div>
 
+              <div class="settings-section">
+                <h3>WhatsApp-группы</h3>
+                <label class="checkbox">
+                  <input type="checkbox" formControlName="whatsAppGroupSyncEnabled">
+                  <span>Автосинхронизация WhatsApp-групп включена</span>
+                </label>
+
+                <label>
+                  <span>Интервал проверки, минут</span>
+                  <input type="number" min="5" max="1440" step="5" formControlName="whatsAppGroupSyncIntervalMinutes">
+                </label>
+
+                <p class="settings-hint">
+                  Включение означает, что сервер сам сверяет ссылки вида chat.whatsapp.com из карточек компаний
+                  с группами, которые отдаёт WhatsApp-шлюз. Интервал задаёт паузу между реальными обходами:
+                  система проверяет каждого настроенного WhatsApp-клиента один раз за запуск, а не каждую компанию отдельно.
+                </p>
+
+                <p class="settings-hint">
+                  Работает только если шлюз поддерживает GET /groups и возвращает groupId вместе с invite-ссылкой
+                  или invite-code. Если шлюз этого не умеет, старый сценарий не ломается: компания привяжется после
+                  входящего сообщения из нужной группы.
+                </p>
+
+                <div class="actions">
+                  <button type="button" class="secondary" (click)="runWhatsAppGroupSync()" [disabled]="syncingWhatsAppGroups() || saving()">
+                    <span class="material-icons-sharp">sync</span>
+                    {{ syncingWhatsAppGroups() ? 'Синхронизирую' : 'Синхронизировать сейчас' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <h3>Общие чаты компаний</h3>
+                <p class="settings-hint">
+                  Если несколько компаний используют одну и ту же ссылку чата, система скопирует уже найденные
+                  WhatsApp, Telegram и MAX id из привязанной компании в остальные компании с этой же ссылкой.
+                </p>
+
+                <p class="settings-hint">
+                  Существующие отличающиеся id не перезаписываются: такие группы будут отмечены как конфликтные.
+                </p>
+
+                <div class="actions">
+                  <button
+                    type="button"
+                    class="secondary"
+                    (click)="runSharedChatLinkSync()"
+                    [disabled]="syncingSharedChatLinks() || saving()"
+                  >
+                    <span class="material-icons-sharp">hub</span>
+                    {{ syncingSharedChatLinks() ? 'Синхронизирую' : 'Скопировать id общих чатов' }}
+                  </button>
+                </div>
+              </div>
+
               <p class="settings-hint">
                 Значения применяются сразу после сохранения. Дефолт расписания сохранён как раньше: 11:30 утром и 22:00 вечером.
-                Если поставить 0 минут, специалист сможет делать выгул без паузы.
+                Если поставить 0 минут для выгула, специалист сможет делать выгул без паузы.
               </p>
 
               @if (settingsForm.invalid && settingsForm.touched) {
-                <p class="error compact">Проверьте паузу, горизонт, время рассылок и часовой пояс.</p>
+                <p class="error compact">Проверьте паузу, горизонт, время рассылок, часовой пояс и интервал WhatsApp.</p>
               }
 
               <div class="actions">

@@ -501,4 +501,18 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     Optional<Company> findByGroupId(String groupId);
 
     Optional<Company> findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(Long maxLinkUserId);
+
+    @Query("""
+    SELECT c
+    FROM Company c
+    WHERE c.urlChat IS NOT NULL
+      AND TRIM(c.urlChat) <> ''
+""")
+    List<Company> findAllWithChatUrl();
+
+    List<Company> findTop3ByMaxGroupChatIdIsNullAndUrlChatContaining(String chatIdText);
+
+    List<Company> findTop3ByTelegramGroupChatIdIsNullAndUrlChatContainingIgnoreCase(String chatUsername);
+
+    List<Company> findTop3ByGroupIdIsNullAndUrlChatContainingIgnoreCase(String inviteCode);
 }

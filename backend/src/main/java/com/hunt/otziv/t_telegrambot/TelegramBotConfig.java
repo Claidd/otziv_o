@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Configuration
@@ -79,6 +80,7 @@ public class TelegramBotConfig {
         options.setMaxThreads(1);
         options.setBaseUrl("https://api.telegram.org/bot");
         options.setGetUpdatesTimeout(normalizedLongPollingTimeoutSeconds);
+        options.setAllowedUpdates(List.of("message", "my_chat_member"));
 
         if (proxyEnabled && proxyHost != null && !proxyHost.isBlank()) {
             options.setProxyHost(proxyHost);

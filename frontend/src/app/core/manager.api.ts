@@ -305,6 +305,9 @@ export interface CompanyEditPayload {
   id: number;
   title: string;
   urlChat: string;
+  groupId?: string;
+  telegramGroupChatId?: number | null;
+  maxGroupChatId?: number | null;
   urlSite: string;
   telephone: string;
   city: string;

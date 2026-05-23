@@ -12,8 +12,10 @@ import {
   AdminNagulSettings,
   AdminProduct,
   AdminPromoText,
+  AdminSharedChatLinkSyncResponse,
   AdminSubCategory,
   AdminTelegramReportScheduleSettings,
+  AdminWhatsAppGroupSyncSettings,
   BotImportResponse,
   BotRequest,
   BotsResponse,
@@ -29,7 +31,8 @@ import {
   PromoTextRequest,
   SubCategoryRequest,
   TelegramReportScheduleSettingsRequest,
-  TitleRequest
+  TitleRequest,
+  WhatsAppGroupSyncSettingsRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
@@ -63,6 +66,7 @@ type DictionaryMetric = {
 type DictionarySettingsResponse = {
   nagulSettings: AdminNagulSettings;
   telegramReportSettings: AdminTelegramReportScheduleSettings;
+  whatsAppGroupSyncSettings: AdminWhatsAppGroupSyncSettings;
 };
 
 const PROMO_TEXT_LABELS: Record<number, string> = {
@@ -113,6 +117,8 @@ export class AdminDictionariesComponent {
   readonly saving = signal(false);
   readonly deleting = signal(false);
   readonly importing = signal(false);
+  readonly syncingWhatsAppGroups = signal(false);
+  readonly syncingSharedChatLinks = signal(false);
   readonly error = signal<string | null>(null);
   readonly importError = signal<string | null>(null);
   readonly importResult = signal<BotImportResponse | null>(null);
@@ -141,6 +147,7 @@ export class AdminDictionariesComponent {
   readonly selectedPromoManagerId = signal<number | null>(null);
   readonly nagulSettings = signal<AdminNagulSettings | null>(null);
   readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
+  readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -220,7 +227,9 @@ export class AdminDictionariesComponent {
     morningReportTime: ['11:30', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
     eveningReportEnabled: [true],
     eveningReportTime: ['22:00', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
-    telegramReportZone: ['Asia/Irkutsk', Validators.required]
+    telegramReportZone: ['Asia/Irkutsk', Validators.required],
+    whatsAppGroupSyncEnabled: [true],
+    whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]]
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
@@ -294,7 +303,8 @@ export class AdminDictionariesComponent {
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
-      { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' }
+      { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
+      { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' }
     ];
   });
 
@@ -331,7 +341,8 @@ export class AdminDictionariesComponent {
         promoTexts: this.dictionariesApi.getPromoTextManagement(),
         managerTexts: this.dictionariesApi.getManagerTexts(),
         nagulSettings: this.dictionariesApi.getNagulSettings(),
-        telegramReportSettings: this.dictionariesApi.getTelegramReportSettings()
+        telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
+        whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings()
       }).subscribe({
         next: ({
           categories,
@@ -343,7 +354,8 @@ export class AdminDictionariesComponent {
           promoTexts,
           managerTexts,
           nagulSettings,
-          telegramReportSettings
+          telegramReportSettings,
+          whatsAppGroupSyncSettings
         }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
@@ -356,6 +368,7 @@ export class AdminDictionariesComponent {
           this.managerTexts.set(managerTexts);
           this.applyNagulSettings(nagulSettings);
           this.applyTelegramReportSettings(telegramReportSettings);
+          this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -386,6 +399,7 @@ export class AdminDictionariesComponent {
         this.selectedPromoManagerId.set(null);
         this.nagulSettings.set(null);
         this.telegramReportSettings.set(null);
+        this.whatsAppGroupSyncSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -775,6 +789,57 @@ export class AdminDictionariesComponent {
     }
   }
 
+  runWhatsAppGroupSync(): void {
+    if (this.syncingWhatsAppGroups() || this.saving()) {
+      return;
+    }
+
+    this.syncingWhatsAppGroups.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.runWhatsAppGroupSync().subscribe({
+      next: (settings) => {
+        this.syncingWhatsAppGroups.set(false);
+        this.applyWhatsAppGroupSyncSettings(settings);
+        this.toastService.success(
+          'WhatsApp-группы проверены',
+          `Новых привязок: ${settings.lastLinkedCount}`
+        );
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось запустить синхронизацию WhatsApp-групп');
+        this.error.set(message);
+        this.syncingWhatsAppGroups.set(false);
+        this.toastService.error('WhatsApp не синхронизирован', message);
+      }
+    });
+  }
+
+  runSharedChatLinkSync(): void {
+    if (this.syncingSharedChatLinks() || this.saving()) {
+      return;
+    }
+
+    this.syncingSharedChatLinks.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.runSharedChatLinkSync().subscribe({
+      next: (response) => {
+        this.syncingSharedChatLinks.set(false);
+        this.toastService.success(
+          'Общие чаты синхронизированы',
+          this.sharedChatSyncSummary(response)
+        );
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось синхронизировать общие чаты');
+        this.error.set(message);
+        this.syncingSharedChatLinks.set(false);
+        this.toastService.error('Общие чаты не синхронизированы', message);
+      }
+    });
+  }
+
   deleteSelected(): void {
     const activeTab = this.activeTab();
     if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'settings') {
@@ -867,7 +932,9 @@ export class AdminDictionariesComponent {
   }
 
   settingsTotal(): number {
-    return (this.nagulSettings() ? 1 : 0) + (this.telegramReportSettings() ? 1 : 0);
+    return (this.nagulSettings() ? 1 : 0)
+      + (this.telegramReportSettings() ? 1 : 0)
+      + (this.whatsAppGroupSyncSettings() ? 1 : 0);
   }
 
   categoryTitle(category?: DictionaryOption | null): string {
@@ -1183,7 +1250,8 @@ export class AdminDictionariesComponent {
       case 'settings':
         request = forkJoin({
           nagulSettings: this.dictionariesApi.getNagulSettings(),
-          telegramReportSettings: this.dictionariesApi.getTelegramReportSettings()
+          telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
+          whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings()
         });
         break;
     }
@@ -1224,6 +1292,7 @@ export class AdminDictionariesComponent {
             const payload = response as DictionarySettingsResponse;
             this.applyNagulSettings(payload.nagulSettings);
             this.applyTelegramReportSettings(payload.telegramReportSettings);
+            this.applyWhatsAppGroupSyncSettings(payload.whatsAppGroupSyncSettings);
             break;
           }
         }
@@ -1486,21 +1555,27 @@ export class AdminDictionariesComponent {
       eveningTime: raw.eveningReportTime,
       zone: raw.telegramReportZone.trim()
     };
+    const whatsAppRequest: WhatsAppGroupSyncSettingsRequest = {
+      enabled: raw.whatsAppGroupSyncEnabled,
+      intervalMinutes: Number(raw.whatsAppGroupSyncIntervalMinutes ?? 30)
+    };
 
     this.saving.set(true);
     this.error.set(null);
 
     forkJoin({
       nagulSettings: this.dictionariesApi.updateNagulSettings(nagulRequest),
-      telegramReportSettings: this.dictionariesApi.updateTelegramReportSettings(telegramRequest)
+      telegramReportSettings: this.dictionariesApi.updateTelegramReportSettings(telegramRequest),
+      whatsAppGroupSyncSettings: this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest)
     }).subscribe({
-      next: ({ nagulSettings, telegramReportSettings }) => {
+      next: ({ nagulSettings, telegramReportSettings, whatsAppGroupSyncSettings }) => {
         this.saving.set(false);
         this.applyNagulSettings(nagulSettings);
         this.applyTelegramReportSettings(telegramReportSettings);
+        this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
         this.toastService.success(
           'Настройки сохранены',
-          `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, ${nagulSettings.lookaheadDays} дн.`
+          `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, WhatsApp ${whatsAppGroupSyncSettings.intervalMinutes} мин.`
         );
       },
       error: (err) => {
@@ -1705,6 +1780,27 @@ export class AdminDictionariesComponent {
     });
   }
 
+  private applyWhatsAppGroupSyncSettings(response: AdminWhatsAppGroupSyncSettings): void {
+    this.whatsAppGroupSyncSettings.set(response);
+    this.settingsForm.patchValue({
+      whatsAppGroupSyncEnabled: response.enabled,
+      whatsAppGroupSyncIntervalMinutes: response.intervalMinutes
+    });
+  }
+
+  private sharedChatSyncSummary(response: AdminSharedChatLinkSyncResponse): string {
+    const parts = [
+      `компаний обновлено: ${response.updatedCompanies}`,
+      `WhatsApp: ${response.whatsappLinked}`,
+      `Telegram: ${response.telegramLinked}`,
+      `MAX: ${response.maxLinked}`
+    ];
+    if (response.conflictGroups > 0) {
+      parts.push(`конфликтов: ${response.conflictGroups}`);
+    }
+    return parts.join(', ');
+  }
+
   private resetSettingsForm(): void {
     this.settingsForm.reset({
       nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
@@ -1713,7 +1809,9 @@ export class AdminDictionariesComponent {
       morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
       eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
       eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
-      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk'
+      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk',
+      whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
+      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30
     });
   }
 

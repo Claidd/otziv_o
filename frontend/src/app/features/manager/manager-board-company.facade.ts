@@ -301,7 +301,10 @@ export class ManagerBoardCompanyFacade {
               manager: payload.manager?.label ?? company.manager,
               commentsCompany: payload.commentsCompany,
               city: payload.city,
-              dateNewTry: payload.dateNewTry
+              dateNewTry: payload.dateNewTry,
+              groupId: payload.groupId,
+              telegramGroupChatId: payload.telegramGroupChatId,
+              maxGroupChatId: payload.maxGroupChatId
             }
           : company
         )

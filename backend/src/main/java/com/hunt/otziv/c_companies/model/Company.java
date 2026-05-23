@@ -153,6 +153,13 @@ public class Company {
     @Column(name = "company_max_link_requested_at")
     private LocalDateTime maxLinkRequestedAt;
 
+    @Column(name = "company_last_payer_email", length = 320)
+    @Email
+    private String lastPayerEmail;
+
+    @Column(name = "company_last_payer_email_at")
+    private LocalDateTime lastPayerEmailAt;
+
 
 
 

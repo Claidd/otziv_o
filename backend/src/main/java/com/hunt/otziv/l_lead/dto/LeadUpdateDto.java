@@ -15,6 +15,18 @@ import java.time.LocalDateTime;
 public class LeadUpdateDto {
     private Long leadId;
     private String telephoneLead;
+    private String companyName;
+    private String phones;
+    private String mobilePhones;
+    private String whatsappPhones;
+    private String emails;
+    private String websites;
+    private String vkUrl;
+    private String telegramUrl;
+    private String industries;
+    private String companyType;
+    private String region;
+    private String address;
     private String cityLead;
     private String commentsLead;
     private String lidStatus;

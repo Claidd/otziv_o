@@ -77,6 +77,23 @@ export interface AdminTelegramReportScheduleSettings {
   eveningLastRunKey: string;
 }
 
+export interface AdminWhatsAppGroupSyncSettings {
+  enabled: boolean;
+  intervalMinutes: number;
+  lastRunAt: string;
+  lastLinkedCount: number;
+}
+
+export interface AdminSharedChatLinkSyncResponse {
+  scannedCompanies: number;
+  sharedChatGroups: number;
+  updatedCompanies: number;
+  whatsappLinked: number;
+  telegramLinked: number;
+  maxLinked: number;
+  conflictGroups: number;
+}
+
 export interface PromoButtonSlot {
   section: string;
   sectionTitle: string;
@@ -191,6 +208,11 @@ export interface TelegramReportScheduleSettingsRequest {
   eveningEnabled: boolean;
   eveningTime: string;
   zone: string;
+}
+
+export interface WhatsAppGroupSyncSettingsRequest {
+  enabled: boolean;
+  intervalMinutes: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -372,6 +394,24 @@ export class AdminDictionariesApi {
     request: TelegramReportScheduleSettingsRequest
   ): Observable<AdminTelegramReportScheduleSettings> {
     return this.http.put<AdminTelegramReportScheduleSettings>(`${this.baseUrl}/settings/telegram-reports`, request);
+  }
+
+  getWhatsAppGroupSyncSettings(): Observable<AdminWhatsAppGroupSyncSettings> {
+    return this.http.get<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync`);
+  }
+
+  updateWhatsAppGroupSyncSettings(
+    request: WhatsAppGroupSyncSettingsRequest
+  ): Observable<AdminWhatsAppGroupSyncSettings> {
+    return this.http.put<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync`, request);
+  }
+
+  runWhatsAppGroupSync(): Observable<AdminWhatsAppGroupSyncSettings> {
+    return this.http.post<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync/run`, {});
+  }
+
+  runSharedChatLinkSync(): Observable<AdminSharedChatLinkSyncResponse> {
+    return this.http.post<AdminSharedChatLinkSyncResponse>(`${this.baseUrl}/settings/shared-chat-links/sync`, {});
   }
 
   private keywordParams(keyword: string): HttpParams {

@@ -118,7 +118,7 @@ class ManagerBoardServiceTest {
         assertEquals(1, response.orders().totalElements());
         assertEquals(List.of("promo"), response.promoTexts());
         assertEquals(20, response.metrics().size());
-        assertEquals("Рабочие", response.metrics().stream()
+        assertEquals("Все", response.metrics().stream()
                 .filter(metric -> "orders".equals(metric.section()) && "Все".equals(metric.status()))
                 .findFirst()
                 .orElseThrow()

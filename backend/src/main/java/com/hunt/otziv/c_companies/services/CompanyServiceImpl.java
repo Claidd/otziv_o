@@ -480,11 +480,12 @@ public class CompanyServiceImpl implements CompanyService{
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
         companyDTO.setCity(leadDTO.getCityLead());
+        applyLeadCompanyDefaults(companyDTO, leadDTO);
         companyDTO.setUser(convertToUserDtoToManager(principal));
         companyDTO.setOperator(leadOperatorName(leadDTO));
         companyDTO.setManager(convertToManagerDto(leadDTO.getManager()));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
-        companyDTO.setFilial(new FilialDTO());
+        ensureFilial(companyDTO);
 
         Set<WorkerDTO> workers = workerService.getAllWorkersByManagerId(leadDTO.getManager().getId());
 
@@ -564,11 +565,12 @@ public class CompanyServiceImpl implements CompanyService{
         CompanyDTO companyDTO = new CompanyDTO();
         companyDTO.setTelephone(leadDTO.getTelephoneLead());
         companyDTO.setCity(leadDTO.getCityLead());
+        applyLeadCompanyDefaults(companyDTO, leadDTO);
         companyDTO.setUser(convertToUserDto(manager.getUser()));
         companyDTO.setOperator(leadOperatorName(leadDTO));
         companyDTO.setManager(convertToManagerDto(manager));
         companyDTO.setStatus(convertToCompanyStatusDto(companyStatusService.getCompanyStatusById(1L)));
-        companyDTO.setFilial(new FilialDTO());
+        ensureFilial(companyDTO);
         companyDTO.setWorkers(managerWorkers);
         companyDTO.setWorker(randomWorker);
         return companyDTO;
@@ -607,6 +609,86 @@ public class CompanyServiceImpl implements CompanyService{
         return leadDTO != null && leadDTO.getOperator() != null && leadDTO.getOperator().getUser() != null
                 ? leadDTO.getOperator().getUser().getFio()
                 : null;
+    }
+
+    private void applyLeadCompanyDefaults(CompanyDTO companyDTO, LeadDTO leadDTO) {
+        if (leadDTO == null) {
+            return;
+        }
+
+        companyDTO.setTitle(firstNonBlank(leadDTO.getCompanyName(), companyDTO.getTitle()));
+        companyDTO.setUrlSite(firstNonBlank(firstMultiValue(leadDTO.getWebsites()), companyDTO.getUrlSite()));
+        companyDTO.setEmail(firstNonBlank(firstMultiValue(leadDTO.getEmails()), companyDTO.getEmail()));
+        companyDTO.setUrlChat(firstNonBlank(
+                firstMultiValue(leadDTO.getTelegramUrl()),
+                firstMultiValue(leadDTO.getVkUrl()),
+                companyDTO.getUrlChat()
+        ));
+
+        if (!clean(leadDTO.getAddress()).isBlank()) {
+            ensureFilial(companyDTO).setTitle(leadDTO.getAddress());
+        }
+
+        String comments = leadCompanyComments(leadDTO);
+        if (!comments.isBlank()) {
+            companyDTO.setCommentsCompany(comments);
+        }
+    }
+
+    private FilialDTO ensureFilial(CompanyDTO companyDTO) {
+        if (companyDTO.getFilial() == null) {
+            companyDTO.setFilial(new FilialDTO());
+        }
+        return companyDTO.getFilial();
+    }
+
+    private String leadCompanyComments(LeadDTO leadDTO) {
+        StringJoiner comments = new StringJoiner("\n");
+        addLeadComment(comments, "Отрасли", leadDTO.getIndustries());
+        addLeadComment(comments, "Тип", leadDTO.getCompanyType());
+        addLeadComment(comments, "Регион", leadDTO.getRegion());
+        addLeadComment(comments, "Телефоны", leadDTO.getPhones());
+        addLeadComment(comments, "Мобильные", leadDTO.getMobilePhones());
+        addLeadComment(comments, "WhatsApp", leadDTO.getWhatsappPhones());
+        addLeadComment(comments, "VK", leadDTO.getVkUrl());
+        addLeadComment(comments, "TG", leadDTO.getTelegramUrl());
+        addLeadComment(comments, "Комментарий лида", leadDTO.getCommentsLead());
+        return comments.toString();
+    }
+
+    private void addLeadComment(StringJoiner comments, String label, String value) {
+        String cleanValue = clean(value);
+        if (!cleanValue.isBlank()) {
+            comments.add(label + ": " + cleanValue);
+        }
+    }
+
+    private String firstMultiValue(String value) {
+        String cleanValue = clean(value);
+        if (cleanValue.isBlank()) {
+            return "";
+        }
+        for (String part : cleanValue.split("[,;\\r\\n]+")) {
+            String cleanPart = clean(part);
+            if (!cleanPart.isBlank()) {
+                return cleanPart;
+            }
+        }
+        return cleanValue;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            String cleanValue = clean(value);
+            if (!cleanValue.isBlank()) {
+                return cleanValue;
+            }
+        }
+        return "";
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
     }
 
 

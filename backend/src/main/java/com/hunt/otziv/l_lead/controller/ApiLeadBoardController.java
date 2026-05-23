@@ -15,6 +15,7 @@ import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.LeadImportService;
+import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportOptions;
 import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportResult;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -168,8 +169,8 @@ public class ApiLeadBoardController {
             Authentication authentication
     ) {
         String telephoneLead = changeNumberPhone(request.telephoneLead());
-        String cityLead = request.cityLead().trim();
-        String commentsLead = request.commentsLead() == null ? "" : request.commentsLead().trim();
+        String cityLead = clean(request.cityLead());
+        String commentsLead = clean(request.commentsLead());
         Manager manager = null;
 
         if (telephoneLead.isBlank()) {
@@ -193,6 +194,18 @@ public class ApiLeadBoardController {
 
         LeadDTO leadDTO = LeadDTO.builder()
                 .telephoneLead(telephoneLead)
+                .companyName(clean(request.companyName()))
+                .phones(clean(request.phones()))
+                .mobilePhones(clean(request.mobilePhones()))
+                .whatsappPhones(clean(request.whatsappPhones()))
+                .emails(clean(request.emails()))
+                .websites(clean(request.websites()))
+                .vkUrl(clean(request.vkUrl()))
+                .telegramUrl(clean(request.telegramUrl()))
+                .industries(clean(request.industries()))
+                .companyType(clean(request.companyType()))
+                .region(clean(request.region()))
+                .address(clean(request.address()))
                 .cityLead(cityLead)
                 .commentsLead(commentsLead)
                 .manager(manager)
@@ -221,8 +234,13 @@ public class ApiLeadBoardController {
 
     @PostMapping("/file-import")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public LeadImportResult importLeads(@RequestParam("file") MultipartFile file) {
-        return leadImportService.importLeads(file);
+    public LeadImportResult importLeads(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "managerIds", required = false) List<Long> managerIds,
+            @RequestParam(name = "operatorId", required = false) Long operatorId,
+            @RequestParam(name = "marketologId", required = false) Long marketologId
+    ) {
+        return leadImportService.importLeads(file, new LeadImportOptions(managerIds, operatorId, marketologId));
     }
 
     @PutMapping("/{id}")
@@ -246,8 +264,20 @@ public class ApiLeadBoardController {
 
         LeadDTO leadDTO = LeadDTO.builder()
                 .telephoneLead(telephoneLead)
-                .cityLead(request.cityLead())
-                .commentsLead(request.commentsLead())
+                .companyName(clean(request.companyName()))
+                .phones(clean(request.phones()))
+                .mobilePhones(clean(request.mobilePhones()))
+                .whatsappPhones(clean(request.whatsappPhones()))
+                .emails(clean(request.emails()))
+                .websites(clean(request.websites()))
+                .vkUrl(clean(request.vkUrl()))
+                .telegramUrl(clean(request.telegramUrl()))
+                .industries(clean(request.industries()))
+                .companyType(clean(request.companyType()))
+                .region(clean(request.region()))
+                .address(clean(request.address()))
+                .cityLead(clean(request.cityLead()))
+                .commentsLead(clean(request.commentsLead()))
                 .lidStatus(request.lidStatus())
                 .operator(request.operatorId() == null ? null : operatorService.getOperatorById(request.operatorId()))
                 .telephone(telephone)
@@ -368,6 +398,18 @@ public class ApiLeadBoardController {
         return new LeadResponse(
                 lead.getId(),
                 lead.getTelephoneLead(),
+                lead.getCompanyName(),
+                lead.getPhones(),
+                lead.getMobilePhones(),
+                lead.getWhatsappPhones(),
+                lead.getEmails(),
+                lead.getWebsites(),
+                lead.getVkUrl(),
+                lead.getTelegramUrl(),
+                lead.getIndustries(),
+                lead.getCompanyType(),
+                lead.getRegion(),
+                lead.getAddress(),
                 lead.getCityLead(),
                 lead.getCommentsLead(),
                 lead.getLidStatus(),
@@ -444,6 +486,10 @@ public class ApiLeadBoardController {
 
     private String changeNumberPhone(String phone) {
         return LeadPhoneNormalizer.normalize(phone);
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private boolean hasAnyRole(Authentication authentication, String... roles) {

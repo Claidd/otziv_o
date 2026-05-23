@@ -40,10 +40,12 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN FETCH c.status
         LEFT JOIN FETCH c.manager cm
         LEFT JOIN FETCH cm.user
+        LEFT JOIN FETCH cm.paymentProfile
         LEFT JOIN FETCH o.worker w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH o.manager m
         LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH m.paymentProfile
         WHERE o.id = :orderId
     """)
     Optional<Order> findByIdForOrderDto(@Param("orderId") Long orderId);
@@ -60,10 +62,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN FETCH c.categoryCompany
         LEFT JOIN FETCH c.subCategory
         LEFT JOIN FETCH c.status
+        LEFT JOIN FETCH c.manager cm
+        LEFT JOIN FETCH cm.user
+        LEFT JOIN FETCH cm.paymentProfile
         LEFT JOIN FETCH o.worker w
         LEFT JOIN FETCH w.user
         LEFT JOIN FETCH o.manager m
         LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH m.paymentProfile
         WHERE o.id = :orderId
     """)
     Optional<Order> findByIdForMutation(@Param("orderId") Long orderId);

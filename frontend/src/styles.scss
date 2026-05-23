@@ -1263,12 +1263,6 @@ app-order-details .review-edit-modal .review-save-action {
   background: var(--otziv-primary);
 }
 
-@media (max-width: 1500px) {
-  :is(app-leads-board, app-operator-board) .lead-workspace .cards-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1180px) {
   :is(app-leads-board, app-operator-board) .lead-workspace .copy-search {
     grid-template-columns: 1fr;

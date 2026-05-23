@@ -86,11 +86,13 @@ const BUSINESS_DETAILS = {
   bankAddress: '665824, Российская Федерация, Иркутская область, г. Ангарск, квартал 212, д. 15'
 };
 
+const PAYMENT_SERVICE_NAME = 'Репутационное сопровождение компании в сети Интернет';
+
 const PAGE_CONTENT: Record<PublicPageKey, PublicPage> = {
   services: {
     eyebrow: 'Что продаем',
     title: 'Услуги',
-    lead: 'Мы оказываем дистанционные услуги для компаний и предпринимателей: PR-публикации, тексты, рекламные материалы, карточки организаций и работу с обратной связью.',
+    lead: 'Мы оказываем информационно-маркетинговые услуги для компаний и предпринимателей: репутационное сопровождение, текстовые материалы, карточки организаций и работу с обратной связью.',
     accent: 'Оплата производится после выполнения и согласования заказа.',
     sections: [
       {
@@ -218,7 +220,12 @@ const PAGE_CONTENT: Record<PublicPageKey, PublicPage> = {
       {
         icon: 'rule',
         title: 'Предмет оферты',
-        body: 'Исполнитель оказывает дистанционные информационные, консультационные и сопутствующие услуги по согласованному заданию клиента. Клиент оплачивает заказ после выполнения работ и согласования результата.'
+        body: 'Исполнитель оказывает информационно-маркетинговые услуги, включая репутационное сопровождение, подготовку текстовых материалов, сопровождение карточек организации в онлайн-справочниках и работу с обратной связью по согласованному заданию клиента. Клиент оплачивает заказ после выполнения работ и согласования результата.'
+      },
+      {
+        icon: 'receipt_long',
+        title: 'Расчеты и НДС',
+        body: 'Оплата принимается за репутационное сопровождение компании в сети Интернет. Операции оформляются без НДС в соответствии с применяемым налоговым режимом исполнителя; счет-фактура с выделенным НДС не выставляется.'
       },
       {
         icon: 'verified',
@@ -351,7 +358,7 @@ const PAGE_CONTENT: Record<PublicPageKey, PublicPage> = {
       {
         icon: 'receipt_long',
         title: 'Реквизиты',
-        body: `${BUSINESS_DETAILS.officialName}. ИНН ${BUSINESS_DETAILS.inn}. ОГРНИП ${BUSINESS_DETAILS.ogrnip}. СНО: ${BUSINESS_DETAILS.taxSystem}.`
+        body: `${BUSINESS_DETAILS.officialName}. ИНН ${BUSINESS_DETAILS.inn}. ОГРНИП ${BUSINESS_DETAILS.ogrnip}. СНО: ${BUSINESS_DETAILS.taxSystem}. НДС: без НДС.`
       },
       {
         icon: 'account_balance',
@@ -379,7 +386,7 @@ const PAGE_CONTENT: Record<PublicPageKey, PublicPage> = {
       {
         icon: 'fact_check',
         title: 'Связь с заказом',
-        body: 'Платежная ссылка или комментарий к платежу связывает оплату и чек с конкретной услугой, заказом или компанией клиента.'
+        body: `Платежная ссылка или комментарий к платежу связывает оплату и чек с услугой "${PAYMENT_SERVICE_NAME}", заказом или компанией клиента. В электронном чеке применяется ставка без НДС.`
       }
     ]
   },
@@ -413,6 +420,7 @@ export class PublicPageComponent {
   private readonly routeData = toSignal(this.route.data, { initialValue: this.route.snapshot.data });
 
   readonly publicLinks = PUBLIC_LINKS;
+  readonly paymentServiceName = PAYMENT_SERVICE_NAME;
   readonly paymentStatus = signal('');
   readonly paymentDraft = {
     amount: null as number | null,
@@ -441,6 +449,18 @@ export class PublicPageComponent {
       this.paymentDraft.offerConsent &&
       this.paymentDraft.receiptConsent
     );
+  }
+
+  paymentAmountLabel(): string {
+    const amount = this.paymentDraft.amount;
+    if (!amount || amount <= 0) {
+      return '0 ₽';
+    }
+
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(amount)} ₽`;
   }
 
   preparePayment(): void {

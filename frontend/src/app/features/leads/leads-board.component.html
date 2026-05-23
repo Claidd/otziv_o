@@ -95,8 +95,8 @@
       @for (lead of currentLeads(); track trackLead($index, lead)) {
         <article class="lead-card">
           <header>
-            <strong>{{ lead.lidStatus || '-' }}</strong>
-            <small>#{{ lead.id }}</small>
+            <strong>{{ leadTitle(lead) }}</strong>
+            <small>{{ leadSubtitle(lead) }}</small>
           </header>
 
           <div class="phone-row" [class.phone-row--offer]="lead.offer">
@@ -112,6 +112,59 @@
             <span>{{ lead.createDate | date:'yyyy-MM-dd' }}</span>
             <span>{{ lead.cityLead || 'Нет' }}</span>
           </div>
+
+          @if (hasLeadCategoryRow(lead)) {
+            <div class="meta-row category-row">
+              @if (leadCategoryLabel(lead)) {
+                <button
+                  type="button"
+                  class="category-chip"
+                  [class.active]="isLeadCategoryPopoverOpen(lead, 'industries')"
+                  [title]="lead.industries || leadCategoryLabel(lead)"
+                  [attr.aria-label]="'Категория: ' + leadCategoryLabel(lead)"
+                  (click)="toggleLeadCategoryPopover(lead, 'industries')"
+                >
+                  <span class="category-chip__label">{{ leadCategoryLabel(lead) }}</span>
+                </button>
+              }
+              @if (leadSubCategoryLabel(lead)) {
+                <button
+                  type="button"
+                  class="category-chip"
+                  [class.active]="isLeadCategoryPopoverOpen(lead, 'companyType')"
+                  [title]="lead.companyType || leadSubCategoryLabel(lead)"
+                  [attr.aria-label]="'Подкатегория: ' + leadSubCategoryLabel(lead)"
+                  (click)="toggleLeadCategoryPopover(lead, 'companyType')"
+                >
+                  <span class="category-chip__label">{{ leadSubCategoryLabel(lead) }}</span>
+                </button>
+              }
+              @if (leadCategoryPopoverText(lead); as text) {
+                <div class="category-popover">{{ text }}</div>
+              }
+            </div>
+          }
+
+          @if (hasLeadLocationRow(lead)) {
+            <div class="meta-row location-row">
+              @if (leadRegionLabel(lead)) {
+                <span [title]="leadRegionLabel(lead)">{{ leadRegionLabel(lead) }}</span>
+              }
+              @if (leadAddressLabel(lead)) {
+                <span [title]="leadAddressLabel(lead)">{{ leadAddressLabel(lead) }}</span>
+              }
+            </div>
+          }
+
+          @if (leadContactLinks(lead).length) {
+            <div class="card-actions lead-contact-actions">
+              @for (link of leadContactLinks(lead); track trackLeadContactLink($index, link)) {
+                <a [href]="link.url" target="_blank" rel="noopener" [title]="link.title">
+                  {{ link.label }}
+                </a>
+              }
+            </div>
+          }
 
           <textarea
             rows="2"
@@ -146,9 +199,9 @@
           </div>
 
           <footer>
+            <button type="button" class="details-button" (click)="openEditModal(lead)">Подробнее</button>
             <div class="people-row">
               <span>{{ assigneeName(lead.operator) }}</span>
-              <button type="button" class="details-link" (click)="openEditModal(lead)">Подробнее</button>
             </div>
           </footer>
         </article>
@@ -229,6 +282,46 @@
           <small>CSV, XLS, XLSX</small>
         </label>
 
+        <div class="import-settings">
+          <fieldset>
+            <legend>Менеджеры</legend>
+            <div class="import-manager-list">
+              @for (manager of managerOptions(); track trackOption($index, manager)) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="isImportManagerSelected(manager.id)"
+                    (change)="toggleImportManager(manager.id, $any($event.target).checked)"
+                  >
+                  <span>{{ optionLabel(manager) }}</span>
+                </label>
+              } @empty {
+                <span class="import-empty">Нет доступных менеджеров</span>
+              }
+            </div>
+          </fieldset>
+
+          <label>
+            <span>Оператор</span>
+            <select [ngModel]="importOperatorId()" (ngModelChange)="setImportOperatorId($event)">
+              <option [ngValue]="null">Не выбран</option>
+              @for (operator of operatorOptions(); track trackOption($index, operator)) {
+                <option [ngValue]="operator.id">{{ optionLabel(operator) }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Маркетолог</span>
+            <select [ngModel]="importMarketologId()" (ngModelChange)="setImportMarketologId($event)">
+              <option [ngValue]="null">Не выбран</option>
+              @for (marketolog of marketologOptions(); track trackOption($index, marketolog)) {
+                <option [ngValue]="marketolog.id">{{ optionLabel(marketolog) }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
         @if (importError()) {
           <p class="error compact">{{ importError() }}</p>
         }
@@ -238,6 +331,19 @@
             <span class="material-icons-sharp">task_alt</span>
             <strong>{{ importResultMessage(result) }}</strong>
             <small>Всего строк: {{ result.totalRows }}</small>
+            @if (result.skippedWithoutPhones) {
+              <small>Без телефонов: {{ result.skippedWithoutPhones }}</small>
+            }
+            @if (result.managerAssignments.length) {
+              <div class="import-assignment-list">
+                @for (assignment of result.managerAssignments; track assignment.managerId) {
+                  <span>
+                    {{ importAssignmentLabel(assignment.managerId, assignment.managerName) }}:
+                    <b>{{ assignment.added }}</b>
+                  </span>
+                }
+              </div>
+            }
             @if (result.errors.length) {
               <ul>
                 @for (message of result.errors; track $index) {
@@ -261,7 +367,7 @@
   @if (createDraft(); as draft) {
     <div class="lead-edit-backdrop" role="presentation" (click)="closeCreateModal()">
       <section
-        class="lead-edit-modal lead-edit-modal--compact"
+        class="lead-edit-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-create-title"
@@ -297,6 +403,16 @@
             </label>
 
             <label class="lead-edit-field">
+              <span>Наименование</span>
+              <input
+                name="createCompanyName"
+                type="text"
+                [ngModel]="draft.companyName"
+                (ngModelChange)="setCreateField('companyName', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
               <span>Город</span>
               <input
                 name="createCityLead"
@@ -305,6 +421,116 @@
                 placeholder="Город"
                 [ngModel]="draft.cityLead"
                 (ngModelChange)="setCreateField('cityLead', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Регион</span>
+              <input
+                name="createRegion"
+                type="text"
+                [ngModel]="draft.region"
+                (ngModelChange)="setCreateField('region', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Телефоны</span>
+              <input
+                name="createPhones"
+                type="text"
+                [ngModel]="draft.phones"
+                (ngModelChange)="setCreateField('phones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Мобильные</span>
+              <input
+                name="createMobilePhones"
+                type="text"
+                [ngModel]="draft.mobilePhones"
+                (ngModelChange)="setCreateField('mobilePhones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>WhatsApp</span>
+              <input
+                name="createWhatsappPhones"
+                type="text"
+                [ngModel]="draft.whatsappPhones"
+                (ngModelChange)="setCreateField('whatsappPhones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Емейлы</span>
+              <input
+                name="createEmails"
+                type="text"
+                [ngModel]="draft.emails"
+                (ngModelChange)="setCreateField('emails', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Сайты</span>
+              <input
+                name="createWebsites"
+                type="text"
+                [ngModel]="draft.websites"
+                (ngModelChange)="setCreateField('websites', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>VK</span>
+              <input
+                name="createVkUrl"
+                type="text"
+                [ngModel]="draft.vkUrl"
+                (ngModelChange)="setCreateField('vkUrl', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>TG</span>
+              <input
+                name="createTelegramUrl"
+                type="text"
+                [ngModel]="draft.telegramUrl"
+                (ngModelChange)="setCreateField('telegramUrl', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Отрасли</span>
+              <input
+                name="createIndustries"
+                type="text"
+                [ngModel]="draft.industries"
+                (ngModelChange)="setCreateField('industries', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Тип</span>
+              <input
+                name="createCompanyType"
+                type="text"
+                [ngModel]="draft.companyType"
+                (ngModelChange)="setCreateField('companyType', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Адрес</span>
+              <input
+                name="createAddress"
+                type="text"
+                [ngModel]="draft.address"
+                (ngModelChange)="setCreateField('address', $event)"
               >
             </label>
 
@@ -396,6 +622,16 @@
             </label>
 
             <label class="lead-edit-field">
+              <span>Наименование</span>
+              <input
+                name="companyName"
+                type="text"
+                [ngModel]="draft.companyName"
+                (ngModelChange)="setEditField('companyName', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
               <span>Город</span>
               <input
                 name="cityLead"
@@ -403,6 +639,116 @@
                 required
                 [ngModel]="draft.cityLead"
                 (ngModelChange)="setEditField('cityLead', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Регион</span>
+              <input
+                name="region"
+                type="text"
+                [ngModel]="draft.region"
+                (ngModelChange)="setEditField('region', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Телефоны</span>
+              <input
+                name="phones"
+                type="text"
+                [ngModel]="draft.phones"
+                (ngModelChange)="setEditField('phones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Мобильные</span>
+              <input
+                name="mobilePhones"
+                type="text"
+                [ngModel]="draft.mobilePhones"
+                (ngModelChange)="setEditField('mobilePhones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>WhatsApp</span>
+              <input
+                name="whatsappPhones"
+                type="text"
+                [ngModel]="draft.whatsappPhones"
+                (ngModelChange)="setEditField('whatsappPhones', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Емейлы</span>
+              <input
+                name="emails"
+                type="text"
+                [ngModel]="draft.emails"
+                (ngModelChange)="setEditField('emails', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Сайты</span>
+              <input
+                name="websites"
+                type="text"
+                [ngModel]="draft.websites"
+                (ngModelChange)="setEditField('websites', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>VK</span>
+              <input
+                name="vkUrl"
+                type="text"
+                [ngModel]="draft.vkUrl"
+                (ngModelChange)="setEditField('vkUrl', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>TG</span>
+              <input
+                name="telegramUrl"
+                type="text"
+                [ngModel]="draft.telegramUrl"
+                (ngModelChange)="setEditField('telegramUrl', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Отрасли</span>
+              <input
+                name="industries"
+                type="text"
+                [ngModel]="draft.industries"
+                (ngModelChange)="setEditField('industries', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Тип</span>
+              <input
+                name="companyType"
+                type="text"
+                [ngModel]="draft.companyType"
+                (ngModelChange)="setEditField('companyType', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Адрес</span>
+              <input
+                name="address"
+                type="text"
+                [ngModel]="draft.address"
+                (ngModelChange)="setEditField('address', $event)"
               >
             </label>
 

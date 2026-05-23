@@ -101,8 +101,8 @@
       @for (lead of currentLeads(); track trackLead($index, lead)) {
         <article class="lead-card">
           <header>
-            <strong>{{ lead.lidStatus || '-' }}</strong>
-            <small>#{{ lead.id }}</small>
+            <strong>{{ lead.companyName || lead.lidStatus || '-' }}</strong>
+            <small>{{ lead.companyName ? (lead.lidStatus || '-') + ' / #' + lead.id : '#' + lead.id }}</small>
           </header>
 
           <div class="phone-row" [class.phone-row--offer]="lead.offer">
@@ -118,6 +118,12 @@
             <span>{{ lead.createDate | date:'yyyy-MM-dd' }}</span>
             <span>{{ lead.cityLead || 'Нет' }}</span>
           </div>
+
+          @if (lead.companyType || lead.industries || lead.region || lead.address) {
+            <div class="business-row">
+              {{ lead.companyType || lead.industries || lead.region || lead.address }}
+            </div>
+          }
 
           <textarea
             rows="3"

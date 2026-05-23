@@ -77,6 +77,20 @@ export interface CabinetProfile {
   workerZp: UserStat;
 }
 
+export interface WhatsAppClientStatus {
+  clientId: string;
+  configured: boolean;
+  ready: boolean;
+  authenticated: boolean;
+  state: string;
+  lastQrAt?: string | null;
+  lastReadyAt?: string | null;
+  lastError?: string | null;
+  hasQr: boolean;
+  qrDataUrl?: string | null;
+  message?: string | null;
+}
+
 export interface CabinetUserInfo {
   date: string;
   currentUser: UserLk;
@@ -245,6 +259,12 @@ export class CabinetApi {
         params: this.paramsWithAnalyticsPeriod(date, options)
       })
     );
+  }
+
+  getWhatsAppBindingStatus(options: CacheOptions = {}): Observable<WhatsAppClientStatus> {
+    return this.http.get<WhatsAppClientStatus>(`${appEnvironment.apiBaseUrl}/api/cabinet/whatsapp`, {
+      context: this.requestContext(options)
+    });
   }
 
   imageUrl(imageId?: number | null): string {

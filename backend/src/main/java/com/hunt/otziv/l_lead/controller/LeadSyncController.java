@@ -159,6 +159,18 @@ public class LeadSyncController {
         return Lead.builder()
                 .id(original.getId())
                 .telephoneLead(original.getTelephoneLead())
+                .companyName(original.getCompanyName())
+                .phones(original.getPhones())
+                .mobilePhones(original.getMobilePhones())
+                .whatsappPhones(original.getWhatsappPhones())
+                .emails(original.getEmails())
+                .websites(original.getWebsites())
+                .vkUrl(original.getVkUrl())
+                .telegramUrl(original.getTelegramUrl())
+                .industries(original.getIndustries())
+                .companyType(original.getCompanyType())
+                .region(original.getRegion())
+                .address(original.getAddress())
                 .cityLead(original.getCityLead())
                 .commentsLead(original.getCommentsLead())
                 .lidStatus(original.getLidStatus())
@@ -178,6 +190,30 @@ public class LeadSyncController {
         Map<String, String> changes = new LinkedHashMap<>();
         if (!Objects.equals(oldLead.getTelephoneLead(), newLead.getTelephoneLead()))
             changes.put("📞 Телефон", oldLead.getTelephoneLead() + " → " + newLead.getTelephoneLead());
+        if (!Objects.equals(oldLead.getCompanyName(), newLead.getCompanyName()))
+            changes.put("🏢 Компания", oldLead.getCompanyName() + " → " + newLead.getCompanyName());
+        if (!Objects.equals(oldLead.getPhones(), newLead.getPhones()))
+            changes.put("☎️ Телефоны", oldLead.getPhones() + " → " + newLead.getPhones());
+        if (!Objects.equals(oldLead.getMobilePhones(), newLead.getMobilePhones()))
+            changes.put("📱 Мобильные", oldLead.getMobilePhones() + " → " + newLead.getMobilePhones());
+        if (!Objects.equals(oldLead.getWhatsappPhones(), newLead.getWhatsappPhones()))
+            changes.put("🟢 WhatsApp", oldLead.getWhatsappPhones() + " → " + newLead.getWhatsappPhones());
+        if (!Objects.equals(oldLead.getEmails(), newLead.getEmails()))
+            changes.put("✉️ Email", oldLead.getEmails() + " → " + newLead.getEmails());
+        if (!Objects.equals(oldLead.getWebsites(), newLead.getWebsites()))
+            changes.put("🌐 Сайты", oldLead.getWebsites() + " → " + newLead.getWebsites());
+        if (!Objects.equals(oldLead.getVkUrl(), newLead.getVkUrl()))
+            changes.put("VK", oldLead.getVkUrl() + " → " + newLead.getVkUrl());
+        if (!Objects.equals(oldLead.getTelegramUrl(), newLead.getTelegramUrl()))
+            changes.put("TG", oldLead.getTelegramUrl() + " → " + newLead.getTelegramUrl());
+        if (!Objects.equals(oldLead.getIndustries(), newLead.getIndustries()))
+            changes.put("Отрасли", oldLead.getIndustries() + " → " + newLead.getIndustries());
+        if (!Objects.equals(oldLead.getCompanyType(), newLead.getCompanyType()))
+            changes.put("Тип", oldLead.getCompanyType() + " → " + newLead.getCompanyType());
+        if (!Objects.equals(oldLead.getRegion(), newLead.getRegion()))
+            changes.put("Регион", oldLead.getRegion() + " → " + newLead.getRegion());
+        if (!Objects.equals(oldLead.getAddress(), newLead.getAddress()))
+            changes.put("Адрес", oldLead.getAddress() + " → " + newLead.getAddress());
         if (!Objects.equals(oldLead.getCityLead(), newLead.getCityLead()))
             changes.put("🌆 Город", oldLead.getCityLead() + " → " + newLead.getCityLead());
         if (!Objects.equals(oldLead.getCommentsLead(), newLead.getCommentsLead()))

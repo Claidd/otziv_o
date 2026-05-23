@@ -12,6 +12,7 @@ import java.util.List;
 public class WhatsAppProperties {
 
     private List<ClientConfig> clients = new ArrayList<>(); // <--- по умолчанию пустой список
+    private HealthMonitor healthMonitor = new HealthMonitor();
 
     @Data
     public static class ClientConfig {
@@ -22,6 +23,12 @@ public class WhatsAppProperties {
 
     public int getClientCount() {
         return clients != null ? clients.size() : 0;
+    }
+
+    @Data
+    public static class HealthMonitor {
+        private boolean enabled;
+        private boolean restartEnabled;
     }
 
 }

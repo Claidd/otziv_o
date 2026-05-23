@@ -3,7 +3,10 @@ import type { CompanyCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
+  ManagerChatBotInviteKind,
   StatusAction,
+  managerCompanyChatBindingWarning,
+  managerCompanyChatBotInviteKind,
   managerCompanyHeaderUrl,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
@@ -32,6 +35,7 @@ export class ManagerCompanyCardComponent {
   @Output() readonly ordersOpened = new EventEmitter<void>();
   @Output() readonly allOrdersOpened = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
+  @Output() readonly chatBotInviteOpened = new EventEmitter<void>();
 
   companyChatUrl(): string {
     return managerCompanyChatUrl(this.company);
@@ -59,6 +63,38 @@ export class ManagerCompanyCardComponent {
 
   needsChatBot(): boolean {
     return managerCompanyNeedsChatBot(this.company);
+  }
+
+  chatBotInviteKind(): ManagerChatBotInviteKind {
+    return managerCompanyChatBotInviteKind(this.company);
+  }
+
+  chatLinkTitle(): string {
+    const warning = this.chatBindingWarning();
+    if (warning) {
+      return warning;
+    }
+
+    const kind = this.chatBotInviteKind();
+    if (kind === 'max') {
+      return 'Открыть MAX-бота. Если кнопка в MAX не запускается, используйте подсказку с командой /start.';
+    }
+
+    if (kind === 'telegram') {
+      return 'Добавить Telegram-бота в группу компании';
+    }
+
+    return this.company.urlChat ? 'Открыть чат компании' : 'Позвонить компании';
+  }
+
+  chatBindingWarning(): string {
+    return managerCompanyChatBindingWarning(this.company);
+  }
+
+  handleChatLinkClick(): void {
+    if (this.needsChatBot()) {
+      this.chatBotInviteOpened.emit();
+    }
   }
 
   companyPhoneLabel(): string {

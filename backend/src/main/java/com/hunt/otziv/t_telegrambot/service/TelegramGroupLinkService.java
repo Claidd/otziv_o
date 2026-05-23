@@ -11,8 +11,11 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -21,6 +24,12 @@ public class TelegramGroupLinkService {
 
     private static final String PAYLOAD_PREFIX = "c";
     private static final int SIGNATURE_LENGTH = 12;
+    private static final Pattern TELEGRAM_PUBLIC_CHAT_URL = Pattern.compile(
+            "(?i)^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/@?([A-Za-z0-9_]{5,32})(?:[/?#].*)?$"
+    );
+    private static final Pattern TELEGRAM_RESOLVE_URL = Pattern.compile(
+            "(?i)^tg://resolve\\?(?:.*&)?domain=([A-Za-z0-9_]{5,32})(?:&.*)?$"
+    );
 
     private final CompanyRepository companyRepository;
 
@@ -73,6 +82,33 @@ public class TelegramGroupLinkService {
         return "https://t.me/" + username + "?startgroup=" + payloadForCompany(companyId);
     }
 
+    public Optional<String> handleBotAddedToGroup(long chatId, String chatUsername, String chatTitle) {
+        if (chatId > 0 || !hasText(chatUsername)) {
+            return Optional.empty();
+        }
+
+        String username = normalizeUsername(chatUsername);
+        if (!hasText(username)) {
+            return Optional.empty();
+        }
+
+        List<Company> candidates = companyRepository.findTop3ByTelegramGroupChatIdIsNullAndUrlChatContainingIgnoreCase(username);
+        Company company = matchCompanyByPublicUsername(username, candidates);
+        if (company == null) {
+            log.info("Telegram bot added to group chatId={} username='{}' title='{}', but no company matched by public URL",
+                    chatId, username, chatTitle);
+            return Optional.empty();
+        }
+
+        company.setTelegramGroupChatId(chatId);
+        companyRepository.save(company);
+        log.info("Telegram group chatId={} linked by public username @{} to company id={} title='{}'",
+                chatId, username, company.getId(), company.getTitle());
+
+        String title = hasText(company.getTitle()) ? company.getTitle().trim() : "Компания";
+        return Optional.of("Готово: Telegram-группа привязана к компании \"" + title + "\".");
+    }
+
     public Optional<String> handleGroupStartCommand(long chatId, String messageText) {
         String payload = extractStartPayload(messageText);
         if (!hasText(payload) || !payload.startsWith(PAYLOAD_PREFIX)) {
@@ -100,6 +136,20 @@ public class TelegramGroupLinkService {
 
         String title = hasText(company.getTitle()) ? company.getTitle().trim() : "Компания";
         return Optional.of("Готово: Telegram-группа привязана к компании \"" + title + "\".");
+    }
+
+    private Company matchCompanyByPublicUsername(String username, List<Company> candidates) {
+        if (candidates.size() == 1 && username.equals(telegramPublicUsername(candidates.getFirst().getUrlChat()).orElse(null))) {
+            return candidates.getFirst();
+        }
+
+        for (Company candidate : candidates) {
+            if (username.equals(telegramPublicUsername(candidate.getUrlChat()).orElse(null))) {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private String payloadForCompany(Long companyId) {
@@ -157,6 +207,36 @@ public class TelegramGroupLinkService {
         }
 
         return botUsername.trim().replaceFirst("^@", "");
+    }
+
+    private static Optional<String> telegramPublicUsername(String value) {
+        if (!hasText(value)) {
+            return Optional.empty();
+        }
+
+        String trimmed = value.trim();
+        Matcher publicUrlMatcher = TELEGRAM_PUBLIC_CHAT_URL.matcher(trimmed);
+        if (publicUrlMatcher.matches()) {
+            return Optional.of(normalizeUsername(publicUrlMatcher.group(1)));
+        }
+
+        Matcher resolveUrlMatcher = TELEGRAM_RESOLVE_URL.matcher(trimmed);
+        if (resolveUrlMatcher.matches()) {
+            return Optional.of(normalizeUsername(resolveUrlMatcher.group(1)));
+        }
+
+        if (trimmed.matches("^@[A-Za-z0-9_]{5,32}$")) {
+            return Optional.of(normalizeUsername(trimmed));
+        }
+
+        return Optional.empty();
+    }
+
+    private static String normalizeUsername(String value) {
+        if (!hasText(value)) {
+            return "";
+        }
+        return value.trim().replaceFirst("^@", "").toLowerCase(Locale.ROOT);
     }
 
     private static boolean hasText(String value) {

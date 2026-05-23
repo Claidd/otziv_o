@@ -81,6 +81,7 @@ function Set-EnvFileValue {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$Name,
+        [AllowEmptyString()]
         [Parameter(Mandatory = $true)][string]$Value
     )
 
@@ -205,6 +206,9 @@ Invoke-External -FilePath "docker" -Arguments @("compose", "-f", $buildCompose, 
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docker-compose.yaml"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "whatsapp"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
@@ -214,6 +218,7 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\init-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\renew-letsencrypt.sh"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\register-max-webhook.ps1"
 
     if (-not $SkipEnvUpload) {
         $stageEnv = Join-Path $stageRoot $RemoteEnvFile
@@ -288,6 +293,22 @@ compose() {
     docker compose -f docker-compose.yaml --env-file "`$env_file" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
+    exit 1
+  fi
+}
+
+require_compose_service() {
+  service_name="`$1"
+  services="`$(compose config --services 2>&1)" || {
+    printf '%s\n' "`$services" >&2
+    echo "Failed to evaluate production compose services." >&2
+    exit 1
+  }
+
+  if ! printf '%s\n' "`$services" | grep -Fxq "`$service_name"; then
+    echo "Required production compose service is missing: `$service_name" >&2
+    echo "Available production compose services:" >&2
+    printf '%s\n' "`$services" >&2
     exit 1
   fi
 }
@@ -369,22 +390,19 @@ ensure_nginx_certs() {
 }
 
 mkdir -p "`$remote_path"
-if [ -f "`$remote_path/docker-compose.yaml" ]; then
-  cd "`$remote_path"
-  backup_dir=".deploy-backups/`$deploy_tag"
-  mkdir -p "`$backup_dir"
+cd "`$remote_path"
+
+backup_dir=".deploy-backups/`$deploy_tag"
+mkdir -p "`$backup_dir"
+if [ -f docker-compose.yaml ]; then
   cp docker-compose.yaml "`$backup_dir/docker-compose.yaml"
-  if [ -f "`$env_file" ]; then
-    cp "`$env_file" "`$backup_dir/`$env_file"
-    compose down --remove-orphans || true
-  else
-    compose down --remove-orphans || true
-  fi
+fi
+if [ -f "`$env_file" ]; then
+  cp "`$env_file" "`$backup_dir/`$env_file"
 fi
 
 tar -xzf "`$bundle_path" -C "`$remote_path"
 rm -f "`$bundle_path"
-cd "`$remote_path"
 
 if [ ! -f docker-compose.yaml ]; then
   echo "docker-compose.yaml was not uploaded to `$remote_path" >&2
@@ -401,6 +419,9 @@ if [ "`$uploaded_env" != "1" ]; then
 fi
 
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
+set_env MAX_BOT_WEBHOOK_UPDATE_TYPES "bot_started,bot_added,message_created"
+set_env MAX_BOT_LONG_POLLING_ENABLED "false"
 set_env KEYCLOAK_PUBLIC_URL "https://o-ogo.ru/keycloak"
 set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
 set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
@@ -420,10 +441,13 @@ set_env MAX_PROXY_HOST ""
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
+require_compose_service whatsapp_lika
+require_compose_service whatsapp_vika
 compose down --remove-orphans
 remove_repo_images "`$app_repo"
 remove_repo_images "`$web_repo"
 compose pull app nginx
+compose build whatsapp_lika whatsapp_vika
 compose up -d --remove-orphans
 sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps

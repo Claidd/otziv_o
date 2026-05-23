@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,16 +67,19 @@ class OrderStatusNotificationServiceTest {
         assertSame(success, order.getStatus());
         verify(orderRepository).save(order);
         verifyNoInteractions(telegramService);
+        verifyNoInteractions(maxBotClient);
     }
 
     @Test
-    void sendMessageToGroupFallsBackToTelegramForToCheckWhenWhatsAppFails() {
+    void sendMessageToGroupUsesTelegramWhenChatLinkPointsToTelegram() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
-        OrderStatus fallback = status("В проверку");
+        order.getCompany().setUrlChat("https://t.me/shared_owner");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        OrderStatus success = status("На проверке");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message")).thenReturn("error");
-        when(orderStatusService.getOrderStatusByTitle("В проверку")).thenReturn(fallback);
+        when(telegramService.sendMessage(-100L, "message")).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
                 "В проверку",
@@ -87,22 +91,24 @@ class OrderStatusNotificationServiceTest {
         );
 
         assertTrue(result);
-        assertSame(fallback, order.getStatus());
-        verify(telegramService).sendMessage(
-                123L,
-                "Компания готов - На проверку\nhttps://o-ogo.ru/orders/all_orders?status=В%20проверку"
-        );
+        assertSame(success, order.getStatus());
+        verify(telegramService).sendMessage(-100L, "message");
         verify(orderRepository).save(order);
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(maxBotClient);
     }
 
     @Test
-    void sendMessageToGroupFallsBackToTelegramForPublicWhenWhatsAppFails() {
+    void sendMessageToGroupUsesMaxWhenChatLinkPointsToMax() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
-        OrderStatus fallback = status("Опубликовано");
+        order.getCompany().setUrlChat("max.ru/join/SharedToken123");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        order.getCompany().setMaxGroupChatId(-200L);
+        OrderStatus success = status("Выставлен счет");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message")).thenReturn(null);
-        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
+        when(maxBotClient.sendMessageToChat(-200L, "message")).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
                 "Опубликовано",
@@ -114,11 +120,73 @@ class OrderStatusNotificationServiceTest {
         );
 
         assertTrue(result);
+        assertSame(success, order.getStatus());
+        verify(maxBotClient).sendMessageToChat(-200L, "message");
+        verify(orderRepository).save(order);
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(telegramService);
+    }
+
+    @Test
+    void sendMessageToGroupReturnsFalseAndKeepsFallbackStatusWhenActiveWhatsAppFails() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setTelegramGroupChatId(-100L);
+        order.getCompany().setMaxGroupChatId(-200L);
+        OrderStatus fallback = status("Опубликовано");
+
+        when(whatsAppService.sendMessageToGroup("client", "group", "message")).thenReturn("error");
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
+
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано",
+                order,
+                "client",
+                "group",
+                "message",
+                "Выставлен счет"
+        );
+
+        assertFalse(result);
         assertSame(fallback, order.getStatus());
+        verify(telegramService, never()).sendMessage(-100L, "message");
         verify(telegramService).sendMessage(
                 123L,
                 "Компания Опубликован\nhttps://o-ogo.ru/orders/all_orders?status=Опубликовано"
         );
+        verifyNoInteractions(maxBotClient);
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void sendMessageToGroupReturnsFalseAndKeepsFallbackStatusWhenActiveTelegramThrows() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("https://t.me/shared_owner");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        OrderStatus fallback = status("В проверку");
+
+        when(telegramService.sendMessage(-100L, "message")).thenThrow(new RuntimeException("telegram"));
+        when(orderStatusService.getOrderStatusByTitle("В проверку")).thenReturn(fallback);
+
+        boolean result = service.sendMessageToGroup(
+                "В проверку",
+                order,
+                "client",
+                "group",
+                "message",
+                "На проверке"
+        );
+
+        assertFalse(result);
+        assertSame(fallback, order.getStatus());
+        verify(telegramService).sendMessage(-100L, "message");
+        verify(telegramService).sendMessage(
+                123L,
+                "Компания готов - На проверку\nhttps://o-ogo.ru/orders/all_orders?status=В%20проверку"
+        );
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(maxBotClient);
         verify(orderRepository).save(order);
     }
 
@@ -168,6 +236,7 @@ class OrderStatusNotificationServiceTest {
     private Company company(String title) {
         Company company = new Company();
         company.setTitle(title);
+        company.setUrlChat("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
         return company;
     }
 

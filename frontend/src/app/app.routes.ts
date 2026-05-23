@@ -72,6 +72,23 @@ export const routes: Routes = [
     data: { page: 'receiptConsent' }
   },
   {
+    path: 'pay/success',
+    loadComponent: () => import('./features/pay/pay-result.component')
+      .then((m) => m.PayResultComponent),
+    data: { result: 'success' }
+  },
+  {
+    path: 'pay/fail',
+    loadComponent: () => import('./features/pay/pay-result.component')
+      .then((m) => m.PayResultComponent),
+    data: { result: 'fail' }
+  },
+  {
+    path: 'pay/:token',
+    loadComponent: () => import('./features/pay/pay-page.component')
+      .then((m) => m.PayPageComponent)
+  },
+  {
     path: 'pay',
     loadComponent: () => import('./features/public/public-page.component')
       .then((m) => m.PublicPageComponent),
@@ -209,6 +226,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'cabinet/whatsapp',
+    loadComponent: () => import('./features/cabinet/whatsapp-bind.component')
+      .then((m) => m.WhatsAppBindComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['MANAGER']
+    }
+  },
+  {
     path: 'admin/analyse',
     loadComponent: () => import('./features/cabinet/admin-analytics.component')
       .then((m) => m.AdminAnalyticsComponent),
@@ -224,6 +250,15 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/tbank-payments',
+    loadComponent: () => import('./features/admin/tbank-payments/tbank-payments.component')
+      .then((m) => m.TbankPaymentsComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN']
     }
   },
   {
