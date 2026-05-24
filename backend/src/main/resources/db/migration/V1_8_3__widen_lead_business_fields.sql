@@ -1,0 +1,13 @@
+ALTER TABLE leads
+    MODIFY COLUMN company_name VARCHAR(500) NULL,
+    MODIFY COLUMN phones TEXT NULL,
+    MODIFY COLUMN mobile_phones TEXT NULL,
+    MODIFY COLUMN whatsapp_phones TEXT NULL,
+    MODIFY COLUMN emails TEXT NULL,
+    MODIFY COLUMN websites TEXT NULL,
+    MODIFY COLUMN vk_url TEXT NULL,
+    MODIFY COLUMN telegram_url TEXT NULL,
+    MODIFY COLUMN industries TEXT NULL,
+    MODIFY COLUMN company_type TEXT NULL,
+    MODIFY COLUMN region VARCHAR(255) NULL,
+    MODIFY COLUMN address TEXT NULL;

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Otziv</string>
+    <string name="title_activity_main">Otziv</string>
+    <string name="package_name">com.hunt.otziv</string>
+    <string name="custom_url_scheme">com.hunt.otziv</string>
+</resources>

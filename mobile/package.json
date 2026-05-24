@@ -1,0 +1,51 @@
+{
+  "name": "mobile",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --host 0.0.0.0 --port 4300 --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "build:local": "ng build --configuration development",
+    "build:prod": "ng build --configuration production",
+    "watch": "ng build --watch --configuration development",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync:local": "npm run build:local && npx cap sync",
+    "cap:sync:prod": "npm run build:prod && npx cap sync",
+    "cap:android": "npm run cap:sync && npx cap open android",
+    "cap:android:local": "npm run cap:sync:local && npx cap open android",
+    "cap:android:prod": "npm run cap:sync:prod && npx cap open android",
+    "cap:ios": "npm run cap:sync && npx cap open ios",
+    "cap:ios:local": "npm run cap:sync:local && npx cap open ios",
+    "cap:ios:prod": "npm run cap:sync:prod && npx cap open ios"
+  },
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "dependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
+    "@ionic/angular": "^8.8.8",
+    "ionicons": "^8.0.13",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.12",
+    "@angular/cli": "^21.2.12",
+    "@angular/compiler-cli": "^21.2.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  }
+}

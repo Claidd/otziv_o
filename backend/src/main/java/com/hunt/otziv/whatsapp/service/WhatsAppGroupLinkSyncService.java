@@ -1,0 +1,263 @@
+package com.hunt.otziv.whatsapp.service;
+
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class WhatsAppGroupLinkSyncService {
+
+    private static final Pattern WHATSAPP_INVITE_URL = Pattern.compile(
+            "(?i)^https?://chat\\.whatsapp\\.com/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$"
+    );
+
+    private final WhatsAppProperties properties;
+    private final WhatsAppService whatsAppService;
+    private final CompanyRepository companyRepository;
+    private final AppSettingService appSettingService;
+
+    public static final boolean DEFAULT_ENABLED = true;
+    public static final int DEFAULT_INTERVAL_MINUTES = 30;
+    public static final int MIN_INTERVAL_MINUTES = 5;
+    public static final int MAX_INTERVAL_MINUTES = 1440;
+
+    @Scheduled(
+            fixedDelayString = "${whatsapp.group-sync.tick-delay-ms:60000}",
+            initialDelayString = "${whatsapp.group-sync.initial-delay-ms:120000}"
+    )
+    public void syncKnownGroups() {
+        WhatsAppGroupSyncSettingsResponse settings = settings();
+        if (!settings.enabled()) {
+            log.debug("WhatsApp group sync skipped: disabled");
+            return;
+        }
+        if (!syncDue(settings)) {
+            log.debug("WhatsApp group sync skipped: lastRunAt={} intervalMinutes={}",
+                    settings.lastRunAt(), settings.intervalMinutes());
+            return;
+        }
+
+        runSync("scheduled");
+    }
+
+    @Transactional(readOnly = true)
+    public WhatsAppGroupSyncSettingsResponse settings() {
+        return new WhatsAppGroupSyncSettingsResponse(
+                appSettingService.getBoolean(AppSettingService.WHATSAPP_GROUP_SYNC_ENABLED, DEFAULT_ENABLED),
+                normalizeStoredInterval(
+                        appSettingService.getInt(
+                                AppSettingService.WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES,
+                                DEFAULT_INTERVAL_MINUTES
+                        )
+                ),
+                appSettingService.getString(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_RUN_AT, ""),
+                Math.max(
+                        0,
+                        appSettingService.getInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, 0)
+                )
+        );
+    }
+
+    @Transactional
+    public WhatsAppGroupSyncSettingsResponse updateSettings(WhatsAppGroupSyncSettingsRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Укажите настройки WhatsApp-синхронизации");
+        }
+
+        WhatsAppGroupSyncSettingsResponse current = settings();
+        boolean enabled = request.enabled() == null ? current.enabled() : request.enabled();
+        int intervalMinutes = request.intervalMinutes() == null
+                ? current.intervalMinutes()
+                : normalizeInterval(request.intervalMinutes());
+
+        appSettingService.setBoolean(AppSettingService.WHATSAPP_GROUP_SYNC_ENABLED, enabled);
+        appSettingService.setInt(AppSettingService.WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES, intervalMinutes);
+        return settings();
+    }
+
+    public WhatsAppGroupSyncSettingsResponse runNow() {
+        runSync("manual");
+        return settings();
+    }
+
+    private int runSync(String source) {
+        long startedAt = System.currentTimeMillis();
+        int linked = 0;
+        int groups = 0;
+        int clients = 0;
+
+        log.info("WhatsApp group sync started source={}", source);
+        List<WhatsAppProperties.ClientConfig> configuredClients = properties.getClients() != null
+                ? properties.getClients()
+                : List.of();
+        if (configuredClients.isEmpty()) {
+            log.warn("WhatsApp group sync skipped source={} reason=no_clients. Configure WHATSAPP_CLIENTS_0_ID and WHATSAPP_CLIENTS_0_URL",
+                    source);
+        } else {
+            for (WhatsAppProperties.ClientConfig client : configuredClients) {
+                if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
+                    continue;
+                }
+                clients++;
+                SyncClientResult result = syncClientGroupsWithSummary(client.getId());
+                groups += result.groups();
+                linked += result.linked();
+            }
+            if (clients == 0) {
+                log.warn("WhatsApp group sync skipped source={} reason=no_usable_clients. Check WhatsApp client id/url values",
+                        source);
+            }
+        }
+
+        appSettingService.setString(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_RUN_AT, Instant.now().toString());
+        appSettingService.setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, linked);
+        log.info("WhatsApp group sync finished source={} clients={} groups={} linked={} durationMs={}",
+                source, clients, groups, linked, System.currentTimeMillis() - startedAt);
+        return linked;
+    }
+
+    int syncClientGroups(String clientId) {
+        return syncClientGroupsWithSummary(clientId).linked();
+    }
+
+    private SyncClientResult syncClientGroupsWithSummary(String clientId) {
+        int linked = 0;
+        if (!hasText(clientId)) {
+            return new SyncClientResult(0, 0);
+        }
+
+        List<WhatsAppGroupInfo> groups = whatsAppService.listGroups(clientId);
+        if (groups.isEmpty()) {
+            log.info("WhatsApp group sync client={} groups=0 linked=0", clientId);
+            return new SyncClientResult(0, 0);
+        }
+
+        for (WhatsAppGroupInfo group : groups) {
+            if (tryLinkGroup(group)) {
+                linked++;
+            }
+        }
+
+        if (linked > 0) {
+            log.info("WhatsApp group sync linked {} group(s) for client {}", linked, clientId);
+        }
+        log.info("WhatsApp group sync client={} groups={} linked={}", clientId, groups.size(), linked);
+        return new SyncClientResult(groups.size(), linked);
+    }
+
+    private boolean syncDue(WhatsAppGroupSyncSettingsResponse settings) {
+        if (!StringUtils.hasText(settings.lastRunAt())) {
+            return true;
+        }
+
+        try {
+            Instant lastRunAt = Instant.parse(settings.lastRunAt());
+            return Duration.between(lastRunAt, Instant.now()).toMinutes() >= settings.intervalMinutes();
+        } catch (RuntimeException ignored) {
+            return true;
+        }
+    }
+
+    private int normalizeStoredInterval(int value) {
+        try {
+            return normalizeInterval(value);
+        } catch (IllegalArgumentException ignored) {
+            return DEFAULT_INTERVAL_MINUTES;
+        }
+    }
+
+    private int normalizeInterval(int value) {
+        if (value < MIN_INTERVAL_MINUTES || value > MAX_INTERVAL_MINUTES) {
+            throw new IllegalArgumentException(
+                    "Интервал WhatsApp-синхронизации должен быть от "
+                            + MIN_INTERVAL_MINUTES
+                            + " до "
+                            + MAX_INTERVAL_MINUTES
+                            + " минут"
+            );
+        }
+        return value;
+    }
+
+    private boolean tryLinkGroup(WhatsAppGroupInfo group) {
+        if (group == null || !hasText(group.groupId())) {
+            return false;
+        }
+
+        Optional<String> inviteCode = whatsAppInviteCode(group.inviteLink());
+        if (inviteCode.isEmpty()) {
+            return false;
+        }
+
+        String code = inviteCode.get();
+        List<Company> candidates = companyRepository.findTop3ByGroupIdIsNullAndUrlChatContainingIgnoreCase(code);
+        Company company = matchCompanyByInviteCode(code, candidates);
+        if (company == null) {
+            return false;
+        }
+
+        company.setGroupId(group.groupId());
+        companyRepository.save(company);
+        log.info("WhatsApp groupId={} linked by invite link to company id={} title='{}'",
+                group.groupId(), company.getId(), company.getTitle());
+        return true;
+    }
+
+    private Company matchCompanyByInviteCode(String code, List<Company> candidates) {
+        if (candidates.size() == 1 && code.equals(whatsAppInviteCode(candidates.getFirst().getUrlChat()).orElse(null))) {
+            return candidates.getFirst();
+        }
+
+        for (Company candidate : candidates) {
+            if (code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static Optional<String> whatsAppInviteCode(String value) {
+        if (!hasText(value)) {
+            return Optional.empty();
+        }
+
+        String trimmed = value.trim();
+        if (trimmed.matches("^[A-Za-z0-9_-]{10,}$")) {
+            return Optional.of(trimmed.toLowerCase(Locale.ROOT));
+        }
+
+        Matcher matcher = WHATSAPP_INVITE_URL.matcher(trimmed);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(matcher.group(1).toLowerCase(Locale.ROOT));
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private record SyncClientResult(int groups, int linked) {
+    }
+}

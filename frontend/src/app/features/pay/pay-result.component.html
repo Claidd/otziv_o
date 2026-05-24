@@ -1,0 +1,84 @@
+<app-admin-layout [title]="title()" [active]="'pay'" [rightPanelMode]="'custom'">
+  <section class="pay-result-shell">
+    <section class="payment-result-widget" [class.payment-result-widget--success]="isSuccess()" [class.payment-result-widget--fail]="!isSuccess()" aria-label="Результат оплаты">
+      <header class="payment-head">
+        <div>
+          <span class="merchant-name">Компания О!</span>
+          <strong>{{ title() }}</strong>
+          <small>{{ serviceName }}</small>
+        </div>
+        <span class="brand-mark" aria-hidden="true">О!</span>
+      </header>
+
+      <article class="result-hero" aria-live="polite">
+        <span class="result-hero-icon" aria-hidden="true">
+          <span class="material-icons-sharp">{{ icon() }}</span>
+        </span>
+        <div>
+          <span class="result-kicker">{{ statusLabel() }}</span>
+          <h1>{{ heroTitle() }}</h1>
+          <p>{{ heroText() }}</p>
+        </div>
+      </article>
+
+      <article class="next-step-card">
+        <span class="material-icons-sharp" aria-hidden="true">{{ isSuccess() ? 'verified' : 'support_agent' }}</span>
+        <div>
+          <strong>{{ nextStepTitle() }}</strong>
+          <p>{{ lead() }}</p>
+        </div>
+      </article>
+
+      <article class="bank-card">
+        <header>
+          <div>
+            <h2>Детали операции</h2>
+            <p>Информация для сверки платежа и чека</p>
+          </div>
+          <span>
+            <span class="material-icons-sharp" aria-hidden="true">lock</span>
+            банк
+          </span>
+        </header>
+
+        <div class="result-summary" aria-label="Данные платежа">
+          <div class="summary-status">
+            <small>Статус</small>
+            <strong>{{ statusLabel() }}</strong>
+          </div>
+          <div>
+            <small>Услуга</small>
+            <strong>{{ serviceName }}</strong>
+          </div>
+          <div>
+            <small>НДС</small>
+            <strong>Без НДС</strong>
+          </div>
+          <div>
+            <small>Способ</small>
+            <strong>T-Pay / банковская форма</strong>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <a class="primary-result-button" [routerLink]="actionLink()">
+            <span class="material-icons-sharp" aria-hidden="true">{{ isSuccess() ? 'home' : 'payments' }}</span>
+            {{ actionLabel() }}
+          </a>
+          <a class="secondary-result-button" routerLink="/contacts">
+            <span class="material-icons-sharp" aria-hidden="true">contacts</span>
+            Контакты
+          </a>
+        </div>
+
+        <div class="payment-badges" aria-label="Способы оплаты">
+          <span>МИР</span>
+          <span>VISA</span>
+          <span>Mastercard</span>
+          <span>СБП</span>
+          <span>Без НДС</span>
+        </div>
+      </article>
+    </section>
+  </section>
+</app-admin-layout>

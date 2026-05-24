@@ -1,0 +1,87 @@
+<app-admin-layout title="WhatsApp" active="whatsapp-bind" rightPanelMode="custom">
+  <section class="whatsapp-bind">
+    <div class="bind-head">
+      <div>
+        <p class="eyebrow">Аккаунт менеджера</p>
+        <h2>Привязка WhatsApp</h2>
+      </div>
+      <button type="button" class="refresh-button" (click)="loadStatus()" [disabled]="loading()">
+        <span class="material-icons-sharp">refresh</span>
+        {{ loading() ? 'Обновляю' : 'Обновить' }}
+      </button>
+    </div>
+
+    @if (error()) {
+      <article class="status-card danger">
+        <span class="material-icons-sharp">error</span>
+        <div>
+          <strong>Статус недоступен</strong>
+          <p>{{ error() }}</p>
+        </div>
+      </article>
+    }
+
+    @if (status(); as current) {
+      <article
+        class="status-card"
+        [class.success]="stateTone() === 'success'"
+        [class.warning]="stateTone() === 'warning'"
+        [class.danger]="stateTone() === 'danger'"
+        [class.neutral]="stateTone() === 'neutral'"
+      >
+        <span class="material-icons-sharp">{{ current.ready ? 'check_circle' : current.qrDataUrl ? 'qr_code_2' : 'sync' }}</span>
+        <div>
+          <strong>{{ stateLabel() }}</strong>
+          <p>{{ current.clientId }}</p>
+        </div>
+      </article>
+
+      @if (current.qrDataUrl && !current.ready) {
+        <section class="qr-panel" aria-label="QR-код WhatsApp">
+          <img [src]="current.qrDataUrl" alt="QR-код WhatsApp">
+        </section>
+      } @else if (current.ready) {
+        <section class="empty-panel success">
+          <span class="material-icons-sharp">done_all</span>
+          <h3>WhatsApp подключен</h3>
+          <p>Последняя готовность: {{ formattedDate(current.lastReadyAt) }}</p>
+        </section>
+      } @else {
+        <section class="empty-panel">
+          <span class="material-icons-sharp">hourglass_top</span>
+          <h3>QR-код готовится</h3>
+          <p>{{ current.message || current.lastError || 'Страница обновится сама.' }}</p>
+        </section>
+      }
+    } @else if (loading()) {
+      <section class="empty-panel">
+        <span class="material-icons-sharp">hourglass_top</span>
+        <h3>Загружаю WhatsApp</h3>
+      </section>
+    }
+  </section>
+
+  <section admin-right-content class="whatsapp-side">
+    <article>
+      <span class="material-icons-sharp">badge</span>
+      <div>
+        <strong>Клиент</strong>
+        <small>{{ status()?.clientId || '-' }}</small>
+      </div>
+    </article>
+    <article>
+      <span class="material-icons-sharp">schedule</span>
+      <div>
+        <strong>QR</strong>
+        <small>{{ formattedDate(status()?.lastQrAt) }}</small>
+      </div>
+    </article>
+    <article>
+      <span class="material-icons-sharp">verified</span>
+      <div>
+        <strong>Готовность</strong>
+        <small>{{ formattedDate(status()?.lastReadyAt) }}</small>
+      </div>
+    </article>
+  </section>
+</app-admin-layout>

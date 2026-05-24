@@ -1,0 +1,166 @@
+<app-admin-layout [title]="title()" [active]="'pay'" [rightPanelMode]="'custom'">
+  <section class="pay-shell">
+    @if (loading()) {
+      <section class="payment-state" aria-live="polite">
+        <span class="material-icons-sharp" aria-hidden="true">hourglass_top</span>
+        <strong>Открываем платежную ссылку</strong>
+        <small>Проверяем заказ и статус оплаты</small>
+      </section>
+    } @else if (payment()) {
+      @let item = payment();
+      <section class="payment-widget" aria-label="Оплата заказа">
+        <header class="payment-head">
+          <div>
+            <span class="merchant-name">Компания О!</span>
+            <strong>{{ formatRubles(item?.amount) }} ₽</strong>
+            <small>{{ item?.companyTitle || 'Компания не указана' }}</small>
+          </div>
+          <span class="brand-mark" aria-hidden="true">О!</span>
+        </header>
+
+        <article class="quick-pay-card">
+          <div class="method-title">
+            <div>
+              <h2>T-Pay</h2>
+              <p>Быстрая оплата через защищенную форму банка</p>
+            </div>
+            <span>{{ statusLabel() }}</span>
+          </div>
+          <button
+            class="quick-pay-button"
+            type="button"
+            [disabled]="!item?.payable || submitting()"
+            (click)="submit()"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">{{ submitting() ? 'hourglass_top' : 'check_circle' }}</span>
+            {{ submitting() ? 'Открываем...' : 'Pay' }}
+          </button>
+        </article>
+
+        <article class="bank-card">
+          <header>
+            <h2>По карте или СБП</h2>
+            <span>
+              <span class="material-icons-sharp" aria-hidden="true">lock</span>
+              банк
+            </span>
+          </header>
+
+          <div class="order-summary" aria-label="Данные заказа">
+            <div>
+              <small>Заказ</small>
+              <strong>№{{ item?.orderId || '...' }}</strong>
+            </div>
+            <div>
+              <small>Услуга</small>
+              <strong>{{ item?.description }}</strong>
+            </div>
+            <div>
+              <small>НДС</small>
+              <strong>Без НДС</strong>
+            </div>
+            <div>
+              <small>Получатель</small>
+              <strong>Компания О!</strong>
+            </div>
+          </div>
+
+          <form class="pay-form" (ngSubmit)="submit()" aria-label="Данные для оплаты">
+            <label class="email-field">
+              <span>E-mail для электронного чека</span>
+              <input
+                type="email"
+                name="email"
+                autocomplete="email"
+                [ngModel]="email()"
+                (ngModelChange)="email.set($event)"
+                placeholder="client@example.ru"
+              >
+            </label>
+
+            <div class="consent-stack">
+              <label class="consent">
+                <input
+                  type="checkbox"
+                  name="offerConsent"
+                  [ngModel]="offerConsent()"
+                  (ngModelChange)="offerConsent.set($event)"
+                >
+                <span>Согласен с <a routerLink="/offer">публичной офертой</a> и <a routerLink="/privacy">политикой персональных данных</a>.</span>
+              </label>
+
+              <label class="consent">
+                <input
+                  type="checkbox"
+                  name="receiptConsent"
+                  [ngModel]="receiptConsent()"
+                  (ngModelChange)="receiptConsent.set($event)"
+                >
+                <span>Согласен получить <a routerLink="/receipt-consent">электронный чек</a> на указанный e-mail.</span>
+              </label>
+            </div>
+
+            <button class="primary-pay-button" type="submit" [disabled]="!canSubmit()">
+              <span class="material-icons-sharp" aria-hidden="true">{{ submitting() ? 'hourglass_top' : 'payments' }}</span>
+              {{ submitting() ? 'Открываем форму банка' : 'Оплатить' }}
+            </button>
+
+            @if (message()) {
+              <p class="pay-message">{{ message() }}</p>
+            }
+            @if (error()) {
+              <p class="pay-error">{{ error() }}</p>
+            }
+
+            <div class="payment-badges" aria-label="Способы оплаты">
+              <span>МИР</span>
+              <span>VISA</span>
+              <span>Mastercard</span>
+              <span>СБП</span>
+              <span>Без НДС</span>
+            </div>
+          </form>
+        </article>
+      </section>
+    } @else {
+      <section class="payment-state payment-state--error" aria-live="polite">
+        <span class="material-icons-sharp" aria-hidden="true">error</span>
+        <strong>{{ error() || 'Платежная ссылка не найдена.' }}</strong>
+        <small>Проверьте ссылку или запросите новую у менеджера</small>
+      </section>
+    }
+  </section>
+
+  <section admin-right-content class="pay-side">
+    <div class="pay-side-head">
+      <span class="brand-mark" aria-hidden="true">О!</span>
+      <div>
+        <h2>Компания О!</h2>
+        <p>Оплата заказа</p>
+      </div>
+    </div>
+    <div class="pay-side-card">
+      <span class="material-icons-sharp" aria-hidden="true">verified_user</span>
+      <strong>Платеж проходит на стороне банка</strong>
+      <small>Сайт не хранит реквизиты карт</small>
+    </div>
+    <nav aria-label="Публичные ссылки">
+      <a routerLink="/">
+        <span class="material-icons-sharp" aria-hidden="true">home</span>
+        <strong>Главная</strong>
+      </a>
+      <a routerLink="/payment">
+        <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+        <strong>Оплата</strong>
+      </a>
+      <a routerLink="/refund">
+        <span class="material-icons-sharp" aria-hidden="true">undo</span>
+        <strong>Возврат</strong>
+      </a>
+      <a routerLink="/contacts">
+        <span class="material-icons-sharp" aria-hidden="true">contacts</span>
+        <strong>Контакты</strong>
+      </a>
+    </nav>
+  </section>
+</app-admin-layout>

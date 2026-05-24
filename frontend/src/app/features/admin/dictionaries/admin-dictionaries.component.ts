@@ -41,6 +41,7 @@ import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
+import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
 import {
   DeviceToken,
   OperatorPhone,
@@ -65,6 +66,11 @@ type DictionaryMetric = {
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink';
 };
 
+type DictionaryGuide = {
+  title: string;
+  text: string;
+};
+
 type DictionarySettingsResponse = {
   nagulSettings: AdminNagulSettings;
   telegramReportSettings: AdminTelegramReportScheduleSettings;
@@ -85,9 +91,48 @@ const PROMO_TEXT_LABELS: Record<number, string> = {
   12: 'текст повторного заказа'
 };
 
+const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
+  categories: {
+    title: 'Категории и подкатегории',
+    text: 'Структура услуг, по которой менеджеры выбирают направление компании и продукта.'
+  },
+  subcategories: {
+    title: 'Подкатегории',
+    text: 'Уточняют основную категорию и помогают точнее разнести продукты.'
+  },
+  cities: {
+    title: 'Города',
+    text: 'Города используются в карточках, аккаунтах и фильтрах.'
+  },
+  products: {
+    title: 'Продукты',
+    text: 'Шаблонные позиции, которые попадают в заказы и сценарии работы.'
+  },
+  phones: {
+    title: 'Телефоны',
+    text: 'Рабочие номера, лимиты отправки и привязанные устройства.'
+  },
+  accounts: {
+    title: 'Аккаунты',
+    text: 'Аккаунты публикации и их привязка к исполнителю, городу и статусу.'
+  },
+  promo: {
+    title: 'Промо-тексты',
+    text: 'Готовые тексты для кнопок менеджера и персональные назначения.'
+  },
+  managerTexts: {
+    title: 'Тексты менеджеров',
+    text: 'Персональные шаблоны сообщений, которые менеджер использует в работе.'
+  },
+  settings: {
+    title: 'Рабочие настройки',
+    text: 'Паузы, расписания отчетов и синхронизации, которые влияют на автоматические процессы.'
+  }
+};
+
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective],
   templateUrl: './admin-dictionaries.component.html',
   styleUrl: './admin-dictionaries.component.scss'
 })
@@ -238,6 +283,10 @@ export class AdminDictionariesComponent {
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
+  readonly activeGuide = computed(() => DICTIONARY_GUIDES[this.activeTab()]);
+  readonly activeTabIcon = computed(() =>
+    this.tabs().find((tab) => tab.key === this.activeTab())?.icon ?? 'help'
+  );
   readonly activeCategory = computed(() => {
     const id = this.activeCategoryId();
     return this.categories().find((category) => category.id === id) ?? null;

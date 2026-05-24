@@ -57,6 +57,10 @@ export class UiTooltipDirective {
       UiTooltipDirective.activeTooltip.open = false;
     }
 
+    if (this.elementRef.nativeElement.tagName.toLowerCase() === 'label') {
+      event.preventDefault();
+    }
+
     this.open = nextOpen;
     UiTooltipDirective.activeTooltip = this.open ? this : null;
     event.stopPropagation();

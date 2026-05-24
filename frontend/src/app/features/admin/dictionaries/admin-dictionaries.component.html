@@ -15,42 +15,40 @@
         }
       </nav>
 
-      <div class="quick-links">
+      <div class="dictionary-actions">
         @if (activeTab() !== 'settings') {
-          <button type="button" (click)="openActiveCreate()">
+          <label class="dictionary-search" appTooltip="Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.">
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Найти"
+              [value]="search()"
+              (input)="search.set($any($event.target).value)"
+              (keyup.enter)="searchActive()"
+            >
+          </label>
+
+          <button type="button" class="dictionary-icon-action" (click)="searchActive()" [disabled]="loading()" title="Искать">
+            <span class="material-icons-sharp">manage_search</span>
+          </button>
+
+          <button type="button" class="dictionary-icon-action reset" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
+            <span class="material-icons-sharp">filter_alt_off</span>
+          </button>
+        }
+
+        @if (activeTab() !== 'settings') {
+          <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
           </button>
         }
-        <button type="button" (click)="loadAll()" [disabled]="loading()">
+        <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="loading()">
           <span class="material-icons-sharp">refresh</span>
           {{ loading() ? 'Загрузка' : 'Обновить' }}
         </button>
       </div>
     </header>
-
-    @if (activeTab() !== 'settings') {
-      <section class="dictionary-search">
-        <label>
-          <span class="material-icons-sharp">search</span>
-          <input
-            type="text"
-            placeholder="Найти"
-            [value]="search()"
-            (input)="search.set($any($event.target).value)"
-            (keyup.enter)="searchActive()"
-          >
-        </label>
-
-        <button type="button" class="icon-button" (click)="searchActive()" [disabled]="loading()" title="Искать">
-          <span class="material-icons-sharp">manage_search</span>
-        </button>
-
-        <button type="button" class="icon-button" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
-          <span class="material-icons-sharp">filter_alt_off</span>
-        </button>
-      </section>
-    }
 
     @if (error()) {
       <app-load-error-card title="Справочники не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadAll()" />
@@ -93,7 +91,7 @@
                     <span class="count-pill">{{ category.subCategoryCount }}</span>
                   </td>
                   <td class="row-tools">
-                    <button type="button" class="row-icon-button" (click)="editCategory($event, category)" title="Редактировать категорию">
+                    <button type="button" class="row-icon-button edit-button" (click)="editCategory($event, category)" title="Редактировать категорию">
                       <span class="material-icons-sharp">edit</span>
                     </button>
                   </td>
@@ -137,7 +135,7 @@
                     <td><strong>{{ subCategory.title }}</strong></td>
                     <td>{{ subCategory.id }}</td>
                     <td class="row-tools">
-                      <button type="button" class="row-icon-button" (click)="editSubCategory($event, subCategory)" title="Редактировать подкатегорию">
+                      <button type="button" class="row-icon-button edit-button" (click)="editSubCategory($event, subCategory)" title="Редактировать подкатегорию">
                         <span class="material-icons-sharp">edit</span>
                       </button>
                     </td>
@@ -526,10 +524,18 @@
           <span>{{ activeLabel() }}</span>
         </div>
 
+        <div class="editor-guide">
+          <span class="material-icons-sharp">{{ activeTabIcon() }}</span>
+          <div>
+            <strong>{{ activeGuide().title }}</strong>
+            <p>{{ activeGuide().text }}</p>
+          </div>
+        </div>
+
         @switch (activeTab()) {
           @case ('categories') {
             <form [formGroup]="categoryForm" (ngSubmit)="saveActive()">
-              <label>
+              <label appTooltip="Короткое название группы услуг. Оно будет видно менеджерам при выборе категории.">
                 <span>Название категории</span>
                 <input type="text" formControlName="title">
               </label>
@@ -547,12 +553,12 @@
 
           @case ('subcategories') {
             <form [formGroup]="subCategoryForm" (ngSubmit)="saveActive()">
-              <label>
+              <label appTooltip="Название уточняющей услуги внутри выбранной категории. Лучше использовать формулировку без дублей.">
                 <span>Название подкатегории</span>
                 <input type="text" formControlName="title">
               </label>
 
-              <label>
+              <label appTooltip="Основная категория, к которой относится подкатегория. От этого зависит группировка в списках.">
                 <span>Категория</span>
                 <select formControlName="categoryId">
                   @for (category of categories(); track trackCategory($index, category)) {
@@ -575,7 +581,7 @@
 
           @case ('cities') {
             <form [formGroup]="cityForm" (ngSubmit)="saveActive()">
-              <label>
+              <label appTooltip="Название города в том виде, как его увидят в справочниках и фильтрах.">
                 <span>Название города</span>
                 <input type="text" formControlName="title">
               </label>
@@ -593,17 +599,17 @@
 
           @case ('products') {
             <form [formGroup]="productForm" (ngSubmit)="saveActive()">
-              <label>
+              <label appTooltip="Название продукта или услуги, которое будет доступно при создании заказа.">
                 <span>Название продукта</span>
                 <input type="text" formControlName="title">
               </label>
 
-              <label>
+              <label appTooltip="Справочная цена продукта. Используется как базовое значение в заказах и расчетах.">
                 <span>Цена</span>
                 <input type="number" min="0" step="0.01" formControlName="price">
               </label>
 
-              <label>
+              <label appTooltip="Категория помогает группировать продукты и быстрее находить нужный вариант.">
                 <span>Категория продукта</span>
                 <select formControlName="categoryId">
                   @for (category of productCategories(); track trackOption($index, category)) {
@@ -612,7 +618,7 @@
                 </select>
               </label>
 
-              <label class="checkbox">
+              <label class="checkbox" appTooltip="Если включено, менеджер увидит, что для этого продукта нужно подготовить фото.">
                 <input type="checkbox" formControlName="photo">
                 <span>Нужна фотография</span>
               </label>
@@ -632,22 +638,27 @@
           @case ('phones') {
             <form [formGroup]="phoneForm" (ngSubmit)="saveActive()">
               <div class="form-grid">
-                <label>
+                <div class="form-section-title wide">
+                  <span class="material-icons-sharp">badge</span>
+                  <strong>Основное</strong>
+                </div>
+
+                <label appTooltip="Рабочий номер в едином формате. Он используется для отправок и привязки устройств.">
                   <span>Номер телефона</span>
                   <input type="text" formControlName="number" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Имя владельца или условное описание номера, чтобы его было легко найти в списке.">
                   <span>ФИО</span>
                   <input type="text" formControlName="fio" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Дата рождения профиля, если она нужна для рабочего сценария аккаунта.">
                   <span>Дата рождения</span>
                   <input type="date" formControlName="birthday">
                 </label>
 
-                <label>
+                <label appTooltip="Оператор или ответственный, которому назначен этот телефон.">
                   <span>Оператор</span>
                   <select formControlName="operatorId">
                     <option [ngValue]="null">Не выбран</option>
@@ -657,62 +668,72 @@
                   </select>
                 </label>
 
-                <label>
+                <div class="form-section-title wide">
+                  <span class="material-icons-sharp">timer</span>
+                  <strong>Лимиты и блокировка</strong>
+                </div>
+
+                <label appTooltip="Сколько сообщений или действий разрешено выполнить с этого номера до паузы.">
                   <span>Разрешено отправлять</span>
                   <input type="number" min="0" step="1" formControlName="amountAllowed">
                 </label>
 
-                <label>
+                <label appTooltip="Сколько действий уже выполнено. Значение помогает контролировать лимит.">
                   <span>Отправлено</span>
                   <input type="number" min="0" step="1" formControlName="amountSent">
                 </label>
 
-                <label>
+                <label appTooltip="Пауза в минутах после срабатывания ограничения. 0 означает отсутствие дополнительной паузы.">
                   <span>Блокировка, мин</span>
                   <input type="number" min="0" step="1" formControlName="blockTime">
                 </label>
 
-                <label>
+                <label appTooltip="Дата и время, до которых номер находится в паузе. Если время прошло, номер считается готовым.">
                   <span>Таймер блокировки</span>
                   <input type="datetime-local" formControlName="timer">
                 </label>
 
-                <label>
+                <div class="form-section-title wide">
+                  <span class="material-icons-sharp">key</span>
+                  <strong>Доступы и источники</strong>
+                </div>
+
+                <label appTooltip="Логин Google-аккаунта, связанного с рабочим номером.">
                   <span>Google логин</span>
                   <input type="text" formControlName="googleLogin" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Пароль Google-аккаунта. Заполняйте только если он нужен для рабочего процесса.">
                   <span>Google пароль</span>
                   <input type="text" formControlName="googlePassword" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Пароль Avito, если номер используется в сценариях с Avito.">
                   <span>Avito пароль</span>
                   <input type="text" formControlName="avitoPassword" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Логин почты, привязанной к этому телефону или аккаунту.">
                   <span>Mail логин</span>
                   <input type="text" formControlName="mailLogin" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Пароль почты. Заполняйте только для рабочих аккаунтов, где он действительно нужен.">
                   <span>Mail пароль</span>
                   <input type="text" formControlName="mailPassword" autocomplete="off">
                 </label>
 
-                <label>
+                <label appTooltip="Дата добавления или создания профиля. Помогает понимать возраст номера.">
                   <span>Дата создания</span>
                   <input type="date" formControlName="createDate">
                 </label>
 
-                <label class="wide">
+                <label class="wide" appTooltip="Ссылка или пометка по фото Instagram, если этот источник нужен для профиля.">
                   <span>Фото Instagram</span>
                   <input type="text" formControlName="fotoInstagram" autocomplete="off">
                 </label>
 
-                <label class="checkbox wide">
+                <label class="checkbox wide" appTooltip="Выключенный телефон остается в базе, но не должен использоваться в активных сценариях.">
                   <input type="checkbox" formControlName="active">
                   <span>Телефон активен</span>
                 </label>
@@ -769,22 +790,32 @@
 
           @case ('accounts') {
             <form [formGroup]="botForm" (ngSubmit)="saveActive()">
-              <label>
+              <div class="form-section-title">
+                <span class="material-icons-sharp">key</span>
+                <strong>Доступ аккаунта</strong>
+              </div>
+
+              <label appTooltip="Логин аккаунта, который используется для публикации или проверки.">
                 <span>Логин</span>
                 <input type="text" formControlName="login">
               </label>
 
-              <label>
+              <label appTooltip="Пароль аккаунта. Храните актуальное значение, чтобы не терять доступ.">
                 <span>Пароль</span>
                 <input type="text" formControlName="password">
               </label>
 
-              <label>
+              <label appTooltip="Имя профиля или ФИО, по которому аккаунт легко отличить от других.">
                 <span>ФИО аккаунта</span>
                 <input type="text" formControlName="fio">
               </label>
 
-              <label>
+              <div class="form-section-title">
+                <span class="material-icons-sharp">assignment_ind</span>
+                <strong>Назначение</strong>
+              </div>
+
+              <label appTooltip="Ответственный работник или менеджер, к которому привязан аккаунт.">
                 <span>Владелец</span>
                 <select formControlName="workerId">
                   @for (worker of botWorkers(); track trackOption($index, worker)) {
@@ -793,7 +824,7 @@
                 </select>
               </label>
 
-              <label>
+              <label appTooltip="Город аккаунта. Помогает распределять публикации по географии.">
                 <span>Город</span>
                 <select formControlName="cityId">
                   @for (city of botCities(); track trackOption($index, city)) {
@@ -802,7 +833,7 @@
                 </select>
               </label>
 
-              <label>
+              <label appTooltip="Рабочий статус аккаунта. Используется для отбора и контроля доступности.">
                 <span>Статус</span>
                 <select formControlName="statusId">
                   @for (status of botStatuses(); track trackOption($index, status)) {
@@ -811,12 +842,17 @@
                 </select>
               </label>
 
-              <label>
+              <div class="form-section-title">
+                <span class="material-icons-sharp">query_stats</span>
+                <strong>Активность</strong>
+              </div>
+
+              <label appTooltip="Счетчик публикаций или выполненных действий по аккаунту.">
                 <span>Публикаций</span>
                 <input type="number" min="0" step="1" formControlName="counter">
               </label>
 
-              <label class="checkbox">
+              <label class="checkbox" appTooltip="Выключенный аккаунт остается в базе, но не должен использоваться в работе.">
                 <input type="checkbox" formControlName="active">
                 <span>Аккаунт активен</span>
               </label>
@@ -835,7 +871,7 @@
 
           @case ('promo') {
             <form [formGroup]="promoTextForm" (ngSubmit)="saveActive()">
-              <label>
+              <label appTooltip="Готовый промо-текст, который можно назначить кнопкам менеджера.">
                 <span>Текст для копирования</span>
                 <textarea rows="8" formControlName="text"></textarea>
               </label>
@@ -860,7 +896,7 @@
                 <span>{{ selectedPromoManagerTitle() }}</span>
               </div>
 
-              <label>
+              <label appTooltip="Менеджер, для которого настраиваются персональные назначения промо-кнопок.">
                 <span>Менеджер</span>
                 <select [value]="selectedPromoManagerId() ?? ''" (change)="selectPromoManager($any($event.target).value)">
                   @for (manager of promoManagers(); track trackOption($index, manager)) {
@@ -897,27 +933,27 @@
           @case ('managerTexts') {
             @if (selectedManagerText(); as managerText) {
               <form class="manager-text-form" [formGroup]="managerTextForm" (ngSubmit)="saveActive()">
-                <label>
+                <label appTooltip="Текст, который менеджер отправляет на этапе оплаты.">
                   <span>Текст оплаты</span>
                   <textarea rows="5" formControlName="payText"></textarea>
                 </label>
 
-                <label>
+                <label appTooltip="Первое сообщение или стартовая заготовка для начала общения.">
                   <span>Начальный текст</span>
                   <textarea rows="5" formControlName="beginText"></textarea>
                 </label>
 
-                <label>
+                <label appTooltip="Основное коммерческое предложение менеджера.">
                   <span>Текст предложения</span>
                   <textarea rows="8" formControlName="offerText"></textarea>
                 </label>
 
-                <label>
+                <label appTooltip="Текст напоминания, если клиент не ответил или нужно вернуть диалог.">
                   <span>Напоминание</span>
                   <textarea rows="5" formControlName="reminderText"></textarea>
                 </label>
 
-                <label>
+                <label appTooltip="Сообщение для старта или запуска группы.">
                   <span>Старт группы</span>
                   <textarea rows="5" formControlName="startText"></textarea>
                 </label>
@@ -939,12 +975,12 @@
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
               <div class="settings-section">
                 <h3>Выгул</h3>
-                <label>
+                <label appTooltip="Минимальная пауза для специалиста после действия «ВЫГУЛЯЛ». 0 минут отключает паузу.">
                   <span>Время между выгулами, минут</span>
                   <input type="number" min="0" max="1440" step="1" formControlName="nagulCooldownMinutes">
                 </label>
 
-                <label>
+                <label appTooltip="На сколько дней вперед показывать отзывы в разделе «Выгул». 0 означает только сегодняшний день.">
                   <span>Горизонт выдачи выгула, дней</span>
                   <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
                 </label>
@@ -952,27 +988,27 @@
 
               <div class="settings-section">
                 <h3>Telegram-рассылки</h3>
-                <label class="checkbox">
+                <label class="checkbox" appTooltip="Включает ежедневный утренний Telegram-отчет по расписанию.">
                   <input type="checkbox" formControlName="morningReportEnabled">
                   <span>Утренняя рассылка включена</span>
                 </label>
 
-                <label>
+                <label appTooltip="Время отправки утреннего отчета в выбранном часовом поясе.">
                   <span>Время утренней рассылки</span>
                   <input type="time" formControlName="morningReportTime">
                 </label>
 
-                <label class="checkbox">
+                <label class="checkbox" appTooltip="Включает ежедневный вечерний Telegram-отчет по расписанию.">
                   <input type="checkbox" formControlName="eveningReportEnabled">
                   <span>Вечерняя рассылка включена</span>
                 </label>
 
-                <label>
+                <label appTooltip="Время отправки вечернего отчета в выбранном часовом поясе.">
                   <span>Время вечерней рассылки</span>
                   <input type="time" formControlName="eveningReportTime">
                 </label>
 
-                <label>
+                <label appTooltip="IANA-часовой пояс для расписаний, например Asia/Irkutsk.">
                   <span>Часовой пояс</span>
                   <input type="text" formControlName="telegramReportZone" placeholder="Asia/Irkutsk">
                 </label>
@@ -980,12 +1016,12 @@
 
               <div class="settings-section">
                 <h3>WhatsApp-группы</h3>
-                <label class="checkbox">
+                <label class="checkbox" appTooltip="Если включено, сервер сверяет ссылки chat.whatsapp.com из компаний с группами, которые отдает WhatsApp-шлюз.">
                   <input type="checkbox" formControlName="whatsAppGroupSyncEnabled">
                   <span>Автосинхронизация WhatsApp-групп включена</span>
                 </label>
 
-                <label>
+                <label appTooltip="Пауза между реальными обходами WhatsApp-групп. Слишком маленькое значение может лишне нагружать шлюз.">
                   <span>Интервал проверки, минут</span>
                   <input type="number" min="5" max="1440" step="5" formControlName="whatsAppGroupSyncIntervalMinutes">
                 </label>
@@ -1036,7 +1072,7 @@
 
               <div class="settings-section">
                 <h3>Отчеты клиентам</h3>
-                <label class="checkbox">
+                <label class="checkbox" appTooltip="Короткий отчет уходит клиенту после промежуточной публикации отзыва, кроме финального отзыва заказа.">
                   <input type="checkbox" formControlName="clientPublicationProgressReportsEnabled">
                   <span>Отправлять клиентам короткие отчеты о публикациях</span>
                 </label>
@@ -1100,7 +1136,7 @@
         </header>
 
         <form class="category-form" [formGroup]="categoryForm" (ngSubmit)="saveActive()">
-          <label>
+          <label appTooltip="Короткое название группы услуг. После сохранения оно появится в списке категорий.">
             <span>Название категории</span>
             <input type="text" formControlName="title">
           </label>
@@ -1133,12 +1169,12 @@
         </header>
 
         <form class="subcategory-form" [formGroup]="subCategoryForm" (ngSubmit)="saveSelectedSubCategory()">
-          <label>
+          <label appTooltip="Название подкатегории внутри выбранной категории.">
             <span>Название подкатегории</span>
             <input type="text" formControlName="title">
           </label>
 
-          <label>
+          <label appTooltip="Категория уже выбрана слева, поэтому поле доступно только для проверки.">
             <span>Категория</span>
             <input type="text" [value]="activeCategory()?.title || ''" readonly>
           </label>

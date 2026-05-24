@@ -9,39 +9,23 @@
 }
 
 .dictionary-toolbar,
-.dictionary-search {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: 0.85rem;
+.dictionary-tabs,
+.dictionary-actions {
+  display: flex;
   align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
-.dictionary-tabs,
-.quick-links {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.55rem;
+.dictionary-toolbar {
+  justify-content: space-between;
 }
 
 .dictionary-tabs {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(8.5rem, 1fr);
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
   overflow-x: auto;
-  width: 100%;
-  border: 1px solid rgba(103, 116, 131, 0.13);
-  border-radius: 0.75rem;
-  padding: 0.25rem;
-  background: var(--otziv-white);
-  box-shadow: 0 0.65rem 1.35rem rgba(132, 139, 200, 0.12);
-  transition: box-shadow 0.65s ease;
-}
-
-.dictionary-tabs:has(button:only-child) {
-  justify-self: start;
-  width: fit-content;
-  max-width: 100%;
+  gap: 0.35rem;
 }
 
 .dictionary-tabs:hover,
@@ -52,109 +36,114 @@
 
 .dictionary-tabs button {
   display: inline-flex;
+  flex: 1 0 6.9rem;
   min-width: 0;
-  min-height: 2.3rem;
+  min-height: 2.1rem;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  border-radius: 0.5rem;
-  padding: 0 0.7rem;
+  gap: 0.22rem;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: 999px;
+  padding: 0 0.35rem;
   color: var(--otziv-dark);
-  background: transparent;
-  font-size: 0.82rem;
+  background: var(--otziv-white);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .dictionary-tabs button.active {
-  color: var(--otziv-primary);
-  background: rgba(108, 155, 207, 0.12);
+  border-color: transparent;
+  color: white;
+  background: #c461dc;
 }
 
-.dictionary-tabs .material-icons-sharp,
-.quick-links .material-icons-sharp {
+.dictionary-tabs .material-icons-sharp {
   font-size: 1rem;
 }
 
 .dictionary-tabs small {
-  display: inline-grid;
-  min-width: 1.45rem;
-  min-height: 1.2rem;
-  place-items: center;
-  border-radius: 999px;
-  padding: 0 0.35rem;
   color: var(--otziv-info);
-  background: var(--otziv-muted-surface);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 
-.quick-links {
+.dictionary-tabs button.active small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.dictionary-actions {
+  flex: 0 1 clamp(28rem, 40vw, 42rem);
   justify-content: flex-end;
 }
 
-.quick-links button,
-.dictionary-search input {
-  min-height: 2.45rem;
-  border: 1px solid rgba(103, 116, 131, 0.24);
-  border-radius: 0.65rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-light);
-  font-size: 0.74rem;
-  font-weight: 800;
-}
-
-.quick-links button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 6.25rem;
-  padding: 0 0.8rem;
-}
-
 .dictionary-search {
-  grid-template-columns: minmax(12rem, 1fr) repeat(2, 2.45rem);
-  gap: 0.55rem;
-}
-
-.dictionary-search label {
   position: relative;
-  display: block;
+  display: grid;
+  flex: 1 1 11rem;
+  min-width: 9.5rem;
+  min-height: 2rem;
+  align-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.75rem;
+  background: var(--otziv-white);
 }
 
-.dictionary-search label > span {
-  position: absolute;
-  top: 50%;
-  left: 0.85rem;
-  margin: 0;
-  color: var(--otziv-info);
-  font-size: 1rem;
-  transform: translateY(-50%);
+.dictionary-search > .material-icons-sharp {
+  display: none;
 }
 
 .dictionary-search input {
   width: 100%;
-  padding: 0 0.85rem 0 2.35rem;
-  background: var(--otziv-field-background);
-}
-
-.icon-button {
-  width: 2.45rem;
-  min-height: 2.45rem;
+  min-height: 1.45rem;
+  border: 0;
+  outline: 0;
   padding: 0;
+  color: var(--otziv-dark);
+  background: transparent;
+  font: inherit;
+  text-align: right;
 }
 
-.icon-button.icon-button {
-  border-radius: 0.65rem;
+.dictionary-workspace button.dictionary-action.dictionary-action,
+.dictionary-workspace button.dictionary-icon-action.dictionary-icon-action {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(103, 116, 131, 0.24);
+  border-radius: var(--otziv-small-radius);
   padding: 0;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  font-size: 0.74rem;
+  font-weight: 800;
 }
 
+.dictionary-workspace button.dictionary-action.dictionary-action {
+  gap: 0.3rem;
+  min-width: 6.25rem;
+  padding: 0 0.72rem;
+}
+
+.dictionary-workspace button.dictionary-action.create {
+  border-color: rgba(27, 156, 133, 0.32);
+  color: var(--otziv-success);
+}
+
+.dictionary-workspace button.dictionary-icon-action.dictionary-icon-action {
+  width: 1.9rem;
+}
 .dictionary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.14fr) minmax(19rem, 0.86fr);
   gap: 1rem;
-  align-items: stretch;
+  align-items: start;
 }
 
 .category-builder-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 .dictionary-card {
@@ -162,7 +151,7 @@
   min-width: 0;
   min-height: 0;
   border: 1px solid rgba(103, 116, 131, 0.1);
-  border-radius: 0.9rem;
+  border-radius: 0.8rem;
   padding: 1rem;
   background: var(--otziv-white);
   box-shadow: 0 0.85rem 1.85rem rgba(132, 139, 200, 0.12);
@@ -178,6 +167,16 @@
   grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   overflow: hidden;
+}
+
+.editor-card {
+  grid-template-rows: auto auto minmax(0, auto);
+  align-content: start;
+  gap: 0.8rem;
+}
+
+.editor-card .editor-title {
+  margin-bottom: 0;
 }
 
 .panel-heading,
@@ -223,14 +222,18 @@
   white-space: nowrap;
 }
 
-.compact-action.compact-action {
+.dictionary-workspace button.compact-action.compact-action {
   min-height: 2.15rem;
-  border-radius: 0.65rem;
+  border: 1px solid rgba(27, 156, 133, 0.58);
+  border-radius: 0.35rem;
   padding: 0 0.8rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.05);
+  box-shadow: none;
   white-space: nowrap;
 }
 
-.compact-action .material-icons-sharp {
+.dictionary-workspace button.compact-action .material-icons-sharp {
   font-size: 1rem;
 }
 
@@ -325,8 +328,16 @@ tr {
   cursor: pointer;
 }
 
+tbody tr:hover td {
+  background: rgba(108, 155, 207, 0.06);
+}
+
 tr.selected td {
   background: rgba(108, 155, 207, 0.14);
+}
+
+tr.selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--otziv-primary);
 }
 
 .count-pill,
@@ -394,6 +405,10 @@ tr.selected td {
   gap: 0.85rem;
 }
 
+.editor-card form {
+  align-content: start;
+}
+
 .form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -416,19 +431,128 @@ tr.selected td {
   grid-column: 1 / -1;
 }
 
-.editor-card label,
-.category-form label,
-.subcategory-form label {
+:is(.editor-card, .category-form, .subcategory-form) label {
+  position: relative;
   display: grid;
   gap: 0.45rem;
 }
 
-.editor-card label > span,
-.category-form label > span,
-.subcategory-form label > span {
+:is(.editor-card, .category-form, .subcategory-form) label > span {
   margin: 0;
   color: var(--otziv-info);
   font-size: 0.78rem;
+}
+
+.editor-guide {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  border: 1px solid rgba(108, 155, 207, 0.14);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  background: rgba(108, 155, 207, 0.06);
+}
+
+.editor-guide > span {
+  color: var(--otziv-primary);
+  font-size: 1.05rem;
+}
+
+.editor-guide strong {
+  display: block;
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.editor-guide p {
+  margin: 0.2rem 0 0;
+  color: var(--otziv-info);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+:is(.editor-card, .category-form, .subcategory-form) label[data-tooltip] > span:first-child,
+.dictionary-search[data-tooltip] input {
+  padding-right: 1.75rem;
+}
+
+:is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::before,
+.dictionary-search[data-tooltip]::before {
+  content: "help";
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  width: 1.05rem;
+  height: 1.05rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--otziv-primary);
+  background: transparent;
+  font-family: 'Material Icons Sharp';
+  font-size: 0.72rem;
+  line-height: 1;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.dictionary-search[data-tooltip]::before {
+  top: 50%;
+  right: 0.75rem;
+  transform: translateY(-50%);
+}
+
+:is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::after,
+.dictionary-search[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: min(20rem, 78vw);
+  padding: 0.62rem 0.72rem;
+  border: 1px solid rgba(28, 41, 57, 0.12);
+  border-radius: 0.65rem;
+  color: #fff;
+  background: rgba(28, 41, 57, 0.96);
+  font-family: var(--otziv-font-family);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.35;
+  opacity: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  text-align: left;
+  visibility: hidden;
+  white-space: normal;
+}
+
+:is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]:is(:hover, .tooltip-open)::after,
+.dictionary-search[data-tooltip]:is(:hover, .tooltip-open)::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+.form-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.1);
+  padding-top: 0.75rem;
+  color: var(--otziv-dark);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.form-section-title.wide {
+  grid-column: 1 / -1;
 }
 
 .editor-card input[type='text'],
@@ -441,7 +565,7 @@ tr.selected td {
 .category-form input[type='text'],
 .subcategory-form input[type='text'] {
   width: 100%;
-  min-height: 2.55rem;
+  min-height: 2.45rem;
   border: 1px solid rgba(103, 116, 131, 0.24);
   border-radius: 0.7rem;
   padding: 0 0.75rem;
@@ -451,7 +575,7 @@ tr.selected td {
 }
 
 .editor-card textarea {
-  min-height: 10rem;
+  min-height: 8rem;
   padding-top: 0.75rem;
   line-height: 1.35;
   resize: vertical;
@@ -502,7 +626,7 @@ tr.selected td {
 
 .editor-card .checkbox {
   display: inline-flex;
-  min-height: 2.55rem;
+  min-height: 2.45rem;
   align-items: center;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.55rem;
@@ -525,8 +649,30 @@ tr.selected td {
   margin-top: 0.15rem;
 }
 
-.actions .danger {
-  background: var(--otziv-danger);
+.dictionary-workspace .actions button[type='submit'],
+.dictionary-workspace .actions button:not(.secondary):not(.danger) {
+  border: 1px solid rgba(27, 156, 133, 0.58);
+  border-radius: 0.35rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.05);
+  box-shadow: none;
+}
+
+.dictionary-workspace .actions button.secondary {
+  border-color: rgba(103, 116, 131, 0.38);
+  color: #536173;
+  background: rgba(103, 116, 131, 0.05);
+}
+
+.editor-card form > .actions {
+  border-top: 1px solid rgba(103, 116, 131, 0.12);
+  padding-top: 0.75rem;
+}
+
+.dictionary-workspace .actions button.danger {
+  border-color: rgba(255, 0, 96, 0.52);
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.05);
 }
 
 .promo-assignment-panel {
@@ -631,35 +777,50 @@ tr.selected td {
   font-size: 0.72rem;
 }
 
-.row-icon-button,
+.dictionary-workspace button.row-icon-button.row-icon-button,
 .row-icon-link {
   display: inline-grid;
   width: 2.15rem;
   min-height: 2.15rem;
   place-items: center;
-  border: 1px solid rgba(103, 116, 131, 0.22);
-  border-radius: 0.65rem;
+  border: 1px solid rgba(103, 116, 131, 0.28);
+  border-radius: 0.35rem;
   padding: 0;
-  color: var(--otziv-primary);
-  background: var(--otziv-light);
+  color: #536173;
+  background: rgba(103, 116, 131, 0.06);
+  box-shadow: none;
   text-decoration: none;
 }
 
-.row-icon-button.row-icon-button,
+.dictionary-workspace button.row-icon-button.row-icon-button,
 .row-icon-link.row-icon-link {
   width: 2.15rem;
   min-height: 2.15rem;
-  border-radius: 0.65rem;
+  border-radius: 0.35rem;
   padding: 0;
 }
 
-.row-icon-button .material-icons-sharp,
+.dictionary-workspace button.row-icon-button .material-icons-sharp,
 .row-icon-link .material-icons-sharp {
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
-.danger-icon {
+.row-icon-link {
+  border-color: rgba(103, 116, 131, 0.38);
+  color: #536173;
+  background: rgba(103, 116, 131, 0.05);
+}
+
+.dictionary-workspace button.row-icon-button.edit-button {
+  border-color: rgba(206, 139, 34, 0.58);
+  color: #9a6417;
+  background: rgba(206, 139, 34, 0.07);
+}
+
+.dictionary-workspace button.danger-icon {
+  border-color: rgba(255, 0, 96, 0.45);
   color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.05);
 }
 
 .empty-picker {
@@ -752,75 +913,75 @@ tr.selected td {
   min-height: 5.6rem;
   align-items: center;
   justify-content: space-between;
+  border: 0;
   border-radius: 1.05rem;
-  padding: 1rem;
+  padding: 0.9rem 1.05rem;
   background: var(--otziv-white);
   box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
-  transition: box-shadow 0.65s ease;
+  text-align: left;
 }
 
 .dictionary-stats .stat-card span {
+  display: block;
+  margin-bottom: 0.4rem;
   color: var(--otziv-info);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 900;
 }
 
 .dictionary-stats .stat-card strong {
-  display: block;
-  margin-top: 0.2rem;
+  color: currentColor;
   font-size: 1.35rem;
+  font-weight: 900;
 }
 
 .dictionary-stats .stat-card i {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 3.2rem;
+  height: 3.2rem;
   place-items: center;
+  border: 0.42rem solid currentColor;
   border-radius: 50%;
-  color: white;
-  font-size: 1.35rem;
+  font-size: 1rem;
 }
 
-.dictionary-stats .stat-card.blue i {
-  background: var(--otziv-primary);
+.dictionary-stats .stat-card.blue {
+  color: var(--otziv-primary);
 }
 
-.dictionary-stats .stat-card.green i {
-  background: var(--otziv-success);
+.dictionary-stats .stat-card.green {
+  color: var(--otziv-success);
 }
 
-.dictionary-stats .stat-card.teal i {
-  background: #4db6ac;
+.dictionary-stats .stat-card.teal {
+  color: #2f9f95;
 }
 
-.dictionary-stats .stat-card.yellow i {
-  color: var(--otziv-dark);
-  background: var(--otziv-warning);
+.dictionary-stats .stat-card.yellow {
+  color: var(--otziv-warning);
 }
 
-.dictionary-stats .stat-card.pink i {
-  background: var(--otziv-danger);
+.dictionary-stats .stat-card.pink {
+  color: var(--otziv-danger);
 }
 
-.dictionary-stats .import-accounts-button.import-accounts-button {
-  display: inline-flex;
+.dictionary-stats button.import-accounts-button.import-accounts-button {
   width: 100%;
-  min-height: 3.35rem;
-  align-items: center;
+  min-height: 3.05rem;
   justify-content: flex-start;
   gap: 0.45rem;
-  border: 1px solid rgba(108, 155, 207, 0.22);
-  border-radius: 0.9rem;
-  padding: 0 1rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-white);
-  box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
+  border: 1px solid rgba(27, 156, 133, 0.58);
+  border-radius: 0.35rem;
+  padding: 0 0.85rem;
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.05);
+  box-shadow: none;
   font-size: 0.78rem;
   font-weight: 900;
 }
 
 .dictionary-stats .import-accounts-button .material-icons-sharp {
-  color: var(--otziv-success);
+  color: currentColor;
   font-size: 1.35rem;
 }
 
@@ -930,14 +1091,17 @@ tr.selected td {
 }
 
 @media (max-width: 1180px) {
-  .dictionary-toolbar,
   .dictionary-grid,
   .category-builder-grid {
     grid-template-columns: 1fr;
   }
 
-  .quick-links {
-    justify-content: flex-start;
+  .dictionary-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .dictionary-actions {
+    flex: 1 1 100%;
   }
 }
 
@@ -950,8 +1114,12 @@ tr.selected td {
     flex: 0 0 auto;
   }
 
+  .dictionary-actions {
+    flex-wrap: wrap;
+  }
+
   .dictionary-search {
-    grid-template-columns: minmax(0, 1fr) 2.55rem 2.55rem;
+    flex-basis: 100%;
   }
 
   .panel-heading,
@@ -964,7 +1132,7 @@ tr.selected td {
     gap: 0.75rem;
   }
 
-  .compact-action.compact-action {
+  .dictionary-workspace button.compact-action.compact-action {
     width: 100%;
   }
 

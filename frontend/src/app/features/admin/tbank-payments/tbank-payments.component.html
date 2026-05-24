@@ -1,0 +1,301 @@
+<app-admin-layout title="T-Bank платежи и чеки" active="tbank-payments" rightPanelMode="custom">
+  <section class="analytics-toolbar">
+    <div class="toolbar-heading">
+      <p class="eyebrow">ADMIN / T-BANK</p>
+      <h2>Платежи, возвраты и чеки</h2>
+      @if (status(); as bank) {
+        <p class="toolbar-note">
+          {{ bank.enabled ? 'API включен' : 'API выключен' }} ·
+          {{ bank.testMode ? 'тестовый терминал' : 'боевой терминал' }} ·
+          {{ bank.applyConfirmedPayments ? 'заказы переводятся автоматически' : 'заказы не переводятся автоматически' }}
+        </p>
+      }
+    </div>
+
+    <div class="toolbar-menu">
+      <nav class="toolbar-selects" aria-label="Меню T-Bank платежей">
+        <select [ngModel]="statusFilter()" (ngModelChange)="setStatusFilter($any($event))" aria-label="Статус платежей">
+          @for (option of statusOptions; track trackStatusOption($index, option)) {
+            <option [ngValue]="option.key">{{ option.label }}</option>
+          }
+        </select>
+
+        <label class="date-field">
+          <span>С</span>
+          <input type="date" aria-label="Дата начала" [ngModel]="dateFrom()" (ngModelChange)="setDateFrom($event)">
+        </label>
+
+        <label class="date-field">
+          <span>По</span>
+          <input type="date" aria-label="Дата окончания" [ngModel]="dateTo()" (ngModelChange)="setDateTo($event)">
+        </label>
+      </nav>
+
+      <div class="quick-links">
+        @if (hasFilters()) {
+          <button type="button" class="quiet-action" (click)="resetFilters()">
+            <span class="material-icons-sharp" aria-hidden="true">close</span>
+            Сбросить
+          </button>
+        }
+
+        <a routerLink="/manager" class="quiet-action">
+          <span class="material-icons-sharp" aria-hidden="true">groups</span>
+          Менеджер
+        </a>
+
+        <button type="button" class="primary-action" (click)="load()" [disabled]="loading()">
+          <span class="material-icons-sharp" aria-hidden="true">refresh</span>
+          {{ loading() ? 'Обновляю' : 'Обновить' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="toolbar-actions">
+      <div class="status-control" role="group" aria-label="Фильтр статуса">
+        @for (option of statusOptions; track trackStatusOption($index, option)) {
+          <button
+            type="button"
+            [class.active]="statusFilter() === option.key"
+            (click)="setStatusFilter(option.key)"
+            [title]="option.label"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">{{ option.icon }}</span>
+            <span>{{ option.label }}</span>
+          </button>
+        }
+      </div>
+
+      <label class="search-field">
+        <input
+          type="search"
+          aria-label="Поиск платежей"
+          placeholder="Компания, заказ, PaymentId, e-mail"
+          [ngModel]="search()"
+          (ngModelChange)="setSearch($event)"
+        >
+      </label>
+    </div>
+  </section>
+
+  <section class="analytics-section compact-section" aria-label="Сводка T-Bank платежей">
+    <div class="metric-grid">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <article class="metric-card" [class]="metric.tone">
+          <span class="material-icons-sharp" aria-hidden="true">{{ metric.icon }}</span>
+          <div>
+            <h3>{{ metric.label }}</h3>
+            <strong>{{ metric.value }}</strong>
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+
+  @if (error()) {
+    <app-load-error-card title="T-Bank платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
+  }
+
+  <section class="analytics-section payments-panel">
+    <div class="section-title">
+      <span class="material-icons-sharp">receipt_long</span>
+      <div>
+        <h2>Журнал платежей</h2>
+        <p>
+          Показано {{ filteredLinks().length }} из {{ links().length }},
+          сумма в выборке {{ totalAmount(filteredLinks()) | number:'1.2-2' }} руб.
+        </p>
+      </div>
+      @if (status(); as bank) {
+        <span [class]="bank.testMode ? 'mode-pill test' : 'mode-pill live'">
+          <span class="material-icons-sharp" aria-hidden="true">{{ bank.testMode ? 'science' : 'verified' }}</span>
+          {{ bank.testMode ? 'Тестовый режим' : 'Боевой режим' }}
+        </span>
+      }
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Заказ</th>
+            <th>Платеж</th>
+            <th>Сумма</th>
+            <th>Статус</th>
+            <th>Даты</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (link of filteredLinks(); track trackLink($index, link)) {
+            <tr [class]="rowMode(link)">
+              <td class="order-cell">
+                <strong class="order-title">{{ paymentTitle(link) }}</strong>
+                <span>{{ paymentSubtitle(link) }}</span>
+                <small>Заказ №{{ link.orderId || '-' }}</small>
+              </td>
+              <td class="payment-cell">
+                <button
+                  type="button"
+                  class="copy-line"
+                  (click)="copy(link.tbankPaymentId, 'payment-' + link.id)"
+                  [disabled]="!link.tbankPaymentId"
+                  title="Скопировать PaymentId"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'payment-' + link.id ? 'check' : 'content_copy' }}</span>
+                  <strong>{{ link.tbankPaymentId || 'PaymentId не получен' }}</strong>
+                </button>
+                <small>{{ link.tbankOrderId || 'OrderId не создан' }}</small>
+                <small class="profile-line">{{ link.paymentProfileName || link.tbankTerminalKey || 'Основной магазин' }}</small>
+                @if (link.payerEmail) {
+                  <small class="email-line">{{ link.payerEmail }}</small>
+                }
+              </td>
+              <td class="amount-cell">
+                <strong>{{ link.amount | number:'1.2-2' }} руб.</strong>
+                <small>{{ link.amountKopecks }} коп.</small>
+              </td>
+              <td class="status-cell">
+                <span [class]="statusClass(link.status)">{{ statusLabel(link.status) }}</span>
+                @if (link.lastError) {
+                  <small class="error-text">{{ link.lastError }}</small>
+                }
+              </td>
+              <td class="date-cell">
+                <span>Создана: {{ link.createdAt | date:'dd.MM HH:mm' }}</span>
+                @if (link.initiatedAt) {
+                  <span>Init: {{ link.initiatedAt | date:'dd.MM HH:mm' }}</span>
+                }
+                @if (link.paidAt) {
+                  <span>Оплата: {{ link.paidAt | date:'dd.MM HH:mm' }}</span>
+                }
+                <span>Истекает: {{ link.expiresAt | date:'dd.MM HH:mm' }}</span>
+              </td>
+              <td class="action-cell">
+                <div class="row-actions">
+                  <a [href]="link.publicUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть ссылку оплаты">
+                    <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                  </a>
+                  @if (link.paymentUrl) {
+                    <a [href]="link.paymentUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть форму банка">
+                      <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+                    </a>
+                  }
+                  <button
+                    type="button"
+                    class="refund-action"
+                    (click)="cancel(link)"
+                    [disabled]="!link.refundable || isMutating(link)"
+                    title="Сделать полный возврат через T-Bank"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">undo</span>
+                    {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty-state">
+                <span class="material-icons-sharp" aria-hidden="true">search_off</span>
+                <strong>{{ hasFilters() ? 'По фильтрам ничего не найдено' : 'Платежных ссылок пока нет' }}</strong>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section admin-right-content class="tbank-side" aria-label="Настройки платежных профилей T-Bank">
+    @if (status(); as bank) {
+      <article class="side-card bank-card">
+        <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+        <div>
+          <p>Состояние T-Bank</p>
+          <h2>{{ bank.enabled ? 'API включен' : 'API выключен' }}</h2>
+          <small>
+            {{ bank.testMode ? 'Тестовый терминал' : 'Боевой терминал' }} ·
+            {{ bank.applyConfirmedPayments ? 'заказы переводятся автоматически' : 'ручной перевод заказов' }}
+          </small>
+        </div>
+      </article>
+    }
+
+    <section class="side-card profiles-panel">
+      <div class="side-card-head">
+        <span class="material-icons-sharp" aria-hidden="true">storefront</span>
+        <div>
+          <h2>Профили</h2>
+          <p>Терминалы, через которые создаются новые ссылки.</p>
+        </div>
+      </div>
+
+      <div class="profiles-grid">
+        @for (profile of profiles(); track trackProfile($index, profile)) {
+          <article class="profile-card" [class.disabled]="!profile.enabled">
+            <div>
+              <strong>{{ profile.name }}</strong>
+              <span>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }}</span>
+            </div>
+            <small>{{ profile.terminalKey }}</small>
+            <span [class]="profile.hasPassword ? 'status-pill paid' : 'status-pill failed'">
+              {{ profile.hasPassword ? 'Секрет найден' : 'Нет секрета' }}
+            </span>
+          </article>
+        } @empty {
+          <div class="empty-state compact-empty">
+            <span class="material-icons-sharp" aria-hidden="true">account_balance_off</span>
+            <strong>Профили не найдены</strong>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="side-card profiles-panel manager-panel">
+      <div class="side-card-head compact-head">
+        <span class="material-icons-sharp" aria-hidden="true">manage_accounts</span>
+        <div>
+          <h2>Менеджеры</h2>
+          <p>Назначьте профиль для новых оплат.</p>
+        </div>
+      </div>
+
+      <div class="manager-profile-list">
+        @for (manager of managerProfiles(); track trackManagerProfile($index, manager)) {
+          <label class="manager-profile-row">
+            <span>
+              <strong>{{ manager.managerTitle }}</strong>
+              <small>ID {{ manager.managerId }} · {{ manager.username || 'без логина' }}</small>
+            </span>
+            <select
+              [ngModel]="selectedProfileId(manager)"
+              (ngModelChange)="setManagerProfile(manager.managerId, $event)"
+              [attr.aria-label]="'Платежный профиль для ' + manager.managerTitle"
+            >
+              <option [ngValue]="null">По умолчанию</option>
+              @for (profile of profiles(); track trackProfile($index, profile)) {
+                <option [ngValue]="profile.id">{{ profile.name }}</option>
+              }
+            </select>
+          </label>
+        } @empty {
+          <div class="empty-state compact-empty">
+            <span class="material-icons-sharp" aria-hidden="true">group_off</span>
+            <strong>Менеджеры не найдены</strong>
+          </div>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="primary-action side-save"
+        (click)="saveProfileAssignments()"
+        [disabled]="savingProfiles() || loading()"
+      >
+        <span class="material-icons-sharp" aria-hidden="true">save</span>
+        {{ savingProfiles() ? 'Сохраняю' : 'Сохранить' }}
+      </button>
+    </section>
+  </section>
+</app-admin-layout>

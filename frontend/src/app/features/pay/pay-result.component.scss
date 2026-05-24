@@ -1,0 +1,463 @@
+:host {
+  display: block;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+:host ::ng-deep app-admin-layout {
+  color: #1f2430;
+  background: #eeeeef;
+  overflow-x: hidden;
+}
+
+:host-context(body.otziv-dark-theme) ::ng-deep app-admin-layout {
+  color: #1f2430;
+  background: #eeeeef;
+}
+
+:host ::ng-deep app-admin-layout,
+:host ::ng-deep app-admin-layout .admin-layout {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout {
+  box-sizing: border-box;
+  display: block;
+  width: min(100vw, 38rem) !important;
+  max-width: 38rem !important;
+  padding-inline: 1rem;
+}
+
+:host ::ng-deep app-admin-layout .admin-sidebar,
+:host ::ng-deep app-admin-layout .admin-right,
+:host ::ng-deep app-admin-layout .mobile-start-nav,
+:host ::ng-deep app-admin-layout .top-links,
+:host ::ng-deep app-admin-layout .page-heading {
+  display: none !important;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout.sidebar-hidden .admin-right,
+:host ::ng-deep app-admin-layout .admin-layout.sidebar-hidden .mobile-start-nav {
+  display: none !important;
+}
+
+:host ::ng-deep app-admin-layout .admin-content {
+  height: auto;
+  min-height: 0;
+  padding: 0.95rem 0 2rem;
+  overflow: visible;
+}
+
+.pay-result-shell {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  padding: 0.4rem 0 1.5rem;
+  color: #1f2430;
+  font-family: var(--otziv-font-family);
+}
+
+.payment-result-widget {
+  display: grid;
+  box-sizing: border-box;
+  width: min(100%, calc(100vw - 2rem), 31.5rem);
+  max-width: 31.5rem;
+  gap: 0.78rem;
+}
+
+.result-hero,
+.next-step-card,
+.bank-card,
+.primary-result-button,
+.secondary-result-button {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.payment-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.1rem 0.1rem 0.25rem;
+}
+
+.payment-head div {
+  min-width: 0;
+}
+
+.merchant-name,
+.payment-head small {
+  display: block;
+  color: #898f99;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.payment-head strong {
+  display: block;
+  margin-top: 0.18rem;
+  color: #161922;
+  font-size: clamp(1.78rem, 3vw, 2.2rem);
+  font-weight: 950;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.payment-head small {
+  max-width: 21rem;
+  margin-top: 0.42rem;
+  overflow-wrap: anywhere;
+}
+
+.brand-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #ef3f3c;
+  font-size: 0.92rem;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 0.65rem 1.3rem rgba(239, 63, 60, 0.22);
+}
+
+.result-hero,
+.next-step-card,
+.bank-card {
+  min-width: 0;
+  border-radius: 0.82rem;
+  background: #fff;
+  box-shadow: 0 1.15rem 2.6rem rgba(24, 28, 38, 0.08);
+}
+
+.result-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  overflow: hidden;
+  padding: 1.25rem;
+  color: #fff;
+  background: linear-gradient(135deg, #21b969 0%, #7bd895 100%);
+  box-shadow: 0 1.35rem 3rem rgba(24, 169, 99, 0.22);
+}
+
+.payment-result-widget--fail .result-hero {
+  background: linear-gradient(135deg, #ef4b5f 0%, #f69a5a 100%);
+  box-shadow: 0 1.35rem 3rem rgba(239, 75, 95, 0.2);
+}
+
+.result-hero-icon {
+  display: grid;
+  width: 5.1rem;
+  height: 5.1rem;
+  place-items: center;
+  border: 0.38rem solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.result-hero-icon .material-icons-sharp {
+  font-size: 3.15rem;
+}
+
+.result-hero h1,
+.result-hero p,
+.bank-card h2,
+.bank-card p,
+.next-step-card p {
+  margin: 0;
+}
+
+.result-kicker {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 0.65rem;
+  color: #137443;
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.payment-result-widget--fail .result-kicker {
+  color: #9e2b3c;
+}
+
+.result-hero h1 {
+  margin-top: 0.42rem;
+  font-size: clamp(1.55rem, 4vw, 2.05rem);
+  font-weight: 950;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.result-hero p {
+  max-width: 22rem;
+  margin-top: 0.55rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.next-step-card {
+  display: grid;
+  grid-template-columns: 2.55rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  border: 1px solid #dcefe3;
+  border-left: 5px solid #32c56f;
+  padding: 0.92rem 1rem;
+  background: #fbfffc;
+}
+
+.payment-result-widget--fail .next-step-card {
+  border-color: #f4d2d8;
+  border-left-color: #ef4b5f;
+  background: #fffafb;
+}
+
+.next-step-card > .material-icons-sharp {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border-radius: 0.62rem;
+  color: #13824d;
+  background: #e6f9ed;
+  font-size: 1.45rem;
+}
+
+.payment-result-widget--fail .next-step-card > .material-icons-sharp {
+  color: #a73443;
+  background: #fff0f3;
+}
+
+.next-step-card strong {
+  display: block;
+  color: #171b24;
+  font-size: 0.95rem;
+  font-weight: 950;
+  line-height: 1.16;
+}
+
+.next-step-card p {
+  margin-top: 0.22rem;
+  color: #68717d;
+  font-size: 0.72rem;
+  font-weight: 780;
+  line-height: 1.36;
+}
+
+.bank-card {
+  display: grid;
+  gap: 0.82rem;
+  padding: 1rem;
+}
+
+.bank-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.bank-card h2 {
+  color: #161922;
+  font-size: 1.05rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.bank-card p {
+  margin-top: 0.22rem;
+  color: #8e96a1;
+  font-size: 0.68rem;
+  font-weight: 820;
+  line-height: 1.28;
+}
+
+.bank-card > header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  color: #9ba3ad;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.bank-card > header .material-icons-sharp {
+  color: #57be79;
+  font-size: 0.9rem;
+}
+
+.result-summary {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.result-summary div {
+  display: grid;
+  grid-template-columns: minmax(4.8rem, 0.36fr) minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  min-height: 2.2rem;
+  border: 1px solid #e1e4e8;
+  border-radius: 0.42rem;
+  padding: 0.3rem 0.68rem;
+  background: #fcfcfd;
+}
+
+.result-summary .summary-status {
+  border-color: #ccefd8;
+  background: #f4fff7;
+}
+
+.payment-result-widget--fail .result-summary .summary-status {
+  border-color: #ffd6dd;
+  background: #fff7f9;
+}
+
+.result-summary small {
+  color: #9aa2ad;
+  font-size: 0.64rem;
+  font-weight: 850;
+}
+
+.result-summary strong {
+  min-width: 0;
+  color: #68717d;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.26;
+  overflow-wrap: anywhere;
+}
+
+.summary-status strong {
+  color: #12814c;
+  font-size: 0.86rem;
+}
+
+.payment-result-widget--fail .summary-status strong {
+  color: #a73443;
+}
+
+.result-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.primary-result-button,
+.secondary-result-button {
+  display: inline-flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border-radius: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.primary-result-button {
+  color: #fff;
+  background: #32c56f;
+}
+
+.payment-result-widget--fail .primary-result-button {
+  background: #ef4b5f;
+}
+
+.secondary-result-button {
+  padding-inline: 0.9rem;
+  color: #1f2430;
+  background: #f0f1f2;
+}
+
+.primary-result-button .material-icons-sharp,
+.secondary-result-button .material-icons-sharp {
+  font-size: 1.08rem;
+}
+
+.payment-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  color: #9ca3ad;
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+@media (max-width: 640px) {
+  :host ::ng-deep app-admin-layout .admin-layout {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    padding-inline: 0.75rem;
+  }
+
+  .payment-result-widget {
+    width: min(calc(100vw - 1.5rem), 22rem);
+    max-width: 22rem;
+  }
+
+  .pay-result-shell {
+    justify-items: start;
+    padding-top: 0.2rem;
+  }
+
+  .payment-head strong {
+    font-size: 1.72rem;
+  }
+
+  .result-hero {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 1.05rem;
+    text-align: center;
+  }
+
+  .result-hero-icon {
+    width: 4.45rem;
+    height: 4.45rem;
+  }
+
+  .result-hero-icon .material-icons-sharp {
+    font-size: 2.8rem;
+  }
+
+  .result-hero p {
+    max-width: 100%;
+  }
+
+  .result-hero,
+  .next-step-card,
+  .bank-card {
+    border-radius: 0.68rem;
+  }
+
+  .result-summary div,
+  .result-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .secondary-result-button {
+    width: 100%;
+  }
+}
