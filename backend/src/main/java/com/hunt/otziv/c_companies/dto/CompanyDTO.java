@@ -35,8 +35,7 @@ public class CompanyDTO {
     @NotEmpty(message = "Название не может быть пустым")
     private String title;
 
-    //    ссылка на чат
-    @NotEmpty(message = "Ссылка на чат не может быть пустой")
+    //    ссылка на рабочий чат с представителем компании
     private String urlChat;
 
     //    официальный сайт компании
@@ -122,5 +121,12 @@ public class CompanyDTO {
     private boolean maxGroupLinked;
 
     private String maxBotInviteUrl;
+
+    @Builder.Default
+    private boolean publicationProgressReportsEnabled = true;
+
+    private Set<CompanyContactDTO> contacts;
+
+    private CompanyInfoDTO info;
 
 }

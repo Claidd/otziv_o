@@ -7,16 +7,22 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
+import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyContact;
+import com.hunt.otziv.c_companies.model.CompanyContactType;
+import com.hunt.otziv.c_companies.model.CompanyInfo;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -69,6 +75,9 @@ public class CompanyServiceImpl implements CompanyService{
     );
     private static final long OPERATOR_COUNT_ZERO_MANAGER_ID = 2L;
     private static final long OPERATOR_COUNT_ONE_MANAGER_ID = 3L;
+    private static final int COMPANY_COMMENTS_MAX_LENGTH = 2000;
+    private static final String COMPANY_DATA_SOURCE_LEAD_IMPORT = "LEAD_IMPORT";
+    private static final String COMPANY_DATA_SOURCE_MANUAL = "MANUAL";
 
     private final CompanyRepository companyRepository;
     private final LeadService leadService;
@@ -100,6 +109,11 @@ public class CompanyServiceImpl implements CompanyService{
     // Создание нового пользователя "Клиент" - начало
     @Transactional
     public boolean save(CompanyDTO companyDTO){ // Сохранение новой компании из дто
+        return saveAndReturn(companyDTO).isPresent();
+    } // Создание нового пользователя "Клиент" - конец
+
+    @Transactional
+    public Optional<Company> saveAndReturn(CompanyDTO companyDTO){ // Сохранение новой компании из дто
         log.info("1. Заходим в создание новой компаниии");
         //        в начале сохранения устанавливаем поля из дто
         Company company = Company.builder()
@@ -117,11 +131,14 @@ public class CompanyServiceImpl implements CompanyService{
                 .categoryCompany(convertCategoryDTOToCategory(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
                 .active(true)
+                .publicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled())
                 .commentsCompany(companyDTO.getCommentsCompany())
                 .counterNoPay(0)
                 .counterPay(0)
                 .sumTotal(new BigDecimal(0))
                 .build();
+        company.setContacts(convertContactDTOSetToContacts(companyDTO.getContacts(), company));
+        company.setInfo(convertInfoDTOToInfo(companyDTO.getInfo(), company));
 
         log.info("2. Собрали компания из ДТО");
 
@@ -156,10 +173,10 @@ public class CompanyServiceImpl implements CompanyService{
                     telegramService.sendMessage(telegramChatId, resultBuilder);
                 }
             }
-            return true;
+            return Optional.of(company1);
         } catch (Exception e) {
-            log.error("ОШИБКА при сохранении компании: " + e.getMessage());
-            return false;
+            log.error("ОШИБКА при сохранении компании: {}", e.getMessage(), e);
+            return Optional.empty();
         }
     } // Создание нового пользователя "Клиент" - конец
 //      =====================================CREATE USERS - START=======================================================
@@ -616,14 +633,17 @@ public class CompanyServiceImpl implements CompanyService{
             return;
         }
 
+        companyDTO.setTelephone(firstNonBlank(
+                companyDTO.getTelephone(),
+                leadDTO.getTelephoneLead(),
+                firstMultiValue(leadDTO.getWhatsappPhones()),
+                firstMultiValue(leadDTO.getMobilePhones()),
+                firstMultiValue(leadDTO.getPhones())
+        ));
+        companyDTO.setCity(firstNonBlank(companyDTO.getCity(), leadDTO.getCityLead(), "Не задан"));
         companyDTO.setTitle(firstNonBlank(leadDTO.getCompanyName(), companyDTO.getTitle()));
         companyDTO.setUrlSite(firstNonBlank(firstMultiValue(leadDTO.getWebsites()), companyDTO.getUrlSite()));
         companyDTO.setEmail(firstNonBlank(firstMultiValue(leadDTO.getEmails()), companyDTO.getEmail()));
-        companyDTO.setUrlChat(firstNonBlank(
-                firstMultiValue(leadDTO.getTelegramUrl()),
-                firstMultiValue(leadDTO.getVkUrl()),
-                companyDTO.getUrlChat()
-        ));
 
         if (!clean(leadDTO.getAddress()).isBlank()) {
             ensureFilial(companyDTO).setTitle(leadDTO.getAddress());
@@ -633,6 +653,8 @@ public class CompanyServiceImpl implements CompanyService{
         if (!comments.isBlank()) {
             companyDTO.setCommentsCompany(comments);
         }
+        companyDTO.setContacts(leadCompanyContacts(leadDTO));
+        companyDTO.setInfo(leadCompanyInfo(leadDTO));
     }
 
     private FilialDTO ensureFilial(CompanyDTO companyDTO) {
@@ -647,13 +669,109 @@ public class CompanyServiceImpl implements CompanyService{
         addLeadComment(comments, "Отрасли", leadDTO.getIndustries());
         addLeadComment(comments, "Тип", leadDTO.getCompanyType());
         addLeadComment(comments, "Регион", leadDTO.getRegion());
+        addLeadComment(comments, "Адрес", leadDTO.getAddress());
         addLeadComment(comments, "Телефоны", leadDTO.getPhones());
         addLeadComment(comments, "Мобильные", leadDTO.getMobilePhones());
         addLeadComment(comments, "WhatsApp", leadDTO.getWhatsappPhones());
+        addLeadComment(comments, "Email", leadDTO.getEmails());
+        addLeadComment(comments, "Сайты", leadDTO.getWebsites());
         addLeadComment(comments, "VK", leadDTO.getVkUrl());
         addLeadComment(comments, "TG", leadDTO.getTelegramUrl());
         addLeadComment(comments, "Комментарий лида", leadDTO.getCommentsLead());
-        return comments.toString();
+        return truncate(comments.toString(), COMPANY_COMMENTS_MAX_LENGTH);
+    }
+
+    private Set<CompanyContactDTO> leadCompanyContacts(LeadDTO leadDTO) {
+        Map<String, CompanyContactDTO> contacts = new LinkedHashMap<>();
+        addContact(contacts, CompanyContactType.PHONE, leadDTO.getTelephoneLead(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.PHONE, leadDTO.getPhones(), false, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.MOBILE, leadDTO.getMobilePhones(), false, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.WHATSAPP, leadDTO.getWhatsappPhones(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.EMAIL, leadDTO.getEmails(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.WEBSITE, leadDTO.getWebsites(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.VK, leadDTO.getVkUrl(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        addMultiContacts(contacts, CompanyContactType.TELEGRAM, leadDTO.getTelegramUrl(), true, COMPANY_DATA_SOURCE_LEAD_IMPORT, leadDTO.getId());
+        return new LinkedHashSet<>(contacts.values());
+    }
+
+    private CompanyInfoDTO leadCompanyInfo(LeadDTO leadDTO) {
+        if (leadDTO == null
+                || (clean(leadDTO.getRegion()).isBlank()
+                && clean(leadDTO.getAddress()).isBlank()
+                && clean(leadDTO.getIndustries()).isBlank()
+                && clean(leadDTO.getCompanyType()).isBlank())) {
+            return null;
+        }
+
+        return CompanyInfoDTO.builder()
+                .region(clean(leadDTO.getRegion()))
+                .address(clean(leadDTO.getAddress()))
+                .industries(clean(leadDTO.getIndustries()))
+                .companyType(clean(leadDTO.getCompanyType()))
+                .source(COMPANY_DATA_SOURCE_LEAD_IMPORT)
+                .sourceLeadId(leadDTO.getId())
+                .build();
+    }
+
+    private void addMultiContacts(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String values,
+            boolean firstPrimary,
+            String source,
+            Long sourceLeadId
+    ) {
+        boolean primary = firstPrimary;
+        for (String value : multiValues(values)) {
+            addContact(contacts, type, value, primary, source, sourceLeadId);
+            primary = false;
+        }
+    }
+
+    private void addContact(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String value,
+            boolean primary,
+            String source,
+            Long sourceLeadId
+    ) {
+        String cleanValue = clean(value);
+        if (cleanValue.isBlank()) {
+            return;
+        }
+
+        String normalized = normalizeContactValue(type, cleanValue);
+        String key = type.name() + ":" + normalized;
+        contacts.putIfAbsent(key, CompanyContactDTO.builder()
+                .type(type.name())
+                .value(cleanValue)
+                .normalizedValue(normalized)
+                .primaryContact(primary)
+                .source(source)
+                .sourceLeadId(sourceLeadId)
+                .build());
+    }
+
+    private List<String> multiValues(String value) {
+        String cleanValue = clean(value);
+        if (cleanValue.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(cleanValue.split("[,;\\r\\n]+"))
+                .map(this::clean)
+                .filter(part -> !part.isBlank())
+                .toList();
+    }
+
+    private String normalizeContactValue(CompanyContactType type, String value) {
+        String cleanValue = clean(value);
+        if (type == CompanyContactType.PHONE
+                || type == CompanyContactType.MOBILE
+                || type == CompanyContactType.WHATSAPP) {
+            return LeadPhoneNormalizer.normalize(cleanValue);
+        }
+        return cleanValue.toLowerCase(Locale.ROOT);
     }
 
     private void addLeadComment(StringJoiner comments, String label, String value) {
@@ -689,6 +807,14 @@ public class CompanyServiceImpl implements CompanyService{
 
     private String clean(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String truncate(String value, int maxLength) {
+        String cleanValue = clean(value);
+        if (cleanValue.length() <= maxLength) {
+            return cleanValue;
+        }
+        return cleanValue.substring(0, maxLength);
     }
 
 
@@ -828,6 +954,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setMaxGroupChatId(company.getMaxGroupChatId());
             companyDTO.setMaxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company));
             companyDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
+            companyDTO.setPublicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled());
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -836,6 +963,8 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setCategoryCompany(convertToCategoryDto(company.getCategoryCompany()));
             companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
             companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
+            companyDTO.setContacts(convertToContactDtoSet(company.getContacts()));
+            companyDTO.setInfo(convertToInfoDto(company.getInfo()));
             companyDTO.setOrders(Collections.emptySet());
             return companyDTO;
         }
@@ -1035,6 +1164,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .maxGroupChatId(company.getMaxGroupChatId())
                 .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
                 .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
+                .publicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled())
                 .build();
     }
 
@@ -1140,6 +1270,10 @@ public class CompanyServiceImpl implements CompanyService{
     } // перевод статуса компании в ДТО
 
     private CategoryDTO convertToCategoryDto(Category category) { // перевод категории в ДТО
+        if (category == null) {
+            return CategoryDTO.builder().id(0L).categoryTitle("Не выбрана").build();
+        }
+
         CategoryDTO categoryDTO = new CategoryDTO();
         categoryDTO.setId(category.getId() != null ? category.getId() : 0L);
         categoryDTO.setCategoryTitle(category.getCategoryTitle() !=null ? category.getCategoryTitle() : "Не выбрана");
@@ -1176,6 +1310,48 @@ public class CompanyServiceImpl implements CompanyService{
         return filialDTO;
     }
 
+    private Set<CompanyContactDTO> convertToContactDtoSet(Set<CompanyContact> contacts) {
+        if (contacts == null || contacts.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        return contacts.stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator
+                        .comparing((CompanyContact contact) -> contact.getType() == null ? "" : contact.getType().name())
+                        .thenComparing(contact -> contact.getId() == null ? 0L : contact.getId()))
+                .map(this::convertToContactDto)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private CompanyContactDTO convertToContactDto(CompanyContact contact) {
+        return CompanyContactDTO.builder()
+                .id(contact.getId())
+                .type(contact.getType() == null ? "" : contact.getType().name())
+                .value(contact.getValue())
+                .normalizedValue(contact.getNormalizedValue())
+                .primaryContact(contact.isPrimaryContact())
+                .source(contact.getSource())
+                .sourceLeadId(contact.getSourceLeadId())
+                .build();
+    }
+
+    private CompanyInfoDTO convertToInfoDto(CompanyInfo info) {
+        if (info == null) {
+            return null;
+        }
+
+        return CompanyInfoDTO.builder()
+                .id(info.getId())
+                .region(info.getRegion())
+                .address(info.getAddress())
+                .industries(info.getIndustries())
+                .companyType(info.getCompanyType())
+                .source(info.getSource())
+                .sourceLeadId(info.getSourceLeadId())
+                .build();
+    }
+
     //    ======================================== COMPANY UPDATE =========================================================
     // Обновить профиль юзера - начало
     @Override
@@ -1196,12 +1372,13 @@ public class CompanyServiceImpl implements CompanyService{
         System.out.println("urlChat: " + !Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat()));
         System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
         System.out.println("active: " + !Objects.equals(companyDTO.isActive(), saveCompany.isActive()));
+        System.out.println("publicationReports: " + !Objects.equals(companyDTO.isPublicationProgressReportsEnabled(), saveCompany.isPublicationProgressReportsEnabled()));
         System.out.println("comments: " +  !Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany()));
-        System.out.println("status: " + !Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId()));
-        System.out.println("category: " + !Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId()));
+        System.out.println("status: " + !Objects.equals(statusId(companyDTO.getStatus()), statusId(saveCompany.getStatus())));
+        System.out.println("category: " + !Objects.equals(categoryId(companyDTO.getCategoryCompany()), categoryId(saveCompany.getCategoryCompany())));
 
-        System.out.println("subCategory: " + !Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId() != null ? saveCompany.getSubCategory().getId() : 0L));
-        System.out.println("manager: " + !Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId()));
+        System.out.println("subCategory: " + !Objects.equals(subCategoryId(companyDTO.getSubCategory()), subCategoryId(saveCompany.getSubCategory())));
+        System.out.println("manager: " + !Objects.equals(managerId(companyDTO.getManager()), managerId(saveCompany.getManager())));
         System.out.println("workerId: " +  (newWorkerDTO.getWorkerId() != 0));
         System.out.println("filial: " +  (!companyDTO.getFilial().getTitle().isEmpty()));
 
@@ -1243,31 +1420,36 @@ public class CompanyServiceImpl implements CompanyService{
             saveCompany.setActive(companyDTO.isActive());
             isChanged = true;
         }
+        if (!Objects.equals(companyDTO.isPublicationProgressReportsEnabled(), saveCompany.isPublicationProgressReportsEnabled())){
+            log.info("Обновляем настройку коротких отчетов о публикациях");
+            saveCompany.setPublicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled());
+            isChanged = true;
+        }
         if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/
             log.info("Обновляем комментарий");
             saveCompany.setCommentsCompany(companyDTO.getCommentsCompany());
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getStatus().getId(), saveCompany.getStatus().getId())){ /*Проверка статус компании*/
+        if (!Objects.equals(statusId(companyDTO.getStatus()), statusId(saveCompany.getStatus()))){ /*Проверка статус компании*/
             log.info("Обновляем статус компании");
             saveCompany.setStatus(companyStatusService.getCompanyStatusById(companyDTO.getStatus().getId()));
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getCategoryCompany().getId(), saveCompany.getCategoryCompany().getId())){ /*Проверка категорию*/
+        if (!Objects.equals(categoryId(companyDTO.getCategoryCompany()), categoryId(saveCompany.getCategoryCompany()))){ /*Проверка категорию*/
             log.info("Обновляем категорию");
-            saveCompany.setCategoryCompany(categoryService.getCategoryByIdCategory(companyDTO.getCategoryCompany().getId()));
+            saveCompany.setCategoryCompany(convertCategoryDTOToCategory(companyDTO.getCategoryCompany()));
             Set<Filial> filials = saveCompany.getFilial();
-            reviewService.updateReviewByFilials(filials, companyDTO.getCategoryCompany().getId(), companyDTO.getSubCategory().getId());
+            reviewService.updateReviewByFilials(filials, categoryId(companyDTO.getCategoryCompany()), subCategoryId(companyDTO.getSubCategory()));
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getSubCategory().getId(), saveCompany.getSubCategory().getId() != null ? saveCompany.getSubCategory().getId() : 0L)){ /*Проверка субкатегорию*/
+        if (!Objects.equals(subCategoryId(companyDTO.getSubCategory()), subCategoryId(saveCompany.getSubCategory()))){ /*Проверка субкатегорию*/
             log.info("Обновляем субкатегорию");
-            saveCompany.setSubCategory(subCategoryService.getSubCategoryById(companyDTO.getSubCategory().getId()));
+            saveCompany.setSubCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()));
             Set<Filial> filials = saveCompany.getFilial();
-            reviewService.updateReviewByFilials(filials, companyDTO.getCategoryCompany().getId(), companyDTO.getSubCategory().getId());
+            reviewService.updateReviewByFilials(filials, categoryId(companyDTO.getCategoryCompany()), subCategoryId(companyDTO.getSubCategory()));
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.getManager().getManagerId(), saveCompany.getManager().getId())){ /*Проверка менеджера*/
+        if (!Objects.equals(managerId(companyDTO.getManager()), managerId(saveCompany.getManager()))){ /*Проверка менеджера*/
             log.info("Обновляем менеджера");
             saveCompany.setManager(managerService.getManagerById(companyDTO.getManager().getManagerId()));
             isChanged = true;
@@ -1301,6 +1483,14 @@ public class CompanyServiceImpl implements CompanyService{
             } catch (Exception e) {
                 log.error("Ошибка при сохранении нового филиала компании: " + e.getMessage());
             }
+        }
+        if (syncCompanyContacts(saveCompany, companyDTO.getContacts())) {
+            log.info("Обновляем контакты компании");
+            isChanged = true;
+        }
+        if (syncCompanyInfo(saveCompany, companyDTO.getInfo())) {
+            log.info("Обновляем сведения компании");
+            isChanged = true;
         }
         if  (isChanged){
             log.info("3. Начали сохранять обновленную компанию в БД");
@@ -1365,6 +1555,9 @@ public class CompanyServiceImpl implements CompanyService{
 
     private Set<Worker> convertWorkerDTOToWorker(WorkerDTO workerDTO){ // перевод работника из Дто в сущность
         Set<Worker> workers = new HashSet<>();
+        if (workerDTO == null || workerDTO.getWorkerId() == null || workerDTO.getWorkerId() <= 0) {
+            return workers;
+        }
         workers.add(workerService.getWorkerById(workerDTO.getWorkerId()));
         return workers;
     } // перевод работника из Дто в сущность
@@ -1374,14 +1567,28 @@ public class CompanyServiceImpl implements CompanyService{
     } // перевод статуса компании из Дто в сущность
 
     private Category convertCategoryDTOToCategory(CategoryDTO categoryDTO){ // перевод категории из Дто в сущность
+        if (categoryDTO == null || categoryDTO.getId() == null || categoryDTO.getId() <= 0) {
+            return null;
+        }
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());
     } // перевод категории из Дто в сущность
 
     private SubCategory convertSubCategoryDTOToSubCategory(SubCategoryDTO subcategoryDTO){ // перевод подкатегории из Дто в сущность
+        if (subcategoryDTO == null || subcategoryDTO.getId() == null || subcategoryDTO.getId() <= 0) {
+            return null;
+        }
         return subCategoryService.getCategoryByIdSubCategory(subcategoryDTO.getId());
     } // перевод подкатегории из Дто в сущность
 
     private Set<Filial> convertFilialDTOToFilial(FilialDTO filialDTO) { // перевод филиала из Дто в сущность
+        if (!hasFilialData(filialDTO)) {
+            return Collections.emptySet();
+        }
+        if (filialDTO.getCity() == null || filialDTO.getCity().getId() == null || filialDTO.getCity().getId() <= 0) {
+            return Collections.emptySet();
+        }
+        filialDTO.setTitle(clean(filialDTO.getTitle()));
+        filialDTO.setUrl(clean(filialDTO.getUrl()));
         Filial existingFilial = filialService.findFilialByTitleAndUrl(filialDTO.getTitle(), filialDTO.getUrl());
         if (existingFilial != null) {
             return Collections.singleton(existingFilial);
@@ -1390,6 +1597,190 @@ public class CompanyServiceImpl implements CompanyService{
             return Collections.singleton(newFilial);
         }
     } // перевод филиала из Дто в сущность
+
+    private boolean hasFilialData(FilialDTO filialDTO) {
+        return filialDTO != null
+                && (!clean(filialDTO.getTitle()).isBlank()
+                || !clean(filialDTO.getUrl()).isBlank());
+    }
+
+    private Set<CompanyContact> convertContactDTOSetToContacts(Set<CompanyContactDTO> contactDTOs, Company company) {
+        if (contactDTOs == null || contactDTOs.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+
+        Map<String, CompanyContact> contacts = new LinkedHashMap<>();
+        for (CompanyContactDTO contactDTO : contactDTOs) {
+            CompanyContact contact = convertContactDTOToContact(contactDTO, company);
+            if (contact == null) {
+                continue;
+            }
+            String key = contact.getType().name() + ":" + clean(contact.getNormalizedValue());
+            contacts.putIfAbsent(key, contact);
+        }
+        return new LinkedHashSet<>(contacts.values());
+    }
+
+    private CompanyContact convertContactDTOToContact(CompanyContactDTO contactDTO, Company company) {
+        if (contactDTO == null || clean(contactDTO.getValue()).isBlank() || clean(contactDTO.getType()).isBlank()) {
+            return null;
+        }
+
+        CompanyContactType type;
+        try {
+            type = CompanyContactType.valueOf(contactDTO.getType());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+
+        String value = clean(contactDTO.getValue());
+        return CompanyContact.builder()
+                .id(contactDTO.getId())
+                .company(company)
+                .type(type)
+                .value(value)
+                .normalizedValue(firstNonBlank(contactDTO.getNormalizedValue(), normalizeContactValue(type, value)))
+                .primaryContact(contactDTO.isPrimaryContact())
+                .source(firstNonBlank(contactDTO.getSource(), COMPANY_DATA_SOURCE_MANUAL))
+                .sourceLeadId(contactDTO.getSourceLeadId())
+                .build();
+    }
+
+    private CompanyInfo convertInfoDTOToInfo(CompanyInfoDTO infoDTO, Company company) {
+        if (!hasInfoData(infoDTO)) {
+            return null;
+        }
+
+        return CompanyInfo.builder()
+                .id(infoDTO.getId())
+                .company(company)
+                .region(blankToNull(infoDTO.getRegion()))
+                .address(blankToNull(infoDTO.getAddress()))
+                .industries(blankToNull(infoDTO.getIndustries()))
+                .companyType(blankToNull(infoDTO.getCompanyType()))
+                .source(firstNonBlank(infoDTO.getSource(), COMPANY_DATA_SOURCE_MANUAL))
+                .sourceLeadId(infoDTO.getSourceLeadId())
+                .build();
+    }
+
+    private boolean hasInfoData(CompanyInfoDTO infoDTO) {
+        return infoDTO != null
+                && (!clean(infoDTO.getRegion()).isBlank()
+                || !clean(infoDTO.getAddress()).isBlank()
+                || !clean(infoDTO.getIndustries()).isBlank()
+                || !clean(infoDTO.getCompanyType()).isBlank());
+    }
+
+    private boolean syncCompanyContacts(Company company, Set<CompanyContactDTO> contactDTOs) {
+        Set<CompanyContact> updatedContacts = convertContactDTOSetToContacts(contactDTOs, company);
+        if (companyContactsSame(company.getContacts(), updatedContacts)) {
+            return false;
+        }
+
+        if (company.getContacts() == null) {
+            company.setContacts(new LinkedHashSet<>());
+        }
+        company.getContacts().clear();
+        company.getContacts().addAll(updatedContacts);
+        return true;
+    }
+
+    private boolean companyContactsSame(Set<CompanyContact> currentContacts, Set<CompanyContact> updatedContacts) {
+        return contactFingerprint(currentContacts).equals(contactFingerprint(updatedContacts));
+    }
+
+    private Set<String> contactFingerprint(Set<CompanyContact> contacts) {
+        if (contacts == null || contacts.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        return contacts.stream()
+                .filter(Objects::nonNull)
+                .map(contact -> (contact.getType() == null ? "" : contact.getType().name())
+                        + "|"
+                        + clean(contact.getNormalizedValue())
+                        + "|"
+                        + clean(contact.getValue())
+                        + "|"
+                        + contact.isPrimaryContact())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean syncCompanyInfo(Company company, CompanyInfoDTO infoDTO) {
+        CompanyInfo updatedInfo = convertInfoDTOToInfo(infoDTO, company);
+        CompanyInfo currentInfo = company.getInfo();
+        if (companyInfoSame(currentInfo, updatedInfo)) {
+            return false;
+        }
+
+        if (updatedInfo == null) {
+            company.setInfo(null);
+            return true;
+        }
+
+        if (currentInfo == null) {
+            company.setInfo(updatedInfo);
+            return true;
+        }
+
+        currentInfo.setRegion(updatedInfo.getRegion());
+        currentInfo.setAddress(updatedInfo.getAddress());
+        currentInfo.setIndustries(updatedInfo.getIndustries());
+        currentInfo.setCompanyType(updatedInfo.getCompanyType());
+        currentInfo.setSource(updatedInfo.getSource());
+        currentInfo.setSourceLeadId(updatedInfo.getSourceLeadId());
+        return true;
+    }
+
+    private boolean companyInfoSame(CompanyInfo currentInfo, CompanyInfo updatedInfo) {
+        if (currentInfo == null || updatedInfo == null) {
+            return currentInfo == updatedInfo;
+        }
+
+        return Objects.equals(clean(currentInfo.getRegion()), clean(updatedInfo.getRegion()))
+                && Objects.equals(clean(currentInfo.getAddress()), clean(updatedInfo.getAddress()))
+                && Objects.equals(clean(currentInfo.getIndustries()), clean(updatedInfo.getIndustries()))
+                && Objects.equals(clean(currentInfo.getCompanyType()), clean(updatedInfo.getCompanyType()))
+                && Objects.equals(clean(currentInfo.getSource()), clean(updatedInfo.getSource()))
+                && Objects.equals(currentInfo.getSourceLeadId(), updatedInfo.getSourceLeadId());
+    }
+
+    private Long statusId(CompanyStatusDTO status) {
+        return status == null || status.getId() == null ? 0L : status.getId();
+    }
+
+    private Long statusId(CompanyStatus status) {
+        return status == null || status.getId() == null ? 0L : status.getId();
+    }
+
+    private Long categoryId(CategoryDTO category) {
+        return category == null || category.getId() == null ? 0L : category.getId();
+    }
+
+    private Long categoryId(Category category) {
+        return category == null || category.getId() == null ? 0L : category.getId();
+    }
+
+    private Long subCategoryId(SubCategoryDTO subCategory) {
+        return subCategory == null || subCategory.getId() == null ? 0L : subCategory.getId();
+    }
+
+    private Long subCategoryId(SubCategory subCategory) {
+        return subCategory == null || subCategory.getId() == null ? 0L : subCategory.getId();
+    }
+
+    private Long managerId(ManagerDTO manager) {
+        return manager == null || manager.getManagerId() == null ? 0L : manager.getManagerId();
+    }
+
+    private Long managerId(Manager manager) {
+        return manager == null || manager.getId() == null ? 0L : manager.getId();
+    }
+
+    private String blankToNull(String value) {
+        String cleanValue = clean(value);
+        return cleanValue.isBlank() ? null : cleanValue;
+    }
 
 
     public String changeNumberPhone(String phone){ // Вспомогательный метод для корректировки номера телефона

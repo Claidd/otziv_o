@@ -8,18 +8,26 @@ import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.sevices.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
+import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.dto.api.CompanyDeepReportLaunchResponse;
 import com.hunt.otziv.c_companies.dto.api.CompanyCreateOptionResponse;
 import com.hunt.otziv.c_companies.dto.api.CompanyCreatePayloadResponse;
 import com.hunt.otziv.c_companies.dto.api.CompanyCreateRequest;
 import com.hunt.otziv.c_companies.dto.api.CompanyCreateResultResponse;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyContactType;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
+import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
+import com.hunt.otziv.reputationai.application.DeepCompanyResearchJobService;
+import com.hunt.otziv.reputationai.config.DeepResearchProfile;
+import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.UserDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
@@ -30,6 +38,7 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -48,19 +57,27 @@ import java.security.Principal;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @RequestMapping("/api/companies")
 public class ApiCompanyCreateController {
 
     private static final String SOURCE_MANAGER = "manager";
     private static final String SOURCE_OPERATOR = "operator";
     private static final String SOURCE_MANUAL = "manual";
+    private static final String FALLBACK_CITY = "Не задан";
+    private static final int COMPANY_COMMENTS_MAX_LENGTH = 2000;
+    private static final String COMPANY_DATA_SOURCE_MANUAL = "MANUAL";
 
     private final CompanyService companyService;
     private final LeadService leadService;
@@ -72,6 +89,7 @@ public class ApiCompanyCreateController {
     private final UserService userService;
     private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
+    private final DeepCompanyResearchJobService deepCompanyResearchJobService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @GetMapping("/create-payload")
@@ -113,10 +131,8 @@ public class ApiCompanyCreateController {
         CompanyDTO company = toCompanyDto(baseCompany, request);
         validateCreateRequest(company, request);
 
-        boolean saved = companyService.save(company);
-        if (!saved) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Компания не создана");
-        }
+        Company savedCompany = companyService.saveAndReturn(company)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Компания не создана"));
 
         if (request.leadId() != null) {
             leadService.changeStatusLeadOnInWork(request.leadId());
@@ -125,12 +141,72 @@ public class ApiCompanyCreateController {
             }
         }
 
-        Long companyId = companyService
-                .getCompanyByTelephonAndTitle(storagePhone(company.getTelephone()), company.getTitle())
-                .map(Company::getId)
-                .orElse(null);
+        Long companyId = savedCompany.getId();
+        CompanyDeepReportLaunchResponse deepReportLaunch = launchDeepReport(companyId, savedCompany.getTitle());
 
-        return new CompanyCreateResultResponse(companyId, company.getTitle(), request.leadId(), source);
+        return new CompanyCreateResultResponse(companyId, savedCompany.getTitle(), request.leadId(), source, deepReportLaunch);
+    }
+
+    private CompanyDeepReportLaunchResponse launchDeepReport(Long companyId, String companyTitle) {
+        if (companyId == null || companyId <= 0) {
+            String message = "Компания создана, но не удалось определить её ID для запуска глубокого отчёта.";
+            log.warn("COMPANY_DEEP_REPORT_AUTO_START_SKIPPED reason=\"{}\" title=\"{}\"", message, safe(companyTitle));
+            return CompanyDeepReportLaunchResponse.failed(message);
+        }
+
+        try {
+            DeepCompanyResearchJobStatus job = deepCompanyResearchJobService.start(companyId, maximumReportRequest());
+            String status = job.status();
+            String message = isActiveDeepReport(job)
+                    ? "Глубокий отчёт поставлен в очередь и соберётся в фоне."
+                    : "Глубокий отчёт уже был запущен ранее.";
+            log.info(
+                    "COMPANY_DEEP_REPORT_AUTO_START_OK companyId={} jobId={} status={} title=\"{}\"",
+                    companyId,
+                    job.jobId(),
+                    status,
+                    safe(companyTitle)
+            );
+            return CompanyDeepReportLaunchResponse.started(job.jobId(), status, message);
+        } catch (Exception exception) {
+            String message = autoLaunchErrorMessage(exception);
+            log.warn(
+                    "COMPANY_DEEP_REPORT_AUTO_START_FAILED companyId={} title=\"{}\" reason=\"{}\"",
+                    companyId,
+                    safe(companyTitle),
+                    message,
+                    exception
+            );
+            return CompanyDeepReportLaunchResponse.failed(message);
+        }
+    }
+
+    private boolean isActiveDeepReport(DeepCompanyResearchJobStatus job) {
+        return job != null && ("QUEUED".equals(job.status()) || "RUNNING".equals(job.status()));
+    }
+
+    private ReputationResearchRequest maximumReportRequest() {
+        return new ReputationResearchRequest(
+                null,
+                null,
+                List.of(),
+                List.of(),
+                true,
+                DeepResearchProfile.MAXIMUM.key(),
+                DeepCompanyResearchJobService.OPERATION_FULL_REPORT,
+                null,
+                null,
+                null,
+                true
+        );
+    }
+
+    private String autoLaunchErrorMessage(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getClass().getSimpleName();
+        }
+        return message.length() <= 1000 ? message : message.substring(0, 1000);
     }
 
     private CompanyDTO buildBaseCompany(
@@ -219,25 +295,43 @@ public class ApiCompanyCreateController {
     }
 
     private CompanyDTO toCompanyDto(CompanyDTO base, CompanyCreateRequest request) {
-        base.setTitle(normalize(request.title()));
-        base.setUrlChat(normalize(request.urlChat()));
-        base.setUrlSite(blankToNull(request.urlSite()));
-        base.setTelephone(normalize(request.telephone()));
-        base.setCity(normalize(request.city()));
-        base.setEmail(blankToNull(request.email()));
-        base.setCommentsCompany(normalize(request.commentsCompany()));
-        base.setCategoryCompany(CategoryDTO.builder().id(request.categoryId()).build());
-        base.setSubCategory(SubCategoryDTO.builder().id(request.subCategoryId()).build());
-        base.setWorker(WorkerDTO.builder().workerId(request.workerId()).build());
-        base.setFilial(FilialDTO.builder()
-                .title(normalize(request.filialTitle()))
-                .url(normalize(request.filialUrl()))
-                .city(City.builder().id(request.filialCityId()).build())
-                .build());
+        boolean manualSource = SOURCE_MANUAL.equals(normalizeSource(request.source()));
+        String telephone = manualSource
+                ? normalize(request.telephone())
+                : firstNonBlank(request.telephone(), base.getTelephone());
+        String title = manualSource
+                ? normalize(request.title())
+                : firstNonBlank(request.title(), base.getTitle(), fallbackTitle(telephone));
+        String city = manualSource
+                ? normalize(request.city())
+                : firstNonBlank(request.city(), base.getCity(), FALLBACK_CITY);
+        String urlSite = firstNonBlank(request.urlSite(), base.getUrlSite());
+        String urlChat = manualSource
+                ? normalize(request.urlChat())
+                : firstNonBlank(request.urlChat(), base.getUrlChat());
+        String comments = manualSource
+                ? normalize(request.commentsCompany())
+                : firstNonBlank(request.commentsCompany(), base.getCommentsCompany());
+
+        base.setTitle(title);
+        base.setUrlChat(blankToNull(urlChat));
+        base.setUrlSite(blankToNull(urlSite));
+        base.setTelephone(telephone);
+        base.setCity(city);
+        base.setEmail(blankToNull(firstNonBlank(request.email(), base.getEmail())));
+        base.setCommentsCompany(truncate(comments, COMPANY_COMMENTS_MAX_LENGTH));
+        base.setCategoryCompany(validId(request.categoryId()) ? CategoryDTO.builder().id(request.categoryId()).build() : null);
+        base.setSubCategory(validId(request.subCategoryId()) ? SubCategoryDTO.builder().id(request.subCategoryId()).build() : null);
+        base.setWorker(validId(request.workerId()) ? WorkerDTO.builder().workerId(request.workerId()).build() : null);
+        base.setFilial(buildFilialDto(base.getFilial(), request, manualSource));
+        base.setContacts(buildContactDtos(base, request, manualSource));
+        base.setInfo(buildCompanyInfoDto(base.getInfo(), request, manualSource));
         return base;
     }
 
     private void validateCreateRequest(CompanyDTO company, CompanyCreateRequest request) {
+        boolean manualSource = SOURCE_MANUAL.equals(normalizeSource(request.source()));
+
         if (isBlank(company.getTitle())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название компании не может быть пустым");
         }
@@ -246,35 +340,31 @@ public class ApiCompanyCreateController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Телефон компании не может быть пустым");
         }
 
-        if (isBlank(company.getUrlChat())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ссылка на чат не может быть пустой");
-        }
-
         if (isBlank(company.getCity())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город компании не может быть пустым");
         }
 
-        if (request.categoryId() == null || request.categoryId() <= 0) {
+        if (manualSource && !validId(request.categoryId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Категория не выбрана");
         }
 
-        if (request.subCategoryId() == null || request.subCategoryId() <= 0) {
+        if (manualSource && !validId(request.subCategoryId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подкатегория не выбрана");
         }
 
-        if (request.workerId() == null || request.workerId() <= 0) {
+        if (manualSource && !validId(request.workerId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не выбран");
         }
 
-        if (request.filialCityId() == null || request.filialCityId() <= 0) {
+        if (manualSource && !validId(request.filialCityId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город филиала не выбран");
         }
 
-        if (isBlank(request.filialTitle())) {
+        if (manualSource && isBlank(request.filialTitle())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Адрес филиала не может быть пустым");
         }
 
-        if (isBlank(request.filialUrl())) {
+        if (manualSource && isBlank(request.filialUrl())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ссылка 2ГИС не может быть пустой");
         }
 
@@ -282,7 +372,7 @@ public class ApiCompanyCreateController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный email");
         }
 
-        if (filialService.findFilialByUrl(normalize(request.filialUrl())) != null) {
+        if (!isBlank(request.filialUrl()) && filialService.findFilialByUrl(normalize(request.filialUrl())) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой url филиала уже есть в базе");
         }
 
@@ -299,9 +389,14 @@ public class ApiCompanyCreateController {
             Authentication authentication
     ) {
         Long categoryId = company.getCategoryCompany() != null ? company.getCategoryCompany().getId() : null;
+        List<CompanyCreateOptionResponse> cities = cityOptions();
         CompanyCreateOptionResponse filialCity = company.getFilial() != null && company.getFilial().getCity() != null
                 ? new CompanyCreateOptionResponse(company.getFilial().getCity().getId(), safe(company.getFilial().getCity().getTitle()))
                 : null;
+        if (filialCity == null && !SOURCE_MANUAL.equals(source)) {
+            filialCity = matchingCity(company.getCity(), cities);
+        }
+        CompanyInfoDTO info = company.getInfo();
 
         return new CompanyCreatePayloadResponse(
                 source,
@@ -322,11 +417,22 @@ public class ApiCompanyCreateController {
                 filialCity,
                 company.getFilial() != null ? safe(company.getFilial().getTitle()) : "",
                 company.getFilial() != null ? safe(company.getFilial().getUrl()) : "",
+                contactValues(company, CompanyContactType.PHONE),
+                contactValues(company, CompanyContactType.MOBILE),
+                contactValues(company, CompanyContactType.WHATSAPP),
+                contactValues(company, CompanyContactType.EMAIL),
+                contactValues(company, CompanyContactType.WEBSITE),
+                contactValues(company, CompanyContactType.VK),
+                contactValues(company, CompanyContactType.TELEGRAM),
+                info != null ? safe(info.getRegion()) : "",
+                info != null ? safe(info.getAddress()) : "",
+                info != null ? safe(info.getIndustries()) : "",
+                info != null ? safe(info.getCompanyType()) : "",
                 managerOptions(principal, authentication),
                 workerOptions(company),
                 categoryOptions(),
                 subCategoryOptions(categoryId),
-                cityOptions(),
+                cities,
                 SOURCE_MANUAL.equals(source) && hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER")
         );
     }
@@ -500,6 +606,198 @@ public class ApiCompanyCreateController {
         return value == null ? "" : value.trim();
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            String normalized = normalize(value);
+            if (!normalized.isBlank()) {
+                return normalized;
+            }
+        }
+        return "";
+    }
+
+    private String fallbackTitle(String telephone) {
+        String normalizedTelephone = normalize(telephone);
+        return normalizedTelephone.isBlank() ? "Компания без названия" : "Компания " + normalizedTelephone;
+    }
+
+    private FilialDTO buildFilialDto(FilialDTO current, CompanyCreateRequest request, boolean manualSource) {
+        String title = manualSource
+                ? normalize(request.filialTitle())
+                : firstNonBlank(request.filialTitle(), current != null ? current.getTitle() : null);
+        String url = manualSource
+                ? normalize(request.filialUrl())
+                : firstNonBlank(request.filialUrl(), current != null ? current.getUrl() : null);
+        Long cityId = request.filialCityId();
+
+        if (!manualSource && !validId(cityId) && current != null && current.getCity() != null) {
+            cityId = current.getCity().getId();
+        }
+
+        if (isBlank(title) && isBlank(url)) {
+            return null;
+        }
+
+        return FilialDTO.builder()
+                .title(title)
+                .url(url)
+                .city(validId(cityId) ? City.builder().id(cityId).build() : null)
+                .build();
+    }
+
+    private Set<CompanyContactDTO> buildContactDtos(CompanyDTO base, CompanyCreateRequest request, boolean manualSource) {
+        Map<String, CompanyContactDTO> contacts = new LinkedHashMap<>();
+        if (!manualSource && base.getContacts() != null) {
+            for (CompanyContactDTO contact : base.getContacts()) {
+                addExistingContact(contacts, contact);
+            }
+        }
+
+        addContact(contacts, CompanyContactType.PHONE, base.getTelephone(), true);
+        addMultiContacts(contacts, CompanyContactType.PHONE, request.phones(), false);
+        addMultiContacts(contacts, CompanyContactType.MOBILE, request.mobilePhones(), false);
+        addMultiContacts(contacts, CompanyContactType.WHATSAPP, request.whatsappPhones(), true);
+        addContact(contacts, CompanyContactType.EMAIL, base.getEmail(), true);
+        addMultiContacts(contacts, CompanyContactType.EMAIL, request.emails(), false);
+        addContact(contacts, CompanyContactType.WEBSITE, base.getUrlSite(), true);
+        addMultiContacts(contacts, CompanyContactType.WEBSITE, request.websites(), false);
+        addMultiContacts(contacts, CompanyContactType.VK, request.vkUrl(), true);
+        addMultiContacts(contacts, CompanyContactType.TELEGRAM, request.telegramUrl(), true);
+        return new LinkedHashSet<>(contacts.values());
+    }
+
+    private void addExistingContact(Map<String, CompanyContactDTO> contacts, CompanyContactDTO contact) {
+        if (contact == null || isBlank(contact.getType()) || isBlank(contact.getValue())) {
+            return;
+        }
+
+        CompanyContactType type;
+        try {
+            type = CompanyContactType.valueOf(contact.getType());
+        } catch (IllegalArgumentException exception) {
+            return;
+        }
+
+        String normalized = firstNonBlank(contact.getNormalizedValue(), normalizeContactValue(type, contact.getValue()));
+        String key = contact.getType() + ":" + normalized;
+        contacts.putIfAbsent(key, contact);
+    }
+
+    private void addMultiContacts(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String values,
+            boolean firstPrimary
+    ) {
+        boolean primary = firstPrimary;
+        for (String value : multiValues(values)) {
+            addContact(contacts, type, value, primary);
+            primary = false;
+        }
+    }
+
+    private void addContact(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String value,
+            boolean primary
+    ) {
+        String cleanValue = normalize(value);
+        if (cleanValue.isBlank()) {
+            return;
+        }
+
+        String normalized = normalizeContactValue(type, cleanValue);
+        String key = type.name() + ":" + normalized;
+        contacts.putIfAbsent(key, CompanyContactDTO.builder()
+                .type(type.name())
+                .value(cleanValue)
+                .normalizedValue(normalized)
+                .primaryContact(primary)
+                .source(COMPANY_DATA_SOURCE_MANUAL)
+                .build());
+    }
+
+    private List<String> multiValues(String value) {
+        String cleanValue = normalize(value);
+        if (cleanValue.isBlank()) {
+            return List.of();
+        }
+
+        return List.of(cleanValue.split("[,;\\r\\n]+")).stream()
+                .map(this::normalize)
+                .filter(part -> !part.isBlank())
+                .toList();
+    }
+
+    private String normalizeContactValue(CompanyContactType type, String value) {
+        String cleanValue = normalize(value);
+        if (type == CompanyContactType.PHONE
+                || type == CompanyContactType.MOBILE
+                || type == CompanyContactType.WHATSAPP) {
+            return LeadPhoneNormalizer.normalize(cleanValue);
+        }
+        return cleanValue.toLowerCase(Locale.ROOT);
+    }
+
+    private CompanyInfoDTO buildCompanyInfoDto(CompanyInfoDTO current, CompanyCreateRequest request, boolean manualSource) {
+        String region = manualSource ? normalize(request.region()) : firstNonBlank(request.region(), current != null ? current.getRegion() : null);
+        String address = manualSource ? normalize(request.address()) : firstNonBlank(request.address(), current != null ? current.getAddress() : null);
+        String industries = manualSource ? normalize(request.industries()) : firstNonBlank(request.industries(), current != null ? current.getIndustries() : null);
+        String companyType = manualSource ? normalize(request.companyType()) : firstNonBlank(request.companyType(), current != null ? current.getCompanyType() : null);
+
+        if (region.isBlank() && address.isBlank() && industries.isBlank() && companyType.isBlank()) {
+            return null;
+        }
+
+        return CompanyInfoDTO.builder()
+                .id(current != null ? current.getId() : null)
+                .region(region)
+                .address(address)
+                .industries(industries)
+                .companyType(companyType)
+                .source(current != null ? firstNonBlank(current.getSource(), COMPANY_DATA_SOURCE_MANUAL) : COMPANY_DATA_SOURCE_MANUAL)
+                .sourceLeadId(current != null ? current.getSourceLeadId() : null)
+                .build();
+    }
+
+    private String contactValues(CompanyDTO company, CompanyContactType type) {
+        if (company.getContacts() == null || company.getContacts().isEmpty()) {
+            return "";
+        }
+
+        return company.getContacts().stream()
+                .filter(contact -> type.name().equals(contact.getType()))
+                .map(CompanyContactDTO::getValue)
+                .map(this::normalize)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining(", "));
+    }
+
+    private CompanyCreateOptionResponse matchingCity(String cityTitle, List<CompanyCreateOptionResponse> cities) {
+        String normalizedCity = matchKey(cityTitle);
+        if (normalizedCity.isBlank()) {
+            return null;
+        }
+
+        return cities.stream()
+                .filter(city -> matchKey(city.label()).equals(normalizedCity))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String matchKey(String value) {
+        return normalize(value).toLowerCase();
+    }
+
+    private String truncate(String value, int maxLength) {
+        String normalized = normalize(value);
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
+    }
+
     private String safe(String value) {
         return value == null ? "" : value;
     }
@@ -511,6 +809,10 @@ public class ApiCompanyCreateController {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean validId(Long id) {
+        return id != null && id > 0;
     }
 
     private String storagePhone(String phone) {

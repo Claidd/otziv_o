@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult } from '../../core/company-create.api';
 import { LeadItem, LeadPage, LeadPerson } from '../../core/leads.api';
 import { OperatorApi, OperatorBoard, OperatorBoardSection } from '../../core/operator.api';
@@ -53,6 +54,7 @@ export class OperatorBoardComponent {
   private readonly operatorApi = inject(OperatorApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
+  private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
   private readonly emptyPage: LeadPage = {
     content: [],
@@ -351,6 +353,7 @@ export class OperatorBoardComponent {
   handleCompanyCreated(result: CompanyCreateResult): void {
     this.companyCreateLead.set(null);
     this.toastService.success('Компания создана', result.title || `#${result.companyId ?? ''}`);
+    this.companyDeepReportLaunch.handleCompanyCreated(result);
     this.loadBoard();
   }
 

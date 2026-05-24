@@ -4,6 +4,7 @@ public record CompanyCreateResultResponse(
         Long companyId,
         String title,
         Long leadId,
-        String source
+        String source,
+        CompanyDeepReportLaunchResponse deepReportLaunch
 ) {
 }

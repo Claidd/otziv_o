@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { DeepCompanyResearchJob, ReputationAiApi } from './reputation-ai.api';
+import { deepReportErrorMessage } from '../shared/reputation/deep-report-error-message';
 import { ToastService } from '../shared/toast.service';
 
 const ACTIVE_DEEP_REPORT_COMPANY_KEY = 'otziv.reputationAi.activeDeepReportCompanyId';
@@ -96,7 +97,7 @@ export class ReputationDeepReportMonitorService {
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
       window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       this.stopPolling();
-      this.toastService.error('Глубокий отчёт не собрался', this.humanizeAiError(job.errorMessage));
+      this.toastService.error('Глубокий отчёт не собрался', deepReportErrorMessage(job.errorMessage));
     }
   }
 
@@ -135,39 +136,6 @@ export class ReputationDeepReportMonitorService {
       window.clearTimeout(this.pollTimeoutId);
       this.pollTimeoutId = null;
     }
-  }
-
-  private humanizeAiError(message: string | null | undefined): string {
-    const text = (message ?? '').trim();
-    if (!text) {
-      return 'Попробуйте запустить ещё раз.';
-    }
-
-    const lower = text.toLowerCase();
-    if (lower.includes('rate limit reached')
-      || lower.includes('tokens per min')
-      || lower.includes('rate_limit_exceeded')
-      || lower.includes('лимит токен')) {
-      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1];
-      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
-      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
-    }
-
-    if (lower.includes('http 407') || lower.includes('proxy authentication required')) {
-      return 'VPS-прокси не пустил запрос к OpenAI. Проверьте allowlist IP в Squid/UFW и отсутствие proxy_auth для этого маршрута.';
-    }
-
-    if (lower.includes('unsupported_country_region_territory')
-      || lower.includes('country, region, or territory not supported')
-      || lower.includes('неподдерживаемого региона')) {
-      return 'OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy и приложение идёт через VPS.';
-    }
-
-    if (lower.includes('поврежд') && lower.includes('json')) {
-      return 'Модель вернула повреждённый JSON отчёта, восстановить структуру не удалось. Запустите отчёт повторно или выберите более лёгкий профиль.';
-    }
-
-    return text;
   }
 
   private doneTitle(job: DeepCompanyResearchJob): string {

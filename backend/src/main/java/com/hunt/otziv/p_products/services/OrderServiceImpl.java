@@ -2,8 +2,10 @@ package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.dto.*;
@@ -17,6 +19,7 @@ import com.hunt.otziv.p_products.review.OrderReviewMutationService;
 import com.hunt.otziv.p_products.services.service.*;
 import com.hunt.otziv.p_products.statistics.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
+import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
@@ -63,6 +66,8 @@ public class OrderServiceImpl implements OrderService {
     private final OrderBotLifecycleService orderBotLifecycleService;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final OrderReviewMutationService orderReviewMutationService;
+    private final OrderStatusNotificationService orderStatusNotificationService;
+    private final AppSettingService appSettingService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -432,6 +437,7 @@ public class OrderServiceImpl implements OrderService {
 
             orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
             log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
+            notifyClientAboutPublishedReviewProgress(order, actualPublished);
             orderStatusCheckerService.checkAndMarkOrderCompleted(order);
 
             return true;
@@ -442,6 +448,80 @@ public class OrderServiceImpl implements OrderService {
             log.error("Ошибка при смене статуса отзыва id={}", reviewId, e);
             throw e;
         }
+    }
+
+    private void notifyClientAboutPublishedReviewProgress(Order order, int actualPublished) {
+        try {
+            if (!shouldSendPublishedReviewProgress(order, actualPublished)) {
+                return;
+            }
+
+            String clientId = order != null && order.getManager() != null ? order.getManager().getClientId() : null;
+            String groupId = order != null && order.getCompany() != null ? order.getCompany().getGroupId() : null;
+            String message = buildPublishedReviewProgressMessage(order, actualPublished);
+
+            boolean sent = orderStatusNotificationService.sendProgressMessageToClientChat(order, clientId, groupId, message);
+            if (sent) {
+                log.info("Короткий отчёт о публикации отправлен клиенту: {}", message);
+            } else {
+                log.warn("Короткий отчёт о публикации не отправлен клиенту: {}", message);
+            }
+        } catch (Exception e) {
+            log.warn("Короткий отчёт о публикации не отправлен из-за ошибки. Заказ продолжит обработку", e);
+        }
+    }
+
+    private boolean shouldSendPublishedReviewProgress(Order order, int actualPublished) {
+        if (order == null) {
+            return false;
+        }
+
+        int total = order.getAmount();
+        if (total > 0 && actualPublished >= total) {
+            log.info("Короткий отчёт о публикации пропущен: заказ {} дошел до финального отзыва", order.getId());
+            return false;
+        }
+
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)) {
+            log.info("Короткий отчёт о публикации пропущен: глобальная настройка выключена");
+            return false;
+        }
+
+        Company company = order.getCompany();
+        if (company != null && !company.isPublicationProgressReportsEnabled()) {
+            log.info("Короткий отчёт о публикации пропущен: отчеты выключены для компании id={}", company.getId());
+            return false;
+        }
+
+        return true;
+    }
+
+    private String buildPublishedReviewProgressMessage(Order order, int actualPublished) {
+        int total = order != null && order.getAmount() > 0 ? order.getAmount() : actualPublished;
+        String progress = actualPublished + " / " + total;
+        String companyTitle = Optional.ofNullable(order)
+                .map(Order::getCompany)
+                .map(Company::getTitle)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .orElse("");
+        String filialTitle = Optional.ofNullable(order)
+                .map(Order::getFilial)
+                .map(Filial::getTitle)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .orElse("");
+
+        String subject = companyTitle;
+        if (!filialTitle.isEmpty()) {
+            subject = subject.isEmpty() ? filialTitle : subject + " - " + filialTitle;
+        }
+
+        if (subject.isEmpty()) {
+            return "Опубликован новый отзыв " + progress + ".";
+        }
+
+        return subject + ". Опубликован новый отзыв " + progress + ".";
     }
 
     private ReviewPublicationTarget validateAndRetrievePublicationTarget(Long reviewId) {

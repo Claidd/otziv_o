@@ -68,9 +68,11 @@ public class OrderStatusTransitionService {
                 case STATUS_PAYMENT -> orderTransactionService.handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
                 case STATUS_TO_CHECK -> handleToCheckStatus(order);
+                case STATUS_IN_CHECK -> handleManualInCheckStatus(order);
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
                 case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
+                case STATUS_TO_PAY -> handleManualToPayStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 case STATUS_BAN -> handleBanStatus(order);
                 default -> {
@@ -375,6 +377,18 @@ public class OrderStatusTransitionService {
         }
     }
 
+    private boolean handleManualInCheckStatus(Order order) {
+        log.info("=== РУЧНОЙ ПЕРЕВОД ЗАКАЗА В СТАТУС 'НА ПРОВЕРКЕ' ===");
+        log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
+
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_IN_CHECK));
+        orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_IN_CHECK);
+        orderRepository.save(order);
+
+        log.info("✅ Заказ ID {} вручную переведен в статус 'На проверке' без отправки сообщения клиенту", order.getId());
+        return true;
+    }
+
     private boolean handleCorrectionStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===");
@@ -460,6 +474,18 @@ public class OrderStatusTransitionService {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'Публикация'", e);
         }
+    }
+
+    private boolean handleManualToPayStatus(Order order) {
+        log.info("=== РУЧНОЙ ПЕРЕВОД ЗАКАЗА В СТАТУС 'ВЫСТАВЛЕН СЧЕТ' ===");
+        log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
+
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PAY));
+        orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_TO_PAY);
+        orderRepository.save(order);
+
+        log.info("✅ Заказ ID {} вручную переведен в статус 'Выставлен счет' без отправки сообщения клиенту", order.getId());
+        return true;
     }
 
     private boolean hasText(String value) {

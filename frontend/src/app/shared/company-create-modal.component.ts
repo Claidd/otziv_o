@@ -21,6 +21,17 @@ type CompanyCreateDraft = {
   telephone: string;
   city: string;
   email: string;
+  phones: string;
+  mobilePhones: string;
+  whatsappPhones: string;
+  emails: string;
+  websites: string;
+  vkUrl: string;
+  telegramUrl: string;
+  region: string;
+  address: string;
+  industries: string;
+  companyType: string;
   commentsCompany: string;
   categoryId: number | null;
   subCategoryId: number | null;
@@ -32,8 +43,13 @@ type CompanyCreateDraft = {
 
 type PreservedDraftFields = Pick<
   CompanyCreateDraft,
-  'title' | 'urlChat' | 'urlSite' | 'telephone' | 'city' | 'email' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
+  'title' | 'urlChat' | 'urlSite' | 'telephone' | 'city' | 'email' | 'phones' | 'mobilePhones' | 'whatsappPhones' | 'emails' | 'websites' | 'vkUrl' | 'telegramUrl' | 'region' | 'address' | 'industries' | 'companyType' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
 >;
+
+type LeadSummaryItem = {
+  label: string;
+  value: string;
+};
 
 @Component({
   selector: 'app-company-create-modal',
@@ -89,85 +105,238 @@ type PreservedDraftFields = Pick<
                 </label>
               }
 
-              <label class="lead-edit-field">
-                <span>Название</span>
-                <input
-                  name="companyTitle"
-                  type="text"
-                  required
-                  [disabled]="saving()"
-                  [ngModel]="draft.title"
-                  (ngModelChange)="setField('title', $event)"
-                >
-              </label>
+              @if (isManualSource()) {
+                <label class="lead-edit-field">
+                  <span>Название</span>
+                  <input
+                    name="companyTitle"
+                    type="text"
+                    required
+                    [disabled]="saving()"
+                    [ngModel]="draft.title"
+                    (ngModelChange)="setField('title', $event)"
+                  >
+                </label>
 
-              <label class="lead-edit-field">
-                <span>Телефон</span>
-                <input
-                  name="companyTelephone"
-                  type="text"
-                  required
-                  autocomplete="tel"
-                  [readonly]="source !== 'manual'"
-                  [disabled]="saving()"
-                  [ngModel]="draft.telephone"
-                  (ngModelChange)="setField('telephone', $event)"
-                >
-              </label>
+                <label class="lead-edit-field">
+                  <span>Телефон</span>
+                  <input
+                    name="companyTelephone"
+                    type="text"
+                    required
+                    autocomplete="tel"
+                    [disabled]="saving()"
+                    [ngModel]="draft.telephone"
+                    (ngModelChange)="setField('telephone', $event)"
+                  >
+                </label>
 
-              <label class="lead-edit-field">
-                <span>Город компании</span>
-                <input
-                  name="companyCity"
-                  type="text"
-                  required
-                  [readonly]="source !== 'manual'"
-                  [disabled]="saving()"
-                  [ngModel]="draft.city"
-                  (ngModelChange)="setField('city', $event)"
-                >
-              </label>
+                <label class="lead-edit-field">
+                  <span>Город компании</span>
+                  <input
+                    name="companyCity"
+                    type="text"
+                    required
+                    [disabled]="saving()"
+                    [ngModel]="draft.city"
+                    (ngModelChange)="setField('city', $event)"
+                  >
+                </label>
 
-              <label class="lead-edit-field">
-                <span>Ссылка на чат</span>
-                <input
-                  name="companyUrlChat"
-                  type="text"
-                  required
-                  [disabled]="saving()"
-                  [ngModel]="draft.urlChat"
-                  (ngModelChange)="setField('urlChat', $event)"
-                >
-              </label>
+                <label class="lead-edit-field">
+                  <span>Ссылка на чат</span>
+                  <input
+                    name="companyUrlChat"
+                    type="text"
+                    [disabled]="saving()"
+                    [ngModel]="draft.urlChat"
+                    (ngModelChange)="setField('urlChat', $event)"
+                  >
+                </label>
 
-              <label class="lead-edit-field">
-                <span>Официальный сайт</span>
-                <input
-                  name="companyUrlSite"
-                  type="text"
-                  autocomplete="url"
-                  [disabled]="saving()"
-                  [ngModel]="draft.urlSite"
-                  (ngModelChange)="setField('urlSite', $event)"
-                >
-              </label>
+                <label class="lead-edit-field">
+                  <span>Официальный сайт</span>
+                  <input
+                    name="companyUrlSite"
+                    type="text"
+                    autocomplete="url"
+                    [disabled]="saving()"
+                    [ngModel]="draft.urlSite"
+                    (ngModelChange)="setField('urlSite', $event)"
+                  >
+                </label>
 
-              <label class="lead-edit-field">
-                <span>Email</span>
-                <input
-                  name="companyEmail"
-                  type="email"
-                  [disabled]="saving()"
-                  [ngModel]="draft.email"
-                  (ngModelChange)="setField('email', $event)"
-                >
-              </label>
+                <label class="lead-edit-field">
+                  <span>Email</span>
+                  <input
+                    name="companyEmail"
+                    type="email"
+                    [disabled]="saving()"
+                    [ngModel]="draft.email"
+                    (ngModelChange)="setField('email', $event)"
+                  >
+                </label>
+              } @else {
+                <div class="lead-edit-field lead-edit-field--wide company-create-summary">
+                  <span>Заполнится из лида</span>
+                  <div class="company-create-summary__grid">
+                    @for (item of leadSummaryItems(draft); track item.label) {
+                      <div class="company-create-summary__item">
+                        <b>{{ item.label }}</b>
+                        <em>{{ item.value }}</em>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Ссылка на рабочий чат</span>
+                  <input
+                    name="companyUrlChat"
+                    type="text"
+                    [disabled]="saving()"
+                    [ngModel]="draft.urlChat"
+                    (ngModelChange)="setField('urlChat', $event)"
+                  >
+                </label>
+              }
+
+              <section class="lead-edit-field lead-edit-field--wide company-create-section">
+                <span>Контакты и ссылки</span>
+                <div class="company-create-extra-grid">
+                  <label class="company-create-inline-field">
+                    <span>Телефоны</span>
+                    <textarea
+                      name="companyPhones"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.phones"
+                      (ngModelChange)="setField('phones', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Мобильные</span>
+                    <textarea
+                      name="companyMobilePhones"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.mobilePhones"
+                      (ngModelChange)="setField('mobilePhones', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>WhatsApp</span>
+                    <textarea
+                      name="companyWhatsappPhones"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.whatsappPhones"
+                      (ngModelChange)="setField('whatsappPhones', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Email</span>
+                    <textarea
+                      name="companyEmails"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.emails"
+                      (ngModelChange)="setField('emails', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Сайты</span>
+                    <textarea
+                      name="companyWebsites"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.websites"
+                      (ngModelChange)="setField('websites', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>VK</span>
+                    <textarea
+                      name="companyVkUrl"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.vkUrl"
+                      (ngModelChange)="setField('vkUrl', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field company-create-inline-field--wide">
+                    <span>Telegram</span>
+                    <textarea
+                      name="companyTelegramUrl"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.telegramUrl"
+                      (ngModelChange)="setField('telegramUrl', $event)"
+                    ></textarea>
+                  </label>
+                </div>
+              </section>
+
+              <section class="lead-edit-field lead-edit-field--wide company-create-section">
+                <span>Сведения</span>
+                <div class="company-create-extra-grid">
+                  <label class="company-create-inline-field">
+                    <span>Регион</span>
+                    <input
+                      name="companyRegion"
+                      type="text"
+                      [disabled]="saving()"
+                      [ngModel]="draft.region"
+                      (ngModelChange)="setField('region', $event)"
+                    >
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Адрес</span>
+                    <input
+                      name="companyAddress"
+                      type="text"
+                      [disabled]="saving()"
+                      [ngModel]="draft.address"
+                      (ngModelChange)="setField('address', $event)"
+                    >
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Отрасли</span>
+                    <textarea
+                      name="companyIndustries"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.industries"
+                      (ngModelChange)="setField('industries', $event)"
+                    ></textarea>
+                  </label>
+
+                  <label class="company-create-inline-field">
+                    <span>Тип</span>
+                    <textarea
+                      name="companyType"
+                      rows="2"
+                      [disabled]="saving()"
+                      [ngModel]="draft.companyType"
+                      (ngModelChange)="setField('companyType', $event)"
+                    ></textarea>
+                  </label>
+                </div>
+              </section>
 
               <label class="lead-edit-field">
                 <span>Категория</span>
                 <select
                   name="companyCategory"
-                  required
+                  [required]="isManualSource()"
                   [disabled]="saving()"
                   [ngModel]="draft.categoryId"
                   (ngModelChange)="changeCategory($event)"
@@ -183,7 +352,7 @@ type PreservedDraftFields = Pick<
                 <span>Подкатегория</span>
                 <select
                   name="companySubCategory"
-                  required
+                  [required]="isManualSource()"
                   [disabled]="saving() || !draft.categoryId"
                   [ngModel]="draft.subCategoryId"
                   (ngModelChange)="setField('subCategoryId', $event)"
@@ -199,7 +368,7 @@ type PreservedDraftFields = Pick<
                 <span>Специалист</span>
                 <select
                   name="companyWorker"
-                  required
+                  [required]="isManualSource()"
                   [disabled]="saving()"
                   [ngModel]="draft.workerId"
                   (ngModelChange)="setField('workerId', $event)"
@@ -211,61 +380,69 @@ type PreservedDraftFields = Pick<
                 </select>
               </label>
 
-              <label class="lead-edit-field">
-                <span>Город филиала</span>
-                <select
-                  name="companyFilialCity"
-                  required
-                  [disabled]="saving()"
-                  [ngModel]="draft.filialCityId"
-                  (ngModelChange)="setField('filialCityId', $event)"
-                >
-                  <option [ngValue]="null">Не выбран</option>
-                  @for (city of cityOptions(); track trackOption($index, city)) {
-                    <option [ngValue]="city.id">{{ city.label }}</option>
-                  }
-                </select>
-              </label>
+              @if (isManualSource() || !draft.filialCityId) {
+                <label class="lead-edit-field">
+                  <span>Город филиала</span>
+                  <select
+                    name="companyFilialCity"
+                    [required]="isManualSource()"
+                    [disabled]="saving()"
+                    [ngModel]="draft.filialCityId"
+                    (ngModelChange)="setField('filialCityId', $event)"
+                  >
+                    <option [ngValue]="null">Не выбран</option>
+                    @for (city of cityOptions(); track trackOption($index, city)) {
+                      <option [ngValue]="city.id">{{ city.label }}</option>
+                    }
+                  </select>
+                </label>
+              }
 
-              <label class="lead-edit-field">
-                <span>Название филиала</span>
-                <input
-                  name="companyFilialTitle"
-                  type="text"
-                  required
-                  [disabled]="saving()"
-                  [ngModel]="draft.filialTitle"
-                  (ngModelChange)="setField('filialTitle', $event)"
-                >
-              </label>
+              @if (isManualSource() || !draft.filialTitle) {
+                <label class="lead-edit-field">
+                  <span>Название филиала</span>
+                  <input
+                    name="companyFilialTitle"
+                    type="text"
+                    [required]="isManualSource()"
+                    [disabled]="saving()"
+                    [ngModel]="draft.filialTitle"
+                    (ngModelChange)="setField('filialTitle', $event)"
+                  >
+                </label>
+              }
 
-              <label class="lead-edit-field">
-                <span>Ссылка филиала</span>
-                <input
-                  name="companyFilialUrl"
-                  type="text"
-                  required
-                  [disabled]="saving()"
-                  [ngModel]="draft.filialUrl"
-                  (ngModelChange)="setField('filialUrl', $event)"
-                >
-              </label>
+              @if (isManualSource() || !draft.filialUrl) {
+                <label class="lead-edit-field">
+                  <span>Ссылка филиала</span>
+                  <input
+                    name="companyFilialUrl"
+                    type="text"
+                    [required]="isManualSource()"
+                    [disabled]="saving()"
+                    [ngModel]="draft.filialUrl"
+                    (ngModelChange)="setField('filialUrl', $event)"
+                  >
+                </label>
+              }
 
-              <label class="lead-edit-field lead-edit-field--wide">
-                <span>Комментарий</span>
-                <textarea
-                  name="companyComments"
-                  rows="3"
-                  [disabled]="saving()"
-                  [ngModel]="draft.commentsCompany"
-                  (ngModelChange)="setField('commentsCompany', $event)"
-                ></textarea>
-              </label>
+              @if (isManualSource()) {
+                <label class="lead-edit-field lead-edit-field--wide">
+                  <span>Комментарий</span>
+                  <textarea
+                    name="companyComments"
+                    rows="3"
+                    [disabled]="saving()"
+                    [ngModel]="draft.commentsCompany"
+                    (ngModelChange)="setField('commentsCompany', $event)"
+                  ></textarea>
+                </label>
+              }
             </div>
 
             <div class="lead-edit-actions">
               <button type="button" class="secondary" (click)="close()" [disabled]="saving()">Отмена</button>
-              <button type="submit" [disabled]="loading() || saving() || companyForm.invalid">
+              <button type="submit" [disabled]="loading() || saving() || (isManualSource() && companyForm.invalid)">
                 {{ saving() ? 'Создаю...' : 'Создать компанию' }}
               </button>
             </div>
@@ -273,7 +450,94 @@ type PreservedDraftFields = Pick<
         }
       </section>
     </div>
-  `
+  `,
+  styles: [`
+    .company-create-summary {
+      background: #f4f8fd;
+      border: 1px solid #dfe8f4;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .company-create-summary__grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 8px;
+    }
+
+    .company-create-summary__item {
+      min-width: 0;
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px 10px;
+    }
+
+    .company-create-summary__item b,
+    .company-create-summary__item em {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .company-create-summary__item b {
+      color: #7b8799;
+      font-size: 11px;
+      font-style: normal;
+      margin-bottom: 3px;
+    }
+
+    .company-create-summary__item em {
+      color: #303545;
+      font-style: normal;
+    }
+
+    .company-create-section {
+      background: #fff;
+      border: 1px solid #dfe8f4;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .company-create-extra-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 8px;
+    }
+
+    .company-create-inline-field {
+      min-width: 0;
+    }
+
+    .company-create-inline-field,
+    .company-create-inline-field span {
+      display: block;
+    }
+
+    .company-create-inline-field span {
+      color: #7b8799;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .company-create-inline-field input,
+    .company-create-inline-field textarea {
+      width: 100%;
+    }
+
+    .company-create-inline-field--wide {
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 760px) {
+      .company-create-summary__grid,
+      .company-create-extra-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  `]
 })
 export class CompanyCreateModalComponent implements OnChanges {
   private readonly companyCreateApi = inject(CompanyCreateApi);
@@ -321,6 +585,21 @@ export class CompanyCreateModalComponent implements OnChanges {
     return this.payload()?.cities ?? [];
   }
 
+  isManualSource(): boolean {
+    return this.source === 'manual';
+  }
+
+  leadSummaryItems(draft: CompanyCreateDraft): LeadSummaryItem[] {
+    return [
+      { label: 'Название', value: draft.title },
+      { label: 'Телефон', value: draft.telephone },
+      { label: 'Город', value: draft.city },
+      { label: 'Сайт', value: draft.urlSite },
+      { label: 'Email', value: draft.email },
+      { label: 'Адрес', value: draft.filialTitle }
+    ].filter((item) => item.value.trim().length > 0);
+  }
+
   setField<K extends keyof CompanyCreateDraft>(field: K, value: CompanyCreateDraft[K]): void {
     this.draft.update((draft) => draft ? { ...draft, [field]: value } : draft);
   }
@@ -349,7 +628,7 @@ export class CompanyCreateModalComponent implements OnChanges {
 
   createCompany(formInvalid: boolean | null): void {
     const draft = this.draft();
-    if (!draft || formInvalid || this.saving()) {
+    if (!draft || (this.isManualSource() && formInvalid) || this.saving()) {
       return;
     }
 
@@ -414,6 +693,17 @@ export class CompanyCreateModalComponent implements OnChanges {
       telephone: payload.telephone ?? '',
       city: payload.city ?? '',
       email: payload.email ?? '',
+      phones: payload.phones ?? '',
+      mobilePhones: payload.mobilePhones ?? '',
+      whatsappPhones: payload.whatsappPhones ?? '',
+      emails: payload.emails ?? '',
+      websites: payload.websites ?? '',
+      vkUrl: payload.vkUrl ?? '',
+      telegramUrl: payload.telegramUrl ?? '',
+      region: payload.region ?? '',
+      address: payload.address ?? '',
+      industries: payload.industries ?? '',
+      companyType: payload.companyType ?? '',
       commentsCompany: payload.commentsCompany ?? '',
       categoryId: payload.category?.id ?? null,
       subCategoryId: payload.subCategory?.id ?? null,
@@ -432,6 +722,17 @@ export class CompanyCreateModalComponent implements OnChanges {
       telephone: draft.telephone,
       city: draft.city,
       email: draft.email,
+      phones: draft.phones,
+      mobilePhones: draft.mobilePhones,
+      whatsappPhones: draft.whatsappPhones,
+      emails: draft.emails,
+      websites: draft.websites,
+      vkUrl: draft.vkUrl,
+      telegramUrl: draft.telegramUrl,
+      region: draft.region,
+      address: draft.address,
+      industries: draft.industries,
+      companyType: draft.companyType,
       commentsCompany: draft.commentsCompany,
       categoryId: draft.categoryId,
       subCategoryId: draft.subCategoryId,
@@ -453,6 +754,17 @@ export class CompanyCreateModalComponent implements OnChanges {
       telephone: draft.telephone.trim(),
       city: draft.city.trim(),
       email: draft.email.trim(),
+      phones: draft.phones.trim(),
+      mobilePhones: draft.mobilePhones.trim(),
+      whatsappPhones: draft.whatsappPhones.trim(),
+      emails: draft.emails.trim(),
+      websites: draft.websites.trim(),
+      vkUrl: draft.vkUrl.trim(),
+      telegramUrl: draft.telegramUrl.trim(),
+      region: draft.region.trim(),
+      address: draft.address.trim(),
+      industries: draft.industries.trim(),
+      companyType: draft.companyType.trim(),
       commentsCompany: draft.commentsCompany.trim(),
       categoryId: draft.categoryId,
       subCategoryId: draft.subCategoryId,

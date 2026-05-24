@@ -6,6 +6,7 @@ import { forkJoin, Observable } from 'rxjs';
 import {
   AdminBot,
   AdminCategory,
+  AdminClientPublicationProgressReportSettings,
   AdminCity,
   AdminDictionariesApi,
   AdminManagerText,
@@ -19,6 +20,7 @@ import {
   BotImportResponse,
   BotRequest,
   BotsResponse,
+  ClientPublicationProgressReportSettingsRequest,
   DictionaryOption,
   ManagerTextRequest,
   NagulSettingsRequest,
@@ -67,6 +69,7 @@ type DictionarySettingsResponse = {
   nagulSettings: AdminNagulSettings;
   telegramReportSettings: AdminTelegramReportScheduleSettings;
   whatsAppGroupSyncSettings: AdminWhatsAppGroupSyncSettings;
+  clientPublicationProgressReportSettings: AdminClientPublicationProgressReportSettings;
 };
 
 const PROMO_TEXT_LABELS: Record<number, string> = {
@@ -148,6 +151,7 @@ export class AdminDictionariesComponent {
   readonly nagulSettings = signal<AdminNagulSettings | null>(null);
   readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
+  readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -229,7 +233,8 @@ export class AdminDictionariesComponent {
     eveningReportTime: ['22:00', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
     telegramReportZone: ['Asia/Irkutsk', Validators.required],
     whatsAppGroupSyncEnabled: [true],
-    whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]]
+    whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]],
+    clientPublicationProgressReportsEnabled: [true]
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
@@ -304,7 +309,8 @@ export class AdminDictionariesComponent {
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
       { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
-      { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' }
+      { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
+      { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' }
     ];
   });
 
@@ -342,7 +348,8 @@ export class AdminDictionariesComponent {
         managerTexts: this.dictionariesApi.getManagerTexts(),
         nagulSettings: this.dictionariesApi.getNagulSettings(),
         telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
-        whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings()
+        whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
+        clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
       }).subscribe({
         next: ({
           categories,
@@ -355,7 +362,8 @@ export class AdminDictionariesComponent {
           managerTexts,
           nagulSettings,
           telegramReportSettings,
-          whatsAppGroupSyncSettings
+          whatsAppGroupSyncSettings,
+          clientPublicationProgressReportSettings
         }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
@@ -369,6 +377,7 @@ export class AdminDictionariesComponent {
           this.applyNagulSettings(nagulSettings);
           this.applyTelegramReportSettings(telegramReportSettings);
           this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
+          this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -400,6 +409,7 @@ export class AdminDictionariesComponent {
         this.nagulSettings.set(null);
         this.telegramReportSettings.set(null);
         this.whatsAppGroupSyncSettings.set(null);
+        this.clientPublicationProgressReportSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -665,7 +675,10 @@ export class AdminDictionariesComponent {
       morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
       eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
       eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
-      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk'
+      telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk',
+      whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
+      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
+      clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
     });
   }
 
@@ -934,7 +947,8 @@ export class AdminDictionariesComponent {
   settingsTotal(): number {
     return (this.nagulSettings() ? 1 : 0)
       + (this.telegramReportSettings() ? 1 : 0)
-      + (this.whatsAppGroupSyncSettings() ? 1 : 0);
+      + (this.whatsAppGroupSyncSettings() ? 1 : 0)
+      + (this.clientPublicationProgressReportSettings() ? 1 : 0);
   }
 
   categoryTitle(category?: DictionaryOption | null): string {
@@ -1251,7 +1265,8 @@ export class AdminDictionariesComponent {
         request = forkJoin({
           nagulSettings: this.dictionariesApi.getNagulSettings(),
           telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
-          whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings()
+          whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
+          clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
         });
         break;
     }
@@ -1293,6 +1308,7 @@ export class AdminDictionariesComponent {
             this.applyNagulSettings(payload.nagulSettings);
             this.applyTelegramReportSettings(payload.telegramReportSettings);
             this.applyWhatsAppGroupSyncSettings(payload.whatsAppGroupSyncSettings);
+            this.applyClientPublicationProgressReportSettings(payload.clientPublicationProgressReportSettings);
             break;
           }
         }
@@ -1559,6 +1575,9 @@ export class AdminDictionariesComponent {
       enabled: raw.whatsAppGroupSyncEnabled,
       intervalMinutes: Number(raw.whatsAppGroupSyncIntervalMinutes ?? 30)
     };
+    const clientPublicationProgressReportRequest: ClientPublicationProgressReportSettingsRequest = {
+      enabled: raw.clientPublicationProgressReportsEnabled
+    };
 
     this.saving.set(true);
     this.error.set(null);
@@ -1566,13 +1585,17 @@ export class AdminDictionariesComponent {
     forkJoin({
       nagulSettings: this.dictionariesApi.updateNagulSettings(nagulRequest),
       telegramReportSettings: this.dictionariesApi.updateTelegramReportSettings(telegramRequest),
-      whatsAppGroupSyncSettings: this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest)
+      whatsAppGroupSyncSettings: this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest),
+      clientPublicationProgressReportSettings: this.dictionariesApi.updateClientPublicationProgressReportSettings(
+        clientPublicationProgressReportRequest
+      )
     }).subscribe({
-      next: ({ nagulSettings, telegramReportSettings, whatsAppGroupSyncSettings }) => {
+      next: ({ nagulSettings, telegramReportSettings, whatsAppGroupSyncSettings, clientPublicationProgressReportSettings }) => {
         this.saving.set(false);
         this.applyNagulSettings(nagulSettings);
         this.applyTelegramReportSettings(telegramReportSettings);
         this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
+        this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
         this.toastService.success(
           'Настройки сохранены',
           `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, WhatsApp ${whatsAppGroupSyncSettings.intervalMinutes} мин.`
@@ -1788,6 +1811,13 @@ export class AdminDictionariesComponent {
     });
   }
 
+  private applyClientPublicationProgressReportSettings(response: AdminClientPublicationProgressReportSettings): void {
+    this.clientPublicationProgressReportSettings.set(response);
+    this.settingsForm.patchValue({
+      clientPublicationProgressReportsEnabled: response.enabled
+    });
+  }
+
   private sharedChatSyncSummary(response: AdminSharedChatLinkSyncResponse): string {
     const parts = [
       `компаний обновлено: ${response.updatedCompanies}`,
@@ -1811,7 +1841,8 @@ export class AdminDictionariesComponent {
       eveningReportTime: this.telegramReportSettings()?.eveningTime ?? '22:00',
       telegramReportZone: this.telegramReportSettings()?.zone ?? 'Asia/Irkutsk',
       whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
-      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30
+      whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
+      clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
     });
   }
 

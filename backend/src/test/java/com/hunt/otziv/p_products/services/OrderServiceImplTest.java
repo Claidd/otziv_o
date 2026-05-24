@@ -1,7 +1,10 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.editing.OrderEditService;
@@ -15,6 +18,7 @@ import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.statistics.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
+import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -91,6 +95,12 @@ class OrderServiceImplTest {
     @Mock
     private OrderReviewMutationService orderReviewMutationService;
 
+    @Mock
+    private OrderStatusNotificationService orderStatusNotificationService;
+
+    @Mock
+    private AppSettingService appSettingService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
@@ -109,6 +119,8 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+                .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
             Integer actualPublished = invocation.getArgument(1);
@@ -123,8 +135,40 @@ class OrderServiceImplTest {
         verify(reviewArchiveService).saveNewReviewArchive(2L);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
+        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
+                order,
+                null,
+                null,
+                "Company - Main filial. Опубликован новый отзыв 2 / 5."
+        );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
         verify(reviewService, never()).save(reviewToPublish);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterSkipsProgressReportForFinalReview() throws Exception {
+        Order order = order(10L, 4);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review reviewToPublish = review(2L, false, "Финальный отзыв", details);
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
+        when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+        when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(5);
+
+        assertTrue(orderService.changeStatusAndOrderCounter(2L));
+
+        verify(orderStatusNotificationService, never()).sendProgressMessageToClientChat(
+                same(order),
+                eq(null),
+                eq(null),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
     }
 
     private Order order(Long id, int counter) {
@@ -132,6 +176,13 @@ class OrderServiceImplTest {
         order.setId(id);
         order.setCounter(counter);
         order.setAmount(5);
+        Company company = new Company();
+        company.setTitle("Company");
+        company.setPublicationProgressReportsEnabled(true);
+        order.setCompany(company);
+        Filial filial = new Filial();
+        filial.setTitle("Main filial");
+        order.setFilial(filial);
         return order;
     }
 

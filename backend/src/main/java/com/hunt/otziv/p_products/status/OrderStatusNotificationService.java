@@ -42,6 +42,24 @@ public class OrderStatusNotificationService {
         return Objects.equals(appliedStatus, successStatus);
     }
 
+    public boolean sendProgressMessageToClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message
+    ) {
+        log.info("📨 Отправка короткого отчёта в клиентский чат");
+        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+        if (sentChannel != null) {
+            log.info("✅ Короткий отчёт клиенту отправлен через {}", sentChannel);
+            return true;
+        }
+
+        log.warn("⚠️ Короткий отчёт компании {} не отправлен в активный клиентский мессенджер",
+                companyTitle(order));
+        return false;
+    }
+
     public String sendMessageToClientChat(
             String title,
             Order order,
@@ -49,6 +67,31 @@ public class OrderStatusNotificationService {
             String groupId,
             String message,
             String successStatus
+    ) {
+        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+
+        String appliedStatus;
+        if (sentChannel != null) {
+            appliedStatus = applySuccessStatus(successStatus, order, sentChannel);
+        } else {
+            log.warn("⚠️ Сообщение компании {} не отправлено в активный клиентский мессенджер. Статус останется: {}",
+                    companyTitle(order), title);
+            notifyManagerAboutFallback(title, order);
+            appliedStatus = applyFallbackStatus(title, order);
+        }
+
+        orderRepository.save(order);
+        log.info("💾 Заказ сохранён: ID {}. Компания - {}. Статус - {}",
+                order.getId(), companyTitle(order), appliedStatus);
+
+        return appliedStatus;
+    }
+
+    private String sendToActiveClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message
     ) {
         log.info("📨 Отправка сообщения в клиентский чат:");
         log.info("🔹 Клиент WhatsApp: {}", clientId);
@@ -68,22 +111,7 @@ public class OrderStatusNotificationService {
             case MAX -> maxChatId != null ? sendToMax(maxChatId, message) : missingActiveChannel("MAX", order);
             case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
         };
-
-        String appliedStatus;
-        if (sentChannel != null) {
-            appliedStatus = applySuccessStatus(successStatus, order, sentChannel);
-        } else {
-            log.warn("⚠️ Сообщение компании {} не отправлено в активный клиентский мессенджер. Статус останется: {}",
-                    companyTitle(order), title);
-            notifyManagerAboutFallback(title, order);
-            appliedStatus = applyFallbackStatus(title, order);
-        }
-
-        orderRepository.save(order);
-        log.info("💾 Заказ сохранён: ID {}. Компания - {}. Статус - {}",
-                order.getId(), companyTitle(order), appliedStatus);
-
-        return appliedStatus;
+        return sentChannel;
     }
 
     private String missingActiveChannel(String channel, Order order) {

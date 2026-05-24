@@ -21,6 +21,7 @@ public class AppSettingService {
     public static final String WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES = "whatsapp.group-sync.interval-minutes";
     public static final String WHATSAPP_GROUP_SYNC_LAST_RUN_AT = "whatsapp.group-sync.last-run-at";
     public static final String WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT = "whatsapp.group-sync.last-linked-count";
+    public static final String CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED = "client.publication-progress-reports.enabled";
     public static final String ARCHIVE_ORDERS_RETENTION_DAYS = "archive.orders.retention.days";
     public static final String ARCHIVE_ORDERS_BATCH_SIZE = "archive.orders.batch.size";
     public static final String ARCHIVE_ORDERS_APPLY_ENABLED = "archive.orders.apply.enabled";

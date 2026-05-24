@@ -2,13 +2,13 @@ const DEFAULT_ERROR_DETAIL = 'Попробуйте обновить данные
 
 export function apiErrorMessage(err: unknown, fallback: string): string {
   const statusDetail = statusErrorDetail(err);
-  if (isServerError(err) && statusDetail) {
-    return joinFallbackAndDetail(fallback, statusDetail);
-  }
-
   const serverMessage = extractUserMessage(err);
   if (serverMessage) {
     return serverMessage;
+  }
+
+  if (isServerError(err) && statusDetail) {
+    return joinFallbackAndDetail(fallback, statusDetail);
   }
 
   return statusDetail ? joinFallbackAndDetail(fallback, statusDetail) : (normalizeText(fallback) ?? DEFAULT_ERROR_DETAIL);
@@ -16,13 +16,13 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 
 export function apiErrorDetail(err: unknown, fallback = DEFAULT_ERROR_DETAIL): string {
   const statusDetail = statusErrorDetail(err);
-  if (isServerError(err) && statusDetail) {
-    return statusDetail;
-  }
-
   const serverMessage = extractUserMessage(err);
   if (serverMessage) {
     return serverMessage;
+  }
+
+  if (isServerError(err) && statusDetail) {
+    return statusDetail;
   }
 
   if (statusDetail) {
@@ -202,6 +202,7 @@ function isTechnicalErrorText(value: string): boolean {
     /\/api\//i,
     /No static resource/i,
     /access-denied/i,
+    /У вас нет доступа/i,
     /Internal Server Error/i,
     /^<!doctype/i,
     /^<html/i,

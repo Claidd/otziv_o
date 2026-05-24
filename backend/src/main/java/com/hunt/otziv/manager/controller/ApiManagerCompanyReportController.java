@@ -62,7 +62,7 @@ public class ApiManagerCompanyReportController {
             );
         }
 
-        deepCompanyResearchJobService.start(company.companyId(), maximumReportRequest());
+        startDeepReport(company.companyId());
         return buildState(company, authentication);
     }
 
@@ -73,8 +73,16 @@ public class ApiManagerCompanyReportController {
             Authentication authentication
     ) {
         CompanyContext company = resolveCompany(orderId);
-        deepCompanyResearchJobService.start(company.companyId(), maximumReportRequest());
+        startDeepReport(company.companyId());
         return buildState(company, authentication);
+    }
+
+    private void startDeepReport(Long companyId) {
+        try {
+            deepCompanyResearchJobService.start(companyId, maximumReportRequest());
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), exception);
+        }
     }
 
     private CompanyDeepReportStateResponse buildState(CompanyContext company, Authentication authentication) {

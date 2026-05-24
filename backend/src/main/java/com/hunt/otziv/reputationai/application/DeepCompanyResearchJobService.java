@@ -11,6 +11,7 @@ import com.hunt.otziv.reputationai.persistence.DeepReportJobStatus;
 import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobEntity;
 import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DeepCompanyResearchJobService {
     public static final String OPERATION_FULL_REPORT = "full_report";
     public static final String OPERATION_REFRESH_SOURCES = "refresh_sources";
@@ -86,7 +88,22 @@ public class DeepCompanyResearchJobService {
             return saved.getId();
         });
 
-        reputationDeepReportExecutor.execute(() -> run(jobId));
+        try {
+            reputationDeepReportExecutor.execute(() -> run(jobId));
+        } catch (RuntimeException exception) {
+            String message = "Не удалось поставить глубокий отчёт в фоновую очередь: " + cleanError(exception);
+            saveFailed(jobId, new IllegalStateException(message, exception));
+            log.warn("DEEP_REPORT_JOB_QUEUE_REJECTED jobId={} companyId={} reason=\"{}\"", jobId, companyId, message, exception);
+            throw new IllegalStateException(message, exception);
+        }
+
+        log.info(
+                "DEEP_REPORT_JOB_QUEUED jobId={} companyId={} operation={} profile={}",
+                jobId,
+                companyId,
+                operation(safeRequest),
+                safeRequest.deepResearchProfile()
+        );
         return findById(jobId)
                 .orElseThrow(() -> new IllegalStateException("Не удалось создать задачу глубокого отчета"));
     }
@@ -180,10 +197,29 @@ public class DeepCompanyResearchJobService {
             return;
         }
 
+        String operation = operation(input.request());
+        log.info("DEEP_REPORT_JOB_STARTED jobId={} companyId={} operation={}", jobId, input.companyId(), operation);
         try {
             DeepCompanyResearchReport report = runReport(jobId, input);
             saveDone(jobId, report);
+            log.info(
+                    "DEEP_REPORT_JOB_DONE jobId={} companyId={} operation={} model={} responseId={}",
+                    jobId,
+                    input.companyId(),
+                    operation,
+                    report.model(),
+                    report.responseId()
+            );
         } catch (Exception exception) {
+            String message = cleanError(exception);
+            log.error(
+                    "DEEP_REPORT_JOB_FAILED jobId={} companyId={} operation={} reason=\"{}\"",
+                    jobId,
+                    input.companyId(),
+                    operation,
+                    message,
+                    exception
+            );
             saveFailed(jobId, exception);
         }
     }

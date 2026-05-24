@@ -23,6 +23,13 @@ describe('apiErrorMessage', () => {
     );
   });
 
+  it('keeps readable service-unavailable messages from backend', () => {
+    expect(apiErrorMessage({
+      status: 503,
+      error: { message: 'OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.' }
+    }, 'Отчёт не запущен')).toBe('OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.');
+  });
+
   it('explains network failures without leaking implementation details', () => {
     expect(apiErrorDetail({ status: 0 })).toBe('Сервер не отвечает. Проверьте, что серверная часть запущена, и попробуйте снова.');
   });

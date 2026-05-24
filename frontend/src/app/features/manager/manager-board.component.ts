@@ -2,6 +2,7 @@ import { Component, HostListener, OnDestroy, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import {
@@ -111,6 +112,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly managerApi = inject(ManagerApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
+  private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
@@ -542,6 +544,7 @@ export class ManagerBoardComponent implements OnDestroy {
   handleCompanyCreated(result: CompanyCreateResult): void {
     this.closeCompanyCreate();
     this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
+    this.companyDeepReportLaunch.handleCompanyCreated(result);
     this.replaceCurrentHistoryState();
     this.activeSection.set('companies');
     this.companyStatus.set('Новая');

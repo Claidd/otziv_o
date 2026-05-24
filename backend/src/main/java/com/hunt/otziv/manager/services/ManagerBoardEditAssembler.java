@@ -11,9 +11,12 @@ import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.model.CompanyContactType;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.manager.dto.api.BadReviewSummaryResponse;
 import com.hunt.otziv.manager.dto.api.BadReviewTaskDetailsResponse;
@@ -65,6 +68,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -92,6 +96,7 @@ public class ManagerBoardEditAssembler {
             Authentication authentication
     ) {
         Long categoryId = idOf(company.getCategoryCompany());
+        CompanyInfoDTO info = company.getInfo();
         return new CompanyEditResponse(
                 company.getId(),
                 safe(company.getTitle()),
@@ -103,8 +108,20 @@ public class ManagerBoardEditAssembler {
                 safe(company.getTelephone()),
                 safe(company.getCity()),
                 safe(company.getEmail()),
+                contactValues(company, CompanyContactType.PHONE),
+                contactValues(company, CompanyContactType.MOBILE),
+                contactValues(company, CompanyContactType.WHATSAPP),
+                contactValues(company, CompanyContactType.EMAIL),
+                contactValues(company, CompanyContactType.WEBSITE),
+                contactValues(company, CompanyContactType.VK),
+                contactValues(company, CompanyContactType.TELEGRAM),
+                info != null ? safe(info.getRegion()) : "",
+                info != null ? safe(info.getAddress()) : "",
+                info != null ? safe(info.getIndustries()) : "",
+                info != null ? safe(info.getCompanyType()) : "",
                 safe(company.getCommentsCompany()),
                 company.isActive(),
+                company.isPublicationProgressReportsEnabled(),
                 dateValue(company.getCreateDate()),
                 dateValue(company.getUpdateStatus()),
                 dateValue(company.getDateNewTry()),
@@ -122,6 +139,20 @@ public class ManagerBoardEditAssembler {
                 cityOptions(),
                 managerPermissionService.hasRole(authentication, "ADMIN")
         );
+    }
+
+    private String contactValues(CompanyDTO company, CompanyContactType type) {
+        if (company.getContacts() == null || company.getContacts().isEmpty()) {
+            return "";
+        }
+
+        return company.getContacts().stream()
+                .filter(Objects::nonNull)
+                .filter(contact -> type.name().equals(contact.getType()))
+                .map(CompanyContactDTO::getValue)
+                .map(this::safe)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining(", "));
     }
 
     public CompanyOrderCreateResponse buildCompanyOrderCreateResponse(CompanyDTO company) {

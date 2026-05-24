@@ -84,6 +84,10 @@ export interface AdminWhatsAppGroupSyncSettings {
   lastLinkedCount: number;
 }
 
+export interface AdminClientPublicationProgressReportSettings {
+  enabled: boolean;
+}
+
 export interface AdminSharedChatLinkSyncResponse {
   scannedCompanies: number;
   sharedChatGroups: number;
@@ -213,6 +217,10 @@ export interface TelegramReportScheduleSettingsRequest {
 export interface WhatsAppGroupSyncSettingsRequest {
   enabled: boolean;
   intervalMinutes: number;
+}
+
+export interface ClientPublicationProgressReportSettingsRequest {
+  enabled: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -408,6 +416,21 @@ export class AdminDictionariesApi {
 
   runWhatsAppGroupSync(): Observable<AdminWhatsAppGroupSyncSettings> {
     return this.http.post<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync/run`, {});
+  }
+
+  getClientPublicationProgressReportSettings(): Observable<AdminClientPublicationProgressReportSettings> {
+    return this.http.get<AdminClientPublicationProgressReportSettings>(
+      `${this.baseUrl}/settings/client-publication-progress-reports`
+    );
+  }
+
+  updateClientPublicationProgressReportSettings(
+    request: ClientPublicationProgressReportSettingsRequest
+  ): Observable<AdminClientPublicationProgressReportSettings> {
+    return this.http.put<AdminClientPublicationProgressReportSettings>(
+      `${this.baseUrl}/settings/client-publication-progress-reports`,
+      request
+    );
   }
 
   runSharedChatLinkSync(): Observable<AdminSharedChatLinkSyncResponse> {

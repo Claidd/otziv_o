@@ -3,13 +3,17 @@ package com.hunt.otziv.manager.controller;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyContactType;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.manager.dto.api.CompanyEditResponse;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateRequest;
@@ -45,13 +49,21 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/manager")
 public class ApiManagerCompanyController {
+
+    private static final String COMPANY_DATA_SOURCE_MANUAL = "MANUAL";
 
     private final CompanyService companyService;
     private final FilialService filialService;
@@ -257,8 +269,8 @@ public class ApiManagerCompanyController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные компании не переданы");
         }
 
-        if (isBlank(request.title()) || isBlank(request.telephone()) || isBlank(request.urlChat()) || isBlank(request.city())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название, телефон, город и ссылка на чат обязательны");
+        if (isBlank(request.title()) || isBlank(request.telephone()) || isBlank(request.city())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название, телефон и город обязательны");
         }
 
         Long newFilialCityId = request.newFilialCityId();
@@ -272,16 +284,21 @@ public class ApiManagerCompanyController {
                 ? firstId(request.managerId(), idOf(current.getManager()))
                 : firstId(idOf(current.getManager()), null);
 
-        return CompanyDTO.builder()
+        CompanyDTO company = CompanyDTO.builder()
                 .id(companyId)
                 .title(normalize(request.title()))
-                .urlChat(normalize(request.urlChat()))
+                .urlChat(blankToNull(request.urlChat()))
                 .urlSite(blankToNull(request.urlSite()))
                 .telephone(normalize(request.telephone()))
                 .city(normalize(request.city()))
                 .email(blankToNull(request.email()))
                 .commentsCompany(normalize(request.commentsCompany()))
                 .active(Boolean.TRUE.equals(request.active()))
+                .publicationProgressReportsEnabled(
+                        request.publicationProgressReportsEnabled() == null
+                                ? current.isPublicationProgressReportsEnabled()
+                                : request.publicationProgressReportsEnabled()
+                )
                 .status(CompanyStatusDTO.builder().id(firstId(request.statusId(), idOf(current.getStatus()))).build())
                 .categoryCompany(CategoryDTO.builder().id(firstId(request.categoryId(), idOf(current.getCategoryCompany()))).build())
                 .subCategory(SubCategoryDTO.builder().id(firstId(request.subCategoryId(), idOf(current.getSubCategory()))).build())
@@ -291,6 +308,102 @@ public class ApiManagerCompanyController {
                         .url(newFilialUrl)
                         .city(newFilialCityId == null ? null : City.builder().id(newFilialCityId).build())
                         .build())
+                .build();
+        company.setContacts(buildContactDtos(company, request));
+        company.setInfo(buildCompanyInfoDto(current.getInfo(), request));
+        return company;
+    }
+
+    private Set<CompanyContactDTO> buildContactDtos(CompanyDTO company, CompanyUpdateRequest request) {
+        Map<String, CompanyContactDTO> contacts = new LinkedHashMap<>();
+        addContact(contacts, CompanyContactType.PHONE, company.getTelephone(), true);
+        addMultiContacts(contacts, CompanyContactType.PHONE, request.phones(), false);
+        addMultiContacts(contacts, CompanyContactType.MOBILE, request.mobilePhones(), false);
+        addMultiContacts(contacts, CompanyContactType.WHATSAPP, request.whatsappPhones(), true);
+        addContact(contacts, CompanyContactType.EMAIL, company.getEmail(), true);
+        addMultiContacts(contacts, CompanyContactType.EMAIL, request.emails(), false);
+        addContact(contacts, CompanyContactType.WEBSITE, company.getUrlSite(), true);
+        addMultiContacts(contacts, CompanyContactType.WEBSITE, request.websites(), false);
+        addMultiContacts(contacts, CompanyContactType.VK, request.vkUrl(), true);
+        addMultiContacts(contacts, CompanyContactType.TELEGRAM, request.telegramUrl(), true);
+        return new LinkedHashSet<>(contacts.values());
+    }
+
+    private void addMultiContacts(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String values,
+            boolean firstPrimary
+    ) {
+        boolean primary = firstPrimary;
+        for (String value : multiValues(values)) {
+            addContact(contacts, type, value, primary);
+            primary = false;
+        }
+    }
+
+    private void addContact(
+            Map<String, CompanyContactDTO> contacts,
+            CompanyContactType type,
+            String value,
+            boolean primary
+    ) {
+        String cleanValue = normalize(value);
+        if (cleanValue.isBlank()) {
+            return;
+        }
+
+        String normalized = normalizeContactValue(type, cleanValue);
+        String key = type.name() + ":" + normalized;
+        contacts.putIfAbsent(key, CompanyContactDTO.builder()
+                .type(type.name())
+                .value(cleanValue)
+                .normalizedValue(normalized)
+                .primaryContact(primary)
+                .source(COMPANY_DATA_SOURCE_MANUAL)
+                .build());
+    }
+
+    private List<String> multiValues(String value) {
+        String cleanValue = normalize(value);
+        if (cleanValue.isBlank()) {
+            return List.of();
+        }
+
+        return Arrays.stream(cleanValue.split("[,;\\r\\n]+"))
+                .map(this::normalize)
+                .filter(part -> !part.isBlank())
+                .toList();
+    }
+
+    private String normalizeContactValue(CompanyContactType type, String value) {
+        String cleanValue = normalize(value);
+        if (type == CompanyContactType.PHONE
+                || type == CompanyContactType.MOBILE
+                || type == CompanyContactType.WHATSAPP) {
+            return LeadPhoneNormalizer.normalize(cleanValue);
+        }
+        return cleanValue.toLowerCase(Locale.ROOT);
+    }
+
+    private CompanyInfoDTO buildCompanyInfoDto(CompanyInfoDTO current, CompanyUpdateRequest request) {
+        String region = normalize(request.region());
+        String address = normalize(request.address());
+        String industries = normalize(request.industries());
+        String companyType = normalize(request.companyType());
+
+        if (region.isBlank() && address.isBlank() && industries.isBlank() && companyType.isBlank()) {
+            return null;
+        }
+
+        return CompanyInfoDTO.builder()
+                .id(current != null ? current.getId() : null)
+                .region(region)
+                .address(address)
+                .industries(industries)
+                .companyType(companyType)
+                .source(current != null && !isBlank(current.getSource()) ? current.getSource() : COMPANY_DATA_SOURCE_MANUAL)
+                .sourceLeadId(current != null ? current.getSourceLeadId() : null)
                 .build();
     }
 

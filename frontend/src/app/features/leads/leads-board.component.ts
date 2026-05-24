@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import {
   LeadBoard,
@@ -68,6 +69,7 @@ export class LeadsBoardComponent {
   private readonly leadsApi = inject(LeadsApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
+  private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
   private readonly emptyPage: LeadPage = {
     content: [],
@@ -580,6 +582,7 @@ export class LeadsBoardComponent {
   handleCompanyCreated(result: CompanyCreateResult): void {
     this.closeCompanyCreate();
     this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
+    this.companyDeepReportLaunch.handleCompanyCreated(result);
     void this.router.navigate(['/manager'], {
       queryParams: {
         section: 'companies',

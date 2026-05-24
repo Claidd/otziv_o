@@ -104,7 +104,7 @@
     }
 
     <div class="deep-report-topic-grid">
-      @for (block of deepReportBlocks(); track trackDeepBlock($index, block); let sectionIndex = $index) {
+      @for (block of deepReportBlocks(); track trackDeepBlock($index, block)) {
         <article class="deep-report-topic">
           <header>
             <div>
@@ -116,7 +116,7 @@
                 type="button"
                 class="icon-button"
                 [disabled]="busy"
-                (click)="emitRebuildSection(block, sectionIndex)"
+                (click)="emitRebuildSection(block, block.sectionIndex)"
                 aria-label="Пересобрать раздел"
                 appTooltip="Пересобрать только этот раздел отчёта."
               >

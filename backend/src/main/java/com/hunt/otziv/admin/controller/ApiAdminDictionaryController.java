@@ -573,6 +573,25 @@ public class ApiAdminDictionaryController {
         return whatsAppGroupLinkSyncService.runNow();
     }
 
+    @GetMapping("/settings/client-publication-progress-reports")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ClientPublicationProgressReportSettingsResponse getClientPublicationProgressReportSettings() {
+        return new ClientPublicationProgressReportSettingsResponse(
+                appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)
+        );
+    }
+
+    @PutMapping("/settings/client-publication-progress-reports")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ClientPublicationProgressReportSettingsResponse updateClientPublicationProgressReportSettings(
+            @RequestBody ClientPublicationProgressReportSettingsRequest request
+    ) {
+        boolean enabled = request == null || request.enabled();
+        return new ClientPublicationProgressReportSettingsResponse(
+                appSettingService.setBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, enabled)
+        );
+    }
+
     @PostMapping("/settings/shared-chat-links/sync")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public SharedChatLinkSyncResponse runSharedChatLinkSync() {
@@ -1163,5 +1182,11 @@ public class ApiAdminDictionaryController {
     }
 
     public record NagulSettingsResponse(int cooldownMinutes, int lookaheadDays) {
+    }
+
+    public record ClientPublicationProgressReportSettingsRequest(boolean enabled) {
+    }
+
+    public record ClientPublicationProgressReportSettingsResponse(boolean enabled) {
     }
 }

@@ -279,6 +279,8 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/admin/settings/whatsapp-group-sync", "загрузка настроек синхронизации WhatsApp-групп");
         put(actions, "PUT", "/api/admin/settings/whatsapp-group-sync", "редактирование настроек синхронизации WhatsApp-групп");
         put(actions, "POST", "/api/admin/settings/whatsapp-group-sync/run", "ручной запуск синхронизации WhatsApp-групп");
+        put(actions, "GET", "/api/admin/settings/client-publication-progress-reports", "загрузка настройки клиентских отчетов о публикациях");
+        put(actions, "PUT", "/api/admin/settings/client-publication-progress-reports", "редактирование настройки клиентских отчетов о публикациях");
         put(actions, "POST", "/api/admin/analytics/aggregates/rebuild-month", "пересчет аналитики за месяц {month}");
         put(actions, "GET", "/api/admin/analytics/aggregates/source-range", "проверка доступного периода данных для аналитики");
         put(actions, "GET", "/api/admin/analytics/aggregates/compare-admin-month", "сверка аналитики за месяц {month}");

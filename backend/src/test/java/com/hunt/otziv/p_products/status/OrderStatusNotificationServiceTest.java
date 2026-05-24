@@ -191,6 +191,32 @@ class OrderStatusNotificationServiceTest {
     }
 
     @Test
+    void sendProgressMessageToClientChatUsesActiveTelegramWithoutChangingOrderStatus() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("https://t.me/shared_owner");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        OrderStatus currentStatus = status("Публикация");
+        order.setStatus(currentStatus);
+
+        when(telegramService.sendMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.")).thenReturn(true);
+
+        boolean result = service.sendProgressMessageToClientChat(
+                order,
+                "client",
+                "group",
+                "Компания. Опубликован новый отзыв 3 / 10."
+        );
+
+        assertTrue(result);
+        assertSame(currentStatus, order.getStatus());
+        verify(telegramService).sendMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.");
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(maxBotClient);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
     void hasWorkerWithTelegramRequiresWorkerChatDetailsAndCompany() {
         OrderStatusNotificationService service = service();
         Company company = company("Компания");

@@ -89,7 +89,7 @@ public class OrderArchiveRestoreService {
                 restored,
                 message
         );
-        log.warn("Archive order restored: {}", result);
+        log.info("Archive order restored: {}", result);
         return result;
     }
 

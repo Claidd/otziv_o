@@ -315,6 +315,23 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void manualInCheckStatusDoesNotSendClientMessage() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(52L, "В проверку", "Компания", " ");
+        OrderStatus inCheck = status("На проверке");
+
+        when(orderRepository.findById(52L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(inCheck);
+
+        assertTrue(service.changeStatusForOrder(52L, "На проверке"));
+
+        assertSame(inCheck, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "На проверке");
+        verify(orderRepository).save(order);
+        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, textService);
+    }
+
+    @Test
     void toCheckRejectsBlankReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(50L, "Новый", 500L, "");
@@ -381,6 +398,23 @@ class OrderStatusTransitionServiceTest {
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
         verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void manualToPayStatusDoesNotSendClientMessage() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(62L, "Опубликовано", "Компания", "group");
+        OrderStatus toPay = status("Выставлен счет");
+
+        when(orderRepository.findById(62L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(toPay);
+
+        assertTrue(service.changeStatusForOrder(62L, "Выставлен счет"));
+
+        assertSame(toPay, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Выставлен счет");
+        verify(orderRepository).save(order);
+        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, textService);
     }
 
     @Test

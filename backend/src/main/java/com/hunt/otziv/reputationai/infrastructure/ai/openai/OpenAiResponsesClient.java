@@ -786,6 +786,12 @@ public class OpenAiResponsesClient {
         if (statusCode == 429 && isRateLimitMessage(message)) {
             return openAiRateLimitError(message);
         }
+        if (statusCode == 402 || isQuotaOrBillingMessage(message)) {
+            return openAiQuotaOrBillingError(message);
+        }
+        if (statusCode == 401) {
+            return "OpenAI не принял API-ключ. Проверьте OPENAI_API_KEY: ключ мог быть удалён, неверно скопирован или недоступен для этого проекта.";
+        }
         if (statusCode == 403 && isUnsupportedRegionMessage(message)) {
             return "OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy: OPENAI_PROXY_ENABLED=true, заданы OPENAI_PROXY_HOST/PORT, а VPS-прокси разрешает IP приложения.";
         }
@@ -806,6 +812,9 @@ public class OpenAiResponsesClient {
         }
         if (isRateLimitMessage(clean)) {
             return openAiRateLimitError(clean);
+        }
+        if (isQuotaOrBillingMessage(clean)) {
+            return openAiQuotaOrBillingError(clean);
         }
         if (isUnsupportedRegionMessage(clean)) {
             return "OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy: OPENAI_PROXY_ENABLED=true, заданы OPENAI_PROXY_HOST/PORT, а VPS-прокси разрешает IP приложения.";
@@ -830,6 +839,27 @@ public class OpenAiResponsesClient {
                 || normalized.contains("country, region, or territory not supported")
                 || normalized.contains("unsupported country")
                 || normalized.contains("request_forbidden");
+    }
+
+    private boolean isQuotaOrBillingMessage(String message) {
+        String normalized = message.toLowerCase(Locale.ROOT);
+        return normalized.contains("insufficient_quota")
+                || normalized.contains("exceeded your current quota")
+                || normalized.contains("check your plan and billing")
+                || normalized.contains("billing")
+                || normalized.contains("credit balance")
+                || normalized.contains("credits")
+                || normalized.contains("spend limit")
+                || normalized.contains("hard limit")
+                || (normalized.contains("законч") && normalized.contains("ден"))
+                || (normalized.contains("недостат") && normalized.contains("баланс"))
+                || (normalized.contains("квот") && normalized.contains("исчерп"));
+    }
+
+    private String openAiQuotaOrBillingError(String message) {
+        String clean = message == null ? "" : message.replaceAll("\\s+", " ").trim();
+        String detail = clean.isBlank() ? "" : " Деталь OpenAI: " + limit(clean, 240);
+        return "OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс, лимиты и billing проекта в OpenAI, затем запустите отчёт повторно." + detail;
     }
 
     private String openAiRateLimitError(String message) {

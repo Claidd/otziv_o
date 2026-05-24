@@ -21,6 +21,7 @@ public interface CompanyService {
 
     CompanyDTO convertToDtoToManager(Long leadId, Principal principal); //    подготовка нового DTO на основе лида
     boolean save(CompanyDTO companyDTO); //    сохранить компанию
+    Optional<Company> saveAndReturn(CompanyDTO companyDTO); //    сохранить компанию и вернуть созданную запись
     Page<CompanyListDTO> getAllCompaniesDTOList(String keyword, int pageNumber, int pageSize);
     Page<CompanyListDTO> getAllCompaniesDTOList(String keyword, int pageNumber, int pageSize, String sortDirection);
     List<Company> getAllCompaniesList();

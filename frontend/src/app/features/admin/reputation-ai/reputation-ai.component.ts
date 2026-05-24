@@ -33,6 +33,7 @@ import type {
 } from '../../../core/reputation-ai.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
+import { deepReportErrorMessage } from '../../../shared/reputation/deep-report-error-message';
 import { DeepResearchReportViewComponent } from '../../../shared/reputation/deep-research-report-view.component';
 import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
 
@@ -2214,52 +2215,7 @@ export class ReputationAiComponent implements OnDestroy {
   }
 
   private humanizeAiError(message: string | null | undefined, fallback: string): string {
-    const text = (message ?? '').trim();
-    if (!text) {
-      return fallback;
-    }
-
-    const lower = text.toLowerCase();
-    if (lower.includes('rate limit reached')
-      || lower.includes('tokens per min')
-      || lower.includes('rate_limit_exceeded')
-      || lower.includes('лимит токен')) {
-      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1];
-      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
-      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
-    }
-
-    if (lower.includes('unsupported_country_region_territory')
-      || lower.includes('country, region, or territory not supported')
-      || lower.includes('unsupported country')
-      || lower.includes('неподдерживаемого региона')) {
-      return 'OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy, заданы OPENAI_PROXY_HOST/PORT, а VPS-прокси разрешает IP приложения.';
-    }
-
-    if (lower.includes('http 407') || lower.includes('proxy authentication required')) {
-      return 'VPS-прокси не пустил запрос к OpenAI. Для схемы без логина и пароля проверьте allowlist IP в Squid/UFW и отсутствие proxy_auth в конфиге Squid.';
-    }
-
-    if (lower.includes('eof reached while reading')
-      || lower.includes('eof')
-      || lower.includes('connection reset')
-      || lower.includes('connection closed')
-      || lower.includes('header parser received no bytes')
-      || lower.includes('remote host terminated')
-      || lower.includes('сетевом уровне')
-      || lower.includes('proxy/vpn')) {
-      return 'Соединение с OpenAI оборвалось на сетевом уровне. Это не ошибка модели: чаще всего виноват proxy/VPN/маршрут. Проверьте соединение или повторите запрос через пару минут.';
-    }
-
-    if (lower.includes('timed out') || lower.includes('timeout') || lower.includes('таймаут')) {
-      return 'OpenAI не успел ответить за отведённое время. Можно повторить запрос или выбрать профиль «Баланс», если mini-профиль не успевает с web search.';
-    }
-
-    if (lower.includes('поврежд') && lower.includes('json')) {
-      return 'Модель вернула повреждённый JSON отчёта. Система попробовала восстановить структуру; если ошибка повторится, запустите отчёт ещё раз или выберите профиль «Быстро».';
-    }
-
-    return text;
+    return deepReportErrorMessage(message, fallback);
   }
 
   private fallbackContentPackProfiles(): ReputationAiModelProfile[] {

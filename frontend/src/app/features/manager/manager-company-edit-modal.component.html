@@ -55,7 +55,6 @@
               <input
                 name="urlChat"
                 type="text"
-                required
                 [ngModel]="draft.urlChat"
                 (ngModelChange)="setField('urlChat', $event)"
               >
@@ -98,6 +97,126 @@
                 (ngModelChange)="setField('email', $event)"
               >
             </label>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+              <span>Контакты и ссылки</span>
+              <div class="company-extra-grid">
+                <label class="lead-edit-field">
+                  <span>Телефоны</span>
+                  <textarea
+                    name="phones"
+                    rows="2"
+                    [ngModel]="draft.phones"
+                    (ngModelChange)="setField('phones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Мобильные</span>
+                  <textarea
+                    name="mobilePhones"
+                    rows="2"
+                    [ngModel]="draft.mobilePhones"
+                    (ngModelChange)="setField('mobilePhones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>WhatsApp</span>
+                  <textarea
+                    name="whatsappPhones"
+                    rows="2"
+                    [ngModel]="draft.whatsappPhones"
+                    (ngModelChange)="setField('whatsappPhones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Email</span>
+                  <textarea
+                    name="emails"
+                    rows="2"
+                    [ngModel]="draft.emails"
+                    (ngModelChange)="setField('emails', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Сайты</span>
+                  <textarea
+                    name="websites"
+                    rows="2"
+                    [ngModel]="draft.websites"
+                    (ngModelChange)="setField('websites', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>VK</span>
+                  <textarea
+                    name="vkUrl"
+                    rows="2"
+                    [ngModel]="draft.vkUrl"
+                    (ngModelChange)="setField('vkUrl', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field company-extra-grid__wide">
+                  <span>Telegram</span>
+                  <textarea
+                    name="telegramUrl"
+                    rows="2"
+                    [ngModel]="draft.telegramUrl"
+                    (ngModelChange)="setField('telegramUrl', $event)"
+                  ></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+              <span>Сведения</span>
+              <div class="company-extra-grid">
+                <label class="lead-edit-field">
+                  <span>Регион</span>
+                  <input
+                    name="region"
+                    type="text"
+                    [ngModel]="draft.region"
+                    (ngModelChange)="setField('region', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Адрес</span>
+                  <input
+                    name="address"
+                    type="text"
+                    [ngModel]="draft.address"
+                    (ngModelChange)="setField('address', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Отрасли</span>
+                  <textarea
+                    name="industries"
+                    rows="2"
+                    [ngModel]="draft.industries"
+                    (ngModelChange)="setField('industries', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Тип</span>
+                  <textarea
+                    name="companyType"
+                    rows="2"
+                    [ngModel]="draft.companyType"
+                    (ngModelChange)="setField('companyType', $event)"
+                  ></textarea>
+                </label>
+              </div>
+            </section>
 
             <label class="lead-edit-field">
               <span>Категория</span>
@@ -201,6 +320,16 @@
                 type="checkbox"
                 [ngModel]="draft.active"
                 (ngModelChange)="setField('active', $event)"
+              >
+            </label>
+
+            <label class="lead-edit-field">
+              <span>Отчеты клиенту</span>
+              <input
+                name="publicationProgressReportsEnabled"
+                type="checkbox"
+                [ngModel]="draft.publicationProgressReportsEnabled"
+                (ngModelChange)="setField('publicationProgressReportsEnabled', $event)"
               >
             </label>
 

@@ -29,6 +29,17 @@ export interface CompanyCreatePayload {
   filialCity?: CompanyCreateOption | null;
   filialTitle: string;
   filialUrl: string;
+  phones: string;
+  mobilePhones: string;
+  whatsappPhones: string;
+  emails: string;
+  websites: string;
+  vkUrl: string;
+  telegramUrl: string;
+  region: string;
+  address: string;
+  industries: string;
+  companyType: string;
   managers: CompanyCreateOption[];
   workers: CompanyCreateOption[];
   categories: CompanyCreateOption[];
@@ -54,6 +65,25 @@ export interface CompanyCreateRequest {
   filialCityId: number | null;
   filialTitle: string;
   filialUrl: string;
+  phones: string;
+  mobilePhones: string;
+  whatsappPhones: string;
+  emails: string;
+  websites: string;
+  vkUrl: string;
+  telegramUrl: string;
+  region: string;
+  address: string;
+  industries: string;
+  companyType: string;
+}
+
+export interface CompanyDeepReportLaunch {
+  attempted: boolean;
+  started: boolean;
+  jobId?: number | null;
+  status: string;
+  message: string;
 }
 
 export interface CompanyCreateResult {
@@ -61,6 +91,7 @@ export interface CompanyCreateResult {
   title: string;
   leadId?: number | null;
   source: CompanyCreateSource;
+  deepReportLaunch?: CompanyDeepReportLaunch | null;
 }
 
 @Injectable({ providedIn: 'root' })

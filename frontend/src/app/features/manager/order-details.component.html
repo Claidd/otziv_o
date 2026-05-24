@@ -497,7 +497,7 @@
           </button>
         }
         <button type="button" class="send-check-action" (click)="sendToCheck()" [disabled]="busy()">
-          {{ isMutating('send-check') ? 'Отправляю...' : 'Отправить на проверку' }}
+          {{ isMutating('send-check') ? sendToCheckBusyLabel() : sendToCheckActionLabel() }}
         </button>
         <a [routerLink]="editAllReviewsRoute()">
           Проверка отзывов

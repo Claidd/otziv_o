@@ -12,10 +12,17 @@ import { UiTooltipDirective } from '../ui-tooltip.directive';
 
 export type DeepReportBlock = {
   key: string;
+  sectionIndex: number;
   title: string;
   icon: string;
   body: string;
   html: string;
+};
+
+type RawDeepReportBlock = {
+  sectionIndex?: number;
+  title: string;
+  body: string;
 };
 
 export type ReportQualityScore = {
@@ -89,6 +96,11 @@ export class DeepResearchReportViewComponent {
   reviewIdeaDraft: string[] = [];
 
   deepReportBlocks(): DeepReportBlock[] {
+    return this.rawDeepReportBlocks()
+      .filter((block) => !this.isReviewIdeasSection(block.title));
+  }
+
+  private rawDeepReportBlocks(): DeepReportBlock[] {
     const report = this.report;
     if (!report) {
       return [];
@@ -96,17 +108,19 @@ export class DeepResearchReportViewComponent {
 
     const sections = (report.sections ?? [])
       .filter((section) => Boolean(section.title?.trim() || section.body?.trim()))
-      .map((section) => ({
+      .map((section, sectionIndex) => ({
+        sectionIndex,
         title: section.title?.trim() || 'Раздел отчёта',
         body: section.body?.trim() || ''
       }));
 
-    const blocks = sections.length > 0
+    const blocks: RawDeepReportBlock[] = sections.length > 0
       ? sections
       : this.splitMarkdownIntoBlocks(report.reportMarkdown);
 
     return blocks.map((section, index) => ({
       key: `${index}-${section.title}`,
+      sectionIndex: section.sectionIndex ?? index,
       title: section.title,
       icon: this.topicIcon(section.title),
       body: section.body,
@@ -387,9 +401,8 @@ export class DeepResearchReportViewComponent {
 
   private reviewIdeasFromSections(): string[] {
     const ideas: string[] = [];
-    for (const block of this.deepReportBlocks()) {
-      const title = block.title.toLowerCase();
-      if (!title.includes('иде') || !title.includes('отзыв') || /(пост|faq|карточ|контент|коммент|дозбор|спросить|уточн)/.test(title)) {
+    for (const block of this.rawDeepReportBlocks()) {
+      if (!this.isReviewIdeasSection(block.title)) {
         continue;
       }
       for (const line of block.body.split(/\r?\n/)) {
@@ -406,6 +419,13 @@ export class DeepResearchReportViewComponent {
       }
     }
     return ideas;
+  }
+
+  private isReviewIdeasSection(title: string): boolean {
+    const value = title.toLowerCase();
+    return value.includes('иде')
+      && value.includes('отзыв')
+      && !/(пост|faq|карточ|контент|коммент|дозбор|спросить|уточн)/.test(value);
   }
 
   cleanReviewIdeas(values: string[]): string[] {

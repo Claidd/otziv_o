@@ -34,7 +34,14 @@ import {
   writeSessionDraft
 } from '../../shared/session-draft-storage';
 import { DeepResearchReportViewComponent } from '../../shared/reputation/deep-research-report-view.component';
+import { deepReportErrorMessage } from '../../shared/reputation/deep-report-error-message';
 import { ToastService } from '../../shared/toast.service';
+import {
+  orderDetailsSendToCheckActionLabel,
+  orderDetailsSendToCheckBusyLabel,
+  orderDetailsSendToCheckSuccessDetail,
+  orderDetailsSendToCheckTargetStatus
+} from './order-details-status';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
@@ -413,33 +420,10 @@ export class OrderDetailsComponent {
   }
 
   companyReportJobErrorMessage(message: string | null | undefined): string {
-    const text = (message ?? '').trim();
-    if (!text) {
-      return 'Отчёт не собрался. Администратор или владелец может запустить обновление.';
-    }
-
-    const lower = text.toLowerCase();
-    if (lower.includes('rate limit reached')
-      || lower.includes('tokens per min')
-      || lower.includes('rate_limit_exceeded')
-      || lower.includes('лимит токен')) {
-      const retry = text.match(/try again in ([0-9.]+)s/i)?.[1]
-        ?? text.match(/через\s+([0-9.]+)\s*с/i)?.[1];
-      const retryHint = retry ? ` API просит повторить примерно через ${retry} с.` : '';
-      return `OpenAI временно упёрся в лимит токенов в минуту.${retryHint} Подождите 1-2 минуты и запустите отчёт снова.`;
-    }
-
-    if (lower.includes('http 407') || lower.includes('proxy authentication required')) {
-      return 'VPS-прокси не пустил запрос к OpenAI. Проверьте allowlist IP в Squid/UFW и отсутствие proxy_auth для этого маршрута.';
-    }
-
-    if (lower.includes('unsupported_country_region_territory')
-      || lower.includes('country, region, or territory not supported')
-      || lower.includes('неподдерживаемого региона')) {
-      return 'OpenAI отклонил запрос из неподдерживаемого региона. Проверьте, что включён OpenAI proxy и приложение идёт через VPS.';
-    }
-
-    return text;
+    return deepReportErrorMessage(
+      message,
+      'Отчёт не собрался. Администратор или владелец может запустить обновление.'
+    );
   }
 
   private loadCompanyReportState(showErrors: boolean): void {
@@ -1978,11 +1962,12 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const targetStatus = this.sendToCheckTargetStatus();
     this.mutationKey.set('send-check');
-    this.managerApi.updateOrderStatus(orderId, 'В проверку').subscribe({
+    this.managerApi.updateOrderStatus(orderId, targetStatus).subscribe({
       next: () => {
         this.mutationKey.set(null);
-        this.toastService.success('Заказ отправлен', 'Статус изменен на "В проверку"');
+        this.toastService.success('Заказ отправлен', orderDetailsSendToCheckSuccessDetail(targetStatus));
 
         if (this.isOnlyWorkerRole()) {
           void this.router.navigate(['/worker']);
@@ -1996,6 +1981,18 @@ export class OrderDetailsComponent {
         this.toastService.error('Заказ не отправлен', this.sendToCheckFailureMessage(err));
       }
     });
+  }
+
+  sendToCheckTargetStatus(): string {
+    return orderDetailsSendToCheckTargetStatus(this.details()?.status, this.isOnlyWorkerRole());
+  }
+
+  sendToCheckActionLabel(): string {
+    return orderDetailsSendToCheckActionLabel(this.sendToCheckTargetStatus());
+  }
+
+  sendToCheckBusyLabel(): string {
+    return orderDetailsSendToCheckBusyLabel(this.sendToCheckTargetStatus());
   }
 
   editAllReviewsRoute(): unknown[] {

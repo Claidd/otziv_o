@@ -16,6 +16,17 @@ public record CompanyCreateRequest(
         Long workerId,
         Long filialCityId,
         String filialTitle,
-        String filialUrl
+        String filialUrl,
+        String phones,
+        String mobilePhones,
+        String whatsappPhones,
+        String emails,
+        String websites,
+        String vkUrl,
+        String telegramUrl,
+        String region,
+        String address,
+        String industries,
+        String companyType
 ) {
 }

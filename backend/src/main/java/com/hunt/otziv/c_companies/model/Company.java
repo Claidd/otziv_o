@@ -44,7 +44,7 @@ public class Company {
     @Column(name = "company_city", length = 50, nullable = false)
     private String city;
 
-    @Column(name = "company_url_chat", length = 500, nullable = false)
+    @Column(name = "company_url_chat", length = 500)
     private String urlChat;
 
     //    мейл пользователя
@@ -153,12 +153,24 @@ public class Company {
     @Column(name = "company_max_link_requested_at")
     private LocalDateTime maxLinkRequestedAt;
 
+    @Builder.Default
+    @Column(name = "company_publication_progress_reports_enabled", nullable = false)
+    private boolean publicationProgressReportsEnabled = true;
+
     @Column(name = "company_last_payer_email", length = 320)
     @Email
     private String lastPayerEmail;
 
     @Column(name = "company_last_payer_email_at")
     private LocalDateTime lastPayerEmailAt;
+
+    @OneToMany(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 20)
+    private Set<CompanyContact> contacts;
+
+    @OneToOne(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private CompanyInfo info;
 
 
 
