@@ -8,10 +8,19 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.client_messages.ClientMessageScenario;
+import com.hunt.otziv.client_messages.ClientMessageTargetType;
+import com.hunt.otziv.client_messages.ScheduledClientMessageAttempt;
+import com.hunt.otziv.client_messages.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.payments.PaymentLinkService;
+import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -21,6 +30,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +45,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -47,11 +58,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private static final int DEFAULT_ORIGINAL_RATING = 5;
     private static final int DEFAULT_TARGET_RATING = 2;
     private static final int SCHEDULE_STEP_DAYS = 2;
+    private static final String STATUS_TO_PAY = "Выставлен счет";
+    private static final String STATUS_NOT_PAID = "Не оплачено";
 
     private final BadReviewTaskRepository badReviewTaskRepository;
     private final ReviewRepository reviewRepository;
     private final BotService botService;
     private final PersonalReminderService personalReminderService;
+    private final AppSettingService appSettingService;
+    private final OrderStatusNotificationService orderStatusNotificationService;
+    private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -132,10 +149,179 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
+        sendBadReviewInvoiceIfEnabled(savedTask, summary);
         createTaskCompletionReminder(savedTask, summary);
         createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}", savedTask.getId(), orderId, savedTask.getPrice());
         return savedTask;
+    }
+
+    private void sendBadReviewInvoiceIfEnabled(BadReviewTask task, BadReviewTaskSummary summary) {
+        Order order = task != null ? task.getOrder() : null;
+        if (order == null || order.getId() == null) {
+            log.warn("Счет после плохого отзыва не отправлен: заказ не найден, taskId={}", task == null ? null : task.getId());
+            recordBadReviewInvoiceAttempt(task, null, ScheduledMessageAttemptStatus.FAILED, null, "order_missing",
+                    "Заказ для счета после плохого отзыва не найден", null, 0);
+            return;
+        }
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
+            log.info("Счет после плохого отзыва пропущен: автоответчик выключен, orderId={}, taskId={}", order.getId(), task.getId());
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "worker_disabled",
+                    "Автоответчик выключен", badReviewInvoicePreview(order, summary), 0);
+            return;
+        }
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
+            log.info("Счет после плохого отзыва пропущен настройкой, orderId={}, taskId={}", order.getId(), task.getId());
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "bad_review_invoice_disabled",
+                    "Отправка счета после плохого отзыва выключена настройкой", badReviewInvoicePreview(order, summary), 0);
+            return;
+        }
+
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+            String preview = badReviewInvoicePreview(order, summary);
+            log.info(
+                    "Счет после плохого отзыва dry-run: orderId={}, taskId={}, amount={}, message={}",
+                    order.getId(),
+                    task.getId(),
+                    money(payableSum(order, summary)),
+                    preview
+            );
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "client_messages_live_disabled",
+                    "Реальная отправка сообщений выключена", preview, 0);
+            return;
+        }
+
+        long startedAt = System.currentTimeMillis();
+        String message = null;
+        try {
+            message = badReviewInvoiceMessage(order, summary);
+            String currentStatus = statusTitle(order);
+            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
+                    currentStatus,
+                    order,
+                    order.getManager() == null ? null : order.getManager().getClientId(),
+                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
+                    message,
+                    STATUS_TO_PAY
+            );
+            if (STATUS_TO_PAY.equals(appliedStatus)) {
+                log.info(
+                        "Счет после плохого отзыва отправлен клиенту: orderId={}, taskId={}, amount={}",
+                        order.getId(),
+                        task.getId(),
+                        money(payableSum(order, summary))
+                );
+                recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SENT, "client-chat",
+                        null, null, message, System.currentTimeMillis() - startedAt);
+            } else {
+                String reason = "Сообщение не отправлено, заказ остался в статусе \"" + appliedStatus + "\"";
+                log.warn(
+                        "Счет после плохого отзыва не отправлен клиенту: orderId={}, taskId={}, statusLeft={}",
+                        order.getId(),
+                        task.getId(),
+                        appliedStatus
+                );
+                recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
+                        "client_chat_send_failed", reason, message, System.currentTimeMillis() - startedAt);
+            }
+        } catch (Exception e) {
+            String reason = readableException(e);
+            log.warn("Счет после плохого отзыва не отправлен: orderId={}, taskId={}, reason={}",
+                    order.getId(), task.getId(), reason, e);
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
+                    "bad_review_invoice_exception", reason, message == null ? badReviewInvoicePreview(order, summary) : message,
+                    System.currentTimeMillis() - startedAt);
+        }
+    }
+
+    private void recordBadReviewInvoiceAttempt(
+            BadReviewTask task,
+            Order order,
+            ScheduledMessageAttemptStatus status,
+            String channel,
+            String errorCode,
+            String errorMessage,
+            String message,
+            long durationMs
+    ) {
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, false)) {
+            return;
+        }
+        Long taskId = task == null ? null : task.getId();
+        Long orderId = order == null ? null : order.getId();
+        clientMessageAttemptRepository.save(ScheduledClientMessageAttempt.builder()
+                .stateId(null)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:" + (taskId == null ? "unknown" : taskId))
+                .companyId(order == null || order.getCompany() == null ? null : order.getCompany().getId())
+                .orderId(orderId)
+                .archiveOrderId(null)
+                .status(status)
+                .channel(channel)
+                .errorCode(errorCode)
+                .errorMessage(limit(errorMessage, 1000))
+                .messagePreview(limit(message, 500))
+                .durationMs(durationMs)
+                .build());
+    }
+
+    private String badReviewInvoiceMessage(Order order, BadReviewTaskSummary summary) {
+        String heading = orderHeading(order);
+        String paymentText = paymentInstruction(order) + "\n\nК оплате: " + money(payableSum(order, summary)) + " руб.";
+        return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
+    }
+
+    private String badReviewInvoicePreview(Order order, BadReviewTaskSummary summary) {
+        return (orderHeading(order) + " " + managerPayText(order) + " К оплате: " + money(payableSum(order, summary)) + " руб.")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String paymentInstruction(Order order) {
+        if (!usesTbankPaymentInstructionSource()) {
+            return managerPayText(order);
+        }
+        ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
+        return "Ссылка на оплату: " + link.url();
+    }
+
+    private boolean usesTbankPaymentInstructionSource() {
+        String source = appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                "MANAGER_TEXT"
+        );
+        return "TBANK_LINK".equals((source == null ? "" : source.trim()).toUpperCase(Locale.ROOT));
+    }
+
+    private String managerPayText(Order order) {
+        String payText = order != null && order.getManager() != null ? order.getManager().getPayText() : null;
+        return payText == null || payText.trim().isEmpty()
+                ? "Здравствуйте, ваш заказ выполнен, просьба оплатить. Пришлите чек, пожалуйста, как оплатите."
+                : payText.trim();
+    }
+
+    private String orderHeading(Order order) {
+        if (order == null) {
+            return "";
+        }
+        String company = companyTitle(order);
+        String filial = order.getFilial() != null && order.getFilial().getTitle() != null
+                ? order.getFilial().getTitle().trim()
+                : "";
+        return filial.isBlank() ? company : company + " - " + filial;
+    }
+
+    private String statusTitle(Order order) {
+        String title = order != null && order.getStatus() != null && order.getStatus().getTitle() != null
+                ? order.getStatus().getTitle().trim()
+                : "";
+        return title.isBlank() ? STATUS_NOT_PAID : title;
+    }
+
+    private String readableException(Exception e) {
+        String message = e.getMessage();
+        return message == null || message.trim().isEmpty() ? e.getClass().getSimpleName() : message.trim();
     }
 
     @Override

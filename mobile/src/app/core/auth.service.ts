@@ -1,14 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
+import { AppLauncher } from '@capacitor/app-launcher';
 import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { mobileEnvironment, webRedirectUri } from './mobile-environment';
-import type { AuthStatus, AuthUser, PendingLogin, StoredTokens, TokenEndpointResponse } from './auth.models';
-
-const TOKENS_KEY = 'otziv.mobile.tokens';
-const PENDING_LOGIN_KEY = 'otziv.mobile.pendingLogin';
+import type { AuthStatus, AuthUser, StoredTokens, TokenEndpointResponse } from './auth.models';
+import { MobileAuthStorageService } from './mobile-auth-storage.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -16,13 +14,17 @@ export class AuthService {
   private refreshTimerId: ReturnType<typeof setTimeout> | undefined;
   private refreshPromise: Promise<boolean> | null = null;
   private initialized = false;
+  private readonly handledNativeAuthUrls = new Set<string>();
 
   readonly status = signal<AuthStatus>('initializing');
   readonly user = signal<AuthUser | null>(null);
   readonly tokens = signal<StoredTokens | null>(null);
   readonly error = signal<string | null>(null);
 
-  constructor(private readonly router: Router) {}
+  constructor(
+    private readonly router: Router,
+    private readonly storage: MobileAuthStorageService
+  ) {}
 
   async init(): Promise<void> {
     if (this.initialized) {
@@ -30,9 +32,13 @@ export class AuthService {
     }
 
     this.initialized = true;
-    await this.registerNativeDeepLinks();
+    await this.registerNativeDeepLinks().catch(() => undefined);
 
-    const stored = await this.readTokens();
+    const stored = await this.storage.readTokens().catch(async () => {
+      await this.storage.clearTokens().catch(() => undefined);
+      this.error.set('Сессия была повреждена и очищена. Войдите заново.');
+      return null;
+    });
     if (!stored) {
       this.clearState('anonymous');
       return;
@@ -72,7 +78,7 @@ export class AuthService {
     const codeVerifier = this.randomUrlSafeString(64);
     const codeChallenge = await this.codeChallenge(codeVerifier);
 
-    await this.writePendingLogin({
+    await this.storage.writePendingLogin({
       state,
       codeVerifier,
       targetUrl,
@@ -89,7 +95,7 @@ export class AuthService {
     authUrl.searchParams.set('code_challenge_method', 'S256');
 
     if (this.isNative) {
-      await Browser.open({ url: authUrl.toString(), presentationStyle: 'fullscreen' });
+      await this.openNativeAuthUrl(authUrl.toString());
       return;
     }
 
@@ -97,38 +103,48 @@ export class AuthService {
   }
 
   async completeLoginFromCallback(callbackUrl: string): Promise<void> {
-    const url = new URL(callbackUrl);
-    const error = url.searchParams.get('error');
-    if (error) {
-      await this.clearPendingLogin();
-      this.error.set(url.searchParams.get('error_description') ?? error);
-      this.status.set('error');
-      return;
+    try {
+      const url = new URL(callbackUrl);
+      const error = url.searchParams.get('error');
+      if (error) {
+        await this.storage.clearPendingLogin();
+        this.error.set(url.searchParams.get('error_description') ?? error);
+        this.status.set('error');
+        await this.router.navigateByUrl('/login', { replaceUrl: true });
+        return;
+      }
+
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
+      const pending = await this.storage.readPendingLogin();
+
+      if (!code || !state || !pending || state !== pending.state) {
+        await this.storage.clearPendingLogin();
+        this.error.set('Не удалось подтвердить ответ Keycloak.');
+        this.status.set('error');
+        await this.router.navigateByUrl('/login', { replaceUrl: true });
+        return;
+      }
+
+      const response = await this.requestToken({
+        grant_type: 'authorization_code',
+        client_id: mobileEnvironment.keycloak.clientId,
+        code,
+        redirect_uri: pending.redirectUri,
+        code_verifier: pending.codeVerifier
+      });
+
+      await this.acceptTokens(response);
+      await this.storage.clearPendingLogin();
+      await Browser.close().catch(() => undefined);
+      await this.router.navigateByUrl(pending.targetUrl || '/tabs/home', { replaceUrl: true });
+    } catch (error: unknown) {
+      await Browser.close().catch(() => undefined);
+      await this.storage.clearPendingLogin().catch(() => undefined);
+      await this.clearSession('error').catch(() => this.clearState('error'));
+      this.error.set(this.errorMessage(error));
+      await this.router.navigateByUrl('/login', { replaceUrl: true });
     }
-
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const pending = await this.readPendingLogin();
-
-    if (!code || !state || !pending || state !== pending.state) {
-      await this.clearPendingLogin();
-      this.error.set('Не удалось подтвердить ответ Keycloak.');
-      this.status.set('error');
-      return;
-    }
-
-    const response = await this.requestToken({
-      grant_type: 'authorization_code',
-      client_id: mobileEnvironment.keycloak.clientId,
-      code,
-      redirect_uri: pending.redirectUri,
-      code_verifier: pending.codeVerifier
-    });
-
-    await this.acceptTokens(response);
-    await this.clearPendingLogin();
-    await Browser.close().catch(() => undefined);
-    await this.router.navigateByUrl(pending.targetUrl || '/tabs/home', { replaceUrl: true });
   }
 
   async getAccessToken(): Promise<string | null> {
@@ -189,7 +205,7 @@ export class AuthService {
     }
 
     if (this.isNative) {
-      await Browser.open({ url: logoutUrl.toString(), presentationStyle: 'fullscreen' });
+      await this.openNativeAuthUrl(logoutUrl.toString());
       await this.router.navigateByUrl('/login', { replaceUrl: true });
       return;
     }
@@ -209,11 +225,32 @@ export class AuthService {
 
     await CapacitorApp.addListener('appUrlOpen', (event) => {
       if (event.url.startsWith(mobileEnvironment.keycloak.nativeRedirectUri)) {
-        void this.completeLoginFromCallback(event.url);
+        void this.handleNativeAuthCallback(event.url);
       } else if (event.url.startsWith('otziv://logout')) {
         void Browser.close();
       }
     });
+
+    const launchUrl = await CapacitorApp.getLaunchUrl().catch(() => undefined);
+    if (launchUrl?.url?.startsWith(mobileEnvironment.keycloak.nativeRedirectUri)) {
+      await this.handleNativeAuthCallback(launchUrl.url);
+    } else if (launchUrl?.url?.startsWith('otziv://logout')) {
+      await Browser.close().catch(() => undefined);
+    }
+  }
+
+  private async handleNativeAuthCallback(url: string): Promise<void> {
+    if (this.handledNativeAuthUrls.has(url)) {
+      return;
+    }
+
+    this.handledNativeAuthUrls.add(url);
+    if (this.handledNativeAuthUrls.size > 5) {
+      this.handledNativeAuthUrls.clear();
+      this.handledNativeAuthUrls.add(url);
+    }
+
+    await this.completeLoginFromCallback(url);
   }
 
   private async acceptTokens(response: TokenEndpointResponse, fallbackRefreshToken?: string): Promise<void> {
@@ -232,15 +269,38 @@ export class AuthService {
     this.syncUser(tokens.accessToken);
     this.status.set('authenticated');
     this.error.set(null);
-    await this.writeTokens(tokens);
+    await this.storage.writeTokens(tokens);
     this.scheduleRefresh();
   }
 
   private async requestToken(params: Record<string, string>): Promise<TokenEndpointResponse> {
     const body = new URLSearchParams(params);
-    const response = await fetch(`${this.issuerUrl()}/protocol/openid-connect/token`, {
+    const url = `${this.issuerUrl()}/protocol/openid-connect/token`;
+
+    if (this.isNative) {
+      const response = await CapacitorHttp.post({
+        url,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        data: body.toString(),
+        responseType: 'json',
+        connectTimeout: 15_000,
+        readTimeout: 30_000
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`Keycloak token request failed: ${response.status}`);
+      }
+
+      return this.parseTokenResponse(response.data);
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
+        Accept: 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body
@@ -251,6 +311,31 @@ export class AuthService {
     }
 
     return response.json() as Promise<TokenEndpointResponse>;
+  }
+
+  private parseTokenResponse(data: unknown): TokenEndpointResponse {
+    if (typeof data === 'string') {
+      return JSON.parse(data) as TokenEndpointResponse;
+    }
+    return data as TokenEndpointResponse;
+  }
+
+  private async openNativeAuthUrl(url: string): Promise<void> {
+    try {
+      await Browser.open({
+        url,
+        presentationStyle: 'fullscreen',
+        toolbarColor: '#f6f8fc'
+      });
+      return;
+    } catch {
+      // Fall back to the default browser when Custom Tabs are unavailable.
+    }
+
+    const result = await AppLauncher.openUrl({ url });
+    if (!result.completed) {
+      throw new Error('Не удалось открыть страницу входа.');
+    }
   }
 
   private scheduleRefresh(): void {
@@ -375,28 +460,6 @@ export class AuthService {
     return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  private async readTokens(): Promise<StoredTokens | null> {
-    const result = await Preferences.get({ key: TOKENS_KEY });
-    return result.value ? JSON.parse(result.value) as StoredTokens : null;
-  }
-
-  private async writeTokens(tokens: StoredTokens): Promise<void> {
-    await Preferences.set({ key: TOKENS_KEY, value: JSON.stringify(tokens) });
-  }
-
-  private async writePendingLogin(login: PendingLogin): Promise<void> {
-    await Preferences.set({ key: PENDING_LOGIN_KEY, value: JSON.stringify(login) });
-  }
-
-  private async readPendingLogin(): Promise<PendingLogin | null> {
-    const result = await Preferences.get({ key: PENDING_LOGIN_KEY });
-    return result.value ? JSON.parse(result.value) as PendingLogin : null;
-  }
-
-  private async clearPendingLogin(): Promise<void> {
-    await Preferences.remove({ key: PENDING_LOGIN_KEY });
-  }
-
   private clearState(status: AuthStatus): void {
     this.tokens.set(null);
     this.user.set(null);
@@ -410,7 +473,7 @@ export class AuthService {
     }
 
     this.clearState(status);
-    await Preferences.remove({ key: TOKENS_KEY });
+    await this.storage.clearTokens();
   }
 
   private errorMessage(error: unknown): string {

@@ -18,6 +18,7 @@ import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Repository
@@ -73,6 +74,29 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         WHERE o.id = :orderId
     """)
     Optional<Order> findByIdForMutation(@Param("orderId") Long orderId);
+
+    @Query("""
+        SELECT o.id AS id,
+               c.id AS companyId,
+               o.statusChangedAt AS statusChangedAt
+        FROM Order o
+        LEFT JOIN o.company c
+        JOIN o.status s
+        WHERE o.complete = false
+          AND o.statusChangedAt IS NOT NULL
+          AND o.statusChangedAt <= :cutoff
+          AND s.title IN :statuses
+        ORDER BY o.statusChangedAt ASC, o.id ASC
+    """)
+    List<ClientMessageCandidate> findClientMessageCandidates(@Param("statuses") Collection<String> statuses,
+                                                             @Param("cutoff") LocalDateTime cutoff,
+                                                             Pageable pageable);
+
+    interface ClientMessageCandidate {
+        Long getId();
+        Long getCompanyId();
+        LocalDateTime getStatusChangedAt();
+    }
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :orderId")

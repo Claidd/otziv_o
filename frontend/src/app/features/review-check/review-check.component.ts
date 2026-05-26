@@ -995,6 +995,10 @@ export class ReviewCheckComponent {
   }
 
   reviewedCount(details: ReviewCheckPayload): number {
+    if (this.isReviewWindowApproved(details)) {
+      return details.reviews.length;
+    }
+
     return details.reviews.filter((review) => this.isReviewPublished(review)).length;
   }
 
@@ -1003,7 +1007,7 @@ export class ReviewCheckComponent {
   }
 
   private isReviewPublished(review: ReviewCheckReview): boolean {
-    return review.publish || !!review.publishedDate;
+    return review.publish;
   }
 
   managerOrderRoute(details: ReviewCheckPayload): unknown[] {

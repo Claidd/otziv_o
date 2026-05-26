@@ -11,6 +11,7 @@ import {
   receiptOutline
 } from 'ionicons/icons';
 import { AuthService } from '../core/auth.service';
+import { MOBILE_ACTIONS, MOBILE_ROLES, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
 
 type SmartTab = 'home' | 'leads' | 'companies' | 'orders' | 'worker';
 const SMART_TAB_HOLD_MS = 700;
@@ -291,24 +292,24 @@ export class TabsPage {
   }
 
   private defaultHomeRoute(): string {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+    return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin)
       ? '/tabs/home/analytics'
       : '/tabs/home/profile';
   }
 
   canManager(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view);
   }
 
   canWorker(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER', 'WORKER']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view);
   }
 
   canLeads(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view);
   }
 
   canOperator(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'OPERATOR']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view);
   }
 }

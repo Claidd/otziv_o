@@ -25,6 +25,7 @@ public class TbankClient {
 
     private final RestTemplate restTemplate;
     private final TbankPaymentProperties properties;
+    private final TbankRuntimeSettingsService runtimeSettingsService;
     private final TbankTokenSigner tokenSigner;
 
     public TbankInitResponse init(TbankInitCommand command) {
@@ -32,7 +33,7 @@ public class TbankClient {
     }
 
     public TbankInitResponse init(TbankPaymentProfile profile, TbankInitCommand command) {
-        if (!properties.isEnabled()) {
+        if (!runtimeSettingsService.isTbankEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Интернет-эквайринг Т-Банка выключен в настройках");
         }
         validateProfile(profile);
@@ -71,7 +72,7 @@ public class TbankClient {
     }
 
     public TbankCancelResponse cancel(TbankPaymentProfile profile, TbankCancelCommand command) {
-        if (!properties.isEnabled()) {
+        if (!runtimeSettingsService.isTbankEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Интернет-эквайринг Т-Банка выключен в настройках");
         }
         validateProfile(profile);
@@ -109,7 +110,7 @@ public class TbankClient {
     }
 
     public TbankGetStateResponse getState(TbankPaymentProfile profile, String paymentId) {
-        if (!properties.isEnabled()) {
+        if (!runtimeSettingsService.isTbankEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Интернет-эквайринг Т-Банка выключен в настройках");
         }
         validateProfile(profile);
@@ -141,6 +142,44 @@ public class TbankClient {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Ошибка запроса GetState в Т-Банк: " + e.getResponseBodyAsString(),
+                    e
+            );
+        }
+    }
+
+    public TbankGetQrResponse getQr(TbankPaymentProfile profile, TbankGetQrCommand command) {
+        if (!runtimeSettingsService.isTbankEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Интернет-эквайринг Т-Банка выключен в настройках");
+        }
+        validateProfile(profile);
+        if (command.paymentId() == null || command.paymentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не задан PaymentId для QR СБП");
+        }
+
+        Map<String, Object> payload = qrPayload(profile, command);
+        payload.put("Token", tokenSigner.sign(payload, profile.password()));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        try {
+            ResponseEntity<TbankGetQrResponse> response = restTemplate.postForEntity(
+                    properties.getBaseUrl() + "/v2/GetQr",
+                    new HttpEntity<>(payload, headers),
+                    TbankGetQrResponse.class
+            );
+            TbankGetQrResponse body = response.getBody();
+            if (body == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк вернул пустой ответ на GetQr");
+            }
+            if (!body.success()) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, body.errorText());
+            }
+            return body;
+        } catch (RestClientResponseException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Ошибка запроса GetQr в Т-Банк: " + e.getResponseBodyAsString(),
                     e
             );
         }
@@ -199,6 +238,19 @@ public class TbankClient {
         return payload;
     }
 
+    private Map<String, Object> qrPayload(TbankPaymentProfile profile, TbankGetQrCommand command) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", profile.terminalKey());
+        payload.put("PaymentId", command.paymentId());
+        if (command.dataType() != null && !command.dataType().isBlank()) {
+            payload.put("DataType", command.dataType());
+        }
+        if (command.bankId() != null && !command.bankId().isBlank()) {
+            payload.put("BankId", command.bankId());
+        }
+        return payload;
+    }
+
     static String formatRedirectDueDate(OffsetDateTime redirectDueDate) {
         return TBANK_DATE_TIME.format(redirectDueDate);
     }
@@ -206,6 +258,7 @@ public class TbankClient {
     private Map<String, Object> receipt(TbankInitCommand command) {
         return Map.of(
                 "Email", command.email(),
+                "FfdVersion", "1.2",
                 "Taxation", properties.getTaxation(),
                 "Items", List.of(Map.of(
                         "Name", properties.getReceiptItemName(),

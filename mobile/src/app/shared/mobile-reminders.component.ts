@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IonModal } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
@@ -8,6 +8,7 @@ import {
   PersonalReminderMode,
   PersonalReminderRequest
 } from '../core/api.service';
+import { MobileConfirmService } from './mobile-confirm.service';
 
 type PersonalReminderDraft = {
   title: string;
@@ -16,6 +17,30 @@ type PersonalReminderDraft = {
   remindAtLocal: string;
   timerMinutes: number;
 };
+
+export const MOBILE_RECOVERY_CLIENT_NOTIFIED_EVENT = 'review-recovery-client-notified';
+export const REVIEW_RECOVERY_BATCH_SOURCE = 'REVIEW_RECOVERY_BATCH';
+export const BAD_REVIEW_TASK_SOURCE = 'BAD_REVIEW_TASK';
+export const BAD_REVIEW_ORDER_READY_SOURCE = 'BAD_REVIEW_ORDER_READY';
+
+export type MobileRecoveryClientNotifiedDetail = {
+  orderId: number;
+  batchId: number;
+};
+
+const CHAT_LINE_PATTERN = /(^|\n)\s*Чат:\s*(https?:\/\/\S+|tel:\S+)/i;
+const ORDER_ID_PATTERN = /#(\d+)/;
+
+export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClientNotifiedDetail): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent<MobileRecoveryClientNotifiedDetail>(
+    MOBILE_RECOVERY_CLIENT_NOTIFIED_EVENT,
+    { detail }
+  ));
+}
 
 @Component({
   selector: 'app-mobile-reminders',
@@ -134,17 +159,63 @@ type PersonalReminderDraft = {
                       <small>{{ timeLabel(reminder) }}</small>
                     </button>
                     <div class="mobile-reminder-actions">
-                      @if (canEdit(reminder)) {
+                      @if (reminderChatUrl(reminder); as chatUrl) {
+                        <a class="text-action" [href]="chatUrl" target="_blank" rel="noopener" aria-label="Открыть чат">
+                          чат
+                        </a>
+                      }
+                      @if (isRecoveryCompletionReminder(reminder)) {
+                        <button
+                          class="text-action"
+                          type="button"
+                          (click)="notifyRecoveryClient(reminder)"
+                          [disabled]="isRecoveryNotificationSaving(reminder) || !canNotifyRecoveryClient(reminder)"
+                          aria-label="Клиент уведомлен"
+                        >
+                          {{ isRecoveryNotificationSaving(reminder) ? '...' : 'клиент' }}
+                        </button>
+                      } @else if (isBadReviewReminder(reminder)) {
+                        @if (hasPaymentCopyText(reminder)) {
+                          <button
+                            class="text-action"
+                            type="button"
+                            (click)="copyReminderPayment(reminder)"
+                            [disabled]="isPaymentCopying(reminder)"
+                            aria-label="Скопировать счет"
+                          >
+                            {{ isPaymentCopying(reminder) ? '...' : 'счет' }}
+                          </button>
+                        }
+                        @if (isBadReviewOrderReadyReminder(reminder)) {
+                          <button
+                            class="text-action danger"
+                            type="button"
+                            (click)="moveBadReviewOrderToBan(reminder)"
+                            [disabled]="isBadReviewBanSaving(reminder)"
+                            aria-label="Перевести заказ в Бан"
+                          >
+                            {{ isBadReviewBanSaving(reminder) ? '...' : 'В Бан' }}
+                          </button>
+                        } @else {
+                          <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">
+                            <span class="material-icons-sharp">done</span>
+                          </button>
+                        }
+                      } @else if (canEdit(reminder)) {
                         <button type="button" (click)="startEdit(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Редактировать">
                           <span class="material-icons-sharp">edit</span>
                         </button>
+                        <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">
+                          <span class="material-icons-sharp">done</span>
+                        </button>
+                        <button class="danger" type="button" (click)="delete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Удалить">
+                          <span class="material-icons-sharp">delete</span>
+                        </button>
+                      } @else {
+                        <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">
+                          <span class="material-icons-sharp">done</span>
+                        </button>
                       }
-                      <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">
-                        <span class="material-icons-sharp">done</span>
-                      </button>
-                      <button class="danger" type="button" (click)="delete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Удалить">
-                        <span class="material-icons-sharp">delete</span>
-                      </button>
                     </div>
                   </article>
                 } @empty {
@@ -161,7 +232,9 @@ type PersonalReminderDraft = {
     </ion-modal>
   `
 })
-export class MobileRemindersComponent implements OnInit {
+export class MobileRemindersComponent implements OnInit, OnDestroy {
+  private readonly recoveryClientNotifiedHandler = (event: Event) => this.handleRecoveryClientNotified(event);
+
   readonly reminders = signal<PersonalReminder[]>([]);
   readonly sheetOpen = signal(false);
   readonly formOpen = signal(false);
@@ -171,14 +244,29 @@ export class MobileRemindersComponent implements OnInit {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
+  readonly notifyingRecoveryReminderId = signal<number | null>(null);
+  readonly copyingPaymentReminderId = signal<number | null>(null);
+  readonly banningBadReviewReminderId = signal<number | null>(null);
   readonly expandedId = signal<number | null>(null);
   readonly activeReminders = computed(() => this.sortReminders(this.reminders().filter((reminder) => !reminder.completedAt)));
   readonly activeReminderCount = computed(() => this.activeReminders().length);
 
-  constructor(private readonly api: ApiService) {}
+  constructor(
+    private readonly api: ApiService,
+    private readonly confirm: MobileConfirmService
+  ) {}
 
   ngOnInit(): void {
+    if (typeof window !== 'undefined') {
+      window.addEventListener(MOBILE_RECOVERY_CLIENT_NOTIFIED_EVENT, this.recoveryClientNotifiedHandler);
+    }
     void this.loadReminders();
+  }
+
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(MOBILE_RECOVERY_CLIENT_NOTIFIED_EVENT, this.recoveryClientNotifiedHandler);
+    }
   }
 
   open(): void {
@@ -290,6 +378,11 @@ export class MobileRemindersComponent implements OnInit {
   }
 
   async complete(reminder: PersonalReminder): Promise<void> {
+    if (this.isRecoveryCompletionReminder(reminder)) {
+      await this.notifyRecoveryClient(reminder);
+      return;
+    }
+
     this.mutatingId.set(reminder.id);
     this.error.set(null);
 
@@ -303,8 +396,72 @@ export class MobileRemindersComponent implements OnInit {
     }
   }
 
+  async notifyRecoveryClient(reminder: PersonalReminder): Promise<void> {
+    const batchId = reminder.sourceId;
+    const orderId = reminder.sourceOrderId ?? this.orderIdFromText(reminder);
+    if (!batchId || !orderId) {
+      this.error.set('Откройте детали заказа и нажмите "Клиент уведомлен" там.');
+      return;
+    }
+
+    this.notifyingRecoveryReminderId.set(reminder.id);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.api.markManagerRecoveryClientNotified(orderId, batchId));
+      dispatchMobileRecoveryClientNotified({ orderId, batchId });
+      this.reminders.update((reminders) => reminders.filter((item) => item.id !== reminder.id));
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Не удалось отметить клиента уведомленным.');
+    } finally {
+      this.notifyingRecoveryReminderId.set(null);
+    }
+  }
+
+  async copyReminderPayment(reminder: PersonalReminder): Promise<void> {
+    const text = this.reminderPaymentText(reminder);
+    if (!text) {
+      this.error.set('В уведомлении нет текста счета.');
+      return;
+    }
+
+    this.copyingPaymentReminderId.set(reminder.id);
+    this.error.set(null);
+    try {
+      await this.copyText(text);
+    } catch {
+      this.error.set('Не удалось скопировать счет.');
+    } finally {
+      this.copyingPaymentReminderId.set(null);
+    }
+  }
+
+  async moveBadReviewOrderToBan(reminder: PersonalReminder): Promise<void> {
+    const orderId = reminder.sourceOrderId ?? this.orderIdFromText(reminder);
+    if (!orderId || !this.isBadReviewOrderReadyReminder(reminder)) {
+      this.error.set('Откройте детали заказа и измените статус там.');
+      return;
+    }
+
+    this.banningBadReviewReminderId.set(reminder.id);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.api.updateManagerOrderStatus(orderId, 'Бан'));
+      await firstValueFrom(this.api.completePersonalReminder(reminder.id));
+      this.reminders.update((reminders) => reminders.filter((item) => item.id !== reminder.id));
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Не удалось перевести заказ в Бан.');
+    } finally {
+      this.banningBadReviewReminderId.set(null);
+    }
+  }
+
   async delete(reminder: PersonalReminder): Promise<void> {
-    const confirmed = window.confirm(`Удалить напоминание "${reminder.title || 'Без названия'}"?`);
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить напоминание',
+      message: `Удалить напоминание "${reminder.title || 'Без названия'}"?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
     if (!confirmed) {
       return;
     }
@@ -331,11 +488,11 @@ export class MobileRemindersComponent implements OnInit {
   }
 
   canEdit(reminder: PersonalReminder): boolean {
-    return !reminder.sourceType;
+    return !this.isSystemReminder(reminder);
   }
 
   reminderText(reminder: PersonalReminder): string {
-    return reminder.text?.trim() || 'Без текста';
+    return (reminder.text || '').replace(CHAT_LINE_PATTERN, '$1').trim() || 'Без текста';
   }
 
   reminderIcon(reminder: PersonalReminder): string {
@@ -352,6 +509,15 @@ export class MobileRemindersComponent implements OnInit {
 
   timeLabel(reminder: PersonalReminder): string {
     if (!reminder.remindAt) {
+      if (this.isRecoveryCompletionReminder(reminder)) {
+        return 'Нужно уведомить клиента';
+      }
+      if (this.isBadReviewOrderReadyReminder(reminder)) {
+        return 'Готово к оплате или Бан';
+      }
+      if (this.isBadReviewTaskReminder(reminder)) {
+        return 'Нужно отправить счет';
+      }
       return reminder.reminderMode === 'timer' && reminder.timerMinutes
         ? `Таймер: ${reminder.timerMinutes} мин.`
         : 'Без времени';
@@ -371,9 +537,59 @@ export class MobileRemindersComponent implements OnInit {
     }).format(date)}`;
   }
 
+  reminderChatUrl(reminder: PersonalReminder): string | null {
+    const match = (reminder.text || '').match(CHAT_LINE_PATTERN);
+    return match?.[2]?.trim() || null;
+  }
+
+  isRecoveryCompletionReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
+      || reminder.title.trim().toLocaleLowerCase('ru-RU').startsWith('восстановление завершено');
+  }
+
+  isBadReviewTaskReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === BAD_REVIEW_TASK_SOURCE
+      || reminder.title.trim().toLocaleLowerCase('ru-RU').startsWith('плохой отзыв выполнен');
+  }
+
+  isBadReviewOrderReadyReminder(reminder: PersonalReminder): boolean {
+    return reminder.sourceType === BAD_REVIEW_ORDER_READY_SOURCE
+      || reminder.title.trim().toLocaleLowerCase('ru-RU').startsWith('плохие отзывы завершены');
+  }
+
+  isBadReviewReminder(reminder: PersonalReminder): boolean {
+    return this.isBadReviewTaskReminder(reminder) || this.isBadReviewOrderReadyReminder(reminder);
+  }
+
+  hasPaymentCopyText(reminder: PersonalReminder): boolean {
+    return Boolean(this.reminderPaymentText(reminder));
+  }
+
+  reminderPaymentText(reminder: PersonalReminder): string {
+    return (reminder.paymentCopyText ?? '').trim();
+  }
+
+  isPaymentCopying(reminder: PersonalReminder): boolean {
+    return this.copyingPaymentReminderId() === reminder.id;
+  }
+
+  isBadReviewBanSaving(reminder: PersonalReminder): boolean {
+    return this.banningBadReviewReminderId() === reminder.id;
+  }
+
+  canNotifyRecoveryClient(reminder: PersonalReminder): boolean {
+    return this.isRecoveryCompletionReminder(reminder)
+      && Boolean(reminder.sourceId)
+      && Boolean(reminder.sourceOrderId ?? this.orderIdFromText(reminder));
+  }
+
+  isRecoveryNotificationSaving(reminder: PersonalReminder): boolean {
+    return this.notifyingRecoveryReminderId() === reminder.id;
+  }
+
   isDue(reminder: PersonalReminder): boolean {
     if (!reminder.remindAt) {
-      return false;
+      return this.isRecoveryCompletionReminder(reminder) || this.isBadReviewReminder(reminder);
     }
 
     const dueAt = Date.parse(reminder.remindAt);
@@ -481,5 +697,51 @@ export class MobileRemindersComponent implements OnInit {
     const date = new Date(Date.now() + minutes * 60_000);
     const timezoneOffset = date.getTimezoneOffset() * 60_000;
     return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  }
+
+  private isSystemReminder(reminder: PersonalReminder): boolean {
+    return this.isRecoveryCompletionReminder(reminder)
+      || this.isBadReviewReminder(reminder)
+      || Boolean(reminder.sourceType);
+  }
+
+  private orderIdFromText(reminder: PersonalReminder): number | null {
+    const match = (reminder.text || '').match(ORDER_ID_PATTERN);
+    const value = match?.[1] ? Number(match[1]) : NaN;
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  private handleRecoveryClientNotified(event: Event): void {
+    const detail = (event as CustomEvent<MobileRecoveryClientNotifiedDetail>).detail;
+    if (!detail?.orderId || !detail.batchId) {
+      return;
+    }
+
+    this.reminders.update((reminders) => reminders.filter((reminder) => {
+      const sameBatch = reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
+        && reminder.sourceId === detail.batchId;
+      const legacySameOrder = reminder.sourceType !== REVIEW_RECOVERY_BATCH_SOURCE
+        && reminder.title.trim().toLocaleLowerCase('ru-RU').startsWith('восстановление завершено')
+        && reminder.text.includes(`#${detail.orderId}`);
+
+      return !sameBatch && !legacySameOrder;
+    }));
+  }
+
+  private async copyText(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
   }
 }

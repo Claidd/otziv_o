@@ -26,7 +26,9 @@
 }
 
 body {
+  height: 100%;
   min-height: 100vh;
+  min-height: 100svh;
   margin: 0;
   background: var(--otziv-login-bg);
   color: var(--otziv-login-text);
@@ -50,11 +52,14 @@ body {
 }
 
 .login-pf-page {
-  display: grid;
+  display: flex;
   width: 100%;
+  height: auto;
   min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   overflow-x: hidden;
   padding: clamp(1rem, 3vw, 2rem);
 }
@@ -62,9 +67,10 @@ body {
 .login-pf-page .card-pf,
 .card-pf {
   position: relative;
-  width: min(100%, 34rem);
+  flex: 0 1 min(34rem, calc(100vw - clamp(2rem, 6vw, 4rem)));
+  width: min(34rem, calc(100vw - clamp(2rem, 6vw, 4rem)));
   min-width: 0;
-  max-width: 34rem;
+  max-width: min(34rem, calc(100vw - clamp(2rem, 6vw, 4rem)));
   margin: 0 auto;
   border: 0;
   border-radius: 1rem;
@@ -199,18 +205,18 @@ body {
   line-height: 1;
 }
 
-.otziv-login__brand span:last-child,
 .otziv-login__brand strong span {
-  color: var(--otziv-login-accent);
+  color: #ef3340;
 }
 
 .otziv-login__mark {
   flex: 0 0 auto;
   width: 1.7rem;
   height: 1.7rem;
-  border: 0.18rem solid var(--otziv-login-accent);
+  border: 0;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 0.22rem #fff, 0 0 0 0.24rem rgba(27, 156, 133, 0.12);
+  background: url("../img/logo-o.png") center / contain no-repeat;
+  box-shadow: 0 0 0 0.24rem rgba(239, 51, 64, 0.08);
 }
 
 .otziv-login__intro h1 {
@@ -396,14 +402,19 @@ body {
 
 @media (max-width: 640px) {
   .login-pf-page {
-    align-items: start;
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    align-items: center;
+    justify-content: center;
     padding: 0.85rem;
   }
 
   .login-pf-page .card-pf,
   .card-pf {
-    width: 100%;
-    max-width: 100%;
+    flex-basis: calc(100vw - 1.7rem);
+    width: calc(100vw - 1.7rem);
+    max-width: calc(100vw - 1.7rem);
     min-width: 0;
     border-radius: 0.85rem;
     padding: 1.15rem;

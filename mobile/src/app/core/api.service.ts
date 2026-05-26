@@ -534,6 +534,7 @@ export interface ReviewRecoveryTaskItem {
 
 export interface ReviewRecoveryTaskUpdateRequest {
   recoveryText: string;
+  recoveryAnswer?: string | null;
   scheduledDate?: string | null;
 }
 
@@ -651,16 +652,30 @@ export interface CompanyDeepReportState {
   companyId: number;
   companyName: string;
   latestJob?: {
+    jobId?: number;
     id?: number;
     status?: string;
     report?: unknown;
     errorMessage?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
   } | null;
   activeJob?: {
+    jobId?: number;
     id?: number;
     status?: string;
     report?: unknown;
     errorMessage?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
   } | null;
   canStart: boolean;
   canRefresh: boolean;
@@ -915,6 +930,29 @@ export interface LeadEditOptions {
   statuses: string[];
 }
 
+export interface LeadImportManagerAssignment {
+  managerId: number;
+  managerName: string;
+  added: number;
+}
+
+export interface LeadImportResponse {
+  totalRows: number;
+  added: number;
+  skippedDuplicates: number;
+  skippedWithoutPhones: number;
+  skippedInvalid: number;
+  errors: string[];
+  managerAssignments: LeadImportManagerAssignment[];
+}
+
+export interface LeadImportRequest {
+  file: File;
+  managerIds: number[];
+  operatorId?: number | null;
+  marketologId?: number | null;
+}
+
 export interface LeadCreateRequest {
   telephoneLead: string;
   companyName?: string;
@@ -1154,6 +1192,93 @@ export interface AdminBot {
   city?: DictionaryOption | null;
 }
 
+export interface CreateKeycloakUserRequest {
+  username: string;
+  email: string;
+  fio?: string;
+  phoneNumber?: string;
+  password: string;
+  temporaryPassword: boolean;
+  enabled: boolean;
+  emailVerified: boolean;
+  coefficient?: number;
+  roles: string[];
+}
+
+export interface CreatedKeycloakUserResponse {
+  id: number;
+  keycloakId: string;
+  username: string;
+  email: string;
+  fio?: string;
+  phoneNumber?: string;
+  coefficient?: number;
+  active: boolean;
+  roles: string[];
+}
+
+export interface AdminUser {
+  id: number;
+  keycloakId?: string;
+  keycloakLinked: boolean;
+  authProvider: string;
+  username: string;
+  email?: string;
+  fio?: string;
+  phoneNumber?: string;
+  coefficient?: number;
+  imageId?: number | null;
+  active: boolean;
+  createTime?: string;
+  lastLoginAt?: string;
+  roles: string[];
+}
+
+export interface UpdateKeycloakUserRequest {
+  email?: string;
+  fio?: string;
+  phoneNumber?: string;
+  coefficient?: number;
+  enabled: boolean;
+  roles: string[];
+}
+
+export interface ChangeKeycloakPasswordRequest {
+  password: string;
+  temporary: boolean;
+}
+
+export interface AssignmentOption {
+  id: number;
+  userId: number;
+  username: string;
+  fio?: string;
+  email?: string;
+  role: string;
+}
+
+export interface AssignmentOptions {
+  managers: AssignmentOption[];
+  workers: AssignmentOption[];
+  operators: AssignmentOption[];
+  marketologs: AssignmentOption[];
+}
+
+export interface UserAssignments {
+  userId: number;
+  managerIds: number[];
+  workerIds: number[];
+  operatorIds: number[];
+  marketologIds: number[];
+}
+
+export interface UpdateUserAssignmentsRequest {
+  managerIds: number[];
+  workerIds: number[];
+  operatorIds: number[];
+  marketologIds: number[];
+}
+
 export interface AdminPromoText {
   id: number;
   position: number;
@@ -1193,6 +1318,124 @@ export interface AdminWhatsAppGroupSyncSettings {
 }
 
 export interface AdminClientPublicationProgressReportSettings {
+  enabled: boolean;
+}
+
+export interface AdminClientMessageSettings {
+  workerEnabled: boolean;
+  liveEnabled: boolean;
+  monitorEnabled: boolean;
+  reviewCheckEnabled: boolean;
+  paymentReminderEnabled: boolean;
+  badReviewInvoiceEnabled: boolean;
+  paymentOverdueEnabled: boolean;
+  paymentOverdueLiveEnabled: boolean;
+  archiveReorderEnabled: boolean;
+  reviewCheckIntervalDays: number;
+  paymentReminderIntervalDays: number;
+  paymentOverdueDays: number;
+  archiveReorderMonths: number;
+  retentionDays: number;
+  tickBatchSize: number;
+  candidateLimit: number;
+  dailyLimit: number;
+  defaultGapSeconds: number;
+  whatsAppGapSeconds: number;
+  telegramGapSeconds: number;
+  maxGapSeconds: number;
+  businessWindows: string;
+  reviewCheckStatuses: string;
+  paymentReminderStatuses: string;
+  paymentOverdueStatuses: string;
+  closedOrderStatuses: string;
+  paymentOverdueTargetStatus: string;
+  archiveCompanyStatus: string;
+  archiveInactiveOrderStatuses: string;
+  openNextOrderRequestStatuses: string;
+  reviewLinkBaseUrl: string;
+  reviewReminderText: string;
+  paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
+  paymentReminderText: string;
+  archiveOfferText: string;
+}
+
+export interface AdminClientMessageMonitorScenario {
+  scenario: string;
+  label: string;
+  activeCandidates: number;
+  dueNow: number;
+  sentToday: number;
+  sentSevenDays: number;
+  failedToday: number;
+  skippedToday: number;
+  lastError?: string | null;
+  lastErrorAt?: string | null;
+}
+
+export interface AdminClientMessageMonitorQueueItem {
+  id: number;
+  scenario: string;
+  scenarioLabel: string;
+  targetType: string;
+  targetKey: string;
+  companyId?: number | null;
+  companyTitle: string;
+  orderId?: number | null;
+  orderTitle?: string | null;
+  statusTitle?: string | null;
+  nextAttemptAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  sentCount: number;
+  consecutiveFailures: number;
+  link?: string | null;
+}
+
+export interface AdminClientMessageMonitorAttempt {
+  id: number;
+  stateId?: number | null;
+  scenario: string;
+  scenarioLabel: string;
+  targetType: string;
+  targetKey: string;
+  companyId?: number | null;
+  companyTitle: string;
+  orderId?: number | null;
+  orderTitle?: string | null;
+  status: 'SENT' | 'FAILED' | 'SKIPPED' | string;
+  statusLabel: string;
+  channel?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  messagePreview?: string | null;
+  durationMs?: number | null;
+  attemptedAt: string;
+  link?: string | null;
+}
+
+export interface AdminClientMessageMonitor {
+  enabled: boolean;
+  workerEnabled: boolean;
+  liveEnabled: boolean;
+  windowAllowed: boolean;
+  businessWindows: string;
+  nowMoscow: string;
+  updatedAt: string;
+  nextAttemptAt?: string | null;
+  activeCandidates: number;
+  dueNow: number;
+  sentToday: number;
+  failedToday: number;
+  skippedToday: number;
+  disabledStates: number;
+  scenarios: AdminClientMessageMonitorScenario[];
+  queue: AdminClientMessageMonitorQueueItem[];
+  attempts: AdminClientMessageMonitorAttempt[];
+}
+
+export interface AdminClientMessageMonitorSettings {
   enabled: boolean;
 }
 
@@ -1330,6 +1573,8 @@ export interface WhatsAppGroupSyncSettingsRequest {
 export interface ClientPublicationProgressReportSettingsRequest {
   enabled: boolean;
 }
+
+export type ClientMessageSettingsRequest = AdminClientMessageSettings;
 
 export interface CabinetProfile {
   date: string;
@@ -1699,6 +1944,10 @@ export class ApiService {
     });
   }
 
+  getAdminBot(id: number): Observable<AdminBot> {
+    return this.http.get<AdminBot>(this.apiUrl(`/api/admin/bots/${id}`));
+  }
+
   createAdminBot(request: BotRequest): Observable<AdminBot> {
     return this.http.post<AdminBot>(this.apiUrl('/api/admin/bots'), request);
   }
@@ -1723,6 +1972,44 @@ export class ApiService {
 
   closeAdminBotBrowser(botId: number): Observable<void> {
     return this.http.post<void>(this.apiUrl(`/api/bots/${botId}/browser/close`), {});
+  }
+
+  getAdminUsers(): Observable<AdminUser[]> {
+    return this.http.get<AdminUser[]>(this.apiUrl('/api/admin/users'));
+  }
+
+  createAdminUser(request: CreateKeycloakUserRequest): Observable<CreatedKeycloakUserResponse> {
+    return this.http.post<CreatedKeycloakUserResponse>(this.apiUrl('/api/admin/users'), request);
+  }
+
+  updateAdminUser(id: number, request: UpdateKeycloakUserRequest): Observable<AdminUser> {
+    return this.http.put<AdminUser>(this.apiUrl(`/api/admin/users/${id}`), request);
+  }
+
+  deleteAdminUser(id: number): Observable<void> {
+    return this.http.delete<void>(this.apiUrl(`/api/admin/users/${id}`));
+  }
+
+  updateAdminUserPhoto(id: number, photo: File): Observable<AdminUser> {
+    const formData = new FormData();
+    formData.append('photo', photo);
+    return this.http.post<AdminUser>(this.apiUrl(`/api/admin/users/${id}/photo`), formData);
+  }
+
+  changeAdminUserPassword(id: number, request: ChangeKeycloakPasswordRequest): Observable<void> {
+    return this.http.put<void>(this.apiUrl(`/api/admin/users/${id}/password`), request);
+  }
+
+  getAdminUserAssignmentOptions(): Observable<AssignmentOptions> {
+    return this.http.get<AssignmentOptions>(this.apiUrl('/api/admin/users/assignment-options'));
+  }
+
+  getAdminUserAssignments(id: number): Observable<UserAssignments> {
+    return this.http.get<UserAssignments>(this.apiUrl(`/api/admin/users/${id}/assignments`));
+  }
+
+  updateAdminUserAssignments(id: number, request: UpdateUserAssignmentsRequest): Observable<UserAssignments> {
+    return this.http.put<UserAssignments>(this.apiUrl(`/api/admin/users/${id}/assignments`), request);
   }
 
   getAdminPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> {
@@ -1812,6 +2099,28 @@ export class ApiService {
     return this.http.put<AdminClientPublicationProgressReportSettings>(
       this.apiUrl('/api/admin/settings/client-publication-progress-reports'),
       request
+    );
+  }
+
+  getAdminClientMessageSettings(): Observable<AdminClientMessageSettings> {
+    return this.http.get<AdminClientMessageSettings>(this.apiUrl('/api/admin/settings/client-messages'));
+  }
+
+  updateAdminClientMessageSettings(request: ClientMessageSettingsRequest): Observable<AdminClientMessageSettings> {
+    return this.http.put<AdminClientMessageSettings>(
+      this.apiUrl('/api/admin/settings/client-messages'),
+      request
+    );
+  }
+
+  getAdminClientMessageMonitor(): Observable<AdminClientMessageMonitor> {
+    return this.http.get<AdminClientMessageMonitor>(this.apiUrl('/api/admin/client-messages/monitor'));
+  }
+
+  updateAdminClientMessageMonitorSettings(enabled: boolean): Observable<AdminClientMessageMonitorSettings> {
+    return this.http.put<AdminClientMessageMonitorSettings>(
+      this.apiUrl('/api/admin/client-messages/monitor'),
+      { enabled }
     );
   }
 
@@ -1952,6 +2261,14 @@ export class ApiService {
 
   publishManagerOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/publish`), {});
+  }
+
+  changeManagerOrderReviewText(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-text`), {});
+  }
+
+  assignManagerOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`), {});
   }
 
   changeManagerOrderReviewBot(orderId: number, reviewId: number): Observable<OrderReviewItem> {
@@ -2206,9 +2523,15 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/bots/${botId}/deactivate`), {});
   }
 
-  updateWorkerRecoveryTask(taskId: number, recoveryText: string, scheduledDate?: string | null): Observable<void> {
+  updateWorkerRecoveryTask(
+    taskId: number,
+    recoveryText: string,
+    scheduledDate?: string | null,
+    recoveryAnswer?: string | null
+  ): Observable<void> {
     return this.http.put<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}`), {
       recoveryText,
+      recoveryAnswer,
       scheduledDate: scheduledDate || null
     });
   }
@@ -2254,6 +2577,22 @@ export class ApiService {
 
   getLeadEditOptions(): Observable<LeadEditOptions> {
     return this.http.get<LeadEditOptions>(this.apiUrl('/api/leads/edit-options'));
+  }
+
+  importLeads(request: LeadImportRequest): Observable<LeadImportResponse> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    for (const managerId of request.managerIds) {
+      formData.append('managerIds', String(managerId));
+    }
+    if (request.operatorId != null) {
+      formData.append('operatorId', String(request.operatorId));
+    }
+    if (request.marketologId != null) {
+      formData.append('marketologId', String(request.marketologId));
+    }
+
+    return this.http.post<LeadImportResponse>(this.apiUrl('/api/leads/file-import'), formData);
   }
 
   createLead(request: LeadCreateRequest): Observable<LeadItem> {

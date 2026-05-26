@@ -17,12 +17,19 @@ export interface PublicPaymentLink {
   status: string;
   expiresAt: string;
   payable: boolean;
+  paymentPageMode?: TbankPaymentPageMode;
+  tpayEnabled?: boolean;
+  sberpayEnabled?: boolean;
+  mirpayEnabled?: boolean;
 }
 
 export interface PublicPaymentInitResponse {
   paymentUrl: string;
   paymentId: string;
   status: string;
+  method?: 'BANK_FORM' | 'SBP_QR' | string;
+  qrPayload?: string | null;
+  qrImage?: string | null;
 }
 
 export interface ManagerPaymentLinkResponse {
@@ -47,6 +54,7 @@ export interface AdminPaymentLinkResponse {
   amount: number;
   amountKopecks: number;
   status: string;
+  paymentMethod?: 'BANK_FORM' | 'SBP_QR' | string;
   paymentProfileCode?: string | null;
   paymentProfileName?: string | null;
   tbankTerminalKey?: string | null;
@@ -60,6 +68,7 @@ export interface AdminPaymentLinkResponse {
   expiresAt: string;
   initiatedAt?: string | null;
   paidAt?: string | null;
+  sbpQrCreatedAt?: string | null;
   refundable: boolean;
 }
 
@@ -89,6 +98,43 @@ export interface TbankPaymentProfilesResponse {
   managers: ManagerPaymentProfileResponse[];
 }
 
+export interface TbankClientPaymentMode {
+  enabled: boolean;
+  paymentInstructionSource: PaymentInstructionSource;
+}
+
+export type TbankRuntimeMode = 'TEST' | 'LIVE';
+export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
+export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_ONLY' | 'BANK_ONLY';
+
+export interface TbankRuntimeSettings {
+  runtimeMode: TbankRuntimeMode;
+  testMode: boolean;
+  tbankEnabled: boolean;
+  paymentLinksEnabled: boolean;
+  managerUiEnabled: boolean;
+  applyConfirmedPayments: boolean;
+  paymentInstructionSource: PaymentInstructionSource;
+  clientTbankEnabled: boolean;
+  paymentPageMode: TbankPaymentPageMode;
+  tpayEnabled: boolean;
+  sberpayEnabled: boolean;
+  mirpayEnabled: boolean;
+}
+
+export interface UpdateTbankRuntimeSettingsRequest {
+  runtimeMode?: TbankRuntimeMode;
+  tbankEnabled?: boolean;
+  paymentLinksEnabled?: boolean;
+  managerUiEnabled?: boolean;
+  applyConfirmedPayments?: boolean;
+  paymentInstructionSource?: PaymentInstructionSource;
+  paymentPageMode?: TbankPaymentPageMode;
+  tpayEnabled?: boolean;
+  sberpayEnabled?: boolean;
+  mirpayEnabled?: boolean;
+}
+
 export interface ManagerPaymentProfileAssignmentRequest {
   managerId: number;
   paymentProfileId?: number | null;
@@ -101,6 +147,7 @@ export interface TbankPaymentStatus {
   applyConfirmedPayments: boolean;
   hasCredentials: boolean;
   testMode: boolean;
+  runtimeMode: TbankRuntimeMode;
   baseUrl: string;
   publicBaseUrl: string;
   notificationUrl: string;
@@ -121,10 +168,30 @@ export class PaymentsApi {
     );
   }
 
-  initPublicPayment(token: string, email: string): Observable<PublicPaymentInitResponse> {
+  initPublicPayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean
+  ): Observable<PublicPaymentInitResponse> {
     return this.http.post<PublicPaymentInitResponse>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/init`,
-      { email },
+      { email, offerConsent, privacyConsent, receiptConsent },
+      { context: this.publicContext }
+    );
+  }
+
+  initPublicSbpPayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean
+  ): Observable<PublicPaymentInitResponse> {
+    return this.http.post<PublicPaymentInitResponse>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/sbp`,
+      { email, offerConsent, privacyConsent, receiptConsent },
       { context: this.publicContext }
     );
   }
@@ -159,6 +226,34 @@ export class PaymentsApi {
   getAdminTbankPaymentProfiles(): Observable<TbankPaymentProfilesResponse> {
     return this.http.get<TbankPaymentProfilesResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-profiles`
+    );
+  }
+
+  getAdminTbankClientPaymentMode(): Observable<TbankClientPaymentMode> {
+    return this.http.get<TbankClientPaymentMode>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-client-payment-mode`
+    );
+  }
+
+  updateAdminTbankClientPaymentMode(enabled: boolean): Observable<TbankClientPaymentMode> {
+    return this.http.put<TbankClientPaymentMode>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-client-payment-mode`,
+      { enabled }
+    );
+  }
+
+  getAdminTbankRuntimeSettings(): Observable<TbankRuntimeSettings> {
+    return this.http.get<TbankRuntimeSettings>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-runtime-settings`
+    );
+  }
+
+  updateAdminTbankRuntimeSettings(
+    request: UpdateTbankRuntimeSettingsRequest
+  ): Observable<TbankRuntimeSettings> {
+    return this.http.put<TbankRuntimeSettings>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-runtime-settings`,
+      request
     );
   }
 

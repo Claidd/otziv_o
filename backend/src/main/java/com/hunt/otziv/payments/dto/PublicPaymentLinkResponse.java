@@ -15,6 +15,10 @@ public record PublicPaymentLinkResponse(
         String payerEmail,
         String status,
         LocalDateTime expiresAt,
-        boolean payable
+        boolean payable,
+        String paymentPageMode,
+        boolean tpayEnabled,
+        boolean sberpayEnabled,
+        boolean mirpayEnabled
 ) {
 }

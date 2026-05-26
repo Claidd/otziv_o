@@ -9,7 +9,7 @@
     <section class="otziv-login">
       <div class="otziv-login__brand" aria-hidden="true">
         <span class="otziv-login__mark"></span>
-        <strong>Компания<span>О!</span></strong>
+        <strong>Компания <span>О!</span></strong>
       </div>
 
       <div class="otziv-login__intro">

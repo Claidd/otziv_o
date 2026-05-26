@@ -46,6 +46,23 @@ describe('cabinet chart helpers', () => {
     expect(chart.series[1].pointsData[5]).toMatchObject({ label: 'Июн', value: 0 });
   });
 
+  it('keeps the latest two year colors stable when switching period modes', () => {
+    const map = '{"2023":{"1":10},"2024":{"1":20},"2025":{"1":30},"2026":{"1":40}}';
+    const lastTwoYears = cabinetYearlyLineChartFrom(map, {
+      from: '2025-01-01',
+      to: '2026-05-24'
+    });
+    const allTime = cabinetYearlyLineChartFrom(map, { allTime: true });
+
+    const colorByLabel = (chart: ReturnType<typeof cabinetYearlyLineChartFrom>) =>
+      Object.fromEntries(chart.series.map((series) => [series.label, series.color]));
+
+    expect(colorByLabel(lastTwoYears)['Год: 2025']).toBe('#ea3362');
+    expect(colorByLabel(lastTwoYears)['Год: 2026']).toBe('#4a9a86');
+    expect(colorByLabel(lastTwoYears)['Год: 2025']).toBe(colorByLabel(allTime)['Год: 2025']);
+    expect(colorByLabel(lastTwoYears)['Год: 2026']).toBe(colorByLabel(allTime)['Год: 2026']);
+  });
+
   it('sums monthly values for the selected period', () => {
     const map = '{"2024":{"12":100},"2025":{"1":200},"2026":{"5":300,"6":400}}';
 

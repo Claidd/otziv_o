@@ -35,6 +35,7 @@ export type CabinetLineChart = {
 
 export type YearlyLineChartOptions = {
   fallbackYear?: number;
+  anchorYear?: number;
   from?: string;
   to?: string;
   allTime?: boolean;
@@ -47,7 +48,9 @@ type ChartScale = {
 };
 
 const MONTH_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
-const YEAR_COLORS = ['#ea3362', '#4a9a86', '#f7a35c', '#6c9bcf', '#9a7bd9', '#1b9c85', '#b28405'];
+const PREVIOUS_YEAR_COLOR = '#ea3362';
+const CURRENT_YEAR_COLOR = '#4a9a86';
+const OTHER_YEAR_COLORS = ['#f7a35c', '#6c9bcf', '#9a7bd9', '#1b9c85', '#b28405'];
 const LINE_VIEWBOX_WIDTH = 100;
 const LINE_VIEWBOX_HEIGHT = 100;
 const LINE_CHART_TOP = 7;
@@ -88,7 +91,7 @@ export function cabinetYearlyLineChartFrom(map: string | null | undefined, optio
   try {
     const parsed = JSON.parse(map) as Record<string, Record<string, number | string> | number | string>;
     const yearlyData = filterYearlyData(yearlyDataFrom(parsed, options.fallbackYear), options);
-    const years = Object.keys(yearlyData).sort();
+    const years = Object.keys(yearlyData).sort((a, b) => Number(a) - Number(b));
     const allValues = years.flatMap((year) => {
       const monthlyData = yearlyData[year] ?? {};
       return MONTH_LABELS.map((_, index) => numberValue(monthlyData[String(index + 1)]));
@@ -98,7 +101,7 @@ export function cabinetYearlyLineChartFrom(map: string | null | undefined, optio
     const yFor = (value: number) => LINE_CHART_TOP + plotHeight - (value / scale.max) * plotHeight;
     const xFor = (index: number) => ((index + 0.5) * LINE_VIEWBOX_WIDTH) / MONTH_LABELS.length;
 
-    const series = years.map((year, index) => {
+    const series = years.map((year) => {
       const monthlyData = yearlyData[year] ?? {};
       const pointsData = MONTH_LABELS.map((label, monthIndex) => {
         const value = numberValue(monthlyData[String(monthIndex + 1)]);
@@ -112,7 +115,7 @@ export function cabinetYearlyLineChartFrom(map: string | null | undefined, optio
 
       return {
         label: `Год: ${year}`,
-        color: YEAR_COLORS[index % YEAR_COLORS.length],
+        color: colorForYear(year, years, options.anchorYear),
         points: pointsData.map((point) => `${point.x},${point.y}`).join(' '),
         pointsData
       };
@@ -130,6 +133,30 @@ export function cabinetYearlyLineChartFrom(map: string | null | undefined, optio
   } catch {
     return emptyCabinetLineChart();
   }
+}
+
+function colorForYear(year: string, years: string[], anchorYear?: number): string {
+  const numericYear = Number(year);
+  const numericYears = years.map(Number).filter(Number.isFinite);
+  const currentYear = Number.isFinite(anchorYear) ? Number(anchorYear) : Math.max(...numericYears);
+  const previousYear = currentYear - 1;
+
+  if (numericYear === previousYear) {
+    return PREVIOUS_YEAR_COLOR;
+  }
+
+  if (numericYear === currentYear) {
+    return CURRENT_YEAR_COLOR;
+  }
+
+  const otherYears = years
+    .filter((value) => {
+      const valueYear = Number(value);
+      return valueYear !== previousYear && valueYear !== currentYear;
+    })
+    .sort((a, b) => Number(a) - Number(b));
+  const index = Math.max(0, otherYears.indexOf(year));
+  return OTHER_YEAR_COLORS[index % OTHER_YEAR_COLORS.length];
 }
 
 export function cabinetPeriodTotalFrom(map: string | null | undefined, options: YearlyLineChartOptions = {}): number {

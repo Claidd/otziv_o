@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -9,7 +9,7 @@ import {
   IonRefresherContent,
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Observable, Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
   BadReviewTaskItem,
@@ -21,11 +21,20 @@ import {
   ReviewUpdateRequest
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
-import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileMediaService } from '../shared/mobile-media.service';
+import {
+  MobileRecoveryClientNotifiedDetail,
+  MobileRemindersComponent,
+  dispatchMobileRecoveryClientNotified
+} from '../shared/mobile-reminders.component';
+import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-shell.component';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
+type RecoveryTaskCopyKind = 'botLogin' | 'botPassword';
 type ReviewEditableField = 'text' | 'answer';
 type ReviewSideNoteField = 'order' | 'company';
 type BadReviewTaskDraft = {
@@ -34,16 +43,51 @@ type BadReviewTaskDraft = {
 };
 type RecoveryTaskDraft = {
   recoveryText: string;
+  recoveryAnswer: string;
   scheduledDate: string | null;
+};
+type CompanyReportFact = {
+  label?: string | null;
+  value?: string | null;
+  evidence?: string | null;
+  confidence?: string | null;
+};
+type CompanyReportSource = {
+  title?: string | null;
+  url?: string | null;
+  note?: string | null;
+  type?: string | null;
+  confidence?: string | null;
+};
+type CompanyReportSection = {
+  id: string;
+  title: string;
+  body: string;
+  html: string;
+};
+type CompanyReport = {
+  city?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  reportMarkdown?: string | null;
+  sections?: Array<{ title?: string | null; body?: string | null }> | null;
+  sources?: CompanyReportSource[] | null;
+  warnings?: string[] | null;
+  reviewIdeas?: string[] | null;
+  factSnapshot?: {
+    confirmedFacts?: CompanyReportFact[] | null;
+    uncertainFacts?: CompanyReportFact[] | null;
+  } | null;
+  createdAt?: string | null;
 };
 
 const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
-const REVIEW_HELP_ORDER_STATUSES = new Set(['новый']);
+const REVIEW_AI_ORDER_STATUSES = new Set(['новый', 'в проверку', 'в проврку', 'в прверку', 'на проверке', 'на провере', 'коррекция']);
 const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
 @Component({
   selector: 'app-order-details-mobile',
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewCardShellComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Детали заказа" />
@@ -72,27 +116,6 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
           }
 
           @if (details(); as details) {
-            @if (companyReportVisible()) {
-              <section class="company-report-panel">
-                <header>
-                  <div>
-                    <small>{{ companyReportState()?.companyName || details.companyTitle }}</small>
-                    <h2>О компании</h2>
-                  </div>
-                  <button type="button" (click)="companyReportVisible.set(false)" aria-label="Закрыть отчет">
-                    <span class="material-icons-sharp">close</span>
-                  </button>
-                </header>
-                @if (companyReportLoading()) {
-                  <p>Отчет проверяется...</p>
-                } @else if (companyReportError()) {
-                  <p class="error">{{ companyReportError() }}</p>
-                } @else {
-                  <p>{{ companyReportStatus() }}</p>
-                }
-              </section>
-            }
-
             <section
               class="review-mobile-strip"
               [class.review-mobile-strip--expanded]="reviewsExpanded()"
@@ -100,41 +123,25 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
               (scroll)="onReviewScroll($event)"
             >
               @for (review of details.reviews; track review.id; let index = $index) {
-                <article
-                  class="mobile-review-card"
-                  [class.published]="review.publish"
-                  [class.active]="activeReviewIndex() === index"
-                  [attr.data-card-index]="index"
-                  [attr.data-review-id]="review.id"
+                <app-mobile-review-card-shell
+                  layout="details"
+                  [title]="review.companyTitle || details.companyTitle || 'Компания'"
+                  [titleHref]="review.filialUrl || ''"
+                  [idLabel]="'#' + review.id"
+                  [published]="review.publish"
+                  [active]="activeReviewIndex() === index"
+                  [cardIndex]="index"
+                  [reviewId]="review.id"
+                  [photoMode]="(review.productPhoto || needsReviewPhoto(review)) ? (hasReviewPhoto(review) ? 'link' : 'button') : 'none'"
+                  [photoUrl]="reviewPhotoUrl(review)"
+                  [noteVisible]="hasReviewNote(review)"
+                  [footerLeft]="review.publishedDate || 'Не назначено'"
+                  [footerRight]="review.workerFio || 'специалист'"
+                  [footerRightDisabled]="!details.canEditReviews"
+                  (photoAction)="openReviewEdit(review)"
+                  (noteClick)="toggleReviewNote(review)"
+                  (footerRightClick)="openReviewEdit(review)"
                 >
-                  <header>
-                    <a [href]="review.filialUrl || '#'" target="_blank" rel="noopener" (click)="guardLink($event, review.filialUrl)">
-                      {{ review.companyTitle || details.companyTitle || 'Компания' }}
-                    </a>
-                    <span>
-                      @if (review.productPhoto) {
-                        @if (hasReviewPhoto(review)) {
-                          <a class="review-card-badge photo" [href]="reviewPhotoUrl(review)" target="_blank" rel="noopener" aria-label="Открыть фото отзыва">
-                            <span class="material-icons-sharp">photo_camera</span>
-                          </a>
-                        } @else {
-                          <button class="review-card-badge photo danger" type="button" (click)="openReviewEdit(review)" aria-label="Нужно фото">
-                            <span class="material-icons-sharp">photo_camera</span>
-                          </button>
-                        }
-                      } @else if (needsReviewPhoto(review)) {
-                        <button class="review-card-badge photo danger" type="button" (click)="openReviewEdit(review)" aria-label="Нужно фото">
-                          <span class="material-icons-sharp">photo_camera</span>
-                        </button>
-                      }
-                      @if (hasReviewNote(review)) {
-                        <button class="review-card-badge" type="button" (click)="toggleReviewNote(review)" aria-label="Заметки">
-                          <span class="material-icons-sharp">priority_high</span>
-                        </button>
-                      }
-                      <small>#{{ review.id }}</small>
-                    </span>
-                  </header>
 
                   <section
                     class="review-text-editor"
@@ -148,7 +155,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                         (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
                         placeholder="Текст отзыва"
                       ></textarea>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="cancelReviewFieldEdit(review, 'text')" [disabled]="isMutating(saveFieldMutationKey(review, 'text'))">Отмена</button>
                         <button type="button" class="save" (click)="saveReviewField(review, 'text')" [disabled]="!canSaveReviewField(review, 'text')">
                           {{ isMutating(saveFieldMutationKey(review, 'text')) ? '...' : 'Сохранить' }}
@@ -179,7 +186,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                         (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
                         placeholder="Ответ на отзыв или замечание"
                       ></textarea>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="cancelReviewFieldEdit(review, 'answer')" [disabled]="isMutating(saveFieldMutationKey(review, 'answer'))">Отмена</button>
                         <button type="button" class="save" (click)="saveReviewField(review, 'answer')" [disabled]="!canSaveReviewField(review, 'answer')">
                           {{ isMutating(saveFieldMutationKey(review, 'answer')) ? '...' : 'Сохранить' }}
@@ -230,7 +237,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                           placeholder="Заметка компании"
                         ></textarea>
                       </label>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="toggleReviewNote(review)" [disabled]="isMutating(reviewNotesMutationKey(review))">Закрыть</button>
                         <button type="button" class="save" (click)="saveAllReviewNotes(review)" [disabled]="!isAnyReviewNoteChanged(review) || isMutating(reviewNotesMutationKey(review))">
                           {{ isMutating(reviewNotesMutationKey(review)) ? '...' : 'Сохранить' }}
@@ -243,8 +250,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     <button type="button" (click)="copyReviewField(review, 'filialUrl')">{{ copiedKey() === review.id + '-filialUrl' ? 'готово' : 'ссылка' }}</button>
                     <button type="button" (click)="copyReviewField(review, 'botLogin')">{{ copiedKey() === review.id + '-botLogin' ? 'готово' : 'логин' }}</button>
                     <button type="button" (click)="copyReviewField(review, 'botPassword')">{{ copiedKey() === review.id + '-botPassword' ? 'готово' : 'пароль' }}</button>
-                    @if (showReviewHelpAction(details)) {
-                      <button class="help" type="button" (click)="createReviewHelpDraft(review)" [disabled]="busy() || companyReportLoading()">
+                    @if (showReviewAiAction(details)) {
+                      <button
+                        class="ai-action"
+                        type="button"
+                        [title]="reviewHelpActionTitle()"
+                        (click)="createReviewHelpDraft(review)"
+                        [disabled]="isMutating('review-help-' + review.id) || companyReportBusy()"
+                      >
                         {{ reviewHelpActionLabel(review) }}
                       </button>
                     } @else {
@@ -276,13 +289,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     </button>
                   }
 
-                  <footer>
-                    <span>{{ review.publishedDate || 'Не назначено' }}</span>
-                    <button class="review-edit-link" type="button" (click)="openReviewEdit(review)" [disabled]="!details.canEditReviews">
-                      {{ review.workerFio || 'специалист' }}
-                    </button>
-                  </footer>
-                </article>
+                </app-mobile-review-card-shell>
               }
 
               @for (task of badReviewTasks(); track task.id; let taskIndex = $index) {
@@ -304,7 +311,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   <div class="task-meta-grid">
                     <span>{{ badReviewTaskState(details, task) }}</span>
                     <span>отзыв #{{ task.sourceReviewId || '-' }}</span>
-                    <span>+{{ money(task.price || 0) }}</span>
+                    <span>доплата +{{ money(task.price || 0) }}</span>
                     <span>{{ badReviewTaskDateLabel(task) }}</span>
                   </div>
 
@@ -326,6 +333,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     placeholder="Текст задачи"
                   ></textarea>
 
+                  @if (task.comment) {
+                    <div class="task-note-field" title="Комментарий плохой задачи">
+                      <small>комментарий</small>
+                      <span>{{ task.comment }}</span>
+                    </div>
+                  }
+
                   <div class="review-actions task-actions">
                     <button type="button" (click)="copyBadReviewTaskField(task, 'botLogin')" [disabled]="!task.botLogin">
                       {{ copiedKey() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
@@ -342,14 +356,22 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   </div>
 
                   <footer>
-                    <span>{{ task.workerFio || 'не назначен' }} · {{ task.botFio || '-' }}</span>
+                    <span [title]="(task.workerFio || 'не назначен') + ' · ' + (task.botFio || '-')">
+                      {{ task.workerFio || 'не назначен' }} · {{ task.botFio || '-' }}
+                    </span>
                     @if (canCompleteBadReviewTask(task)) {
                       <button class="review-edit-link" type="button" (click)="completeBadReviewTask(task)" [disabled]="isMutating('bad-task-complete-' + task.id)">
                         {{ isMutating('bad-task-complete-' + task.id) ? '...' : 'сменил' }}
                       </button>
                     } @else if (canCancelBadReviewTask(details, task)) {
-                      <button class="review-edit-link danger-link" type="button" (click)="cancelBadReviewTask(task)" [disabled]="isMutating('bad-task-cancel-' + task.id)">
-                        {{ isMutating('bad-task-cancel-' + task.id) ? '...' : 'убрать' }}
+                      <button
+                        class="review-edit-link danger-link"
+                        type="button"
+                        title="Убрать из счета"
+                        (click)="cancelBadReviewTask(task)"
+                        [disabled]="isMutating('bad-task-cancel-' + task.id)"
+                      >
+                        {{ isMutating('bad-task-cancel-' + task.id) ? '...' : 'убрать из счета' }}
                       </button>
                     } @else {
                       <span>{{ badReviewTaskState(details, task) }}</span>
@@ -419,7 +441,28 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     placeholder="Текст восстановления"
                   ></textarea>
 
+                  <textarea
+                    class="task-answer-field"
+                    [readonly]="!canEditRecoveryTask(task)"
+                    [ngModel]="recoveryTaskAnswerValue(task)"
+                    (ngModelChange)="setRecoveryTaskAnswer(task, $event)"
+                    placeholder="Ответ или замечание"
+                  ></textarea>
+
                   <div class="review-actions task-actions">
+                    <button type="button" (click)="copyRecoveryTaskField(task, 'botLogin')" [disabled]="!task.botLogin">
+                      {{ copiedKey() === recoveryTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
+                    </button>
+                    <button type="button" (click)="copyRecoveryTaskField(task, 'botPassword')" [disabled]="!task.botPassword">
+                      {{ copiedKey() === recoveryTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
+                    </button>
+                    <a [href]="recoveryTaskBotBrowserUrl(task)" target="_blank" rel="noopener">вк</a>
+                    <button type="button" (click)="changeRecoveryTaskBot(task)" [disabled]="!canEditRecoveryTask(task) || isMutating('recovery-change-bot-' + task.id)">
+                      {{ isMutating('recovery-change-bot-' + task.id) ? '...' : 'смена' }}
+                    </button>
+                    <button type="button" (click)="deactivateRecoveryTaskBot(task)" [disabled]="!canEditRecoveryTask(task) || !task.botId || isMutating('recovery-block-bot-' + task.id)">
+                      {{ isMutating('recovery-block-bot-' + task.id) ? '...' : 'блок' }}
+                    </button>
                     <button type="button" class="save" (click)="saveRecoveryTask(task)" [disabled]="!canEditRecoveryTask(task) || !isRecoveryTaskChanged(task) || isMutating('recovery-save-' + task.id)">
                       {{ isRecoveryTaskSaved(task) ? 'готово' : 'сохранить' }}
                     </button>
@@ -452,10 +495,12 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 <span class="material-icons-sharp">auto_awesome</span>
                 Помощь
               </button>
-              <button type="button" (click)="refreshCompanyReport()" [disabled]="companyReportLoading()">
-                <span class="material-icons-sharp">refresh</span>
-                Обновить отчет
-              </button>
+              @if (canRefreshCompanyReport()) {
+                <button type="button" (click)="refreshCompanyReport()" [disabled]="companyReportLoading()">
+                  <span class="material-icons-sharp">refresh</span>
+                  Обновить отчет
+                </button>
+              }
               <button type="button" class="primary" (click)="sendToCheck()" [disabled]="busy()">
                 {{ isMutating('send-check') ? '...' : 'На проверку' }}
               </button>
@@ -467,14 +512,22 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
               </button>
             </footer>
 
-            <section class="lead-bottom-controls order-review-bottom-controls" aria-label="Навигация по отзывам">
-              <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+            <app-mobile-bottom-pager
+              class="mobile-page-bottom-pager"
+              [pageIndex]="activeReviewIndex()"
+              [totalPages]="totalDetailCards()"
+              [disabled]="busy() || loading()"
+              (previous)="previousReview()"
+              (next)="nextReview()"
+            >
+              <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
                 <span class="material-icons-sharp">notifications_active</span>
                 @if (reminders.activeReminderCount()) {
                   <small>{{ reminders.activeReminderCount() }}</small>
                 }
               </button>
               <button
+                mobilePagerActions
                 class="expand-list-button"
                 type="button"
                 [class.active]="reviewsExpanded()"
@@ -483,18 +536,125 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
               >
                 <span class="material-icons-sharp">{{ reviewsExpanded() ? 'close_fullscreen' : 'open_in_full' }}</span>
               </button>
-              <div class="lead-pager">
-                <button type="button" (click)="previousReview()" [disabled]="activeReviewIndex() === 0 || totalDetailCards() <= 1" aria-label="Предыдущая карточка">
-                  <span class="material-icons-sharp">chevron_left</span>
-                </button>
-                <span>{{ totalDetailCards() ? activeReviewIndex() + 1 : 0 }} / {{ totalDetailCards() }}</span>
-                <button type="button" (click)="nextReview()" [disabled]="activeReviewIndex() >= totalDetailCards() - 1 || totalDetailCards() <= 1" aria-label="Следующая карточка">
-                  <span class="material-icons-sharp">chevron_right</span>
-                </button>
-              </div>
-            </section>
+            </app-mobile-bottom-pager>
           }
         </main>
+
+        <ion-modal class="sheet-modal company-report-modal" [isOpen]="companyReportVisible()" (didDismiss)="closeCompanyReport()">
+          <ng-template>
+            <section class="sheet-body company-report-sheet">
+              <header class="sheet-head">
+                <div>
+                  <p class="sheet-note">{{ companyReportState()?.companyName || details()?.companyTitle || 'Компания' }}</p>
+                  <h2>О компании</h2>
+                </div>
+                <button class="icon-button" type="button" (click)="closeCompanyReport()" aria-label="Закрыть отчет">
+                  <span class="material-icons-sharp">close</span>
+                </button>
+              </header>
+
+              <div class="company-report-content">
+                @if (companyReportLoading()) {
+                  <div class="company-report-state-card">
+                    <span class="material-icons-sharp">hourglass_top</span>
+                    <p>{{ companyReportState()?.activeJob ? 'Отчет готовится в фоне.' : 'Проверяю отчет о компании...' }}</p>
+                  </div>
+                } @else if (companyReportError()) {
+                  <p class="sheet-error">{{ companyReportError() }}</p>
+                } @else if (companyReport(); as report) {
+                  <div class="company-report-meta">
+                    @if (report.city) {
+                      <span>{{ report.city }}</span>
+                    }
+                    @if (companyReportCompletedAt()) {
+                      <span>{{ companyReportCompletedAt() }}</span>
+                    }
+                    @if (report.provider || report.model) {
+                      <span>{{ report.provider || 'AI' }} {{ report.model || '' }}</span>
+                    }
+                  </div>
+
+                  @if (companyReportSections(); as sections) {
+                    @if (sections.length) {
+                      @for (section of sections; track section.id) {
+                        <article class="company-report-reader-section">
+                          <h3>{{ section.title }}</h3>
+                          <div class="company-report-rich" [innerHTML]="section.html"></div>
+                        </article>
+                      }
+                    }
+                  }
+
+                  @if (companyReportConfirmedFacts().length) {
+                    <article class="company-report-section">
+                      <h3>Факты</h3>
+                      @for (fact of companyReportConfirmedFacts(); track $index) {
+                        <p><strong>{{ fact.label }}</strong>{{ fact.label ? ': ' : '' }}{{ fact.value || fact.evidence }}</p>
+                      }
+                    </article>
+                  }
+
+                  @if (companyReportReviewIdeas().length) {
+                    <article class="company-report-section">
+                      <h3>Идеи для отзывов</h3>
+                      <ul>
+                        @for (idea of companyReportReviewIdeas(); track idea) {
+                          <li>{{ idea }}</li>
+                        }
+                      </ul>
+                    </article>
+                  }
+
+                  @if (companyReportWarnings().length) {
+                    <article class="company-report-section warning">
+                      <h3>Предупреждения</h3>
+                      <ul>
+                        @for (warning of companyReportWarnings(); track warning) {
+                          <li>{{ warning }}</li>
+                        }
+                      </ul>
+                    </article>
+                  }
+
+                  @if (companyReportSources().length) {
+                    <article class="company-report-section sources">
+                      <h3>Источники</h3>
+                      @for (source of companyReportSources(); track source.url || source.title) {
+                        @if (source.url) {
+                          <a [href]="source.url" target="_blank" rel="noopener">{{ source.title || source.url }}</a>
+                        } @else {
+                          <p>{{ source.title || source.note }}</p>
+                        }
+                      }
+                    </article>
+                  }
+                } @else {
+                  <div class="company-report-state-card">
+                    <span class="material-icons-sharp">auto_awesome</span>
+                    <p>{{ companyReportStatus() }}</p>
+                  </div>
+                }
+              </div>
+
+              <footer class="sheet-actions company-report-actions">
+                @if (companyReportState()?.activeJob) {
+                  <button type="button" class="secondary" (click)="openCompanyReport()" [disabled]="companyReportLoading()">
+                    Проверить готовность
+                  </button>
+                } @else if (!companyReport()) {
+                  <button type="button" (click)="startCompanyReport()" [disabled]="companyReportLoading() || !companyReportState()?.canStart">
+                    Создать отчет
+                  </button>
+                }
+                @if (canRefreshCompanyReport()) {
+                  <button type="button" (click)="refreshCompanyReport()" [disabled]="companyReportLoading()">
+                    Обновить
+                  </button>
+                }
+              </footer>
+            </section>
+          </ng-template>
+        </ion-modal>
 
         <ion-modal class="sheet-modal review-edit-sheet" [isOpen]="reviewEdit() !== null" (didDismiss)="closeReviewEdit()">
           <ng-template>
@@ -517,6 +677,47 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 @if (reviewEdit(); as review) {
                   @if (reviewEditDraft(); as draft) {
                     <label class="sheet-field">
+                      <span>Аккаунт</span>
+                      <input
+                        name="reviewEditBot"
+                        type="text"
+                        [ngModel]="draft.botName"
+                        (ngModelChange)="setReviewEditField('botName', $event)"
+                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
+                      >
+                    </label>
+
+                    <label class="sheet-field">
+                      <span>Пароль</span>
+                      <input
+                        name="reviewEditPassword"
+                        type="text"
+                        [ngModel]="draft.botPassword"
+                        (ngModelChange)="setReviewEditField('botPassword', $event)"
+                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
+                      >
+                    </label>
+
+                    <label class="sheet-field">
+                      <span>Дата публикации</span>
+                      <input
+                        name="reviewEditPublishedDate"
+                        type="date"
+                        [ngModel]="draft.publishedDate"
+                        (ngModelChange)="setReviewEditField('publishedDate', emptyToNull($event))"
+                        [readonly]="!details()?.canEditReviewDates"
+                        [disabled]="reviewEditSaving() || reviewEditDeleting()"
+                      >
+                    </label>
+
+                    <div class="sheet-utility-actions sheet-utility-actions--single">
+                      <button type="button" (click)="assignReviewNewAccount(review)" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading() || isMutating('new-account-' + review.id)">
+                        <span class="material-icons-sharp">person_add</span>
+                        {{ isMutating('new-account-' + review.id) ? 'Ищу' : 'Добавить новый' }}
+                      </button>
+                    </div>
+
+                    <label class="sheet-field review-edit-main-text">
                       <span>Текст отзыва</span>
                       <textarea
                         name="reviewEditText"
@@ -527,7 +728,19 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       ></textarea>
                     </label>
 
-                    <label class="sheet-field">
+                    <div class="sheet-utility-actions sheet-utility-actions--single">
+                      <button
+                        type="button"
+                        [title]="reviewHelpActionTitle()"
+                        (click)="createReviewHelpDraft(review)"
+                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading() || isMutating('review-help-' + review.id) || companyReportBusy()"
+                      >
+                        <span class="material-icons-sharp">auto_awesome</span>
+                        {{ isMutating('review-help-' + review.id) ? 'Пишу' : 'AI текст' }}
+                      </button>
+                    </div>
+
+                    <label class="sheet-field review-edit-answer">
                       <span>Ответ или замечание</span>
                       <textarea
                         name="reviewEditAnswer"
@@ -538,7 +751,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       ></textarea>
                     </label>
 
-                    <label class="sheet-field">
+                    <label class="sheet-field review-edit-comment">
                       <span>Заметка</span>
                       <textarea
                         name="reviewEditComment"
@@ -585,7 +798,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                           </a>
                         }
                         @if (productNeedsPhoto(draft.productId)) {
-                          <label class="photo-upload-button">
+                          <label class="photo-upload-button" (click)="pickNativeReviewPhoto($event)">
                             <span class="material-icons-sharp">add_photo_alternate</span>
                             <span>{{ reviewEditUploading() ? 'Загружаю' : 'Загрузить фото' }}</span>
                             <input
@@ -599,85 +812,53 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       </div>
                     }
 
-                    <label class="sheet-field">
-                      <span>Аккаунт</span>
-                      <input
-                        name="reviewEditBot"
-                        type="text"
-                        [ngModel]="draft.botName"
-                        (ngModelChange)="setReviewEditField('botName', $event)"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
-                      >
-                    </label>
+                    <div class="review-edit-compact-grid">
+                      <label class="sheet-field">
+                        <span>Создан</span>
+                        <input
+                          name="reviewEditCreated"
+                          type="text"
+                          [ngModel]="draft.created"
+                          (ngModelChange)="setReviewEditField('created', emptyToNull($event))"
+                          [readonly]="!details()?.canEditReviewDates"
+                          [disabled]="reviewEditSaving() || reviewEditDeleting()"
+                        >
+                      </label>
 
-                    <label class="sheet-field">
-                      <span>Пароль</span>
-                      <input
-                        name="reviewEditPassword"
-                        type="text"
-                        [ngModel]="draft.botPassword"
-                        (ngModelChange)="setReviewEditField('botPassword', $event)"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
-                      >
-                    </label>
+                      <label class="sheet-field">
+                        <span>Изменен</span>
+                        <input
+                          name="reviewEditChanged"
+                          type="text"
+                          [ngModel]="draft.changed"
+                          (ngModelChange)="setReviewEditField('changed', emptyToNull($event))"
+                          [readonly]="!details()?.canEditReviewDates"
+                          [disabled]="reviewEditSaving() || reviewEditDeleting()"
+                        >
+                      </label>
 
-                    <label class="sheet-field">
-                      <span>Создан</span>
-                      <input
-                        name="reviewEditCreated"
-                        type="text"
-                        [ngModel]="draft.created"
-                        (ngModelChange)="setReviewEditField('created', emptyToNull($event))"
-                        [readonly]="!details()?.canEditReviewDates"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting()"
-                      >
-                    </label>
+                      <label class="sheet-field sheet-field--inline">
+                        <span>Статус опубликован</span>
+                        <input
+                          name="reviewEditPublish"
+                          type="checkbox"
+                          [ngModel]="draft.publish"
+                          (ngModelChange)="setReviewEditField('publish', $event)"
+                          [disabled]="reviewEditSaving() || reviewEditDeleting() || !details()?.canEditReviewPublish"
+                        >
+                      </label>
 
-                    <label class="sheet-field">
-                      <span>Изменен</span>
-                      <input
-                        name="reviewEditChanged"
-                        type="text"
-                        [ngModel]="draft.changed"
-                        (ngModelChange)="setReviewEditField('changed', emptyToNull($event))"
-                        [readonly]="!details()?.canEditReviewDates"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting()"
-                      >
-                    </label>
-
-                    <label class="sheet-field">
-                      <span>Опубликован</span>
-                      <input
-                        name="reviewEditPublishedDate"
-                        type="text"
-                        [ngModel]="draft.publishedDate"
-                        (ngModelChange)="setReviewEditField('publishedDate', emptyToNull($event))"
-                        [readonly]="!details()?.canEditReviewDates"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting()"
-                      >
-                    </label>
-
-                    <label class="sheet-field sheet-field--inline">
-                      <span>Опубликован</span>
-                      <input
-                        name="reviewEditPublish"
-                        type="checkbox"
-                        [ngModel]="draft.publish"
-                        (ngModelChange)="setReviewEditField('publish', $event)"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting() || !details()?.canEditReviewPublish"
-                      >
-                    </label>
-
-                    <label class="sheet-field sheet-field--inline">
-                      <span>Выгул</span>
-                      <input
-                        name="reviewEditVigul"
-                        type="checkbox"
-                        [ngModel]="draft.vigul"
-                        (ngModelChange)="setReviewEditField('vigul', $event)"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting() || !details()?.canEditReviewVigul"
-                      >
-                    </label>
+                      <label class="sheet-field sheet-field--inline">
+                        <span>Выгул</span>
+                        <input
+                          name="reviewEditVigul"
+                          type="checkbox"
+                          [ngModel]="draft.vigul"
+                          (ngModelChange)="setReviewEditField('vigul', $event)"
+                          [disabled]="reviewEditSaving() || reviewEditDeleting() || !details()?.canEditReviewVigul"
+                        >
+                      </label>
+                    </div>
                   }
                 }
               </section>
@@ -775,6 +956,320 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       color: var(--otziv-danger);
     }
 
+    .company-report-modal {
+      --height: min(92vh, 48rem);
+    }
+
+    .company-report-sheet {
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--otziv-font-family);
+    }
+
+    .company-report-sheet .sheet-head h2 {
+      margin: 0;
+      color: var(--otziv-dark);
+      font-size: 1.05rem;
+      font-weight: 1000;
+      line-height: 1.12;
+    }
+
+    .company-report-content {
+      display: grid;
+      gap: 0.78rem;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 0.1rem 0.18rem 0;
+      scrollbar-width: thin;
+    }
+
+    .company-report-state-card,
+    .company-report-section {
+      border: 1px solid rgba(103, 116, 131, 0.2);
+      border-radius: 0.74rem;
+      background: var(--otziv-white);
+      box-shadow: 0 0.5rem 1.1rem rgba(42, 57, 82, 0.06);
+    }
+
+    .company-report-state-card {
+      display: grid;
+      place-items: center;
+      gap: 0.45rem;
+      min-height: 9rem;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .company-report-state-card .material-icons-sharp {
+      color: var(--otziv-primary);
+      font-size: 2rem;
+    }
+
+    .company-report-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.42rem;
+    }
+
+    .company-report-meta span {
+      border: 1px solid rgba(108, 155, 207, 0.28);
+      border-radius: 999px;
+      padding: 0.36rem 0.58rem;
+      color: #526276;
+      background: var(--otziv-white);
+      font-size: 0.66rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .company-report-reader-section {
+      border: 1px solid rgba(103, 116, 131, 0.2);
+      border-radius: 0.74rem;
+      background: var(--otziv-white);
+      box-shadow: 0 0.5rem 1.1rem rgba(42, 57, 82, 0.06);
+    }
+
+    .company-report-reader-section {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.72rem;
+    }
+
+    .company-report-reader-section h3 {
+      margin: 0;
+      padding: 0 0 0.46rem;
+      border-bottom: 1px solid rgba(103, 116, 131, 0.14);
+      color: var(--otziv-dark);
+      font-size: 0.95rem;
+      font-weight: 1000;
+      line-height: 1.18;
+    }
+
+    .company-report-section {
+      display: grid;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .company-report-section h3 {
+      box-sizing: border-box;
+      margin: 0;
+      width: 100%;
+      border-bottom: 1px solid rgba(103, 116, 131, 0.12);
+      border-radius: 0;
+      padding: 0.62rem 0.72rem;
+      color: var(--otziv-dark);
+      background: #eef4fb;
+      font-family: var(--otziv-font-family);
+      font-size: 0.8rem;
+      font-weight: 1000;
+      line-height: 1.12;
+      text-align: left;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem;
+      align-items: center;
+      min-height: 2.7rem;
+      height: auto;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .company-report-section-content {
+      display: block;
+      padding: 0.64rem 0.72rem 0.72rem;
+    }
+
+    .company-report-state-card p,
+    .company-report-section > p,
+    .company-report-section > ul li,
+    .company-report-section a,
+    .company-report-rich,
+    :host ::ng-deep .company-report-rich p,
+    :host ::ng-deep .company-report-rich li {
+      margin: 0;
+      color: #263244;
+      font-size: 0.75rem;
+      font-weight: 500;
+      line-height: 1.3;
+      overflow-wrap: break-word;
+    }
+
+    .company-report-rich {
+      display: grid;
+      gap: 0.38rem;
+      text-align: left;
+    }
+
+    :host ::ng-deep .company-report-rich * {
+      box-sizing: border-box;
+    }
+
+    :host ::ng-deep .company-report-rich p {
+      max-width: 100%;
+    }
+
+    :host ::ng-deep .company-report-rich h4 {
+      margin: 0.08rem 0 0;
+      padding: 0.42rem 0.52rem;
+      border-left: 0.22rem solid #6c9bcf;
+      border-radius: 0.48rem;
+      color: var(--otziv-dark);
+      background: #f1f6fc;
+      font-size: 0.82rem;
+      font-weight: 1000;
+      line-height: 1.18;
+    }
+
+    :host ::ng-deep .company-report-subheading {
+      margin: 0.08rem 0 0;
+      width: fit-content;
+      max-width: 100%;
+      border-radius: 999px;
+      padding: 0.16rem 0.42rem;
+      color: #1f2937;
+      background: #fff4d8;
+      font-size: 0.74rem;
+      font-weight: 1000;
+      line-height: 1.16;
+    }
+
+    :host ::ng-deep .company-report-rich strong {
+      color: #111827;
+      font-weight: 850;
+    }
+
+    :host ::ng-deep .company-report-rich code {
+      border-radius: 0.36rem;
+      padding: 0.08rem 0.28rem;
+      color: #24364d;
+      background: #eef4fb;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .company-report-section ul,
+    :host ::ng-deep .company-report-rich ul,
+    :host ::ng-deep .company-report-rich ol {
+      display: grid;
+      gap: 0.24rem;
+      margin: 0;
+      padding-left: 1.1rem;
+    }
+
+    :host ::ng-deep .company-report-rich li::marker {
+      color: #6c9bcf;
+      font-weight: 1000;
+    }
+
+    :host ::ng-deep .company-report-table-stack {
+      display: grid;
+      gap: 0.42rem;
+      max-width: 100%;
+    }
+
+    :host ::ng-deep .company-report-table-card {
+      display: grid;
+      gap: 0.28rem;
+      margin: 0;
+      padding: 0.52rem 0.56rem;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-left: 0.24rem solid #6c9bcf;
+      border-radius: 0.62rem;
+      background: #f8fbff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    :host ::ng-deep .company-report-table-card.tone-2 {
+      border-left-color: #2f9e6d;
+      background: #f6fbf8;
+    }
+
+    :host ::ng-deep .company-report-table-card.tone-3 {
+      border-left-color: #d39a27;
+      background: #fffaf0;
+    }
+
+    :host ::ng-deep .company-report-table-card.tone-4 {
+      border-left-color: #8a7ccf;
+      background: #fbf9ff;
+    }
+
+    :host ::ng-deep .company-report-table-card h5 {
+      margin: 0;
+      padding-bottom: 0.26rem;
+      border-bottom: 1px solid rgba(103, 116, 131, 0.1);
+      color: #1f2937;
+      font-size: 0.79rem;
+      font-weight: 1000;
+      line-height: 1.15;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    :host ::ng-deep .company-report-table-field {
+      display: grid;
+      gap: 0.06rem;
+      max-width: 100%;
+      padding-top: 0.22rem;
+      border-top: 1px solid rgba(103, 116, 131, 0.12);
+    }
+
+    :host ::ng-deep .company-report-table-card h5 + .company-report-table-field {
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    :host ::ng-deep .company-report-table-label,
+    :host ::ng-deep .company-report-table-value {
+      min-width: 0;
+      margin: 0;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    :host ::ng-deep .company-report-table-label {
+      width: fit-content;
+      max-width: 100%;
+      border-radius: 999px;
+      padding: 0.1rem 0.34rem;
+      color: #66758a;
+      background: rgba(108, 155, 207, 0.12);
+      font-size: 0.62rem;
+      font-weight: 1000;
+      line-height: 1.08;
+    }
+
+    :host ::ng-deep .company-report-table-value {
+      color: #263244;
+      font-size: 0.73rem;
+      font-weight: 500;
+      line-height: 1.26;
+    }
+
+    .company-report-section.warning {
+      border-color: rgba(244, 197, 66, 0.36);
+      background: color-mix(in srgb, var(--otziv-white) 84%, #fff3b6 16%);
+    }
+
+    .company-report-section.sources a {
+      color: var(--otziv-primary);
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .company-report-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .company-report-actions:empty {
+      display: none;
+    }
+
     .review-mobile-strip {
       display: flex;
       gap: 0.62rem;
@@ -783,7 +1278,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       margin-inline: -0.68rem;
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 0 0.68rem 0.15rem;
+      padding: 0 0.9rem 0.15rem;
+      scroll-padding-inline: 0.9rem;
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
     }
@@ -948,7 +1444,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     }
 
     .review-text-editor.editing {
-      gap: 0.22rem;
+      gap: 0.34rem;
       grid-template-rows: minmax(0, 1fr) auto;
     }
 
@@ -966,17 +1462,23 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
       font-size: 0.78rem;
-      font-weight: 800;
+      font-weight: 700;
       line-height: 1.34;
       text-align: left;
     }
 
     .review-text-editor textarea,
     .review-text-editor .review-display-field {
+      font-weight: 650;
+    }
+
+    .review-text-editor textarea,
+    .review-text-editor .review-display-field {
       display: block;
       height: 100%;
-      min-height: 12.2rem;
+      min-height: 11.45rem;
       overflow: hidden;
+      padding-bottom: 1.15rem;
       resize: none;
       white-space: pre-wrap;
     }
@@ -988,23 +1490,27 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     }
 
     .review-text-editor.editing textarea {
-      height: 12.08rem;
-      min-height: 12.08rem;
+      height: clamp(8.7rem, 24vh, 10.25rem);
+      min-height: 8.7rem;
       overflow: auto;
+      padding-bottom: 0.72rem;
     }
 
     .review-answer-editor textarea,
     .review-display-field--answer {
-      height: 3.05rem;
-      min-height: 3.05rem;
-      padding: 0.52rem 0.64rem;
+      display: -webkit-box;
+      height: 3.58rem;
+      min-height: 3.58rem;
+      padding: 0.46rem 0.6rem;
       overflow: hidden;
       resize: none;
       opacity: 0.56;
-      font-size: 0.63rem;
+      font-size: 0.6rem;
       font-weight: 800;
-      line-height: 1.22;
+      line-height: 1.2;
       text-align: center;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
     }
 
     .review-answer-editor textarea:focus {
@@ -1012,8 +1518,9 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     }
 
     .review-answer-editor.editing textarea {
-      height: 2.9rem;
-      min-height: 2.9rem;
+      display: block;
+      height: 3.7rem;
+      min-height: 3.7rem;
       overflow: auto;
     }
 
@@ -1038,8 +1545,9 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .field-actions {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.5rem;
+      gap: 0.44rem;
       align-items: center;
+      min-height: 1.68rem;
     }
 
     .field-actions button,
@@ -1060,10 +1568,10 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-text-editor > .field-actions button,
     .review-answer-editor > .field-actions button {
       align-self: center;
-      height: 1.92rem;
-      min-height: 1.92rem;
-      padding: 0 0.55rem;
-      font-size: 0.62rem;
+      height: 1.68rem;
+      min-height: 1.68rem;
+      padding: 0 0.42rem;
+      font-size: 0.56rem;
     }
 
     .field-actions .save,
@@ -1142,7 +1650,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       gap: 0.45rem;
     }
 
-    .review-actions .help {
+    .review-actions .ai-action {
       border-color: rgba(244, 197, 66, 0.42);
       color: #4d3900;
       background: #fff8c9;
@@ -1160,7 +1668,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       background: var(--otziv-muted-surface);
     }
 
-    :host-context(body.otziv-dark-theme) .review-actions .help {
+    :host-context(body.otziv-dark-theme) .review-actions .ai-action {
       border-color: rgba(248, 217, 117, 0.72);
       color: #342800;
       background: linear-gradient(145deg, #fff3b6 0%, #f8d975 100%);
@@ -1235,7 +1743,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .task-text-field {
       width: 100%;
-      min-height: 9.4rem;
+      min-height: 8.1rem;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.84rem;
       padding: 0.62rem;
@@ -1248,8 +1756,57 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       resize: none;
     }
 
+    .task-answer-field {
+      width: 100%;
+      min-height: 3.15rem;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 0.82rem;
+      padding: 0.54rem 0.6rem;
+      color: var(--otziv-info);
+      background: var(--otziv-field-background);
+      font-family: var(--otziv-font-family);
+      font-size: 0.64rem;
+      font-weight: 700;
+      line-height: 1.24;
+      opacity: 0.78;
+      resize: none;
+    }
+
     .task-text-field[readonly] {
       color: var(--otziv-info);
+    }
+
+    .task-note-field {
+      display: grid;
+      gap: 0.12rem;
+      min-height: 2.25rem;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-radius: 0.78rem;
+      padding: 0.42rem 0.52rem;
+      color: var(--otziv-info);
+      background: color-mix(in srgb, var(--otziv-field-background) 88%, var(--otziv-tone-bad-surface) 12%);
+      font-family: var(--otziv-font-family);
+    }
+
+    .task-note-field small {
+      color: var(--otziv-muted);
+      font-size: 0.53rem;
+      font-weight: 900;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .task-note-field span {
+      overflow: hidden;
+      font-size: 0.62rem;
+      font-weight: 800;
+      line-height: 1.18;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-answer-field[readonly] {
+      opacity: 0.62;
     }
 
     .task-actions .save {
@@ -1377,6 +1934,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly companyReportLoading = signal(false);
   readonly companyReportError = signal<string | null>(null);
   readonly companyReportState = signal<CompanyDeepReportState | null>(null);
+  readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
+  readonly companyReportBusy = computed(() => this.companyReportLoading() || !!this.companyReportState()?.activeJob);
+  readonly companyReport = computed(() => (this.companyReportState()?.latestJob?.report ?? null) as CompanyReport | null);
+  readonly companyReportSections = computed(() => this.buildCompanyReportSections(this.companyReport()));
+  readonly companyReportReviewIdeas = computed(() => this.cleanStringList(this.companyReport()?.reviewIdeas).slice(0, 12));
+  readonly companyReportWarnings = computed(() => this.cleanStringList(this.companyReport()?.warnings));
+  readonly companyReportSources = computed(() => (this.companyReport()?.sources ?? [])
+    .filter((source): source is CompanyReportSource => !!source && Boolean(this.cleanText(source.title) || this.cleanText(source.url) || this.cleanText(source.note)))
+    .slice(0, 10));
+  readonly companyReportConfirmedFacts = computed(() => (this.companyReport()?.factSnapshot?.confirmedFacts ?? [])
+    .filter((fact): fact is CompanyReportFact => !!fact && Boolean(this.cleanText(fact.label) || this.cleanText(fact.value) || this.cleanText(fact.evidence)))
+    .slice(0, 8));
   readonly reviewsExpanded = signal(false);
   readonly reviewEdit = signal<OrderReviewItem | null>(null);
   readonly reviewEditDraft = signal<ReviewUpdateRequest | null>(null);
@@ -1413,8 +1982,24 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     private readonly api: ApiService,
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly confirm: MobileConfirmService,
+    private readonly media: MobileMediaService
   ) {}
+
+  @HostListener('window:review-recovery-client-notified', ['$event'])
+  onRecoveryClientNotified(event: Event): void {
+    const detail = (event as CustomEvent<MobileRecoveryClientNotifiedDetail>).detail;
+    if (!detail?.orderId || detail.orderId !== this.orderId()) {
+      return;
+    }
+
+    if (this.mutationKey() === `recovery-notified-${detail.batchId}`) {
+      return;
+    }
+
+    this.loadDetails();
+  }
 
   ngOnInit(): void {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
@@ -1786,9 +2371,19 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     });
   }
 
-  deleteReviewEdit(): void {
+  async deleteReviewEdit(): Promise<void> {
     const review = this.reviewEdit();
-    if (!review || !this.details()?.canDeleteReviews || !window.confirm('Удалить отзыв?')) {
+    if (!review || !this.details()?.canDeleteReviews) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить отзыв',
+      message: 'Удалить отзыв?',
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -1817,29 +2412,47 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    void this.uploadReviewPhotoFile(review, file, input);
+  }
+
+  async pickNativeReviewPhoto(event: Event): Promise<void> {
+    if (!this.media.nativePhotoPickerAvailable || this.reviewEditUploading()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const review = this.reviewEdit();
+    if (!review) {
+      return;
+    }
+
+    const file = await this.media.pickImageFile(`review-${review.id}`);
+    if (file) {
+      await this.uploadReviewPhotoFile(review, file);
+    }
+  }
+
+  private async uploadReviewPhotoFile(review: OrderReviewItem, file: File, input?: HTMLInputElement | null): Promise<void> {
     this.reviewEditUploading.set(true);
     this.reviewEditError.set(null);
-    this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, file).subscribe({
-      next: (updatedReview) => {
-        this.applyUpdatedReview(updatedReview);
-        this.reviewEdit.set(updatedReview);
-        this.reviewEditDraft.update((draft) => draft ? {
-          ...draft,
-          url: updatedReview.url || updatedReview.urlPhoto || ''
-        } : this.reviewEditDraftFromReview(updatedReview));
-        this.reviewEditUploading.set(false);
-        if (input) {
-          input.value = '';
-        }
-      },
-      error: (err) => {
-        this.reviewEditError.set(this.errorMessage(err, 'Фото отзыва не загрузилось.'));
-        this.reviewEditUploading.set(false);
-        if (input) {
-          input.value = '';
-        }
+    try {
+      const preparedFile = await this.media.prepareImageFile(file, `review-${review.id}`);
+      const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
+      this.applyUpdatedReview(updatedReview);
+      this.reviewEdit.set(updatedReview);
+      this.reviewEditDraft.update((draft) => draft ? {
+        ...draft,
+        url: updatedReview.url || updatedReview.urlPhoto || ''
+      } : this.reviewEditDraftFromReview(updatedReview));
+    } catch (err) {
+      this.reviewEditError.set(this.errorMessage(err, 'Фото отзыва не загрузилось.'));
+    } finally {
+      this.reviewEditUploading.set(false);
+      if (input) {
+        input.value = '';
       }
-    });
+    }
   }
 
   hasReviewNote(review: OrderReviewItem): boolean {
@@ -1889,12 +2502,42 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     );
   }
 
-  deactivateBot(review: OrderReviewItem): void {
+  changeReviewText(review: OrderReviewItem): void {
+    if (this.isMutating(`ai-text-${review.id}`)) {
+      return;
+    }
+
+    this.runReviewMutation(
+      `ai-text-${review.id}`,
+      () => this.api.changeManagerOrderReviewText(review.orderId, review.id),
+      'Не удалось изменить текст отзыва'
+    );
+  }
+
+  assignReviewNewAccount(review: OrderReviewItem): void {
+    if (this.isMutating(`new-account-${review.id}`)) {
+      return;
+    }
+
+    this.runReviewMutation(
+      `new-account-${review.id}`,
+      () => this.api.assignManagerOrderReviewNewAccount(review.orderId, review.id),
+      'Не удалось назначить новый аккаунт'
+    );
+  }
+
+  async deactivateBot(review: OrderReviewItem): Promise<void> {
     if (!review.botId || this.isMutating(`block-${review.id}`)) {
       return;
     }
 
-    if (!window.confirm(`Заблокировать аккаунт "${this.botLabel(review)}" и заменить его?`)) {
+    const confirmed = await this.confirm.confirm({
+      title: 'Заменить аккаунт',
+      message: `Заблокировать аккаунт "${this.botLabel(review)}" и заменить его?`,
+      confirmText: 'Заменить',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -1918,24 +2561,61 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     );
   }
 
-  showReviewHelpAction(details: OrderDetailsPayload | null | undefined = this.details()): boolean {
+  showReviewAiAction(details: OrderDetailsPayload | null | undefined = this.details()): boolean {
     const status = (details?.status ?? '').trim().toLocaleLowerCase('ru-RU');
-    return REVIEW_HELP_ORDER_STATUSES.has(status);
+    return REVIEW_AI_ORDER_STATUSES.has(status);
   }
 
   reviewHelpActionLabel(review: OrderReviewItem): string {
     return this.isMutating(`review-help-${review.id}`) ? '...' : 'помощь';
   }
 
+  reviewHelpActionTitle(): string {
+    if (this.companyReportBusy()) {
+      return 'Отчет о компании сейчас готовится';
+    }
+
+    if (!this.hasReadyCompanyReport()) {
+      return 'Сначала собрать отчет о компании, потом подготовить текст отзыва';
+    }
+
+    return 'Подготовить и сохранить текст отзыва через AI-помощник';
+  }
+
   createReviewHelpDraft(review: OrderReviewItem): void {
-    if (this.busy()) {
+    const orderId = this.orderId();
+    if (!orderId || this.busy()) {
       return;
     }
 
+    if (this.companyReportBusy()) {
+      this.error.set('Отчет о компании еще готовится. Дождитесь завершения и повторите AI.');
+      this.companyReportVisible.set(true);
+      return;
+    }
+
+    if (!this.hasReadyCompanyReport()) {
+      this.error.set('Сначала нужен отчет о компании. Я открыл подготовку отчета, после готовности нажмите AI еще раз.');
+      this.openCompanyReport();
+      return;
+    }
+
+    const fieldKey = this.reviewFieldKey(review, 'text');
     this.runDetailsMutation(
       `review-help-${review.id}`,
-      () => this.api.createManagerReviewHelpDraftForCard(review.orderId, review.id),
-      'Не удалось подготовить подсказку'
+      () => this.api.createManagerReviewHelpDraftForCard(orderId, review.id),
+      'Не удалось подготовить AI-текст',
+      () => {
+        this.reviewFieldDrafts.update((drafts) => {
+          const next = { ...drafts };
+          delete next[fieldKey];
+          return next;
+        });
+        if (this.editingFieldKey() === fieldKey) {
+          this.editingFieldKey.set(null);
+        }
+        this.expandedReviewIds.update((items) => ({ ...items, [review.id]: true }));
+      }
     );
   }
 
@@ -2088,22 +2768,88 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     );
   }
 
-  completeBadReviewTask(task: BadReviewTaskItem): void {
+  recoveryTaskCopyKey(task: ReviewRecoveryTaskItem, kind: RecoveryTaskCopyKind): string {
+    return `recovery-task-${task.id}-${kind}`;
+  }
+
+  async copyRecoveryTaskField(task: ReviewRecoveryTaskItem, kind: RecoveryTaskCopyKind): Promise<void> {
+    const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
+    await this.copyText(value ?? '', this.recoveryTaskCopyKey(task, kind));
+  }
+
+  recoveryTaskBotBrowserUrl(task: ReviewRecoveryTaskItem): string {
+    return task.botId ? `/admin/dictionaries/accounts/${task.botId}/browser` : 'https://vk.com/';
+  }
+
+  changeRecoveryTaskBot(task: ReviewRecoveryTaskItem): void {
+    if (!this.canEditRecoveryTask(task)) {
+      return;
+    }
+
+    this.runRecoveryBotMutation(
+      `recovery-change-bot-${task.id}`,
+      () => this.api.changeWorkerRecoveryTaskBot(task.id),
+      'Не удалось сменить аккаунт восстановления'
+    );
+  }
+
+  async deactivateRecoveryTaskBot(task: ReviewRecoveryTaskItem): Promise<void> {
+    if (!this.canEditRecoveryTask(task) || !task.botId) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Заменить аккаунт',
+      message: `Заблокировать аккаунт "${task.botFio || task.botId}" и заменить в восстановлении?`,
+      confirmText: 'Заменить',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.runRecoveryBotMutation(
+      `recovery-block-bot-${task.id}`,
+      () => this.api.deactivateWorkerRecoveryTaskBot(task.id, task.botId!),
+      'Не удалось заблокировать аккаунт восстановления'
+    );
+  }
+
+  async completeBadReviewTask(task: BadReviewTaskItem): Promise<void> {
     const orderId = this.orderId();
-    if (!orderId || !this.canCompleteBadReviewTask(task) || !window.confirm(`Отметить плохую задачу #${task.id} выполненной?`)) {
+    if (!orderId || !this.canCompleteBadReviewTask(task)) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Отметить выполненной',
+      message: `Плохая задача #${task.id} будет отмечена как "Сменил". После этого доплата попадет в сумму заказа, а менеджер получит уведомление для счета клиенту.`,
+      confirmText: 'Сменил'
+    });
+    if (!confirmed) {
       return;
     }
 
     this.runDetailsMutation(
       `bad-task-complete-${task.id}`,
       () => this.api.completeManagerBadReviewTask(orderId, task.id),
-      'Не удалось закрыть плохую задачу'
+      'Не удалось отметить плохую задачу'
     );
   }
 
-  cancelBadReviewTask(task: BadReviewTaskItem): void {
+  async cancelBadReviewTask(task: BadReviewTaskItem): Promise<void> {
     const orderId = this.orderId();
-    if (!orderId || !window.confirm(`Убрать плохую задачу #${task.id} из доплаты?`)) {
+    if (!orderId) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Убрать из доплаты',
+      message: `Убрать плохую задачу #${task.id} из доплаты?`,
+      confirmText: 'Убрать',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -2122,12 +2868,20 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return this.recoveryTaskDraft(task).recoveryText;
   }
 
+  recoveryTaskAnswerValue(task: ReviewRecoveryTaskItem): string {
+    return this.recoveryTaskDraft(task).recoveryAnswer;
+  }
+
   recoveryTaskDateValue(task: ReviewRecoveryTaskItem): string {
     return this.recoveryTaskDraft(task).scheduledDate ?? '';
   }
 
   setRecoveryTaskText(task: ReviewRecoveryTaskItem, value: string): void {
     this.updateRecoveryTaskDraft(task, { recoveryText: value });
+  }
+
+  setRecoveryTaskAnswer(task: ReviewRecoveryTaskItem, value: string): void {
+    this.updateRecoveryTaskDraft(task, { recoveryAnswer: value });
   }
 
   setRecoveryTaskDate(task: ReviewRecoveryTaskItem, value: string): void {
@@ -2141,6 +2895,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
 
     return draft.recoveryText !== (task.recoveryText ?? '')
+      || draft.recoveryAnswer !== (task.recoveryAnswer ?? '')
       || (draft.scheduledDate ?? '') !== (task.scheduledDate ?? '');
   }
 
@@ -2164,6 +2919,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       `recovery-save-${task.id}`,
       () => this.api.updateManagerReviewRecoveryTask(orderId, task.id, {
         recoveryText: draft.recoveryText,
+        recoveryAnswer: draft.recoveryAnswer,
         scheduledDate: draft.scheduledDate
       }),
       'Не удалось сохранить восстановление',
@@ -2179,16 +2935,25 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     );
   }
 
-  completeRecoveryTask(task: ReviewRecoveryTaskItem): void {
+  async completeRecoveryTask(task: ReviewRecoveryTaskItem): Promise<void> {
     const orderId = this.orderId();
-    if (!orderId || task.statusCode !== 'PLANNED' || !window.confirm(`Отметить задачу восстановления #${task.id} выполненной?`)) {
+    if (!orderId || task.statusCode !== 'PLANNED') {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Отметить выполненным',
+      message: `Восстановление #${task.id} будет отмечено выполненным. Если это последняя задача в пачке, менеджеру уйдет уведомление связаться с клиентом.`,
+      confirmText: 'Готово'
+    });
+    if (!confirmed) {
       return;
     }
 
     this.runDetailsMutation(
       `recovery-complete-${task.id}`,
       () => this.api.completeManagerReviewRecoveryTask(orderId, task.id),
-      'Не удалось закрыть восстановление'
+      'Не удалось отметить восстановление'
     );
   }
 
@@ -2201,7 +2966,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.runDetailsMutation(
       `recovery-notified-${batch.id}`,
       () => this.api.markManagerRecoveryClientNotified(orderId, batch.id),
-      'Не удалось отметить уведомление клиента'
+      'Не удалось отметить уведомление клиента',
+      () => dispatchMobileRecoveryClientNotified({ orderId, batchId: batch.id })
     );
   }
 
@@ -2293,9 +3059,23 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     });
   }
 
+  closeCompanyReport(): void {
+    this.companyReportVisible.set(false);
+  }
+
+  canRefreshCompanyReport(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
   refreshCompanyReport(): void {
     const orderId = this.orderId();
     if (!orderId || this.companyReportLoading()) {
+      return;
+    }
+
+    if (!this.canRefreshCompanyReport()) {
+      this.companyReportVisible.set(true);
+      this.companyReportError.set('Обновлять отчет может только владелец или администратор.');
       return;
     }
 
@@ -2323,9 +3103,32 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return 'Отчет готовится в фоне. Можно продолжать работать с отзывами.';
     }
     if (state.latestJob?.report) {
-      return 'Отчет о компании готов в веб-версии. Полный мобильный просмотр отчета добавим отдельным шагом.';
+      return 'Отчет о компании готов.';
     }
     return state.unavailableReason || 'Готового отчета пока нет.';
+  }
+
+  companyReportCompletedAt(): string {
+    const value = this.companyReportState()?.latestJob?.completedAt
+      ?? this.companyReport()?.createdAt
+      ?? this.companyReportState()?.latestJob?.updatedAt
+      ?? '';
+    if (!value) {
+      return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value).slice(0, 16).replace('T', ' ');
+    }
+
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   }
 
   canShowPublishButton(details: OrderDetailsPayload, review: OrderReviewItem): boolean {
@@ -2449,6 +3252,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   private recoveryTaskDraft(task: ReviewRecoveryTaskItem): RecoveryTaskDraft {
     return this.recoveryTaskDrafts()[task.id] ?? {
       recoveryText: task.recoveryText ?? '',
+      recoveryAnswer: task.recoveryAnswer ?? '',
       scheduledDate: this.dateInputValue(task.scheduledDate)
     };
   }
@@ -2485,7 +3289,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
   }
 
-  private startCompanyReport(): void {
+  startCompanyReport(): void {
     const orderId = this.orderId();
     if (!orderId) {
       return;
@@ -2502,6 +3306,272 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.companyReportLoading.set(false);
       }
     });
+  }
+
+  private buildCompanyReportSections(report: CompanyReport | null): CompanyReportSection[] {
+    if (!report) {
+      return [];
+    }
+
+    const explicitSections = (report.sections ?? [])
+      .map((section) => ({
+        title: this.cleanText(section.title),
+        body: this.cleanReportBody(section.body)
+      }))
+      .filter((section) => section.body)
+      .map((section, index) => this.createCompanyReportSection(section.title || `Раздел ${index + 1}`, section.body, index));
+    if (explicitSections.length) {
+      return explicitSections;
+    }
+
+    return this.sectionsFromMarkdown(report.reportMarkdown);
+  }
+
+  private sectionsFromMarkdown(markdown?: string | null): CompanyReportSection[] {
+    const text = this.cleanReportBody(markdown);
+    if (!text) {
+      return [];
+    }
+
+    const sections: CompanyReportSection[] = [];
+    let title = 'Кратко';
+    let body: string[] = [];
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trimEnd();
+      const heading = line.match(/^#{1,4}\s+(.+)$/);
+      if (heading) {
+        this.pushCompanyReportSection(sections, title, body.join('\n'));
+        title = this.cleanMarkdownText(heading[1]);
+        body = [];
+        continue;
+      }
+      body.push(line);
+    }
+    this.pushCompanyReportSection(sections, title, body.join('\n'));
+
+    return sections.length ? sections : [this.createCompanyReportSection('Отчет', text, 0)];
+  }
+
+  private pushCompanyReportSection(sections: CompanyReportSection[], title: string, body: string): void {
+    const cleanBody = this.cleanReportBody(body);
+    if (!cleanBody) {
+      return;
+    }
+
+    sections.push(this.createCompanyReportSection(this.cleanText(title) || `Раздел ${sections.length + 1}`, cleanBody, sections.length));
+  }
+
+  private createCompanyReportSection(title: string, body: string, index: number): CompanyReportSection {
+    const cleanBody = this.cleanReportBody(body);
+    const cleanTitle = this.cleanText(title) || 'Раздел';
+    return {
+      id: `company-report-section-${index}-${this.companyReportSectionSlug(cleanTitle)}`,
+      title: cleanTitle,
+      body: cleanBody,
+      html: this.renderCompanyReportMarkdown(cleanBody)
+    };
+  }
+
+  private companyReportSectionSlug(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zа-яё0-9-]/g, '')
+      .slice(0, 40) || 'section';
+  }
+
+  private renderCompanyReportMarkdown(markdown?: string | null): string {
+    const text = this.cleanReportBody(markdown);
+    if (!text) {
+      return '';
+    }
+
+    const html: string[] = [];
+    const paragraph: string[] = [];
+    const listItems: string[] = [];
+    const tableRows: string[][] = [];
+    let listTag: 'ul' | 'ol' | null = null;
+
+    const flushParagraph = () => {
+      if (!paragraph.length) {
+        return;
+      }
+      html.push(`<p>${this.renderInlineReportMarkdown(paragraph.join(' '))}</p>`);
+      paragraph.length = 0;
+    };
+
+    const flushList = () => {
+      if (!listTag || !listItems.length) {
+        return;
+      }
+      html.push(`<${listTag}>${listItems.map((item) => `<li>${item}</li>`).join('')}</${listTag}>`);
+      listItems.length = 0;
+      listTag = null;
+    };
+
+    const flushTable = () => {
+      if (!tableRows.length) {
+        return;
+      }
+
+      const separatorIndex = tableRows.findIndex((row) => this.isMarkdownTableSeparator(row));
+      const hasHeader = separatorIndex === 1 && tableRows.length > 2;
+      const headerRow = hasHeader ? tableRows[0] : null;
+      const bodyRows = tableRows
+        .filter((row, index) => !this.isMarkdownTableSeparator(row) && (!hasHeader || index !== 0));
+
+      if (!headerRow && bodyRows.length < 2) {
+        paragraph.push(...tableRows.map((row) => row.join(' | ')));
+      } else {
+        const bodyHtml = bodyRows
+          .map((row, rowIndex) => {
+            const title = this.cleanText(row[0]) || `Строка ${rowIndex + 1}`;
+            const tone = `tone-${(rowIndex % 4) + 1}`;
+            const fieldsSource = row.length > 1 ? row.slice(1) : row;
+            const labelsSource = row.length > 1 ? headerRow?.slice(1) : headerRow;
+            const fields = fieldsSource
+              .map((cell, index) => {
+                const label = labelsSource?.[index] || `Поле ${index + 1}`;
+                return `<div class="company-report-table-field"><span class="company-report-table-label">${this.renderInlineReportMarkdown(label)}</span><p class="company-report-table-value">${this.renderInlineReportMarkdown(cell || '-')}</p></div>`;
+              })
+              .join('');
+            if (!fieldsSource.length) {
+              return `<article class="company-report-table-card ${tone}"><h5>${this.renderInlineReportMarkdown(title)}</h5></article>`;
+            }
+            return `<article class="company-report-table-card ${tone}"><h5>${this.renderInlineReportMarkdown(title)}</h5>${fields}</article>`;
+          })
+          .join('');
+        html.push(`<div class="company-report-table-stack">${bodyHtml}</div>`);
+      }
+
+      tableRows.length = 0;
+    };
+
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) {
+        flushParagraph();
+        flushList();
+        flushTable();
+        continue;
+      }
+
+      if (this.isMarkdownTableLine(line)) {
+        flushParagraph();
+        flushList();
+        tableRows.push(this.parseMarkdownTableRow(line));
+        continue;
+      }
+
+      flushTable();
+
+      const heading = line.match(/^#{2,5}\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        html.push(`<h4>${this.renderInlineReportMarkdown(heading[1])}</h4>`);
+        continue;
+      }
+
+      if (this.isReportSubheadingLine(line)) {
+        flushParagraph();
+        flushList();
+        html.push(`<h5 class="company-report-subheading">${this.renderInlineReportMarkdown(line.replace(/:$/, ''))}</h5>`);
+        continue;
+      }
+
+      const unordered = line.match(/^[-*]\s+(.+)$/);
+      if (unordered) {
+        flushParagraph();
+        if (listTag && listTag !== 'ul') {
+          flushList();
+        }
+        listTag = 'ul';
+        listItems.push(this.renderInlineReportMarkdown(unordered[1]));
+        continue;
+      }
+
+      const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+      if (ordered) {
+        flushParagraph();
+        if (listTag && listTag !== 'ol') {
+          flushList();
+        }
+        listTag = 'ol';
+        listItems.push(this.renderInlineReportMarkdown(ordered[1]));
+        continue;
+      }
+
+      flushList();
+      paragraph.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+    flushTable();
+
+    return html.join('');
+  }
+
+  private renderInlineReportMarkdown(value?: string | null): string {
+    return this.escapeHtml(this.cleanText(value))
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  private parseMarkdownTableRow(line: string): string[] {
+    return line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => this.cleanText(cell));
+  }
+
+  private isMarkdownTableLine(line: string): boolean {
+    const trimmed = line.trim();
+    return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.includes('|');
+  }
+
+  private isMarkdownTableSeparator(row: string[]): boolean {
+    return row.length > 0 && row.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, '')));
+  }
+
+  private isReportSubheadingLine(line: string): boolean {
+    const text = this.cleanMarkdownText(line);
+    return text.endsWith(':') && text.length <= 90 && !text.includes('|');
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private cleanReportBody(value?: string | null): string {
+    return this.cleanText(value)
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n');
+  }
+
+  private cleanMarkdownText(value?: string | null): string {
+    return this.cleanText(value)
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/`([^`]+)`/g, '$1');
+  }
+
+  private cleanStringList(values?: Array<string | null | undefined> | null): string[] {
+    return (values ?? [])
+      .map((value) => this.cleanText(value))
+      .filter((value, index, items) => !!value && items.indexOf(value) === index);
+  }
+
+  private cleanText(value?: unknown): string {
+    return typeof value === 'string' ? value.trim() : '';
   }
 
   private sendToCheckBlockReason(): string | null {
@@ -2575,11 +3645,39 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     });
   }
 
+  private runRecoveryBotMutation(
+    key: string,
+    request: () => Observable<unknown>,
+    fallback: string
+  ): void {
+    if (this.isMutating(key)) {
+      return;
+    }
+
+    this.mutationKey.set(key);
+    this.error.set(null);
+    request().subscribe({
+      next: () => {
+        this.mutationKey.set(null);
+        this.loadDetails();
+      },
+      error: (err) => {
+        this.error.set(this.errorMessage(err, fallback));
+        this.mutationKey.set(null);
+      }
+    });
+  }
+
   private applyUpdatedReview(updatedReview: OrderReviewItem): void {
     this.details.update((details) => details ? {
       ...details,
       reviews: details.reviews.map((review) => review.id === updatedReview.id ? updatedReview : review)
     } : details);
+
+    if (this.reviewEdit()?.id === updatedReview.id) {
+      this.reviewEdit.set(updatedReview);
+      this.reviewEditDraft.set(this.reviewEditDraftFromReview(updatedReview));
+    }
   }
 
   private patchOrderNote(orderId: number, orderComments: string): void {

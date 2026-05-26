@@ -32,51 +32,42 @@ import {
   OrderUpdateRequest,
   Page
 } from '../core/api.service';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { MobileOrderCardComponent, type MobileOrderCopyKind, type MobileOrderStatusAction } from '../shared/mobile-order-card.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  mobilePageIndex,
+  mobilePageIsFirst,
+  mobilePageIsLast,
+  mobilePageLabel,
+  mobilePageTotal,
+  mobileSortTitle
+} from '../shared/mobile-board.helpers';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
+import {
+  ALL_STATUS,
+  COMPANY_ACTIONS,
+  DEFAULT_COMPANY_STATUSES,
+  DEFAULT_ORDER_STATUSES,
+  ORDER_ACTIONS,
+  PREFERRED_CREATE_ORDER_PRODUCT,
+  ensureAllStatus,
+  managerStatusLabel,
+  managerOrderActionsFor,
+  normalizedManagerStatus,
+  type CompanyStatusAction,
+  type ManagerNoteSaveState,
+  type OrderStatusAction
+} from './manager/manager-board.helpers';
+import { MobileCompanyCardComponent } from './manager/mobile-company-card.component';
 
-const ALL_STATUS = 'Все';
-const PREFERRED_CREATE_ORDER_PRODUCT = 'отзыв2гис+';
-const DEFAULT_COMPANY_STATUSES = ['Все', 'Новая', 'В работе', 'Новый заказ', 'К рассылке', 'Ожидание', 'На стопе', 'Бан', 'Архив'];
-const DEFAULT_ORDER_STATUSES = [
-  'Все',
-  'Новый',
-  'В проверку',
-  'На проверке',
-  'Коррекция',
-  'Публикация',
-  'Опубликовано',
-  'Выставлен счет',
-  'Напоминание',
-  'Не оплачено',
-  'Бан',
-  'Архив'
-];
-const COMPANY_ACTIONS = [
-  { label: 'предложил', status: 'Ожидание', icon: 'outgoing_mail' },
-  { label: 'рассылка', status: 'К рассылке', icon: 'campaign' },
-  { label: 'на стоп', status: 'На стопе', icon: 'pause_circle' },
-  { label: 'бан', status: 'Бан', icon: 'block' }
-] as const;
-const ORDER_ACTIONS = [
-  { label: 'на проверк', status: 'На проверке', icon: 'manage_search' },
-  { label: 'коррекция', status: 'Коррекция', icon: 'build_circle' },
-  { label: 'одобрено', status: 'Публикация', icon: 'task_alt' },
-  { label: 'архив', status: 'Архив', icon: 'archive' },
-  { label: 'опубликов.', status: 'Опубликовано', icon: 'published_with_changes' },
-  { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
-  { label: 'напомин.', status: 'Напоминание', icon: 'notifications_active' },
-  { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
-  { label: 'в бан', status: 'Бан', icon: 'block' },
-  { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
-] as const;
-
-type CompanyStatusAction = (typeof COMPANY_ACTIONS)[number];
-type OrderStatusAction = (typeof ORDER_ACTIONS)[number];
 type SelectedCompany = { id: number; title: string };
 type CompanyFilialEditDraft = CompanyFilialUpdateRequest & { filialId: number };
-type CompanyNoteSaveState = 'idle' | 'saving' | 'saved' | 'error';
+type CompanyNoteSaveState = ManagerNoteSaveState;
 type OrderNoteSaveState = CompanyNoteSaveState;
 type CompanyCreateDraft = {
   source: CompanyCreateSource;
@@ -104,7 +95,7 @@ type CompanyPreservedFields = Pick<
 
 @Component({
   selector: 'app-manager',
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileCompanyCardComponent, MobileHeaderComponent, MobileOrderCardComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header [title]="sectionLabel()" />
@@ -117,50 +108,37 @@ type CompanyPreservedFields = Pick<
         <app-mobile-reminders #reminders />
 
         <main class="manager-page">
-          <section class="manager-status-scroll" [attr.aria-label]="'Статусы: ' + sectionLabel()">
-            @for (status of currentStatuses(); track status) {
-              <button
-                type="button"
-                class="metric-tile {{ statusTone(status) }}"
-                [class.active]="currentStatus() === normalizedStatus(status)"
-                (click)="selectStatus(status)"
-              >
-                <span class="material-icons-sharp">{{ statusIcon(status) }}</span>
-                <strong>{{ metricValue(status) }}</strong>
-                <small>{{ statusLabel(status) }}</small>
-              </button>
-            }
-          </section>
+          <app-mobile-status-slider
+            [items]="statusItems()"
+            [activeKey]="currentStatus()"
+            [ariaLabel]="'Статусы: ' + sectionLabel()"
+            (select)="selectStatus($event)"
+          />
 
-          <form class="manager-search-strip" (ngSubmit)="applySearch()" role="search" aria-label="Поиск">
-            <label>
-              <span class="material-icons-sharp">search</span>
-              <input
-                name="managerKeyword"
-                type="search"
-                autocomplete="off"
-                [placeholder]="searchPlaceholder()"
-                [ngModel]="keyword()"
-                (ngModelChange)="setKeyword($event)"
-              >
-            </label>
-
+          <app-mobile-search-bar
+            [value]="keyword()"
+            [placeholder]="searchPlaceholder()"
+            [showRefresh]="false"
+            [hasExtraAction]="true"
+            (valueChange)="setKeyword($event)"
+            (searchSubmit)="applySearch()"
+          >
             @if (keyword() || appliedKeyword()) {
-              <button class="icon-button" type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
+              <button mobileSearchActions type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
                 <span class="material-icons-sharp">close</span>
               </button>
             }
 
-            <button class="icon-button" type="button" (click)="openArchive()" [disabled]="loading()" aria-label="Архив">
+            <button mobileSearchActions type="button" (click)="openArchive()" [disabled]="loading()" aria-label="Архив">
               <span class="material-icons-sharp">archive</span>
             </button>
 
             @if (activeSection() === 'companies') {
-              <button class="icon-button" type="button" (click)="openManualCompanyCreate()" aria-label="Добавить компанию">
+              <button mobileSearchActions type="button" (click)="openManualCompanyCreate()" aria-label="Добавить компанию">
                 <span class="material-icons-sharp">add</span>
               </button>
             }
-          </form>
+          </app-mobile-search-bar>
 
           @if (error()) {
             <button class="inline-alert" type="button" (click)="reload()">
@@ -177,257 +155,94 @@ type CompanyPreservedFields = Pick<
           >
             @if (activeSection() === 'companies') {
               @for (company of board()?.companies?.content ?? []; track company.id) {
-                <article [class]="'lead-card manager-card company-mobile-card lead-card--' + companyTone(company)">
-                  <header class="lead-card-head">
-                    <a [href]="companyChatUrl(company)" target="_blank" rel="noopener">
-                      {{ company.title || 'Без названия' }}
-                    </a>
-                    <span>
-                      <small>{{ company.status || '-' }} / #{{ company.id }}</small>
-                      @if (companyNoteBadge(company); as badge) {
-                        <button class="order-note-badge" type="button" (click)="focusCompanyNote(company)" [attr.aria-label]="badge">
-                          {{ badge }}
-                        </button>
-                      }
-                    </span>
-                  </header>
-
-                  <div class="lead-phone-row">
-                    <a [href]="companyChatUrl(company)" target="_blank" rel="noopener">
-                      {{ companyPhone(company) }}
-                    </a>
-                    <button type="button" (click)="copyCompanyPhone(company)" aria-label="Скопировать телефон">
-                      {{ copiedKey() === 'company-phone-' + company.id ? '✓' : 'T' }}
-                    </button>
-                  </div>
-
-                  <div class="lead-meta-row">
-                    <span>{{ company.status || '-' }}</span>
-                    <button type="button" (click)="openCompanyOrderCreate(company)">Заказ</button>
-                  </div>
-
-                  @if (hasNextOrderRequest(company)) {
-                    <p class="company-next-order" [class.company-next-order--failed]="hasFailedNextOrderRequest(company)">
-                      <span class="material-icons-sharp">{{ hasFailedNextOrderRequest(company) ? 'error' : 'assignment_add' }}</span>
-                      {{ nextOrderRequestLabel(company) }}
-                    </p>
-                  }
-
-                  <div class="lead-comment-editor company-note-editor">
-                    <textarea
-                      class="lead-card-comment"
-                      [id]="'companyNote' + company.id"
-                      [name]="'companyNote' + company.id"
-                      rows="3"
-                      placeholder="Комментарий"
-                      [ngModel]="companyNoteFor(company)"
-                      (ngModelChange)="setCompanyNote(company, $event)"
-                      (blur)="saveCompanyNoteNow(company)"
-                    ></textarea>
-                    @if (companyNoteSaveLabel(company); as saveLabel) {
-                      <span [class]="'lead-comment-state lead-comment-state--' + companyNoteSaveState(company)">{{ saveLabel }}</span>
-                    }
-                  </div>
-
-                  <div class="lead-card-actions company-card-actions">
-                    @for (action of companyActions; track action.status) {
-                      <button
-                        type="button"
-                        (click)="updateCompanyStatus(company, action)"
-                        [disabled]="isMutatingCompany(company, action)"
-                      >
-                        <span class="material-icons-sharp">{{ action.icon }}</span>
-                        {{ isMutatingCompany(company, action) ? '...' : action.label }}
-                      </button>
-                    }
-                  </div>
-
-                  <div class="company-filial-count">
-                    <span>Филиалов:</span>
-                    <strong>{{ company.countFilials || 0 }}</strong>
-                  </div>
-
-                  <button class="company-details-button" type="button" (click)="openCompanyOrders(company)">Подробнее</button>
-
-                  <footer class="lead-card-foot">
-                    <button type="button" (click)="showAllCompanyOrders()" title="Показать все заказы менеджера">
-                      {{ company.manager || '-' }}
-                    </button>
-                    <button type="button" (click)="openCompanyEdit(company)">компания - {{ company.city || 'город' }}</button>
-                  </footer>
-                </article>
+                <app-mobile-company-card
+                  [company]="company"
+                  [actions]="companyActions"
+                  [copiedKey]="copiedKey()"
+                  [mutationKey]="mutationKey()"
+                  [note]="companyNoteFor(company)"
+                  [noteStateLabel]="companyNoteSaveLabel(company) || ''"
+                  [noteState]="companyNoteSaveState(company)"
+                  (copyPhone)="copyCompanyPhone($event)"
+                  (createOrder)="openCompanyOrderCreate($event)"
+                  (focusNote)="focusCompanyNote($event)"
+                  (noteChange)="setCompanyNote(company, $event)"
+                  (noteSave)="saveCompanyNoteNow(company)"
+                  (statusChange)="updateCompanyStatus(company, $event)"
+                  (openOrders)="openCompanyOrders($event)"
+                  (showAllOrders)="showAllCompanyOrders()"
+                  (edit)="openCompanyEdit($event)"
+                />
               } @empty {
                 <div class="empty-state compact-empty">Компаний для отображения нет.</div>
               }
             } @else {
               @for (order of board()?.orders?.content ?? []; track order.id) {
-                <article
-                  [class]="'lead-card manager-card order-mobile-card ' + orderTone(order)"
-                  [class.order-mobile-card--company]="selectedCompany()"
-                  [class.waiting-client]="order.waitingForClient"
-                >
-                  <header class="lead-card-head order-card-head">
-                    <a
-                      [href]="orderChatUrl(order)"
-                      target="_blank"
-                      rel="noopener"
-                      (click)="guardLink($event, orderChatUrl(order))"
-                    >
-                      {{ orderTitle(order) }}
-                    </a>
-                    <span>
-                      <small>#{{ order.id }}</small>
-                      @if (order.waitingForClient) {
-                        <em aria-label="Ждет клиента">!</em>
-                      }
-                      @if (orderNoteBadge(order); as badge) {
-                        <button class="order-note-badge" type="button" (click)="focusOrderNote(order)" [attr.aria-label]="badge">
-                          {{ badge }}
-                        </button>
-                      }
-                    </span>
-                  </header>
-
-                  <div class="lead-meta-row order-main-meta">
-                    <span>{{ order.status || '-' }}</span>
-                    <span>{{ orderMoney(orderPayableSum(order)) }}</span>
-                  </div>
-
-                  @if (showBadReviewSummary(order)) {
-                    <div class="lead-meta-row order-bad-review-row">
-                      <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
-                      <span>+{{ orderMoney(order.badReviewTasksSum || 0) }}</span>
-                    </div>
-                  }
-
-                  <div class="lead-phone-row order-phone-row">
-                    <a
-                      [href]="orderChatUrl(order)"
-                      target="_blank"
-                      rel="noopener"
-                      (click)="guardLink($event, orderChatUrl(order))"
-                    >
-                      {{ orderPhone(order) }}
-                    </a>
-                    <button type="button" (click)="copyOrderPhone(order)" aria-label="Скопировать телефон">
-                      {{ copiedKey() === 'order-phone-' + order.id ? '✓' : 'T' }}
-                    </button>
-                  </div>
-
-                  <div class="lead-card-actions order-link-actions">
-                    <button type="button" (click)="copyOrderReviewText(order)">
-                      {{ copiedKey() === 'order-review-' + order.id ? '✓' : 'текст' }}
-                    </button>
-                    <a
-                      [href]="orderReviewUrl(order)"
-                      target="_blank"
-                      rel="noopener"
-                      [class.disabled]="!orderReviewUrl(order)"
-                      (click)="guardLink($event, orderReviewUrl(order))"
-                    >url</a>
-                    <button type="button" (click)="copyOrderPaymentText(order)">
-                      {{ copiedKey() === 'order-payment-' + order.id ? '✓' : 'счет' }}
-                    </button>
-                    <a
-                      [href]="orderFilialUrl(order)"
-                      target="_blank"
-                      rel="noopener"
-                      [class.disabled]="!orderFilialUrl(order)"
-                      (click)="guardLink($event, orderFilialUrl(order))"
-                    >ссылка</a>
-                  </div>
-
-                  <div class="order-progress" aria-label="Прогресс заказа">
-                    <span [style.width.%]="orderProgress(order)">
-                      <em>{{ order.counter || 0 }}</em>
-                    </span>
-                  </div>
-
-                  <div class="lead-card-actions order-status-actions">
-                    @for (action of orderActions; track action.status) {
-                      <button
-                        type="button"
-                        [disabled]="order.waitingForClient || isMutatingOrder(order, action)"
-                        (click)="updateOrderStatus(order, action)"
-                        [title]="order.waitingForClient ? 'Сначала верните заказ в работу' : action.status"
-                      >
-                        {{ action.label }}
-                      </button>
-                    }
-                    @if (canManageOrderClientWaiting(order)) {
-                      <button
-                        type="button"
-                        class="client-waiting-action"
-                        [class.active]="order.waitingForClient"
-                        [disabled]="isOrderClientWaitingMutating(order)"
-                        (click)="toggleOrderClientWaiting(order)"
-                      >
-                        {{ order.waitingForClient ? 'ждет клиента' : 'клиент' }}
-                      </button>
-                    }
-                  </div>
-
-                  <div class="lead-meta-row order-category-row">
-                    <span [title]="order.categoryTitle || 'Категория не указана'">{{ order.categoryTitle || 'Категория' }}</span>
-                    <span [title]="order.subCategoryTitle || 'Подкатегория не указана'">{{ order.subCategoryTitle || 'Подкатегория' }}</span>
-                  </div>
-
-                  <div class="order-city-row" [title]="orderCity(order)">
-                    <span class="material-icons-sharp">location_on</span>
-                    <span>{{ orderCity(order) }}</span>
-                  </div>
-
-                  @if (!selectedCompany()) {
-                    <div class="lead-comment-editor order-note-editor">
-                      <textarea
-                        class="lead-card-comment"
-                        [id]="'orderNote' + order.id"
-                        [name]="'orderNote' + order.id"
-                        rows="3"
-                        placeholder="нет заметок"
-                        [ngModel]="orderNoteFor(order)"
-                        (ngModelChange)="setOrderNote(order, $event)"
-                        (blur)="saveOrderNoteNow(order)"
-                      ></textarea>
-                      @if (orderNoteSaveLabel(order); as saveLabel) {
-                        <span [class]="'lead-comment-state lead-comment-state--' + orderNoteSaveState(order)">{{ saveLabel }}</span>
-                      }
-                    </div>
-                  }
-
-                  <button class="company-details-button order-details-button" type="button" (click)="openOrderDetails(order)">Подробнее</button>
-
-                  <footer class="lead-card-foot order-card-foot">
-                    <button
-                      class="order-unchanged"
-                      type="button"
-                      [class.order-unchanged--alert]="isOrderUnchangedAlert(order)"
-                      [title]="order.filialCity || 'Город филиала не указан'"
-                    >
-                      @if (isOrderUnchangedAlert(order)) {
-                        <i aria-hidden="true">!</i>
-                      }
-                      Без изменений: {{ orderUnchangedDays(order) }} дн.
-                    </button>
-                    <button type="button" [title]="order.workerUserFio || 'Исполнитель не назначен'" (click)="openOrderEdit(order)">
-                      {{ workerLabel(order) }}
-                    </button>
-                  </footer>
-                </article>
+                <app-mobile-order-card
+                  [order]="order"
+                  [statusActions]="orderActionsFor(order)"
+                  [copiedKey]="copiedKey()"
+                  [mutationKey]="mutationKey()"
+                  [title]="orderTitle(order)"
+                  [titleHref]="orderChatUrl(order)"
+                  [toneClass]="orderTone(order)"
+                  [companyMode]="!!selectedCompany()"
+                  [statusLabel]="order.status || '-'"
+                  [amountLabel]="orderMoney(orderPayableSum(order))"
+                  [badReviewSummary]="showBadReviewSummary(order) ? 'Плохие: ' + (order.badReviewTasksDone || 0) + '/' + (order.badReviewTasksTotal || 0) : ''"
+                  [badReviewAmount]="showBadReviewSummary(order) ? '+' + orderMoney(order.badReviewTasksSum || 0) : ''"
+                  [phoneLabel]="orderPhone(order)"
+                  [phoneHref]="orderChatUrl(order)"
+                  [reviewHref]="orderReviewUrl(order)"
+                  [filialHref]="orderFilialUrl(order)"
+                  [phoneCopyKey]="'order-phone-' + order.id"
+                  [reviewCopyKey]="'order-review-' + order.id"
+                  [paymentCopyKey]="'order-payment-' + order.id"
+                  [progress]="orderProgress(order)"
+                  [cityLabel]="orderCity(order)"
+                  [workerLabel]="workerLabel(order)"
+                  [workerTitle]="order.workerUserFio || 'Исполнитель не назначен'"
+                  [noteBadge]="orderNoteBadge(order)"
+                  [showNoteEditor]="!selectedCompany()"
+                  [noteEditorId]="'orderNote' + order.id"
+                  [noteValue]="orderNoteFor(order)"
+                  [noteStateLabel]="orderNoteSaveLabel(order) || ''"
+                  [noteState]="orderNoteSaveState(order)"
+                  [canManageClientWaiting]="canManageOrderClientWaiting(order)"
+                  [unchangedDays]="orderUnchangedDays(order)"
+                  [unchangedAlert]="isOrderUnchangedAlert(order)"
+                  (copyPhone)="copyOrderPhone(order)"
+                  (copyText)="copyManagerOrderText(order, $event)"
+                  (statusChange)="updateOrderStatusFromCard(order, $event)"
+                  (clientWaitingToggle)="toggleOrderClientWaiting(order)"
+                  (noteBadgeClick)="focusOrderNote(order)"
+                  (noteChange)="setOrderNote(order, $event)"
+                  (noteBlur)="saveOrderNoteNow(order)"
+                  (details)="openOrderDetails(order)"
+                  (workerClick)="openOrderEdit(order)"
+                />
               } @empty {
                 <div class="empty-state compact-empty">Заказов для отображения нет.</div>
               }
             }
           </section>
 
-          <section class="lead-bottom-controls manager-bottom-controls" aria-label="Пагинация">
-            <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+          <app-mobile-bottom-pager
+            class="mobile-page-bottom-pager"
+            [pageIndex]="currentPageIndex() - 1"
+            [totalPages]="currentPageTotal()"
+            [disabled]="loading()"
+            (previous)="previousPage()"
+            (next)="nextPage()"
+          >
+            <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
               <span class="material-icons-sharp">notifications_active</span>
               @if (reminders.activeReminderCount()) {
                 <small>{{ reminders.activeReminderCount() }}</small>
               }
             </button>
             <button
+              mobilePagerActions
               class="expand-list-button"
               type="button"
               [class.active]="sortDirection() === 'asc'"
@@ -436,16 +251,7 @@ type CompanyPreservedFields = Pick<
             >
               <span class="material-icons-sharp">swap_vert</span>
             </button>
-            <div class="lead-pager">
-              <button type="button" (click)="previousPage()" [disabled]="isFirstPage() || loading()" aria-label="Предыдущая страница">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-              <span>{{ pageLabel() }}</span>
-              <button type="button" (click)="nextPage()" [disabled]="isLastPage() || loading()" aria-label="Следующая страница">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </div>
-          </section>
+          </app-mobile-bottom-pager>
         </main>
 
         @if (statusSheetOpen()) {
@@ -1481,16 +1287,7 @@ type CompanyPreservedFields = Pick<
       min-height: 25.5rem;
     }
 
-    .manager-list.manager-list--expanded.manager-list--orders .order-mobile-card {
-      min-height: 31.25rem;
-    }
-
-    .manager-list.manager-list--expanded.manager-list--orders .order-mobile-card--company {
-      min-height: 29.5rem;
-    }
-
-    .manager-list--expanded .company-mobile-card,
-    .manager-list--expanded .order-mobile-card {
+    .manager-list--expanded .company-mobile-card {
       gap: 0.42rem;
       justify-content: space-between;
       overflow: hidden;
@@ -1503,12 +1300,6 @@ type CompanyPreservedFields = Pick<
       max-height: none;
     }
 
-    .manager-list--expanded .order-note-editor {
-      flex: 0 0 auto;
-      height: 3.7rem;
-      min-height: 3.7rem;
-    }
-
     .manager-list--expanded .lead-card-comment {
       min-height: 100%;
       overflow: auto;
@@ -1516,10 +1307,6 @@ type CompanyPreservedFields = Pick<
 
     .manager-list--expanded .company-card-actions {
       gap: 0.42rem 0.5rem;
-    }
-
-    .manager-list--expanded .order-status-actions {
-      gap: 0.26rem 0.28rem;
     }
 
     .manager-list--expanded .lead-card-foot {
@@ -1532,11 +1319,6 @@ type CompanyPreservedFields = Pick<
 
     .company-mobile-card {
       gap: clamp(0.46rem, 0.9vh, 0.72rem);
-      justify-content: space-between;
-    }
-
-    .order-mobile-card {
-      gap: clamp(0.42rem, 0.75vh, 0.6rem);
       justify-content: space-between;
     }
 
@@ -1856,45 +1638,6 @@ type CompanyPreservedFields = Pick<
       white-space: nowrap;
     }
 
-    .order-note-editor {
-      flex: 1 1 6.6rem;
-      min-height: 5.25rem;
-    }
-
-    .order-note-editor .lead-card-comment {
-      min-height: 100%;
-      font-size: 0.76rem;
-    }
-
-    .order-city-row {
-      display: inline-flex;
-      min-width: 0;
-      min-height: 1.72rem;
-      align-items: center;
-      justify-content: center;
-      gap: 0.26rem;
-      overflow: hidden;
-      border: 1px solid rgba(103, 116, 131, 0.18);
-      border-radius: 999px;
-      padding: 0 0.58rem;
-      color: var(--otziv-info);
-      background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-tone-work-surface) 100%);
-      font: 900 0.66rem/1 var(--otziv-font-family);
-    }
-
-    .order-city-row .material-icons-sharp {
-      flex: 0 0 auto;
-      color: var(--otziv-success);
-      font-size: 0.9rem;
-    }
-
-    .order-city-row span:last-child {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     .company-edit-mobile-section {
       display: grid;
       gap: 0.5rem;
@@ -2115,8 +1858,21 @@ export class ManagerPage implements OnInit, OnDestroy {
       ? this.board()?.companyStatuses
       : this.board()?.orderStatuses;
 
-    return this.ensureAllStatus(statuses ?? (section === 'companies' ? DEFAULT_COMPANY_STATUSES : DEFAULT_ORDER_STATUSES));
+    return ensureAllStatus(statuses ?? (section === 'companies' ? DEFAULT_COMPANY_STATUSES : DEFAULT_ORDER_STATUSES));
   });
+  readonly statusItems = computed<MobileStatusItem[]>(() =>
+    this.currentStatuses().map((status) => {
+      const normalized = this.normalizedStatus(status);
+      const metric = this.statusMetric(status);
+      return {
+        key: normalized,
+        title: this.statusLabel(status),
+        value: this.metricValue(status),
+        icon: metric?.icon || 'dashboard',
+        tone: metric?.tone || 'blue'
+      };
+    })
+  );
   readonly companyManagerOptions = computed(() => this.companyPayload()?.managers ?? []);
   readonly companyWorkerOptions = computed(() => this.companyPayload()?.workers ?? []);
   readonly companyCategoryOptions = computed(() => this.companyPayload()?.categories ?? []);
@@ -2132,7 +1888,8 @@ export class ManagerPage implements OnInit, OnDestroy {
   constructor(
     private readonly api: ApiService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly confirm: MobileConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -2331,30 +2088,27 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   pageLabel(): string {
-    return `${this.currentPageIndex()} / ${this.currentPageTotal()}`;
+    return mobilePageLabel(this.activePage(), this.pageNumber());
   }
 
   sortTitle(): string {
-    return this.sortDirection() === 'desc' ? 'Сначала новые' : 'Сначала старые';
+    return mobileSortTitle(this.sortDirection());
   }
 
   currentPageIndex(): number {
-    const page = this.activePage();
-    return (page.number ?? page.pageNumber ?? this.pageNumber()) + 1;
+    return mobilePageIndex(this.activePage(), this.pageNumber());
   }
 
   currentPageTotal(): number {
-    return this.activePage().totalPages || 1;
+    return mobilePageTotal(this.activePage());
   }
 
   isFirstPage(): boolean {
-    const page = this.activePage();
-    return page.first ?? this.pageNumber() <= 0;
+    return mobilePageIsFirst(this.activePage(), this.pageNumber());
   }
 
   isLastPage(): boolean {
-    const page = this.activePage();
-    return page.last ?? this.currentPageIndex() >= this.currentPageTotal();
+    return mobilePageIsLast(this.activePage(), this.pageNumber());
   }
 
   metricValue(status: string): number {
@@ -2374,11 +2128,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   statusLabel(status: string): string {
-    return this.normalizedStatus(status).toLowerCase();
+    return managerStatusLabel(status);
   }
 
   normalizedStatus(status: string): string {
-    return status === 'Рабочие' || !status ? ALL_STATUS : status;
+    return normalizedManagerStatus(status);
   }
 
   openCompanyDetails(company: CompanyItem): void {
@@ -2537,7 +2291,17 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   async deleteOrderEdit(): Promise<void> {
     const order = this.orderEdit();
-    if (!order || !order.canDelete || !window.confirm('Удалить заказ?')) {
+    if (!order || !order.canDelete) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить заказ',
+      message: 'Удалить заказ?',
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -2873,6 +2637,15 @@ export class ManagerPage implements OnInit, OnDestroy {
     return this.mutationKey() === this.orderMutationKey(order, action);
   }
 
+  async updateOrderStatusFromCard(order: OrderItem, action: MobileOrderStatusAction): Promise<void> {
+    const matchedAction = this.orderActions.find((item) => item.status === action.status);
+    if (!matchedAction) {
+      return;
+    }
+
+    await this.updateOrderStatus(order, matchedAction);
+  }
+
   canManageOrderClientWaiting(order: OrderItem): boolean {
     return order.status === 'Новый' || order.status === 'Коррекция' || Boolean(order.waitingForClient);
   }
@@ -3133,6 +2906,15 @@ export class ManagerPage implements OnInit, OnDestroy {
     await this.copyText(phone, `order-phone-${order.id}`, 'Не удалось скопировать телефон.');
   }
 
+  async copyManagerOrderText(order: OrderItem, kind: MobileOrderCopyKind): Promise<void> {
+    if (kind === 'payment') {
+      await this.copyOrderPaymentText(order);
+      return;
+    }
+
+    await this.copyOrderReviewText(order);
+  }
+
   async copyOrderReviewText(order: OrderItem): Promise<void> {
     const reviewUrl = this.orderReviewUrl(order);
     const text = [
@@ -3234,6 +3016,10 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   showBadReviewSummary(order: OrderItem): boolean {
     return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
+  }
+
+  orderActionsFor(order: OrderItem): readonly OrderStatusAction[] {
+    return managerOrderActionsFor(order, Boolean(this.selectedCompany()));
   }
 
   orderProgress(order: OrderItem): number {
@@ -3736,14 +3522,6 @@ export class ManagerPage implements OnInit, OnDestroy {
       filialTitle: draft.filialTitle.trim(),
       filialUrl: draft.filialUrl.trim()
     };
-  }
-
-  private ensureAllStatus(statuses: string[]): string[] {
-    const normalized = statuses.map((status) => this.normalizedStatus(status));
-    const uniqueStatuses = normalized.filter((status, index) =>
-      status !== ALL_STATUS && normalized.indexOf(status) === index
-    );
-    return [ALL_STATUS, ...uniqueStatuses];
   }
 
   private companyMutationKey(company: CompanyItem, action: CompanyStatusAction): string {

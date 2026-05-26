@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 public record ReviewRecoveryTaskUpdateRequest(
         String recoveryText,
+        String recoveryAnswer,
         LocalDate scheduledDate
 ) {
 }

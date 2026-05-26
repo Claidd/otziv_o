@@ -2,6 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   IonContent,
+  IonModal,
   IonRefresher,
   IonRefresherContent,
   RefresherCustomEvent
@@ -16,6 +17,12 @@ import {
   TbankPaymentStatus
 } from '../core/api.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
+import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 
 type TbankMode = 'payments' | 'profiles' | 'managers';
 type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created';
@@ -32,7 +39,7 @@ const PAGE_SIZE = 10;
 
 @Component({
   selector: 'app-tbank-page',
-  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Т Банк" />
@@ -42,75 +49,53 @@ const PAGE_SIZE = 10;
           <ion-refresher-content />
         </ion-refresher>
 
+        <app-mobile-reminders #reminders />
+
         <main class="tbank-page">
-          <section class="mode-scroll" aria-label="Разделы T-Bank">
-            <button type="button" class="metric-tile tone-blue" [class.active]="mode() === 'payments'" (click)="setMode('payments')">
-              <span class="material-icons-sharp">receipt_long</span>
-              <strong>{{ filteredLinks().length }}/{{ links().length }}</strong>
-              <small>платежи</small>
-            </button>
-            <button type="button" class="metric-tile tone-green" [class.active]="mode() === 'profiles'" (click)="setMode('profiles')">
-              <span class="material-icons-sharp">storefront</span>
-              <strong>{{ profiles().length }}</strong>
-              <small>профили</small>
-            </button>
-            <button type="button" class="metric-tile tone-yellow" [class.active]="mode() === 'managers'" (click)="setMode('managers')">
-              <span class="material-icons-sharp">manage_accounts</span>
-              <strong>{{ managerProfiles().length }}</strong>
-              <small>менеджеры</small>
-            </button>
-          </section>
+          <app-mobile-status-slider
+            [items]="modeItems()"
+            [activeKey]="mode()"
+            ariaLabel="Разделы T-Bank"
+            (select)="selectModeItem($event)"
+          />
 
           @if (mode() === 'payments') {
-            <form class="search-strip" (ngSubmit)="resetPage()" role="search" aria-label="Поиск платежей">
-              <label>
-                <span class="material-icons-sharp">search</span>
-                <input
-                  name="tbankSearch"
-                  type="search"
-                  autocomplete="off"
-                  placeholder="Компания, заказ, PaymentId, e-mail"
-                  [ngModel]="search()"
-                  (ngModelChange)="setSearch($event)"
-                >
-              </label>
+            <app-mobile-search-bar
+              [value]="search()"
+              placeholder="Компания, заказ, PaymentId, e-mail"
+              [showRefresh]="false"
+              [hasExtraAction]="true"
+              (valueChange)="setSearch($event)"
+              (searchSubmit)="resetPage()"
+            >
+              <button
+                mobileSearchActions
+                class="date-filter-button"
+                type="button"
+                [class.active]="hasDateFilter()"
+                (click)="openDateSheet()"
+                [attr.aria-label]="'Период платежей: ' + dateFilterLabel()"
+              >
+                <span class="material-icons-sharp">date_range</span>
+              </button>
 
               @if (hasFilters()) {
-                <button class="icon-button" type="button" (click)="resetFilters()" aria-label="Сбросить фильтры">
+                <button mobileSearchActions type="button" (click)="resetFilters()" aria-label="Сбросить фильтры">
                   <span class="material-icons-sharp">close</span>
                 </button>
               }
 
-              <button class="icon-button" type="button" (click)="load()" [disabled]="loading()" aria-label="Обновить">
+              <button mobileSearchActions type="button" (click)="load()" [disabled]="loading()" aria-label="Обновить">
                 <span class="material-icons-sharp">refresh</span>
               </button>
-            </form>
+            </app-mobile-search-bar>
 
-            <section class="status-scroll" aria-label="Статусы платежей">
-              @for (option of statusOptions; track option.key) {
-                <button
-                  type="button"
-                  class="metric-tile tone-{{ option.tone }}"
-                  [class.active]="statusFilter() === option.key"
-                  (click)="setStatusFilter(option.key)"
-                >
-                  <span class="material-icons-sharp">{{ option.icon }}</span>
-                  <strong>{{ statusCount(option.key) }}</strong>
-                  <small>{{ option.label }}</small>
-                </button>
-              }
-            </section>
-
-            <section class="date-strip" aria-label="Период платежей">
-              <label>
-                <span>с</span>
-                <input type="date" [ngModel]="dateFrom()" (ngModelChange)="setDateFrom($event)">
-              </label>
-              <label>
-                <span>по</span>
-                <input type="date" [ngModel]="dateTo()" (ngModelChange)="setDateTo($event)">
-              </label>
-            </section>
+            <app-mobile-status-slider
+              [items]="paymentStatusItems()"
+              [activeKey]="statusFilter()"
+              ariaLabel="Статусы платежей"
+              (select)="selectPaymentStatus($event)"
+            />
           }
 
           @if (error()) {
@@ -221,18 +206,29 @@ const PAGE_SIZE = 10;
               }
             </section>
 
-            <section class="mobile-pagination" aria-label="Навигация по платежам">
-              <button type="button" class="icon-button" (click)="toggleSort()" aria-label="Перевернуть список">
-                <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'swap_vert' : 'swap_vert' }}</span>
+            <app-mobile-bottom-pager
+              class="mobile-page-bottom-pager"
+              [pageIndex]="pageIndex()"
+              [totalPages]="totalPages()"
+              (previous)="previousPage()"
+              (next)="nextPage()"
+            >
+              <button mobilePagerActions class="reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+                <span class="material-icons-sharp">notifications_active</span>
+                @if (reminders.activeReminderCount()) {
+                  <small>{{ reminders.activeReminderCount() }}</small>
+                }
               </button>
-              <button type="button" class="page-button" (click)="previousPage()" [disabled]="pageIndex() <= 0">
-                <span class="material-icons-sharp">chevron_left</span>
+              <button
+                mobilePagerActions
+                type="button"
+                [class.active]="sortDirection() === 'asc'"
+                (click)="toggleSort()"
+                [attr.aria-label]="sortDirection() === 'asc' ? 'Показать сначала новые платежи' : 'Показать сначала старые платежи'"
+              >
+                <span class="material-icons-sharp">swap_vert</span>
               </button>
-              <strong>{{ pageIndex() + 1 }} / {{ totalPages() }}</strong>
-              <button type="button" class="page-button" (click)="nextPage()" [disabled]="pageIndex() >= totalPages() - 1">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </section>
+            </app-mobile-bottom-pager>
           } @else if (mode() === 'profiles') {
             <section class="profile-list" aria-label="Платежные профили">
               @if (status(); as bank) {
@@ -323,6 +319,50 @@ const PAGE_SIZE = 10;
             </section>
           }
         </main>
+
+        <ion-modal class="sheet-modal tbank-date-sheet" [isOpen]="dateSheetOpen()" (didDismiss)="closeDateSheet()">
+          <ng-template>
+            <form class="sheet-body tbank-date-sheet-body" (ngSubmit)="applyDateSheet()">
+              <header class="sheet-head">
+                <div>
+                  <p class="sheet-note">T-Bank</p>
+                  <h2>Период платежей</h2>
+                </div>
+                <button class="icon-button" type="button" (click)="closeDateSheet()" aria-label="Закрыть">
+                  <span class="material-icons-sharp">close</span>
+                </button>
+              </header>
+
+              <section class="sheet-form-content tbank-date-form">
+                <label class="sheet-field">
+                  <span>С</span>
+                  <input
+                    name="tbankDateFrom"
+                    type="date"
+                    [ngModel]="draftDateFrom()"
+                    (ngModelChange)="setDraftDateFrom($event)"
+                  >
+                </label>
+
+                <label class="sheet-field">
+                  <span>По</span>
+                  <input
+                    name="tbankDateTo"
+                    type="date"
+                    [ngModel]="draftDateTo()"
+                    (ngModelChange)="setDraftDateTo($event)"
+                  >
+                </label>
+              </section>
+
+              <div class="sheet-actions tbank-date-actions">
+                <button class="secondary" type="button" (click)="clearDateSheet()">Сбросить</button>
+                <button class="secondary" type="button" (click)="closeDateSheet()">Отмена</button>
+                <button type="submit">Применить</button>
+              </div>
+            </form>
+          </ng-template>
+        </ion-modal>
       </ion-content>
     </div>
   `,
@@ -342,7 +382,7 @@ const PAGE_SIZE = 10;
       margin: 0 auto;
       flex-direction: column;
       gap: 0.65rem;
-      padding: 0.75rem 0.75rem calc(4.95rem + env(safe-area-inset-bottom));
+      padding: 0.75rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom));
       overflow: hidden;
     }
 
@@ -451,7 +491,7 @@ const PAGE_SIZE = 10;
 
     .search-strip {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
       align-items: center;
       gap: 0.45rem;
       flex: 0 0 auto;
@@ -530,6 +570,12 @@ const PAGE_SIZE = 10;
       font-weight: 900;
     }
 
+    .date-filter-button.active {
+      color: var(--otziv-dark);
+      background: linear-gradient(145deg, rgba(247, 208, 96, 0.24) 0%, var(--otziv-white) 92%);
+      box-shadow: inset 0 0 0 1px rgba(218, 168, 36, 0.24);
+    }
+
     .inline-alert {
       display: flex;
       align-items: center;
@@ -548,6 +594,7 @@ const PAGE_SIZE = 10;
       grid-auto-columns: minmax(14.3rem, 65vw);
       gap: 0.58rem;
       flex: 1 1 0;
+      height: 100%;
       min-height: 0;
       align-items: stretch;
     }
@@ -566,11 +613,14 @@ const PAGE_SIZE = 10;
       --card-border: var(--tile-border, rgba(135, 151, 178, 0.2));
       --card-bg: var(--tile-bg, #ffffff);
       display: flex;
+      height: 100%;
       min-height: 100%;
       min-width: 0;
       flex-direction: column;
-      gap: 0.55rem;
-      padding: 0.72rem;
+      justify-content: space-between;
+      gap: clamp(0.3rem, 0.72vh, 0.54rem);
+      overflow: hidden;
+      padding: 0.66rem;
     }
 
     .payment-card header,
@@ -596,7 +646,7 @@ const PAGE_SIZE = 10;
       overflow: hidden;
       color: var(--otziv-dark);
       font-family: var(--otziv-card-title-font);
-      font-size: 1.02rem;
+      font-size: 0.98rem;
       font-weight: 900;
       line-height: 1.05;
       text-overflow: ellipsis;
@@ -611,7 +661,7 @@ const PAGE_SIZE = 10;
       display: block;
       overflow: hidden;
       color: var(--otziv-info);
-      font-size: 0.64rem;
+      font-size: 0.6rem;
       font-weight: 900;
       line-height: 1.25;
       text-overflow: ellipsis;
@@ -624,8 +674,8 @@ const PAGE_SIZE = 10;
       align-items: center;
       justify-content: center;
       border-radius: 999px;
-      padding: 0 0.55rem;
-      font-size: 0.62rem;
+      padding: 0 0.5rem;
+      font-size: 0.58rem;
       font-weight: 900;
       white-space: nowrap;
     }
@@ -646,12 +696,12 @@ const PAGE_SIZE = 10;
     .meta-grid span {
       display: flex;
       min-width: 0;
-      min-height: 2.3rem;
+      min-height: 2.02rem;
       flex-direction: column;
       justify-content: center;
       border: 1px solid rgba(135, 151, 178, 0.18);
       border-radius: 0.75rem;
-      padding: 0.42rem 0.55rem;
+      padding: 0.34rem 0.48rem;
       background: rgba(255, 255, 255, 0.72);
     }
 
@@ -660,26 +710,34 @@ const PAGE_SIZE = 10;
     .manager-row strong {
       overflow: hidden;
       color: var(--otziv-dark);
-      font-size: 0.78rem;
-      font-weight: 900;
+      font-size: 0.74rem;
+      font-weight: 850;
+      line-height: 1.08;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
+    .amount-row small,
+    .meta-grid small {
+      font-size: 0.56rem;
+      font-weight: 900;
+      line-height: 1.05;
+    }
+
     .copy-line {
       display: inline-flex;
-      min-height: 2.05rem;
+      min-height: 1.9rem;
       min-width: 0;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
+      gap: 0.28rem;
       border: 1px solid rgba(135, 151, 178, 0.22);
       border-radius: 999px;
-      padding: 0 0.55rem;
-      color: var(--otziv-primary);
-      background: var(--otziv-white);
+      padding: 0 0.5rem;
+      color: #315f97;
+      background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
       font: inherit;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 900;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -687,12 +745,18 @@ const PAGE_SIZE = 10;
     }
 
     .copy-line.email {
-      color: #2f6d7a;
+      color: #315f97;
+    }
+
+    .copy-line:disabled {
+      opacity: 1;
+      color: var(--otziv-info);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(237, 242, 249, 0.86));
     }
 
     .copy-line .material-icons-sharp {
       flex: 0 0 auto;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
     }
 
     .error-text {
@@ -700,46 +764,62 @@ const PAGE_SIZE = 10;
       align-items: flex-start;
       gap: 0.32rem;
       margin: 0;
+      max-height: 2.2rem;
+      overflow: hidden;
       border-radius: 0.7rem;
-      padding: 0.48rem 0.55rem;
+      padding: 0.38rem 0.48rem;
       color: var(--otziv-danger);
       background: rgba(239, 52, 95, 0.1);
-      font-size: 0.66rem;
+      font-size: 0.58rem;
       font-weight: 900;
-      line-height: 1.28;
+      line-height: 1.18;
     }
 
     .error-text .material-icons-sharp {
-      font-size: 0.9rem;
+      font-size: 0.82rem;
     }
 
     .payment-card footer {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.42rem;
-      margin-top: auto;
+      gap: 0.34rem;
+      margin-top: 0;
     }
 
     .payment-card footer button,
     .manager-save-card button {
       display: inline-flex;
       min-width: 0;
-      min-height: 2rem;
+      min-height: 1.82rem;
       align-items: center;
       justify-content: center;
-      gap: 0.28rem;
+      gap: 0.2rem;
       border: 1px solid rgba(135, 151, 178, 0.24);
       border-radius: 999px;
-      padding: 0 0.5rem;
-      color: var(--otziv-primary);
-      background: var(--otziv-white);
+      padding: 0 0.42rem;
+      color: #315f97;
+      background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
       font: inherit;
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .payment-card footer button:disabled {
+      opacity: 1;
+      color: var(--otziv-info);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(237, 242, 249, 0.78));
+    }
+
+    .payment-card footer .material-icons-sharp {
+      flex: 0 0 auto;
+      font-size: 0.88rem;
     }
 
     .payment-card footer .refund {
-      color: #8b6800;
+      color: #315f97;
       border-color: rgba(218, 168, 36, 0.36);
     }
 
@@ -747,27 +827,34 @@ const PAGE_SIZE = 10;
       opacity: 0.52;
     }
 
-    .mobile-pagination {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
-      align-items: center;
-      gap: 0.55rem;
+    .tbank-bottom-controls {
       flex: 0 0 auto;
-      min-height: 3.05rem;
-      padding: 0.42rem;
+      border: 1px solid var(--otziv-tone-walk-border);
+      background: linear-gradient(155deg, var(--otziv-white) 0%, var(--otziv-tone-walk-surface) 100%);
+      box-shadow: 0 0.5rem 1.3rem rgba(31, 44, 71, 0.055);
     }
 
-    .mobile-pagination strong {
-      color: var(--otziv-info);
-      font-size: 0.75rem;
-      font-weight: 900;
-      text-align: center;
-      white-space: nowrap;
+    .tbank-bottom-controls .expand-list-button,
+    .tbank-bottom-controls .lead-pager button {
+      background: linear-gradient(145deg, rgba(108, 155, 207, 0.16) 0%, var(--otziv-white) 92%);
     }
 
-    .page-button {
-      width: 100%;
-      min-width: 0;
+    .tbank-bottom-controls .lead-pager span {
+      min-width: 3.2rem;
+    }
+
+    .tbank-date-sheet-body {
+      height: 100%;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .tbank-date-form {
+      align-content: start;
+      gap: 0.72rem;
+    }
+
+    .tbank-date-actions {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .profile-list,
@@ -877,7 +964,7 @@ const PAGE_SIZE = 10;
     :host-context(body.otziv-dark-theme) .metric-tile,
     :host-context(body.otziv-dark-theme) .search-strip,
     :host-context(body.otziv-dark-theme) .date-strip,
-    :host-context(body.otziv-dark-theme) .mobile-pagination,
+    :host-context(body.otziv-dark-theme) .tbank-bottom-controls,
     :host-context(body.otziv-dark-theme) .payment-card,
     :host-context(body.otziv-dark-theme) .profile-card,
     :host-context(body.otziv-dark-theme) .bank-card,
@@ -942,8 +1029,43 @@ export class TbankPage implements OnInit {
   readonly statusFilter = signal<PaymentStatusFilter>('all');
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
+  readonly dateSheetOpen = signal(false);
+  readonly draftDateFrom = signal('');
+  readonly draftDateTo = signal('');
   readonly pageIndex = signal(0);
   readonly sortDirection = signal<'asc' | 'desc'>('desc');
+  readonly modeItems = computed<MobileStatusItem[]>(() => [
+    {
+      key: 'payments',
+      title: 'платежи',
+      value: `${this.filteredLinks().length}/${this.links().length}`,
+      icon: 'receipt_long',
+      tone: 'blue'
+    },
+    {
+      key: 'profiles',
+      title: 'профили',
+      value: this.profiles().length,
+      icon: 'storefront',
+      tone: 'green'
+    },
+    {
+      key: 'managers',
+      title: 'менеджеры',
+      value: this.managerProfiles().length,
+      icon: 'manage_accounts',
+      tone: 'yellow'
+    }
+  ]);
+  readonly paymentStatusItems = computed<MobileStatusItem[]>(() =>
+    this.statusOptions.map((option) => ({
+      key: option.key,
+      title: option.label,
+      value: this.statusCount(option.key),
+      icon: option.icon,
+      tone: option.tone
+    }))
+  );
 
   readonly filteredLinks = computed(() => {
     const search = this.search().trim().toLowerCase();
@@ -973,7 +1095,28 @@ export class TbankPage implements OnInit {
     this.search().trim() || this.statusFilter() !== 'all' || this.dateFrom() || this.dateTo()
   ));
 
-  constructor(private readonly api: ApiService) {}
+  readonly hasDateFilter = computed(() => Boolean(this.dateFrom() || this.dateTo()));
+
+  readonly dateFilterLabel = computed(() => {
+    const from = this.dateFrom();
+    const to = this.dateTo();
+    if (from && to) {
+      return `${this.dateInputLabel(from)} - ${this.dateInputLabel(to)}`;
+    }
+    if (from) {
+      return `с ${this.dateInputLabel(from)}`;
+    }
+    if (to) {
+      return `по ${this.dateInputLabel(to)}`;
+    }
+    return 'не выбран';
+  });
+
+  constructor(
+    private readonly api: ApiService,
+    private readonly confirm: MobileConfirmService,
+    private readonly externalLink: MobileExternalLinkService
+  ) {}
 
   ngOnInit(): void {
     void this.load();
@@ -1012,6 +1155,10 @@ export class TbankPage implements OnInit {
     this.mode.set(mode);
   }
 
+  selectModeItem(mode: string): void {
+    this.setMode(mode as TbankMode);
+  }
+
   setSearch(value: string): void {
     this.search.set(value ?? '');
     this.resetPage();
@@ -1022,6 +1169,10 @@ export class TbankPage implements OnInit {
     this.resetPage();
   }
 
+  selectPaymentStatus(value: string): void {
+    this.setStatusFilter(value as PaymentStatusFilter);
+  }
+
   setDateFrom(value: string): void {
     this.dateFrom.set(value ?? '');
     this.resetPage();
@@ -1030,6 +1181,36 @@ export class TbankPage implements OnInit {
   setDateTo(value: string): void {
     this.dateTo.set(value ?? '');
     this.resetPage();
+  }
+
+  openDateSheet(): void {
+    this.draftDateFrom.set(this.dateFrom());
+    this.draftDateTo.set(this.dateTo());
+    this.dateSheetOpen.set(true);
+  }
+
+  closeDateSheet(): void {
+    this.dateSheetOpen.set(false);
+  }
+
+  setDraftDateFrom(value: string): void {
+    this.draftDateFrom.set(value ?? '');
+  }
+
+  setDraftDateTo(value: string): void {
+    this.draftDateTo.set(value ?? '');
+  }
+
+  clearDateSheet(): void {
+    this.draftDateFrom.set('');
+    this.draftDateTo.set('');
+  }
+
+  applyDateSheet(): void {
+    this.dateFrom.set(this.draftDateFrom());
+    this.dateTo.set(this.draftDateTo());
+    this.resetPage();
+    this.closeDateSheet();
   }
 
   resetFilters(): void {
@@ -1096,7 +1277,12 @@ export class TbankPage implements OnInit {
       return;
     }
 
-    const confirmed = window.confirm(`Вернуть платеж T-Bank ${link.tbankPaymentId || link.id} на сумму ${this.money(link.amount)}?`);
+    const confirmed = await this.confirm.confirm({
+      title: 'Возврат платежа',
+      message: `Вернуть платеж T-Bank ${link.tbankPaymentId || link.id} на сумму ${this.money(link.amount)}?`,
+      confirmText: 'Вернуть',
+      danger: true
+    });
     if (!confirmed) {
       return;
     }
@@ -1132,11 +1318,7 @@ export class TbankPage implements OnInit {
   }
 
   openUrl(value: string | null | undefined): void {
-    const url = value?.trim();
-    if (!url) {
-      return;
-    }
-    window.open(url, '_blank', 'noopener');
+    void this.externalLink.open(value);
   }
 
   statusCount(filter: PaymentStatusFilter): number {
@@ -1297,6 +1479,11 @@ export class TbankPage implements OnInit {
   private timeValue(value: string | null | undefined): number {
     const date = value ? new Date(value).getTime() : 0;
     return Number.isNaN(date) ? 0 : date;
+  }
+
+  private dateInputLabel(value: string): string {
+    const [year, month, day] = value.split('-');
+    return day && month && year ? `${day}.${month}.${year}` : value;
   }
 
   private keepPageInRange(): void {

@@ -61,6 +61,10 @@ public class PaymentLink {
     @Column(nullable = false, length = 32)
     private PaymentLinkStatus status = PaymentLinkStatus.CREATED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false, length = 32)
+    private PaymentMethod paymentMethod = PaymentMethod.BANK_FORM;
+
     @Column(name = "tbank_payment_id", length = 64)
     private String tbankPaymentId;
 
@@ -83,6 +87,18 @@ public class PaymentLink {
     @Column(name = "payment_url", length = 1024)
     private String paymentUrl;
 
+    @Column(name = "sbp_qr_payload", length = 2048)
+    private String sbpQrPayload;
+
+    @Column(name = "sbp_qr_image", columnDefinition = "TEXT")
+    private String sbpQrImage;
+
+    @Column(name = "sbp_qr_data_type", length = 16)
+    private String sbpQrDataType;
+
+    @Column(name = "sbp_qr_created_at")
+    private LocalDateTime sbpQrCreatedAt;
+
     @Column(name = "last_error", length = 512)
     private String lastError;
 
@@ -100,6 +116,30 @@ public class PaymentLink {
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    @Column(name = "offer_consent_at")
+    private LocalDateTime offerConsentAt;
+
+    @Column(name = "privacy_consent_at")
+    private LocalDateTime privacyConsentAt;
+
+    @Column(name = "receipt_consent_at")
+    private LocalDateTime receiptConsentAt;
+
+    @Column(name = "consent_ip", length = 128)
+    private String consentIp;
+
+    @Column(name = "consent_user_agent", length = 512)
+    private String consentUserAgent;
+
+    @Column(name = "offer_document_url", length = 512)
+    private String offerDocumentUrl;
+
+    @Column(name = "privacy_document_url", length = 512)
+    private String privacyDocumentUrl;
+
+    @Column(name = "receipt_consent_document_url", length = 512)
+    private String receiptConsentDocumentUrl;
 
     @PrePersist
     void onCreate() {

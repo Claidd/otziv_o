@@ -10,9 +10,10 @@ const localProdLikeBaseUrl = 'http://localhost:8088';
 const nativeBackendBaseUrl = trimTrailingSlash(mobileBuildTarget.nativeBackendBaseUrl);
 
 export const mobileEnvironment = {
-  appName: 'Otziv',
+  appName: 'Компания О!',
   apiBaseUrl: isNative ? nativeBackendBaseUrl : '',
   backendBaseUrl: isNative ? nativeBackendBaseUrl : '',
+  pushNotificationsEnabled: mobileBuildTarget.pushNotificationsEnabled,
   keycloak: {
     url: isNative ? `${nativeBackendBaseUrl}/keycloak` : isLocalWebDev ? `${localProdLikeBaseUrl}/keycloak` : '/keycloak',
     realm: 'otziv',

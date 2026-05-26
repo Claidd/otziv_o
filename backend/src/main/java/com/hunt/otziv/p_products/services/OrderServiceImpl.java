@@ -44,6 +44,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -415,7 +417,8 @@ public class OrderServiceImpl implements OrderService {
             if (reviewRepository.existsPublishedByTextExcludingReviewId(review.getText(), review.getId())) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией."
+                        "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией. Проблемная карточка: "
+                                + reviewCardLabel(order, review) + "."
                 );
             }
 
@@ -469,6 +472,32 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e) {
             log.warn("Короткий отчёт о публикации не отправлен из-за ошибки. Заказ продолжит обработку", e);
         }
+    }
+
+    private String reviewCardLabel(Order order, Review target) {
+        List<Review> reviews = getAllReviews(order);
+        int index = reviewIndex(reviews, target);
+        String number = index >= 0 ? "№" + (index + 1) : "№?";
+        String id = target != null && target.getId() != null ? " (отзыв #" + target.getId() + ")" : "";
+        return number + id;
+    }
+
+    private int reviewIndex(List<Review> reviews, Review target) {
+        if (target == null) {
+            return -1;
+        }
+
+        for (int i = 0; i < reviews.size(); i++) {
+            Review review = reviews.get(i);
+            if (review == target) {
+                return i;
+            }
+            if (review != null && review.getId() != null && review.getId().equals(target.getId())) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private boolean shouldSendPublishedReviewProgress(Order order, int actualPublished) {

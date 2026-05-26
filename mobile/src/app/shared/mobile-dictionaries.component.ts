@@ -1,6 +1,7 @@
 import { Component, Input, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { IonModal } from '@ionic/angular/standalone';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import {
@@ -8,6 +9,11 @@ import {
   BotImportResponse,
   AdminCategory,
   AdminCity,
+  AdminClientMessageMonitor,
+  AdminClientMessageMonitorAttempt,
+  AdminClientMessageMonitorQueueItem,
+  AdminClientMessageMonitorScenario,
+  AdminClientMessageSettings,
   AdminManagerText,
   AdminProduct,
   AdminPromoText,
@@ -17,11 +23,14 @@ import {
   OperatorPhone,
   OperatorPhoneRequest,
   PromoButtonSlot,
-  PromoTextAssignment
+  PromoTextAssignment,
+  ClientMessageSettingsRequest
 } from '../core/api.service';
+import { MobileSearchBarComponent } from './mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from './mobile-status-slider.component';
 
-type DictionaryTabKey = 'categories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings';
-type EditorKind = Exclude<DictionaryTabKey, 'settings'> | 'subcategory';
+type DictionaryTabKey = 'categories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
+type EditorKind = Exclude<DictionaryTabKey, 'settings' | 'autoresponder' | 'autoresponderMonitor'> | 'subcategory';
 
 interface DictionaryTab {
   key: DictionaryTabKey;
@@ -48,7 +57,9 @@ const TABS: DictionaryTab[] = [
   { key: 'accounts', title: 'Аккаунты', icon: 'manage_accounts', description: 'боты и рабочие профили', roles: 'admin' },
   { key: 'promo', title: 'Промо', icon: 'smart_button', description: 'тексты и назначения кнопок', roles: 'admin' },
   { key: 'managerTexts', title: 'Тексты', icon: 'article', description: 'сообщения менеджеров', roles: 'admin' },
-  { key: 'settings', title: 'Настройки', icon: 'tune', description: 'рассылки, выгул и синхронизация', roles: 'admin' }
+  { key: 'settings', title: 'Настройки', icon: 'tune', description: 'рассылки, выгул и синхронизация', roles: 'admin' },
+  { key: 'autoresponder', title: 'Автоответчик', icon: 'mark_chat_unread', description: 'клиентские автонапоминания', roles: 'admin' },
+  { key: 'autoresponderMonitor', title: 'Мониторинг', icon: 'monitor_heart', description: 'очередь, сценарии и попытки', roles: 'admin' }
 ];
 
 const SETTINGS_DEFAULTS = {
@@ -68,41 +79,76 @@ const SETTINGS_DEFAULTS = {
   telegramEveningLastRunKey: ''
 };
 
+const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
+
+const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
+  workerEnabled: true,
+  liveEnabled: true,
+  monitorEnabled: false,
+  reviewCheckEnabled: true,
+  paymentReminderEnabled: true,
+  badReviewInvoiceEnabled: true,
+  paymentOverdueEnabled: true,
+  paymentOverdueLiveEnabled: false,
+  archiveReorderEnabled: true,
+  reviewCheckIntervalDays: 2,
+  paymentReminderIntervalDays: 2,
+  paymentOverdueDays: 30,
+  archiveReorderMonths: 3,
+  retentionDays: 90,
+  tickBatchSize: 5,
+  candidateLimit: 200,
+  dailyLimit: 140,
+  defaultGapSeconds: 180,
+  whatsAppGapSeconds: 180,
+  telegramGapSeconds: 90,
+  maxGapSeconds: 90,
+  businessWindows: '10:00-12:00,14:00-17:00,19:00-21:00',
+  reviewCheckStatuses: 'На проверке',
+  paymentReminderStatuses: 'Выставлен счет,Напоминание',
+  paymentOverdueStatuses: 'Выставлен счет,Напоминание',
+  closedOrderStatuses: 'Оплачено,Архив,Бан,Не оплачено',
+  paymentOverdueTargetStatus: 'Не оплачено',
+  archiveCompanyStatus: 'На стопе',
+  archiveInactiveOrderStatuses: 'Оплачено,Архив,Бан',
+  openNextOrderRequestStatuses: 'PENDING,FAILED',
+  reviewLinkBaseUrl: 'https://o-ogo.ru',
+  reviewReminderText: '{companyAndFilial}\n\nПроверьте, пожалуйста, отзывы по ссылке: {reviewLink}',
+  paymentInstructionSource: 'MANAGER_TEXT',
+  paymentReminderText: '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
+  archiveOfferText: '{company}, добрый день! Хотите повторить заказ?'
+};
+
 @Component({
   selector: 'app-mobile-dictionaries',
-  imports: [FormsModule, IonModal],
+  imports: [FormsModule, IonModal, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <section class="mobile-dictionaries">
-      <div class="dictionary-tabs" aria-label="Справочники">
-        @for (tab of visibleTabs(); track tab.key) {
-          <button type="button" [class.active]="activeTab() === tab.key" (click)="setTab(tab.key)">
-            <span class="material-icons-sharp">{{ tab.icon }}</span>
-            <strong>{{ tabTotalLabel(tab.key) }}</strong>
-            <small>{{ tab.title }}</small>
-          </button>
-        }
-      </div>
+      <app-mobile-status-slider
+        [items]="tabStatusItems()"
+        [activeKey]="activeTab()"
+        ariaLabel="Справочники"
+        (select)="selectTabStatus($event)"
+      />
 
-      @if (activeTab() !== 'settings') {
-        <section class="dictionary-search">
-          <label>
-            <span class="material-icons-sharp">search</span>
-            <input
-              type="search"
-              [placeholder]="searchPlaceholder()"
-              [ngModel]="search()"
-              (ngModelChange)="setSearch($event)"
-            >
-          </label>
-          <button type="button" class="icon-button" (click)="loadActive(true)" [disabled]="loading()" aria-label="Обновить">
+      @if (showSearch()) {
+        <app-mobile-search-bar
+          [value]="search()"
+          [placeholder]="searchPlaceholder()"
+          [showRefresh]="false"
+          [hasExtraAction]="true"
+          (valueChange)="setSearch($event)"
+          (searchSubmit)="loadActive(true)"
+        >
+          <button mobileSearchActions type="button" (click)="loadActive(true)" [disabled]="loading()" aria-label="Обновить">
             <span class="material-icons-sharp">refresh</span>
           </button>
           @if (canCreateActive()) {
-            <button type="button" class="icon-button add" (click)="openCreate()" aria-label="Добавить">
+            <button mobileSearchActions type="button" class="add" (click)="openCreate()" aria-label="Добавить">
               <span class="material-icons-sharp">add</span>
             </button>
           }
-        </section>
+        </app-mobile-search-bar>
       }
 
       @if (notice()) {
@@ -372,6 +418,277 @@ const SETTINGS_DEFAULTS = {
               }
             }
 
+            @case ('autoresponder') {
+              <section class="settings-stack autoresponder-stack">
+                <article class="dict-card settings-card tone-green">
+                  <header>
+                    <span class="material-icons-sharp">mark_chat_unread</span>
+                    <div>
+                      <strong>Автоответчик</strong>
+                      <small>{{ autoresponder().workerEnabled ? 'worker включен' : 'worker выключен' }} · {{ autoresponder().liveEnabled ? 'live' : 'dry-run' }}</small>
+                    </div>
+                    <b>{{ autoresponderTotal() }}</b>
+                  </header>
+                  <p>Сервис находит подходящие компании и заказы, планирует сообщения внутри рабочих окон по Москве и отправляет их с паузами между каналами.</p>
+                  <div class="chip-list">
+                    <span>лимит {{ autoresponder().dailyLimit }}/день</span>
+                    <span>пачка {{ autoresponder().tickBatchSize }}</span>
+                    <span>кандидатов {{ autoresponder().candidateLimit }}</span>
+                  </div>
+                </article>
+
+                <article class="dict-card settings-card">
+                  <header>
+                    <span class="material-icons-sharp">toggle_on</span>
+                    <div>
+                      <strong>Включатели</strong>
+                      <small>глобальная работа сценариев</small>
+                    </div>
+                  </header>
+                  <div class="form-grid">
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().workerEnabled" (ngModelChange)="patchAutoresponder('workerEnabled', $event)"><span>Автоответчик включен</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().liveEnabled" (ngModelChange)="patchAutoresponder('liveEnabled', $event)"><span>Реальная отправка</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckEnabled" (ngModelChange)="patchAutoresponder('reviewCheckEnabled', $event)"><span>Проверка отзывов</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentReminderEnabled" (ngModelChange)="patchAutoresponder('paymentReminderEnabled', $event)"><span>Напоминать об оплате</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().badReviewInvoiceEnabled" (ngModelChange)="patchAutoresponder('badReviewInvoiceEnabled', $event)"><span>Счет после плохого</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentOverdueEnabled" (ngModelChange)="patchAutoresponder('paymentOverdueEnabled', $event)"><span>Просрочка оплаты</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentOverdueLiveEnabled" (ngModelChange)="patchAutoresponder('paymentOverdueLiveEnabled', $event)"><span>Live-перевод просрочки</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().archiveReorderEnabled" (ngModelChange)="patchAutoresponder('archiveReorderEnabled', $event)"><span>Архивные предложения</span></label>
+                    <label class="toggle-row wide"><input type="checkbox" [ngModel]="autoresponder().monitorEnabled" (ngModelChange)="patchAutoresponder('monitorEnabled', $event)"><span>Мониторинг автоответчика</span></label>
+                  </div>
+                </article>
+
+                <article class="dict-card settings-card">
+                  <header>
+                    <span class="material-icons-sharp">schedule</span>
+                    <div>
+                      <strong>Расписание и лимиты</strong>
+                      <small>рабочие окна и паузы каналов</small>
+                    </div>
+                  </header>
+                  <div class="form-grid">
+                    <label><span>Интервал проверки, дней</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckIntervalDays" (ngModelChange)="patchAutoresponder('reviewCheckIntervalDays', $event)"></label>
+                    <label><span>Интервал оплаты, дней</span><input type="number" min="1" [ngModel]="autoresponder().paymentReminderIntervalDays" (ngModelChange)="patchAutoresponder('paymentReminderIntervalDays', $event)"></label>
+                    <label><span>Просрочка оплаты, дней</span><input type="number" min="1" [ngModel]="autoresponder().paymentOverdueDays" (ngModelChange)="patchAutoresponder('paymentOverdueDays', $event)"></label>
+                    <label><span>Архив, месяцев</span><input type="number" min="1" [ngModel]="autoresponder().archiveReorderMonths" (ngModelChange)="patchAutoresponder('archiveReorderMonths', $event)"></label>
+                    <label><span>Дневной лимит</span><input type="number" min="1" [ngModel]="autoresponder().dailyLimit" (ngModelChange)="patchAutoresponder('dailyLimit', $event)"></label>
+                    <label><span>Пачка за тик</span><input type="number" min="1" [ngModel]="autoresponder().tickBatchSize" (ngModelChange)="patchAutoresponder('tickBatchSize', $event)"></label>
+                    <label><span>Лимит кандидатов</span><input type="number" min="1" [ngModel]="autoresponder().candidateLimit" (ngModelChange)="patchAutoresponder('candidateLimit', $event)"></label>
+                    <label><span>Хранить журнал, дней</span><input type="number" min="1" [ngModel]="autoresponder().retentionDays" (ngModelChange)="patchAutoresponder('retentionDays', $event)"></label>
+                    <label class="wide"><span>Рабочие окна по Москве</span><input [ngModel]="autoresponder().businessWindows" (ngModelChange)="patchAutoresponder('businessWindows', $event)"></label>
+                    <label><span>Общая пауза, сек.</span><input type="number" min="30" [ngModel]="autoresponder().defaultGapSeconds" (ngModelChange)="patchAutoresponder('defaultGapSeconds', $event)"></label>
+                    <label><span>WhatsApp, сек.</span><input type="number" min="30" [ngModel]="autoresponder().whatsAppGapSeconds" (ngModelChange)="patchAutoresponder('whatsAppGapSeconds', $event)"></label>
+                    <label><span>Telegram, сек.</span><input type="number" min="30" [ngModel]="autoresponder().telegramGapSeconds" (ngModelChange)="patchAutoresponder('telegramGapSeconds', $event)"></label>
+                    <label><span>MAX, сек.</span><input type="number" min="30" [ngModel]="autoresponder().maxGapSeconds" (ngModelChange)="patchAutoresponder('maxGapSeconds', $event)"></label>
+                  </div>
+                </article>
+
+                <article class="dict-card settings-card">
+                  <header>
+                    <span class="material-icons-sharp">fact_check</span>
+                    <div>
+                      <strong>Статусы</strong>
+                      <small>через запятую, как в веб-версии</small>
+                    </div>
+                  </header>
+                  <div class="form-grid">
+                    <label class="wide"><span>Статусы проверки отзывов</span><input [ngModel]="autoresponder().reviewCheckStatuses" (ngModelChange)="patchAutoresponder('reviewCheckStatuses', $event)"></label>
+                    <label class="wide"><span>Статусы ожидания оплаты</span><input [ngModel]="autoresponder().paymentReminderStatuses" (ngModelChange)="patchAutoresponder('paymentReminderStatuses', $event)"></label>
+                    <label class="wide"><span>Статусы просрочки оплаты</span><input [ngModel]="autoresponder().paymentOverdueStatuses" (ngModelChange)="patchAutoresponder('paymentOverdueStatuses', $event)"></label>
+                    <label class="wide"><span>Закрытые статусы заказов</span><input [ngModel]="autoresponder().closedOrderStatuses" (ngModelChange)="patchAutoresponder('closedOrderStatuses', $event)"></label>
+                    <label><span>Целевой статус просрочки</span><input [ngModel]="autoresponder().paymentOverdueTargetStatus" (ngModelChange)="patchAutoresponder('paymentOverdueTargetStatus', $event)"></label>
+                    <label><span>Статус архивной компании</span><input [ngModel]="autoresponder().archiveCompanyStatus" (ngModelChange)="patchAutoresponder('archiveCompanyStatus', $event)"></label>
+                    <label class="wide"><span>Неактивные статусы заказов</span><input [ngModel]="autoresponder().archiveInactiveOrderStatuses" (ngModelChange)="patchAutoresponder('archiveInactiveOrderStatuses', $event)"></label>
+                    <label class="wide"><span>Открытые статусы заявок</span><input [ngModel]="autoresponder().openNextOrderRequestStatuses" (ngModelChange)="patchAutoresponder('openNextOrderRequestStatuses', $event)"></label>
+                  </div>
+                </article>
+
+                <article class="dict-card settings-card">
+                  <header>
+                    <span class="material-icons-sharp">article</span>
+                    <div>
+                      <strong>Тексты</strong>
+                      <small>переменные сохранены как в вебе</small>
+                    </div>
+                  </header>
+                  <div class="form-grid">
+                    <label class="wide"><span>Ссылка проверки отзывов</span><input [ngModel]="autoresponder().reviewLinkBaseUrl" (ngModelChange)="patchAutoresponder('reviewLinkBaseUrl', $event)"></label>
+                    <label class="wide"><span>Источник оплаты</span>
+                      <select [ngModel]="autoresponder().paymentInstructionSource" (ngModelChange)="patchAutoresponder('paymentInstructionSource', $event)">
+                        <option value="MANAGER_TEXT">Текст менеджера</option>
+                        <option value="TBANK_LINK">T-Bank ссылка</option>
+                      </select>
+                    </label>
+                    <label class="wide"><span>Текст проверки отзывов</span><textarea rows="5" [ngModel]="autoresponder().reviewReminderText" (ngModelChange)="patchAutoresponder('reviewReminderText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст оплаты</span><textarea rows="5" [ngModel]="autoresponder().paymentReminderText" (ngModelChange)="patchAutoresponder('paymentReminderText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст архивного предложения</span><textarea rows="5" [ngModel]="autoresponder().archiveOfferText" (ngModelChange)="patchAutoresponder('archiveOfferText', $event)"></textarea></label>
+                  </div>
+                </article>
+
+                <button type="button" class="save-wide" (click)="saveAutoresponderSettings()" [disabled]="saving()">
+                  {{ saving() ? 'Сохраняем...' : 'Сохранить автоответчик' }}
+                </button>
+              </section>
+            }
+
+            @case ('autoresponderMonitor') {
+              <section class="settings-stack monitor-stack">
+                <article class="dict-card settings-card tone-blue monitor-head-card">
+                  <header>
+                    <span class="material-icons-sharp">monitor_heart</span>
+                    <div>
+                      <strong>Мониторинг автоответчика</strong>
+                      <small>{{ autoresponder().monitorEnabled ? 'наблюдение включено' : 'наблюдение выключено' }}</small>
+                    </div>
+                  </header>
+                  <div class="monitor-control-row">
+                    <button
+                      type="button"
+                      class="monitor-switch"
+                      role="switch"
+                      [class.on]="autoresponder().monitorEnabled"
+                      [attr.aria-checked]="autoresponder().monitorEnabled"
+                      (click)="setClientMessageMonitorEnabled(!autoresponder().monitorEnabled)"
+                      [disabled]="clientMessageMonitorSaving()"
+                    >
+                      <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                      <span>{{ clientMessageMonitorSaving() ? 'Переключаем...' : (autoresponder().monitorEnabled ? 'Наблюдение включено' : 'Наблюдение выключено') }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="monitor-refresh"
+                      (click)="loadClientMessageMonitor()"
+                      [disabled]="clientMessageMonitorLoading() || !autoresponder().monitorEnabled"
+                    >
+                      <span class="material-icons-sharp">refresh</span>
+                      <span>Обновить</span>
+                    </button>
+                  </div>
+                  <p class="monitor-note">Переключатель включает только экран наблюдения и периодическое обновление. Отправка автоответчика живет по настройкам раздела "Автоответчик".</p>
+                </article>
+
+                @if (clientMessageMonitorError()) {
+                  <div class="empty-state error-state">
+                    <span class="material-icons-sharp">error</span>
+                    <strong>{{ clientMessageMonitorError() }}</strong>
+                    <button type="button" class="ghost" (click)="loadClientMessageMonitor()">Повторить</button>
+                  </div>
+                } @else if (!autoresponder().monitorEnabled) {
+                  <div class="empty-state">
+                    <span class="material-icons-sharp">visibility_off</span>
+                    <strong>Наблюдение выключено</strong>
+                    <span>Очередь и отправка продолжают работать по настройкам автоответчика.</span>
+                  </div>
+                } @else if (clientMessageMonitorLoading() && !clientMessageMonitor()) {
+                  <div class="empty-state">
+                    <span class="material-icons-sharp">hourglass_top</span>
+                    <strong>Загружаем мониторинг</strong>
+                  </div>
+                } @else if (clientMessageMonitor(); as monitor) {
+                  <article class="dict-card settings-card">
+                    <header>
+                      <span class="material-icons-sharp">settings_input_component</span>
+                      <div>
+                        <strong>{{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}</strong>
+                        <small>обновлено {{ dateTimeLabel(monitor.updatedAt) }} · окна {{ monitor.businessWindows }}</small>
+                      </div>
+                      <b>{{ monitorTotal() }}</b>
+                    </header>
+                    <div class="chip-list">
+                      <span [class.badge]="true" [class.active]="monitor.workerEnabled">{{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}</span>
+                      <span [class.badge]="true" [class.active]="monitor.windowAllowed">{{ monitor.windowAllowed ? 'рабочее окно' : 'вне окна' }}</span>
+                      <span>следующий слот: {{ monitor.nextAttemptAt ? dateTimeLabel(monitor.nextAttemptAt) : 'нет' }}</span>
+                    </div>
+                  </article>
+
+                  <div class="monitor-metric-list">
+                    @for (metric of monitorMetrics(); track metric.title) {
+                      <article class="setting-summary-row">
+                        <span class="material-icons-sharp">{{ metric.icon }}</span>
+                        <div>
+                          <strong>{{ metric.title }}</strong>
+                          <small>{{ metric.detail }}</small>
+                        </div>
+                        <b>{{ metric.value }}</b>
+                      </article>
+                    }
+                  </div>
+
+                  @for (scenario of monitor.scenarios; track scenario.scenario) {
+                    <article class="dict-card monitor-scenario-card tone-{{ monitorScenarioTone(scenario) }}">
+                      <header>
+                        <span class="material-icons-sharp">{{ monitorScenarioIcon(scenario) }}</span>
+                        <div>
+                          <strong>{{ scenario.label }}</strong>
+                          <small>{{ monitorScenarioHint(scenario) }}</small>
+                        </div>
+                        <b>{{ scenario.activeCandidates }}</b>
+                      </header>
+                      <div class="meta-grid">
+                        <span>готово: {{ scenario.dueNow }}</span>
+                        <span>сегодня: {{ scenario.sentToday }}</span>
+                        <span>за 7 дней: {{ scenario.sentSevenDays }}</span>
+                        <span>ошибок: {{ scenario.failedToday }}</span>
+                      </div>
+                      @if (scenario.lastError) {
+                        <p class="danger-text">Последняя ошибка: {{ scenario.lastError }}</p>
+                      }
+                    </article>
+                  }
+
+                  <article class="dict-card settings-card">
+                    <header>
+                      <span class="material-icons-sharp">playlist_add_check</span>
+                      <div>
+                        <strong>Очередь кандидатов</strong>
+                        <small>следующие попытки и причины ошибок</small>
+                      </div>
+                      <b>{{ monitor.queue.length }}</b>
+                    </header>
+                    @for (item of monitor.queue; track item.id) {
+                      <article class="dict-row monitor-row">
+                        <span class="material-icons-sharp">{{ monitorScenarioIcon(item) }}</span>
+                        <div>
+                          <strong>{{ item.orderTitle || item.companyTitle }}</strong>
+                          <small>{{ item.scenarioLabel }} · {{ item.statusTitle || 'без статуса' }}</small>
+                          @if (item.lastErrorMessage) {
+                            <small class="danger-text">{{ item.lastErrorMessage }}</small>
+                          }
+                        </div>
+                        <b>{{ item.nextAttemptAt ? dateTimeLabel(item.nextAttemptAt) : '-' }}</b>
+                      </article>
+                    } @empty {
+                      <p>В очереди пока пусто.</p>
+                    }
+                  </article>
+
+                  <article class="dict-card settings-card">
+                    <header>
+                      <span class="material-icons-sharp">history</span>
+                      <div>
+                        <strong>Журнал попыток</strong>
+                        <small>отправлено, пропущено, ошибки</small>
+                      </div>
+                      <b>{{ monitor.attempts.length }}</b>
+                    </header>
+                    @for (attempt of monitor.attempts; track attempt.id) {
+                      <article class="dict-row monitor-row">
+                        <span class="material-icons-sharp">{{ attempt.status === 'SENT' ? 'done' : (attempt.status === 'FAILED' ? 'error' : 'pause') }}</span>
+                        <div>
+                          <strong>{{ attempt.statusLabel }} · {{ attempt.scenarioLabel }}</strong>
+                          <small>{{ attempt.orderTitle || attempt.companyTitle }} · {{ attempt.channel || 'канал не выбран' }}</small>
+                          <small>{{ attempt.errorMessage || attempt.messagePreview || 'без превью' }}</small>
+                        </div>
+                        <b>{{ dateTimeLabel(attempt.attemptedAt) }}</b>
+                      </article>
+                    } @empty {
+                      <p>Попыток пока нет.</p>
+                    }
+                  </article>
+                }
+              </section>
+            }
+
             @case ('settings') {
               <section class="settings-stack">
                 <article class="dict-card settings-card">
@@ -591,6 +908,8 @@ const SETTINGS_DEFAULTS = {
     .mobile-dictionaries{gap:.62rem;padding:.05rem .05rem .25rem;overflow:hidden}.dictionary-tabs{gap:.48rem;padding:.02rem .02rem .08rem}.dictionary-tabs button{min-height:3.05rem;border-radius:.9rem;padding:.48rem .6rem;background:linear-gradient(145deg,#fff,rgba(246,250,255,.96));box-shadow:0 .5rem 1.2rem rgba(31,44,71,.055)}.dictionary-tabs button.active{background:linear-gradient(145deg,#edf5ff,#fff);box-shadow:inset 0 0 0 1px rgba(116,154,207,.18),0 .55rem 1.25rem rgba(31,44,71,.07)}.dictionary-tabs .material-icons-sharp{width:1.9rem;height:1.9rem;border-radius:.72rem}.dictionary-tabs strong{font-size:1rem}.dictionary-search{grid-template-columns:minmax(0,1fr)2.45rem 2.45rem;border:1px solid rgba(135,151,178,.14);border-radius:1.05rem;padding:.5rem;background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(244,247,252,.9));box-shadow:0 .5rem 1.3rem rgba(31,44,71,.055)}.dictionary-search.no-search{grid-template-columns:minmax(0,1fr)2.45rem}.dictionary-search label{min-width:0;border-radius:.86rem}.dictionary-search input{height:2.4rem;font-size:.78rem}.settings-compact-title{display:flex;align-items:center;gap:.45rem;min-width:0;border:1px solid rgba(135,151,178,.18);border-radius:.86rem;padding:0 .72rem;background:#fff;color:var(--otziv-dark);font-size:.78rem;font-weight:900}.settings-compact-title .material-icons-sharp{color:var(--otziv-primary)}.dictionary-list{gap:.62rem;scrollbar-width:none}.dict-card,.dict-row,.empty-state{border-color:rgba(135,151,178,.2);border-radius:1rem;background:linear-gradient(145deg,#fff,rgba(248,251,255,.96));box-shadow:0 .7rem 1.7rem rgba(31,44,71,.065)}.dict-card{gap:.7rem;padding:.78rem}.dict-card header>.material-icons-sharp{width:2.15rem;height:2.15rem;border-radius:.78rem}.dict-card strong,.dict-row strong{font-size:.92rem;line-height:1.14}.dict-card small{font-size:.67rem}.dict-card header button,.icon-button{transition:transform .12s ease,box-shadow .12s ease}.dict-card header button:active,.icon-button:active,.ghost:active,.danger-link:active{transform:scale(.97)}.dict-card footer,.card-actions,.action-row{justify-content:space-between;flex-wrap:wrap}.split-actions{justify-content:flex-start}.split-actions button{flex:1 1 calc(50% - .35rem)}.compact-card{padding:.65rem .72rem}.chip-list button,.chip-list span,.ghost,.danger-link,.badge,.dict-row button,.save-wide,.assignment-card select{min-height:2.05rem;border-color:rgba(135,151,178,.28);box-shadow:0 .25rem .8rem rgba(31,44,71,.035)}.ghost,.danger-link{padding-inline:.82rem}.danger-text{color:var(--otziv-danger)!important}.meta-grid span{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:.1rem;min-height:2.3rem}.settings-summary-list{display:flex;flex-direction:column;gap:.45rem}.setting-summary-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.62rem;border:1px solid rgba(135,151,178,.18);border-radius:.82rem;padding:.55rem .62rem;background:rgba(255,255,255,.72)}.setting-summary-row>.material-icons-sharp{display:grid;place-items:center;width:2rem;height:2rem;border-radius:.65rem;background:rgba(116,154,207,.12);color:var(--otziv-primary);font-size:1.05rem}.setting-summary-row div{min-width:0}.setting-summary-row strong{display:block;overflow:hidden;color:var(--otziv-dark);font-size:.76rem;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.setting-summary-row small{display:block;overflow:hidden;color:var(--otziv-info);font-size:.62rem;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.setting-summary-row b{color:var(--otziv-dark);font-size:.76rem;font-weight:900;text-align:right}.form-grid{gap:.62rem}.settings-card{background:linear-gradient(145deg,#fff,rgba(247,250,255,.98))}.settings-card p{color:var(--otziv-info);font-size:.69rem}.promo-manager-card{border-style:dashed}.empty-state{min-height:9rem;border-style:dashed;background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(244,248,253,.76))}.error-state{border-color:rgba(239,52,95,.22);background:linear-gradient(145deg,rgba(255,246,249,.92),rgba(255,255,255,.78));color:var(--otziv-danger)}.error-state>.material-icons-sharp{color:var(--otziv-danger);font-size:2.2rem}.error-state strong{max-width:18rem;color:var(--otziv-danger);line-height:1.3}.dictionary-editor{border-radius:1.1rem 1.1rem 0 0}.dictionary-editor header{padding-bottom:.45rem;border-bottom:1px solid rgba(135,151,178,.16)}.dictionary-editor h2{font-size:1.18rem}.editor-form{gap:.7rem}.editor-form label{gap:.34rem}.editor-actions{gap:.55rem}.editor-actions button{min-height:2.45rem}@media(max-width:420px){.dictionary-tabs{grid-auto-columns:minmax(6.75rem,1fr)}.split-actions button{flex-basis:calc(50% - .35rem)}}
     :host-context(.dark) .dictionary-search,:host-context(.dark) .dict-card,:host-context(.dark) .dict-row,:host-context(.dark) .empty-state{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(22,27,29,.96));border-color:rgba(151,169,183,.18);box-shadow:none}:host-context(.dark) .settings-compact-title{background:#151b1d;border-color:rgba(151,169,183,.2);color:var(--otziv-dark)}:host-context(.dark) .dictionary-tabs button{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(24,30,32,.94));box-shadow:none}:host-context(.dark) .dictionary-tabs button.active{background:linear-gradient(145deg,rgba(38,48,53,.98),rgba(25,31,34,.96));border-color:rgba(116,154,207,.5)}:host-context(.dark) .setting-summary-row{background:#151b1d;border-color:rgba(151,169,183,.2)}:host-context(.dark) .settings-card{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(22,27,29,.96))}
     .dictionary-tabs button{grid-template-columns:2rem minmax(0,1fr);grid-template-rows:1fr 1fr;column-gap:.48rem;align-items:center}.dictionary-tabs .material-icons-sharp{align-self:center;justify-self:center}.dictionary-tabs strong{align-self:end;line-height:.95}.dictionary-tabs small{align-self:start;line-height:1.05}
+    .dictionary-tabs button{min-width:0;overflow:hidden}.dictionary-tabs strong,.dictionary-tabs small{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-head-card{gap:.58rem}.monitor-head-card header{align-items:center}.monitor-control-row{display:grid;grid-template-columns:minmax(0,1fr)auto;align-items:center;gap:.52rem}.monitor-switch,.monitor-refresh{min-width:0;min-height:2.34rem;border:1px solid rgba(68,158,133,.35);border-radius:.82rem;background:#fff;color:#3c8374;font-size:.67rem;font-weight:900;box-shadow:0 .35rem .85rem rgba(31,44,71,.04)}.monitor-switch{display:flex;align-items:center;gap:.52rem;padding:0 .7rem;text-align:left}.monitor-switch:disabled,.monitor-refresh:disabled{opacity:.58}.switch-track{position:relative;display:inline-block;flex:0 0 3.12rem;width:3.12rem;height:1.52rem;border-radius:999px;background:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(31,44,71,.08);transition:background .16s ease}.switch-thumb{position:absolute;top:.17rem;left:.17rem;width:1.18rem;height:1.18rem;border-radius:50%;background:#fff;box-shadow:0 .14rem .28rem rgba(31,44,71,.2);transition:transform .16s ease}.monitor-switch.on .switch-track{background:#4aa08a}.monitor-switch.on .switch-thumb{transform:translateX(1.58rem)}.monitor-switch>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-refresh{display:inline-flex;align-items:center;justify-content:center;gap:.34rem;padding:0 .76rem}.monitor-refresh .material-icons-sharp{font-size:1.12rem}.monitor-note{color:var(--otziv-info)!important;font-size:.66rem!important;line-height:1.32!important}@media(max-width:360px){.monitor-control-row{grid-template-columns:1fr}.monitor-refresh{width:100%}.dictionary-tabs{grid-auto-columns:minmax(6.45rem,1fr)}}
+    :host-context(.dark) .monitor-switch,:host-context(.dark) .monitor-refresh{background:#151b1d;border-color:rgba(74,160,138,.42);color:#9fd8ca}:host-context(.dark) .monitor-switch:not(.on) .switch-track{background:#2c363a}
   `]
 })
 export class MobileDictionariesComponent implements OnInit, OnDestroy {
@@ -607,6 +926,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   readonly selectedId = signal<number | null>(null);
   readonly draft = signal<Draft>({});
   readonly settings = signal({ ...SETTINGS_DEFAULTS });
+  readonly autoresponder = signal<AdminClientMessageSettings>({ ...CLIENT_MESSAGE_DEFAULTS });
+  readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
+  readonly clientMessageMonitorLoading = signal(false);
+  readonly clientMessageMonitorSaving = signal(false);
+  readonly clientMessageMonitorError = signal<string | null>(null);
 
   readonly categories = signal<AdminCategory[]>([]);
   readonly subCategories = signal<AdminSubCategory[]>([]);
@@ -632,8 +956,12 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   readonly loadedTabs = signal<Partial<Record<DictionaryTabKey, boolean>>>({});
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private monitorTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly api: ApiService) {}
+  constructor(
+    private readonly api: ApiService,
+    private readonly router: Router
+  ) {}
 
   ngOnInit(): void {
     void this.loadActive(true);
@@ -643,10 +971,25 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
+    this.stopClientMessageMonitorPolling();
   }
 
   visibleTabs(): DictionaryTab[] {
     return TABS.filter((tab) => tab.roles === 'all' || this.adminMode);
+  }
+
+  tabStatusItems(): MobileStatusItem[] {
+    return this.visibleTabs().map((tab, index) => ({
+      key: tab.key,
+      title: tab.title,
+      value: this.tabTotalLabel(tab.key),
+      icon: tab.icon,
+      tone: this.tabTone(index)
+    }));
+  }
+
+  selectTabStatus(tab: string): void {
+    this.setTab(tab as DictionaryTabKey);
   }
 
   activeTabMeta(): DictionaryTab {
@@ -670,6 +1013,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     this.activeTab.set(tab);
     this.search.set('');
     this.notice.set(null);
+    this.syncClientMessageMonitorPolling();
     void this.loadActive(true);
   }
 
@@ -679,6 +1023,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       clearTimeout(this.searchTimer);
     }
     this.searchTimer = setTimeout(() => void this.loadActive(), 1000);
+  }
+
+  tabTone(index: number): MobileStatusItem['tone'] {
+    const tones: Array<MobileStatusItem['tone']> = ['blue', 'green', 'yellow', 'teal', 'violet', 'pink', 'gray'];
+    return tones[index % tones.length] ?? 'blue';
   }
 
   async loadActive(force = false): Promise<void> {
@@ -739,6 +1088,13 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         case 'settings':
           await this.loadSettings();
           break;
+        case 'autoresponder':
+          await this.loadAutoresponderSettings();
+          break;
+        case 'autoresponderMonitor':
+          await this.loadAutoresponderSettings();
+          await this.loadClientMessageMonitor(true);
+          break;
       }
       this.markLoaded(this.activeTab());
     } catch (error) {
@@ -750,7 +1106,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     const tab = this.activeTab();
-    if (tab === 'settings') {
+    if (tab === 'settings' || tab === 'autoresponder' || tab === 'autoresponderMonitor') {
       return;
     }
     this.editorKind.set(tab);
@@ -963,10 +1319,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
     this.botBrowserBusyId.set(bot.id);
     try {
-      const response = await firstValueFrom(this.api.openAdminBotBrowser(bot.id));
-      const url = this.withVncParams(response.vncUrl);
-      const opened = window.open(url, '_blank', 'noopener');
-      this.notice.set(opened ? `Браузер аккаунта ${bot.login} открыт.` : `VNC: ${url}`);
+      await this.router.navigate(['/tabs/bots', bot.id, 'browser']);
     } catch (error) {
       this.error.set(this.errorMessage(error));
     } finally {
@@ -1105,6 +1458,98 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     }
   }
 
+  patchAutoresponder(key: keyof AdminClientMessageSettings, value: string | number | boolean): void {
+    const numericKeys: Array<keyof AdminClientMessageSettings> = [
+      'reviewCheckIntervalDays',
+      'paymentReminderIntervalDays',
+      'paymentOverdueDays',
+      'archiveReorderMonths',
+      'retentionDays',
+      'tickBatchSize',
+      'candidateLimit',
+      'dailyLimit',
+      'defaultGapSeconds',
+      'whatsAppGapSeconds',
+      'telegramGapSeconds',
+      'maxGapSeconds'
+    ];
+
+    this.autoresponder.update((current) => ({
+      ...current,
+      [key]: numericKeys.includes(key) ? Math.max(0, Number(value) || 0) : value
+    }));
+  }
+
+  async saveAutoresponderSettings(): Promise<void> {
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const saved = await firstValueFrom(this.api.updateAdminClientMessageSettings(this.autoresponderRequest()));
+      this.autoresponder.set(saved);
+      this.notice.set(saved.workerEnabled ? `Автоответчик сохранен. Лимит: ${saved.dailyLimit} в день.` : 'Автоответчик сохранен и выключен.');
+      this.syncClientMessageMonitorPolling();
+    } catch (error) {
+      this.error.set(this.errorMessage(error));
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async setClientMessageMonitorEnabled(enabled: boolean): Promise<void> {
+    if (this.clientMessageMonitorSaving()) {
+      return;
+    }
+
+    const previous = this.autoresponder().monitorEnabled;
+    this.clientMessageMonitorSaving.set(true);
+    this.clientMessageMonitorError.set(null);
+    this.patchAutoresponder('monitorEnabled', enabled);
+
+    try {
+      const response = await firstValueFrom(this.api.updateAdminClientMessageMonitorSettings(enabled));
+      this.patchAutoresponder('monitorEnabled', response.enabled);
+      if (response.enabled) {
+        await this.loadClientMessageMonitor();
+        this.startClientMessageMonitorPolling();
+      } else {
+        this.stopClientMessageMonitorPolling();
+        this.clientMessageMonitor.set(null);
+      }
+      this.notice.set(response.enabled ? 'Мониторинг включен.' : 'Мониторинг выключен.');
+    } catch (error) {
+      this.patchAutoresponder('monitorEnabled', previous);
+      this.clientMessageMonitorError.set(this.errorMessage(error));
+    } finally {
+      this.clientMessageMonitorSaving.set(false);
+    }
+  }
+
+  async loadClientMessageMonitor(silent = false): Promise<void> {
+    if (!this.autoresponder().monitorEnabled) {
+      this.clientMessageMonitor.set(null);
+      this.stopClientMessageMonitorPolling();
+      return;
+    }
+
+    if (!silent) {
+      this.clientMessageMonitorLoading.set(true);
+    }
+    this.clientMessageMonitorError.set(null);
+
+    try {
+      const monitor = await firstValueFrom(this.api.getAdminClientMessageMonitor());
+      this.clientMessageMonitor.set(monitor);
+      this.patchAutoresponder('monitorEnabled', monitor.enabled);
+      if (monitor.enabled && this.activeTab() === 'autoresponderMonitor') {
+        this.startClientMessageMonitorPolling();
+      }
+    } catch (error) {
+      this.clientMessageMonitorError.set(this.errorMessage(error));
+    } finally {
+      this.clientMessageMonitorLoading.set(false);
+    }
+  }
+
   patchDraft(key: string, value: string | number | boolean | null): void {
     this.draft.update((current) => ({ ...current, [key]: value }));
   }
@@ -1115,10 +1560,15 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   canCreateActive(): boolean {
     const tab = this.activeTab();
-    if (tab === 'settings' || tab === 'managerTexts') {
+    if (tab === 'settings' || tab === 'managerTexts' || tab === 'autoresponder' || tab === 'autoresponderMonitor') {
       return false;
     }
     return this.adminMode || tab === 'categories';
+  }
+
+  showSearch(): boolean {
+    const tab = this.activeTab();
+    return tab !== 'settings' && tab !== 'autoresponder' && tab !== 'autoresponderMonitor';
   }
 
   canDeleteEditor(): boolean {
@@ -1154,7 +1604,9 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       accounts: 'Логин, ФИО, город',
       promo: 'Промо-текст или позиция',
       managerTexts: 'Менеджер или текст',
-      settings: ''
+      settings: '',
+      autoresponder: '',
+      autoresponderMonitor: ''
     };
     return labels[this.activeTab()];
   }
@@ -1168,7 +1620,9 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
-      settings: this.settingsTotal()
+      settings: this.settingsTotal(),
+      autoresponder: this.autoresponderTotal(),
+      autoresponderMonitor: this.monitorTotal()
     };
     return totals[tab] ?? 0;
   }
@@ -1292,6 +1746,45 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     });
   }
 
+  private async loadAutoresponderSettings(): Promise<void> {
+    const settings = await firstValueFrom(this.api.getAdminClientMessageSettings());
+    this.autoresponder.set({ ...CLIENT_MESSAGE_DEFAULTS, ...settings });
+    this.syncClientMessageMonitorPolling();
+  }
+
+  private autoresponderRequest(): ClientMessageSettingsRequest {
+    const value = this.autoresponder();
+    return {
+      ...value,
+      reviewCheckIntervalDays: this.positiveNumber(value.reviewCheckIntervalDays, 2),
+      paymentReminderIntervalDays: this.positiveNumber(value.paymentReminderIntervalDays, 2),
+      paymentOverdueDays: this.positiveNumber(value.paymentOverdueDays, 30),
+      archiveReorderMonths: this.positiveNumber(value.archiveReorderMonths, 3),
+      retentionDays: this.positiveNumber(value.retentionDays, 90),
+      tickBatchSize: this.positiveNumber(value.tickBatchSize, 5),
+      candidateLimit: this.positiveNumber(value.candidateLimit, 200),
+      dailyLimit: this.positiveNumber(value.dailyLimit, 140),
+      defaultGapSeconds: this.positiveNumber(value.defaultGapSeconds, 180),
+      whatsAppGapSeconds: this.positiveNumber(value.whatsAppGapSeconds, 180),
+      telegramGapSeconds: this.positiveNumber(value.telegramGapSeconds, 90),
+      maxGapSeconds: this.positiveNumber(value.maxGapSeconds, 90),
+      businessWindows: this.text(value.businessWindows) || CLIENT_MESSAGE_DEFAULTS.businessWindows,
+      reviewCheckStatuses: this.text(value.reviewCheckStatuses) || CLIENT_MESSAGE_DEFAULTS.reviewCheckStatuses,
+      paymentReminderStatuses: this.text(value.paymentReminderStatuses) || CLIENT_MESSAGE_DEFAULTS.paymentReminderStatuses,
+      paymentOverdueStatuses: this.text(value.paymentOverdueStatuses) || CLIENT_MESSAGE_DEFAULTS.paymentOverdueStatuses,
+      closedOrderStatuses: this.text(value.closedOrderStatuses) || CLIENT_MESSAGE_DEFAULTS.closedOrderStatuses,
+      paymentOverdueTargetStatus: this.text(value.paymentOverdueTargetStatus) || CLIENT_MESSAGE_DEFAULTS.paymentOverdueTargetStatus,
+      archiveCompanyStatus: this.text(value.archiveCompanyStatus) || CLIENT_MESSAGE_DEFAULTS.archiveCompanyStatus,
+      archiveInactiveOrderStatuses: this.text(value.archiveInactiveOrderStatuses) || CLIENT_MESSAGE_DEFAULTS.archiveInactiveOrderStatuses,
+      openNextOrderRequestStatuses: this.text(value.openNextOrderRequestStatuses) || CLIENT_MESSAGE_DEFAULTS.openNextOrderRequestStatuses,
+      reviewLinkBaseUrl: this.text(value.reviewLinkBaseUrl) || CLIENT_MESSAGE_DEFAULTS.reviewLinkBaseUrl,
+      reviewReminderText: this.text(value.reviewReminderText) || CLIENT_MESSAGE_DEFAULTS.reviewReminderText,
+      paymentInstructionSource: value.paymentInstructionSource === 'TBANK_LINK' ? 'TBANK_LINK' : 'MANAGER_TEXT',
+      paymentReminderText: this.text(value.paymentReminderText) || CLIENT_MESSAGE_DEFAULTS.paymentReminderText,
+      archiveOfferText: this.text(value.archiveOfferText) || CLIENT_MESSAGE_DEFAULTS.archiveOfferText
+    };
+  }
+
   private patchWhatsAppSettings(value: { enabled: boolean; intervalMinutes: number; lastRunAt: string; lastLinkedCount: number }): void {
     this.settings.update((current) => ({
       ...current,
@@ -1314,8 +1807,114 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     ].filter(Boolean).length;
   }
 
+  autoresponderTotal(): number {
+    const s = this.autoresponder();
+    return [
+      s.workerEnabled,
+      s.liveEnabled,
+      s.reviewCheckEnabled,
+      s.paymentReminderEnabled,
+      s.badReviewInvoiceEnabled,
+      s.paymentOverdueEnabled,
+      s.archiveReorderEnabled,
+      s.monitorEnabled
+    ].filter(Boolean).length;
+  }
+
+  monitorTotal(): number {
+    const monitor = this.clientMessageMonitor();
+    if (!this.autoresponder().monitorEnabled) {
+      return 0;
+    }
+    return monitor ? monitor.activeCandidates + monitor.dueNow + monitor.failedToday : 0;
+  }
+
+  monitorMetrics(): SettingsRow[] {
+    const monitor = this.clientMessageMonitor();
+    return [
+      { icon: 'playlist_add_check', title: 'Активных', value: String(monitor?.activeCandidates ?? 0), detail: 'кандидаты в очереди' },
+      { icon: 'bolt', title: 'Готово сейчас', value: String(monitor?.dueNow ?? 0), detail: 'можно отправлять' },
+      { icon: 'send', title: 'Сегодня', value: String(monitor?.sentToday ?? 0), detail: 'отправлено' },
+      { icon: 'priority_high', title: 'Ошибок', value: String(monitor?.failedToday ?? 0), detail: 'за сегодня' },
+      { icon: 'pause_circle', title: 'Пропущено', value: String(monitor?.skippedToday ?? 0), detail: 'за сегодня' },
+      { icon: 'block', title: 'Отключено', value: String(monitor?.disabledStates ?? 0), detail: 'состояний' }
+    ];
+  }
+
+  monitorScenarioIcon(item: { scenario: string }): string {
+    return {
+      REVIEW_CHECK_REMINDER: 'playlist_add_check',
+      PAYMENT_REMINDER: 'receipt_long',
+      PAYMENT_OVERDUE_ESCALATION: 'priority_high',
+      ARCHIVE_REORDER_OFFER: 'archive',
+      BAD_REVIEW_INVOICE: 'request_quote'
+    }[item.scenario] ?? 'mark_chat_unread';
+  }
+
+  monitorScenarioTone(scenario: AdminClientMessageMonitorScenario): string {
+    if (scenario.failedToday > 0 || scenario.lastError) {
+      return 'yellow';
+    }
+    if (scenario.dueNow > 0) {
+      return 'blue';
+    }
+    if (scenario.activeCandidates > 0) {
+      return 'green';
+    }
+    return 'teal';
+  }
+
+  monitorScenarioHint(scenario: AdminClientMessageMonitorScenario): string {
+    return {
+      REVIEW_CHECK_REMINDER: 'напоминания проверить шаблоны отзывов',
+      PAYMENT_REMINDER: 'напоминания об оплате заказа',
+      PAYMENT_OVERDUE_ESCALATION: 'контроль долгой просрочки оплаты',
+      ARCHIVE_REORDER_OFFER: 'предложение нового заказа архивным компаниям',
+      BAD_REVIEW_INVOICE: 'счет после плохого отзыва'
+    }[scenario.scenario] ?? 'сценарий автоответчика';
+  }
+
+  paymentInstructionSourceLabel(source?: string | null): string {
+    return source === 'TBANK_LINK' ? 'T-Bank ссылка' : 'текст менеджера';
+  }
+
   private markLoaded(tab: DictionaryTabKey): void {
     this.loadedTabs.update((current) => ({ ...current, [tab]: true }));
+  }
+
+  private syncClientMessageMonitorPolling(): void {
+    if (this.activeTab() === 'autoresponderMonitor' && this.autoresponder().monitorEnabled) {
+      void this.loadClientMessageMonitor(true);
+      this.startClientMessageMonitorPolling();
+      return;
+    }
+    this.stopClientMessageMonitorPolling();
+  }
+
+  private startClientMessageMonitorPolling(): void {
+    if (this.monitorTimer || this.activeTab() !== 'autoresponderMonitor' || !this.autoresponder().monitorEnabled) {
+      return;
+    }
+    this.monitorTimer = setInterval(() => {
+      if (this.activeTab() === 'autoresponderMonitor' && this.autoresponder().monitorEnabled) {
+        void this.loadClientMessageMonitor(true);
+      } else {
+        this.stopClientMessageMonitorPolling();
+      }
+    }, CLIENT_MESSAGE_MONITOR_POLLING_MS);
+  }
+
+  private stopClientMessageMonitorPolling(): void {
+    if (!this.monitorTimer) {
+      return;
+    }
+    clearInterval(this.monitorTimer);
+    this.monitorTimer = null;
+  }
+
+  private positiveNumber(value: number, fallback: number): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   private withVncParams(rawUrl: string): string {
@@ -1327,7 +1926,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     return url.toString();
   }
 
-  private dateTimeLabel(value: string): string {
+  dateTimeLabel(value: string): string {
     if (!value) {
       return 'еще не запускалась';
     }

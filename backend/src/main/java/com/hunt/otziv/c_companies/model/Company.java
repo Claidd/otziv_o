@@ -127,6 +127,9 @@ public class Company {
     @Column(name = "update_status")
     private LocalDate updateStatus;
 
+    @Column(name = "company_status_changed_at")
+    private LocalDateTime statusChangedAt;
+
     //    дата и время нового отправления предложения
     @Column(name = "date_new_try")
     private LocalDate dateNewTry;
@@ -182,7 +185,31 @@ public class Company {
         createDate = LocalDate.now();
         updateStatus = LocalDate.now();
         dateNewTry = LocalDate.now();
+        if (statusChangedAt == null) {
+            statusChangedAt = LocalDateTime.now();
+        }
         System.out.println(LocalDate.now().plusDays(10));
+    }
+
+    public void setStatus(CompanyStatus status) {
+        if (statusChanged(this.status, status)) {
+            this.statusChangedAt = LocalDateTime.now();
+            this.updateStatus = LocalDate.now();
+        }
+        this.status = status;
+    }
+
+    private boolean statusChanged(CompanyStatus current, CompanyStatus next) {
+        if (current == next) {
+            return false;
+        }
+        if (current == null || next == null) {
+            return true;
+        }
+        if (current.getId() != null || next.getId() != null) {
+            return !Objects.equals(current.getId(), next.getId());
+        }
+        return !Objects.equals(current.getTitle(), next.getTitle());
     }
 
     @Override

@@ -8,7 +8,7 @@
       </section>
     } @else if (payment()) {
       @let item = payment();
-      <section class="payment-widget" aria-label="Оплата заказа">
+      <section class="payment-widget" [class.bank-first]="bankFirst()" aria-label="Оплата заказа">
         <header class="payment-head">
           <div>
             <span class="merchant-name">Компания О!</span>
@@ -18,33 +18,74 @@
           <span class="brand-mark" aria-hidden="true">О!</span>
         </header>
 
+        @if (showSbpPayment()) {
         <article class="quick-pay-card">
           <div class="method-title">
             <div>
-              <h2>T-Pay</h2>
-              <p>Быстрая оплата через защищенную форму банка</p>
+              <h2>СБП</h2>
+              <p>{{ showBankPayment() ? 'Основной способ оплаты по динамическому QR-коду' : 'Оплата только через динамический QR-код' }}</p>
             </div>
             <span>{{ statusLabel() }}</span>
           </div>
           <button
             class="quick-pay-button"
             type="button"
-            [disabled]="!item?.payable || submitting()"
-            (click)="submit()"
+            [disabled]="!canSubmit()"
+            (click)="submitSbp()"
           >
-            <span class="material-icons-sharp" aria-hidden="true">{{ submitting() ? 'hourglass_top' : 'check_circle' }}</span>
-            {{ submitting() ? 'Открываем...' : 'Pay' }}
+            <span class="material-icons-sharp" aria-hidden="true">{{ sbpSubmitting() ? 'hourglass_top' : 'qr_code_2' }}</span>
+            {{ sbpSubmitting() ? 'Создаем QR...' : 'Оплатить через СБП' }}
           </button>
-        </article>
 
+          @if (hasSbpQr()) {
+            <div class="sbp-qr-panel" aria-live="polite">
+              <div>
+                <strong>QR-код готов</strong>
+                <small>Откройте приложение банка и оплатите по СБП. После оплаты статус придет от банка автоматически.</small>
+              </div>
+              @if (sbpQrImageSrc()) {
+                <img [src]="sbpQrImageSrc()" alt="QR-код для оплаты через СБП">
+              }
+              <div class="sbp-actions">
+                @if (sbpQrPayload()) {
+                  <button type="button" class="secondary-pay-button" (click)="openSbpPayload()">
+                    <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                    Открыть в банке
+                  </button>
+                }
+                @if (sbpPaymentUrl()) {
+                  <a [href]="sbpPaymentUrl()" target="_blank" rel="noopener" class="secondary-pay-button">
+                    <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+                    Другой способ
+                  </a>
+                }
+              </div>
+            </div>
+          }
+        </article>
+        }
+
+        @if (message()) {
+          <p class="pay-message">{{ message() }}</p>
+        }
+        @if (error()) {
+          <p class="pay-error">{{ error() }}</p>
+        }
+
+        @if (showBankPayment()) {
         <article class="bank-card">
           <header>
-            <h2>По карте или СБП</h2>
+            <h2>{{ bankPaymentTitle() }}</h2>
             <span>
               <span class="material-icons-sharp" aria-hidden="true">lock</span>
               банк
             </span>
           </header>
+          <div class="bank-method-grid" aria-label="Доступные способы в форме банка">
+            @for (method of bankMethodChips(); track method) {
+              <span>{{ method }}</span>
+            }
+          </div>
 
           <div class="order-summary" aria-label="Данные заказа">
             <div>
@@ -65,7 +106,7 @@
             </div>
           </div>
 
-          <form class="pay-form" (ngSubmit)="submit()" aria-label="Данные для оплаты">
+          <form class="pay-form" (ngSubmit)="submitBankForm()" aria-label="Данные для оплаты">
             <label class="email-field">
               <span>E-mail для электронного чека</span>
               <input
@@ -101,26 +142,18 @@
             </div>
 
             <button class="primary-pay-button" type="submit" [disabled]="!canSubmit()">
-              <span class="material-icons-sharp" aria-hidden="true">{{ submitting() ? 'hourglass_top' : 'payments' }}</span>
-              {{ submitting() ? 'Открываем форму банка' : 'Оплатить' }}
+              <span class="material-icons-sharp" aria-hidden="true">{{ bankSubmitting() ? 'hourglass_top' : 'payments' }}</span>
+              {{ bankSubmitting() ? 'Открываем форму банка' : 'Оплатить другим способом' }}
             </button>
 
-            @if (message()) {
-              <p class="pay-message">{{ message() }}</p>
-            }
-            @if (error()) {
-              <p class="pay-error">{{ error() }}</p>
-            }
-
             <div class="payment-badges" aria-label="Способы оплаты">
-              <span>МИР</span>
-              <span>VISA</span>
-              <span>Mastercard</span>
-              <span>СБП</span>
-              <span>Без НДС</span>
+              @for (badge of paymentBadges(); track badge) {
+                <span>{{ badge }}</span>
+              }
             </div>
           </form>
         </article>
+        }
       </section>
     } @else {
       <section class="payment-state payment-state--error" aria-live="polite">

@@ -1,12 +1,12 @@
-import { Component, computed } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, OnInit, computed, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   IonButton,
   IonContent,
   IonIcon,
   IonSpinner
 } from '@ionic/angular/standalone';
-import { logInOutline, shieldCheckmarkOutline } from 'ionicons/icons';
+import { logInOutline } from 'ionicons/icons';
 import { addIcons } from 'ionicons';
 import { AuthService } from '../core/auth.service';
 
@@ -19,24 +19,37 @@ import { AuthService } from '../core/auth.service';
         <main class="login-screen">
           <section class="brand-panel">
             <div class="brand-mark">
-              <ion-icon name="shield-checkmark-outline" />
+              <img src="assets/brand/logo-o.png" alt="" />
             </div>
-            <h1>Otziv</h1>
+            <h1>Компания О!</h1>
             <p>Мобильный кабинет команды</p>
           </section>
 
           @if (auth.error()) {
             <div class="error-state">{{ auth.error() }}</div>
-          }
-
-          <ion-button size="large" expand="block" (click)="login()" [disabled]="busy()">
-            @if (busy()) {
+            <ion-button size="large" expand="block" (click)="login()" [disabled]="busy()">
+              @if (busy()) {
+                <ion-spinner name="crescent" />
+              } @else {
+                <ion-icon slot="start" name="log-in-outline" />
+              }
+              Повторить вход
+            </ion-button>
+          } @else if (redirecting()) {
+            <div class="login-progress">
               <ion-spinner name="crescent" />
-            } @else {
-              <ion-icon slot="start" name="log-in-outline" />
-            }
-            Войти через Keycloak
-          </ion-button>
+              <span>Открываем защищенный вход</span>
+            </div>
+          } @else {
+            <ion-button size="large" expand="block" (click)="login()" [disabled]="busy()">
+              @if (busy()) {
+                <ion-spinner name="crescent" />
+              } @else {
+                <ion-icon slot="start" name="log-in-outline" />
+              }
+              Войти
+            </ion-button>
+          }
         </main>
       </ion-content>
     </div>
@@ -67,10 +80,15 @@ import { AuthService } from '../core/auth.service';
       width: 54px;
       height: 54px;
       place-items: center;
-      border-radius: 8px;
-      background: #e7f0ff;
-      color: #246bfe;
-      font-size: 1.8rem;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(218, 226, 238, 0.9);
+    }
+
+    .brand-mark img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
     }
 
     h1 {
@@ -85,23 +103,68 @@ import { AuthService } from '../core/auth.service';
       color: #667085;
       font-size: 1rem;
     }
+
+    .login-progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 52px;
+      border: 1px solid #d9e1ef;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #53627a;
+      font-weight: 700;
+    }
   `]
 })
-export class LoginPage {
+export class LoginPage implements OnInit {
+  private autoLoginStarted = false;
+
   readonly busy = computed(() => this.auth.status() === 'initializing' || this.auth.status() === 'refreshing');
+  readonly redirecting = signal(true);
 
   constructor(
     readonly auth: AuthService,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly route: ActivatedRoute
   ) {
-    addIcons({ logInOutline, shieldCheckmarkOutline });
+    addIcons({ logInOutline });
 
     if (this.auth.isAuthenticated()) {
-      void this.router.navigateByUrl('/tabs/home', { replaceUrl: true });
+      void this.router.navigateByUrl(this.targetUrl(), { replaceUrl: true });
     }
   }
 
+  ngOnInit(): void {
+    if (this.auth.isAuthenticated() || this.auth.error()) {
+      this.redirecting.set(false);
+      return;
+    }
+
+    setTimeout(() => this.startAutoLogin(), 250);
+  }
+
   login(): void {
-    void this.auth.login('/tabs/home');
+    void this.startAutoLogin();
+  }
+
+  private startAutoLogin(): void {
+    if (this.autoLoginStarted || this.auth.isAuthenticated()) {
+      return;
+    }
+
+    this.autoLoginStarted = true;
+    this.redirecting.set(true);
+    void this.auth.login(this.targetUrl()).catch((error: unknown) => {
+      this.autoLoginStarted = false;
+      this.redirecting.set(false);
+      this.auth.error.set(error instanceof Error ? error.message : 'Не удалось открыть страницу входа.');
+    });
+  }
+
+  private targetUrl(): string {
+    const target = this.route.snapshot.queryParamMap.get('target');
+    return target?.startsWith('/') ? target : '/tabs/home';
   }
 }

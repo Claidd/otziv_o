@@ -88,6 +88,145 @@ export interface AdminClientPublicationProgressReportSettings {
   enabled: boolean;
 }
 
+export interface AdminClientMessageSettings {
+  workerEnabled: boolean;
+  liveEnabled: boolean;
+  monitorEnabled: boolean;
+  reviewCheckEnabled: boolean;
+  paymentReminderEnabled: boolean;
+  badReviewInvoiceEnabled: boolean;
+  paymentOverdueEnabled: boolean;
+  paymentOverdueLiveEnabled: boolean;
+  archiveReorderEnabled: boolean;
+  errorProtectionEnabled: boolean;
+  reviewCheckIntervalDays: number;
+  paymentReminderIntervalDays: number;
+  paymentOverdueDays: number;
+  archiveReorderMonths: number;
+  errorProtectionThreshold: number;
+  errorProtectionWindowMinutes: number;
+  errorProtectionCooldownMinutes: number;
+  retentionDays: number;
+  tickBatchSize: number;
+  candidateLimit: number;
+  dailyLimit: number;
+  defaultGapSeconds: number;
+  whatsAppGapSeconds: number;
+  telegramGapSeconds: number;
+  maxGapSeconds: number;
+  businessWindows: string;
+  reviewCheckStatuses: string;
+  paymentReminderStatuses: string;
+  paymentOverdueStatuses: string;
+  closedOrderStatuses: string;
+  paymentOverdueTargetStatus: string;
+  archiveCompanyStatus: string;
+  archiveInactiveOrderStatuses: string;
+  openNextOrderRequestStatuses: string;
+  reviewLinkBaseUrl: string;
+  reviewReminderText: string;
+  paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
+  paymentReminderText: string;
+  archiveOfferText: string;
+}
+
+export interface AdminClientMessageMonitorScenario {
+  scenario: string;
+  label: string;
+  activeCandidates: number;
+  dueNow: number;
+  sentToday: number;
+  sentSevenDays: number;
+  failedToday: number;
+  skippedToday: number;
+  lastError?: string | null;
+  lastErrorAt?: string | null;
+}
+
+export interface AdminClientMessageMonitorQueueItem {
+  id: number;
+  scenario: string;
+  scenarioLabel: string;
+  targetType: string;
+  targetKey: string;
+  companyId?: number | null;
+  companyTitle: string;
+  orderId?: number | null;
+  orderTitle?: string | null;
+  statusTitle?: string | null;
+  nextAttemptAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  sentCount: number;
+  consecutiveFailures: number;
+  expectedChannel?: string | null;
+  channelDetails?: string | null;
+  paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null;
+  messagePreview?: string | null;
+  link?: string | null;
+}
+
+export interface AdminClientMessageMonitorAttempt {
+  id: number;
+  stateId?: number | null;
+  scenario: string;
+  scenarioLabel: string;
+  targetType: string;
+  targetKey: string;
+  companyId?: number | null;
+  companyTitle: string;
+  orderId?: number | null;
+  orderTitle?: string | null;
+  status: 'SENT' | 'FAILED' | 'SKIPPED' | string;
+  statusLabel: string;
+  channel?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  messagePreview?: string | null;
+  durationMs?: number | null;
+  attemptedAt: string;
+  link?: string | null;
+}
+
+export interface AdminClientMessageMonitor {
+  enabled: boolean;
+  workerEnabled: boolean;
+  liveEnabled: boolean;
+  windowAllowed: boolean;
+  businessWindows: string;
+  nowMoscow: string;
+  updatedAt: string;
+  nextAttemptAt?: string | null;
+  pausedUntil?: string | null;
+  pauseReason?: string | null;
+  activeCandidates: number;
+  dueNow: number;
+  sentToday: number;
+  failedToday: number;
+  skippedToday: number;
+  disabledStates: number;
+  archiveDiagnostics?: AdminClientMessageArchiveDiagnostics | null;
+  scenarios: AdminClientMessageMonitorScenario[];
+  queue: AdminClientMessageMonitorQueueItem[];
+  attempts: AdminClientMessageMonitorAttempt[];
+}
+
+export interface AdminClientMessageArchiveDiagnostics {
+  status: string;
+  totalInStatus: number;
+  ready: number;
+  tooFresh: number;
+  withoutChat: number;
+  blockedByActiveOrder: number;
+  blockedByOpenRequest: number;
+}
+
+export interface AdminClientMessageMonitorSettings {
+  enabled: boolean;
+}
+
 export interface AdminSharedChatLinkSyncResponse {
   scannedCompanies: number;
   sharedChatGroups: number;
@@ -222,6 +361,8 @@ export interface WhatsAppGroupSyncSettingsRequest {
 export interface ClientPublicationProgressReportSettingsRequest {
   enabled: boolean;
 }
+
+export type ClientMessageSettingsRequest = AdminClientMessageSettings;
 
 @Injectable({ providedIn: 'root' })
 export class AdminDictionariesApi {
@@ -430,6 +571,46 @@ export class AdminDictionariesApi {
     return this.http.put<AdminClientPublicationProgressReportSettings>(
       `${this.baseUrl}/settings/client-publication-progress-reports`,
       request
+    );
+  }
+
+  getClientMessageSettings(): Observable<AdminClientMessageSettings> {
+    return this.http.get<AdminClientMessageSettings>(`${this.baseUrl}/settings/client-messages`);
+  }
+
+  updateClientMessageSettings(request: ClientMessageSettingsRequest): Observable<AdminClientMessageSettings> {
+    return this.http.put<AdminClientMessageSettings>(`${this.baseUrl}/settings/client-messages`, request);
+  }
+
+  getClientMessageMonitor(): Observable<AdminClientMessageMonitor> {
+    return this.http.get<AdminClientMessageMonitor>(`${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor`);
+  }
+
+  updateClientMessageMonitorSettings(enabled: boolean): Observable<AdminClientMessageMonitorSettings> {
+    return this.http.put<AdminClientMessageMonitorSettings>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor`,
+      { enabled }
+    );
+  }
+
+  retryClientMessageNow(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/retry-now`,
+      {}
+    );
+  }
+
+  disableClientMessageCandidate(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/disable`,
+      {}
+    );
+  }
+
+  markClientMessageCandidateDone(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/done`,
+      {}
     );
   }
 

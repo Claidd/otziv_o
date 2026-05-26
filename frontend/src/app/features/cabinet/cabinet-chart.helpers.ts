@@ -47,7 +47,9 @@ export type YearlyLineChartOptions = {
 };
 
 const MONTH_LABELS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
-const YEAR_COLORS = ['#ea3362', '#4a9a86', '#f7a35c', '#6c9bcf', '#9a7bd9', '#1b9c85', '#b28405'];
+const PREVIOUS_YEAR_COLOR = '#ea3362';
+const CURRENT_YEAR_COLOR = '#4a9a86';
+const OTHER_YEAR_COLORS = ['#f7a35c', '#6c9bcf', '#9a7bd9', '#1b9c85', '#b28405'];
 const LINE_VIEWBOX_WIDTH = 100;
 const LINE_VIEWBOX_HEIGHT = 100;
 const LINE_CHART_TOP = 7;
@@ -90,7 +92,9 @@ export function cabinetYearlyLineChartFrom(
 
   try {
     const parsed = JSON.parse(map) as Record<string, Record<string, number | string> | number | string>;
-    const yearlyData = filterYearlyData(yearlyDataFrom(parsed, options.fallbackYear), options);
+    const rawYearlyData = yearlyDataFrom(parsed, options.fallbackYear);
+    const anchorYear = latestYearFrom(rawYearlyData);
+    const yearlyData = filterYearlyData(rawYearlyData, options);
     const years = Object.keys(yearlyData).sort();
     const allValues = years.flatMap((year) => {
       const monthlyData = yearlyData[year] ?? {};
@@ -101,7 +105,7 @@ export function cabinetYearlyLineChartFrom(
     const yFor = (value: number) => LINE_CHART_TOP + plotHeight - (value / scale.max) * plotHeight;
     const xFor = (index: number) => ((index + 0.5) * LINE_VIEWBOX_WIDTH) / MONTH_LABELS.length;
 
-    const series = years.map((year, index) => {
+    const series = years.map((year) => {
       const monthlyData = yearlyData[year] ?? {};
       const pointsData = MONTH_LABELS.map((label, monthIndex) => {
         const value = numberValue(monthlyData[String(monthIndex + 1)]);
@@ -115,7 +119,7 @@ export function cabinetYearlyLineChartFrom(
 
       return {
         label: `Год: ${year}`,
-        color: YEAR_COLORS[index % YEAR_COLORS.length],
+        color: colorForYear(year, anchorYear),
         points: pointsData.map((point) => `${point.x},${point.y}`).join(' '),
         pointsData
       };
@@ -201,6 +205,32 @@ function yearlyDataFrom(
   }
 
   return fallbackYear == null ? {} : { [fallbackYear]: parsed as Record<string, number | string> };
+}
+
+function latestYearFrom(yearlyData: Record<string, Record<string, number | string>>): number | null {
+  const years = Object.keys(yearlyData)
+    .map((year) => Number(year))
+    .filter((year) => Number.isFinite(year));
+
+  return years.length ? Math.max(...years) : null;
+}
+
+function colorForYear(year: string, anchorYear: number | null): string {
+  const numericYear = Number(year);
+  if (!Number.isFinite(numericYear) || anchorYear == null) {
+    return OTHER_YEAR_COLORS[0];
+  }
+
+  if (numericYear === anchorYear) {
+    return CURRENT_YEAR_COLOR;
+  }
+
+  if (numericYear === anchorYear - 1) {
+    return PREVIOUS_YEAR_COLOR;
+  }
+
+  const paletteIndex = Math.abs(anchorYear - numericYear) - 2;
+  return OTHER_YEAR_COLORS[Math.max(0, paletteIndex) % OTHER_YEAR_COLORS.length];
 }
 
 function numberValue(value: unknown): number {

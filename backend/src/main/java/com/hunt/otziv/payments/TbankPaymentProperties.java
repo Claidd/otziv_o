@@ -19,8 +19,16 @@ public class TbankPaymentProperties implements EnvironmentAware {
     private String primaryName = "Основной магазин";
     private String primaryTerminalKey = "";
     private String primaryPassword = "";
+    private String primaryTestTerminalKey = "";
+    private String primaryTestPassword = "";
+    private String primaryLiveTerminalKey = "";
+    private String primaryLivePassword = "";
     private String secondaryTerminalKey = "";
     private String secondaryPassword = "";
+    private String secondaryTestTerminalKey = "";
+    private String secondaryTestPassword = "";
+    private String secondaryLiveTerminalKey = "";
+    private String secondaryLivePassword = "";
     private String terminalKey = "";
     private String password = "";
     private String publicBaseUrl = "https://o-ogo.ru";
@@ -121,6 +129,64 @@ public class TbankPaymentProperties implements EnvironmentAware {
         this.primaryPassword = primaryPassword;
     }
 
+    public String getPrimaryTestTerminalKey() {
+        String explicit = safe(primaryTestTerminalKey);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String current = fallback(primaryTerminalKey, terminalKey);
+        return isDemoTerminal(current) ? current : "";
+    }
+
+    public void setPrimaryTestTerminalKey(String primaryTestTerminalKey) {
+        this.primaryTestTerminalKey = primaryTestTerminalKey;
+    }
+
+    public String getPrimaryTestPassword() {
+        String explicit = safe(primaryTestPassword);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String testTerminal = getPrimaryTestTerminalKey();
+        if (!testTerminal.isBlank() && testTerminal.equals(fallback(primaryTerminalKey, terminalKey))) {
+            return getPrimaryPassword();
+        }
+        return "";
+    }
+
+    public void setPrimaryTestPassword(String primaryTestPassword) {
+        this.primaryTestPassword = primaryTestPassword;
+    }
+
+    public String getPrimaryLiveTerminalKey() {
+        String explicit = safe(primaryLiveTerminalKey);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String current = fallback(primaryTerminalKey, terminalKey);
+        return !current.isBlank() && !isDemoTerminal(current) ? current : "";
+    }
+
+    public void setPrimaryLiveTerminalKey(String primaryLiveTerminalKey) {
+        this.primaryLiveTerminalKey = primaryLiveTerminalKey;
+    }
+
+    public String getPrimaryLivePassword() {
+        String explicit = safe(primaryLivePassword);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String liveTerminal = getPrimaryLiveTerminalKey();
+        if (!liveTerminal.isBlank() && liveTerminal.equals(fallback(primaryTerminalKey, terminalKey))) {
+            return getPrimaryPassword();
+        }
+        return "";
+    }
+
+    public void setPrimaryLivePassword(String primaryLivePassword) {
+        this.primaryLivePassword = primaryLivePassword;
+    }
+
     public String getSecondaryTerminalKey() {
         return safe(secondaryTerminalKey);
     }
@@ -135,6 +201,64 @@ public class TbankPaymentProperties implements EnvironmentAware {
 
     public void setSecondaryPassword(String secondaryPassword) {
         this.secondaryPassword = secondaryPassword;
+    }
+
+    public String getSecondaryTestTerminalKey() {
+        String explicit = safe(secondaryTestTerminalKey);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String current = safe(secondaryTerminalKey);
+        return isDemoTerminal(current) ? current : "";
+    }
+
+    public void setSecondaryTestTerminalKey(String secondaryTestTerminalKey) {
+        this.secondaryTestTerminalKey = secondaryTestTerminalKey;
+    }
+
+    public String getSecondaryTestPassword() {
+        String explicit = safe(secondaryTestPassword);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String testTerminal = getSecondaryTestTerminalKey();
+        if (!testTerminal.isBlank() && testTerminal.equals(safe(secondaryTerminalKey))) {
+            return getSecondaryPassword();
+        }
+        return "";
+    }
+
+    public void setSecondaryTestPassword(String secondaryTestPassword) {
+        this.secondaryTestPassword = secondaryTestPassword;
+    }
+
+    public String getSecondaryLiveTerminalKey() {
+        String explicit = safe(secondaryLiveTerminalKey);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String current = safe(secondaryTerminalKey);
+        return !current.isBlank() && !isDemoTerminal(current) ? current : "";
+    }
+
+    public void setSecondaryLiveTerminalKey(String secondaryLiveTerminalKey) {
+        this.secondaryLiveTerminalKey = secondaryLiveTerminalKey;
+    }
+
+    public String getSecondaryLivePassword() {
+        String explicit = safe(secondaryLivePassword);
+        if (!explicit.isBlank()) {
+            return explicit;
+        }
+        String liveTerminal = getSecondaryLiveTerminalKey();
+        if (!liveTerminal.isBlank() && liveTerminal.equals(safe(secondaryTerminalKey))) {
+            return getSecondaryPassword();
+        }
+        return "";
+    }
+
+    public void setSecondaryLivePassword(String secondaryLivePassword) {
+        this.secondaryLivePassword = secondaryLivePassword;
     }
 
     public String getPublicBaseUrl() {
@@ -231,42 +355,71 @@ public class TbankPaymentProperties implements EnvironmentAware {
     }
 
     public TbankPaymentProfile defaultProfile() {
+        return defaultProfile(defaultRuntimeMode());
+    }
+
+    public TbankPaymentProfile defaultProfile(TbankRuntimeMode runtimeMode) {
+        TbankRuntimeMode mode = runtimeMode == null ? defaultRuntimeMode() : runtimeMode;
         return new TbankPaymentProfile(
                 null,
                 TbankPaymentProfile.PRIMARY_CODE,
                 getPrimaryName(),
                 true,
-                getPrimaryTerminalKey(),
-                getPrimaryPassword(),
-                isTestMode(getPrimaryTerminalKey())
+                terminalKeyFor(null, mode),
+                passwordFor(null, mode),
+                mode.isTest()
         );
     }
 
+    public TbankRuntimeMode defaultRuntimeMode() {
+        return isDemoTerminal(getPrimaryTerminalKey()) ? TbankRuntimeMode.TEST : TbankRuntimeMode.LIVE;
+    }
+
     public String terminalKeyFor(PaymentProfile profile) {
+        return terminalKeyFor(profile, defaultRuntimeMode());
+    }
+
+    public String terminalKeyFor(PaymentProfile profile, TbankRuntimeMode runtimeMode) {
+        TbankRuntimeMode mode = runtimeMode == null ? defaultRuntimeMode() : runtimeMode;
         if (profile == null) {
-            return getPrimaryTerminalKey();
+            return mode.isTest() ? getPrimaryTestTerminalKey() : getPrimaryLiveTerminalKey();
         }
         if (isPrimaryProfile(profile)) {
-            return fallback(getPrimaryTerminalKey(), profile.getTerminalKey());
+            return modeTerminal(
+                    mode,
+                    getPrimaryTestTerminalKey(),
+                    getPrimaryLiveTerminalKey(),
+                    profile.getTerminalKey()
+            );
         }
         if (TbankPaymentProfile.SECONDARY_CODE.equals(profile.getCode())) {
-            return fallback(getSecondaryTerminalKey(), profile.getTerminalKey());
+            return modeTerminal(
+                    mode,
+                    getSecondaryTestTerminalKey(),
+                    getSecondaryLiveTerminalKey(),
+                    profile.getTerminalKey()
+            );
         }
         return safe(profile.getTerminalKey());
     }
 
     public String passwordFor(PaymentProfile profile) {
+        return passwordFor(profile, defaultRuntimeMode());
+    }
+
+    public String passwordFor(PaymentProfile profile, TbankRuntimeMode runtimeMode) {
+        TbankRuntimeMode mode = runtimeMode == null ? defaultRuntimeMode() : runtimeMode;
         if (profile == null) {
-            return getPrimaryPassword();
+            return mode.isTest() ? getPrimaryTestPassword() : getPrimaryLivePassword();
         }
         if (isPrimaryProfile(profile)) {
-            String primary = getPrimaryPassword();
+            String primary = mode.isTest() ? getPrimaryTestPassword() : getPrimaryLivePassword();
             if (!primary.isBlank()) {
                 return primary;
             }
         }
         if (TbankPaymentProfile.SECONDARY_CODE.equals(profile.getCode())) {
-            String secondary = getSecondaryPassword();
+            String secondary = mode.isTest() ? getSecondaryTestPassword() : getSecondaryLivePassword();
             if (!secondary.isBlank()) {
                 return secondary;
             }
@@ -284,8 +437,43 @@ public class TbankPaymentProperties implements EnvironmentAware {
         return "";
     }
 
+    public TbankPaymentProfile runtimeProfileForTerminal(PaymentProfile profile, String terminalKey) {
+        String cleanTerminal = safe(terminalKey);
+        if (profile == null || cleanTerminal.isBlank()) {
+            return defaultProfile();
+        }
+        RuntimeCredential credential = credentialForTerminal(profile, cleanTerminal);
+        if (credential == null) {
+            TbankRuntimeMode mode = isDemoTerminal(cleanTerminal) ? TbankRuntimeMode.TEST : TbankRuntimeMode.LIVE;
+            credential = new RuntimeCredential(cleanTerminal, passwordFor(profile, mode), mode.isTest());
+        }
+        return new TbankPaymentProfile(
+                profile.getId(),
+                profile.getCode(),
+                profile.getName(),
+                profile.isEnabled(),
+                credential.terminalKey(),
+                credential.password(),
+                credential.testMode()
+        );
+    }
+
+    public boolean matchesAnyTerminal(PaymentProfile profile, String terminalKey) {
+        String clean = safe(terminalKey);
+        if (profile == null || clean.isBlank()) {
+            return false;
+        }
+        return clean.equals(safe(profile.getTerminalKey()))
+                || clean.equals(terminalKeyFor(profile, TbankRuntimeMode.TEST))
+                || clean.equals(terminalKeyFor(profile, TbankRuntimeMode.LIVE));
+    }
+
+    public boolean isConfiguredTestTerminal(String terminalKey) {
+        return isDemoTerminal(terminalKey) || getBaseUrl().contains("test");
+    }
+
     public boolean isTestMode(String terminalKey) {
-        return getBaseUrl().contains("test") || safe(terminalKey).endsWith("DEMO");
+        return isConfiguredTestTerminal(terminalKey);
     }
 
     public String notificationUrl() {
@@ -325,8 +513,75 @@ public class TbankPaymentProperties implements EnvironmentAware {
         return clean.isBlank() ? safe(fallback) : clean;
     }
 
+    private static boolean isDemoTerminal(String terminalKey) {
+        return safe(terminalKey).endsWith("DEMO");
+    }
+
+    private static String modeTerminal(TbankRuntimeMode mode, String testTerminal, String liveTerminal, String storedTerminal) {
+        String selected = mode.isTest() ? safe(testTerminal) : safe(liveTerminal);
+        if (!selected.isBlank()) {
+            return selected;
+        }
+        String stored = safe(storedTerminal);
+        if (mode.isTest()) {
+            return isDemoTerminal(stored) ? stored : "";
+        }
+        return !stored.isBlank() && !isDemoTerminal(stored) ? stored : "";
+    }
+
     private static boolean isPrimaryProfile(PaymentProfile profile) {
         return profile.isDefaultProfile() || TbankPaymentProfile.PRIMARY_CODE.equals(profile.getCode());
+    }
+
+    private RuntimeCredential credentialForTerminal(PaymentProfile profile, String terminalKey) {
+        if (isPrimaryProfile(profile)) {
+            RuntimeCredential primary = credentialForTerminal(
+                    terminalKey,
+                    getPrimaryTestTerminalKey(),
+                    getPrimaryTestPassword(),
+                    getPrimaryLiveTerminalKey(),
+                    getPrimaryLivePassword()
+            );
+            if (primary != null) {
+                return primary;
+            }
+        }
+        if (TbankPaymentProfile.SECONDARY_CODE.equals(profile.getCode())) {
+            RuntimeCredential secondary = credentialForTerminal(
+                    terminalKey,
+                    getSecondaryTestTerminalKey(),
+                    getSecondaryTestPassword(),
+                    getSecondaryLiveTerminalKey(),
+                    getSecondaryLivePassword()
+            );
+            if (secondary != null) {
+                return secondary;
+            }
+        }
+        if (terminalKey.equals(safe(profile.getTerminalKey()))) {
+            return new RuntimeCredential(
+                    terminalKey,
+                    passwordFor(profile, isDemoTerminal(terminalKey) ? TbankRuntimeMode.TEST : TbankRuntimeMode.LIVE),
+                    isConfiguredTestTerminal(terminalKey)
+            );
+        }
+        return null;
+    }
+
+    private RuntimeCredential credentialForTerminal(
+            String terminalKey,
+            String testTerminal,
+            String testPassword,
+            String liveTerminal,
+            String livePassword
+    ) {
+        if (!safe(testTerminal).isBlank() && terminalKey.equals(safe(testTerminal))) {
+            return new RuntimeCredential(terminalKey, safe(testPassword), true);
+        }
+        if (!safe(liveTerminal).isBlank() && terminalKey.equals(safe(liveTerminal))) {
+            return new RuntimeCredential(terminalKey, safe(livePassword), false);
+        }
+        return null;
     }
 
     private String configuredValue(String key) {
@@ -341,5 +596,8 @@ public class TbankPaymentProperties implements EnvironmentAware {
             return property;
         }
         return safe(System.getenv(key));
+    }
+
+    private record RuntimeCredential(String terminalKey, String password, boolean testMode) {
     }
 }

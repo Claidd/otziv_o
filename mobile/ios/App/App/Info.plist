@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Otziv</string>
+        <string>Компания О!</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -35,6 +35,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Компания О! использует камеру, чтобы добавить фото к отзыву.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Компания О! использует галерею, чтобы выбрать фото для отзыва или профиля.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Компания О! может сохранять подготовленные изображения в галерею, если вы разрешите.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -1,11 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, Observable } from 'rxjs';
 import {
   AdminBot,
   AdminCategory,
+  AdminClientMessageMonitor,
+  AdminClientMessageMonitorAttempt,
+  AdminClientMessageMonitorQueueItem,
+  AdminClientMessageMonitorScenario,
+  AdminClientMessageSettings,
   AdminClientPublicationProgressReportSettings,
   AdminCity,
   AdminDictionariesApi,
@@ -21,6 +26,7 @@ import {
   BotRequest,
   BotsResponse,
   ClientPublicationProgressReportSettingsRequest,
+  ClientMessageSettingsRequest,
   DictionaryOption,
   ManagerTextRequest,
   NagulSettingsRequest,
@@ -51,7 +57,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -91,6 +97,8 @@ const PROMO_TEXT_LABELS: Record<number, string> = {
   12: 'текст повторного заказа'
 };
 
+const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
+
 const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   categories: {
     title: 'Категории и подкатегории',
@@ -127,6 +135,14 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   settings: {
     title: 'Рабочие настройки',
     text: 'Паузы, расписания отчетов и синхронизации, которые влияют на автоматические процессы.'
+  },
+  autoresponder: {
+    title: 'Автоответчик',
+    text: 'Расписания, статусы, лимиты и тексты клиентских автонапоминаний.'
+  },
+  autoresponderMonitor: {
+    title: 'Мониторинг автоответчика',
+    text: 'Очередь кандидатов, сценарии, последние попытки отправки и ошибки без вмешательства в работу сервиса.'
   }
 };
 
@@ -136,7 +152,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   templateUrl: './admin-dictionaries.component.html',
   styleUrl: './admin-dictionaries.component.scss'
 })
-export class AdminDictionariesComponent {
+export class AdminDictionariesComponent implements OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
   private readonly dictionariesApi = inject(AdminDictionariesApi);
@@ -144,6 +160,7 @@ export class AdminDictionariesComponent {
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
   private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
+  private monitorTimerId: ReturnType<typeof window.setInterval> | null = null;
 
   private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
@@ -153,7 +170,9 @@ export class AdminDictionariesComponent {
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
-    { key: 'settings', label: 'Настройки', icon: 'tune' }
+    { key: 'settings', label: 'Настройки', icon: 'tune' },
+    { key: 'autoresponder', label: 'Автоответчик', icon: 'mark_chat_unread' },
+    { key: 'autoresponderMonitor', label: 'Мониторинг', icon: 'monitor_heart' }
   ];
   private readonly managerTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' }
@@ -197,6 +216,17 @@ export class AdminDictionariesComponent {
   readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
+  readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
+  readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
+  readonly clientMessageMonitorLoading = signal(false);
+  readonly clientMessageMonitorSaving = signal(false);
+  readonly clientMessageMonitorError = signal<string | null>(null);
+  readonly monitorScenarioFilter = signal('ALL');
+  readonly monitorQueueStatusFilter = signal('ALL');
+  readonly monitorAttemptStatusFilter = signal('ALL');
+  readonly monitorSearch = signal('');
+  readonly expandedMonitorQueueKey = signal<string | null>(null);
+  readonly clientMessageManualAction = signal<string | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -282,6 +312,48 @@ export class AdminDictionariesComponent {
     clientPublicationProgressReportsEnabled: [true]
   });
 
+  readonly autoresponderForm = this.fb.nonNullable.group({
+    workerEnabled: [true],
+    liveEnabled: [true],
+    monitorEnabled: [false],
+    reviewCheckEnabled: [true],
+    paymentReminderEnabled: [true],
+    badReviewInvoiceEnabled: [true],
+    paymentOverdueEnabled: [true],
+    paymentOverdueLiveEnabled: [false],
+    archiveReorderEnabled: [true],
+    errorProtectionEnabled: [true],
+    reviewCheckIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
+    paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
+    paymentOverdueDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
+    archiveReorderMonths: [3, [Validators.required, Validators.min(1), Validators.max(36)]],
+    errorProtectionThreshold: [20, [Validators.required, Validators.min(1), Validators.max(10000)]],
+    errorProtectionWindowMinutes: [10, [Validators.required, Validators.min(1), Validators.max(1440)]],
+    errorProtectionCooldownMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
+    retentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
+    tickBatchSize: [5, [Validators.required, Validators.min(1), Validators.max(100)]],
+    candidateLimit: [200, [Validators.required, Validators.min(1), Validators.max(5000)]],
+    dailyLimit: [140, [Validators.required, Validators.min(1), Validators.max(5000)]],
+    defaultGapSeconds: [180, [Validators.required, Validators.min(30), Validators.max(86400)]],
+    whatsAppGapSeconds: [180, [Validators.required, Validators.min(30), Validators.max(86400)]],
+    telegramGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
+    maxGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
+    businessWindows: ['10:00-12:00,14:00-17:00,19:00-21:00', [Validators.required, Validators.maxLength(500)]],
+    reviewCheckStatuses: ['На проверке', [Validators.required, Validators.maxLength(500)]],
+    paymentReminderStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
+    paymentOverdueStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
+    closedOrderStatuses: ['Оплачено,Архив,Бан,Не оплачено', [Validators.required, Validators.maxLength(500)]],
+    paymentOverdueTargetStatus: ['Не оплачено', [Validators.required, Validators.maxLength(500)]],
+    archiveCompanyStatus: ['На стопе', [Validators.required, Validators.maxLength(500)]],
+    archiveInactiveOrderStatuses: ['Оплачено,Архив,Бан', [Validators.required, Validators.maxLength(500)]],
+    openNextOrderRequestStatuses: ['PENDING,FAILED', [Validators.required, Validators.maxLength(500)]],
+    reviewLinkBaseUrl: ['https://o-ogo.ru', [Validators.required, Validators.maxLength(500)]],
+    reviewReminderText: ['', [Validators.required, Validators.maxLength(500)]],
+    paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK', [Validators.required]],
+    paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
+    archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
+  });
+
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
   readonly activeGuide = computed(() => DICTIONARY_GUIDES[this.activeTab()]);
   readonly activeTabIcon = computed(() =>
@@ -334,6 +406,10 @@ export class AdminDictionariesComponent {
         return this.managerTexts().length;
       case 'settings':
         return this.settingsTotal();
+      case 'autoresponder':
+        return this.autoresponderTotal();
+      case 'autoresponderMonitor':
+        return this.monitorTotal();
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => {
@@ -359,8 +435,64 @@ export class AdminDictionariesComponent {
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
       { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
       { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
-      { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' }
+      { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' },
+      { label: 'Автоответчик', value: this.clientMessageSettings()?.workerEnabled ? 1 : 0, icon: 'mark_chat_unread', tone: 'green' },
+      { label: 'Лимит сообщений', value: this.clientMessageSettings()?.dailyLimit ?? 0, icon: 'speed', tone: 'yellow' }
     ];
+  });
+
+  readonly monitorMetrics = computed<DictionaryMetric[]>(() => {
+    const monitor = this.clientMessageMonitor();
+    return [
+      { label: 'Активных', value: monitor?.activeCandidates ?? 0, icon: 'playlist_add_check', tone: 'blue' },
+      { label: 'Готово сейчас', value: monitor?.dueNow ?? 0, icon: 'bolt', tone: 'yellow' },
+      { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green' },
+      { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal' },
+      { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal' },
+      { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue' }
+    ];
+  });
+
+  readonly filteredMonitorQueue = computed(() => {
+    const monitor = this.clientMessageMonitor();
+    if (!monitor) {
+      return [];
+    }
+    const scenarioFilter = this.monitorScenarioFilter();
+    const statusFilter = this.monitorQueueStatusFilter();
+    const search = this.monitorSearch().trim().toLowerCase();
+    const nowMs = Date.parse(monitor.updatedAt);
+    return monitor.queue.filter((item) => {
+      if (scenarioFilter !== 'ALL' && item.scenario !== scenarioFilter) {
+        return false;
+      }
+      if (statusFilter === 'DUE' && !this.isMonitorQueueDue(item, nowMs)) {
+        return false;
+      }
+      if (statusFilter === 'ERROR' && !item.lastErrorMessage) {
+        return false;
+      }
+      return this.matchesMonitorQueueSearch(item, search);
+    });
+  });
+
+  readonly filteredMonitorAttempts = computed(() => {
+    const monitor = this.clientMessageMonitor();
+    if (!monitor) {
+      return [];
+    }
+    const scenarioFilter = this.monitorScenarioFilter();
+    const statusFilter = this.monitorAttemptStatusFilter();
+    const search = this.monitorSearch().trim().toLowerCase();
+    return monitor.attempts.filter((attempt) => {
+      if (scenarioFilter !== 'ALL' && attempt.scenario !== scenarioFilter) {
+        return false;
+      }
+      if (statusFilter !== 'ALL' && attempt.status !== statusFilter) {
+        return false;
+      }
+      return this.matchesMonitorAttemptSearch(attempt, search);
+    });
   });
 
   constructor() {
@@ -371,6 +503,15 @@ export class AdminDictionariesComponent {
     this.loadAll();
   }
 
+  ngOnDestroy(): void {
+    this.stopClientMessageMonitorPolling();
+  }
+
+  @HostListener('document:visibilitychange')
+  onDocumentVisibilityChange(): void {
+    this.syncClientMessageMonitorPolling();
+  }
+
   setTab(tab: DictionaryTabKey): void {
     if (!this.tabs().some((item) => item.key === tab)) {
       return;
@@ -379,6 +520,7 @@ export class AdminDictionariesComponent {
     this.activeTab.set(tab);
     this.search.set('');
     this.clearSelection();
+    this.syncClientMessageMonitorPolling();
   }
 
   loadAll(): void {
@@ -398,7 +540,8 @@ export class AdminDictionariesComponent {
         nagulSettings: this.dictionariesApi.getNagulSettings(),
         telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
         whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
-        clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
+        clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
+        clientMessageSettings: this.dictionariesApi.getClientMessageSettings()
       }).subscribe({
         next: ({
           categories,
@@ -412,7 +555,8 @@ export class AdminDictionariesComponent {
           nagulSettings,
           telegramReportSettings,
           whatsAppGroupSyncSettings,
-          clientPublicationProgressReportSettings
+          clientPublicationProgressReportSettings,
+          clientMessageSettings
         }) => {
           this.categories.set(categories);
           this.subCategories.set(subCategories);
@@ -427,6 +571,7 @@ export class AdminDictionariesComponent {
           this.applyTelegramReportSettings(telegramReportSettings);
           this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
           this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
+          this.applyClientMessageSettings(clientMessageSettings);
           this.loading.set(false);
           this.ensureDefaults();
         },
@@ -459,6 +604,7 @@ export class AdminDictionariesComponent {
         this.telegramReportSettings.set(null);
         this.whatsAppGroupSyncSettings.set(null);
         this.clientPublicationProgressReportSettings.set(null);
+        this.clientMessageSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
       },
@@ -493,6 +639,11 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'settings') {
       this.resetSettingsForm();
+      return;
+    }
+
+    if (this.activeTab() === 'autoresponder') {
+      this.resetAutoresponderForm();
       return;
     }
 
@@ -729,6 +880,7 @@ export class AdminDictionariesComponent {
       whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
       clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
     });
+    this.resetAutoresponderForm();
   }
 
   startNewCategory(): void {
@@ -848,6 +1000,12 @@ export class AdminDictionariesComponent {
       case 'settings':
         this.saveSettings();
         return;
+      case 'autoresponder':
+        this.saveAutoresponderSettings();
+        return;
+      case 'autoresponderMonitor':
+        this.loadClientMessageMonitor();
+        return;
     }
   }
 
@@ -902,9 +1060,265 @@ export class AdminDictionariesComponent {
     });
   }
 
+  setClientMessageMonitorEnabled(enabled: boolean): void {
+    if (this.clientMessageMonitorSaving()) {
+      return;
+    }
+
+    const previous = this.clientMessageSettings()?.monitorEnabled ?? false;
+    this.clientMessageMonitorSaving.set(true);
+    this.clientMessageMonitorError.set(null);
+    this.dictionariesApi.updateClientMessageMonitorSettings(enabled).subscribe({
+      next: (settings) => {
+        this.clientMessageMonitorSaving.set(false);
+        this.patchClientMessageMonitorEnabled(settings.enabled);
+        if (settings.enabled) {
+          this.loadClientMessageMonitor();
+          this.startClientMessageMonitorPolling();
+        } else {
+          this.stopClientMessageMonitorPolling();
+          this.clientMessageMonitor.set(null);
+        }
+        this.toastService.success(
+          settings.enabled ? 'Мониторинг включен' : 'Мониторинг выключен',
+          settings.enabled ? 'Данные будут обновляться раз в минуту, пока вкладка открыта.' : 'Автоответчик продолжит работать без UI-опроса.'
+        );
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось переключить мониторинг автоответчика');
+        this.patchClientMessageMonitorEnabled(previous);
+        this.clientMessageMonitorSaving.set(false);
+        this.clientMessageMonitorError.set(message);
+        this.toastService.error('Мониторинг не переключен', message);
+      }
+    });
+  }
+
+  loadClientMessageMonitor(silent = false): void {
+    if (!this.clientMessageSettings()?.monitorEnabled) {
+      this.clientMessageMonitor.set(null);
+      this.stopClientMessageMonitorPolling();
+      return;
+    }
+    if (!silent) {
+      this.clientMessageMonitorLoading.set(true);
+    }
+    this.clientMessageMonitorError.set(null);
+    this.dictionariesApi.getClientMessageMonitor().subscribe({
+      next: (monitor) => {
+        this.clientMessageMonitor.set(monitor);
+        this.patchClientMessageMonitorEnabled(monitor.enabled);
+        this.clientMessageMonitorLoading.set(false);
+        if (monitor.enabled && this.activeTab() === 'autoresponderMonitor') {
+          this.startClientMessageMonitorPolling();
+        }
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось загрузить мониторинг автоответчика');
+        this.clientMessageMonitorError.set(message);
+        this.clientMessageMonitorLoading.set(false);
+        if (!silent) {
+          this.toastService.error('Мониторинг не загрузился', message);
+        }
+      }
+    });
+  }
+
+  setMonitorScenarioFilter(value: string): void {
+    this.monitorScenarioFilter.set(value);
+    this.expandedMonitorQueueKey.set(null);
+  }
+
+  setMonitorQueueStatusFilter(value: string): void {
+    this.monitorQueueStatusFilter.set(value);
+    this.expandedMonitorQueueKey.set(null);
+  }
+
+  setMonitorAttemptStatusFilter(value: string): void {
+    this.monitorAttemptStatusFilter.set(value);
+  }
+
+  setMonitorSearch(value: string): void {
+    this.monitorSearch.set(value);
+    this.expandedMonitorQueueKey.set(null);
+  }
+
+  toggleMonitorQueueDetails(item: AdminClientMessageMonitorQueueItem): void {
+    this.expandedMonitorQueueKey.set(this.expandedMonitorQueueKey() === item.targetKey ? null : item.targetKey);
+  }
+
+  retryClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
+    this.runClientMessageManualAction(
+      item,
+      'retry',
+      () => this.dictionariesApi.retryClientMessageNow(item.id),
+      'Кандидат поставлен на ближайшую попытку'
+    );
+  }
+
+  disableClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): void {
+    if (!window.confirm(`Отключить кандидата "${item.orderTitle || item.companyTitle}"?`)) {
+      return;
+    }
+    this.runClientMessageManualAction(
+      item,
+      'disable',
+      () => this.dictionariesApi.disableClientMessageCandidate(item.id),
+      'Кандидат отключен'
+    );
+  }
+
+  markClientMessageCandidateDone(item: AdminClientMessageMonitorQueueItem): void {
+    if (!window.confirm(`Пометить кандидата "${item.orderTitle || item.companyTitle}" выполненным?`)) {
+      return;
+    }
+    this.runClientMessageManualAction(
+      item,
+      'done',
+      () => this.dictionariesApi.markClientMessageCandidateDone(item.id),
+      'Кандидат помечен выполненным'
+    );
+  }
+
+  monitorManualActionKey(item: AdminClientMessageMonitorQueueItem, action: string): string {
+    return `${item.id}:${action}`;
+  }
+
+  private runClientMessageManualAction(
+    item: AdminClientMessageMonitorQueueItem,
+    action: string,
+    requestFactory: () => Observable<AdminClientMessageMonitor>,
+    successTitle: string
+  ): void {
+    const key = this.monitorManualActionKey(item, action);
+    if (this.clientMessageManualAction()) {
+      return;
+    }
+    this.clientMessageManualAction.set(key);
+    this.clientMessageMonitorError.set(null);
+    requestFactory().subscribe({
+      next: (monitor) => {
+        this.clientMessageManualAction.set(null);
+        this.clientMessageMonitor.set(monitor);
+        this.patchClientMessageMonitorEnabled(monitor.enabled);
+        this.expandedMonitorQueueKey.set(null);
+        this.toastService.success(successTitle, item.scenarioLabel);
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось выполнить действие с кандидатом');
+        this.clientMessageManualAction.set(null);
+        this.clientMessageMonitorError.set(message);
+        this.toastService.error('Действие не выполнено', message);
+      }
+    });
+  }
+
+  private isMonitorQueueDue(item: AdminClientMessageMonitorQueueItem, nowMs: number): boolean {
+    if (!item.nextAttemptAt || Number.isNaN(nowMs)) {
+      return false;
+    }
+    const nextMs = Date.parse(item.nextAttemptAt);
+    return !Number.isNaN(nextMs) && nextMs <= nowMs;
+  }
+
+  private matchesMonitorQueueSearch(item: AdminClientMessageMonitorQueueItem, search: string): boolean {
+    if (!search) {
+      return true;
+    }
+    return [
+      item.scenarioLabel,
+      item.companyTitle,
+      item.orderTitle,
+      item.statusTitle,
+      item.lastErrorMessage,
+      item.expectedChannel,
+      item.channelDetails,
+      item.messagePreview,
+      item.orderId?.toString(),
+      item.companyId?.toString()
+    ].some((value) => String(value ?? '').toLowerCase().includes(search));
+  }
+
+  private matchesMonitorAttemptSearch(attempt: AdminClientMessageMonitorAttempt, search: string): boolean {
+    if (!search) {
+      return true;
+    }
+    return [
+      attempt.scenarioLabel,
+      attempt.companyTitle,
+      attempt.orderTitle,
+      attempt.statusLabel,
+      attempt.errorCode,
+      attempt.errorMessage,
+      attempt.messagePreview,
+      attempt.channel,
+      attempt.orderId?.toString(),
+      attempt.companyId?.toString()
+    ].some((value) => String(value ?? '').toLowerCase().includes(search));
+  }
+
+  monitorAttemptStatusClass(status: string): string {
+    if (status === 'SENT') {
+      return 'status-pill';
+    }
+    if (status === 'FAILED') {
+      return 'status-pill danger';
+    }
+    return 'status-pill off';
+  }
+
+  monitorScenarioIcon(scenario: AdminClientMessageMonitorScenario): string {
+    return {
+      REVIEW_CHECK_REMINDER: 'playlist_add_check',
+      PAYMENT_REMINDER: 'receipt_long',
+      PAYMENT_OVERDUE_ESCALATION: 'priority_high',
+      ARCHIVE_REORDER_OFFER: 'archive',
+      BAD_REVIEW_INVOICE: 'request_quote'
+    }[scenario.scenario] ?? 'mark_chat_unread';
+  }
+
+  monitorScenarioTone(scenario: AdminClientMessageMonitorScenario): DictionaryMetric['tone'] {
+    if (scenario.failedToday > 0 || scenario.lastError) {
+      return 'pink';
+    }
+    if (scenario.dueNow > 0) {
+      return 'yellow';
+    }
+    if (scenario.activeCandidates > 0) {
+      return 'green';
+    }
+    return 'teal';
+  }
+
+  monitorScenarioTooltip(scenario: AdminClientMessageMonitorScenario): string {
+    return {
+      REVIEW_CHECK_REMINDER: 'Напоминает клиенту проверить шаблоны отзывов и перейти по ссылке проверки.',
+      PAYMENT_REMINDER: 'Напоминает клиенту об оплате заказа в статусах счета и напоминания.',
+      PAYMENT_OVERDUE_ESCALATION: 'Следит за долгой просрочкой оплаты и готовит перевод в целевой статус по настройкам.',
+      ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
+      BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.'
+    }[scenario.scenario] ?? 'Сценарий автоответчика: кандидаты, отправки, пропуски и ошибки.';
+  }
+
+  trackMonitorMetric(_index: number, metric: DictionaryMetric): string {
+    return metric.label;
+  }
+
+  trackMonitorScenario(_index: number, scenario: AdminClientMessageMonitorScenario): string {
+    return scenario.scenario;
+  }
+
+  trackMonitorQueueItem(_index: number, item: AdminClientMessageMonitorQueueItem): number {
+    return item.id;
+  }
+
+  trackMonitorAttempt(_index: number, attempt: AdminClientMessageMonitorAttempt): number {
+    return attempt.id;
+  }
+
   deleteSelected(): void {
     const activeTab = this.activeTab();
-    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'settings') {
+    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'settings' || activeTab === 'autoresponder' || activeTab === 'autoresponderMonitor') {
       return;
     }
 
@@ -989,7 +1403,9 @@ export class AdminDictionariesComponent {
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
-      settings: this.settingsTotal()
+      settings: this.settingsTotal(),
+      autoresponder: this.autoresponderTotal(),
+      autoresponderMonitor: this.monitorTotal()
     }[tab];
   }
 
@@ -998,6 +1414,33 @@ export class AdminDictionariesComponent {
       + (this.telegramReportSettings() ? 1 : 0)
       + (this.whatsAppGroupSyncSettings() ? 1 : 0)
       + (this.clientPublicationProgressReportSettings() ? 1 : 0);
+  }
+
+  autoresponderTotal(): number {
+    const settings = this.clientMessageSettings();
+    if (!settings) {
+      return 0;
+    }
+    return [
+      settings.workerEnabled,
+      settings.liveEnabled,
+      settings.reviewCheckEnabled,
+      settings.paymentReminderEnabled,
+      settings.badReviewInvoiceEnabled,
+      settings.paymentOverdueEnabled,
+      settings.archiveReorderEnabled
+    ].filter(Boolean).length;
+  }
+
+  monitorTotal(): number {
+    if (!this.clientMessageSettings()?.monitorEnabled) {
+      return 0;
+    }
+    return this.clientMessageMonitor()?.activeCandidates ?? 0;
+  }
+
+  paymentInstructionSourceLabel(source?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null): string {
+    return source === 'TBANK_LINK' ? 'T-Bank ссылка' : 'текст менеджера';
   }
 
   categoryTitle(category?: DictionaryOption | null): string {
@@ -1039,6 +1482,14 @@ export class AdminDictionariesComponent {
 
     if (this.activeTab() === 'settings') {
       return 'Рассылки и выгул';
+    }
+
+    if (this.activeTab() === 'autoresponder') {
+      return 'Клиентские автоответы';
+    }
+
+    if (this.activeTab() === 'autoresponderMonitor') {
+      return 'Кабинет мониторинга';
     }
 
     return this.selectedId() == null ? 'Новая запись' : `ID ${this.selectedId()}`;
@@ -1284,7 +1735,7 @@ export class AdminDictionariesComponent {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -1318,10 +1769,16 @@ export class AdminDictionariesComponent {
           clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
         });
         break;
+      case 'autoresponder':
+        request = this.dictionariesApi.getClientMessageSettings();
+        break;
+      case 'autoresponderMonitor':
+        request = this.dictionariesApi.getClientMessageMonitor();
+        break;
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -1358,6 +1815,15 @@ export class AdminDictionariesComponent {
             this.applyTelegramReportSettings(payload.telegramReportSettings);
             this.applyWhatsAppGroupSyncSettings(payload.whatsAppGroupSyncSettings);
             this.applyClientPublicationProgressReportSettings(payload.clientPublicationProgressReportSettings);
+            break;
+          }
+          case 'autoresponder':
+            this.applyClientMessageSettings(response as AdminClientMessageSettings);
+            break;
+          case 'autoresponderMonitor': {
+            const monitor = response as AdminClientMessageMonitor;
+            this.clientMessageMonitor.set(monitor);
+            this.patchClientMessageMonitorEnabled(monitor.enabled);
             break;
           }
         }
@@ -1659,6 +2125,76 @@ export class AdminDictionariesComponent {
     });
   }
 
+  private saveAutoresponderSettings(): void {
+    if (this.autoresponderForm.invalid) {
+      this.autoresponderForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.autoresponderForm.getRawValue();
+    const request: ClientMessageSettingsRequest = {
+      workerEnabled: raw.workerEnabled,
+      liveEnabled: raw.liveEnabled,
+      monitorEnabled: raw.monitorEnabled,
+      reviewCheckEnabled: raw.reviewCheckEnabled,
+      paymentReminderEnabled: raw.paymentReminderEnabled,
+      badReviewInvoiceEnabled: raw.badReviewInvoiceEnabled,
+      paymentOverdueEnabled: raw.paymentOverdueEnabled,
+      paymentOverdueLiveEnabled: raw.paymentOverdueLiveEnabled,
+      archiveReorderEnabled: raw.archiveReorderEnabled,
+      errorProtectionEnabled: raw.errorProtectionEnabled,
+      reviewCheckIntervalDays: Number(raw.reviewCheckIntervalDays ?? 2),
+      paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
+      paymentOverdueDays: Number(raw.paymentOverdueDays ?? 30),
+      archiveReorderMonths: Number(raw.archiveReorderMonths ?? 3),
+      errorProtectionThreshold: Number(raw.errorProtectionThreshold ?? 20),
+      errorProtectionWindowMinutes: Number(raw.errorProtectionWindowMinutes ?? 10),
+      errorProtectionCooldownMinutes: Number(raw.errorProtectionCooldownMinutes ?? 60),
+      retentionDays: Number(raw.retentionDays ?? 90),
+      tickBatchSize: Number(raw.tickBatchSize ?? 5),
+      candidateLimit: Number(raw.candidateLimit ?? 200),
+      dailyLimit: Number(raw.dailyLimit ?? 140),
+      defaultGapSeconds: Number(raw.defaultGapSeconds ?? 180),
+      whatsAppGapSeconds: Number(raw.whatsAppGapSeconds ?? 180),
+      telegramGapSeconds: Number(raw.telegramGapSeconds ?? 90),
+      maxGapSeconds: Number(raw.maxGapSeconds ?? 90),
+      businessWindows: raw.businessWindows.trim(),
+      reviewCheckStatuses: raw.reviewCheckStatuses.trim(),
+      paymentReminderStatuses: raw.paymentReminderStatuses.trim(),
+      paymentOverdueStatuses: raw.paymentOverdueStatuses.trim(),
+      closedOrderStatuses: raw.closedOrderStatuses.trim(),
+      paymentOverdueTargetStatus: raw.paymentOverdueTargetStatus.trim(),
+      archiveCompanyStatus: raw.archiveCompanyStatus.trim(),
+      archiveInactiveOrderStatuses: raw.archiveInactiveOrderStatuses.trim(),
+      openNextOrderRequestStatuses: raw.openNextOrderRequestStatuses.trim(),
+      reviewLinkBaseUrl: raw.reviewLinkBaseUrl.trim(),
+      reviewReminderText: raw.reviewReminderText.trim(),
+      paymentInstructionSource: raw.paymentInstructionSource,
+      paymentReminderText: raw.paymentReminderText.trim(),
+      archiveOfferText: raw.archiveOfferText.trim()
+    };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.updateClientMessageSettings(request).subscribe({
+      next: (settings) => {
+        this.saving.set(false);
+        this.applyClientMessageSettings(settings);
+        this.toastService.success(
+          'Автоответчик сохранен',
+          settings.workerEnabled ? `лимит ${settings.dailyLimit} в день` : 'сервис выключен'
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить автоответчик');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Автоответчик не сохранен', message);
+      }
+    });
+  }
+
   private runSave<T extends { id: number }>(
     request: Observable<T>,
     title: string,
@@ -1867,6 +2403,56 @@ export class AdminDictionariesComponent {
     });
   }
 
+  private applyClientMessageSettings(response: AdminClientMessageSettings): void {
+    this.clientMessageSettings.set(response);
+    this.autoresponderForm.patchValue(response);
+    this.syncClientMessageMonitorPolling();
+  }
+
+  private patchClientMessageMonitorEnabled(enabled: boolean): void {
+    const current = this.clientMessageSettings();
+    if (current) {
+      this.clientMessageSettings.set({ ...current, monitorEnabled: enabled });
+    }
+    this.autoresponderForm.patchValue({ monitorEnabled: enabled });
+  }
+
+  private syncClientMessageMonitorPolling(): void {
+    if (this.canPollClientMessageMonitor()) {
+      this.loadClientMessageMonitor(true);
+      this.startClientMessageMonitorPolling();
+      return;
+    }
+    this.stopClientMessageMonitorPolling();
+  }
+
+  private startClientMessageMonitorPolling(): void {
+    if (this.monitorTimerId != null || !this.canPollClientMessageMonitor()) {
+      return;
+    }
+    this.monitorTimerId = window.setInterval(() => {
+      if (this.canPollClientMessageMonitor()) {
+        this.loadClientMessageMonitor(true);
+      } else {
+        this.stopClientMessageMonitorPolling();
+      }
+    }, CLIENT_MESSAGE_MONITOR_POLLING_MS);
+  }
+
+  private stopClientMessageMonitorPolling(): void {
+    if (this.monitorTimerId == null) {
+      return;
+    }
+    window.clearInterval(this.monitorTimerId);
+    this.monitorTimerId = null;
+  }
+
+  private canPollClientMessageMonitor(): boolean {
+    return this.activeTab() === 'autoresponderMonitor'
+      && !!this.clientMessageSettings()?.monitorEnabled
+      && (typeof document === 'undefined' || document.visibilityState === 'visible');
+  }
+
   private sharedChatSyncSummary(response: AdminSharedChatLinkSyncResponse): string {
     const parts = [
       `компаний обновлено: ${response.updatedCompanies}`,
@@ -1892,6 +2478,53 @@ export class AdminDictionariesComponent {
       whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
       whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
       clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
+    });
+  }
+
+  resetAutoresponderForm(): void {
+    const settings = this.clientMessageSettings();
+    this.autoresponderForm.reset({
+      workerEnabled: settings?.workerEnabled ?? true,
+      liveEnabled: settings?.liveEnabled ?? true,
+      monitorEnabled: settings?.monitorEnabled ?? false,
+      reviewCheckEnabled: settings?.reviewCheckEnabled ?? true,
+      paymentReminderEnabled: settings?.paymentReminderEnabled ?? true,
+      badReviewInvoiceEnabled: settings?.badReviewInvoiceEnabled ?? true,
+      paymentOverdueEnabled: settings?.paymentOverdueEnabled ?? true,
+      paymentOverdueLiveEnabled: settings?.paymentOverdueLiveEnabled ?? false,
+      archiveReorderEnabled: settings?.archiveReorderEnabled ?? true,
+      errorProtectionEnabled: settings?.errorProtectionEnabled ?? true,
+      reviewCheckIntervalDays: settings?.reviewCheckIntervalDays ?? 2,
+      paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
+      paymentOverdueDays: settings?.paymentOverdueDays ?? 30,
+      archiveReorderMonths: settings?.archiveReorderMonths ?? 3,
+      errorProtectionThreshold: settings?.errorProtectionThreshold ?? 20,
+      errorProtectionWindowMinutes: settings?.errorProtectionWindowMinutes ?? 10,
+      errorProtectionCooldownMinutes: settings?.errorProtectionCooldownMinutes ?? 60,
+      retentionDays: settings?.retentionDays ?? 90,
+      tickBatchSize: settings?.tickBatchSize ?? 5,
+      candidateLimit: settings?.candidateLimit ?? 200,
+      dailyLimit: settings?.dailyLimit ?? 140,
+      defaultGapSeconds: settings?.defaultGapSeconds ?? 180,
+      whatsAppGapSeconds: settings?.whatsAppGapSeconds ?? 180,
+      telegramGapSeconds: settings?.telegramGapSeconds ?? 90,
+      maxGapSeconds: settings?.maxGapSeconds ?? 90,
+      businessWindows: settings?.businessWindows ?? '10:00-12:00,14:00-17:00,19:00-21:00',
+      reviewCheckStatuses: settings?.reviewCheckStatuses ?? 'На проверке',
+      paymentReminderStatuses: settings?.paymentReminderStatuses ?? 'Выставлен счет,Напоминание',
+      paymentOverdueStatuses: settings?.paymentOverdueStatuses ?? 'Выставлен счет,Напоминание',
+      closedOrderStatuses: settings?.closedOrderStatuses ?? 'Оплачено,Архив,Бан,Не оплачено',
+      paymentOverdueTargetStatus: settings?.paymentOverdueTargetStatus ?? 'Не оплачено',
+      archiveCompanyStatus: settings?.archiveCompanyStatus ?? 'На стопе',
+      archiveInactiveOrderStatuses: settings?.archiveInactiveOrderStatuses ?? 'Оплачено,Архив,Бан',
+      openNextOrderRequestStatuses: settings?.openNextOrderRequestStatuses ?? 'PENDING,FAILED',
+      reviewLinkBaseUrl: settings?.reviewLinkBaseUrl ?? 'https://o-ogo.ru',
+      reviewReminderText: settings?.reviewReminderText
+        ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
+      paymentInstructionSource: settings?.paymentInstructionSource ?? 'MANAGER_TEXT',
+      paymentReminderText: settings?.paymentReminderText ?? '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
+      archiveOfferText: settings?.archiveOfferText
+        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
     });
   }
 
@@ -1941,7 +2574,9 @@ export class AdminDictionariesComponent {
       'accounts',
       'promo',
       'managerTexts',
-      'settings'
+      'settings',
+      'autoresponder',
+      'autoresponderMonitor'
     ].includes(String(value));
   }
 

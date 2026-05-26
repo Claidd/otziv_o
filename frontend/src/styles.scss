@@ -136,6 +136,127 @@ body.otziv-dark-theme select option:checked {
   box-sizing: border-box;
 }
 
+input.switch {
+  position: relative;
+  flex: 0 0 3.15rem;
+  width: 3.15rem;
+  min-width: 3.15rem;
+  height: 1.65rem;
+  margin: 0;
+  border: 1px solid rgba(103, 116, 131, 0.34);
+  border-radius: 999px;
+  appearance: none;
+  background: #aab3bd;
+  box-shadow: inset 0 0.08rem 0.16rem rgba(24, 37, 56, 0.2);
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+input.switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0.2rem;
+  width: 1.18rem;
+  height: 1.18rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0.12rem 0.32rem rgba(24, 37, 56, 0.28);
+  transform: translateY(-50%);
+  transition: left 0.18s ease;
+}
+
+input.switch:checked {
+  border-color: rgba(27, 156, 133, 0.72);
+  background: var(--otziv-success);
+  box-shadow: inset 0 0.08rem 0.16rem rgba(10, 97, 82, 0.22);
+}
+
+input.switch:checked::after {
+  left: 1.72rem;
+}
+
+input.switch:focus-visible {
+  outline: 0.18rem solid rgba(108, 155, 207, 0.36);
+  outline-offset: 0.14rem;
+}
+
+input.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+app-admin-dictionaries .monitor-metric-card {
+  min-height: 4.5rem;
+  padding: 0.75rem;
+}
+
+app-admin-dictionaries .monitor-scenario-card,
+app-admin-dictionaries .monitor-table-card {
+  gap: 0.65rem;
+  padding: 0.82rem;
+}
+
+app-admin-dictionaries .monitor-metric-card small,
+app-admin-dictionaries .monitor-metric-card strong {
+  display: block;
+  line-height: 1.45;
+}
+
+app-admin-dictionaries .monitor-metric-card small {
+  font-size: 0.76rem;
+}
+
+app-admin-dictionaries .monitor-metric-card strong {
+  margin-top: 0.12rem;
+  font-size: 1.1rem;
+}
+
+app-admin-dictionaries .monitor-scenario-title[data-tooltip] {
+  position: relative;
+  width: fit-content;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+app-admin-dictionaries .monitor-scenario-title[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 60;
+  width: max-content;
+  max-width: min(26rem, 76vw);
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.65rem;
+  color: #fff;
+  background: rgba(28, 41, 57, 0.96);
+  font-size: calc(0.78rem + 4px);
+  font-weight: 800;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  white-space: normal;
+  visibility: hidden;
+}
+
+app-admin-dictionaries .monitor-scenario-title[data-tooltip]:is(:hover, .tooltip-open)::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+app-admin-dictionaries .monitor-table-scroll th,
+app-admin-dictionaries .monitor-table-scroll td {
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+app-admin-dictionaries .monitor-table-scroll td span {
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .material-icons-sharp {
   font-family: 'Material Icons Sharp';
   font-weight: normal;
@@ -3228,5 +3349,368 @@ app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-a
   color: #c44d72;
   background: #ffe6ef;
   box-shadow: none;
+}
+
+app-admin-dictionaries {
+  .autoresponder-monitor {
+    gap: 0.9rem;
+  }
+
+  .monitor-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.85rem;
+    align-items: center;
+  }
+
+  .monitor-status-row,
+  .monitor-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .monitor-status-row {
+    gap: 0.5rem;
+  }
+
+  .monitor-row-actions {
+    gap: 0.28rem;
+  }
+
+  .monitor-actions {
+    align-self: center;
+    justify-self: end;
+    flex-wrap: nowrap;
+    margin-top: 0;
+  }
+
+  .monitor-toggle {
+    flex: 0 0 auto;
+    min-width: 11.6rem;
+    justify-content: flex-start;
+    white-space: nowrap;
+  }
+
+  .monitor-actions .dictionary-action {
+    flex: 0 0 auto;
+    min-width: 5.8rem;
+  }
+
+  .monitor-updated {
+    color: var(--otziv-info);
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .status-pill.danger {
+    color: var(--otziv-danger);
+    background: rgba(255, 0, 96, 0.09);
+  }
+
+  .monitor-metric-grid,
+  .monitor-scenario-grid,
+  .monitor-table-card,
+  .archive-diagnostics-grid,
+  .monitor-scenario-card,
+  .monitor-scenario-stats {
+    display: grid;
+  }
+
+  .monitor-metric-grid,
+  .monitor-scenario-grid {
+    gap: 0.65rem;
+  }
+
+  .monitor-metric-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  }
+
+  .monitor-scenario-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14.5rem), 1fr));
+  }
+
+  .monitor-metric-card {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    min-width: 0;
+    min-height: 4.25rem;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid rgba(103, 116, 131, 0.13);
+    border-radius: 0.7rem;
+    padding: 0.65rem;
+    color: var(--otziv-primary);
+    background: var(--otziv-field-background);
+  }
+
+  .monitor-metric-card.green {
+    color: var(--otziv-success);
+  }
+
+  .monitor-metric-card.teal {
+    color: #2f9f95;
+  }
+
+  .monitor-metric-card.yellow {
+    color: var(--otziv-warning);
+  }
+
+  .monitor-metric-card.pink,
+  .monitor-scenario-stat.failed b,
+  .monitor-scenario-error,
+  .monitor-error {
+    color: var(--otziv-danger);
+  }
+
+  .monitor-metric-card small {
+    color: var(--otziv-info);
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1.28;
+  }
+
+  .monitor-table-card {
+    min-width: 0;
+    gap: 0.5rem;
+    border: 1px solid rgba(103, 116, 131, 0.12);
+    border-radius: 0.7rem;
+    padding: 0.72rem;
+    background: var(--otziv-muted-surface);
+  }
+
+  .archive-diagnostics-card {
+    background: var(--otziv-field-background);
+  }
+
+  .archive-diagnostics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: 0.45rem;
+  }
+
+  .archive-diagnostics-grid span,
+  .monitor-preview-grid span,
+  .monitor-preview-grid p {
+    min-width: 0;
+    border: 1px solid rgba(103, 116, 131, 0.12);
+    color: var(--otziv-dark);
+    background: var(--otziv-white);
+    overflow-wrap: anywhere;
+  }
+
+  .archive-diagnostics-grid span {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.45rem;
+    border-radius: 0.55rem;
+    padding: 0.5rem 0.6rem;
+    color: var(--otziv-info);
+    font-size: 0.8rem;
+    font-weight: 850;
+    line-height: 1.25;
+  }
+
+  .archive-diagnostics-grid b {
+    color: var(--otziv-success);
+    font-size: 1.05rem;
+    font-weight: 950;
+    text-align: right;
+  }
+
+  .monitor-scenario-card {
+    grid-template-columns: 1fr;
+    align-content: start;
+    align-items: stretch;
+    gap: 0.72rem;
+    min-height: 12rem;
+  }
+
+  .monitor-scenario-header,
+  .monitor-table-head {
+    display: flex;
+    align-items: center;
+  }
+
+  .monitor-scenario-header {
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .monitor-scenario-header .material-icons-sharp {
+    flex: 0 0 auto;
+    color: currentColor;
+    font-size: 1.25rem;
+    font-weight: normal;
+  }
+
+  .monitor-scenario-card strong {
+    color: var(--otziv-dark);
+    font-size: calc(0.86rem + 4px);
+    line-height: 1.25;
+  }
+
+  .monitor-scenario-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .monitor-scenario-stats {
+    gap: 0.28rem;
+  }
+
+  .monitor-scenario-stat,
+  .monitor-scenario-error {
+    display: grid;
+    grid-template-columns: 2.85rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .monitor-scenario-stat b,
+  .monitor-scenario-error b {
+    font-weight: 950;
+    text-align: right;
+  }
+
+  .monitor-scenario-stat b {
+    color: currentColor;
+    font-size: calc(0.96rem + 4px);
+    line-height: 1.1;
+  }
+
+  .monitor-scenario-stat span,
+  .monitor-scenario-error span {
+    color: var(--otziv-info);
+    font-size: calc(0.74rem + 4px);
+    font-weight: 850;
+    line-height: 1.25;
+  }
+
+  .monitor-scenario-stat.primary b {
+    font-size: calc(1.08rem + 4px);
+  }
+
+  .monitor-scenario-error span {
+    overflow-wrap: anywhere;
+    color: currentColor;
+    font-size: calc(0.72rem + 4px);
+  }
+
+  .monitor-error {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .monitor-table-head {
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .monitor-table-head > span {
+    display: inline-grid;
+    min-width: 2rem;
+    min-height: 1.55rem;
+    place-items: center;
+    border-radius: 999px;
+    padding: 0 0.45rem;
+    color: var(--otziv-success);
+    background: rgba(27, 156, 133, 0.13);
+    font-size: 0.7rem;
+    font-weight: 900;
+  }
+
+  .monitor-table-head > .monitor-table-count {
+    min-width: max-content;
+    padding: 0 0.7rem;
+    white-space: nowrap;
+  }
+
+  .monitor-filter-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(8rem, 12rem)) minmax(14rem, 1fr);
+    gap: 0.55rem;
+    align-items: end;
+  }
+
+  .monitor-filter-row label {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .monitor-filter-row span {
+    color: var(--otziv-info);
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .monitor-filter-row select,
+  .monitor-filter-row input {
+    min-height: 2rem;
+    border: 1px solid rgba(103, 116, 131, 0.22);
+    border-radius: 0.45rem;
+    padding: 0 0.55rem;
+    color: var(--otziv-dark);
+    background: var(--otziv-white);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+
+  .monitor-filter-row .wide {
+    min-width: 0;
+  }
+
+  .monitor-table-scroll {
+    max-height: 34rem;
+  }
+
+  .monitor-table-scroll table {
+    min-width: 64rem;
+  }
+
+  .monitor-table-scroll a {
+    color: var(--otziv-primary);
+    font-weight: 900;
+  }
+
+  .monitor-details-button,
+  .monitor-row-actions .monitor-details-button {
+    margin-top: 0.35rem;
+  }
+
+  .monitor-detail-row td {
+    background: rgba(108, 155, 207, 0.05);
+  }
+
+  .monitor-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .monitor-preview-grid span,
+  .monitor-preview-grid p {
+    border-radius: 0.55rem;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 850;
+    line-height: 1.35;
+  }
+
+  .monitor-preview-grid b {
+    display: block;
+    margin-bottom: 0.18rem;
+    color: var(--otziv-info);
+    font-size: 0.68rem;
+    font-weight: 900;
+  }
+
+  .monitor-preview-grid p {
+    grid-column: 1 / -1;
+    margin: 0;
+    white-space: pre-wrap;
+  }
 }
 

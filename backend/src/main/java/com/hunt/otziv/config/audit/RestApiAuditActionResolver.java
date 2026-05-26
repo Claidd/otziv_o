@@ -221,6 +221,7 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/cabinet/score", "загрузка рейтинга");
         put(actions, "GET", "/api/cabinet/analyse", "загрузка аналитики");
         put(actions, "POST", "/api/metric-snapshots/seen", "отметка счетчика \"{section}\" на странице \"{page}\" как просмотренного, значение {value}");
+        put(actions, "POST", "/api/mobile/push-token", "регистрация push-токена мобильного приложения ({platform})");
         put(actions, "GET", "/api/personal-reminders", "загрузка личных заметок и напоминаний");
         put(actions, "POST", "/api/personal-reminders", "создание личной заметки или напоминания \"{title}\"");
         put(actions, "PUT", "/api/personal-reminders/{reminderId}", "редактирование личной заметки или напоминания {reminderId}");
@@ -281,6 +282,13 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/admin/settings/whatsapp-group-sync/run", "ручной запуск синхронизации WhatsApp-групп");
         put(actions, "GET", "/api/admin/settings/client-publication-progress-reports", "загрузка настройки клиентских отчетов о публикациях");
         put(actions, "PUT", "/api/admin/settings/client-publication-progress-reports", "редактирование настройки клиентских отчетов о публикациях");
+        put(actions, "GET", "/api/admin/settings/client-messages", "загрузка настроек автоответчика");
+        put(actions, "PUT", "/api/admin/settings/client-messages", "редактирование настроек автоответчика");
+        put(actions, "GET", "/api/admin/client-messages/monitor", "загрузка мониторинга автоответчика");
+        put(actions, "PUT", "/api/admin/client-messages/monitor", "переключение мониторинга автоответчика");
+        put(actions, "POST", "/api/admin/client-messages/monitor/{stateId}/retry-now", "ручной повтор кандидата автоответчика {stateId}");
+        put(actions, "POST", "/api/admin/client-messages/monitor/{stateId}/disable", "ручное отключение кандидата автоответчика {stateId}");
+        put(actions, "POST", "/api/admin/client-messages/monitor/{stateId}/done", "ручное завершение кандидата автоответчика {stateId}");
         put(actions, "POST", "/api/admin/analytics/aggregates/rebuild-month", "пересчет аналитики за месяц {month}");
         put(actions, "GET", "/api/admin/analytics/aggregates/source-range", "проверка доступного периода данных для аналитики");
         put(actions, "GET", "/api/admin/analytics/aggregates/compare-admin-month", "сверка аналитики за месяц {month}");

@@ -20,8 +20,20 @@ import {
   Page
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { MOBILE_ACTIONS, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  mobilePageIndex,
+  mobilePageIsFirst,
+  mobilePageIsLast,
+  mobilePageLabel,
+  mobilePageTotal,
+  mobileToneFromClass
+} from '../shared/mobile-board.helpers';
 import { displayPhone, normalizePhoneDigits } from '../shared/phone-format';
 
 type ArchiveModeTab = {
@@ -63,7 +75,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
 
 @Component({
   selector: 'app-manager-archive',
-  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Архив" />
@@ -76,48 +88,35 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
         <app-mobile-reminders #reminders />
 
         <main class="archive-mobile-page">
-          <section class="archive-mode-scroll" aria-label="Разделы архива">
-            @for (tab of modeTabs; track tab.key) {
-              <button
-                type="button"
-                class="metric-tile {{ tab.tone }}"
-                [class.active]="mode() === tab.key"
-                (click)="setMode(tab.key)"
-              >
-                <span class="material-icons-sharp">{{ tab.icon }}</span>
-                <strong>{{ modeValue(tab) }}</strong>
-                <small>{{ tab.short }}</small>
-              </button>
-            }
-          </section>
+          <app-mobile-status-slider
+            [items]="modeItems()"
+            [activeKey]="mode()"
+            ariaLabel="Разделы архива"
+            (select)="selectModeItem($event)"
+          />
 
-          <form class="archive-search-strip" (ngSubmit)="applySearch()" role="search" aria-label="Поиск архива">
-            <label>
-              <span class="material-icons-sharp">search</span>
-              <input
-                name="archiveKeyword"
-                type="search"
-                autocomplete="off"
-                placeholder="Компания, телефон, заказ"
-                [ngModel]="keyword()"
-                (ngModelChange)="setKeyword($event)"
-              >
-            </label>
-
+          <app-mobile-search-bar
+            [value]="keyword()"
+            placeholder="Компания, телефон, заказ"
+            [showRefresh]="false"
+            [hasExtraAction]="true"
+            (valueChange)="setKeyword($event)"
+            (searchSubmit)="applySearch()"
+          >
             @if (keyword() || appliedKeyword()) {
-              <button class="icon-button" type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
+              <button mobileSearchActions type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
                 <span class="material-icons-sharp">close</span>
               </button>
             }
 
-            <button class="icon-button" type="submit" [disabled]="loading()" aria-label="Найти">
+            <button mobileSearchActions type="button" (click)="applySearch()" [disabled]="loading()" aria-label="Найти">
               <span class="material-icons-sharp">manage_search</span>
             </button>
 
-            <button class="icon-button" type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить архив">
+            <button mobileSearchActions type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить архив">
               <span class="material-icons-sharp">refresh</span>
             </button>
-          </form>
+          </app-mobile-search-bar>
 
           @if (error()) {
             <button class="inline-alert" type="button" (click)="reload()">
@@ -233,14 +232,22 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
             }
           </section>
 
-          <section class="lead-bottom-controls archive-bottom-controls" aria-label="Пагинация">
-            <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+          <app-mobile-bottom-pager
+            class="mobile-page-bottom-pager"
+            [pageIndex]="currentPageIndex() - 1"
+            [totalPages]="currentPageTotal()"
+            [disabled]="loading()"
+            (previous)="previousPage()"
+            (next)="nextPage()"
+          >
+            <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
               <span class="material-icons-sharp">notifications_active</span>
               @if (reminders.activeReminderCount()) {
                 <small>{{ reminders.activeReminderCount() }}</small>
               }
             </button>
             <button
+              mobilePagerActions
               class="expand-list-button"
               type="button"
               [class.active]="sortDirection() === 'asc'"
@@ -249,16 +256,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
             >
               <span class="material-icons-sharp">swap_vert</span>
             </button>
-            <div class="lead-pager">
-              <button type="button" (click)="previousPage()" [disabled]="isFirstPage() || loading()" aria-label="Предыдущая страница">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-              <span>{{ pageLabel() }}</span>
-              <button type="button" (click)="nextPage()" [disabled]="isLastPage() || loading()" aria-label="Следующая страница">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </div>
-          </section>
+          </app-mobile-bottom-pager>
         </main>
 
         @if (detailsOrder(); as order) {
@@ -1003,6 +1001,15 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   readonly liveStatusMutationKey = signal<string | null>(null);
 
   readonly orders = computed(() => this.page().content ?? []);
+  readonly modeItems = computed<MobileStatusItem[]>(() =>
+    this.modeTabs.map((tab) => ({
+      key: tab.key,
+      title: tab.short,
+      value: this.modeValue(tab),
+      icon: tab.icon,
+      tone: this.sliderTone(tab.tone)
+    }))
+  );
 
   constructor(
     private readonly api: ApiService,
@@ -1037,6 +1044,10 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     this.mode.set(mode);
     this.pageNumber.set(0);
     void this.load().finally(() => this.resetListScroll());
+  }
+
+  selectModeItem(mode: string): void {
+    this.setMode(mode as ArchiveOrderMode);
   }
 
   setKeyword(value: string): void {
@@ -1096,23 +1107,23 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   }
 
   pageLabel(): string {
-    return `${this.currentPageIndex()} / ${this.currentPageTotal()}`;
+    return mobilePageLabel(this.page(), this.pageNumber());
   }
 
   currentPageIndex(): number {
-    return (this.page().number ?? this.page().pageNumber ?? this.pageNumber()) + 1;
+    return mobilePageIndex(this.page(), this.pageNumber());
   }
 
   currentPageTotal(): number {
-    return this.page().totalPages || 1;
+    return mobilePageTotal(this.page());
   }
 
   isFirstPage(): boolean {
-    return this.page().first ?? this.pageNumber() <= 0;
+    return mobilePageIsFirst(this.page(), this.pageNumber());
   }
 
   isLastPage(): boolean {
-    return this.page().last ?? this.currentPageIndex() >= this.currentPageTotal();
+    return mobilePageIsLast(this.page(), this.pageNumber());
   }
 
   modeValue(tab: ArchiveModeTab): string | number {
@@ -1121,6 +1132,10 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     }
 
     return tab.key === 'all' ? 'Все' : tab.key === 'archive' ? 'Арх' : '₽';
+  }
+
+  sliderTone(toneClass: string): MobileStatusItem['tone'] {
+    return mobileToneFromClass(toneClass);
   }
 
   openOrder(order: ArchiveOrderListItem): void {
@@ -1371,7 +1386,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   }
 
   canSeeArchiveFinance(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.archive, MOBILE_ACTIONS.manage);
   }
 
   trackPayment(payment: ArchivePaymentCheckItem): number {
@@ -1413,7 +1428,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   }
 
   private canManagePaidRestore(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.archive, MOBILE_ACTIONS.manage);
   }
 
   private async copyText(text: string, key: string, fallbackError: string): Promise<void> {

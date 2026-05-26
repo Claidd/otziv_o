@@ -20,7 +20,7 @@ import { AuthService } from '../core/auth.service';
             </div>
           } @else {
             <ion-spinner name="crescent" />
-            <h1>Входим в Otziv</h1>
+            <h1>Входим в Компания О!</h1>
           }
         </div>
       </ion-content>

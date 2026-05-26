@@ -1,6 +1,6 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
 import { IonContent, IonModal } from '@ionic/angular/standalone';
 import { firstValueFrom, Subscription } from 'rxjs';
 import {
@@ -23,8 +23,18 @@ import {
   type CabinetLineChart,
   type YearlyLineChartOptions
 } from '../shared/cabinet-chart.helpers';
+import {
+  MOBILE_ACTIONS,
+  MOBILE_ROLE_LABELS,
+  MOBILE_ROLES,
+  MOBILE_SECTIONS,
+  canUseAction,
+  type MobileRoleSet
+} from '../core/mobile-permissions';
 import { MobileDictionariesComponent } from '../shared/mobile-dictionaries.component';
+import { MobileActionSheetComponent } from '../shared/mobile-action-sheet.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 
 type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries';
 type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
@@ -37,7 +47,7 @@ type HomeSectionLink = {
   subtitle: string;
   icon: string;
   tone: HomeTone;
-  roles: string[];
+  roles: MobileRoleSet;
 };
 
 type Row = {
@@ -48,10 +58,10 @@ type Row = {
 
 const HOME_SECTIONS: HomeSectionLink[] = [
   { key: 'profile', title: 'Личный кабинет', subtitle: 'профиль и показатели', icon: 'dashboard', tone: 'blue', roles: [] },
-  { key: 'analytics', title: 'Аналитика', subtitle: 'оборот, ЗП и графики', icon: 'analytics', tone: 'violet', roles: ['ADMIN', 'OWNER'] },
-  { key: 'team', title: 'Моя команда', subtitle: 'сотрудники и показатели', icon: 'badge', tone: 'green', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-  { key: 'score', title: 'Рейтинг', subtitle: 'рабочие счетчики', icon: 'leaderboard', tone: 'teal', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'] },
-  { key: 'dictionaries', title: 'Справочники', subtitle: 'настройки данных', icon: 'tune', tone: 'yellow', roles: ['ADMIN', 'OWNER', 'MANAGER'] }
+  { key: 'analytics', title: 'Аналитика', subtitle: 'оборот, ЗП и графики', icon: 'analytics', tone: 'violet', roles: MOBILE_ROLES.ownerAdmin },
+  { key: 'team', title: 'Моя команда', subtitle: 'сотрудники и показатели', icon: 'badge', tone: 'green', roles: MOBILE_ROLES.manager },
+  { key: 'score', title: 'Рейтинг', subtitle: 'рабочие счетчики', icon: 'leaderboard', tone: 'teal', roles: MOBILE_ROLES.score },
+  { key: 'dictionaries', title: 'Справочники', subtitle: 'настройки данных', icon: 'tune', tone: 'yellow', roles: MOBILE_ROLES.manager }
 ];
 
 const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
@@ -63,27 +73,19 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
 
 @Component({
   selector: 'app-home',
-  imports: [FormsModule, IonContent, IonModal, MobileDictionariesComponent, MobileHeaderComponent, RouterLink],
+  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
   template: `
     <div class="ion-page">
       <app-mobile-header [title]="sectionTitle()" />
 
       <ion-content class="home-content" fullscreen [scrollY]="false">
         <main class="analytics-home">
-          <section class="home-section-scroll" aria-label="Разделы главной">
-            @for (link of navLinks(); track link.key) {
-              <button
-                type="button"
-                class="metric-tile tone-{{ link.tone }}"
-                [class.active]="activeSection() === link.key"
-                (click)="selectSection(link.key)"
-              >
-                <span class="material-icons-sharp">{{ link.icon }}</span>
-                <strong>{{ navMetric(link.key) }}</strong>
-                <small>{{ link.title.toLowerCase() }}</small>
-              </button>
-            }
-          </section>
+          <app-mobile-status-slider
+            [items]="navStatusItems()"
+            [activeKey]="activeSection()"
+            ariaLabel="Разделы главной"
+            (select)="selectNavStatusItem($event)"
+          />
 
           @if (activeSection() !== 'dictionaries') {
             <section class="home-toolbar" aria-label="Управление разделом">
@@ -461,20 +463,10 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
         </main>
       </ion-content>
 
-      <ion-modal class="sheet-modal home-section-sheet" [isOpen]="sectionSheetOpen()" (didDismiss)="closeSectionSheet()">
+      <ion-modal #sectionModal class="sheet-modal home-section-sheet" [isOpen]="sectionSheetOpen()" (didDismiss)="onSectionSheetDismissed()">
         <ng-template>
           <ion-content>
-            <section class="sheet-body">
-              <header class="sheet-head">
-                <div>
-                  <p class="eyebrow">Главная</p>
-                  <h2>Выберите раздел</h2>
-                </div>
-                <button class="icon-button" type="button" (click)="closeSectionSheet()" aria-label="Закрыть">
-                  <span class="material-icons-sharp">close</span>
-                </button>
-              </header>
-
+            <app-mobile-action-sheet kicker="Главная" title="Выберите раздел" (close)="closeSectionSheet()">
               <div class="section-choice-list">
                 @for (link of navLinks(); track link.key) {
                   <button type="button" [class.active]="activeSection() === link.key" (click)="selectSection(link.key)">
@@ -494,8 +486,17 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
                       </div>
                     </button>
                   }
+                  @if (canSeeAdminUsers()) {
+                    <button type="button" (click)="openAdminUsersSection()">
+                      <span class="material-icons-sharp">admin_panel_settings</span>
+                      <div>
+                        <strong>Пользователи</strong>
+                        <small>доступы и назначения</small>
+                      </div>
+                    </button>
+                  }
                 </div>
-              </section>
+              </app-mobile-action-sheet>
             </ion-content>
         </ng-template>
       </ion-modal>
@@ -1271,8 +1272,11 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
   `]
 })
 export class HomePage implements OnInit, OnDestroy {
+  @ViewChild('sectionModal') private sectionModal?: IonModal;
+
   private routeSubscription?: Subscription;
   private querySubscription?: Subscription;
+  private routerEventsSubscription?: Subscription;
   private lastMobileNavKey = '';
 
   readonly activeSection = signal<HomeSectionKey>('profile');
@@ -1320,15 +1324,33 @@ export class HomePage implements OnInit, OnDestroy {
       this.lastMobileNavKey = key;
       this.applyMobileNavIntent(params);
     });
+
+    this.routerEventsSubscription = this.router.events.subscribe((event) => {
+      if (event instanceof NavigationStart) {
+        this.closeSectionSheet();
+      }
+    });
   }
 
   ngOnDestroy(): void {
+    this.closeSectionSheet();
     this.routeSubscription?.unsubscribe();
     this.querySubscription?.unsubscribe();
+    this.routerEventsSubscription?.unsubscribe();
   }
 
   navLinks(): HomeSectionLink[] {
     return HOME_SECTIONS.filter((link) => this.canSee(link));
+  }
+
+  navStatusItems(): MobileStatusItem[] {
+    return this.navLinks().map((link) => ({
+      key: link.key,
+      title: link.title.toLowerCase(),
+      value: this.navMetric(link.key),
+      icon: link.icon,
+      tone: link.tone
+    }));
   }
 
   sectionTitle(): string {
@@ -1361,9 +1383,19 @@ export class HomePage implements OnInit, OnDestroy {
     this.closeSectionSheet();
   }
 
+  selectNavStatusItem(section: string): void {
+    void this.selectSection(section as HomeSectionKey);
+  }
+
   async openTbankSection(): Promise<void> {
     this.closeSectionSheet();
     await this.router.navigateByUrl('/tabs/tbank');
+    this.closeSectionSheet();
+  }
+
+  async openAdminUsersSection(): Promise<void> {
+    this.closeSectionSheet();
+    await this.router.navigateByUrl('/tabs/users');
     this.closeSectionSheet();
   }
 
@@ -1372,6 +1404,11 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   closeSectionSheet(): void {
+    this.sectionSheetOpen.set(false);
+    void this.sectionModal?.dismiss(undefined, 'close').catch(() => undefined);
+  }
+
+  onSectionSheetDismissed(): void {
     this.sectionSheetOpen.set(false);
   }
 
@@ -1462,21 +1499,12 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   primaryRoleLabel(): string {
-    const role = this.auth.user()?.roles.find((value) => ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG', 'CLIENT'].includes(value));
+    const role = this.auth.user()?.roles.find((value) => MOBILE_ROLE_LABELS[value]);
     return role ? this.roleLabel(role) : 'Пользователь';
   }
 
   roleLabel(role: string): string {
-    const labels: Record<string, string> = {
-      ADMIN: 'Админ',
-      OWNER: 'Владелец',
-      MANAGER: 'Менеджер',
-      WORKER: 'Специалист',
-      OPERATOR: 'Оператор',
-      MARKETOLOG: 'Маркетолог',
-      CLIENT: 'Клиент'
-    };
-    return labels[role] ?? role;
+    return MOBILE_ROLE_LABELS[role] ?? role;
   }
 
   profileRows(): Row[] {
@@ -1702,7 +1730,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   private defaultSection(): HomeSectionKey {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']) ? 'analytics' : 'profile';
+    return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin) ? 'analytics' : 'profile';
   }
 
   private currentLink(): HomeSectionLink {
@@ -1719,11 +1747,15 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   canManageAllDictionaries(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.dictionaries, MOBILE_ACTIONS.manage);
   }
 
   canSeeTbank(): boolean {
-    return this.auth.hasRealmRole('ADMIN');
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view);
+  }
+
+  canSeeAdminUsers(): boolean {
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view);
   }
 
   private isHomeSection(value: unknown): value is HomeSectionKey {
@@ -1755,12 +1787,14 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   private chartPeriodOptions(): YearlyLineChartOptions {
+    const anchorYear = new Date(this.selectedDate()).getFullYear();
     if (this.analyticsMode() === 'allTime') {
-      return { allTime: true };
+      return { allTime: true, anchorYear };
     }
 
     const period = this.analytics()?.period;
     return {
+      anchorYear,
       from: period?.from ?? this.periodFrom(),
       to: period?.to ?? this.periodTo()
     };

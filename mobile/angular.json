@@ -73,8 +73,29 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "12kB",
-                  "maximumError": "18kB"
+                  "maximumWarning": "20kB",
+                  "maximumError": "28kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "production-push": {
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/mobile-build-target.ts",
+                  "with": "src/app/core/mobile-build-target.prod.push.ts"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "900kB",
+                  "maximumError": "1.5MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "20kB",
+                  "maximumError": "28kB"
                 }
               ],
               "outputHashing": "all"
@@ -83,6 +104,17 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "development-push": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/mobile-build-target.ts",
+                  "with": "src/app/core/mobile-build-target.push.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

@@ -16,6 +16,7 @@ import {
   ReviewCheckReview,
   ReviewCheckUpdateRequest
 } from '../core/api.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 
@@ -29,7 +30,7 @@ type ReviewDraft = {
 
 @Component({
   selector: 'app-review-check-mobile',
-  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Проверка отзывов" />
@@ -138,7 +139,7 @@ type ReviewDraft = {
                         (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
                         placeholder="Текст отзыва"
                       ></textarea>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="cancelReviewFieldEdit(review, 'text')" [disabled]="isMutating(fieldMutationKey(review, 'text'))">Отмена</button>
                         <button type="button" class="save" (click)="saveReviewField(review, 'text')" [disabled]="!canSaveReviewField(review, 'text')">
                           {{ isMutating(fieldMutationKey(review, 'text')) ? '...' : 'Сохранить' }}
@@ -169,7 +170,7 @@ type ReviewDraft = {
                         (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
                         placeholder="Ответ на отзыв или замечание"
                       ></textarea>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="cancelReviewFieldEdit(review, 'answer')" [disabled]="isMutating(fieldMutationKey(review, 'answer'))">Отмена</button>
                         <button type="button" class="save" (click)="saveReviewField(review, 'answer')" [disabled]="!canSaveReviewField(review, 'answer')">
                           {{ isMutating(fieldMutationKey(review, 'answer')) ? '...' : 'Сохранить' }}
@@ -220,7 +221,7 @@ type ReviewDraft = {
                           placeholder="Заметка компании"
                         ></textarea>
                       </label>
-                      <div class="field-actions">
+                      <div class="field-actions mobile-keyboard-actions">
                         <button type="button" (click)="toggleReviewNotes(review)" [disabled]="isMutating(notesMutationKey(review))">Закрыть</button>
                         <button type="button" class="save" (click)="saveReviewNotes(review)" [disabled]="!canEditNotes(details) || !hasChangedNotes(details, review) || isMutating(notesMutationKey(review))">
                           {{ isMutating(notesMutationKey(review)) ? '...' : 'Сохранить' }}
@@ -304,14 +305,22 @@ type ReviewDraft = {
               }
             </section>
 
-            <section class="lead-bottom-controls review-check-bottom-controls" aria-label="Навигация по отзывам">
-              <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+            <app-mobile-bottom-pager
+              class="mobile-page-bottom-pager"
+              [pageIndex]="activeReviewIndex()"
+              [totalPages]="reviewCardCount(details)"
+              [disabled]="busy() || loading()"
+              (previous)="previousReview()"
+              (next)="nextReview()"
+            >
+              <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
                 <span class="material-icons-sharp">notifications_active</span>
                 @if (reminders.activeReminderCount()) {
                   <small>{{ reminders.activeReminderCount() }}</small>
                 }
               </button>
               <button
+                mobilePagerActions
                 class="expand-list-button"
                 type="button"
                 [class.active]="listExpanded()"
@@ -320,16 +329,7 @@ type ReviewDraft = {
               >
                 <span class="material-icons-sharp">{{ listExpanded() ? 'close_fullscreen' : 'open_in_full' }}</span>
               </button>
-              <div class="lead-pager">
-                <button type="button" (click)="previousReview()" [disabled]="activeReviewIndex() === 0 || reviewCardCount(details) <= 1" aria-label="Предыдущий отзыв">
-                  <span class="material-icons-sharp">chevron_left</span>
-                </button>
-                <span>{{ reviewCardCount(details) ? activeReviewIndex() + 1 : 0 }} / {{ reviewCardCount(details) }}</span>
-                <button type="button" (click)="nextReview()" [disabled]="activeReviewIndex() >= reviewCardCount(details) - 1 || reviewCardCount(details) <= 1" aria-label="Следующий отзыв">
-                  <span class="material-icons-sharp">chevron_right</span>
-                </button>
-              </div>
-            </section>
+            </app-mobile-bottom-pager>
           }
         </main>
       </ion-content>
@@ -612,10 +612,12 @@ type ReviewDraft = {
     }
 
     .review-card-badge {
-      display: grid;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       width: 1.28rem;
       height: 1.28rem;
-      place-items: center;
+      min-width: 1.28rem;
       border: 0;
       border-radius: 999px;
       color: #4d3900;
@@ -629,6 +631,9 @@ type ReviewDraft = {
     }
 
     .review-card-badge.photo {
+      width: 1.18rem;
+      height: 1.18rem;
+      min-width: 1.18rem;
       color: white;
       background: var(--otziv-success);
     }
@@ -640,6 +645,11 @@ type ReviewDraft = {
 
     .review-card-badge .material-icons-sharp {
       font-size: 0.82rem;
+      line-height: 1;
+    }
+
+    .review-card-badge.photo .material-icons-sharp {
+      font-size: 0.76rem;
     }
 
     .review-text-editor,
@@ -657,7 +667,8 @@ type ReviewDraft = {
     }
 
     .review-text-editor.editing {
-      grid-template-rows: auto auto;
+      gap: 0.34rem;
+      grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .review-text-editor textarea,
@@ -675,17 +686,23 @@ type ReviewDraft = {
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
       font-size: 0.78rem;
-      font-weight: 800;
+      font-weight: 700;
       line-height: 1.34;
       text-align: left;
     }
 
     .review-text-editor textarea,
     .review-text-editor .review-display-field {
+      font-weight: 650;
+    }
+
+    .review-text-editor textarea,
+    .review-text-editor .review-display-field {
       display: block;
       height: 100%;
-      min-height: 10.5rem;
+      min-height: 10.15rem;
       overflow: hidden;
+      padding-bottom: 1.05rem;
       resize: none;
       white-space: pre-wrap;
     }
@@ -696,28 +713,33 @@ type ReviewDraft = {
     }
 
     .review-text-editor.editing textarea {
-      height: 10.5rem;
-      min-height: 10.5rem;
+      height: clamp(8.2rem, 23vh, 9.8rem);
+      min-height: 8.2rem;
       overflow: auto;
+      padding-bottom: 0.72rem;
     }
 
     .review-answer-editor textarea,
     .review-display-field--answer {
-      height: 3.05rem;
-      min-height: 3.05rem;
-      padding: 0.52rem 0.64rem;
+      display: -webkit-box;
+      height: 3.58rem;
+      min-height: 3.58rem;
+      padding: 0.46rem 0.6rem;
       overflow: hidden;
       resize: none;
       opacity: 0.58;
-      font-size: 0.63rem;
+      font-size: 0.6rem;
       font-weight: 800;
-      line-height: 1.22;
+      line-height: 1.2;
       text-align: center;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
     }
 
     .review-answer-editor.editing textarea {
-      height: 3rem;
-      min-height: 3rem;
+      display: block;
+      height: 3.7rem;
+      min-height: 3.7rem;
       overflow: auto;
       opacity: 1;
     }
@@ -743,8 +765,17 @@ type ReviewDraft = {
     .field-actions {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.5rem;
+      gap: 0.44rem;
       align-items: center;
+      min-height: 1.68rem;
+    }
+
+    .review-text-editor > .field-actions button,
+    .review-answer-editor > .field-actions button {
+      height: 1.68rem;
+      min-height: 1.68rem;
+      padding: 0 0.42rem;
+      font-size: 0.56rem;
     }
 
     .field-actions .save {

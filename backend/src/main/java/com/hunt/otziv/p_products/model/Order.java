@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Data
@@ -35,6 +36,8 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "order_changed")
     private LocalDate changed;
+    @Column(name = "order_status_changed_at")
+    private LocalDateTime statusChangedAt;
     @Column(name = "order_pay_day")
     private LocalDate payDay;
     @Column(name = "order_amount")
@@ -80,6 +83,33 @@ public class Order {
 
     @Column(name = "order_complete")
     private boolean complete;
+
+    public void setStatus(OrderStatus status) {
+        if (statusChanged(this.status, status)) {
+            this.statusChangedAt = LocalDateTime.now();
+        }
+        this.status = status;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        if (statusChangedAt == null) {
+            statusChangedAt = LocalDateTime.now();
+        }
+    }
+
+    private boolean statusChanged(OrderStatus current, OrderStatus next) {
+        if (current == next) {
+            return false;
+        }
+        if (current == null || next == null) {
+            return true;
+        }
+        if (current.getId() != null || next.getId() != null) {
+            return !Objects.equals(current.getId(), next.getId());
+        }
+        return !Objects.equals(current.getTitle(), next.getTitle());
+    }
 
     @Override
     public String toString() {

@@ -14,6 +14,7 @@ public record AdminPaymentLinkResponse(
         BigDecimal amount,
         long amountKopecks,
         String status,
+        String paymentMethod,
         String paymentProfileCode,
         String paymentProfileName,
         String tbankTerminalKey,
@@ -27,6 +28,7 @@ public record AdminPaymentLinkResponse(
         LocalDateTime expiresAt,
         LocalDateTime initiatedAt,
         LocalDateTime paidAt,
+        LocalDateTime sbpQrCreatedAt,
         boolean refundable
 ) {
 }

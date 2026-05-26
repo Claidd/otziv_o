@@ -19,7 +19,7 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask createTask(Long reviewId, User createdBy);
 
-    ReviewRecoveryTask updateTask(Long taskId, String recoveryText, LocalDate scheduledDate);
+    ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate);
 
     ReviewRecoveryTask completeTask(Long taskId, User completedBy);
 

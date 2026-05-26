@@ -28,6 +28,7 @@ import {
   PersonalRemindersService,
   RecoveryClientNotifiedDetail
 } from '../../shared/personal-reminders.service';
+import { reviewCheckPath } from '../../shared/order-review-copy-text';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -1995,9 +1996,9 @@ export class OrderDetailsComponent {
     return orderDetailsSendToCheckBusyLabel(this.sendToCheckTargetStatus());
   }
 
-  editAllReviewsRoute(): unknown[] {
+  editAllReviewsRoute(): string {
     const details = this.details();
-    return details?.orderDetailsId ? ['/review/editReviews', details.orderDetailsId] : ['/manager'];
+    return details?.orderDetailsId ? reviewCheckPath(details.orderDetailsId) : '/manager';
   }
 
   botLabel(review: OrderReviewItem): string {

@@ -16,6 +16,8 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
+import com.hunt.otziv.client_messages.ClientMessageSlotPlanner;
+import com.hunt.otziv.client_messages.ScheduledClientMessageService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.model.PromoText;
@@ -592,6 +594,69 @@ public class ApiAdminDictionaryController {
         );
     }
 
+    @GetMapping("/settings/client-messages")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ClientMessageSettingsResponse getClientMessageSettings() {
+        return clientMessageSettings();
+    }
+
+    @PutMapping("/settings/client-messages")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ClientMessageSettingsResponse updateClientMessageSettings(@RequestBody ClientMessageSettingsRequest request) {
+        if (request == null) {
+            throw badRequest("Настройки автоответчика не переданы");
+        }
+
+        String businessWindows = requiredSettingText(request.businessWindows(), "Укажите рабочие окна автоответчика");
+        if (!ClientMessageSlotPlanner.isValidWindowsSpec(businessWindows)) {
+            throw badRequest("Рабочие окна должны быть в формате 10:00-12:00,14:00-17:00 без пересечений");
+        }
+
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, request.workerEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, request.liveEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, request.monitorEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, request.reviewCheckEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, request.paymentReminderEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, request.badReviewInvoiceEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, request.paymentOverdueEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, request.paymentOverdueLiveEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, request.archiveReorderEnabled());
+        appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, request.errorProtectionEnabled());
+
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES, request.errorProtectionWindowMinutes(), 1, 1440, "Окно массовых ошибок");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES, request.errorProtectionCooldownMinutes(), 1, 1440, "Пауза после массовых ошибок");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS, request.retentionDays(), 1, 3650, "Хранение журнала");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE, request.tickBatchSize(), 1, 100, "Размер пачки");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT, request.candidateLimit(), 1, 5000, "Лимит кандидатов");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT, request.dailyLimit(), 1, 5000, "Дневной лимит");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_DEFAULT_GAP_SECONDS, request.defaultGapSeconds(), 30, 86400, "Общая пауза");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS, request.whatsAppGapSeconds(), 30, 86400, "Пауза WhatsApp");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS, request.telegramGapSeconds(), 30, 86400, "Пауза Telegram");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS, request.maxGapSeconds(), 30, 86400, "Пауза MAX");
+
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, requiredSettingText(request.reviewCheckStatuses(), "Укажите статусы проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, requiredSettingText(request.paymentReminderStatuses(), "Укажите статусы напоминаний об оплате"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES, requiredSettingText(request.paymentOverdueStatuses(), "Укажите статусы просрочки оплаты"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES, requiredSettingText(request.closedOrderStatuses(), "Укажите закрытые статусы заказов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_TARGET_STATUS, requiredSettingText(request.paymentOverdueTargetStatus(), "Укажите целевой статус просрочки"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS, requiredSettingText(request.archiveCompanyStatus(), "Укажите архивный статус компании"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, requiredSettingText(request.archiveInactiveOrderStatuses(), "Укажите неактивные статусы заказов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, requiredSettingText(request.openNextOrderRequestStatuses(), "Укажите открытые статусы заявок"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL, requiredSettingText(request.reviewLinkBaseUrl(), "Укажите базовую ссылку проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT, requiredSettingText(request.reviewReminderText(), "Укажите текст проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, requiredPaymentInstructionSource(request.paymentInstructionSource()));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
+
+        return clientMessageSettings();
+    }
+
     @PostMapping("/settings/shared-chat-links/sync")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public SharedChatLinkSyncResponse runSharedChatLinkSync() {
@@ -867,12 +932,172 @@ public class ApiAdminDictionaryController {
         return appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, defaultNagulLookaheadDays);
     }
 
+    private ClientMessageSettingsResponse clientMessageSettings() {
+        return new ClientMessageSettingsResponse(
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, false),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, false),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, true),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
+                        ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS,
+                        ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD,
+                        ScheduledClientMessageService.DEFAULT_ERROR_PROTECTION_THRESHOLD
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES,
+                        ScheduledClientMessageService.DEFAULT_ERROR_PROTECTION_WINDOW_MINUTES
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES,
+                        ScheduledClientMessageService.DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS,
+                        ScheduledClientMessageService.DEFAULT_RETENTION_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE,
+                        ScheduledClientMessageService.DEFAULT_TICK_BATCH_SIZE
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT,
+                        ScheduledClientMessageService.DEFAULT_CANDIDATE_LIMIT
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT,
+                        ScheduledClientMessageService.DEFAULT_DAILY_LIMIT
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_DEFAULT_GAP_SECONDS,
+                        ScheduledClientMessageService.DEFAULT_DEFAULT_GAP_SECONDS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS,
+                        ScheduledClientMessageService.DEFAULT_WHATSAPP_GAP_SECONDS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS,
+                        ScheduledClientMessageService.DEFAULT_TELEGRAM_GAP_SECONDS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS,
+                        ScheduledClientMessageService.DEFAULT_MAX_GAP_SECONDS
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                        ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_CLOSED_ORDER_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_TARGET_STATUS,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_TARGET_STATUS
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_LINK_BASE_URL
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_REMINDER_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_OFFER_TEXT
+                )
+        );
+    }
+
+    private int saveIntSetting(String key, Integer value, int min, int max, String title) {
+        if (value == null) {
+            throw badRequest(title + ": значение обязательно");
+        }
+        if (value < min || value > max) {
+            throw badRequest(title + ": допустимо от " + min + " до " + max);
+        }
+        return appSettingService.setInt(key, value);
+    }
+
     private String requiredText(String value, String message) {
         String text = safe(value).trim();
         if (text.isBlank()) {
             throw badRequest(message);
         }
         return text;
+    }
+
+    private String requiredSettingText(String value, String message) {
+        String text = requiredText(value, message);
+        if (text.length() > 500) {
+            throw badRequest(message + ": не больше 500 символов");
+        }
+        return text;
+    }
+
+    private String requiredPaymentInstructionSource(String value) {
+        String source = safe(value).trim().toUpperCase(Locale.ROOT);
+        if (source.isBlank()) {
+            return ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE;
+        }
+        if ("MANAGER_TEXT".equals(source) || "TBANK_LINK".equals(source)) {
+            return source;
+        }
+        throw badRequest("Источник оплаты должен быть MANAGER_TEXT или TBANK_LINK");
     }
 
     private String requiredTitle(String value) {
@@ -1188,5 +1413,91 @@ public class ApiAdminDictionaryController {
     }
 
     public record ClientPublicationProgressReportSettingsResponse(boolean enabled) {
+    }
+
+    public record ClientMessageSettingsRequest(
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean monitorEnabled,
+            boolean reviewCheckEnabled,
+            boolean paymentReminderEnabled,
+            boolean badReviewInvoiceEnabled,
+            boolean paymentOverdueEnabled,
+            boolean paymentOverdueLiveEnabled,
+            boolean archiveReorderEnabled,
+            boolean errorProtectionEnabled,
+            Integer reviewCheckIntervalDays,
+            Integer paymentReminderIntervalDays,
+            Integer paymentOverdueDays,
+            Integer archiveReorderMonths,
+            Integer errorProtectionThreshold,
+            Integer errorProtectionWindowMinutes,
+            Integer errorProtectionCooldownMinutes,
+            Integer retentionDays,
+            Integer tickBatchSize,
+            Integer candidateLimit,
+            Integer dailyLimit,
+            Integer defaultGapSeconds,
+            Integer whatsAppGapSeconds,
+            Integer telegramGapSeconds,
+            Integer maxGapSeconds,
+            String businessWindows,
+            String reviewCheckStatuses,
+            String paymentReminderStatuses,
+            String paymentOverdueStatuses,
+            String closedOrderStatuses,
+            String paymentOverdueTargetStatus,
+            String archiveCompanyStatus,
+            String archiveInactiveOrderStatuses,
+            String openNextOrderRequestStatuses,
+            String reviewLinkBaseUrl,
+            String reviewReminderText,
+            String paymentInstructionSource,
+            String paymentReminderText,
+            String archiveOfferText
+    ) {
+    }
+
+    public record ClientMessageSettingsResponse(
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean monitorEnabled,
+            boolean reviewCheckEnabled,
+            boolean paymentReminderEnabled,
+            boolean badReviewInvoiceEnabled,
+            boolean paymentOverdueEnabled,
+            boolean paymentOverdueLiveEnabled,
+            boolean archiveReorderEnabled,
+            boolean errorProtectionEnabled,
+            int reviewCheckIntervalDays,
+            int paymentReminderIntervalDays,
+            int paymentOverdueDays,
+            int archiveReorderMonths,
+            int errorProtectionThreshold,
+            int errorProtectionWindowMinutes,
+            int errorProtectionCooldownMinutes,
+            int retentionDays,
+            int tickBatchSize,
+            int candidateLimit,
+            int dailyLimit,
+            int defaultGapSeconds,
+            int whatsAppGapSeconds,
+            int telegramGapSeconds,
+            int maxGapSeconds,
+            String businessWindows,
+            String reviewCheckStatuses,
+            String paymentReminderStatuses,
+            String paymentOverdueStatuses,
+            String closedOrderStatuses,
+            String paymentOverdueTargetStatus,
+            String archiveCompanyStatus,
+            String archiveInactiveOrderStatuses,
+            String openNextOrderRequestStatuses,
+            String reviewLinkBaseUrl,
+            String reviewReminderText,
+            String paymentInstructionSource,
+            String paymentReminderText,
+            String archiveOfferText
+    ) {
     }
 }

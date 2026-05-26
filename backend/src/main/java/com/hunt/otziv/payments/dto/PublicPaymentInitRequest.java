@@ -6,6 +6,9 @@ import jakarta.validation.constraints.NotBlank;
 public record PublicPaymentInitRequest(
         @NotBlank
         @Email
-        String email
+        String email,
+        Boolean offerConsent,
+        Boolean privacyConsent,
+        Boolean receiptConsent
 ) {
 }

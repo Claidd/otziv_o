@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
-import { PaymentsApi, PublicPaymentLink } from '../../core/payments.api';
+import { PaymentsApi, PublicPaymentLink, TbankPaymentPageMode } from '../../core/payments.api';
 
 @Component({
   selector: 'app-pay-page',
@@ -18,12 +18,16 @@ export class PayPageComponent {
   readonly token = signal(this.route.snapshot.paramMap.get('token') ?? '');
   readonly payment = signal<PublicPaymentLink | null>(null);
   readonly loading = signal(true);
-  readonly submitting = signal(false);
+  readonly sbpSubmitting = signal(false);
+  readonly bankSubmitting = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
   readonly offerConsent = signal(false);
   readonly receiptConsent = signal(false);
+  readonly sbpQrImage = signal('');
+  readonly sbpQrPayload = signal('');
+  readonly sbpPaymentUrl = signal('');
 
   readonly title = computed(() => {
     const payment = this.payment();
@@ -31,6 +35,49 @@ export class PayPageComponent {
   });
 
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
+  readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
+  readonly showSbpPayment = computed(() => this.paymentPageMode() !== 'BANK_ONLY');
+  readonly showBankPayment = computed(() => this.paymentPageMode() !== 'SBP_ONLY');
+  readonly bankFirst = computed(() => this.paymentPageMode() === 'BANK_PRIMARY' || this.paymentPageMode() === 'BANK_ONLY');
+  readonly bankMethodChips = computed(() => {
+    const payment = this.payment();
+    const methods = ['Карта'];
+    if (payment?.tpayEnabled) {
+      methods.push('T-Pay');
+    }
+    if (payment?.sberpayEnabled) {
+      methods.push('SberPay');
+    }
+    if (payment?.mirpayEnabled) {
+      methods.push('Mir Pay');
+    }
+    return methods;
+  });
+  readonly bankPaymentTitle = computed(() => {
+    const methods = this.bankMethodChips();
+    if (methods.length === 1) {
+      return this.showSbpPayment() ? 'Карта / другой способ' : 'Карта';
+    }
+    return this.showSbpPayment() ? `${methods.join(' / ')} / другой способ` : methods.join(' / ');
+  });
+  readonly paymentBadges = computed(() => {
+    const payment = this.payment();
+    const badges = ['МИР', 'VISA', 'Mastercard'];
+    if (payment?.tpayEnabled) {
+      badges.push('T-Pay');
+    }
+    if (payment?.sberpayEnabled) {
+      badges.push('SberPay');
+    }
+    if (payment?.mirpayEnabled) {
+      badges.push('Mir Pay');
+    }
+    if (this.showSbpPayment()) {
+      badges.push('СБП');
+    }
+    badges.push('Без НДС');
+    return badges;
+  });
   readonly canSubmit = computed(() => {
     const email = this.email().trim();
     return Boolean(
@@ -39,37 +86,103 @@ export class PayPageComponent {
       email.includes('@') &&
       this.offerConsent() &&
       this.receiptConsent() &&
-      !this.submitting()
+      !this.sbpSubmitting() &&
+      !this.bankSubmitting()
     );
   });
+  readonly sbpQrImageSrc = computed(() => {
+    const image = this.sbpQrImage().trim();
+    if (!image) {
+      return '';
+    }
+    if (image.startsWith('data:') || image.startsWith('http://') || image.startsWith('https://')) {
+      return image;
+    }
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(image)}`;
+  });
+  readonly hasSbpQr = computed(() => Boolean(this.sbpQrImageSrc() || this.sbpQrPayload()));
 
   constructor() {
     this.loadPayment();
   }
 
-  submit(): void {
+  submitSbp(): void {
     if (!this.canSubmit()) {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
     }
 
-    this.submitting.set(true);
+    this.sbpSubmitting.set(true);
     this.message.set('');
     this.error.set('');
-    this.paymentsApi.initPublicPayment(this.token(), this.email().trim()).subscribe({
+    this.paymentsApi.initPublicSbpPayment(
+      this.token(),
+      this.email().trim(),
+      this.offerConsent(),
+      this.offerConsent(),
+      this.receiptConsent()
+    ).subscribe({
+      next: (response) => {
+        this.sbpQrImage.set(response.qrImage ?? '');
+        this.sbpQrPayload.set(response.qrPayload ?? '');
+        this.sbpPaymentUrl.set(response.paymentUrl ?? '');
+        if (response.qrImage || response.qrPayload) {
+          this.message.set('QR-код СБП создан. Отсканируйте его в банковском приложении.');
+          this.sbpSubmitting.set(false);
+          return;
+        }
+        if (response.paymentUrl) {
+          this.message.set('Банк не вернул QR-код. Можно открыть обычную форму оплаты.');
+          this.sbpSubmitting.set(false);
+          return;
+        }
+        this.message.set('Банк не вернул QR-код СБП. Попробуйте запасной способ оплаты.');
+        this.sbpSubmitting.set(false);
+      },
+      error: (err) => {
+        this.error.set(this.publicPaymentError(err));
+        this.sbpSubmitting.set(false);
+      }
+    });
+  }
+
+  submitBankForm(): void {
+    if (!this.canSubmit()) {
+      this.message.set('Укажите e-mail и подтвердите согласия.');
+      return;
+    }
+
+    this.bankSubmitting.set(true);
+    this.message.set('');
+    this.error.set('');
+    this.paymentsApi.initPublicPayment(
+      this.token(),
+      this.email().trim(),
+      this.offerConsent(),
+      this.offerConsent(),
+      this.receiptConsent()
+    ).subscribe({
       next: (response) => {
         if (response.paymentUrl) {
           window.location.href = response.paymentUrl;
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату. Попробуйте еще раз позже.');
-        this.submitting.set(false);
+        this.bankSubmitting.set(false);
       },
       error: (err) => {
         this.error.set(this.publicPaymentError(err));
-        this.submitting.set(false);
+        this.bankSubmitting.set(false);
       }
     });
+  }
+
+  openSbpPayload(): void {
+    const payload = this.sbpQrPayload().trim();
+    if (!payload) {
+      return;
+    }
+    window.location.href = payload;
   }
 
   formatRubles(amount?: number | null): string {

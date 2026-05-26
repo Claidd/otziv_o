@@ -2,35 +2,33 @@ import { Component, Input, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IonHeader, IonToolbar } from '@ionic/angular/standalone';
 import { AuthService } from '../core/auth.service';
+import {
+  MOBILE_ACTIONS,
+  MOBILE_ROLE_LABELS,
+  MOBILE_SECTIONS,
+  rolesForAction,
+  type MobileRoleSet
+} from '../core/mobile-permissions';
 import { MobileThemeMode, MobileThemeService } from './mobile-theme.service';
 
 interface MobileHeaderLink {
   label: string;
   icon: string;
   path: string;
-  roles: string[];
+  roles: MobileRoleSet;
 }
 
 const HEADER_LINKS: MobileHeaderLink[] = [
-  { label: 'Главная', icon: 'home', path: '/tabs/home', roles: [] },
-  { label: 'Лиды', icon: 'notifications_active', path: '/tabs/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-  { label: 'Компании', icon: 'business', path: '/tabs/companies', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-  { label: 'Заказы', icon: 'inventory_2', path: '/tabs/orders', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-  { label: 'Специалист', icon: 'engineering', path: '/tabs/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-  { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
-  { label: 'Т Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: ['ADMIN'] },
-  { label: 'Профиль', icon: 'account_circle', path: '/tabs/profile', roles: [] }
+  { label: 'Главная', icon: 'home', path: '/tabs/home', roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) },
+  { label: 'Лиды', icon: 'notifications_active', path: '/tabs/leads', roles: rolesForAction(MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view) },
+  { label: 'Компании', icon: 'business', path: '/tabs/companies', roles: rolesForAction(MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view) },
+  { label: 'Заказы', icon: 'inventory_2', path: '/tabs/orders', roles: rolesForAction(MOBILE_SECTIONS.orders, MOBILE_ACTIONS.view) },
+  { label: 'Специалист', icon: 'engineering', path: '/tabs/worker', roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) },
+  { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },
+  { label: 'Т Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
+  { label: 'Пользователи', icon: 'admin_panel_settings', path: '/tabs/users', roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) },
+  { label: 'Профиль', icon: 'account_circle', path: '/tabs/profile', roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
 ];
-
-const ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'Админ',
-  OWNER: 'Владелец',
-  MANAGER: 'Менеджер',
-  WORKER: 'Специалист',
-  OPERATOR: 'Оператор',
-  MARKETOLOG: 'Маркетолог',
-  CLIENT: 'Клиент'
-};
 
 @Component({
   selector: 'app-mobile-header',
@@ -349,8 +347,8 @@ export class MobileHeaderComponent {
   }
 
   primaryRole(): string {
-    const role = this.auth.user()?.roles.find((value) => ROLE_LABELS[value]) ?? this.auth.user()?.roles[0] ?? 'USER';
-    return ROLE_LABELS[role] ?? role;
+    const role = this.auth.user()?.roles.find((value) => MOBILE_ROLE_LABELS[value]) ?? this.auth.user()?.roles[0] ?? 'USER';
+    return MOBILE_ROLE_LABELS[role] ?? role;
   }
 
   initials(): string {

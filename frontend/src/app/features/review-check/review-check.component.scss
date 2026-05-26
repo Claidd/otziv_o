@@ -426,6 +426,17 @@
   min-height: 14rem;
 }
 
+.review-field-editor--text.review-field-editor--text-expanded .review-display-field--text {
+  height: auto;
+  min-height: 14rem;
+  overflow: visible;
+}
+
+.review-field-editor--text.review-field-editor--text-expanded textarea {
+  height: 24rem;
+  min-height: 24rem;
+}
+
 .review-text-toggle {
   position: absolute;
   right: 0.72rem;
@@ -1030,6 +1041,17 @@
     min-height: 19rem;
   }
 
+  .review-field-editor--text.review-field-editor--text-expanded .review-display-field--text {
+    height: auto;
+    min-height: 19rem;
+    overflow: visible;
+  }
+
+  .review-field-editor--text.review-field-editor--text-expanded textarea {
+    height: 30rem;
+    min-height: 30rem;
+  }
+
   .review-field-editor--answer textarea {
     height: 3.6rem;
     font-size: 0.86rem;
@@ -1075,6 +1097,17 @@
   .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
     height: 20rem;
     min-height: 20rem;
+  }
+
+  .review-field-editor--text.review-field-editor--text-expanded .review-display-field--text {
+    height: auto;
+    min-height: 20rem;
+    overflow: visible;
+  }
+
+  .review-field-editor--text.review-field-editor--text-expanded textarea {
+    height: 32rem;
+    min-height: 32rem;
   }
 
   .review-note-popover {

@@ -14,6 +14,7 @@ import {
   LeadBucketKey,
   LeadCreateRequest,
   LeadEditOptions,
+  LeadImportResponse,
   LeadItem,
   LeadPersonOption,
   LeadUpdateRequest,
@@ -23,10 +24,38 @@ import {
   PersonalReminderRequest
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { MOBILE_ACTIONS, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
-import { displayPhone, normalizePhoneDigits, phoneHref as formatPhoneHref } from '../shared/phone-format';
-
-type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
+import { MobileNoteEditorComponent } from '../shared/mobile-note-editor.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  mobilePageIsFirst,
+  mobilePageIsLast,
+  mobilePageLabel,
+  mobileSortTitle
+} from '../shared/mobile-board.helpers';
+import { displayPhone, phoneHref as formatPhoneHref } from '../shared/phone-format';
+import {
+  LEAD_BUCKETS,
+  type LeadCommentSaveState,
+  type LeadContactLink,
+  type LeadMutation,
+  leadActionIcon,
+  leadActionLabel,
+  leadAddressLine as leadAddressLineHelper,
+  leadCategoryLine as leadCategoryLineHelper,
+  leadContactLinks as leadContactLinksHelper,
+  leadSocialLine,
+  leadStatusActions,
+  leadTitle as leadTitleHelper,
+  leadTone as leadToneHelper,
+  normalizedLeadPhone
+} from './leads/lead-board.helpers';
+import { MobileLeadCardComponent } from './leads/mobile-lead-card.component';
 
 type CompanyCreateDraft = {
   source: CompanyCreateSource;
@@ -52,24 +81,6 @@ type CompanyPreservedFields = Pick<
   'title' | 'urlChat' | 'urlSite' | 'telephone' | 'city' | 'email' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
 >;
 
-type LeadBucket = {
-  key: LeadBucketKey;
-  label: string;
-  short: string;
-  icon: string;
-  tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
-  adminOnly?: boolean;
-};
-
-type LeadContactLink = {
-  key: 'wa' | 'email' | 'site' | 'vk' | 'tg';
-  label: string;
-  url: string;
-  title: string;
-};
-
-type LeadCommentSaveState = 'idle' | 'saving' | 'saved' | 'error';
-
 type PersonalReminderDraft = {
   title: string;
   text: string;
@@ -80,57 +91,50 @@ type PersonalReminderDraft = {
 
 @Component({
   selector: 'app-leads',
-  imports: [DatePipe, FormsModule, IonContent, IonModal, MobileHeaderComponent],
+  imports: [DatePipe, FormsModule, IonContent, IonModal, MobileBottomPagerComponent, MobileHeaderComponent, MobileLeadCardComponent, MobileNoteEditorComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Лиды" />
 
       <ion-content fullscreen [scrollY]="false">
         <main class="leads-page">
-          <section class="lead-status-scroll" aria-label="Статусы лидов">
-            @for (bucket of visibleBuckets(); track bucket.key) {
-              <button
-                class="metric-tile tone-{{ bucket.tone }}"
-                type="button"
-                [class.active]="activeBucket() === bucket.key"
-                (click)="setBucket(bucket.key)"
-              >
-                <span class="material-icons-sharp">{{ bucket.icon }}</span>
-                <strong>{{ bucketTotal(bucket.key) }}</strong>
-                <small>{{ bucket.short }}</small>
-              </button>
-            }
-          </section>
+          <app-mobile-status-slider
+            [items]="statusItems()"
+            [activeKey]="activeBucket()"
+            ariaLabel="Статусы лидов"
+            (select)="selectStatusSliderBucket($event)"
+          />
 
-          <form class="lead-search-strip" (ngSubmit)="applySearch()" role="search" aria-label="Поиск лидов">
-            <label>
-              <span class="material-icons-sharp">search</span>
-              <input
-                name="leadKeyword"
-                type="search"
-                autocomplete="off"
-                placeholder="Телефон, город, комментарий"
-                [ngModel]="keyword()"
-                (ngModelChange)="setKeyword($event)"
-              >
-            </label>
-
+          <app-mobile-search-bar
+            [value]="keyword()"
+            placeholder="Телефон, город, комментарий"
+            [showRefresh]="false"
+            [hasExtraAction]="true"
+            (valueChange)="setKeyword($event)"
+            (searchSubmit)="applySearch()"
+          >
             @if (keyword() || appliedKeyword()) {
-              <button class="icon-button" type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
+              <button mobileSearchActions type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
                 <span class="material-icons-sharp">close</span>
               </button>
             }
 
-            <button class="icon-button" type="button" (click)="openArchiveBucket()" [disabled]="loading()" aria-label="Архив">
+            <button mobileSearchActions type="button" (click)="openArchiveBucket()" [disabled]="loading()" aria-label="Архив">
               <span class="material-icons-sharp">archive</span>
             </button>
 
+            @if (canImportLeads()) {
+              <button mobileSearchActions type="button" (click)="openLeadImport()" [disabled]="loading()" aria-label="Импорт лидов">
+                <span class="material-icons-sharp">upload_file</span>
+              </button>
+            }
+
             @if (canCreateLead()) {
-              <button class="icon-button" type="button" (click)="openCreateLead()" aria-label="Создать лид">
+              <button mobileSearchActions type="button" (click)="openCreateLead()" aria-label="Создать лид">
                 <span class="material-icons-sharp">add</span>
               </button>
             }
-          </form>
+          </app-mobile-search-bar>
 
           @if (error()) {
             <button class="inline-alert" type="button" (click)="reload()">
@@ -141,96 +145,24 @@ type PersonalReminderDraft = {
 
           <section class="lead-list" aria-label="Список лидов">
             @for (lead of visibleLeads(); track lead.id) {
-              <article [class]="'lead-card mobile-lead-card lead-card--' + leadTone(lead)">
-                <header class="lead-card-head">
-                  <strong>{{ leadTitle(lead) }}</strong>
-                  <span>
-                    <small>{{ lead.companyName ? (lead.lidStatus || 'Без статуса') + ' / #' + lead.id : '#' + lead.id }}</small>
-                    @if (lead.offer) {
-                      <em>!</em>
-                    }
-                  </span>
-                </header>
-
-                <div class="lead-phone-row" [class.lead-phone-row--offer]="lead.offer">
-                  <button class="lead-phone-open" type="button" (click)="openContactMenu(lead)">
-                    {{ phoneDisplay(lead) }}
-                  </button>
-                  <button type="button" (click)="copyPhone(lead)" aria-label="Скопировать телефон">
-                    {{ copiedLeadId() === lead.id ? '✓' : 'T' }}
-                  </button>
-                </div>
-
-                <div class="lead-meta-row">
-                  <span>{{ lead.createDate ? (lead.createDate | date: 'yyyy-MM-dd') : '-' }}</span>
-                  <span>{{ lead.cityLead || 'Нет' }}</span>
-                </div>
-
-                @if (leadCategoryLine(lead) || leadAddressLine(lead)) {
-                  <div class="lead-business-stack">
-                    @if (leadCategoryLine(lead); as categoryLine) {
-                      <p class="lead-business-line lead-business-line--category" [title]="categoryLine">{{ categoryLine }}</p>
-                    }
-                    @if (leadAddressLine(lead); as addressLine) {
-                      <p class="lead-business-line lead-business-line--address" [title]="addressLine">{{ addressLine }}</p>
-                    }
-                  </div>
-                }
-
-                @if (leadContactLinks(lead); as contactLinks) {
-                  @if (contactLinks.length) {
-                    <div class="lead-contact-row" aria-label="Контакты лида">
-                      @for (link of contactLinks; track link.key) {
-                        <a
-                          [class]="'lead-contact-link lead-contact-link--' + link.key"
-                          [href]="link.url"
-                          target="_blank"
-                          rel="noopener"
-                          [title]="link.title"
-                        >
-                          {{ link.label }}
-                        </a>
-                      }
-                    </div>
-                  }
-                }
-
-                <div class="lead-comment-editor">
-                  <textarea
-                    class="lead-card-comment"
-                    [name]="'leadComment' + lead.id"
-                    rows="3"
-                    placeholder="Комментарий"
-                    [readonly]="!canEditLead()"
-                    [ngModel]="commentFor(lead)"
-                    (ngModelChange)="setLeadComment(lead, $event)"
-                    (blur)="saveLeadCommentNow(lead)"
-                  ></textarea>
-                  @if (commentSaveLabel(lead); as saveLabel) {
-                    <span [class]="'lead-comment-state lead-comment-state--' + commentSaveState(lead)">{{ saveLabel }}</span>
-                  }
-                </div>
-
-                <div class="lead-card-actions">
-                  @for (action of statusActions(lead); track action) {
-                    <button type="button" (click)="runAction(lead, action)" [disabled]="isMutating(lead, action)">
-                      <span class="material-icons-sharp">{{ actionIcon(action) }}</span>
-                      {{ isMutating(lead, action) ? '...' : actionLabel(action) }}
-                    </button>
-                  }
-                  @if (canCreateCompanyFromLead(lead)) {
-                    <button type="button" (click)="openCompanyCreate(lead)">
-                      <span class="material-icons-sharp">business_center</span>
-                      работа
-                    </button>
-                  }
-                </div>
-
-                <footer class="lead-card-foot">
-                  <span>{{ leadCardPerson(lead) }}</span>
-                  <button type="button" (click)="openLead(lead)">Подробнее</button>
-                </footer>
-              </article>
+              <app-mobile-lead-card
+                [lead]="lead"
+                [canEdit]="canEditLead()"
+                [canCreateCompany]="canCreateCompanyFromLead(lead)"
+                [copiedLeadId]="copiedLeadId()"
+                [comment]="commentFor(lead)"
+                [commentStateLabel]="commentSaveLabel(lead) || ''"
+                [commentState]="commentSaveState(lead)"
+                [mutationKey]="mutationKey()"
+                [privilegedActions]="canUsePrivilegedLeadActions()"
+                (contact)="openContactMenu($event)"
+                (copy)="copyPhone($event)"
+                (commentChange)="setLeadComment(lead, $event)"
+                (commentSave)="saveLeadCommentNow(lead)"
+                (action)="runAction(lead, $event)"
+                (createCompany)="openCompanyCreate($event)"
+                (open)="openLead($event)"
+              />
             } @empty {
               <div class="empty-state compact-empty">
                 <span class="material-icons-sharp">inbox</span>
@@ -239,8 +171,15 @@ type PersonalReminderDraft = {
             }
           </section>
 
-          <section class="lead-bottom-controls" aria-label="Управление списком лидов">
+          <app-mobile-bottom-pager
+            class="mobile-page-bottom-pager"
+            [pageIndex]="pageNumber()"
+            [totalPages]="currentPage().totalPages || 1"
+            (previous)="previousPage()"
+            (next)="nextPage()"
+          >
             <button
+              mobilePagerActions
               class="expand-list-button reminder-hero-button"
               type="button"
               (click)="openReminderSheet()"
@@ -252,6 +191,7 @@ type PersonalReminderDraft = {
               }
             </button>
             <button
+              mobilePagerActions
               class="expand-list-button"
               type="button"
               [class.active]="sortDirection() === 'asc'"
@@ -260,16 +200,7 @@ type PersonalReminderDraft = {
             >
               <span class="material-icons-sharp">swap_vert</span>
             </button>
-            <div class="lead-pager">
-              <button type="button" (click)="previousPage()" [disabled]="isFirstPage()" aria-label="Предыдущая страница">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-              <span>{{ pageLabel() }}</span>
-              <button type="button" (click)="nextPage()" [disabled]="isLastPage()" aria-label="Следующая страница">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </div>
-          </section>
+          </app-mobile-bottom-pager>
 
           @if (bucketSheetOpen()) {
             <button class="lead-section-backdrop" type="button" aria-label="Закрыть разделы" (click)="closeBucketSheet()"></button>
@@ -394,21 +325,18 @@ type PersonalReminderDraft = {
                 </div>
               </section>
 
-              <div class="lead-comment-editor lead-comment-editor--detail">
-                <textarea
-                  class="lead-card-comment"
-                  name="leadDetailComment"
-                  rows="4"
-                  placeholder="Комментарий"
-                  [readonly]="!canEditLead()"
-                  [ngModel]="commentFor(lead)"
-                  (ngModelChange)="setLeadComment(lead, $event)"
-                  (blur)="saveLeadCommentNow(lead)"
-                ></textarea>
-                @if (commentSaveLabel(lead); as saveLabel) {
-                  <span [class]="'lead-comment-state lead-comment-state--' + commentSaveState(lead)">{{ saveLabel }}</span>
-                }
-              </div>
+              <app-mobile-note-editor
+                class="lead-comment-editor lead-comment-editor--detail"
+                name="leadDetailComment"
+                [rows]="4"
+                placeholder="Комментарий"
+                [readOnly]="!canEditLead()"
+                [value]="commentFor(lead)"
+                [stateLabel]="commentSaveLabel(lead) || ''"
+                [state]="commentSaveState(lead)"
+                (valueChange)="setLeadComment(lead, $event)"
+                (blurred)="saveLeadCommentNow(lead)"
+              />
 
               <div class="lead-action-grid">
                 <button type="button" (click)="openContactMenu(lead)">
@@ -542,6 +470,98 @@ type PersonalReminderDraft = {
             <div class="sheet-actions">
               <button class="secondary" type="button" (click)="clearFilters()" [disabled]="loading()">Сбросить</button>
               <button type="submit" [disabled]="loading()">Применить</button>
+            </div>
+          </form>
+        </ng-template>
+      </ion-modal>
+
+      <ion-modal class="sheet-modal" [isOpen]="leadImportOpen()" (didDismiss)="closeLeadImport()">
+        <ng-template>
+          <form class="sheet-body sheet-form" (ngSubmit)="uploadLeadImport()">
+            <div class="sheet-head">
+              <div>
+                <p class="sheet-note">ADMIN / OWNER</p>
+                <h2>Импорт лидов</h2>
+              </div>
+              <button class="icon-button" type="button" (click)="closeLeadImport()" [disabled]="leadImportSaving()" aria-label="Закрыть">
+                <span class="material-icons-sharp">close</span>
+              </button>
+            </div>
+
+            <section class="sheet-form-content">
+              @if (leadImportError()) {
+                <p class="sheet-error">{{ leadImportError() }}</p>
+              }
+
+              <label class="import-file-picker">
+                <span class="material-icons-sharp">upload_file</span>
+                <strong>{{ leadImportFile()?.name || 'Выбрать CSV / Excel' }}</strong>
+                <small>Файл будет отправлен на сервер через /api/leads/file-import</small>
+                <input type="file" accept=".csv,.xlsx,.xls,.tsv" (change)="selectLeadImportFile($event)" [disabled]="leadImportSaving()">
+              </label>
+
+              <div class="import-assignment-card">
+                <span>Менеджеры для распределения</span>
+                <div class="import-manager-grid">
+                  @for (manager of managerOptions(); track manager.id) {
+                    <button type="button" [class.active]="isImportManagerSelected(manager.id)" (click)="toggleImportManager(manager.id)" [disabled]="leadImportSaving()">
+                      <span class="material-icons-sharp">{{ isImportManagerSelected(manager.id) ? 'check_circle' : 'radio_button_unchecked' }}</span>
+                      {{ optionLabel(manager) }}
+                    </button>
+                  }
+                </div>
+              </div>
+
+              <label class="sheet-field">
+                <span>Оператор</span>
+                <select name="leadImportOperator" [ngModel]="leadImportOperatorId()" (ngModelChange)="leadImportOperatorId.set($event)" [disabled]="leadImportSaving()">
+                  <option [ngValue]="null">Не назначать</option>
+                  @for (operator of operatorOptions(); track operator.id) {
+                    <option [ngValue]="operator.id">{{ optionLabel(operator) }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="sheet-field">
+                <span>Маркетолог</span>
+                <select name="leadImportMarketolog" [ngModel]="leadImportMarketologId()" (ngModelChange)="leadImportMarketologId.set($event)" [disabled]="leadImportSaving()">
+                  <option [ngValue]="null">Не назначать</option>
+                  @for (marketolog of marketologOptions(); track marketolog.id) {
+                    <option [ngValue]="marketolog.id">{{ optionLabel(marketolog) }}</option>
+                  }
+                </select>
+              </label>
+
+              @if (leadImportResult(); as result) {
+                <div class="import-result-card">
+                  <strong>{{ leadImportResultMessage(result) }}</strong>
+                  <span>Строк: {{ result.totalRows }}</span>
+                  <span>Без телефона: {{ result.skippedWithoutPhones }}</span>
+                  <span>Дубликаты: {{ result.skippedDuplicates }}</span>
+                  <span>Некорректные: {{ result.skippedInvalid }}</span>
+                  @if (result.managerAssignments.length) {
+                    <div class="import-result-list">
+                      @for (assignment of result.managerAssignments; track assignment.managerId) {
+                        <small>{{ assignment.managerName }}: {{ assignment.added }}</small>
+                      }
+                    </div>
+                  }
+                  @if (result.errors.length) {
+                    <div class="import-result-list danger">
+                      @for (item of result.errors.slice(0, 4); track item) {
+                        <small>{{ item }}</small>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+
+            <div class="sheet-actions">
+              <button class="secondary" type="button" (click)="closeLeadImport()" [disabled]="leadImportSaving()">Отмена</button>
+              <button type="submit" [disabled]="leadImportSaving() || !leadImportFile() || !leadImportManagerIds().length">
+                {{ leadImportSaving() ? 'Загружаю' : 'Импортировать' }}
+              </button>
             </div>
           </form>
         </ng-template>
@@ -1481,6 +1501,155 @@ type PersonalReminderDraft = {
       min-height: 0;
     }
 
+    .lead-search-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+      align-items: center;
+      gap: 0.45rem;
+      flex: 0 0 auto;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-radius: 1rem;
+      padding: 0.48rem;
+      background: linear-gradient(155deg, var(--otziv-white) 0%, var(--otziv-tone-walk-surface) 100%);
+      box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.1);
+    }
+
+    .lead-search-strip label {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 0.45rem;
+      min-width: 0;
+      min-height: 2.42rem;
+      border: 1px solid rgba(103, 116, 131, 0.14);
+      border-radius: 0.82rem;
+      padding: 0 0.7rem;
+      color: var(--otziv-info);
+      background: var(--otziv-white);
+    }
+
+    .lead-search-strip input {
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      color: var(--otziv-dark);
+      background: transparent;
+      font: 900 0.82rem/1 var(--otziv-font-family);
+    }
+
+    .lead-search-strip input::placeholder {
+      color: var(--otziv-info);
+      opacity: 1;
+    }
+
+    .lead-search-strip .material-icons-sharp {
+      font-size: 1.12rem;
+    }
+
+    .lead-search-strip .icon-button {
+      width: 2.42rem;
+      height: 2.42rem;
+      min-width: 2.42rem;
+      border: 0;
+      border-radius: 0.82rem;
+      color: var(--otziv-primary);
+      background: linear-gradient(145deg, rgba(108, 155, 207, 0.16) 0%, var(--otziv-white) 92%);
+    }
+
+    .lead-search-strip button:disabled {
+      opacity: 0.52;
+    }
+
+    .import-file-picker {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 0.18rem 0.65rem;
+      align-items: center;
+      border: 1px dashed rgba(116, 154, 207, 0.38);
+      border-radius: 0.95rem;
+      padding: 0.75rem;
+      background: linear-gradient(145deg, rgba(237, 246, 255, 0.9), var(--otziv-white));
+    }
+
+    .import-file-picker > .material-icons-sharp {
+      grid-row: 1 / 3;
+      display: grid;
+      place-items: center;
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.72rem;
+      color: var(--otziv-primary);
+      background: rgba(116, 154, 207, 0.14);
+    }
+
+    .import-file-picker strong,
+    .import-assignment-card > span,
+    .import-result-card strong {
+      color: var(--otziv-dark);
+      font-size: 0.85rem;
+      font-weight: 1000;
+    }
+
+    .import-file-picker small,
+    .import-result-card span,
+    .import-result-list small {
+      color: var(--otziv-info);
+      font-size: 0.68rem;
+      font-weight: 900;
+    }
+
+    .import-file-picker input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+    }
+
+    .import-assignment-card,
+    .import-result-card {
+      display: grid;
+      gap: 0.55rem;
+      border: 1px solid rgba(103, 116, 131, 0.14);
+      border-radius: 0.95rem;
+      padding: 0.75rem;
+      background: var(--otziv-white);
+    }
+
+    .import-manager-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+
+    .import-manager-grid button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      min-height: 2.1rem;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 999px;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font: 900 0.68rem/1 var(--otziv-font-family);
+    }
+
+    .import-manager-grid button.active {
+      border-color: rgba(74, 198, 177, 0.4);
+      color: #16735f;
+      background: rgba(74, 198, 177, 0.12);
+    }
+
+    .import-result-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+    }
+
+    .import-result-list.danger small {
+      color: var(--otziv-danger);
+    }
+
   `]
 })
 export class LeadsPage implements OnInit, OnDestroy {
@@ -1504,14 +1673,7 @@ export class LeadsPage implements OnInit, OnDestroy {
 
   readonly pageSizeOptions = [5, 10, 12, 15];
 
-  readonly buckets: LeadBucket[] = [
-    { key: 'newLeads', label: 'Новые', short: 'новые', icon: 'fiber_new', tone: 'yellow' },
-    { key: 'toWork', label: 'В работу', short: 'в работу', icon: 'assignment_ind', tone: 'green' },
-    { key: 'inWork', label: 'В работе', short: 'в работе', icon: 'work_history', tone: 'teal' },
-    { key: 'send', label: 'Напомнить', short: 'напомнить', icon: 'send', tone: 'pink' },
-    { key: 'archive', label: 'Архив', short: 'архив', icon: 'archive', tone: 'gray' },
-    { key: 'all', label: 'Все', short: 'все', icon: 'dataset', tone: 'blue', adminOnly: true }
-  ];
+  readonly buckets = LEAD_BUCKETS;
 
   readonly board = signal<LeadBoard | null>(null);
   readonly activeBucket = signal<LeadBucketKey>('newLeads');
@@ -1534,6 +1696,14 @@ export class LeadsPage implements OnInit, OnDestroy {
   readonly createDraft = signal<LeadCreateRequest | null>(null);
   readonly createSaving = signal(false);
   readonly createError = signal<string | null>(null);
+  readonly leadImportOpen = signal(false);
+  readonly leadImportFile = signal<File | null>(null);
+  readonly leadImportManagerIds = signal<number[]>([]);
+  readonly leadImportOperatorId = signal<number | null>(null);
+  readonly leadImportMarketologId = signal<number | null>(null);
+  readonly leadImportSaving = signal(false);
+  readonly leadImportError = signal<string | null>(null);
+  readonly leadImportResult = signal<LeadImportResponse | null>(null);
   readonly editLead = signal<LeadItem | null>(null);
   readonly editDraft = signal<LeadUpdateRequest | null>(null);
   readonly editSaving = signal(false);
@@ -1558,14 +1728,25 @@ export class LeadsPage implements OnInit, OnDestroy {
   readonly reminderMutatingId = signal<number | null>(null);
   readonly expandedReminderId = signal<number | null>(null);
 
-  readonly canSeeAllBucket = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
-  readonly canCreateLead = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']));
-  readonly canEditLead = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']));
-  readonly canCreateCompany = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']));
-  readonly canDeleteLead = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
-  readonly canChooseCreateManager = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
-  readonly canEditLeadTelephone = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
+  readonly canSeeAllBucket = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.manage));
+  readonly canCreateLead = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.create));
+  readonly canEditLead = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.edit));
+  readonly canCreateCompany = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.companies, MOBILE_ACTIONS.create));
+  readonly canDeleteLead = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.delete));
+  readonly canImportLeads = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.import));
+  readonly canChooseCreateManager = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.assign));
+  readonly canEditLeadTelephone = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.assign));
+  readonly canUsePrivilegedLeadActions = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MARKETOLOG']));
   readonly visibleBuckets = computed(() => this.buckets.filter((bucket) => !bucket.adminOnly || this.canSeeAllBucket()));
+  readonly statusItems = computed<MobileStatusItem[]>(() =>
+    this.visibleBuckets().map((bucket) => ({
+      key: bucket.key,
+      title: bucket.short,
+      value: this.bucketTotal(bucket.key),
+      icon: bucket.icon,
+      tone: bucket.tone
+    }))
+  );
   readonly bucketMenuOptions = computed(() => {
     const visible = this.visibleBuckets();
     const allBucket = visible.find((bucket) => bucket.key === 'all');
@@ -1579,24 +1760,17 @@ export class LeadsPage implements OnInit, OnDestroy {
   readonly visibleLeads = computed(() => this.currentPage().content ?? []);
   readonly previewLeads = computed(() => this.visibleLeads().slice(0, 3));
   readonly leadSheetOpen = computed(() => this.selectedLead() !== null);
-  readonly sortTitle = computed(() => this.sortDirection() === 'desc'
-    ? 'давно без изменений'
-    : 'недавно измененные'
-  );
+  readonly sortTitle = computed(() => mobileSortTitle(this.sortDirection(), {
+    desc: 'давно без изменений',
+    asc: 'недавно измененные'
+  }));
   readonly heroMeta = computed(() => {
     const keyword = this.appliedKeyword();
     return `${this.leadCountLabel(this.currentPage().totalElements)} · ${this.sortTitle()}${keyword ? ` · ${keyword}` : ''}`;
   });
-  readonly pageLabel = computed(() => {
-    const page = this.currentPage();
-    const current = this.pageNumber() + 1;
-    return `${current} / ${Math.max(page.totalPages || 1, 1)}`;
-  });
-  readonly isFirstPage = computed(() => this.pageNumber() <= 0 || this.currentPage().first === true);
-  readonly isLastPage = computed(() => {
-    const totalPages = this.currentPage().totalPages || 1;
-    return this.currentPage().last === true || this.pageNumber() >= totalPages - 1;
-  });
+  readonly pageLabel = computed(() => mobilePageLabel(this.currentPage(), this.pageNumber()));
+  readonly isFirstPage = computed(() => mobilePageIsFirst(this.currentPage(), this.pageNumber()));
+  readonly isLastPage = computed(() => mobilePageIsLast(this.currentPage(), this.pageNumber()));
   readonly operatorOptions = computed(() => this.editOptions()?.operators ?? []);
   readonly managerOptions = computed(() => this.editOptions()?.managers ?? []);
   readonly marketologOptions = computed(() => this.editOptions()?.marketologs ?? []);
@@ -1618,7 +1792,9 @@ export class LeadsPage implements OnInit, OnDestroy {
     private readonly api: ApiService,
     private readonly auth: AuthService,
     private readonly router: Router,
-    private readonly route: ActivatedRoute
+    private readonly route: ActivatedRoute,
+    private readonly confirm: MobileConfirmService,
+    private readonly externalLink: MobileExternalLinkService
   ) {}
 
   ngOnInit(): void {
@@ -1753,6 +1929,10 @@ export class LeadsPage implements OnInit, OnDestroy {
     this.listExpanded.set(false);
     this.pageNumber.set(0);
     void this.loadBoard();
+  }
+
+  selectStatusSliderBucket(bucket: string): void {
+    this.setBucket(bucket as LeadBucketKey);
   }
 
   selectBucket(bucket: LeadBucketKey): void {
@@ -2016,6 +2196,89 @@ export class LeadsPage implements OnInit, OnDestroy {
     }
   }
 
+  openLeadImport(): void {
+    if (!this.canImportLeads()) {
+      return;
+    }
+
+    this.leadImportOpen.set(true);
+    this.leadImportFile.set(null);
+    this.leadImportError.set(null);
+    this.leadImportResult.set(null);
+    void this.loadEditOptions(
+      () => this.setDefaultImportManagers(),
+      (message) => this.leadImportError.set(message)
+    );
+  }
+
+  closeLeadImport(): void {
+    if (this.leadImportSaving()) {
+      return;
+    }
+
+    this.leadImportOpen.set(false);
+    this.leadImportFile.set(null);
+    this.leadImportError.set(null);
+  }
+
+  selectLeadImportFile(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files?.[0] ?? null;
+    this.leadImportFile.set(file);
+    this.leadImportResult.set(null);
+    this.leadImportError.set(file ? null : 'Выберите файл для импорта.');
+  }
+
+  toggleImportManager(managerId: number): void {
+    this.leadImportManagerIds.update((ids) => ids.includes(managerId)
+      ? ids.filter((id) => id !== managerId)
+      : [...ids, managerId]
+    );
+    this.leadImportResult.set(null);
+  }
+
+  isImportManagerSelected(managerId: number): boolean {
+    return this.leadImportManagerIds().includes(managerId);
+  }
+
+  async uploadLeadImport(): Promise<void> {
+    const file = this.leadImportFile();
+    const managerIds = this.leadImportManagerIds();
+    if (!file) {
+      this.leadImportError.set('Выберите файл для импорта.');
+      return;
+    }
+    if (!managerIds.length) {
+      this.leadImportError.set('Выберите хотя бы одного менеджера.');
+      return;
+    }
+
+    this.leadImportSaving.set(true);
+    this.leadImportError.set(null);
+    this.leadImportResult.set(null);
+
+    try {
+      const result = await firstValueFrom(this.api.importLeads({
+        file,
+        managerIds,
+        operatorId: this.leadImportOperatorId(),
+        marketologId: this.leadImportMarketologId()
+      }));
+      this.leadImportResult.set(result);
+      this.activeBucket.set('newLeads');
+      this.pageNumber.set(0);
+      await this.loadBoard();
+    } catch (error) {
+      this.leadImportError.set(error instanceof Error ? error.message : 'Не удалось импортировать лиды.');
+    } finally {
+      this.leadImportSaving.set(false);
+    }
+  }
+
+  leadImportResultMessage(result: LeadImportResponse): string {
+    return `Добавлено ${result.added}, пропущено ${result.skippedDuplicates + result.skippedWithoutPhones + result.skippedInvalid}`;
+  }
+
   openReminderSheet(): void {
     this.selectedLead.set(null);
     this.reminderSheetOpen.set(true);
@@ -2140,7 +2403,12 @@ export class LeadsPage implements OnInit, OnDestroy {
   }
 
   async deleteReminder(reminder: PersonalReminder): Promise<void> {
-    const confirmed = window.confirm(`Удалить напоминание "${reminder.title || 'Без названия'}"?`);
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить напоминание',
+      message: `Удалить напоминание "${reminder.title || 'Без названия'}"?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
     if (!confirmed) {
       return;
     }
@@ -2322,7 +2590,17 @@ export class LeadsPage implements OnInit, OnDestroy {
 
   async deleteCurrentLead(): Promise<void> {
     const lead = this.editLead();
-    if (!lead || this.deleteSaving() || !window.confirm(`Удалить лид #${lead.id}?`)) {
+    if (!lead || this.deleteSaving()) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить лид',
+      message: `Удалить лид #${lead.id}?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -2459,11 +2737,11 @@ export class LeadsPage implements OnInit, OnDestroy {
     }[messenger];
 
     if (messenger === 'telegram') {
-      window.location.href = url;
+      this.externalLink.openScheme(url);
       return;
     }
 
-    window.open(url, '_blank', 'noopener');
+    void this.externalLink.open(url);
   }
 
   async copyPhone(lead: LeadItem): Promise<void> {
@@ -2498,7 +2776,7 @@ export class LeadsPage implements OnInit, OnDestroy {
   }
 
   private normalizedPhone(lead: LeadItem): string {
-    return normalizePhoneDigits(lead.telephoneLead);
+    return normalizedLeadPhone(lead);
   }
 
   personName(person?: { fio?: string; username?: string; id?: number }): string {
@@ -2511,96 +2789,39 @@ export class LeadsPage implements OnInit, OnDestroy {
   }
 
   leadTitle(lead: LeadItem): string {
-    return lead.companyName?.trim() || lead.lidStatus || 'Без статуса';
+    return leadTitleHelper(lead);
   }
 
   leadCategoryLine(lead: LeadItem): string {
-    return [
-      lead.companyType,
-      lead.industries
-    ]
-      .map((value) => value?.trim())
-      .filter(Boolean)
-      .join(' • ');
+    return leadCategoryLineHelper(lead);
   }
 
   leadAddressLine(lead: LeadItem): string {
-    return [
-      lead.region,
-      lead.address
-    ]
-      .map((value) => value?.trim())
-      .filter(Boolean)
-      .join(' • ');
+    return leadAddressLineHelper(lead);
   }
 
   socialLine(lead: LeadItem): string {
-    return [
-      this.firstMultiValue(lead.vkUrl),
-      this.firstMultiValue(lead.telegramUrl)
-    ]
-      .filter(Boolean)
-      .join(' • ');
+    return leadSocialLine(lead);
   }
 
   leadContactLinks(lead: LeadItem): LeadContactLink[] {
-    const whatsapp = this.firstMultiValue(lead.whatsappPhones) || lead.telephoneLead;
-    const email = this.firstMultiValue(lead.emails);
-    const website = this.firstMultiValue(lead.websites);
-    const vk = this.firstMultiValue(lead.vkUrl);
-    const telegram = this.firstMultiValue(lead.telegramUrl);
-
-    return [
-      whatsapp ? { key: 'wa', label: 'ватсап', url: this.whatsappLink(whatsapp), title: whatsapp } : null,
-      email ? { key: 'email', label: 'почта', url: this.emailLink(email), title: email } : null,
-      website ? { key: 'site', label: 'сайт', url: this.externalUrl(website), title: website } : null,
-      vk ? { key: 'vk', label: 'ВК', url: this.vkLink(vk), title: vk } : null,
-      telegram ? { key: 'tg', label: 'ТГ', url: this.telegramLink(telegram), title: telegram } : null
-    ].filter((link): link is LeadContactLink => link !== null);
+    return leadContactLinksHelper(lead);
   }
 
   leadTone(lead: LeadItem): 'default' | 'new' | 'work' | 'send' {
-    const status = (lead.lidStatus ?? '').trim().toLocaleLowerCase('ru-RU');
-    if (status.includes('нов')) {
-      return 'new';
-    }
-    if (status.includes('работ')) {
-      return 'work';
-    }
-    if (status.includes('напом') || status.includes('отправ')) {
-      return 'send';
-    }
-    return 'default';
+    return leadToneHelper(lead);
   }
 
   statusActions(lead: LeadItem): LeadMutation[] {
-    if (lead.lidStatus === 'Новый') {
-      return ['send'];
-    }
-
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MARKETOLOG'])
-      ? ['toWork', 'resend', 'archive']
-      : ['resend', 'archive'];
+    return leadStatusActions(lead, this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MARKETOLOG']));
   }
 
   actionLabel(action: LeadMutation): string {
-    return {
-      send: 'отправил',
-      resend: 'напомнил',
-      archive: 'архив',
-      new: 'новый',
-      toWork: 'передать'
-    }[action];
+    return leadActionLabel(action);
   }
 
   actionIcon(action: LeadMutation): string {
-    return {
-      send: 'send',
-      resend: 'notifications_active',
-      archive: 'archive',
-      new: 'fiber_new',
-      toWork: 'swap_horiz'
-    }[action];
+    return leadActionIcon(action);
   }
 
   isMutating(lead: LeadItem, action: LeadMutation): boolean {
@@ -2752,6 +2973,18 @@ export class LeadsPage implements OnInit, OnDestroy {
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Не удалось загрузить списки.');
     }
+  }
+
+  private setDefaultImportManagers(): void {
+    if (this.leadImportManagerIds().length) {
+      return;
+    }
+
+    const managers = this.managerOptions();
+    const preferred = managers
+      .filter((manager) => manager.id === 2 || manager.id === 3)
+      .map((manager) => manager.id);
+    this.leadImportManagerIds.set(preferred.length ? preferred : managers.slice(0, 2).map((manager) => manager.id));
   }
 
   private async loadReminders(force = false): Promise<void> {
@@ -2967,60 +3200,5 @@ export class LeadsPage implements OnInit, OnDestroy {
   private cleanText(value?: string): string | undefined {
     const cleanValue = value?.trim() ?? '';
     return cleanValue || undefined;
-  }
-
-  private firstMultiValue(value?: string): string {
-    return value
-      ?.split(/[,;\r\n]+/)
-      .map((part) => part.trim())
-      .find(Boolean) ?? '';
-  }
-
-  private emailLink(value: string): string {
-    const trimmed = value.trim();
-    return trimmed.toLocaleLowerCase('en-US').startsWith('mailto:')
-      ? trimmed
-      : `mailto:${trimmed}`;
-  }
-
-  private externalUrl(value: string): string {
-    const trimmed = value.trim();
-    if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) {
-      return trimmed;
-    }
-    return `https://${trimmed}`;
-  }
-
-  private vkLink(value: string): string {
-    const trimmed = value.trim();
-    if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) || /^(www\.|vk\.com\/)/i.test(trimmed) || trimmed.includes('.')) {
-      return this.externalUrl(trimmed);
-    }
-    return `https://vk.com/${trimmed.replace(/^@+|^\/+/g, '')}`;
-  }
-
-  private telegramLink(value: string): string {
-    const trimmed = value.trim();
-    if (trimmed.startsWith('@')) {
-      return `https://t.me/${trimmed.slice(1)}`;
-    }
-    if (/^[a-z][a-z\d_]{4,31}$/i.test(trimmed)) {
-      return `https://t.me/${trimmed}`;
-    }
-    return this.externalUrl(trimmed);
-  }
-
-  private whatsappLink(value: string): string {
-    const trimmed = value.trim();
-    if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) || /^(wa\.me|api\.whatsapp\.com|whatsapp\.com)\//i.test(trimmed)) {
-      return this.externalUrl(trimmed);
-    }
-
-    const phone = this.normalizedPhoneValue(trimmed);
-    return phone ? `https://wa.me/${phone}` : this.externalUrl(trimmed);
-  }
-
-  private normalizedPhoneValue(value: string): string {
-    return normalizePhoneDigits(value);
   }
 }

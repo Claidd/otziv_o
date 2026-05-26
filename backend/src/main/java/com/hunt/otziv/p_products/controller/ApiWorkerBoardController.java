@@ -435,7 +435,7 @@ public class ApiWorkerBoardController {
         }
 
         try {
-            reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.scheduledDate());
+            reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), request.scheduledDate());
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задача восстановления не сохранена", exception);
         }
@@ -2035,7 +2035,7 @@ public class ApiWorkerBoardController {
     public record BadTaskUpdateRequest(String taskText, LocalDate scheduledDate) {
     }
 
-    public record RecoveryTaskUpdateRequest(String recoveryText, LocalDate scheduledDate) {
+    public record RecoveryTaskUpdateRequest(String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
     }
 
     public record ReviewAnswerUpdateRequest(Long orderId, String answer) {

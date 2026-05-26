@@ -4,7 +4,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -33,7 +33,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -64,9 +63,6 @@ class OrderStatusTransitionServiceTest {
     private BadReviewTaskService badReviewTaskService;
 
     @Mock
-    private PromoTextService textService;
-
-    @Mock
     private TelegramService telegramService;
 
     @Mock
@@ -83,6 +79,18 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private ReviewRepository reviewRepository;
+
+    @Mock
+    private OrderPaymentMessageBuilder orderPaymentMessageBuilder;
+
+    @Mock
+    private OrderReviewCheckMessageBuilder orderReviewCheckMessageBuilder;
+
+    @Mock
+    private MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
+
+    @Mock
+    private OrderCorrectionTelegramNotifier orderCorrectionTelegramNotifier;
 
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
@@ -279,14 +287,14 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void toCheckWithoutClientDeliveryKeepsToCheckStatusAndReturnsFalse() throws Exception {
+    void toCheckWithoutClientDeliveryKeepsToCheckStatusAndReturnsTrue() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(5L, "Новый", "Компания", " ");
         OrderStatus toCheck = status("В проверку");
 
         when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
-        when(textService.findById(5)).thenReturn("Проверьте отзывы");
-        when(orderStatusNotificationService.sendMessageToGroup(
+        when(orderReviewCheckMessageBuilder.reviewCheckMessage(order)).thenReturn("Проверьте отзывы");
+        when(orderStatusNotificationService.sendMessageToClientChat(
                 eq("В проверку"),
                 same(order),
                 eq("client"),
@@ -295,15 +303,15 @@ class OrderStatusTransitionServiceTest {
                 eq("На проверке")
         )).thenAnswer(invocation -> {
             order.setStatus(toCheck);
-            return false;
+            return "В проверку";
         });
 
-        assertFalse(service.changeStatusForOrder(5L, "В проверку"));
+        assertTrue(service.changeStatusForOrder(5L, "В проверку"));
 
         assertSame(toCheck, order.getStatus());
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "В проверку");
-        verify(orderStatusNotificationService).sendMessageToGroup(
+        verify(orderStatusNotificationService).sendMessageToClientChat(
                 eq("В проверку"),
                 same(order),
                 eq("client"),
@@ -328,7 +336,7 @@ class OrderStatusTransitionServiceTest {
         assertSame(inCheck, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "На проверке");
         verify(orderRepository).save(order);
-        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, textService);
+        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, orderReviewCheckMessageBuilder);
     }
 
     @Test
@@ -368,7 +376,7 @@ class OrderStatusTransitionServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "Нельзя отправить заказ на проверку: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой.",
+                "Нельзя отправить заказ на проверку: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #510).",
                 exception.getReason()
         );
         assertSame(originalStatus, order.getStatus());
@@ -384,6 +392,8 @@ class OrderStatusTransitionServiceTest {
         order.setSum(BigDecimal.valueOf(1500));
 
         when(orderRepository.findById(6L)).thenReturn(Optional.of(order));
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
+                .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
         when(orderStatusNotificationService.sendMessageToGroup(
                 eq("Опубликовано"),
                 same(order),
@@ -401,6 +411,30 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void publicStatusKeepsManualTransitionSuccessfulWhenClientMessageFails() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
+
+        when(orderRepository.findById(61L)).thenReturn(Optional.of(order));
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
+                .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
+        when(orderStatusNotificationService.sendMessageToGroup(
+                eq("Опубликовано"),
+                same(order),
+                eq("client"),
+                eq("group"),
+                contains("К оплате: 1500"),
+                eq("Выставлен счет")
+        )).thenReturn(false);
+
+        assertTrue(service.changeStatusForOrder(61L, "Опубликовано"));
+
+        verify(orderBotLifecycleService).assignBotsIfNeeded(order);
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
+        verify(mobilePushBusinessNotificationService).notifyManagerOrderPublished(order);
+    }
+
+    @Test
     void manualToPayStatusDoesNotSendClientMessage() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(62L, "Опубликовано", "Компания", "group");
@@ -414,11 +448,11 @@ class OrderStatusTransitionServiceTest {
         assertSame(toPay, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Выставлен счет");
         verify(orderRepository).save(order);
-        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, textService);
+        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, orderReviewCheckMessageBuilder);
     }
 
     @Test
-    void correctionStatusNotifiesWorkerWhenTelegramIsAvailable() throws Exception {
+    void correctionStatusQueuesTelegramAfterSavingOrderWhenWorkerChatIsAvailable() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithWorker(7L, "Публикация", 700L);
         order.setZametka("заметка");
@@ -432,11 +466,40 @@ class OrderStatusTransitionServiceTest {
         assertTrue(service.changeStatusForOrder(7L, "Коррекция"));
 
         assertSame(correction, order.getStatus());
-        verify(telegramService).sendMessage(
+        InOrder inOrder = inOrder(orderRepository, orderCorrectionTelegramNotifier);
+        inOrder.verify(orderRepository).save(order);
+        inOrder.verify(orderCorrectionTelegramNotifier).notifyWorkerCorrection(
+                7L,
                 700L,
-                "Компания отправлен в Коррекцию - заметка комментарий\n https://o-ogo.ru/worker/correct"
+                "Компания",
+                "заметка",
+                "комментарий"
         );
-        verify(orderRepository).save(order);
+        verify(telegramService, never()).sendMessage(
+                eq(700L),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void correctionStatusIsIdempotentWhenOrderAlreadyInCorrection() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(72L, "Коррекция", 720L);
+
+        when(orderRepository.findById(72L)).thenReturn(Optional.of(order));
+
+        assertTrue(service.changeStatusForOrder(72L, "Коррекция"));
+
+        verify(orderBotLifecycleService, never()).assignBotsIfNeeded(order);
+        verify(orderCompanyStatusService, never()).autoManageCompanyStatus(order, "Коррекция");
+        verify(orderRepository, never()).save(order);
+        verify(orderCorrectionTelegramNotifier, never()).notifyWorkerCorrection(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
     }
 
     @Test
@@ -521,7 +584,7 @@ class OrderStatusTransitionServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "Нельзя отправить заказ в публикацию: в заказе есть одинаковые тексты отзывов. Измените повторяющийся текст и сохраните его дискеткой.",
+                "Нельзя отправить заказ в публикацию: в заказе есть одинаковые тексты отзывов. Измените повторяющийся текст и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #821), №2 (отзыв #822).",
                 exception.getReason()
         );
         assertSame(originalStatus, order.getStatus());
@@ -536,13 +599,16 @@ class OrderStatusTransitionServiceTest {
                 orderStatusService,
                 orderTransactionService,
                 badReviewTaskService,
-                textService,
                 telegramService,
                 orderCompanyStatusService,
                 orderStatusNotificationService,
                 orderBotLifecycleService,
                 reviewArchiveService,
-                reviewRepository
+                reviewRepository,
+                orderPaymentMessageBuilder,
+                orderReviewCheckMessageBuilder,
+                mobilePushBusinessNotificationService,
+                orderCorrectionTelegramNotifier
         );
     }
 

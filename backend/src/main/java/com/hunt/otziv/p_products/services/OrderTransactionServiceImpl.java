@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -31,6 +32,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final OrderStatusService orderStatusService;
     private final BadReviewTaskService badReviewTaskService;
     private final NextOrderRequestService nextOrderRequestService;
+    private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
 
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
@@ -43,7 +45,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             CompanyStatusService companyStatusService,
             OrderStatusService orderStatusService,
             BadReviewTaskService badReviewTaskService,
-            NextOrderRequestService nextOrderRequestService
+            NextOrderRequestService nextOrderRequestService,
+            MobilePushBusinessNotificationService mobilePushBusinessNotificationService
     ) {
         this.companyService = companyService;
         this.zpService = zpService;
@@ -53,11 +56,16 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.orderStatusService = orderStatusService;
         this.badReviewTaskService = badReviewTaskService;
         this.nextOrderRequestService = nextOrderRequestService;
+        this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
     }
 
     @Override
     @Transactional
     public boolean handlePaymentStatus(Order order) throws Exception {
+        boolean wasAlreadyPaid = order != null
+                && order.getStatus() != null
+                && STATUS_PAYMENT.equals(order.getStatus().getTitle());
+
         if (!order.isComplete() && order.getCounter() >= order.getAmount()) {
             log.info("Заказ не выполнен и счетчик достиг плана");
 
@@ -100,6 +108,9 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
 
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PAYMENT));
         orderRepository.save(order);
+        if (!wasAlreadyPaid) {
+            mobilePushBusinessNotificationService.notifyOwnersOrderPaid(order);
+        }
         return true;
     }
 

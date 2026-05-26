@@ -111,7 +111,7 @@ public class ApiManagerReviewController {
     ) {
         requireReviewForOrder(orderId, reviewId);
         if (!autoTextService.changeReviewText(reviewId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не изменен");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI не сгенерировал безопасный текст отзыва. Старый текст оставлен без изменений.");
         }
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
@@ -702,7 +702,7 @@ public class ApiManagerReviewController {
         }
         requireRecoveryTaskForOrder(orderId, taskId);
 
-        reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.scheduledDate());
+        reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), request.scheduledDate());
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 

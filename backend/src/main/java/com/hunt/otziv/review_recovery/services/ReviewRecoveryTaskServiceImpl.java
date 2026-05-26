@@ -107,7 +107,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
     @Override
     @Transactional
-    public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, LocalDate scheduledDate) {
+    public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
         ReviewRecoveryTask task = requireTask(taskId);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Можно редактировать только активную задачу восстановления");
@@ -118,6 +118,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         task.setRecoveryText(recoveryText.trim());
+        if (recoveryAnswer != null) {
+            task.setRecoveryAnswer(recoveryAnswer.trim());
+        }
         if (scheduledDate != null) {
             task.setScheduledDate(scheduledDate);
         }

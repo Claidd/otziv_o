@@ -298,8 +298,9 @@ public class AutoTextServiceImpl implements AutoTextService{
                 log.info("🧠 Генерация отзыва (попытка {})...", i);
                 generatedText = reviewGeneratorService.safeGenerateSingleReview(promptDTO);
 
-                if (generatedText == null || generatedText.isBlank()) {
-                    log.warn("⚠️ Пустой результат генерации — попытка {}", i);
+                if (isInvalidGeneratedReviewText(generatedText)) {
+                    log.warn("⚠️ Некорректный результат генерации — попытка {}: {}", i, generatedText);
+                    generatedText = null;
                     continue;
                 }
 
@@ -321,7 +322,7 @@ public class AutoTextServiceImpl implements AutoTextService{
             }
         }
 
-        if (generatedText == null || generatedText.isBlank()) {
+        if (isInvalidGeneratedReviewText(generatedText)) {
             log.error("❌ Не удалось сгенерировать отзыв после {} попыток", maxAttempts);
             return false;
         }
@@ -333,6 +334,17 @@ public class AutoTextServiceImpl implements AutoTextService{
         log.info("✅ Смена текста завершена за {:.4f} сек", (end - start) / 1_000_000_000.0);
 
         return result;
+    }
+
+    private boolean isInvalidGeneratedReviewText(String text) {
+        if (text == null || text.isBlank()) {
+            return true;
+        }
+
+        String normalized = text.trim();
+        return normalized.startsWith("⚠️")
+                || normalized.startsWith("⚠")
+                || normalized.toLowerCase(Locale.ROOT).contains("ошибка при генерации отзыва");
     }
 
 

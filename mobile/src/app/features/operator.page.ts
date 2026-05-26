@@ -23,8 +23,21 @@ import {
   PhoneOperatorOption
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { MOBILE_ACTIONS, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  mobilePageIndex,
+  mobilePageIsFirst,
+  mobilePageIsLast,
+  mobilePageLabel,
+  mobilePageTotal,
+  mobileToneFromClass
+} from '../shared/mobile-board.helpers';
 import { displayPhone, normalizePhoneDigits } from '../shared/phone-format';
 
 type OperatorAction = 'send' | 'toWork';
@@ -74,7 +87,7 @@ const OPERATOR_TABS: OperatorTab[] = [
 
 @Component({
   selector: 'app-operator',
-  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Оператор" />
@@ -87,56 +100,37 @@ const OPERATOR_TABS: OperatorTab[] = [
         <app-mobile-reminders #reminders />
 
         <main class="operator-page">
-          <section class="operator-status-scroll" aria-label="Состояние оператора">
-            @for (tab of tabs; track tab.key) {
-              <button
-                type="button"
-                class="metric-tile {{ tab.tone }}"
-                [class.active]="activeSection() === tab.key"
-                (click)="setSection(tab.key)"
-              >
-                <span class="material-icons-sharp">{{ tab.icon }}</span>
-                <strong>{{ tabValue(tab.key) }}</strong>
-                <small>{{ tab.label.toLowerCase() }}</small>
-              </button>
-            }
+          <app-mobile-status-slider
+            [items]="statusItems()"
+            [activeKey]="activeSection()"
+            ariaLabel="Состояние оператора"
+            (select)="selectStatusSliderItem($event)"
+          />
 
-            <button type="button" class="metric-tile tone-yellow" (click)="openBindModal()">
-              <span class="material-icons-sharp">timer</span>
-              <strong>{{ timerState() }}</strong>
-              <small>{{ board()?.telephoneId ? ('тел. #' + board()?.telephoneId) : 'телефон' }}</small>
-            </button>
-          </section>
-
-          <form class="operator-search-strip" (ngSubmit)="applySearch()" role="search" aria-label="Поиск">
-            <label>
-              <span class="material-icons-sharp">search</span>
-              <input
-                name="operatorKeyword"
-                type="search"
-                autocomplete="off"
-                placeholder="Телефон, город, компания"
-                [ngModel]="keyword()"
-                (ngModelChange)="setKeyword($event)"
-              >
-            </label>
-
+          <app-mobile-search-bar
+            [value]="keyword()"
+            placeholder="Телефон, город, компания"
+            [showRefresh]="false"
+            [hasExtraAction]="true"
+            (valueChange)="setKeyword($event)"
+            (searchSubmit)="applySearch()"
+          >
             @if (keyword() || appliedKeyword()) {
-              <button class="icon-button" type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
+              <button mobileSearchActions type="button" (click)="clearSearch()" [disabled]="loading()" aria-label="Сбросить поиск">
                 <span class="material-icons-sharp">close</span>
               </button>
             }
 
             @if (canManagePhones()) {
-              <button class="icon-button" type="button" (click)="openPhones()" [disabled]="phoneLoading()" aria-label="Телефоны">
+              <button mobileSearchActions type="button" (click)="openPhones()" [disabled]="phoneLoading()" aria-label="Телефоны">
                 <span class="material-icons-sharp">settings_cell</span>
               </button>
             }
 
-            <button class="icon-button" type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить">
+            <button mobileSearchActions type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить">
               <span class="material-icons-sharp">refresh</span>
             </button>
-          </form>
+          </app-mobile-search-bar>
 
           <section class="operator-promo-strip" aria-label="Тексты оператора">
             @for (item of promoItems(); track item.key) {
@@ -226,26 +220,24 @@ const OPERATOR_TABS: OperatorTab[] = [
             }
           </section>
 
-          <section class="lead-bottom-controls operator-bottom-controls" aria-label="Пагинация">
-            <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+          <app-mobile-bottom-pager
+            class="mobile-page-bottom-pager"
+            [pageIndex]="currentPageIndex() - 1"
+            [totalPages]="currentPageTotal()"
+            [disabled]="loading()"
+            (previous)="previousPage()"
+            (next)="nextPage()"
+          >
+            <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
               <span class="material-icons-sharp">notifications_active</span>
               @if (reminders.activeReminderCount()) {
                 <small>{{ reminders.activeReminderCount() }}</small>
               }
             </button>
-            <button class="expand-list-button" type="button" (click)="openBindModal()" aria-label="ID телефона">
+            <button mobilePagerActions class="expand-list-button" type="button" (click)="openBindModal()" aria-label="ID телефона">
               <span class="material-icons-sharp">phone_iphone</span>
             </button>
-            <div class="lead-pager">
-              <button type="button" (click)="previousPage()" [disabled]="isFirstPage() || loading()" aria-label="Предыдущая страница">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-              <span>{{ pageLabel() }}</span>
-              <button type="button" (click)="nextPage()" [disabled]="isLastPage() || loading()" aria-label="Следующая страница">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </div>
-          </section>
+          </app-mobile-bottom-pager>
         </main>
 
         <ion-modal class="sheet-modal operator-bind-sheet" [isOpen]="bindModalOpen()" (didDismiss)="closeBindModal()">
@@ -1041,7 +1033,7 @@ export class OperatorPage implements OnInit, OnDestroy {
   readonly phoneDeleting = signal(false);
   readonly phoneError = signal<string | null>(null);
 
-  readonly canManagePhones = computed(() => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']));
+  readonly canManagePhones = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.manage));
   readonly currentPage = computed(() => this.board()?.leads ?? this.emptyPage());
   readonly currentLeads = computed(() => this.currentPage().content ?? []);
   readonly companyCreateOpen = computed(() => this.companyLead() !== null);
@@ -1052,6 +1044,22 @@ export class OperatorPage implements OnInit, OnDestroy {
   readonly companyCityOptions = computed(() => this.companyPayload()?.cities ?? []);
   readonly activePhones = computed(() => this.phones().filter((phone) => phone.active).length);
   readonly pausedPhones = computed(() => this.phones().filter((phone) => !this.isTimerReady(phone)).length);
+  readonly statusItems = computed<MobileStatusItem[]>(() => [
+    ...this.tabs.map((tab) => ({
+      key: tab.key,
+      title: tab.label.toLowerCase(),
+      value: this.tabValue(tab.key),
+      icon: tab.icon,
+      tone: this.sliderTone(tab.tone)
+    })),
+    {
+      key: 'phone-timer',
+      title: this.board()?.telephoneId ? `тел. #${this.board()?.telephoneId}` : 'телефон',
+      value: this.timerState(),
+      icon: 'timer',
+      tone: 'yellow' as const
+    }
+  ]);
   readonly promoItems = computed<OperatorPromoItem[]>(() => {
     const text = this.board()?.text;
     return [
@@ -1064,7 +1072,8 @@ export class OperatorPage implements OnInit, OnDestroy {
 
   constructor(
     private readonly api: ApiService,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly confirm: MobileConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -1127,6 +1136,15 @@ export class OperatorPage implements OnInit, OnDestroy {
     void this.loadBoard().finally(() => this.resetListScroll());
   }
 
+  selectStatusSliderItem(key: string): void {
+    if (key === 'phone-timer') {
+      this.openBindModal();
+      return;
+    }
+
+    this.setSection(key as OperatorBoardSection);
+  }
+
   previousPage(): void {
     if (this.isFirstPage() || this.loading()) {
       return;
@@ -1147,6 +1165,10 @@ export class OperatorPage implements OnInit, OnDestroy {
     return section === 'queue' ? this.board()?.queueTotal ?? 0 : this.board()?.sentTotal ?? 0;
   }
 
+  sliderTone(toneClass: string): MobileStatusItem['tone'] {
+    return mobileToneFromClass(toneClass);
+  }
+
   timerState(): string {
     const board = this.board();
     if (!board) {
@@ -1159,24 +1181,23 @@ export class OperatorPage implements OnInit, OnDestroy {
   }
 
   pageLabel(): string {
-    return `${this.currentPageIndex()} / ${this.currentPageTotal()}`;
+    return mobilePageLabel(this.currentPage(), this.pageNumber());
   }
 
   currentPageIndex(): number {
-    const page = this.currentPage();
-    return (page.number ?? page.pageNumber ?? this.pageNumber()) + 1;
+    return mobilePageIndex(this.currentPage(), this.pageNumber());
   }
 
   currentPageTotal(): number {
-    return this.currentPage().totalPages || 1;
+    return mobilePageTotal(this.currentPage());
   }
 
   isFirstPage(): boolean {
-    return this.currentPage().first ?? this.pageNumber() <= 0;
+    return mobilePageIsFirst(this.currentPage(), this.pageNumber());
   }
 
   isLastPage(): boolean {
-    return this.currentPage().last ?? this.currentPageIndex() >= this.currentPageTotal();
+    return mobilePageIsLast(this.currentPage(), this.pageNumber());
   }
 
   emptyMessage(): string {
@@ -1531,7 +1552,17 @@ export class OperatorPage implements OnInit, OnDestroy {
 
   async deleteSelectedPhone(): Promise<void> {
     const phone = this.selectedPhone();
-    if (!phone || this.phoneDeleting() || !window.confirm(`Удалить телефон ${phone.number}?`)) {
+    if (!phone || this.phoneDeleting()) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить телефон',
+      message: `Удалить телефон ${phone.number}?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
       return;
     }
 

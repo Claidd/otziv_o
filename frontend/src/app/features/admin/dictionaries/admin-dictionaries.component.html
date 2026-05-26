@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" appTooltip="Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,7 +37,7 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
@@ -156,6 +156,372 @@
               Новая категория
             </button>
           </div>
+        }
+      </article>
+    </section>
+    } @else if (activeTab() === 'autoresponderMonitor') {
+    <section class="dictionary-monitor-page">
+      <article class="dictionary-card editor-card autoresponder-monitor">
+        <div class="monitor-head">
+          <div class="editor-guide">
+            <span class="material-icons-sharp">monitor_heart</span>
+            <div>
+              <h3>Кабинет мониторинга автоответчика</h3>
+              <p>
+                Здесь видно, кто стоит в очереди, какие сценарии активны, что уже отправлено и где есть ошибки. Переключатель включает только наблюдение и polling, отправка автоответчика продолжает жить по своим настройкам.
+              </p>
+            </div>
+          </div>
+
+          <div class="actions monitor-actions">
+            <label class="checkbox monitor-toggle" appTooltip="Включает только кабинет наблюдения и периодическое обновление страницы. На отправку сообщений не влияет.">
+              <input
+                class="switch"
+                type="checkbox"
+                [checked]="clientMessageSettings()?.monitorEnabled"
+                [disabled]="clientMessageMonitorSaving()"
+                (change)="setClientMessageMonitorEnabled($any($event.target).checked)"
+              >
+              <span>{{ clientMessageMonitorSaving() ? 'Переключаю' : (clientMessageSettings()?.monitorEnabled ? 'Наблюдение включено' : 'Наблюдение выключено') }}</span>
+            </label>
+
+            <button type="button" class="dictionary-action" (click)="loadClientMessageMonitor()" [disabled]="clientMessageMonitorLoading() || !clientMessageSettings()?.monitorEnabled">
+              <span class="material-icons-sharp">refresh</span>
+              {{ clientMessageMonitorLoading() ? 'Обновляю' : 'Обновить' }}
+            </button>
+          </div>
+        </div>
+
+        @if (!clientMessageSettings()?.monitorEnabled) {
+          <div class="empty-picker monitor-empty">
+            <span class="material-icons-sharp">visibility_off</span>
+            <h2>Наблюдение выключено</h2>
+            <p>Страница не опрашивает мониторинг и не нагружает сервер. Планировщик, очередь и отправка продолжают работать по настройкам автоответчика.</p>
+          </div>
+        } @else {
+          @if (clientMessageMonitorError()) {
+            <app-load-error-card
+              title="Мониторинг не загрузился"
+              [message]="clientMessageMonitorError()!"
+              actionLabel="Повторить"
+              [loading]="clientMessageMonitorLoading()"
+              (retry)="loadClientMessageMonitor()"
+            />
+          }
+
+          @if (clientMessageMonitor(); as monitor) {
+            <div class="monitor-status-row">
+              <span [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
+                {{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}
+              </span>
+              <span [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
+                {{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}
+              </span>
+              <span [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
+                {{ monitor.windowAllowed ? 'рабочее окно сейчас' : 'вне рабочего окна' }}
+              </span>
+              @if (monitor.pausedUntil) {
+                <span class="status-pill danger" [appTooltip]="monitor.pauseReason || 'Автоответчик временно поставлен на паузу защитой от массовых ошибок.'">
+                  пауза до {{ monitor.pausedUntil | date:'dd.MM HH:mm' }}
+                </span>
+              }
+              <span class="monitor-updated">
+                Обновлено {{ monitor.updatedAt | date:'HH:mm:ss' }} МСК · окна {{ monitor.businessWindows }}
+              </span>
+              <span class="monitor-updated">
+                Ближайший слот: {{ monitor.nextAttemptAt ? (monitor.nextAttemptAt | date:'dd.MM HH:mm') : 'не запланирован' }}
+              </span>
+            </div>
+
+            <div class="monitor-metric-grid">
+              @for (metric of monitorMetrics(); track trackMonitorMetric($index, metric)) {
+                <article class="monitor-metric-card" [class]="metric.tone">
+                  <span class="material-icons-sharp">{{ metric.icon }}</span>
+                  <div>
+                    <small>{{ metric.label }}</small>
+                    <strong>{{ metric.value }}</strong>
+                  </div>
+                </article>
+              }
+            </div>
+
+            @if (monitor.archiveDiagnostics; as archiveDiagnostics) {
+              <section class="monitor-table-card archive-diagnostics-card">
+                <div class="monitor-table-head">
+                  <div>
+                    <h3>Почему компании "{{ archiveDiagnostics.status }}" попадают или не попадают в очередь</h3>
+                    <p class="settings-hint">Диагностика строится по текущему статусу компании, дате перехода в статус, чату, активным заказам и открытым заявкам.</p>
+                  </div>
+                </div>
+                <div class="archive-diagnostics-grid">
+                  <span><b>{{ archiveDiagnostics.totalInStatus }}</b> всего в статусе</span>
+                  <span><b>{{ archiveDiagnostics.ready }}</b> готовы к предложению</span>
+                  <span><b>{{ archiveDiagnostics.tooFresh }}</b> еще рано</span>
+                  <span><b>{{ archiveDiagnostics.withoutChat }}</b> без чата</span>
+                  <span><b>{{ archiveDiagnostics.blockedByActiveOrder }}</b> с активным заказом</span>
+                  <span><b>{{ archiveDiagnostics.blockedByOpenRequest }}</b> с открытой заявкой</span>
+                </div>
+              </section>
+            }
+
+            <div class="monitor-scenario-grid">
+              @for (scenario of monitor.scenarios; track trackMonitorScenario($index, scenario)) {
+                <article class="monitor-metric-card monitor-scenario-card" [class]="monitorScenarioTone(scenario)">
+                  <div class="monitor-scenario-header">
+                    <span class="material-icons-sharp">{{ monitorScenarioIcon(scenario) }}</span>
+                    <strong
+                      class="monitor-scenario-title"
+                      tabindex="0"
+                      [appTooltip]="monitorScenarioTooltip(scenario)"
+                    >
+                      {{ scenario.label }}
+                    </strong>
+                  </div>
+                  <div class="monitor-scenario-stats">
+                    <div class="monitor-scenario-stat primary">
+                      <b>{{ scenario.activeCandidates }}</b>
+                      <span>активных кандидатов</span>
+                    </div>
+                    <div class="monitor-scenario-stat">
+                      <b>{{ scenario.dueNow }}</b>
+                      <span>готово сейчас</span>
+                    </div>
+                    <div class="monitor-scenario-stat">
+                      <b>{{ scenario.sentToday }}</b>
+                      <span>отправлено сегодня</span>
+                    </div>
+                    <div class="monitor-scenario-stat failed">
+                      <b>{{ scenario.failedToday }}</b>
+                      <span>ошибок сегодня</span>
+                    </div>
+                    <div class="monitor-scenario-stat">
+                      <b>{{ scenario.skippedToday }}</b>
+                      <span>пропущено сегодня</span>
+                    </div>
+                    <div class="monitor-scenario-stat">
+                      <b>{{ scenario.sentSevenDays }}</b>
+                      <span>отправлено за 7 дней</span>
+                    </div>
+                  </div>
+                  @if (scenario.lastError) {
+                    <div class="monitor-scenario-error">
+                      <b>!</b>
+                      <span>Последняя ошибка: {{ scenario.lastError }}</span>
+                    </div>
+                  }
+                </article>
+              }
+            </div>
+
+            <section class="monitor-table-card">
+              <div class="monitor-table-head">
+                <div>
+                  <h3>Очередь кандидатов</h3>
+                  <p class="settings-hint">Кто встал в рассылку, когда следующая попытка и почему задача может не уйти.</p>
+                </div>
+                <span class="monitor-table-count">Показано {{ filteredMonitorQueue().length }} из {{ monitor.activeCandidates }}</span>
+              </div>
+              <div class="monitor-filter-row">
+                <label>
+                  <span>Сценарий</span>
+                  <select [value]="monitorScenarioFilter()" (change)="setMonitorScenarioFilter($any($event.target).value)">
+                    <option value="ALL">Все сценарии</option>
+                    @for (scenario of monitor.scenarios; track trackMonitorScenario($index, scenario)) {
+                      <option [value]="scenario.scenario">{{ scenario.label }}</option>
+                    }
+                  </select>
+                </label>
+                <label>
+                  <span>Очередь</span>
+                  <select [value]="monitorQueueStatusFilter()" (change)="setMonitorQueueStatusFilter($any($event.target).value)">
+                    <option value="ALL">Все кандидаты</option>
+                    <option value="DUE">Готово сейчас</option>
+                    <option value="ERROR">С ошибкой</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Журнал</span>
+                  <select [value]="monitorAttemptStatusFilter()" (change)="setMonitorAttemptStatusFilter($any($event.target).value)">
+                    <option value="ALL">Все попытки</option>
+                    <option value="SENT">Отправлено</option>
+                    <option value="FAILED">Ошибка</option>
+                    <option value="SKIPPED">Пропущено</option>
+                  </select>
+                </label>
+                <label class="wide">
+                  <span>Поиск</span>
+                  <input
+                    type="search"
+                    placeholder="Компания, заказ, канал, ошибка"
+                    [value]="monitorSearch()"
+                    (input)="setMonitorSearch($any($event.target).value)"
+                  >
+                </label>
+              </div>
+              <div class="table-scroll monitor-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Сценарий</th>
+                      <th>Цель</th>
+                      <th>Текущий статус</th>
+                      <th>Следующая попытка</th>
+                      <th>Последняя попытка</th>
+                      <th>Итог</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of filteredMonitorQueue(); track trackMonitorQueueItem($index, item)) {
+                      <tr>
+                        <td>
+                          <strong>{{ item.scenarioLabel }}</strong>
+                          <span>{{ item.sentCount }} отправок · {{ item.consecutiveFailures }} ошибок подряд</span>
+                        </td>
+                        <td>
+                          @if (item.link) {
+                            <a [href]="item.link">{{ item.orderTitle || item.companyTitle }}</a>
+                          } @else {
+                            <strong>{{ item.orderTitle || item.companyTitle }}</strong>
+                          }
+                          <span>Заказ {{ item.orderId || '-' }} · компания {{ item.companyId || '-' }}</span>
+                        </td>
+                        <td>
+                          <span class="status-pill off">{{ item.statusTitle || 'без статуса' }}</span>
+                        </td>
+                        <td>
+                          <strong>{{ item.nextAttemptAt ? (item.nextAttemptAt | date:'dd.MM HH:mm') : '-' }}</strong>
+                          <span>{{ item.targetType }}</span>
+                        </td>
+                        <td>
+                          <strong>{{ item.lastAttemptAt ? (item.lastAttemptAt | date:'dd.MM HH:mm') : '-' }}</strong>
+                          <span>успех {{ item.lastSuccessAt ? (item.lastSuccessAt | date:'dd.MM HH:mm') : '-' }}</span>
+                        </td>
+                        <td>
+                          @if (item.lastErrorMessage) {
+                            <small class="monitor-error">{{ item.lastErrorMessage }}</small>
+                          } @else {
+                            <span>ошибок нет</span>
+                          }
+                          <div class="monitor-row-actions">
+                            <button type="button" class="row-icon-button monitor-details-button" (click)="toggleMonitorQueueDetails(item)" title="Показать превью">
+                              <span class="material-icons-sharp">{{ expandedMonitorQueueKey() === item.targetKey ? 'expand_less' : 'preview' }}</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="row-icon-button monitor-details-button"
+                              (click)="retryClientMessageCandidate(item)"
+                              [disabled]="!!clientMessageManualAction()"
+                              title="Повторить сейчас"
+                            >
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'retry') ? 'hourglass_top' : 'replay' }}</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="row-icon-button monitor-details-button"
+                              (click)="markClientMessageCandidateDone(item)"
+                              [disabled]="!!clientMessageManualAction()"
+                              title="Пометить выполненным"
+                            >
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'done') ? 'hourglass_top' : 'task_alt' }}</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="row-icon-button monitor-details-button danger-icon"
+                              (click)="disableClientMessageCandidate(item)"
+                              [disabled]="!!clientMessageManualAction()"
+                              title="Отключить кандидата"
+                            >
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'disable') ? 'hourglass_top' : 'block' }}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      @if (expandedMonitorQueueKey() === item.targetKey) {
+                        <tr class="monitor-detail-row">
+                          <td colspan="6">
+                            <div class="monitor-preview-grid">
+                              <span><b>Канал</b>{{ item.expectedChannel || '-' }}</span>
+                              <span><b>Детали</b>{{ item.channelDetails || '-' }}</span>
+                              <span><b>Оплата</b>{{ paymentInstructionSourceLabel(item.paymentInstructionSource) }}</span>
+                              <p>{{ item.messagePreview || 'Превью пока недоступно' }}</p>
+                            </div>
+                          </td>
+                        </tr>
+                      }
+                    } @empty {
+                      <tr>
+                        <td colspan="6" class="no-results">В очереди пока пусто</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="monitor-table-card">
+              <div class="monitor-table-head">
+                <div>
+                  <h3>Журнал попыток</h3>
+                  <p class="settings-hint">Что реально происходило: отправлено, пропущено, ошибка, канал и превью сообщения.</p>
+                </div>
+                <span class="monitor-table-count">Показано {{ filteredMonitorAttempts().length }} из {{ monitor.attempts.length }}</span>
+              </div>
+              <div class="table-scroll monitor-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Время</th>
+                      <th>Сценарий</th>
+                      <th>Статус</th>
+                      <th>Цель</th>
+                      <th>Сообщение / ошибка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (attempt of filteredMonitorAttempts(); track trackMonitorAttempt($index, attempt)) {
+                      <tr>
+                        <td>
+                          <strong>{{ attempt.attemptedAt | date:'dd.MM HH:mm:ss' }}</strong>
+                          <span>{{ attempt.channel || 'канал не выбран' }}</span>
+                        </td>
+                        <td>
+                          <strong>{{ attempt.scenarioLabel }}</strong>
+                          <span>{{ attempt.targetType }}</span>
+                        </td>
+                        <td>
+                          <span [class]="monitorAttemptStatusClass(attempt.status)">{{ attempt.statusLabel }}</span>
+                          @if (attempt.errorCode) {
+                            <span>{{ attempt.errorCode }}</span>
+                          }
+                        </td>
+                        <td>
+                          @if (attempt.link) {
+                            <a [href]="attempt.link">{{ attempt.orderTitle || attempt.companyTitle }}</a>
+                          } @else {
+                            <strong>{{ attempt.orderTitle || attempt.companyTitle }}</strong>
+                          }
+                          <span>Заказ {{ attempt.orderId || '-' }} · компания {{ attempt.companyId || '-' }}</span>
+                        </td>
+                        <td>
+                          @if (attempt.errorMessage) {
+                            <small class="monitor-error">{{ attempt.errorMessage }}</small>
+                          } @else {
+                            <span>{{ attempt.messagePreview || 'без превью' }}</span>
+                          }
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="5" class="no-results">Попыток пока нет</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          } @else if (clientMessageMonitorLoading()) {
+            <p class="settings-hint">Загружаю мониторинг...</p>
+          }
         }
       </article>
     </section>
@@ -506,6 +872,157 @@
                     <td>
                       <strong>{{ telegramReportSettings()?.morningLastRunKey || 'утро: нет' }}</strong>
                       <span>{{ telegramReportSettings()?.eveningLastRunKey || 'вечер: нет' }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            }
+
+            @case ('autoresponder') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="selected">
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Сервис</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.workerEnabled" [class.off]="!clientMessageSettings()?.workerEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.workerEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <div class="setting-state-row">
+                        <span class="summary-switch mini" [class.on]="clientMessageSettings()?.liveEnabled" [class.off]="!clientMessageSettings()?.liveEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.liveEnabled ? 'live' : 'dry-run' }}
+                        </span>
+                      </div>
+                      <span>Глобальная работа автоответчика и реальные отправки</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.workerEnabled ? 'включен' : 'выключен' }}</strong>
+                      <span>{{ clientMessageSettings()?.liveEnabled ? 'live-отправка' : 'dry-run без отправки' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Рабочие окна</strong>
+                      <span>Московское время</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.businessWindows || '-' }}</strong>
+                      <span>лимит {{ clientMessageSettings()?.dailyLimit ?? 0 }} в день</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Проверка отзывов</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.reviewCheckEnabled" [class.off]="!clientMessageSettings()?.reviewCheckEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.reviewCheckEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <span>Статусы: {{ clientMessageSettings()?.reviewCheckStatuses || '-' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.reviewCheckEnabled ? 'включена' : 'выключена' }}</strong>
+                      <span>каждые {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Оплата</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.paymentReminderEnabled" [class.off]="!clientMessageSettings()?.paymentReminderEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.paymentReminderEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <span>Статусы: {{ clientMessageSettings()?.paymentReminderStatuses || '-' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.paymentReminderEnabled ? 'включена' : 'выключена' }}</strong>
+                      <span>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}, каждые {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Просрочка оплаты</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.paymentOverdueEnabled" [class.off]="!clientMessageSettings()?.paymentOverdueEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.paymentOverdueEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <div class="setting-state-row">
+                        <span class="summary-switch mini" [class.on]="clientMessageSettings()?.paymentOverdueLiveEnabled" [class.off]="!clientMessageSettings()?.paymentOverdueLiveEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run' }}
+                        </span>
+                      </div>
+                      <span>Цель: {{ clientMessageSettings()?.paymentOverdueTargetStatus || '-' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.paymentOverdueEnabled ? 'контроль включен' : 'контроль выключен' }}</strong>
+                      <span>{{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run' }} после {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Плохие отзывы</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.badReviewInvoiceEnabled" [class.off]="!clientMessageSettings()?.badReviewInvoiceEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <span>Счет после публикации плохого</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'включен' : 'выключен' }}</strong>
+                      <span>сумма с доплатой</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="setting-parameter">
+                      <div class="setting-title-row">
+                        <strong>Архивные компании</strong>
+                        <span class="summary-switch" [class.on]="clientMessageSettings()?.archiveReorderEnabled" [class.off]="!clientMessageSettings()?.archiveReorderEnabled">
+                          <i></i>
+                          {{ clientMessageSettings()?.archiveReorderEnabled ? 'вкл' : 'выкл' }}
+                        </span>
+                      </div>
+                      <span>Статус: {{ clientMessageSettings()?.archiveCompanyStatus || '-' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.archiveReorderEnabled ? 'включены' : 'выключены' }}</strong>
+                      <span>каждые {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Паузы каналов</strong>
+                      <span>WhatsApp / Telegram / MAX / общий</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} / {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} / {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.</strong>
+                      <span>общая {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Журнал и пачки</strong>
+                      <span>Сколько храним и сколько берем за тик</span>
+                    </td>
+                    <td>
+                      <strong>{{ clientMessageSettings()?.retentionDays ?? 0 }} дн.</strong>
+                      <span>пачка {{ clientMessageSettings()?.tickBatchSize ?? 0 }}, кандидатов {{ clientMessageSettings()?.candidateLimit ?? 0 }}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -989,7 +1506,7 @@
               <div class="settings-section">
                 <h3>Telegram-рассылки</h3>
                 <label class="checkbox" appTooltip="Включает ежедневный утренний Telegram-отчет по расписанию.">
-                  <input type="checkbox" formControlName="morningReportEnabled">
+                  <input class="switch" type="checkbox" formControlName="morningReportEnabled">
                   <span>Утренняя рассылка включена</span>
                 </label>
 
@@ -999,7 +1516,7 @@
                 </label>
 
                 <label class="checkbox" appTooltip="Включает ежедневный вечерний Telegram-отчет по расписанию.">
-                  <input type="checkbox" formControlName="eveningReportEnabled">
+                  <input class="switch" type="checkbox" formControlName="eveningReportEnabled">
                   <span>Вечерняя рассылка включена</span>
                 </label>
 
@@ -1017,7 +1534,7 @@
               <div class="settings-section">
                 <h3>WhatsApp-группы</h3>
                 <label class="checkbox" appTooltip="Если включено, сервер сверяет ссылки chat.whatsapp.com из компаний с группами, которые отдает WhatsApp-шлюз.">
-                  <input type="checkbox" formControlName="whatsAppGroupSyncEnabled">
+                  <input class="switch" type="checkbox" formControlName="whatsAppGroupSyncEnabled">
                   <span>Автосинхронизация WhatsApp-групп включена</span>
                 </label>
 
@@ -1073,7 +1590,7 @@
               <div class="settings-section">
                 <h3>Отчеты клиентам</h3>
                 <label class="checkbox" appTooltip="Короткий отчет уходит клиенту после промежуточной публикации отзыва, кроме финального отзыва заказа.">
-                  <input type="checkbox" formControlName="clientPublicationProgressReportsEnabled">
+                  <input class="switch" type="checkbox" formControlName="clientPublicationProgressReportsEnabled">
                   <span>Отправлять клиентам короткие отчеты о публикациях</span>
                 </label>
 
@@ -1093,6 +1610,323 @@
               }
 
               <div class="actions">
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
+          }
+
+          @case ('autoresponder') {
+            <form class="settings-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
+              <section class="settings-section" aria-label="Как работает автоответчик">
+                <div class="editor-guide">
+                  <span class="material-icons-sharp">info</span>
+                  <div>
+                    <h3>Как сейчас работает автоответчик</h3>
+                    <p>
+                      Сервис регулярно находит подходящие компании и заказы, планирует сообщения внутри рабочих окон по Москве и отправляет их с паузами между каналами.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="form-grid">
+                  <div>
+                    <strong>Проверка шаблонов</strong>
+                    <p class="settings-hint">
+                      Заказы в статусах "{{ clientMessageSettings()?.reviewCheckStatuses || 'не заданы' }}" получают ссылку на проверку отзывов.
+                      Повтор идет раз в {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн., пока заказ остается в этих статусах.
+                    </p>
+                  </div>
+
+                  <div>
+                    <strong>Напоминание об оплате</strong>
+                    <p class="settings-hint">
+                      Для статусов "{{ clientMessageSettings()?.paymentReminderStatuses || 'не заданы' }}" клиенту уходит текст оплаты.
+                      Повтор идет раз в {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн. и прекращается после выхода заказа из группы.
+                      Источник оплаты сейчас: {{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}.
+                    </p>
+                  </div>
+
+                  <div>
+                    <strong>Просрочка оплаты</strong>
+                    <p class="settings-hint">
+                      После {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. в статусах "{{ clientMessageSettings()?.paymentOverdueStatuses || 'не заданы' }}"
+                      сервис готовит эскалацию в "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задано' }}".
+                      Сейчас режим: {{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run без смены статуса' }}.
+                    </p>
+                  </div>
+
+                  <div>
+                    <strong>Плохие отзывы</strong>
+                    <p class="settings-hint">
+                      После выполнения плохого отзыва сервис сразу готовит счет клиенту на сумму заказа плюс все выполненные плохие отзывы.
+                      При выключенной live-отправке счет только логируется.
+                    </p>
+                  </div>
+
+                  <div>
+                    <strong>Архивные компании</strong>
+                    <p class="settings-hint">
+                      Компаниям со статусом "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задан' }}" предлагается новый заказ раз в
+                      {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес., если нет активных заказов и открытой заявки на следующий заказ.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="form-grid">
+                  <div>
+                    <strong>Расписание</strong>
+                    <p class="settings-hint">
+                      Окна: {{ clientMessageSettings()?.businessWindows || 'не заданы' }} по Москве.
+                      Лимит: {{ clientMessageSettings()?.dailyLimit ?? 0 }} успешных сообщений в день.
+                      За проход берется до {{ clientMessageSettings()?.tickBatchSize ?? 0 }} задач и до {{ clientMessageSettings()?.candidateLimit ?? 0 }} кандидатов на сценарий.
+                    </p>
+                  </div>
+                  <div>
+                    <strong>Защита от массовой отправки</strong>
+                    <p class="settings-hint">
+                      Между сообщениями выдерживаются паузы: WhatsApp {{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} сек.,
+                      Telegram {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} сек., MAX {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.
+                      Если канал не распознан, применяется общая пауза {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.
+                    </p>
+                  </div>
+                  <div>
+                    <strong>Ошибки и ручная работа</strong>
+                    <p class="settings-hint">
+                      Ошибка отправки записывается в журнал с читаемой причиной и не ломает сайт: менеджер может вручную отправить сообщение или поменять статус.
+                      При выключенной live-отправке задачи только планируются и логируются.
+                    </p>
+                  </div>
+                  <div>
+                    <strong>Хранение</strong>
+                    <p class="settings-hint">
+                      Сервис хранит состояние последней отправки по сценарию, а старые попытки и закрытые состояния очищает через
+                      {{ clientMessageSettings()?.retentionDays ?? 0 }} дн., чтобы журнал не рос бесконечно.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <div class="settings-section">
+                <h3>Включатели</h3>
+                <label class="checkbox" appTooltip="Полностью включает или останавливает worker автоответчика.">
+                  <input class="switch" type="checkbox" formControlName="workerEnabled">
+                  <span>Автоответчик включен</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Если выключить, задачи будут планироваться и логироваться, но сообщения не уйдут клиентам.">
+                  <input class="switch" type="checkbox" formControlName="liveEnabled">
+                  <span>Реальная отправка сообщений включена</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Напоминание клиенту о проверке шаблонов отзывов.">
+                  <input class="switch" type="checkbox" formControlName="reviewCheckEnabled">
+                  <span>Напоминать о проверке шаблонов</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Напоминание клиенту об оплате заказа.">
+                  <input class="switch" type="checkbox" formControlName="paymentReminderEnabled">
+                  <span>Напоминать об оплате</span>
+                </label>
+
+                <label class="checkbox" appTooltip="После выполнения плохого отзыва отправляет клиенту счет с суммой заказа и уже выполненных плохих отзывов.">
+                  <input class="switch" type="checkbox" formControlName="badReviewInvoiceEnabled">
+                  <span>Отправлять счет после плохого отзыва</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Контролирует заказы с долгой просрочкой оплаты.">
+                  <input class="switch" type="checkbox" formControlName="paymentOverdueEnabled">
+                  <span>Контролировать просрочку оплаты</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Если включить, просрочка будет переводить заказ в целевой статус. Сейчас лучше держать выключенным до проверки на бою.">
+                  <input class="switch" type="checkbox" formControlName="paymentOverdueLiveEnabled">
+                  <span>Live-перевод просрочки в целевой статус</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Предложение нового заказа компаниям, которые давно в архивном цикле.">
+                  <input class="switch" type="checkbox" formControlName="archiveReorderEnabled">
+                  <span>Предлагать новый заказ архивным компаниям</span>
+                </label>
+
+                <label class="checkbox" appTooltip="Если за короткое время накопится много ошибок отправки, worker временно поставит авторассылку на паузу.">
+                  <input class="switch" type="checkbox" formControlName="errorProtectionEnabled">
+                  <span>Защита от массовых ошибок включена</span>
+                </label>
+              </div>
+
+              <div class="settings-section form-grid">
+                <h3 class="wide">Расписание и лимиты</h3>
+                <label appTooltip="Через сколько дней после перехода в статус проверки отправлять и повторять сообщение.">
+                  <span>Интервал проверки отзывов, дней</span>
+                  <input type="number" min="1" max="365" step="1" formControlName="reviewCheckIntervalDays">
+                </label>
+
+                <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
+                  <span>Интервал оплаты, дней</span>
+                  <input type="number" min="1" max="365" step="1" formControlName="paymentReminderIntervalDays">
+                </label>
+
+                <label appTooltip="Через сколько дней неоплаты заказ считается просроченным для эскалации.">
+                  <span>Просрочка оплаты, дней</span>
+                  <input type="number" min="1" max="365" step="1" formControlName="paymentOverdueDays">
+                </label>
+
+                <label appTooltip="Через сколько месяцев после архива предлагать новый заказ.">
+                  <span>Архивное предложение, месяцев</span>
+                  <input type="number" min="1" max="36" step="1" formControlName="archiveReorderMonths">
+                </label>
+
+                <label appTooltip="Максимум успешно отправленных автоответчиком сообщений за московский день.">
+                  <span>Дневной лимит сообщений</span>
+                  <input type="number" min="1" max="5000" step="1" formControlName="dailyLimit">
+                </label>
+
+                <label appTooltip="Сколько активных задач брать за один тик планировщика.">
+                  <span>Размер пачки за тик</span>
+                  <input type="number" min="1" max="100" step="1" formControlName="tickBatchSize">
+                </label>
+
+                <label appTooltip="Сколько кандидатов по каждому сценарию искать за один проход сверки.">
+                  <span>Лимит кандидатов</span>
+                  <input type="number" min="1" max="5000" step="1" formControlName="candidateLimit">
+                </label>
+
+                <label appTooltip="Сколько дней хранить попытки отправок и закрытые состояния.">
+                  <span>Хранить журнал, дней</span>
+                  <input type="number" min="1" max="3650" step="1" formControlName="retentionDays">
+                </label>
+
+                <label class="wide" appTooltip="Окна в часовом поясе Europe/Moscow. Формат: HH:mm-HH:mm, через запятую.">
+                  <span>Рабочие окна по Москве</span>
+                  <input type="text" formControlName="businessWindows">
+                </label>
+              </div>
+
+              <div class="settings-section form-grid">
+                <h3 class="wide">Паузы каналов</h3>
+                <label appTooltip="Минимальная пауза, если канал не распознан.">
+                  <span>Общая пауза, секунд</span>
+                  <input type="number" min="30" max="86400" step="10" formControlName="defaultGapSeconds">
+                </label>
+
+                <label appTooltip="Минимальная пауза между сообщениями WhatsApp.">
+                  <span>WhatsApp, секунд</span>
+                  <input type="number" min="30" max="86400" step="10" formControlName="whatsAppGapSeconds">
+                </label>
+
+                <label appTooltip="Минимальная пауза между сообщениями Telegram.">
+                  <span>Telegram, секунд</span>
+                  <input type="number" min="30" max="86400" step="10" formControlName="telegramGapSeconds">
+                </label>
+
+                <label appTooltip="Минимальная пауза между сообщениями MAX.">
+                  <span>MAX, секунд</span>
+                  <input type="number" min="30" max="86400" step="10" formControlName="maxGapSeconds">
+                </label>
+              </div>
+
+              <div class="settings-section form-grid">
+                <h3 class="wide">Защита от массовых ошибок</h3>
+                <label appTooltip="Сколько ошибок подряд за окно достаточно, чтобы временно остановить новые отправки.">
+                  <span>Порог ошибок</span>
+                  <input type="number" min="1" max="10000" step="1" formControlName="errorProtectionThreshold">
+                </label>
+
+                <label appTooltip="За сколько последних минут считать ошибки для защитной паузы.">
+                  <span>Окно ошибок, минут</span>
+                  <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionWindowMinutes">
+                </label>
+
+                <label appTooltip="На сколько минут поставить автоответчик на паузу после срабатывания защиты.">
+                  <span>Пауза после срабатывания, минут</span>
+                  <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionCooldownMinutes">
+                </label>
+
+                <p class="settings-hint wide">
+                  Пауза останавливает только новые попытки авторассылки. Очередь и мониторинг остаются видны, сайт и ручные действия менеджера продолжают работать.
+                </p>
+              </div>
+
+              <div class="settings-section">
+                <h3>Статусы</h3>
+                <label appTooltip="Заказы в этих статусах получают напоминание о проверке шаблонов. Через запятую.">
+                  <span>Статусы проверки отзывов</span>
+                  <input type="text" formControlName="reviewCheckStatuses">
+                </label>
+
+                <label appTooltip="Заказы в этих статусах получают напоминания об оплате. Через запятую.">
+                  <span>Статусы ожидания оплаты</span>
+                  <input type="text" formControlName="paymentReminderStatuses">
+                </label>
+
+                <label appTooltip="Заказы в этих статусах считаются кандидатами на просрочку оплаты. Через запятую.">
+                  <span>Статусы просрочки оплаты</span>
+                  <input type="text" formControlName="paymentOverdueStatuses">
+                </label>
+
+                <label appTooltip="Статусы, при которых просрочка больше не нужна. Через запятую.">
+                  <span>Закрытые статусы заказов</span>
+                  <input type="text" formControlName="closedOrderStatuses">
+                </label>
+
+                <label appTooltip="В этот статус будет переведен просроченный заказ, если live-перевод включен.">
+                  <span>Целевой статус просрочки</span>
+                  <input type="text" formControlName="paymentOverdueTargetStatus">
+                </label>
+
+                <label appTooltip="Статус компании, которая участвует в архивном предложении нового заказа.">
+                  <span>Статус архивной компании</span>
+                  <input type="text" formControlName="archiveCompanyStatus">
+                </label>
+
+                <label appTooltip="Статусы заказов, которые не мешают архивному предложению. Через запятую.">
+                  <span>Неактивные статусы заказов</span>
+                  <input type="text" formControlName="archiveInactiveOrderStatuses">
+                </label>
+
+                <label appTooltip="Статусы заявок на следующий заказ, при которых повторное предложение не отправляется.">
+                  <span>Открытые статусы заявок</span>
+                  <input type="text" formControlName="openNextOrderRequestStatuses">
+                </label>
+              </div>
+
+              <div class="settings-section">
+                <h3>Тексты</h3>
+                <label appTooltip="Базовая ссылка без id детали заказа. Id будет добавлен автоматически.">
+                  <span>Ссылка проверки отзывов</span>
+                  <input type="text" formControlName="reviewLinkBaseUrl">
+                </label>
+
+                <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK подготовлен для перехода и подставит /pay/{token} через переменные оплаты.">
+                  <span>Источник оплаты</span>
+                  <select formControlName="paymentInstructionSource">
+                    <option value="MANAGER_TEXT">Текст менеджера (сейчас)</option>
+                    <option value="TBANK_LINK">T-Bank ссылка (для будущего перехода)</option>
+                  </select>
+                </label>
+
+                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {reviewLink}, {sum}.">
+                  <span>Текст проверки отзывов</span>
+                  <textarea rows="5" formControlName="reviewReminderText"></textarea>
+                </label>
+
+                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
+                  <span>Текст оплаты</span>
+                  <textarea rows="5" formControlName="paymentReminderText"></textarea>
+                </label>
+
+                <label appTooltip="Переменная: {company}.">
+                  <span>Текст архивного предложения</span>
+                  <textarea rows="5" formControlName="archiveOfferText"></textarea>
+                </label>
+              </div>
+
+              @if (autoresponderForm.invalid && autoresponderForm.touched) {
+                <p class="error compact">Проверьте интервалы, лимиты, статусы, рабочие окна и длину текстов до 500 символов.</p>
+              }
+
+              <div class="actions">
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="saving()">Сбросить</button>
                 <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>

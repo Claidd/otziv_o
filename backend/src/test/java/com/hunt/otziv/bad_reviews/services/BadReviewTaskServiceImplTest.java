@@ -8,7 +8,12 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.client_messages.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -48,6 +54,18 @@ class BadReviewTaskServiceImplTest {
 
     @Mock
     private PersonalReminderService personalReminderService;
+
+    @Mock
+    private AppSettingService appSettingService;
+
+    @Mock
+    private OrderStatusNotificationService orderStatusNotificationService;
+
+    @Mock
+    private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+
+    @Mock
+    private ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
 
     @InjectMocks
     private BadReviewTaskServiceImpl service;
@@ -216,6 +234,49 @@ class BadReviewTaskServiceImplTest {
                 eq(PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY),
                 any(),
                 any()
+        );
+    }
+
+    @Test
+    void completeTaskSendsClientInvoiceWithDoneBadReviewSumWhenLiveEnabled() {
+        Order order = order(14L);
+        order.getManager().setClientId("client-14");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-14");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(44L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(44L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(14L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
+        ));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendMessageToClientChat(
+                eq("Не оплачено"),
+                eq(order),
+                eq("client-14"),
+                eq("group-14"),
+                eq("Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб."),
+                eq("Выставлен счет")
+        )).thenReturn("Выставлен счет");
+
+        service.completeTask(44L);
+
+        verify(orderStatusNotificationService).sendMessageToClientChat(
+                "Не оплачено",
+                order,
+                "client-14",
+                "group-14",
+                "Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб.",
+                "Выставлен счет"
         );
     }
 

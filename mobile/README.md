@@ -1,4 +1,4 @@
-# Otziv Mobile
+# Компания О! Mobile
 
 Ionic Angular + Capacitor приложение для Android и iOS. Приложение использует тот же Spring API и Keycloak realm `otziv`, но отдельный public client `otziv-mobile` с Authorization Code + PKCE.
 
@@ -53,6 +53,54 @@ adb reverse tcp:8088 tcp:8088
 ```
 
 После этого приложение внутри Android сможет обращаться к `http://localhost:8088`.
+
+Быстрый локальный запуск в уже открытом эмуляторе:
+
+```powershell
+npm run android:run:local
+```
+
+Команда собирает local/debug APK, включает `adb reverse tcp:8088 tcp:8088`, устанавливает приложение и запускает его. Перед этим локальный prod-like стек должен отвечать на `http://localhost:8088`, например после:
+
+```powershell
+..\infrastructure\scripts\local\prod-like-smoke.ps1
+```
+
+### Android Push Notifications
+
+Обычная local/prod сборка запускается без системных push-уведомлений, чтобы APK не падал, если Firebase еще не настроен. Для push-сборки нужен файл Firebase Android config:
+
+```text
+mobile\android\app\google-services.json
+```
+
+Файл должен быть создан в Firebase Console для Android package:
+
+```text
+com.hunt.otziv
+```
+
+После добавления файла можно собрать и запустить local APK с включенными push:
+
+```powershell
+npm run android:run:local:push
+```
+
+Для production-сборки с push используйте:
+
+```powershell
+npm run cap:sync:prod:push
+```
+
+Backend принимает FCM-токен приложения через `POST /api/mobile/push-token`. Для отправки push с backend нужно включить Firebase Admin:
+
+```properties
+OTZIV_MOBILE_PUSH_FIREBASE_ENABLED=true
+OTZIV_MOBILE_PUSH_FIREBASE_PROJECT_ID=...
+OTZIV_MOBILE_PUSH_FIREBASE_SERVICE_ACCOUNT_PATH=/run/secrets/firebase-service-account.json
+```
+
+Проверочный endpoint для авторизованного пользователя: `POST /api/mobile/push-token/test`.
 
 ## iOS
 

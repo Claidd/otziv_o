@@ -29,16 +29,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -169,6 +173,34 @@ class OrderServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString()
         );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterReportsDuplicateCardNumber() {
+        Order order = order(10L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review firstReview = review(1L, false, "Первый отзыв", details);
+        Review duplicateReview = review(2L, false, "Уже был", details);
+        details.setReviews(List.of(firstReview, duplicateReview));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
+        when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(duplicateReview));
+        when(reviewRepository.existsPublishedByTextExcludingReviewId("Уже был", 2L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> orderService.changeStatusAndOrderCounter(2L)
+        );
+
+        assertEquals(
+                "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией. Проблемная карточка: №2 (отзыв #2).",
+                exception.getReason()
+        );
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService);
     }
 
     private Order order(Long id, int counter) {

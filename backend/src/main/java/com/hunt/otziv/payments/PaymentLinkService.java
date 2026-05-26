@@ -38,6 +38,9 @@ import java.util.UUID;
 public class PaymentLinkService {
 
     private static final String PAYMENT_SERVICE_NAME = "Репутационное сопровождение компании в сети Интернет";
+    private static final String OFFER_PATH = "/offer";
+    private static final String PRIVACY_PATH = "/privacy";
+    private static final String RECEIPT_CONSENT_PATH = "/receipt-consent";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
             PaymentLinkStatus.INITIATED,
@@ -59,6 +62,7 @@ public class PaymentLinkService {
     private final BadReviewTaskService badReviewTaskService;
     private final OrderTransactionService orderTransactionService;
     private final TbankPaymentProperties properties;
+    private final TbankRuntimeSettingsService runtimeSettingsService;
     private final PaymentProfileService paymentProfileService;
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
@@ -66,7 +70,7 @@ public class PaymentLinkService {
 
     @Transactional
     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
-        if (!properties.isPaymentLinksEnabled()) {
+        if (!runtimeSettingsService.isPaymentLinksEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
         }
 
@@ -126,7 +130,8 @@ public class PaymentLinkService {
         }
 
         PaymentProfile profile = resolvePaymentProfile(link);
-        TbankCancelResponse response = tbankClient.cancel(paymentProfileService.toRuntime(profile), new TbankCancelCommand(
+        TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
+        TbankCancelResponse response = tbankClient.cancel(runtimeProfile, new TbankCancelCommand(
                 link.getTbankPaymentId(),
                 link.getAmountKopecks()
         ));
@@ -138,9 +143,18 @@ public class PaymentLinkService {
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
-    public PublicPaymentInitResponse init(String token, String email) {
+    public PublicPaymentInitResponse init(
+            String token,
+            String email,
+            boolean offerConsent,
+            boolean privacyConsent,
+            boolean receiptConsent,
+            String clientIp,
+            String userAgent
+    ) {
         PaymentLink link = findPublicLink(token);
         validatePayable(link);
+        validateConsents(offerConsent, privacyConsent, receiptConsent);
 
         String cleanEmail = normalizeEmail(email);
         if (cleanEmail.isBlank()) {
@@ -151,10 +165,14 @@ public class PaymentLinkService {
         TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
         if (link.getPaymentUrl() != null && !link.getPaymentUrl().isBlank()
                 && link.getStatus() == PaymentLinkStatus.INITIATED) {
+            applyConsentTrace(link, clientIp, userAgent);
+            link.setPaymentMethod(PaymentMethod.BANK_FORM);
+            paymentLinkRepository.save(link);
             return new PublicPaymentInitResponse(link.getPaymentUrl(), link.getTbankPaymentId(), link.getStatus().name());
         }
 
         link.setPayerEmail(cleanEmail);
+        applyConsentTrace(link, clientIp, userAgent);
         link.setTbankOrderId(tbankOrderId(link));
         link.setTbankTerminalKey(runtimeProfile.terminalKey());
 
@@ -187,6 +205,7 @@ public class PaymentLinkService {
         }
 
         link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
         link.setTbankPaymentId(response.paymentId());
         link.setPaymentUrl(response.paymentUrl());
         link.setInitiatedAt(LocalDateTime.now());
@@ -196,10 +215,139 @@ public class PaymentLinkService {
         return new PublicPaymentInitResponse(response.paymentUrl(), response.paymentId(), link.getStatus().name());
     }
 
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public PublicPaymentInitResponse initSbp(
+            String token,
+            String email,
+            boolean offerConsent,
+            boolean privacyConsent,
+            boolean receiptConsent,
+            String clientIp,
+            String userAgent
+    ) {
+        PaymentLink link = findPublicLink(token);
+        validatePayable(link);
+        validateConsents(offerConsent, privacyConsent, receiptConsent);
+
+        String cleanEmail = normalizeEmail(email);
+        if (cleanEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите e-mail для электронного чека");
+        }
+
+        PaymentProfile profile = ensurePaymentProfile(link);
+        link.setPayerEmail(cleanEmail);
+        applyConsentTrace(link, clientIp, userAgent);
+
+        TbankPaymentProfile runtimeProfile;
+        if (normalize(link.getTbankPaymentId()).isBlank()) {
+            runtimeProfile = paymentProfileService.toRuntime(profile);
+            link.setTbankOrderId(tbankOrderId(link));
+            link.setTbankTerminalKey(runtimeProfile.terminalKey());
+            try {
+                TbankInitResponse response = tbankClient.init(runtimeProfile, new TbankInitCommand(
+                        link.getTbankOrderId(),
+                        link.getAmountKopecks(),
+                        link.getDescription(),
+                        cleanEmail,
+                        properties.notificationUrl(),
+                        properties.successUrl(),
+                        properties.failUrl(),
+                        OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())
+                ));
+                link.setStatus(PaymentLinkStatus.INITIATED);
+                link.setTbankPaymentId(response.paymentId());
+                link.setPaymentUrl(response.paymentUrl());
+                link.setInitiatedAt(LocalDateTime.now());
+                link.setLastError(null);
+            } catch (ResponseStatusException e) {
+                String reason = normalize(e.getReason());
+                link.setLastError(reason.isBlank() ? "T-Bank Init failed" : reason);
+                paymentLinkRepository.save(link);
+                log.warn(
+                        "T-Bank Init before SBP QR failed: linkId={}, orderId={}, profile={}, terminal={}, status={}, reason={}",
+                        link.getId(),
+                        link.getOrder() == null ? null : link.getOrder().getId(),
+                        profile.getCode(),
+                        runtimeProfile.terminalKey(),
+                        e.getStatusCode(),
+                        link.getLastError()
+                );
+                throw e;
+            }
+        } else {
+            runtimeProfile = runtimeProfileForLink(profile, link);
+        }
+
+        if (link.getPaymentMethod() == PaymentMethod.SBP_QR
+                && !normalize(link.getSbpQrImage()).isBlank()
+                && link.getStatus() == PaymentLinkStatus.INITIATED) {
+            paymentLinkRepository.save(link);
+            return new PublicPaymentInitResponse(
+                    link.getPaymentUrl(),
+                    link.getTbankPaymentId(),
+                    link.getStatus().name(),
+                    PaymentMethod.SBP_QR.name(),
+                    link.getSbpQrPayload(),
+                    link.getSbpQrImage()
+            );
+        }
+
+        TbankGetQrResponse qrResponse;
+        try {
+            qrResponse = tbankClient.getQr(runtimeProfile, new TbankGetQrCommand(
+                    link.getTbankPaymentId(),
+                    "IMAGE",
+                    null
+            ));
+        } catch (ResponseStatusException e) {
+            String reason = normalize(e.getReason());
+            link.setLastError(reason.isBlank() ? "T-Bank GetQr failed" : reason);
+            paymentLinkRepository.save(link);
+            log.warn(
+                    "T-Bank GetQr failed: linkId={}, orderId={}, paymentId={}, profile={}, terminal={}, status={}, reason={}",
+                    link.getId(),
+                    link.getOrder() == null ? null : link.getOrder().getId(),
+                    link.getTbankPaymentId(),
+                    profile.getCode(),
+                    runtimeProfile.terminalKey(),
+                    e.getStatusCode(),
+                    link.getLastError()
+            );
+            throw e;
+        }
+
+        String qrImage = normalize(qrResponse.data());
+        if (qrImage.isBlank()) {
+            link.setLastError("T-Bank GetQr returned empty QR data");
+            paymentLinkRepository.save(link);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк не вернул QR-код СБП");
+        }
+
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankTerminalKey(runtimeProfile.terminalKey());
+        link.setSbpQrImage(qrImage);
+        link.setSbpQrPayload(null);
+        link.setSbpQrDataType("IMAGE");
+        link.setSbpQrCreatedAt(LocalDateTime.now());
+        link.setLastError(null);
+        paymentLinkRepository.save(link);
+
+        return new PublicPaymentInitResponse(
+                link.getPaymentUrl(),
+                link.getTbankPaymentId(),
+                link.getStatus().name(),
+                PaymentMethod.SBP_QR.name(),
+                null,
+                qrImage
+        );
+    }
+
     @Transactional
     public void handleTbankWebhook(Map<String, String> payload) {
-        PaymentProfile profile = verifyWebhook(payload);
-        TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
+        VerifiedWebhookProfile verified = verifyWebhook(payload);
+        PaymentProfile profile = verified.profile();
+        TbankPaymentProfile runtimeProfile = verified.runtimeProfile();
 
         String orderId = normalize(payload.get("OrderId"));
         String paymentId = normalize(payload.get("PaymentId"));
@@ -216,7 +364,7 @@ public class PaymentLinkService {
         }
 
         PaymentLink link = linkCandidate.get();
-        validateWebhookTerminal(link, profile);
+        validateWebhookTerminal(link, runtimeProfile);
         validateWebhookAmount(link, payload);
         link.setTbankPaymentId(paymentId.isBlank() ? link.getTbankPaymentId() : paymentId);
         link.setTbankTerminalKey(runtimeProfile.terminalKey());
@@ -232,7 +380,7 @@ public class PaymentLinkService {
     }
 
     private void syncTbankStateIfNeeded(PaymentLink link) {
-        if (!properties.isEnabled()
+        if (!runtimeSettingsService.isTbankEnabled()
                 || !SYNCABLE_BANK_STATUSES.contains(link.getStatus())
                 || normalize(link.getTbankPaymentId()).isBlank()) {
             return;
@@ -240,7 +388,7 @@ public class PaymentLinkService {
 
         try {
             PaymentProfile profile = resolvePaymentProfile(link);
-            TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
+            TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
             TbankGetStateResponse state = tbankClient.getState(runtimeProfile, link.getTbankPaymentId());
             if (!isStateConsistent(link, state, runtimeProfile)) {
                 paymentLinkRepository.save(link);
@@ -341,7 +489,8 @@ public class PaymentLinkService {
             rememberCompanyPayerEmail(link);
             return;
         }
-        if (!properties.isApplyConfirmedPayments()) {
+        if (!runtimeSettingsService.isApplyConfirmedPayments()
+                || paymentProfileService.isTestTerminal(link.getTbankTerminalKey())) {
             link.setStatus(PaymentLinkStatus.TEST_CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
             link.setLastError(null);
@@ -366,23 +515,23 @@ public class PaymentLinkService {
         }
     }
 
-    private PaymentProfile verifyWebhook(Map<String, String> payload) {
+    private VerifiedWebhookProfile verifyWebhook(Map<String, String> payload) {
         String terminalKey = normalize(payload.get("TerminalKey"));
         PaymentProfile profile = paymentProfileService.findByTerminalKey(terminalKey)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "TerminalKey не совпадает с настройками"));
-        TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
+        TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntimeForTerminal(profile, terminalKey);
         if (!runtimeProfile.hasCredentials()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не заданы TerminalKey или Password Т-Банка");
         }
         if (!tokenSigner.matches(payload, runtimeProfile.password(), payload.get("Token"))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная подпись уведомления Т-Банка");
         }
-        return profile;
+        return new VerifiedWebhookProfile(profile, runtimeProfile);
     }
 
-    private void validateWebhookTerminal(PaymentLink link, PaymentProfile profile) {
+    private void validateWebhookTerminal(PaymentLink link, TbankPaymentProfile runtimeProfile) {
         String linkTerminal = normalize(link.getTbankTerminalKey());
-        String profileTerminal = normalize(paymentProfileService.toRuntime(profile).terminalKey());
+        String profileTerminal = normalize(runtimeProfile.terminalKey());
         if (!linkTerminal.isBlank() && !linkTerminal.equals(profileTerminal)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TerminalKey webhook не совпадает с платежной ссылкой");
         }
@@ -433,6 +582,24 @@ public class PaymentLinkService {
         }
     }
 
+    private void validateConsents(boolean offerConsent, boolean privacyConsent, boolean receiptConsent) {
+        if (!offerConsent || !privacyConsent || !receiptConsent) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите оферту, политику персональных данных и согласие на электронный чек");
+        }
+    }
+
+    private void applyConsentTrace(PaymentLink link, String clientIp, String userAgent) {
+        LocalDateTime now = LocalDateTime.now();
+        link.setOfferConsentAt(now);
+        link.setPrivacyConsentAt(now);
+        link.setReceiptConsentAt(now);
+        link.setConsentIp(limit(clientIp, 128));
+        link.setConsentUserAgent(limit(userAgent, 512));
+        link.setOfferDocumentUrl(publicDocumentUrl(OFFER_PATH));
+        link.setPrivacyDocumentUrl(publicDocumentUrl(PRIVACY_PATH));
+        link.setReceiptConsentDocumentUrl(publicDocumentUrl(RECEIPT_CONSENT_PATH));
+    }
+
     private PublicPaymentLinkResponse toPublicResponse(PaymentLink link) {
         Order order = link.getOrder();
         String payerEmail = normalizeEmail(link.getPayerEmail());
@@ -451,8 +618,17 @@ public class PaymentLinkService {
                 payerEmail,
                 link.getStatus().name(),
                 link.getExpiresAt(),
-                isPayable(link)
+                isPayable(link),
+                paymentPageModeName(),
+                runtimeSettingsService.isTpayEnabled(),
+                runtimeSettingsService.isSberpayEnabled(),
+                runtimeSettingsService.isMirpayEnabled()
         );
+    }
+
+    private String paymentPageModeName() {
+        TbankPaymentPageMode mode = runtimeSettingsService.paymentPageMode();
+        return (mode == null ? TbankRuntimeSettingsService.DEFAULT_PAYMENT_PAGE_MODE : mode).name();
     }
 
     private ManagerPaymentLinkResponse toManagerResponse(PaymentLink link) {
@@ -482,6 +658,7 @@ public class PaymentLinkService {
                 amountRubles(link.getAmountKopecks()),
                 link.getAmountKopecks(),
                 link.getStatus().name(),
+                link.getPaymentMethod() == null ? PaymentMethod.BANK_FORM.name() : link.getPaymentMethod().name(),
                 paymentProfileCode(link),
                 paymentProfileName(link),
                 normalize(link.getTbankTerminalKey()),
@@ -495,6 +672,7 @@ public class PaymentLinkService {
                 link.getExpiresAt(),
                 link.getInitiatedAt(),
                 link.getPaidAt(),
+                link.getSbpQrCreatedAt(),
                 isRefundable(link)
         );
     }
@@ -548,6 +726,14 @@ public class PaymentLinkService {
         }
 
         return selectProfile(link.getOrder());
+    }
+
+    private TbankPaymentProfile runtimeProfileForLink(PaymentProfile profile, PaymentLink link) {
+        String terminalKey = normalize(link.getTbankTerminalKey());
+        if (terminalKey.isBlank()) {
+            return paymentProfileService.toRuntime(profile);
+        }
+        return paymentProfileService.toRuntimeForTerminal(profile, terminalKey);
     }
 
     private PaymentProfile selectProfile(Order order) {
@@ -704,6 +890,17 @@ public class PaymentLinkService {
         return properties.getPublicBaseUrl() + "/pay/" + link.getToken();
     }
 
+    private String publicDocumentUrl(String path) {
+        String baseUrl = normalize(properties.getPublicBaseUrl());
+        if (baseUrl.isBlank()) {
+            return path;
+        }
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        return baseUrl + path;
+    }
+
     private String tbankOrderId(PaymentLink link) {
         if (link.getTbankOrderId() != null && !link.getTbankOrderId().isBlank()) {
             return link.getTbankOrderId();
@@ -725,5 +922,16 @@ public class PaymentLinkService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String limit(String value, int maxLength) {
+        String clean = normalize(value);
+        if (clean.length() <= maxLength) {
+            return clean;
+        }
+        return clean.substring(0, maxLength);
+    }
+
+    private record VerifiedWebhookProfile(PaymentProfile profile, TbankPaymentProfile runtimeProfile) {
     }
 }

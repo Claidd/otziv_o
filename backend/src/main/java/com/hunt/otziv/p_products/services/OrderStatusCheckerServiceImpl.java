@@ -4,6 +4,7 @@ import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
+import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final EmailService emailService;
     private final OrderRepository orderRepository;
     private final OrderStatusNotificationService orderStatusNotificationService;
+    private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -78,9 +80,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         String clientId = order.getManager().getClientId();
         String groupId = order.getCompany().getGroupId();
 
-        String message = order.getCompany().getTitle() + ". " + order.getFilial().getTitle() + "\n\n" +
-                "Здравствуйте, ваш заказ выполнен, просьба оплатить.  АЛЬФА-БАНК по счету https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И.  ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " +
-                order.getSum() + " руб.";
+        String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
 
         return orderStatusNotificationService.sendMessageToClientChat(
                 STATUS_PUBLIC,

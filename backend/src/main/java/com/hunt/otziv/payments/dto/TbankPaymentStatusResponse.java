@@ -7,6 +7,7 @@ public record TbankPaymentStatusResponse(
         boolean applyConfirmedPayments,
         boolean hasCredentials,
         boolean testMode,
+        String runtimeMode,
         String baseUrl,
         String publicBaseUrl,
         String notificationUrl,

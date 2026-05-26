@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -58,6 +60,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private PaymentProfileService paymentProfileService;
+
+    @Mock
+    private TbankRuntimeSettingsService runtimeSettingsService;
 
     @Test
     void createForOrderBuildsHiddenTokenizedLinkWithPayableAmount() {
@@ -166,6 +171,16 @@ class PaymentLinkServiceTest {
         properties.setApplyConfirmedPayments(true);
         TbankTokenSigner signer = new TbankTokenSigner();
         PaymentLinkService service = service(properties, signer);
+        when(paymentProfileService.toRuntimeForTerminal(any(PaymentProfile.class), eq("terminal"))).thenReturn(new TbankPaymentProfile(
+                1L,
+                TbankPaymentProfile.PRIMARY_CODE,
+                "Основной магазин",
+                true,
+                "terminal",
+                "password",
+                false
+        ));
+        when(paymentProfileService.isTestTerminal("terminal")).thenReturn(false);
         Order order = order(21L, "ООО Боевой тест", BigDecimal.valueOf(11.11));
         PaymentLink link = new PaymentLink();
         link.setOrder(order);
@@ -249,7 +264,7 @@ class PaymentLinkServiceTest {
         ));
 
         OffsetDateTime minExpected = OffsetDateTime.now(ZoneId.of("Europe/Moscow")).plusDays(7).minusSeconds(2);
-        service.init("token", "PAYER@EXAMPLE.RU");
+        service.init("token", "PAYER@EXAMPLE.RU", true, true, true, "203.0.113.7", "JUnit UA");
 
         ArgumentCaptor<TbankInitCommand> captor = ArgumentCaptor.forClass(TbankInitCommand.class);
         ArgumentCaptor<TbankPaymentProfile> profileCaptor = ArgumentCaptor.forClass(TbankPaymentProfile.class);
@@ -261,8 +276,97 @@ class PaymentLinkServiceTest {
         assertEquals("payer@example.ru", command.email());
         assertTrue(command.redirectDueDate().isAfter(minExpected));
         assertTrue(command.redirectDueDate().isBefore(maxExpected));
+        assertEquals("203.0.113.7", link.getConsentIp());
+        assertEquals("JUnit UA", link.getConsentUserAgent());
+        assertEquals("https://example.ru/offer", link.getOfferDocumentUrl());
+        assertEquals("https://example.ru/privacy", link.getPrivacyDocumentUrl());
+        assertEquals("https://example.ru/receipt-consent", link.getReceiptConsentDocumentUrl());
+        assertNotNull(link.getOfferConsentAt());
+        assertNotNull(link.getPrivacyConsentAt());
+        assertNotNull(link.getReceiptConsentAt());
         assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
         assertEquals("https://securepay.tinkoff.ru/pay", link.getPaymentUrl());
+    }
+
+    @Test
+    void initRejectsPaymentWithoutRequiredConsents() {
+        PaymentLinkService service = service(properties());
+        Order order = order(31L, "ООО Без согласий", BigDecimal.valueOf(123.45));
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("token");
+        link.setAmountKopecks(12345L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("token")).thenReturn(Optional.of(link));
+
+        assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.init("token", "PAYER@EXAMPLE.RU", true, false, true, "203.0.113.7", "JUnit UA")
+        );
+        verify(tbankClient, never()).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+    }
+
+    @Test
+    void initSbpCreatesQrAfterBankInitAndStoresPaymentMethod() {
+        TbankPaymentProperties properties = properties();
+        PaymentLinkService service = service(properties);
+        Order order = order(32L, "ООО СБП", BigDecimal.valueOf(321));
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("token");
+        link.setAmountKopecks(32100L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("token")).thenReturn(Optional.of(link));
+        when(tbankClient.init(any(TbankPaymentProfile.class), any(TbankInitCommand.class))).thenReturn(new TbankInitResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "payment-sbp",
+                "order-sbp",
+                32100L,
+                "https://securepay.tinkoff.ru/pay"
+        ));
+        when(tbankClient.getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class))).thenReturn(new TbankGetQrResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "payment-sbp",
+                "<svg></svg>"
+        ));
+
+        PublicPaymentInitResponse response = service.initSbp(
+                "token",
+                "SBP@EXAMPLE.RU",
+                true,
+                true,
+                true,
+                "203.0.113.8",
+                "JUnit UA"
+        );
+
+        ArgumentCaptor<TbankGetQrCommand> qrCaptor = ArgumentCaptor.forClass(TbankGetQrCommand.class);
+        verify(tbankClient).getQr(any(TbankPaymentProfile.class), qrCaptor.capture());
+        assertEquals("payment-sbp", qrCaptor.getValue().paymentId());
+        assertEquals("IMAGE", qrCaptor.getValue().dataType());
+        assertEquals(PaymentMethod.SBP_QR, link.getPaymentMethod());
+        assertEquals("<svg></svg>", link.getSbpQrImage());
+        assertEquals("IMAGE", link.getSbpQrDataType());
+        assertNotNull(link.getSbpQrCreatedAt());
+        assertEquals("SBP_QR", response.method());
+        assertEquals("<svg></svg>", response.qrImage());
+        assertEquals("sbp@example.ru", link.getPayerEmail());
+        verify(paymentLinkRepository).save(link);
     }
 
     @Test
@@ -334,7 +438,7 @@ class PaymentLinkServiceTest {
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(paymentLinkRepository.findTop100ByOrderByCreatedAtDesc()).thenReturn(List.of(link));
-        when(paymentProfileService.toRuntime(profile)).thenReturn(new TbankPaymentProfile(
+        when(paymentProfileService.toRuntimeForTerminal(profile, "secondary-terminal")).thenReturn(new TbankPaymentProfile(
                 2L,
                 TbankPaymentProfile.SECONDARY_CODE,
                 "Второй магазин",
@@ -411,6 +515,7 @@ class PaymentLinkServiceTest {
                 badReviewTaskService,
                 orderTransactionService,
                 properties,
+                runtimeSettingsService,
                 paymentProfileService,
                 tbankClient,
                 signer
@@ -421,6 +526,11 @@ class PaymentLinkServiceTest {
         TbankPaymentProperties properties = new TbankPaymentProperties();
         properties.setPublicBaseUrl("https://example.ru");
         PaymentProfile defaultProfile = profile(1L, TbankPaymentProfile.PRIMARY_CODE, "Основной магазин", "terminal");
+        org.mockito.Mockito.lenient().when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.TEST);
+        org.mockito.Mockito.lenient().when(runtimeSettingsService.isTbankEnabled()).thenAnswer(invocation -> properties.isEnabled());
+        org.mockito.Mockito.lenient().when(runtimeSettingsService.isPaymentLinksEnabled()).thenAnswer(invocation -> properties.isPaymentLinksEnabled());
+        org.mockito.Mockito.lenient().when(runtimeSettingsService.isManagerUiEnabled()).thenAnswer(invocation -> properties.isManagerUiEnabled());
+        org.mockito.Mockito.lenient().when(runtimeSettingsService.isApplyConfirmedPayments()).thenAnswer(invocation -> properties.isApplyConfirmedPayments());
         org.mockito.Mockito.lenient().when(paymentProfileService.selectForManager(any())).thenReturn(defaultProfile);
         org.mockito.Mockito.lenient().when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(defaultProfile));
         org.mockito.Mockito.lenient().when(paymentProfileService.findByCode(TbankPaymentProfile.PRIMARY_CODE)).thenReturn(Optional.of(defaultProfile));
@@ -433,6 +543,16 @@ class PaymentLinkServiceTest {
                 "password",
                 true
         ));
+        org.mockito.Mockito.lenient().when(paymentProfileService.toRuntimeForTerminal(defaultProfile, "terminal")).thenReturn(new TbankPaymentProfile(
+                1L,
+                TbankPaymentProfile.PRIMARY_CODE,
+                "Основной магазин",
+                true,
+                "terminal",
+                "password",
+                true
+        ));
+        org.mockito.Mockito.lenient().when(paymentProfileService.isTestTerminal("terminal")).thenReturn(true);
         return properties;
     }
 

@@ -20,84 +20,45 @@ import {
   WorkerBoardSection,
   WorkerBoardSectionQuery,
   WorkerOption,
-  WorkerPermissions,
   WorkerReviewItem
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { MobileOrderCardComponent, type MobileOrderCopyKind } from '../shared/mobile-order-card.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-editor.component';
+import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-shell.component';
+import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  mobilePageIndex,
+  mobilePageIsFirst,
+  mobilePageIsLast,
+  mobilePageLabel,
+  mobilePageTotal,
+  mobileSortTitle
+} from '../shared/mobile-board.helpers';
+import { MobileMediaService } from '../shared/mobile-media.service';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
-
-type StatusAction = {
-  label: string;
-  status: string;
-  icon: string;
-};
-
-type ReviewEditableField = 'text' | 'answer';
-type SideNoteField = 'order' | 'company';
-type ReviewCopyKind = 'url' | 'login' | 'password' | 'text' | 'answer' | 'vk';
-
-const DEFAULT_WORKER_SECTION: WorkerBoardSection = 'new';
-const WORKER_SECTIONS: WorkerBoardSection[] = ['new', 'correct', 'nagul', 'recovery', 'publish', 'bad', 'all'];
-const REVIEW_SECTIONS = new Set<WorkerBoardSection>(['nagul', 'recovery', 'publish', 'bad']);
-const WORKER_SECTION_LABELS: Record<WorkerBoardSection, string> = {
-  all: 'Все',
-  new: 'Новые',
-  correct: 'Коррекция',
-  nagul: 'Выгул',
-  recovery: 'Восстановление',
-  publish: 'Публикация',
-  bad: 'Плохие'
-};
-const WORKER_SECTION_ICONS: Record<WorkerBoardSection, string> = {
-  all: 'dashboard',
-  new: 'fiber_new',
-  correct: 'build_circle',
-  nagul: 'directions_walk',
-  recovery: 'restore',
-  publish: 'published_with_changes',
-  bad: 'money_off'
-};
-const ORDER_STATUS_ACTIONS: StatusAction[] = [
-  { label: 'на проверку', status: 'На проверке', icon: 'manage_search' },
-  { label: 'коррекция', status: 'Коррекция', icon: 'build_circle' },
-  { label: 'архив', status: 'Архив', icon: 'archive' },
-  { label: 'одобрено', status: 'Публикация', icon: 'task_alt' },
-  { label: 'опублик.', status: 'Опубликовано', icon: 'published_with_changes' },
-  { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
-  { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
-  { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
-  { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
-];
-const DEFAULT_WORKER_PERMISSIONS: WorkerPermissions = {
-  canManageOrderStatuses: false,
-  canManageClientWaiting: false,
-  canSeePhoneAndPayment: false,
-  canManageBots: false,
-  canAddBot: false,
-  canSeeMoney: false,
-  canWorkReviews: false,
-  canEditNotes: false
-};
-const EMPTY_ORDER_PAGE: Page<OrderItem> = {
-  content: [],
-  totalElements: 0,
-  totalPages: 0,
-  first: true,
-  last: true,
-  number: 0,
-  size: 10
-};
-const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
-  content: [],
-  totalElements: 0,
-  totalPages: 0,
-  first: true,
-  last: true,
-  number: 0,
-  size: 10
-};
+import {
+  DEFAULT_WORKER_PERMISSIONS,
+  DEFAULT_WORKER_SECTION,
+  EMPTY_ORDER_PAGE,
+  EMPTY_REVIEW_PAGE,
+  ORDER_STATUS_ACTIONS,
+  WORKER_SECTIONS,
+  isWorkerReviewSection,
+  workerReviewTitle,
+  workerReviewToneClass,
+  workerSectionIcon,
+  workerSectionLabel,
+  type ReviewCopyKind,
+  type ReviewEditableField,
+  type SideNoteField,
+  type WorkerStatusAction
+} from './worker/worker-board.helpers';
 
 @Component({
   selector: 'app-worker',
@@ -106,8 +67,14 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
     IonContent,
     IonRefresher,
     IonRefresherContent,
+    MobileBottomPagerComponent,
     MobileHeaderComponent,
-    MobileRemindersComponent
+    MobileOrderCardComponent,
+    MobileRemindersComponent,
+    MobileReviewCardShellComponent,
+    MobileReviewFieldEditorComponent,
+    MobileSearchBarComponent,
+    MobileStatusSliderComponent
   ],
   template: `
     <div class="ion-page">
@@ -128,49 +95,35 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
             </button>
           }
 
-          <section class="worker-status-strip" aria-label="Разделы специалиста">
-            @for (section of sectionOptions(); track section) {
-              <button
-                type="button"
-                class="metric-tile {{ sectionTone(section) }}"
-                [class.active]="activeSection() === section"
-                [class.locked]="isSectionLocked(section)"
-                (click)="selectSection(section)"
-              >
-                <span class="material-icons-sharp">{{ sectionIcon(section) }}</span>
-                <strong>{{ metricValue(section) }}</strong>
-                <small>{{ sectionLabel(section) }}</small>
-                @if (metricDelta(section) > 0) {
-                  <em>+{{ metricDelta(section) }}</em>
-                }
-              </button>
-            }
-          </section>
+          <app-mobile-status-slider
+            [items]="statusItems()"
+            [activeKey]="activeSection()"
+            ariaLabel="Разделы специалиста"
+            (select)="selectStatusSliderSection($event)"
+          />
 
-          <section class="worker-search-line" aria-label="Поиск специалиста">
-            <label>
-              <span class="material-icons-sharp">search</span>
-              <input
-                type="search"
-                placeholder="Компания, филиал, отзыв, аккаунт"
-                [ngModel]="keyword()"
-                (ngModelChange)="setKeyword($event)"
-              >
-            </label>
+          <app-mobile-search-bar
+            [value]="keyword()"
+            placeholder="Компания, филиал, отзыв, аккаунт"
+            [showRefresh]="false"
+            [hasExtraAction]="true"
+            (valueChange)="setKeyword($event)"
+            (searchSubmit)="applySearch()"
+          >
             @if (keyword()) {
-              <button class="icon-button" type="button" (click)="clearSearch()" aria-label="Очистить поиск">
+              <button mobileSearchActions type="button" (click)="clearSearch()" aria-label="Очистить поиск">
                 <span class="material-icons-sharp">close</span>
               </button>
             }
             @if (workerFilterAvailable()) {
-              <button class="icon-button" type="button" (click)="openWorkerSheet()" aria-label="Фильтр специалиста">
+              <button mobileSearchActions type="button" (click)="openWorkerSheet()" aria-label="Фильтр специалиста">
                 <span class="material-icons-sharp">person_search</span>
               </button>
             }
-            <button class="icon-button" type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить">
+            <button mobileSearchActions type="button" (click)="reload()" [disabled]="loading()" aria-label="Обновить">
               <span class="material-icons-sharp">refresh</span>
             </button>
-          </section>
+          </app-mobile-search-bar>
 
           <section
             class="lead-list worker-list"
@@ -179,256 +132,136 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
           >
             @if (isOrderSection()) {
               @for (order of board()?.orders?.content ?? []; track order.id) {
-                <article
-                  class="lead-card manager-card order-mobile-card mobile-worker-card mobile-worker-order-card {{ orderLeadToneClass(order) }}"
-                  [class.waiting-client]="order.waitingForClient"
-                >
-                  <header class="lead-card-head order-card-head">
-                    <a [href]="order.filialUrl || orderDetailsHref(order)" target="_blank" rel="noopener">
-                      {{ order.companyTitle || 'Без компании' }}{{ order.filialTitle ? ' - ' + order.filialTitle : '' }}
-                    </a>
-                    <span class="card-id-line">
-                      <small>#{{ order.id }}</small>
-                      @if (orderNoteBadge(order); as badge) {
-                        <button class="order-note-badge" type="button" (click)="openOrderNoteBadge(order)" [attr.aria-label]="badge">
-                          {{ badge }}
-                        </button>
-                      }
-                    </span>
-                  </header>
-
-                  <div class="lead-meta-row order-main-meta meta-row">
-                    <span [class.status-waiting]="order.waitingForClient">{{ order.waitingForClient ? 'Ждем' : (order.status || '-') }}</span>
-                    <span>{{ orderAmountLabel(order) }}</span>
-                  </div>
-
-                  @if (showBadReviewSummary(order)) {
-                    <div class="lead-meta-row order-bad-review-row meta-row bad-summary-row">
-                      <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
-                      <span>+{{ money(order.badReviewTasksSum || 0) }}</span>
-                    </div>
-                  }
-
-                  @if (permissions().canSeePhoneAndPayment) {
-                    <div class="lead-phone-row order-phone-row phone-row">
-                      <a [href]="orderChatUrl(order)" target="_blank" rel="noopener">{{ formatPhone(order.companyTelephone) }}</a>
-                      <button type="button" (click)="copyPhone(order)" title="Скопировать телефон">
-                        {{ copiedKey() === 'phone-' + order.id ? '✓' : 'T' }}
-                      </button>
-                    </div>
-
-                    <div class="lead-card-actions card-actions order-link-actions">
-                      <button type="button" (click)="copyOrderText(order, 'check')">текст</button>
-                      <a [href]="order.orderDetailsId ? '/' + order.orderDetailsId : orderDetailsHref(order)" target="_blank" rel="noopener">url</a>
-                      <button type="button" (click)="copyOrderText(order, 'payment')">счет</button>
-                      <a [href]="order.filialUrl || orderDetailsHref(order)" target="_blank" rel="noopener">ссылка</a>
-                    </div>
-                  }
-
-                  <div class="order-progress progress">
-                    <span class="progress-bar" [style.width.%]="orderProgress(order)">
-                      <em>{{ order.counter || 0 }}</em>
-                    </span>
-                  </div>
-
-                  @if (permissions().canManageOrderStatuses || canManageClientWaiting(order)) {
-                    <div class="lead-card-actions card-actions order-status-actions">
-                      @if (permissions().canManageOrderStatuses) {
-                        @for (action of orderStatusActions; track action.status) {
-                          <button
-                            type="button"
-                            [disabled]="order.waitingForClient || isMutating(orderMutationKey(order, action.status))"
-                            (click)="updateOrderStatus(order, action)"
-                            [title]="action.status"
-                          >
-                            {{ action.label }}
-                          </button>
-                        }
-                      }
-                      @if (canManageClientWaiting(order)) {
-                        <button
-                          type="button"
-                          class="client-waiting-action"
-                          [class.active]="order.waitingForClient"
-                          [disabled]="isMutating(clientWaitingMutationKey(order))"
-                          (click)="toggleOrderClientWaiting(order)"
-                        >
-                          {{ order.waitingForClient ? 'ждет клиента' : 'клиент' }}
-                        </button>
-                      }
-                    </div>
-                  }
-
-                  <div class="lead-meta-row order-category-row meta-row category-row">
-                    <span [title]="order.categoryTitle || 'Категория'">{{ order.categoryTitle || 'Категория' }}</span>
-                    <span [title]="order.subCategoryTitle || 'Подкатегория'">{{ order.subCategoryTitle || 'Подкатегория' }}</span>
-                  </div>
-
-                  <div class="order-city-row" [title]="orderCity(order)">
-                    <span class="material-icons-sharp">location_on</span>
-                    <span>{{ orderCity(order) }}</span>
-                  </div>
-
-                  <div class="lead-comment-editor order-note-editor note-editor" [class.saved]="savedOrderNoteId() === order.id">
-                    <textarea
-                      class="lead-card-comment"
-                      [id]="'workerOrderNote' + order.id"
-                      [name]="'workerOrderNote' + order.id"
-                      [readonly]="!permissions().canEditNotes || isMutating(orderNoteMutationKey(order))"
-                      [ngModel]="orderNoteValue(order)"
-                      (focus)="startOrderNoteEdit(order)"
-                      (click)="startOrderNoteEdit(order)"
-                      (ngModelChange)="setOrderNoteDraft(order, $event)"
-                      placeholder="нет заметок"
-                    ></textarea>
-                    @if (editingOrderNoteId() === order.id) {
-                      <div class="note-actions">
-                        <button type="button" class="cancel" (click)="cancelOrderNoteEdit(order)" [disabled]="isMutating(orderNoteMutationKey(order))">X</button>
-                        <button type="button" class="save" (click)="saveOrderNote(order)" [disabled]="!isOrderNoteChanged(order) || isMutating(orderNoteMutationKey(order))">
-                          <span class="material-icons-sharp">{{ savedOrderNoteId() === order.id ? 'check' : 'save' }}</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
-
-                  @if (openedOrderCompanyNoteId() === order.id) {
-                    <div class="note-editor side-note-editor">
-                      <small>Заметка компании</small>
-                      <textarea
-                        [readonly]="!permissions().canEditNotes || isMutating(companyNoteMutationKey(order))"
-                        [ngModel]="companyNoteValue(order)"
-                        (ngModelChange)="setCompanyNoteDraft(order, $event)"
-                      ></textarea>
-                      <div class="note-actions">
-                        <button type="button" class="cancel" (click)="toggleOrderCompanyNote(order)">X</button>
-                        <button type="button" class="save" (click)="saveOrderCompanyNote(order)" [disabled]="!isCompanyNoteChanged(order) || isMutating(companyNoteMutationKey(order))">
-                          <span class="material-icons-sharp">save</span>
-                        </button>
-                      </div>
-                    </div>
-                  }
-
-                  <button class="company-details-button order-details-button details-button" type="button" (click)="openOrderDetails(order)">Подробнее</button>
-
-                  <footer class="lead-card-foot order-card-foot">
-                    <button
-                      class="order-unchanged unchanged-age"
-                      type="button"
-                      [class.order-unchanged--alert]="unchangedDays(order) >= 2"
-                      [class.alert]="unchangedDays(order) >= 2"
-                      [title]="orderCity(order)"
-                    >
-                      @if (unchangedDays(order) >= 2) {
-                        <i>!</i>
-                      }
-                      Без изменений: {{ unchangedDays(order) }} дн.
-                    </button>
-                    <button type="button" (click)="openOrderDetails(order)" [title]="order.workerUserFio || 'Специалист не назначен'">
-                      {{ workerLabel(order) }}
-                    </button>
-                  </footer>
-                </article>
+                <app-mobile-order-card
+                  [order]="order"
+                  [statusActions]="orderStatusActions"
+                  [copiedKey]="copiedKey()"
+                  [mutationKey]="mutationKey()"
+                  [title]="orderTitle(order)"
+                  [titleHref]="order.filialUrl || orderDetailsHref(order)"
+                  [toneClass]="orderLeadToneClass(order)"
+                  [showWaitingBadge]="false"
+                  [statusLabel]="order.waitingForClient ? 'Ждем' : (order.status || '-')"
+                  [amountLabel]="orderAmountLabel(order)"
+                  [badReviewSummary]="showBadReviewSummary(order) ? 'Плохие: ' + (order.badReviewTasksDone || 0) + '/' + (order.badReviewTasksTotal || 0) : ''"
+                  [badReviewAmount]="showBadReviewSummary(order) ? '+' + money(order.badReviewTasksSum || 0) : ''"
+                  [phoneLabel]="formatPhone(order.companyTelephone)"
+                  [phoneHref]="orderChatUrl(order)"
+                  [reviewHref]="order.orderDetailsId ? '/' + order.orderDetailsId : orderDetailsHref(order)"
+                  [filialHref]="order.filialUrl || orderDetailsHref(order)"
+                  [phoneCopyKey]="'phone-' + order.id"
+                  [reviewCopyKey]="'check-' + order.id"
+                  [paymentCopyKey]="'payment-' + order.id"
+                  [progress]="orderProgress(order)"
+                  [cityLabel]="orderCity(order)"
+                  [workerLabel]="workerLabel(order)"
+                  [workerTitle]="order.workerUserFio || 'Специалист не назначен'"
+                  [noteBadge]="orderNoteBadge(order)"
+                  [canSeePhoneAndPayment]="permissions().canSeePhoneAndPayment"
+                  [canManageOrderStatuses]="permissions().canManageOrderStatuses"
+                  [canManageClientWaiting]="canManageClientWaiting(order)"
+                  [noteEditorId]="'workerOrderNote' + order.id"
+                  [noteValue]="orderNoteValue(order)"
+                  [noteReadOnly]="!permissions().canEditNotes || isMutating(orderNoteMutationKey(order))"
+                  [noteShowActions]="editingOrderNoteId() === order.id"
+                  [noteCancelDisabled]="isMutating(orderNoteMutationKey(order))"
+                  [noteSaveDisabled]="!isOrderNoteChanged(order) || isMutating(orderNoteMutationKey(order))"
+                  [noteSaveIcon]="savedOrderNoteId() === order.id ? 'check' : 'save'"
+                  [noteSaved]="savedOrderNoteId() === order.id"
+                  [showCompanyNoteEditor]="openedOrderCompanyNoteId() === order.id"
+                  [companyNoteValue]="companyNoteValue(order)"
+                  [companyNoteReadOnly]="!permissions().canEditNotes || isMutating(companyNoteMutationKey(order))"
+                  [companyNoteSaveDisabled]="!isCompanyNoteChanged(order) || isMutating(companyNoteMutationKey(order))"
+                  [unchangedDays]="unchangedDays(order)"
+                  [unchangedAlert]="unchangedDays(order) >= 2"
+                  (copyPhone)="copyPhone(order)"
+                  (copyText)="copyWorkerOrderText(order, $event)"
+                  (statusChange)="updateOrderStatus(order, $event)"
+                  (clientWaitingToggle)="toggleOrderClientWaiting(order)"
+                  (noteBadgeClick)="openOrderNoteBadge(order)"
+                  (noteStart)="startOrderNoteEdit(order)"
+                  (noteChange)="setOrderNoteDraft(order, $event)"
+                  (noteCancel)="cancelOrderNoteEdit(order)"
+                  (noteSave)="saveOrderNote(order)"
+                  (companyNoteChange)="setCompanyNoteDraft(order, $event)"
+                  (companyNoteCancel)="toggleOrderCompanyNote(order)"
+                  (companyNoteSave)="saveOrderCompanyNote(order)"
+                  (details)="openOrderDetails(order)"
+                  (workerClick)="openOrderDetails(order)"
+                />
               } @empty {
                 <div class="empty-state compact-empty">Заказов для отображения нет.</div>
               }
             } @else {
               @for (review of board()?.reviews?.content ?? []; track reviewKey(review)) {
-                <article
-                  class="mobile-worker-card mobile-worker-review-card {{ reviewToneClass(review) }}"
-                  [class.published]="review.publish"
-                  [class.bad-task]="isBadTask(review)"
-                  [class.recovery-task]="isRecoveryTask(review)"
-                  [class.expanded-text]="isReviewTextExpanded(review)"
+                <app-mobile-review-card-shell
+                  [title]="reviewTitle(review)"
+                  [titleHref]="review.filialUrl || reviewDetailsHref(review)"
+                  [idLabel]="'#' + review.id"
+                  [toneClass]="reviewToneClass(review)"
+                  [published]="!!review.publish"
+                  [expandedText]="isReviewTextExpanded(review)"
+                  [photoMode]="needsReviewPhoto(review) ? (hasReviewPhoto(review) ? 'link' : 'file') : 'none'"
+                  [photoUrl]="reviewPhotoUrl(review)"
+                  [photoLoading]="uploadingPhotoReviewId() === review.id"
+                  [badBadge]="isBadTask(review) ? ratingTaskLabel(review) : ''"
+                  [recoveryBadge]="isRecoveryTask(review) ? 'восст.' : ''"
+                  [noteVisible]="hasReviewAnyNote(review) || openedReviewNotesId() === review.id"
+                  [footerLeft]="reviewDate(review)"
+                  [footerRight]="reviewFooterLabel(review)"
+                  [footerRightTitle]="reviewFooterLabel(review)"
+                  (photoAction)="pickNativeReviewPhoto(review, $event)"
+                  (photoFileChange)="uploadReviewPhoto(review, $event)"
+                  (noteClick)="toggleReviewNotes(review)"
+                  (footerRightClick)="handleReviewFooterClick(review)"
                 >
-                  <header>
-                    <a
-                      [href]="review.filialUrl || reviewDetailsHref(review)"
-                      target="_blank"
-                      rel="noopener"
-                      [title]="reviewTitle(review)"
-                    >
-                      {{ reviewTitle(review) }}
-                    </a>
-                    <div class="card-id-line">
-                      @if (needsReviewPhoto(review)) {
-                        @if (hasReviewPhoto(review)) {
-                          <a class="photo-dot" [href]="reviewPhotoUrl(review)" target="_blank" rel="noopener" title="Открыть фото отзыва" aria-label="Открыть фото отзыва">
-                            <span class="material-icons-sharp">photo_camera</span>
-                          </a>
-                        } @else {
-                          <label
-                            class="photo-dot missing"
-                            [class.loading]="uploadingPhotoReviewId() === review.id"
-                            title="Загрузить фото отзыва"
-                            aria-label="Загрузить фото отзыва"
-                          >
-                            <span class="material-icons-sharp">{{ uploadingPhotoReviewId() === review.id ? 'hourglass_top' : 'photo_camera' }}</span>
-                            <input type="file" accept="image/*" (change)="uploadReviewPhoto(review, $event)" [disabled]="uploadingPhotoReviewId() === review.id">
-                          </label>
-                        }
-                      }
-                      #{{ review.id }}
-                      @if (isBadTask(review)) {
-                        <em class="task-badge bad">{{ ratingTaskLabel(review) }}</em>
-                      }
-                      @if (isRecoveryTask(review)) {
-                        <em class="task-badge recovery">восст.</em>
-                      }
-                      @if (hasReviewAnyNote(review) || openedReviewNotesId() === review.id) {
-                        <button class="note-dot" type="button" (click)="toggleReviewNotes(review)" aria-label="Заметки отзыва">
-                          <span class="material-icons-sharp">priority_high</span>
-                        </button>
-                      }
-                    </div>
-                  </header>
 
-                  <div class="review-field review-field--text" [class.editing]="isReviewFieldEditing(review, 'text')">
-                    <textarea
-                      [readonly]="!permissions().canWorkReviews || isMutating(reviewFieldMutationKey(review, 'text'))"
-                      [ngModel]="reviewFieldValue(review, 'text')"
-                      (focus)="startReviewFieldEdit(review, 'text')"
-                      (click)="startReviewFieldEdit(review, 'text')"
-                      (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
-                      placeholder="Текст отзыва"
-                    ></textarea>
-                    @if (shouldShowReviewTextToggle(review)) {
-                      <button class="review-text-toggle" type="button" (click)="toggleReviewText(review)">
-                        {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
-                      </button>
-                    }
-                    @if (isReviewFieldEditing(review, 'text')) {
-                      <div class="note-actions">
-                        <button type="button" class="cancel" (click)="cancelReviewFieldEdit(review, 'text')" [disabled]="isMutating(reviewFieldMutationKey(review, 'text'))">X</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'text')" [disabled]="!isReviewFieldChanged(review, 'text') || !reviewFieldValue(review, 'text').trim() || isMutating(reviewFieldMutationKey(review, 'text'))">
-                          <span class="material-icons-sharp">{{ savedReviewFieldKey() === reviewFieldKey(review, 'text') ? 'check' : 'save' }}</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
+                  <app-mobile-review-field-editor
+                    class="review-field review-field--text"
+                    [class.editing]="isReviewFieldEditing(review, 'text')"
+                    placeholder="Текст отзыва"
+                    [readOnly]="!permissions().canWorkReviews || isMutating(reviewFieldMutationKey(review, 'text'))"
+                    [disabled]="isMutating(reviewFieldMutationKey(review, 'text'))"
+                    [value]="reviewFieldValue(review, 'text')"
+                    [editing]="isReviewFieldEditing(review, 'text')"
+                    [showToggle]="shouldShowReviewTextToggle(review)"
+                    [expanded]="isReviewTextExpanded(review)"
+                    [saveDisabled]="!isReviewFieldChanged(review, 'text') || !reviewFieldValue(review, 'text').trim() || isMutating(reviewFieldMutationKey(review, 'text'))"
+                    [saveIcon]="savedReviewFieldKey() === reviewFieldKey(review, 'text') ? 'check' : 'save'"
+                    (start)="startReviewFieldEdit(review, 'text')"
+                    (valueChange)="setReviewFieldDraft(review, 'text', $event)"
+                    (toggle)="toggleReviewText(review)"
+                    (cancel)="cancelReviewFieldEdit(review, 'text')"
+                    (save)="saveReviewField(review, 'text')"
+                  />
 
-                  <div class="review-field review-field--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
-                    <textarea
-                      [readonly]="!permissions().canWorkReviews || isMutating(reviewFieldMutationKey(review, 'answer'))"
-                      [ngModel]="reviewFieldValue(review, 'answer')"
-                      (focus)="startReviewFieldEdit(review, 'answer')"
-                      (click)="startReviewFieldEdit(review, 'answer')"
-                      (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
-                      placeholder="Ответ на отзыв или замечание"
-                    ></textarea>
-                    @if (isReviewFieldEditing(review, 'answer')) {
-                      <div class="note-actions">
-                        <button type="button" class="cancel" (click)="cancelReviewFieldEdit(review, 'answer')" [disabled]="isMutating(reviewFieldMutationKey(review, 'answer'))">X</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'answer')" [disabled]="!isReviewFieldChanged(review, 'answer') || isMutating(reviewFieldMutationKey(review, 'answer'))">
-                          <span class="material-icons-sharp">{{ savedReviewFieldKey() === reviewFieldKey(review, 'answer') ? 'check' : 'save' }}</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
+                  <app-mobile-review-field-editor
+                    class="review-field review-field--answer"
+                    [class.editing]="isReviewFieldEditing(review, 'answer')"
+                    placeholder="Ответ на отзыв или замечание"
+                    [readOnly]="!permissions().canWorkReviews || isMutating(reviewFieldMutationKey(review, 'answer'))"
+                    [value]="reviewFieldValue(review, 'answer')"
+                    [editing]="isReviewFieldEditing(review, 'answer')"
+                    [disabled]="isMutating(reviewFieldMutationKey(review, 'answer'))"
+                    [saveDisabled]="!isReviewFieldChanged(review, 'answer') || isMutating(reviewFieldMutationKey(review, 'answer'))"
+                    [saveIcon]="savedReviewFieldKey() === reviewFieldKey(review, 'answer') ? 'check' : 'save'"
+                    (start)="startReviewFieldEdit(review, 'answer')"
+                    (valueChange)="setReviewFieldDraft(review, 'answer', $event)"
+                    (cancel)="cancelReviewFieldEdit(review, 'answer')"
+                    (save)="saveReviewField(review, 'answer')"
+                  />
 
                   <div class="order-city-row review-city-row" [title]="reviewCity(review)">
                     <span class="material-icons-sharp">location_on</span>
                     <span>{{ reviewCity(review) }}</span>
                   </div>
+
+                  @if (isBadTask(review) && review.badTaskComment) {
+                    <div class="bad-task-note-row" [title]="review.badTaskComment">
+                      <span class="material-icons-sharp">priority_high</span>
+                      <span>{{ review.badTaskComment }}</span>
+                    </div>
+                  }
 
                   @if (openedReviewNotesId() === review.id) {
                     <section class="review-notes-panel">
@@ -495,27 +328,29 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
                     {{ isMutating(reviewDoneMutationKey(review)) ? '...' : doneLabel(review) }}
                   </button>
 
-                  <footer>
-                    <span>{{ reviewDate(review) }}</span>
-                    <button type="button" (click)="openReviewDetails(review)" [title]="reviewFooterLabel(review)">
-                      {{ reviewFooterLabel(review) }}
-                    </button>
-                  </footer>
-                </article>
+                </app-mobile-review-card-shell>
               } @empty {
                 <div class="empty-state compact-empty">Отзывов для отображения нет.</div>
               }
             }
           </section>
 
-          <section class="lead-bottom-controls worker-bottom-controls" aria-label="Пагинация специалиста">
-            <button class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
+          <app-mobile-bottom-pager
+            class="mobile-page-bottom-pager"
+            [pageIndex]="currentPageIndex() - 1"
+            [totalPages]="currentPageTotal()"
+            [disabled]="loading()"
+            (previous)="previousPage()"
+            (next)="nextPage()"
+          >
+            <button mobilePagerActions class="expand-list-button reminder-hero-button" type="button" (click)="reminders.open()" aria-label="Напоминания">
               <span class="material-icons-sharp">notifications_active</span>
               @if (reminders.activeReminderCount()) {
                 <small>{{ reminders.activeReminderCount() }}</small>
               }
             </button>
             <button
+              mobilePagerActions
               class="expand-list-button"
               type="button"
               [class.active]="sortDirection() === 'asc'"
@@ -524,16 +359,7 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
             >
               <span class="material-icons-sharp">swap_vert</span>
             </button>
-            <div class="lead-pager">
-              <button type="button" (click)="previousPage()" [disabled]="isFirstPage() || loading()" aria-label="Предыдущая страница">
-                <span class="material-icons-sharp">chevron_left</span>
-              </button>
-              <span>{{ pageLabel() }}</span>
-              <button type="button" (click)="nextPage()" [disabled]="isLastPage() || loading()" aria-label="Следующая страница">
-                <span class="material-icons-sharp">chevron_right</span>
-              </button>
-            </div>
-          </section>
+          </app-mobile-bottom-pager>
         </main>
 
         @if (sectionSheetOpen()) {
@@ -849,177 +675,7 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       scroll-snap-type: none;
     }
 
-    .worker-list--expanded .mobile-worker-card {
-      flex: none;
-      width: 100%;
-      min-height: auto;
-      scroll-snap-align: none;
-    }
-
-    .mobile-worker-card {
-      display: grid;
-      flex: 0 0 min(15.4rem, 76vw);
-      min-width: 0;
-      min-height: 100%;
-      align-content: start;
-      gap: clamp(0.34rem, 0.78vh, 0.56rem);
-      border: 1px solid rgba(103, 116, 131, 0.2);
-      border-radius: 0.9rem;
-      padding: 0.68rem;
-      background: linear-gradient(180deg, var(--otziv-white) 0%, var(--otziv-white) 58%, var(--otziv-muted-surface) 100%);
-      box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
-      scroll-snap-align: center;
-    }
-
-    .mobile-worker-order-card {
-      align-content: space-between;
-      gap: clamp(0.28rem, 0.58vh, 0.46rem);
-    }
-
-    .mobile-worker-card.tone-wait,
-    .mobile-worker-card.waiting-client {
-      border-color: var(--otziv-tone-wait-border);
-      background: linear-gradient(180deg, var(--otziv-tone-wait-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-walk {
-      border-color: var(--otziv-tone-walk-border);
-      background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-correction {
-      border-color: var(--otziv-tone-correction-border);
-      background: linear-gradient(180deg, var(--otziv-tone-correction-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-publication {
-      border-color: var(--otziv-tone-publication-border);
-      background: linear-gradient(180deg, var(--otziv-tone-publication-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-success {
-      border-color: var(--otziv-tone-success-border);
-      background: linear-gradient(180deg, var(--otziv-tone-success-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-bad {
-      border-color: var(--otziv-tone-bad-border);
-      background: linear-gradient(180deg, var(--otziv-tone-bad-surface) 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card.tone-recovery {
-      border-color: rgba(244, 197, 66, 0.7);
-      background: linear-gradient(180deg, #fff8d8 0%, var(--otziv-white) 54%, var(--otziv-white) 100%);
-    }
-
-    .mobile-worker-card header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) max-content;
-      align-items: start;
-      gap: 0.42rem;
-    }
-
-    .mobile-worker-card header a {
-      display: -webkit-box;
-      min-width: 0;
-      overflow: hidden;
-      color: var(--otziv-dark);
-      font-family: var(--otziv-card-title-font);
-      font-size: 0.98rem;
-      font-weight: 1000;
-      line-height: 1.06;
-      text-decoration: none;
-      overflow-wrap: anywhere;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-    }
-
-    .card-id-line {
-      display: inline-flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.24rem;
-      color: var(--otziv-info);
-      font-size: 0.68rem;
-      font-weight: 900;
-      white-space: nowrap;
-    }
-
-    .note-dot,
-    .photo-dot {
-      display: inline-grid;
-      width: 1.24rem;
-      height: 1.24rem;
-      place-items: center;
-      border: 0;
-      border-radius: 999px;
-      color: #4d3900;
-      background: #f4c542;
-      font: inherit;
-      text-decoration: none;
-    }
-
-    .note-dot .material-icons-sharp,
-    .photo-dot .material-icons-sharp {
-      font-size: 0.84rem;
-    }
-
-    .photo-dot {
-      position: relative;
-      color: white;
-      background: var(--otziv-success);
-    }
-
-    .photo-dot.missing {
-      background: var(--otziv-danger);
-    }
-
-    .photo-dot.loading {
-      opacity: 0.72;
-    }
-
-    .photo-dot input {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .task-badge {
-      border-radius: 999px;
-      padding: 0.14rem 0.35rem;
-      font-size: 0.58rem;
-      font-style: normal;
-      font-weight: 900;
-    }
-
-    .task-badge.bad {
-      color: var(--otziv-danger);
-      background: rgba(255, 0, 96, 0.1);
-    }
-
-    .task-badge.recovery {
-      color: #8a6400;
-      background: rgba(255, 248, 216, 0.92);
-    }
-
-    .meta-row,
-    .phone-row,
-    .mobile-worker-card footer {
-      display: flex;
-      min-width: 0;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.48rem;
-    }
-
-    .meta-row span,
-    .meta-row button,
-    .phone-row a,
-    .phone-row button,
-    .bot-line,
-    .mobile-worker-card footer button {
+    .bot-line {
       min-width: 0;
       min-height: 1.9rem;
       overflow: hidden;
@@ -1035,77 +691,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       white-space: nowrap;
     }
 
-    .meta-row span,
-    .meta-row button,
-    .phone-row a {
-      flex: 1;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .phone-row a {
-      color: #36708d;
-      font-size: 0.95rem;
-    }
-
-    .phone-row button {
-      flex: 0 0 2.25rem;
-      padding: 0;
-      color: #36708d;
-    }
-
-    .mobile-worker-order-card .meta-row span,
-    .mobile-worker-order-card .meta-row button,
-    .mobile-worker-order-card .phone-row a,
-    .mobile-worker-order-card .phone-row button {
-      min-height: 1.62rem;
-      font-size: 0.7rem;
-      font-weight: 900;
-    }
-
-    .mobile-worker-order-card .phone-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 2rem;
-    }
-
-    .mobile-worker-order-card .phone-row a {
-      color: #36708d;
-      font-size: 0.82rem;
-    }
-
-    .mobile-worker-order-card .phone-row button {
-      min-width: 2rem;
-      padding: 0;
-      font-size: 0.78rem;
-    }
-
-    .status-waiting,
-    .bad-summary-row span {
-      color: #8a6416 !important;
-      border-color: rgba(214, 159, 43, 0.36) !important;
-      background: rgba(255, 244, 214, 0.86) !important;
-    }
-
-    .progress {
-      overflow: hidden;
-      min-height: 0.38rem;
-      border-radius: 999px;
-      background: #f3ddf8;
-    }
-
-    .progress-bar {
-      display: grid;
-      min-width: 1.6rem;
-      height: 100%;
-      place-items: center;
-      border-radius: inherit;
-      color: var(--otziv-dark);
-      background: #bdcfe5;
-      font-size: 0.56rem;
-      font-weight: 900;
-    }
-
     .card-actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1114,7 +699,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
 
     .card-actions button,
     .card-actions a,
-    .details-button,
     .publish-button,
     .review-notes-panel button {
       display: inline-flex;
@@ -1137,43 +721,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
     .card-actions button:disabled,
     .publish-button:disabled {
       opacity: 0.58;
-    }
-
-    .order-status-actions {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
-
-    .mobile-worker-order-card .order-link-actions,
-    .mobile-worker-order-card .order-status-actions {
-      gap: 0.28rem 0.3rem;
-    }
-
-    .mobile-worker-order-card .order-link-actions button,
-    .mobile-worker-order-card .order-link-actions a,
-    .mobile-worker-order-card .order-status-actions button,
-    .mobile-worker-order-card .details-button {
-      min-height: 1.55rem;
-      padding: 0 0.18rem;
-      font-size: 0.56rem;
-      letter-spacing: 0;
-    }
-
-    .client-waiting-action.active {
-      grid-column: 1 / -1;
-      color: #8a6416;
-      border-color: rgba(214, 159, 43, 0.36);
-      background: rgba(255, 244, 214, 0.86);
-      text-transform: uppercase;
-    }
-
-    .category-row {
-      overflow: visible;
-    }
-
-    .category-row button,
-    .category-row span {
-      flex: 1;
-      cursor: default;
     }
 
     .order-city-row {
@@ -1205,7 +752,34 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       white-space: nowrap;
     }
 
-    .note-editor,
+    .bad-task-note-row {
+      display: inline-flex;
+      min-width: 0;
+      min-height: 1.72rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.24rem;
+      overflow: hidden;
+      border: 1px solid rgba(236, 75, 109, 0.22);
+      border-radius: 999px;
+      padding: 0 0.58rem;
+      color: var(--otziv-danger);
+      background: linear-gradient(145deg, var(--otziv-white) 0%, rgba(236, 75, 109, 0.08) 100%);
+      font: 900 0.62rem/1 var(--otziv-font-family);
+    }
+
+    .bad-task-note-row .material-icons-sharp {
+      flex: 0 0 auto;
+      font-size: 0.88rem;
+    }
+
+    .bad-task-note-row span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .review-field,
     .review-notes-panel {
       position: relative;
@@ -1214,7 +788,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       gap: 0.35rem;
     }
 
-    .note-editor textarea,
     .review-field textarea,
     .review-notes-panel textarea {
       display: block;
@@ -1228,15 +801,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       color: var(--otziv-dark);
       background: var(--otziv-field-background);
       font: 700 0.74rem/1.35 var(--otziv-font-family);
-    }
-
-    .note-editor textarea {
-      height: 4.4rem;
-    }
-
-    .mobile-worker-order-card .note-editor textarea {
-      height: clamp(3.7rem, 9.4vh, 4.7rem);
-      font-size: 0.72rem;
     }
 
     .review-field--text textarea {
@@ -1258,7 +822,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       text-align: center;
     }
 
-    .note-editor textarea:focus,
     .review-field textarea:focus,
     .review-field.editing textarea {
       border-color: #f4c542;
@@ -1306,7 +869,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       color: var(--otziv-danger);
     }
 
-    .side-note-editor small,
     .review-notes-panel span {
       color: var(--otziv-info);
       font-size: 0.62rem;
@@ -1350,8 +912,7 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       color: var(--otziv-danger);
     }
 
-    .publish-button,
-    .details-button {
+    .publish-button {
       width: 100%;
       min-height: 2.04rem;
       text-transform: uppercase;
@@ -1370,48 +931,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       border-color: rgba(255, 0, 96, 0.18) !important;
       background: #ffe6ef !important;
       opacity: 1;
-    }
-
-    .mobile-worker-card footer {
-      margin-top: 0;
-    }
-
-    .mobile-worker-card footer span,
-    .mobile-worker-card footer button {
-      color: var(--otziv-info);
-      font-size: 0.68rem;
-      font-weight: 900;
-      background: transparent;
-      border: 0;
-      padding: 0;
-      text-align: left;
-    }
-
-    .mobile-worker-card footer button {
-      text-align: right;
-      text-decoration: underline;
-    }
-
-    .unchanged-age {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.22rem;
-    }
-
-    .unchanged-age.alert {
-      color: var(--otziv-danger) !important;
-    }
-
-    .unchanged-age i {
-      display: inline-grid;
-      width: 0.92rem;
-      height: 0.92rem;
-      place-items: center;
-      border-radius: 50%;
-      color: white;
-      background: var(--otziv-danger);
-      font-size: 0.58rem;
-      font-style: normal;
     }
 
     .worker-bottom-controls {
@@ -1558,13 +1077,52 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
       color: var(--otziv-danger);
     }
 
+    .overdue-sheet {
+      width: min(92vw, 21.25rem);
+      max-height: min(76dvh, 34rem);
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+
+    .overdue-sheet header {
+      min-height: 0;
+    }
+
+    .overdue-sheet header small {
+      font-size: 0.58rem;
+      line-height: 1;
+    }
+
+    .overdue-sheet .worker-filter-options {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 0.08rem;
+    }
+
+    .overdue-sheet .worker-filter-options button {
+      min-height: 2.35rem;
+      padding: 0.38rem 0.58rem;
+      font-size: 0.78rem;
+    }
+
+    .overdue-sheet .worker-filter-options button small {
+      grid-column: 1 / -1;
+      font-size: 0.58rem;
+      line-height: 1;
+      text-transform: none;
+    }
+
     .dismiss-button {
       display: flex;
+      min-height: 2.2rem;
       justify-content: center;
+      padding: 0.42rem 0.58rem;
+      font-size: 0.68rem;
+      line-height: 1.12;
       text-align: center;
     }
 
-    :host-context(body.otziv-dark-theme) .mobile-worker-card,
     :host-context(body.otziv-dark-theme) .worker-search-line,
     :host-context(body.otziv-dark-theme) .worker-section-sheet {
       background: linear-gradient(180deg, rgba(32, 38, 44, 0.98) 0%, rgba(24, 29, 34, 0.98) 100%);
@@ -1586,9 +1144,6 @@ const EMPTY_REVIEW_PAGE: Page<WorkerReviewItem> = {
         flex-basis: 7.1rem;
       }
 
-      .mobile-worker-card {
-        flex-basis: min(15.1rem, calc(100vw - 2.7rem));
-      }
     }
   `]
 })
@@ -1644,12 +1199,29 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
     return this.metricValue(section) > 0 || this.activeSection() === section;
   }));
+  readonly statusItems = computed<MobileStatusItem[]>(() =>
+    this.sectionOptions().map((section) => {
+      const metric = this.sectionMetric(section);
+      const delta = this.metricDelta(section);
+      return {
+        key: section,
+        title: this.sectionLabel(section),
+        value: this.metricValue(section),
+        icon: metric?.icon || workerSectionIcon(section),
+        tone: metric?.tone || 'blue',
+        badge: delta > 0 ? `+${delta}` : null,
+        disabled: this.isSectionLocked(section)
+      };
+    })
+  );
 
   constructor(
     private readonly api: ApiService,
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly confirm: MobileConfirmService,
+    private readonly media: MobileMediaService
   ) {}
 
   ngOnInit(): void {
@@ -1693,6 +1265,12 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.searchTimer = setTimeout(() => void this.load(), 1000);
   }
 
+  applySearch(): void {
+    this.pageNumber.set(0);
+    this.clearSearchTimer();
+    void this.load();
+  }
+
   clearSearch(): void {
     this.keyword.set('');
     this.pageNumber.set(0);
@@ -1727,11 +1305,19 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   selectSection(section: WorkerBoardSection): void {
+    if (this.isSectionLocked(section)) {
+      return;
+    }
+
     this.activeSection.set(section);
     this.pageNumber.set(0);
     this.listExpanded.set(false);
     this.sectionSheetOpen.set(false);
     void this.load();
+  }
+
+  selectStatusSliderSection(section: string): void {
+    this.selectSection(section as WorkerBoardSection);
   }
 
   changeWorkerFilter(worker: WorkerOption | null): void {
@@ -1783,7 +1369,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     void this.load();
   }
 
-  async updateOrderStatus(order: OrderItem, action: StatusAction): Promise<void> {
+  async updateOrderStatus(order: OrderItem, action: WorkerStatusAction): Promise<void> {
     const key = this.orderMutationKey(order, action.status);
     await this.runMutation(key, () => this.api.updateWorkerOrderStatus(order.id, action.status), 'Не удалось изменить статус заказа.');
   }
@@ -1916,8 +1502,15 @@ export class WorkerPage implements OnInit, OnDestroy {
     try {
       if (field === 'text' && this.isBadTask(review) && review.badTaskId) {
         await firstValueFrom(this.api.updateWorkerBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null));
-      } else if (field === 'text' && this.isRecoveryTask(review) && review.recoveryTaskId) {
-        await firstValueFrom(this.api.updateWorkerRecoveryTask(review.recoveryTaskId, value, review.recoveryTaskScheduledDate || review.publishedDate || null));
+      } else if (this.isRecoveryTask(review) && review.recoveryTaskId) {
+        const recoveryText = field === 'text' ? value : (review.text ?? '');
+        const recoveryAnswer = field === 'answer' ? value : (review.answer ?? '');
+        await firstValueFrom(this.api.updateWorkerRecoveryTask(
+          review.recoveryTaskId,
+          recoveryText,
+          review.recoveryTaskScheduledDate || review.publishedDate || null,
+          recoveryAnswer
+        ));
       } else if (field === 'text') {
         await firstValueFrom(this.api.updateWorkerReviewText(review.id, review.orderId, value));
       } else {
@@ -2004,9 +1597,27 @@ export class WorkerPage implements OnInit, OnDestroy {
       return;
     }
 
+    await this.uploadReviewPhotoFile(review, file, input);
+  }
+
+  async pickNativeReviewPhoto(review: WorkerReviewItem, event: Event): Promise<void> {
+    if (!this.media.nativePhotoPickerAvailable || this.uploadingPhotoReviewId()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const file = await this.media.pickImageFile(`review-${review.id}`);
+    if (file) {
+      await this.uploadReviewPhotoFile(review, file);
+    }
+  }
+
+  private async uploadReviewPhotoFile(review: WorkerReviewItem, file: File, input?: HTMLInputElement | null): Promise<void> {
     this.uploadingPhotoReviewId.set(review.id);
     try {
-      const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, file));
+      const preparedFile = await this.media.prepareImageFile(file, `review-${review.id}`);
+      const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
       this.patchReview(review.id, {
         productPhoto: updatedReview.productPhoto,
         url: updatedReview.url,
@@ -2032,6 +1643,10 @@ export class WorkerPage implements OnInit, OnDestroy {
       ? `${order.companyTitle}. ${order.filialTitle || ''}\n\nСумма к оплате: ${this.money(order.totalSumWithBadReviews ?? order.sum ?? 0)}`
       : `${order.companyTitle}. ${order.filialTitle || ''}\n\nПроверьте, пожалуйста, отзывы по заказу #${order.id}`;
     await this.copyText(value, `${kind}-${order.id}`);
+  }
+
+  async copyWorkerOrderText(order: OrderItem, kind: MobileOrderCopyKind): Promise<void> {
+    await this.copyOrderText(order, kind === 'payment' ? 'payment' : 'check');
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
@@ -2063,7 +1678,12 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (!review.botId) {
       return;
     }
-    const confirmed = window.confirm(`Заблокировать аккаунт "${review.botFio || review.botId}" и заменить в карточке?`);
+    const confirmed = await this.confirm.confirm({
+      title: 'Заменить аккаунт',
+      message: `Заблокировать аккаунт "${review.botFio || review.botId}" и заменить в карточке?`,
+      confirmText: 'Заменить',
+      danger: true
+    });
     if (!confirmed) {
       return;
     }
@@ -2107,12 +1727,29 @@ export class WorkerPage implements OnInit, OnDestroy {
     void this.router.navigate(['/tabs/orders', review.companyId, review.orderId]);
   }
 
+  handleReviewFooterClick(review: WorkerReviewItem): void {
+    if (this.isRecoveryTask(review) || this.isBadTask(review)) {
+      this.startReviewFieldEdit(review, 'text');
+      window.setTimeout(() => {
+        const selector = `article[data-review-id="${review.id}"] textarea`;
+        document.querySelector<HTMLTextAreaElement>(selector)?.focus();
+      });
+      return;
+    }
+
+    this.openReviewDetails(review);
+  }
+
+  orderTitle(order: OrderItem): string {
+    return `${order.companyTitle || 'Без компании'}${order.filialTitle ? ' - ' + order.filialTitle : ''}`;
+  }
+
   sectionLabel(section: WorkerBoardSection): string {
-    return WORKER_SECTION_LABELS[section];
+    return workerSectionLabel(section);
   }
 
   sectionIcon(section: WorkerBoardSection): string {
-    return this.sectionMetric(section)?.icon || WORKER_SECTION_ICONS[section];
+    return this.sectionMetric(section)?.icon || workerSectionIcon(section);
   }
 
   sectionTone(section: WorkerBoardSection): string {
@@ -2132,11 +1769,11 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   pageLabel(): string {
-    return `${this.currentPageIndex()} / ${this.currentPageTotal()}`;
+    return mobilePageLabel(this.activePage(), this.pageNumber());
   }
 
   sortTitle(): string {
-    return this.sortDirection() === 'desc' ? 'Сначала новые' : 'Сначала старые';
+    return mobileSortTitle(this.sortDirection());
   }
 
   isOrderSection(section = this.activeSection()): boolean {
@@ -2144,25 +1781,23 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   isReviewSection(section = this.activeSection()): boolean {
-    return REVIEW_SECTIONS.has(section);
+    return isWorkerReviewSection(section);
   }
 
   currentPageIndex(): number {
-    const page = this.activePage();
-    return (page.number ?? page.pageNumber ?? this.pageNumber()) + 1;
+    return mobilePageIndex(this.activePage(), this.pageNumber());
   }
 
   currentPageTotal(): number {
-    return this.activePage().totalPages || 1;
+    return mobilePageTotal(this.activePage());
   }
 
   isFirstPage(): boolean {
-    return this.activePage().first ?? this.pageNumber() <= 0;
+    return mobilePageIsFirst(this.activePage(), this.pageNumber());
   }
 
   isLastPage(): boolean {
-    const page = this.activePage();
-    return page.last ?? this.currentPageIndex() >= this.currentPageTotal();
+    return mobilePageIsLast(this.activePage(), this.pageNumber());
   }
 
   isSectionLocked(section: WorkerBoardSection): boolean {
@@ -2333,19 +1968,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   reviewToneClass(review: WorkerReviewItem): string {
-    if (this.isBadTask(review) || this.activeSection() === 'bad') {
-      return 'tone-bad';
-    }
-    if (this.isRecoveryTask(review) || this.activeSection() === 'recovery') {
-      return 'tone-recovery';
-    }
-    if (this.activeSection() === 'nagul') {
-      return 'tone-walk';
-    }
-    if (this.activeSection() === 'publish') {
-      return 'tone-publication';
-    }
-    return '';
+    return workerReviewToneClass(review, this.activeSection());
   }
 
   isBadTask(review: WorkerReviewItem): boolean {
@@ -2361,11 +1984,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   reviewTitle(review: WorkerReviewItem): string {
-    const company = review.companyTitle?.trim() || 'Компания';
-    const filial = review.filialTitle?.trim();
-    return filial && (this.activeSection() === 'nagul' || this.activeSection() === 'recovery' || this.activeSection() === 'publish')
-      ? `${company} - ${filial}`
-      : company;
+    return workerReviewTitle(review, this.activeSection());
   }
 
   reviewFooterLabel(review: WorkerReviewItem): string {
@@ -2479,7 +2098,7 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   doneLabel(review: WorkerReviewItem): string {
     if (this.isRecoveryTask(review)) {
-      return 'Восстановил';
+      return 'Сообщить менеджеру';
     }
     if (this.isBadTask(review)) {
       return 'Сменил';

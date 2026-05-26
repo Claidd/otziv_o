@@ -7,11 +7,10 @@ export const roleGuard: CanActivateFn = async (route, state) => {
   const router = inject(Router);
 
   if (!auth.isAuthenticated()) {
-    await auth.login(state.url);
-    return false;
+    return router.createUrlTree(['/login'], { queryParams: { target: state.url } });
   }
 
-  const roles = route.data['roles'] as string[] | undefined;
+  const roles = route.data['roles'] as readonly string[] | undefined;
   if (!roles?.length || auth.hasAnyRealmRole(roles)) {
     return true;
   }

@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeFilialTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeString;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
@@ -50,13 +49,16 @@ public class OrderStatusTransitionService {
     private final OrderStatusService orderStatusService;
     private final OrderTransactionService orderTransactionService;
     private final BadReviewTaskService badReviewTaskService;
-    private final PromoTextService textService;
     private final TelegramService telegramService;
     private final OrderCompanyStatusService orderCompanyStatusService;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderBotLifecycleService orderBotLifecycleService;
     private final ReviewArchiveService reviewArchiveService;
     private final ReviewRepository reviewRepository;
+    private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
+    private final OrderReviewCheckMessageBuilder orderReviewCheckMessageBuilder;
+    private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
+    private final OrderCorrectionTelegramNotifier orderCorrectionTelegramNotifier;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -310,14 +312,47 @@ public class OrderStatusTransitionService {
         String reviewIds = duplicateReviews.stream()
                 .map(review -> review.getId() == null ? "без id" : review.getId().toString())
                 .collect(Collectors.joining(", "));
+        String cardLabels = reviewCardLabels(order, duplicateReviews);
         log.warn("{} заказа ID {} отменена: {} у отзывов {}",
                 logActionTitle, order.getId(), reason, reviewIds);
 
-        throw new ResponseStatusException(HttpStatus.CONFLICT, errorMessage);
+        throw new ResponseStatusException(HttpStatus.CONFLICT, errorMessage + " Проблемные карточки: " + cardLabels + ".");
     }
 
     private String normalizedReviewText(String text) {
         return text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String reviewCardLabels(Order order, List<Review> reviews) {
+        List<Review> allReviews = getAllReviews(order);
+        return reviews.stream()
+                .map(review -> reviewCardLabel(allReviews, review))
+                .collect(Collectors.joining(", "));
+    }
+
+    private String reviewCardLabel(List<Review> allReviews, Review target) {
+        int index = reviewIndex(allReviews, target);
+        String number = index >= 0 ? "№" + (index + 1) : "№?";
+        String id = target != null && target.getId() != null ? " (отзыв #" + target.getId() + ")" : "";
+        return number + id;
+    }
+
+    private int reviewIndex(List<Review> allReviews, Review target) {
+        if (target == null) {
+            return -1;
+        }
+
+        for (int i = 0; i < allReviews.size(); i++) {
+            Review review = allReviews.get(i);
+            if (review == target) {
+                return i;
+            }
+            if (review != null && review.getId() != null && review.getId().equals(target.getId())) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private boolean handleToCheckStatus(Order order) {
@@ -338,15 +373,14 @@ public class OrderStatusTransitionService {
                 log.warn("У заказа {} нет OrderDetails. Статус выставим без ссылки на проверку", order.getId());
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
                 orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
                 return true;
             }
 
-            String message = order.getCompany().getTitle() + ". " + safeFilialTitle(order) + "\n\n" +
-                    textService.findById(5) + "\n\n" +
-                    "Ссылка на проверку отзывов: https://o-ogo.ru/review/editReviews/" + firstDetail.getId();
+            String message = orderReviewCheckMessageBuilder.reviewCheckMessage(order);
 
             log.info("Отправляем сообщение клиенту для заказа ID: {}", order.getId());
-            boolean result = orderStatusNotificationService.sendMessageToGroup(
+            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
                     STATUS_TO_CHECK,
                     order,
                     clientId,
@@ -355,20 +389,27 @@ public class OrderStatusTransitionService {
                     STATUS_IN_CHECK
             );
 
-            if (result) {
+            if (STATUS_IN_CHECK.equals(appliedStatus)) {
                 log.info("✅ Заказ ID {} переведен в статус 'На проверку' (сообщение отправлено)", order.getId());
-            } else {
-                log.error("❌ Ошибка при отправке сообщения для заказа ID: {}", order.getId());
+                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
+                return true;
             }
 
-            return result;
+            if (STATUS_TO_CHECK.equals(appliedStatus)) {
+                log.warn("⚠️ Заказ ID {} оставлен в статусе 'В проверку': клиентское сообщение не отправлено", order.getId());
+                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
+                return true;
+            } else {
+                log.error("❌ Неожиданный статус после отправки сообщения для заказа ID {}: {}", order.getId(), appliedStatus);
+                return false;
+            }
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===", e);
             try {
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
                 orderRepository.save(order);
-                log.warn("Статус заказа ID {} изменен на 'На проверку' без дополнительных действий из-за ошибки",
+                log.warn("Статус заказа ID {} изменен на 'В проверку' без дополнительных действий из-за ошибки",
                         order.getId());
             } catch (Exception ex) {
                 log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
@@ -392,26 +433,23 @@ public class OrderStatusTransitionService {
     private boolean handleCorrectionStatus(Order order) {
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===");
-            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
+            String currentStatus = safeStatusTitle(order);
+            log.info("Заказ ID: {}, текущий статус: {}", order.getId(), currentStatus);
+
+            if (STATUS_CORRECTION.equals(currentStatus)) {
+                log.info("Заказ ID {} уже находится в статусе 'Коррекция'. Повторный перевод пропущен", order.getId());
+                return true;
+            }
 
             orderBotLifecycleService.assignBotsIfNeeded(order);
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_CORRECTION);
-
-            if (orderStatusNotificationService.hasWorkerWithTelegram(order)) {
-                String companyTitle = order.getCompany().getTitle();
-                String comments = order.getCompany().getCommentsCompany();
-                telegramService.sendMessage(
-                        order.getWorker().getUser().getTelegramChatId(),
-                        companyTitle + " отправлен в Коррекцию - " + safeString(order.getZametka()) + " " + safeString(comments) +
-                                "\n https://o-ogo.ru/worker/correct"
-                );
-                log.info("Уведомление о коррекции отправлено в Telegram");
-            }
 
             clearPublicationDatesForUnpublishedReviews(order);
 
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
             orderRepository.save(order);
+            mobilePushBusinessNotificationService.notifyWorkerCorrection(order);
+            enqueueCorrectionTelegramNotification(order);
 
             log.info("✅ Заказ ID {} переведен в статус 'Коррекция'", order.getId());
             return true;
@@ -422,12 +460,36 @@ public class OrderStatusTransitionService {
                 clearPublicationDatesForUnpublishedReviews(order);
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
                 orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyWorkerCorrection(order);
                 log.warn("Статус заказа ID {} изменен на 'Коррекция' без дополнительных действий из-за ошибки",
                         order.getId());
             } catch (Exception ex) {
                 log.error("Критическая ошибка при сохранении статуса: {}", ex.getMessage());
             }
             return false;
+        }
+    }
+
+    private void enqueueCorrectionTelegramNotification(Order order) {
+        try {
+            if (!orderStatusNotificationService.hasWorkerWithTelegram(order)) {
+                return;
+            }
+
+            Long chatId = order.getWorker().getUser().getTelegramChatId();
+            String companyTitle = order.getCompany() == null ? "" : safeString(order.getCompany().getTitle());
+            String comments = order.getCompany() == null ? "" : safeString(order.getCompany().getCommentsCompany());
+            orderCorrectionTelegramNotifier.notifyWorkerCorrection(
+                    order.getId(),
+                    chatId,
+                    companyTitle,
+                    safeString(order.getZametka()),
+                    comments
+            );
+            log.info("Уведомление о коррекции заказа ID {} поставлено в очередь Telegram", order.getId());
+        } catch (RuntimeException e) {
+            log.warn("Не удалось поставить Telegram-уведомление о коррекции заказа ID {} в очередь. Статус уже изменен.",
+                    order.getId(), e);
         }
     }
 
@@ -456,12 +518,9 @@ public class OrderStatusTransitionService {
             String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
             String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 
-            String message = order.getCompany().getTitle() + ". " + safeFilialTitle(order) + "\n\n" +
-                    "Здравствуйте, ваш заказ выполнен, просьба оплатить. АЛЬФА-БАНК по счету " +
-                    "https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR получатель: Сивохин И.И. " +
-                    "ПРИШЛИТЕ ЧЕК, пожалуйста, как оплатите) К оплате: " + order.getSum() + " руб.";
+            String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
 
-            return orderStatusNotificationService.sendMessageToGroup(
+            boolean sent = orderStatusNotificationService.sendMessageToGroup(
                     STATUS_PUBLIC,
                     order,
                     clientId,
@@ -469,7 +528,15 @@ public class OrderStatusTransitionService {
                     message,
                     STATUS_TO_PAY
             );
+            if (!sent) {
+                log.warn("⚠️ Заказ ID {} оставлен в статусе 'Опубликовано': счет клиенту не отправлен", order.getId());
+            }
+            mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
+            return true;
 
+        } catch (ResponseStatusException e) {
+            log.warn("=== СЧЕТ ПРИ ПЕРЕВОДЕ В 'ОПУБЛИКОВАНО' НЕ ПОДГОТОВЛЕН: {} ===", e.getReason());
+            throw e;
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'Публикация'", e);

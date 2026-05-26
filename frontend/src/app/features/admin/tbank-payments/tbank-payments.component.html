@@ -147,6 +147,7 @@
                 </button>
                 <small>{{ link.tbankOrderId || 'OrderId не создан' }}</small>
                 <small class="profile-line">{{ link.paymentProfileName || link.tbankTerminalKey || 'Основной магазин' }}</small>
+                <small class="method-line">{{ paymentMethodLabel(link) }}</small>
                 @if (link.payerEmail) {
                   <small class="email-line">{{ link.payerEmail }}</small>
                 }
@@ -208,6 +209,242 @@
   </section>
 
   <section admin-right-content class="tbank-side" aria-label="Настройки платежных профилей T-Bank">
+    @if (runtimeSettings(); as settings) {
+      <article class="side-card launch-panel">
+        <div class="side-card-head compact-head">
+          <span class="material-icons-sharp" aria-hidden="true">rocket_launch</span>
+          <div>
+            <h2>Пульт запуска</h2>
+            <p>Режим, источник ссылок и способы на странице оплаты.</p>
+          </div>
+        </div>
+
+        <div [class]="launchStateClass()">
+          <strong>{{ launchStateTitle() }}</strong>
+          <span>{{ launchStateDescription() }}</span>
+        </div>
+
+        <div class="launch-section">
+          <div class="launch-label">
+            <span>1</span>
+            <strong>Контур T-Bank</strong>
+          </div>
+          <div class="launch-segment">
+            <button
+              type="button"
+              [class.active]="settings.runtimeMode === 'TEST'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setRuntimeMode('TEST')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">science</span>
+              Тестовый
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.runtimeMode === 'LIVE'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setRuntimeMode('LIVE')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">verified</span>
+              Боевой
+            </button>
+          </div>
+          <small>В тестовом контуре платежи не засчитываются как реальные.</small>
+        </div>
+
+        <div class="launch-section">
+          <div class="launch-label">
+            <span>2</span>
+            <strong>Что отправлять клиентам</strong>
+          </div>
+          <div class="launch-segment">
+            <button
+              type="button"
+              [class.active]="settings.paymentInstructionSource === 'MANAGER_TEXT'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setPaymentInstructionSource('MANAGER_TEXT')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">article</span>
+              Альфа / текст
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.paymentInstructionSource === 'TBANK_LINK'"
+              [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'"
+              (click)="setPaymentInstructionSource('TBANK_LINK')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">link</span>
+              T-Bank ссылки
+            </button>
+          </div>
+          <small>Это переключает автоответчик и счета после плохого отзыва.</small>
+        </div>
+
+        <div class="launch-section">
+          <div class="launch-label">
+            <span>3</span>
+            <strong>После подтверждения оплаты</strong>
+          </div>
+          <div class="launch-segment">
+            <button
+              type="button"
+              [class.active]="!settings.applyConfirmedPayments"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setApplyConfirmedPayments(false)"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+              Только журнал
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.applyConfirmedPayments"
+              [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'"
+              (click)="setApplyConfirmedPayments(true)"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">paid</span>
+              Оплачивать заказ
+            </button>
+          </div>
+          <small>Полное включение переводит заказ в оплату по webhook CONFIRMED.</small>
+        </div>
+
+        <div class="launch-section">
+          <div class="launch-label">
+            <span>4</span>
+            <strong>Способы на /pay</strong>
+          </div>
+          <div class="launch-segment four">
+            <button
+              type="button"
+              [class.active]="settings.paymentPageMode === 'SBP_PRIMARY'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setPaymentPageMode('SBP_PRIMARY')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">qr_code_2</span>
+              СБП + карта
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.paymentPageMode === 'BANK_PRIMARY'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setPaymentPageMode('BANK_PRIMARY')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+              Карта + СБП
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.paymentPageMode === 'SBP_ONLY'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setPaymentPageMode('SBP_ONLY')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">qr_code_scanner</span>
+              Только СБП
+            </button>
+            <button
+              type="button"
+              [class.active]="settings.paymentPageMode === 'BANK_ONLY'"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (click)="setPaymentPageMode('BANK_ONLY')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">payments</span>
+              Только банк
+            </button>
+          </div>
+          <small>{{ paymentPageModeDescription() }}</small>
+        </div>
+
+        <div class="launch-section">
+          <div class="launch-label">
+            <span>5</span>
+            <strong>Быстрые методы банка</strong>
+          </div>
+          <div class="method-toggle-list" aria-label="Быстрые способы оплаты в форме банка">
+            <label class="method-toggle-row">
+              <span class="method-icon tpay">T</span>
+              <span>
+                <strong>T-Pay</strong>
+                <small>Показывать как быстрый способ в банковском блоке</small>
+              </span>
+              <input
+                class="switch"
+                type="checkbox"
+                [checked]="settings.tpayEnabled"
+                [disabled]="savingRuntimeSettings() || loading()"
+                (change)="setFastBankMethodSwitch('tpayEnabled', $any($event.target).checked)"
+              >
+            </label>
+            <label class="method-toggle-row">
+              <span class="method-icon sber">S</span>
+              <span>
+                <strong>SberPay</strong>
+                <small>Показывать как быстрый способ в банковском блоке</small>
+              </span>
+              <input
+                class="switch"
+                type="checkbox"
+                [checked]="settings.sberpayEnabled"
+                [disabled]="savingRuntimeSettings() || loading()"
+                (change)="setFastBankMethodSwitch('sberpayEnabled', $any($event.target).checked)"
+              >
+            </label>
+            <label class="method-toggle-row">
+              <span class="method-icon mir">MIR</span>
+              <span>
+                <strong>Mir Pay</strong>
+                <small>Показывать как быстрый способ в банковском блоке</small>
+              </span>
+              <input
+                class="switch"
+                type="checkbox"
+                [checked]="settings.mirpayEnabled"
+                [disabled]="savingRuntimeSettings() || loading()"
+                (change)="setFastBankMethodSwitch('mirpayEnabled', $any($event.target).checked)"
+              >
+            </label>
+          </div>
+          <small>{{ fastBankMethodDescription() }}</small>
+        </div>
+
+        <div class="mini-toggle-grid">
+          <label>
+            <span>API</span>
+            <input
+              class="switch"
+              type="checkbox"
+              [checked]="settings.tbankEnabled"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (change)="setCoreSwitch('tbankEnabled', $any($event.target).checked)"
+            >
+          </label>
+          <label>
+            <span>Ссылки</span>
+            <input
+              class="switch"
+              type="checkbox"
+              [checked]="settings.paymentLinksEnabled"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (change)="setCoreSwitch('paymentLinksEnabled', $any($event.target).checked)"
+            >
+          </label>
+          <label>
+            <span>UI менеджера</span>
+            <input
+              class="switch"
+              type="checkbox"
+              [checked]="settings.managerUiEnabled"
+              [disabled]="savingRuntimeSettings() || loading()"
+              (change)="setCoreSwitch('managerUiEnabled', $any($event.target).checked)"
+            >
+          </label>
+        </div>
+
+        @if (savingRuntimeSettings()) {
+          <span class="saving-note">Сохраняю настройки...</span>
+        }
+      </article>
+    }
+
     @if (status(); as bank) {
       <article class="side-card bank-card">
         <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
@@ -215,8 +452,24 @@
           <p>Состояние T-Bank</p>
           <h2>{{ bank.enabled ? 'API включен' : 'API выключен' }}</h2>
           <small>
-            {{ bank.testMode ? 'Тестовый терминал' : 'Боевой терминал' }} ·
+            {{ activeRuntimeMode() === 'TEST' ? 'Тестовый терминал' : 'Боевой терминал' }} ·
             {{ bank.applyConfirmedPayments ? 'заказы переводятся автоматически' : 'ручной перевод заказов' }}
+          </small>
+        </div>
+      </article>
+
+      <article class="side-card bank-card">
+        <span class="material-icons-sharp" aria-hidden="true">mark_chat_read</span>
+        <div>
+          <p>Готовность автоответчика</p>
+          <h2>{{ bank.paymentLinksEnabled && bank.managerUiEnabled ? 'ссылки доступны' : 'проверьте настройки' }}</h2>
+          <small>
+            Автоответчик сможет использовать {{ bank.publicBaseUrl }}/pay/{{ '{token}' }},
+            когда здесь или в справочнике выбран источник T-Bank.
+          </small>
+          <small>
+            {{ bank.paymentLinksEnabled ? 'создание ссылок включено' : 'создание ссылок выключено' }} ·
+            {{ bank.hasCredentials ? 'секреты заданы' : 'нет секретов' }}
           </small>
         </div>
       </article>

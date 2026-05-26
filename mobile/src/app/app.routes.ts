@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { roleGuard } from './core/role.guard';
+import { MOBILE_ACTIONS, MOBILE_ROLES, MOBILE_SECTIONS, rolesForAction } from './core/mobile-permissions';
 
 export const routes: Routes = [
   {
@@ -22,44 +23,50 @@ export const routes: Routes = [
   {
     path: 'tabs',
     loadComponent: () => import('./features/tabs.page').then((m) => m.TabsPage),
+    canActivate: [roleGuard],
+    data: { roles: MOBILE_ROLES.authenticated },
     children: [
       {
         path: 'home/:section',
-        loadComponent: () => import('./features/home.page').then((m) => m.HomePage)
+        loadComponent: () => import('./features/home.page').then((m) => m.HomePage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
       },
       {
         path: 'home',
-        loadComponent: () => import('./features/home.page').then((m) => m.HomePage)
+        loadComponent: () => import('./features/home.page').then((m) => m.HomePage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
       },
       {
         path: 'companies',
         loadComponent: () => import('./features/manager.page').then((m) => m.ManagerPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER'], managerSection: 'companies' }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view), managerSection: 'companies' }
       },
       {
         path: 'orders',
         loadComponent: () => import('./features/manager.page').then((m) => m.ManagerPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER'], managerSection: 'orders' }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.orders, MOBILE_ACTIONS.view), managerSection: 'orders' }
       },
       {
         path: 'archive',
         loadComponent: () => import('./features/manager-archive.page').then((m) => m.ManagerArchivePage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.archive, MOBILE_ACTIONS.view) }
       },
       {
         path: 'orders/:companyId/:orderId',
         loadComponent: () => import('./features/order-details.page').then((m) => m.OrderDetailsPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) }
       },
       {
         path: 'review-check/:orderDetailId',
         loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) }
       },
       {
         path: 'manager',
@@ -70,29 +77,43 @@ export const routes: Routes = [
         path: 'worker',
         loadComponent: () => import('./features/worker.page').then((m) => m.WorkerPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) }
       },
       {
         path: 'leads',
         loadComponent: () => import('./features/leads.page').then((m) => m.LeadsPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view) }
       },
       {
         path: 'operator',
         loadComponent: () => import('./features/operator.page').then((m) => m.OperatorPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN', 'OWNER', 'OPERATOR'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) }
       },
       {
         path: 'tbank',
         loadComponent: () => import('./features/tbank.page').then((m) => m.TbankPage),
         canActivate: [roleGuard],
-        data: { roles: ['ADMIN'] }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'users',
+        loadComponent: () => import('./features/admin-users.page').then((m) => m.AdminUsersPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'bots/:botId/browser',
+        loadComponent: () => import('./features/bot-browser.page').then((m) => m.BotBrowserPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.botBrowser, MOBILE_ACTIONS.view) }
       },
       {
         path: 'profile',
-        loadComponent: () => import('./features/profile.page').then((m) => m.ProfilePage)
+        loadComponent: () => import('./features/profile.page').then((m) => m.ProfilePage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
       },
       {
         path: '',

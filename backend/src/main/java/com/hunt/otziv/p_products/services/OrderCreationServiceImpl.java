@@ -15,6 +15,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -65,6 +66,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final ReviewRepository reviewRepository;
     private final BotAssignmentService botAssignmentService;
     private final NextOrderRequestService nextOrderRequestService;
+    private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
 
@@ -743,6 +745,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         } else {
             log.warn("У заказа нет работника или пользователя для уведомления");
         }
+
+        mobilePushBusinessNotificationService.notifyWorkerNewOrder(order);
     }
     //    ================================================== CONVERTER =====================================================
 

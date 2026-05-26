@@ -19,7 +19,8 @@ public class OrderArchiveRestoreService {
             "В проверку",
             "На проверке",
             "Коррекция",
-            "Публикация"
+            "Публикация",
+            "Архив"
     );
 
     private final OrderArchiveRestoreRepository repository;

@@ -179,12 +179,17 @@ function Invoke-TbankPaymentConfigSmoke {
     $status = Invoke-RestMethod -Uri $url -TimeoutSec 20
 
     $expectedEnabled = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_ENABLED") -Default $false
+    $expectedPaymentLinks = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED") -Default $true
     $expectedManagerUi = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED") -Default $false
     $expectedApplyConfirmed = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS") -Default $false
     $expectedBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_BASE_URL"
+    $expectedRuntimeMode = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_RUNTIME_MODE"
 
     if ($status.enabled -ne $expectedEnabled) {
         throw "T-Bank enabled flag mismatch: expected $expectedEnabled, got $($status.enabled)."
+    }
+    if ($status.paymentLinksEnabled -ne $expectedPaymentLinks) {
+        throw "T-Bank payment links flag mismatch: expected $expectedPaymentLinks, got $($status.paymentLinksEnabled)."
     }
     if ($status.managerUiEnabled -ne $expectedManagerUi) {
         throw "T-Bank manager UI flag mismatch: expected $expectedManagerUi, got $($status.managerUiEnabled)."
@@ -192,11 +197,63 @@ function Invoke-TbankPaymentConfigSmoke {
     if ($status.applyConfirmedPayments -ne $expectedApplyConfirmed) {
         throw "T-Bank apply-confirmed flag mismatch: expected $expectedApplyConfirmed, got $($status.applyConfirmedPayments)."
     }
+    if ($status.runtimeMode -notin @("TEST", "LIVE")) {
+        throw "T-Bank runtime mode must be TEST or LIVE, got '$($status.runtimeMode)'."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($expectedRuntimeMode) -and $status.runtimeMode -ne $expectedRuntimeMode.Trim().ToUpperInvariant()) {
+        throw "T-Bank runtime mode mismatch: expected $expectedRuntimeMode, got $($status.runtimeMode)."
+    }
+    if (($status.runtimeMode -eq "TEST") -ne [bool]$status.testMode) {
+        throw "T-Bank testMode flag mismatch for runtime $($status.runtimeMode): got $($status.testMode)."
+    }
     if (-not [string]::IsNullOrWhiteSpace($expectedBaseUrl) -and $status.baseUrl -ne $expectedBaseUrl.TrimEnd("/")) {
         throw "T-Bank base URL mismatch: expected $expectedBaseUrl, got $($status.baseUrl)."
     }
 
-    Write-Host "T-Bank config OK: enabled=$($status.enabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
+    Write-Host "T-Bank config OK: runtime=$($status.runtimeMode), enabled=$($status.enabled), paymentLinks=$($status.paymentLinksEnabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
+}
+
+function Disable-LocalClientMessageLiveSending {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][string]$EnvPath
+    )
+
+    $mysqlUser = Get-EnvValue -Path $EnvPath -Name "MYSQL_USER"
+    $mysqlPassword = Get-EnvValue -Path $EnvPath -Name "MYSQL_PASSWORD"
+    $mysqlDatabase = Get-EnvValue -Path $EnvPath -Name "MYSQL_DATABASE"
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) -or [string]::IsNullOrWhiteSpace($mysqlPassword) -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw "MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE must be set to force local autoresponder dry-run mode."
+    }
+
+    $sql = @"
+UPDATE app_settings
+SET setting_value = 'false', updated_at = NOW(6)
+WHERE setting_key IN ('client.messages.live.enabled', 'client.messages.payment-overdue.live-enabled');
+
+SELECT setting_key, setting_value
+FROM app_settings
+WHERE setting_key IN ('client.messages.live.enabled', 'client.messages.payment-overdue.live-enabled')
+ORDER BY setting_key;
+"@
+
+    $mysqlArgs = $ComposeArguments + @(
+        "exec", "-T", "mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "-u$mysqlUser",
+        "-p$mysqlPassword",
+        $mysqlDatabase,
+        "-e",
+        $sql
+    )
+    $output = & docker @mysqlArgs 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not force local autoresponder dry-run mode: $text"
+    }
+
+    Write-Host "Local autoresponder live sending is disabled for this prod-like stack."
 }
 
 function Get-KeycloakServiceAccountToken {
@@ -1149,6 +1206,7 @@ try {
     }
 
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
+    Disable-LocalClientMessageLiveSending -ComposeArguments $composeArgs -EnvPath $envPath
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline

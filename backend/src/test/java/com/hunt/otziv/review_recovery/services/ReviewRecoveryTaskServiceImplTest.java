@@ -245,9 +245,10 @@ class ReviewRecoveryTaskServiceImplTest {
         when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
 
-        ReviewRecoveryTask updated = service.updateTask(40L, "новый текст", newDate);
+        ReviewRecoveryTask updated = service.updateTask(40L, "новый текст", "новый ответ", newDate);
 
         assertEquals("новый текст", updated.getRecoveryText());
+        assertEquals("новый ответ", updated.getRecoveryAnswer());
         assertEquals(newDate, updated.getScheduledDate());
     }
 

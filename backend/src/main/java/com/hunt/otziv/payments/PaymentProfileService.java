@@ -26,6 +26,7 @@ public class PaymentProfileService {
     private final PaymentProfileRepository paymentProfileRepository;
     private final ManagerRepository managerRepository;
     private final TbankPaymentProperties properties;
+    private final TbankRuntimeSettingsService runtimeSettingsService;
 
     @Transactional(readOnly = true)
     public TbankPaymentProfilesResponse managementState() {
@@ -93,22 +94,35 @@ public class PaymentProfileService {
             return byStoredTerminal;
         }
         return paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc().stream()
-                .filter(profile -> clean.equals(normalize(properties.terminalKeyFor(profile))))
+                .filter(profile -> properties.matchesAnyTerminal(profile, clean))
                 .findFirst();
     }
 
     public TbankPaymentProfile toRuntime(PaymentProfile profile) {
+        return toRuntime(profile, runtimeSettingsService.runtimeMode());
+    }
+
+    public TbankPaymentProfile toRuntimeForTerminal(PaymentProfile profile, String terminalKey) {
+        return properties.runtimeProfileForTerminal(profile, terminalKey);
+    }
+
+    public boolean isTestTerminal(String terminalKey) {
+        return properties.isConfiguredTestTerminal(terminalKey);
+    }
+
+    private TbankPaymentProfile toRuntime(PaymentProfile profile, TbankRuntimeMode runtimeMode) {
         if (profile == null) {
-            return properties.defaultProfile();
+            return properties.defaultProfile(runtimeMode);
         }
+        String terminalKey = properties.terminalKeyFor(profile, runtimeMode);
         return new TbankPaymentProfile(
                 profile.getId(),
                 profile.getCode(),
                 profile.getName(),
                 profile.isEnabled(),
-                properties.terminalKeyFor(profile),
-                properties.passwordFor(profile),
-                profile.isTestMode() || properties.isTestMode(properties.terminalKeyFor(profile))
+                terminalKey,
+                properties.passwordFor(profile, runtimeMode),
+                runtimeMode.isTest() || profile.isTestMode() || properties.isTestMode(terminalKey)
         );
     }
 
@@ -125,17 +139,18 @@ public class PaymentProfileService {
     }
 
     private PaymentProfileResponse profileResponse(PaymentProfile profile) {
+        TbankPaymentProfile runtimeProfile = toRuntime(profile);
         return new PaymentProfileResponse(
                 profile.getId(),
                 profile.getCode(),
                 profile.getProvider(),
                 profile.getName(),
-                properties.terminalKeyFor(profile),
+                runtimeProfile.terminalKey(),
                 profile.getPasswordEnvKey(),
                 profile.isEnabled(),
                 profile.isDefaultProfile(),
-                profile.isTestMode() || properties.isTestMode(properties.terminalKeyFor(profile)),
-                !properties.passwordFor(profile).isBlank()
+                runtimeProfile.testMode(),
+                runtimeProfile.hasCredentials()
         );
     }
 
