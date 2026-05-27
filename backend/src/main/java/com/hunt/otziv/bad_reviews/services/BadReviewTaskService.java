@@ -39,6 +39,8 @@ public interface BadReviewTaskService {
 
     Map<Long, BadReviewTaskSummary> getSummaryByOrderIds(Collection<Long> orderIds);
 
+    String buildBadReviewInvoiceMessage(Order order);
+
     BigDecimal getPayableSum(Order order);
 
     int getPayableAmount(Order order);

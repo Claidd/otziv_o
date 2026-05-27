@@ -44,6 +44,9 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED = "client.messages.payment-overdue.live-enabled";
     public static final String CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS = "client.messages.review-check.interval-days";
     public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS = "client.messages.payment-reminder.interval-days";
+    public static final String CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS = "client.messages.review-check-retry.delay-hours";
+    public static final String CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS = "client.messages.payment-invoice-retry.delay-hours";
+    public static final String CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS = "client.messages.bad-review-invoice-retry.delay-hours";
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS = "client.messages.payment-overdue-days";
     public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS = "client.messages.archive-reorder.months";
     public static final String CLIENT_MESSAGES_RETENTION_DAYS = "client.messages.retention-days";
@@ -68,6 +71,7 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT = "client.messages.publication-started-text";
     public static final String CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE = "client.messages.payment-instruction-source";
     public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT = "client.messages.payment-reminder-text";
+    public static final String CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT = "client.messages.payment-link-copy-text";
     public static final String CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT = "client.messages.archive-offer-text";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED = "client.messages.error-protection.enabled";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD = "client.messages.error-protection.threshold";

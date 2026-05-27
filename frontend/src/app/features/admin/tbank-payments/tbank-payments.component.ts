@@ -166,10 +166,17 @@ export class TbankPaymentsComponent {
     return this.runtimeSettings()?.paymentPageMode ?? 'SBP_PRIMARY';
   });
 
+  readonly bankPaymentBlockEnabled = computed(() => {
+    const mode = this.paymentPageMode();
+    return mode !== 'SBP_ONLY' && mode !== 'SBP_PAY_ONLY';
+  });
+
   readonly paymentPageModeDescription = computed(() => {
     switch (this.paymentPageMode()) {
       case 'BANK_PRIMARY':
         return 'На странице оплаты сначала показываем форму банка, СБП остается запасным способом.';
+      case 'SBP_PAY_ONLY':
+        return 'На странице оплаты показываем СБП и быстрые Pay-кнопки, карточная кнопка скрыта.';
       case 'SBP_ONLY':
         return 'На странице оплаты доступна только кнопка СБП. Форма банка скрыта.';
       case 'BANK_ONLY':
@@ -189,6 +196,18 @@ export class TbankPaymentsComponent {
       settings.sberpayEnabled ? 'SberPay' : '',
       settings.mirpayEnabled ? 'Mir Pay' : ''
     ].filter(Boolean);
+    if (this.paymentPageMode() === 'SBP_PAY_ONLY') {
+      if (!methods.length) {
+        return 'В режиме "СБП + Pay" сейчас будет только СБП. Включите T-Pay, SberPay или Mir Pay ниже.';
+      }
+      return `На /pay показываем СБП и быстрые способы: ${methods.join(', ')}. Карточную кнопку не показываем.`;
+    }
+    if (!this.bankPaymentBlockEnabled()) {
+      if (!methods.length) {
+        return 'Форма банка скрыта режимом "Только СБП". Быстрые методы появятся после выбора режима с банковским блоком.';
+      }
+      return `Сейчас выбран режим "Только СБП", поэтому ${methods.join(', ')} не показывается на /pay. Выберите "СБП + карта", "СБП + Pay" или "Только банк".`;
+    }
     if (!methods.length) {
       return 'В блоке формы банка показываем только оплату картой. Быстрые методы можно включить здесь после включения в T-Bank.';
     }
@@ -377,6 +396,7 @@ export class TbankPaymentsComponent {
     const titles: Record<TbankPaymentPageMode, string> = {
       SBP_PRIMARY: 'СБП выбран основным способом',
       BANK_PRIMARY: 'Форма банка выбрана основным способом',
+      SBP_PAY_ONLY: 'На странице оплаты оставлены СБП и Pay',
       SBP_ONLY: 'На странице оплаты оставлен только СБП',
       BANK_ONLY: 'На странице оплаты оставлена только форма банка'
     };
@@ -941,6 +961,10 @@ export class TbankPaymentsComponent {
 
   profileManualLimitKopecks(profile: PaymentProfileResponse): number {
     return this.manualLimitKopecksFromDraft(this.policyDraft(profile.id).manualMonthlyLimitRubles);
+  }
+
+  profileManualAvailableKopecks(profile: PaymentProfileResponse): number {
+    return Math.max(0, this.profileManualLimitKopecks(profile) - (profile.manualMonthlyUsedKopecks ?? 0));
   }
 
   manualTaskProgressPercent(task: ManualPaymentTaskResponse): number {

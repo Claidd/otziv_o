@@ -101,6 +101,9 @@ export interface AdminClientMessageSettings {
   errorProtectionEnabled: boolean;
   reviewCheckIntervalDays: number;
   paymentReminderIntervalDays: number;
+  reviewCheckRetryDelayHours: number;
+  paymentInvoiceRetryDelayHours: number;
+  badReviewInvoiceRetryDelayHours: number;
   paymentOverdueDays: number;
   archiveReorderMonths: number;
   errorProtectionThreshold: number;
@@ -129,6 +132,7 @@ export interface AdminClientMessageSettings {
   publicationProgressReportText: string;
   paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
   paymentReminderText: string;
+  paymentLinkCopyText: string;
   archiveOfferText: string;
 }
 

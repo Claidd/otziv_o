@@ -254,7 +254,7 @@ import {
                   />
 
                   <div class="order-city-row review-city-row" [title]="reviewCity(review)">
-                    <span class="material-icons-sharp">location_on</span>
+                    <span class="city-prefix" aria-hidden="true">город</span>
                     <span>{{ reviewCity(review) }}</span>
                   </div>
 

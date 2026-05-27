@@ -41,13 +41,59 @@ class WhatsAppGroupLinkSyncServiceTest {
         when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
                 new WhatsAppGroupInfo("120363123@g.us", "Св-Моторс. Отзывы", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv")
         ));
-        when(companyRepository.findTop3ByGroupIdIsNullAndUrlChatContainingIgnoreCase("abcdefghijklmnopqrstuv"))
+        when(companyRepository.findByUrlChatContainingIgnoreCase("abcdefghijklmnopqrstuv"))
                 .thenReturn(List.of(company));
 
         service.syncClientGroups("whatsapp_lika");
 
         assertEquals("120363123@g.us", company.getGroupId());
         verify(companyRepository).save(company);
+    }
+
+    @Test
+    void refreshesGroupIdWhenCompanyInviteLinkWasChanged() {
+        Company company = new Company();
+        company.setId(3005L);
+        company.setTitle("Маэстро Снов");
+        company.setUrlChat("https://chat.whatsapp.com/D3OwhSlSLyQEolQIb1Guaz");
+        company.setGroupId("120363405037491708@g.us");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363409041774389@g.us", "Маэстро снов. Отзывы", "https://chat.whatsapp.com/D3OwhSlSLyQEolQIb1Guaz")
+        ));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("d3owhslslyqeolqib1guaz"))
+                .thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363409041774389@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksAllCompaniesWithSameWhatsAppInviteLink() {
+        Company first = new Company();
+        first.setId(1L);
+        first.setTitle("Филиал 1");
+        first.setUrlChat("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+
+        Company second = new Company();
+        second.setId(2L);
+        second.setTitle("Филиал 2");
+        second.setUrlChat("https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv?mode=wwt");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363123@g.us", "Общий чат", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv")
+        ));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("abcdefghijklmnopqrstuv"))
+                .thenReturn(List.of(first, second));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363123@g.us", first.getGroupId());
+        assertEquals("120363123@g.us", second.getGroupId());
+        verify(companyRepository).save(first);
+        verify(companyRepository).save(second);
     }
 
     @Test

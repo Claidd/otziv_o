@@ -89,6 +89,11 @@ public class TelegramService extends TelegramLongPollingBot {
             return;
         }
 
+        if (!isPrivateChat(update)) {
+            log.debug("Telegram group message ignored chatId={}: '{}'", chatId, messageText);
+            return;
+        }
+
         User user = authUserInTelegramBot(chatId, messageText);
         if (user == null) {
             return;
@@ -389,6 +394,13 @@ public class TelegramService extends TelegramLongPollingBot {
         String normalizedBotUsername = hasText(botUsername) ? botUsername.replaceFirst("^@", "") : "";
         return "/chatid".equalsIgnoreCase(command)
                 || (hasText(normalizedBotUsername) && command.equalsIgnoreCase("/chatid@" + normalizedBotUsername));
+    }
+
+    private static boolean isPrivateChat(Update update) {
+        return update != null
+                && update.hasMessage()
+                && update.getMessage().getChat() != null
+                && Boolean.TRUE.equals(update.getMessage().getChat().isUserChat());
     }
 
     private static boolean looksLikeTelegramBotToken(String botToken) {

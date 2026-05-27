@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
@@ -21,6 +22,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final OrderRepository orderRepository;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
+    private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -82,7 +84,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
         String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
 
-        return orderStatusNotificationService.sendMessageToClientChat(
+        String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
                 STATUS_PUBLIC,
                 order,
                 clientId,
@@ -90,6 +92,10 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
                 message,
                 STATUS_TO_PAY
         );
+        if (!STATUS_TO_PAY.equals(appliedStatus)) {
+            paymentInvoiceRetryScheduler.scheduleRetry(order);
+        }
+        return appliedStatus;
     }
 
     private String safeCompanyTitle(Order order) {

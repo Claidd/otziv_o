@@ -38,6 +38,13 @@ public class PaymentProfileService {
             PaymentLinkStatus.MANUAL_REPORTED,
             PaymentLinkStatus.CONFIRMED
     );
+    private static final Set<PaymentLinkStatus> MANUAL_CONFIRMED_STATUSES = Set.of(
+            PaymentLinkStatus.CONFIRMED
+    );
+    private static final Set<PaymentLinkStatus> MANUAL_PENDING_STATUSES = Set.of(
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+            PaymentLinkStatus.MANUAL_REPORTED
+    );
     private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
             PaymentMethod.MANUAL_MOBILE_BANK,
             PaymentMethod.MANUAL_EXTERNAL_LINK
@@ -221,7 +228,9 @@ public class PaymentProfileService {
         LocalDateTime periodStart = currentMonthStart();
         LocalDateTime periodEnd = periodStart.plusMonths(1);
         long manualUsed = manualMonthlyUsed(profile, periodStart, periodEnd);
-        long manualPending = manualMonthlyPending(profile, periodStart, periodEnd);
+        long manualConfirmed = manualMonthlyConfirmed(profile, periodStart, periodEnd);
+        long manualPendingAmount = manualMonthlyPendingAmount(profile, periodStart, periodEnd);
+        long manualPending = manualMonthlyPendingCount(profile, periodStart, periodEnd);
         return new PaymentProfileResponse(
                 profile.getId(),
                 profile.getCode(),
@@ -242,6 +251,8 @@ public class PaymentProfileService {
                 manualLimitOrDefault(profile.getManualMonthlySoftLimitKopecks()),
                 manualLimitOrDefault(profile.getManualMonthlyHardLimitKopecks()),
                 manualUsed,
+                manualConfirmed,
+                manualPendingAmount,
                 manualPending
         );
     }
@@ -286,13 +297,30 @@ public class PaymentProfileService {
     }
 
     private long manualMonthlyUsed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
+        return manualMonthlyAmount(profile, MANUAL_USAGE_STATUSES, periodStart, periodEnd);
+    }
+
+    private long manualMonthlyConfirmed(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
+        return manualMonthlyAmount(profile, MANUAL_CONFIRMED_STATUSES, periodStart, periodEnd);
+    }
+
+    private long manualMonthlyPendingAmount(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
+        return manualMonthlyAmount(profile, MANUAL_PENDING_STATUSES, periodStart, periodEnd);
+    }
+
+    private long manualMonthlyAmount(
+            PaymentProfile profile,
+            Set<PaymentLinkStatus> statuses,
+            LocalDateTime periodStart,
+            LocalDateTime periodEnd
+    ) {
         if (profile.getId() == null) {
             return 0;
         }
         return paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
                 profile.getId(),
                 MANUAL_PAYMENT_METHODS,
-                MANUAL_USAGE_STATUSES,
+                statuses,
                 periodStart,
                 periodEnd,
                 LocalDateTime.now(MOSCOW_ZONE),
@@ -301,14 +329,14 @@ public class PaymentProfileService {
         );
     }
 
-    private long manualMonthlyPending(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
+    private long manualMonthlyPendingCount(PaymentProfile profile, LocalDateTime periodStart, LocalDateTime periodEnd) {
         if (profile.getId() == null) {
             return 0;
         }
         return paymentLinkRepository.countManualReservedAndConfirmedForPeriod(
                 profile.getId(),
                 MANUAL_PAYMENT_METHODS,
-                Set.of(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED),
+                MANUAL_PENDING_STATUSES,
                 periodStart,
                 periodEnd,
                 LocalDateTime.now(MOSCOW_ZONE)

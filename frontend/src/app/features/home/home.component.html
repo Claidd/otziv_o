@@ -318,12 +318,22 @@
                   <span class="task-status">{{ manualTaskStatusLabel(task.status) }}</span>
                 </header>
                 <div class="manual-task-progress">
-                  <div>
-                    <strong>{{ formatKopecks(task.reservedAmountKopecks) }}</strong>
-                    <small>из {{ formatKopecks(task.targetAmountKopecks) }} · ждут {{ task.pendingCount }}</small>
+                  <div class="manual-task-progress-head">
+                    <strong>Занято {{ formatKopecks(task.reservedAmountKopecks) }}</strong>
+                    <small>из {{ formatKopecks(task.targetAmountKopecks) }} · свободно {{ formatKopecks(task.remainingAmountKopecks) }}</small>
                   </div>
                   <div class="task-bar">
                     <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                  </div>
+                  <div class="manual-task-breakdown">
+                    <span>
+                      <b>{{ formatKopecks(task.confirmedAmountKopecks) }}</b>
+                      <small>оплачено</small>
+                    </span>
+                    <span>
+                      <b>{{ formatKopecks(task.pendingAmountKopecks) }}</b>
+                      <small>в брони · {{ task.pendingCount }}</small>
+                    </span>
                   </div>
                 </div>
                 @if (task.comment) {

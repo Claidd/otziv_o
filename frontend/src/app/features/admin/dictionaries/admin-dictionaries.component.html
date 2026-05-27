@@ -1766,6 +1766,21 @@
                   <input type="number" min="1" max="365" step="1" formControlName="paymentReminderIntervalDays">
                 </label>
 
+                <label appTooltip="Если первая ссылка на проверку не ушла из-за чата и заказ остался в статусе 'В проверку', через сколько часов попробовать снова.">
+                  <span>Повтор проверки после сбоя, часов</span>
+                  <input type="number" min="1" max="168" step="1" formControlName="reviewCheckRetryDelayHours">
+                </label>
+
+                <label appTooltip="Если финальный счет после публикации не ушел из-за чата, через сколько часов попробовать отправить его снова.">
+                  <span>Повтор счета после сбоя, часов</span>
+                  <input type="number" min="1" max="168" step="1" formControlName="paymentInvoiceRetryDelayHours">
+                </label>
+
+                <label appTooltip="Если счет после выполнения плохого отзыва не ушел из-за чата, через сколько часов попробовать отправить его снова.">
+                  <span>Повтор доплаты после сбоя, часов</span>
+                  <input type="number" min="1" max="168" step="1" formControlName="badReviewInvoiceRetryDelayHours">
+                </label>
+
                 <label appTooltip="Через сколько дней неоплаты заказ считается просроченным для эскалации.">
                   <span>Просрочка оплаты, дней</span>
                   <input type="number" min="1" max="365" step="1" formControlName="paymentOverdueDays">
@@ -1897,11 +1912,11 @@
                   <input type="text" formControlName="reviewLinkBaseUrl">
                 </label>
 
-                <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK подготовлен для перехода и подставит /pay/{token} через переменные оплаты.">
+                <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK создает актуальную /pay-ссылку по платежным профилям, лимитам и заданиям из раздела T-Bank.">
                   <span>Источник оплаты</span>
                   <select formControlName="paymentInstructionSource">
                     <option value="MANAGER_TEXT">Текст менеджера (сейчас)</option>
-                    <option value="TBANK_LINK">T-Bank ссылка (для будущего перехода)</option>
+                    <option value="TBANK_LINK">T-Bank /pay ссылка</option>
                   </select>
                 </label>
 
@@ -1920,9 +1935,14 @@
                   <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
                 </label>
 
-                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
-                  <span>Текст оплаты</span>
+                <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме T-Bank /pay ссылка стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
+                  <span>Текст напоминания об оплате</span>
                   <textarea rows="5" formControlName="paymentReminderText"></textarea>
+                </label>
+
+                <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме T-Bank ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
+                  <span>Текст счета /pay</span>
+                  <textarea rows="6" formControlName="paymentLinkCopyText"></textarea>
                 </label>
 
                 <label appTooltip="Переменная: {company}.">

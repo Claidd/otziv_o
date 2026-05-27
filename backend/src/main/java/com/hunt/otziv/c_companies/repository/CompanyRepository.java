@@ -514,5 +514,5 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     List<Company> findTop3ByTelegramGroupChatIdIsNullAndUrlChatContainingIgnoreCase(String chatUsername);
 
-    List<Company> findTop3ByGroupIdIsNullAndUrlChatContainingIgnoreCase(String inviteCode);
+    List<Company> findByUrlChatContainingIgnoreCase(String inviteCode);
 }

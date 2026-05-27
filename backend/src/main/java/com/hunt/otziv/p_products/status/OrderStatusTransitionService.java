@@ -1,6 +1,8 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.payments.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -61,6 +63,8 @@ public class OrderStatusTransitionService {
     private final OrderReviewCheckMessageBuilder orderReviewCheckMessageBuilder;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     private final OrderCorrectionTelegramNotifier orderCorrectionTelegramNotifier;
+    private final ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
+    private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -69,7 +73,7 @@ public class OrderStatusTransitionService {
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
             return switch (title) {
-                case STATUS_PAYMENT -> orderTransactionService.handlePaymentStatus(order);
+                case STATUS_PAYMENT -> handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
                 case STATUS_TO_CHECK -> handleToCheckStatus(order);
                 case STATUS_IN_CHECK -> handleManualInCheckStatus(order);
@@ -102,13 +106,23 @@ public class OrderStatusTransitionService {
         return true;
     }
 
+    private boolean handlePaymentStatus(Order order) throws Exception {
+        manualPaymentAutoConfirmationService.ensureCanCloseOrderManually(order);
+        boolean updated = orderTransactionService.handlePaymentStatus(order);
+        if (updated) {
+            manualPaymentAutoConfirmationService.confirmForPaidOrder(order);
+            manualPaymentAutoConfirmationService.retireOpenLinksForPaidOrder(order);
+        }
+        return updated;
+    }
+
     private boolean handleBanStatus(Order order) {
         if (!STATUS_NOT_PAID.equals(safeStatusTitle(order))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Перевести заказ в Бан можно только из статуса \"Не оплачено\"");
         }
 
         var summary = badReviewTaskService.getSummaryForOrder(order.getId());
-        if (summary == null || summary.done() <= 0 || summary.pending() > 0) {
+        if (summary != null && summary.pending() > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните все плохие задачи заказа");
         }
 
@@ -470,6 +484,7 @@ public class OrderStatusTransitionService {
             }
 
             if (STATUS_TO_CHECK.equals(appliedStatus)) {
+                paymentInvoiceRetryScheduler.scheduleReviewCheckRetry(order);
                 log.warn("⚠️ Заказ ID {} оставлен в статусе 'В проверку': клиентское сообщение не отправлено", order.getId());
                 mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
                 return true;
@@ -605,6 +620,7 @@ public class OrderStatusTransitionService {
                     STATUS_TO_PAY
             );
             if (!sent) {
+                paymentInvoiceRetryScheduler.scheduleRetry(order);
                 log.warn("⚠️ Заказ ID {} оставлен в статусе 'Опубликовано': счет клиенту не отправлен", order.getId());
             }
             mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);

@@ -410,12 +410,12 @@
             </button>
             <button
               type="button"
-              [class.active]="settings.paymentPageMode === 'BANK_PRIMARY'"
+              [class.active]="settings.paymentPageMode === 'SBP_PAY_ONLY'"
               [disabled]="savingRuntimeSettings() || loading()"
-              (click)="setPaymentPageMode('BANK_PRIMARY')"
+              (click)="setPaymentPageMode('SBP_PAY_ONLY')"
             >
-              <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
-              Карта + СБП
+              <span class="material-icons-sharp" aria-hidden="true">contactless</span>
+              СБП + Pay
             </button>
             <button
               type="button"
@@ -705,16 +705,25 @@
                 <span class="status-pill manual">{{ manualTaskStatusLabel(task.status) }}</span>
               </header>
               <div class="manual-limit-box">
-                <div>
-                  <strong>{{ formatKopecks(task.reservedAmountKopecks) }}</strong>
+                <div class="manual-limit-head">
+                  <strong>Занято {{ formatKopecks(task.reservedAmountKopecks) }}</strong>
                   <small>
                     из {{ formatKopecks(task.targetAmountKopecks) }}
-                    · подтверждено {{ formatKopecks(task.confirmedAmountKopecks) }}
-                    · ждут {{ task.pendingCount }}
+                    · свободно {{ formatKopecks(task.remainingAmountKopecks) }}
                   </small>
                 </div>
                 <div class="limit-bar" [title]="'Заполнено: ' + manualTaskProgressPercent(task) + '%'">
                   <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                </div>
+                <div class="manual-limit-breakdown">
+                  <span>
+                    <b>{{ formatKopecks(task.confirmedAmountKopecks) }}</b>
+                    <small>оплачено</small>
+                  </span>
+                  <span>
+                    <b>{{ formatKopecks(task.pendingAmountKopecks) }}</b>
+                    <small>в брони · {{ task.pendingCount }}</small>
+                  </span>
                 </div>
               </div>
               <small class="profile-terminal">{{ task.paymentProfileName }}</small>
@@ -774,15 +783,25 @@
               <small class="profile-terminal">{{ profile.terminalKey }}</small>
 
               <div class="manual-limit-box">
-                <div>
-                  <strong>{{ formatKopecks(profile.manualMonthlyUsedKopecks) }}</strong>
+                <div class="manual-limit-head">
+                  <strong>Занято {{ formatKopecks(profile.manualMonthlyUsedKopecks) }}</strong>
                   <small>
                     из {{ formatKopecks(profileManualLimitKopecks(profile)) }}
-                    · ожидают {{ profile.manualMonthlyPendingCount }}
+                    · свободно {{ formatKopecks(profileManualAvailableKopecks(profile)) }}
                   </small>
                 </div>
                 <div class="limit-bar" [title]="'Использовано лимита: ' + profileManualUsagePercent(profile) + '%'">
                   <span [style.width.%]="profileManualUsagePercent(profile)"></span>
+                </div>
+                <div class="manual-limit-breakdown">
+                  <span>
+                    <b>{{ formatKopecks(profile.manualMonthlyConfirmedKopecks) }}</b>
+                    <small>оплачено</small>
+                  </span>
+                  <span>
+                    <b>{{ formatKopecks(profile.manualMonthlyPendingAmountKopecks) }}</b>
+                    <small>в брони · {{ profile.manualMonthlyPendingCount }}</small>
+                  </span>
                 </div>
               </div>
 

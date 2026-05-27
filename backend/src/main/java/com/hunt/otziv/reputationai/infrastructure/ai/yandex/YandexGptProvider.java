@@ -63,13 +63,44 @@ public class YandexGptProvider implements AiProvider {
             }
 
             JsonNode root = objectMapper.readTree(response.body());
-            String text = root.path("alternatives").path(0).path("message").path("text").asText("");
-            JsonNode usage = root.path("usage");
+            JsonNode result = root.has("result") ? root.path("result") : root;
+            JsonNode alternative = result.path("alternatives").path(0);
+            String text = firstNonBlank(
+                    alternative.path("message").path("text").asText(""),
+                    alternative.path("text").asText("")
+            );
+            JsonNode usage = result.path("usage");
+            int inputTokens = parseInt(firstNonBlank(
+                    usage.path("inputTextTokens").asText(""),
+                    usage.path("inputTokens").asText(""),
+                    usage.path("promptTokens").asText("")
+            ));
+            int outputTokens = parseInt(firstNonBlank(
+                    usage.path("completionTokens").asText(""),
+                    usage.path("outputTextTokens").asText(""),
+                    usage.path("outputTokens").asText("")
+            ));
+            if (text.isBlank()) {
+                String status = firstNonBlank(
+                        alternative.path("status").asText(""),
+                        result.path("status").asText(""),
+                        root.path("error").path("message").asText(""),
+                        root.path("message").asText("")
+                );
+                String detail = status.isBlank() ? "" : " status=" + status + ".";
+                return new AiResponse(
+                        "",
+                        providerName(),
+                        inputTokens,
+                        outputTokens,
+                        "YandexGPT вернул пустой текст." + detail + " Ответ: " + limit(response.body(), 900)
+                );
+            }
             return new AiResponse(
                     text,
                     providerName(),
-                    parseInt(usage.path("inputTextTokens").asText("0")),
-                    parseInt(usage.path("completionTokens").asText("0"))
+                    inputTokens,
+                    outputTokens
             );
         } catch (Exception exception) {
             log.warn("YandexGPT request failed: {}", exception.getMessage());
@@ -131,6 +162,18 @@ public class YandexGptProvider implements AiProvider {
         } catch (Exception exception) {
             return 0;
         }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private String limit(String value, int maxLength) {

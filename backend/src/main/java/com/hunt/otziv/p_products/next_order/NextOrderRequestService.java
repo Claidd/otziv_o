@@ -142,6 +142,34 @@ public class NextOrderRequestService {
     }
 
     @Transactional
+    public boolean cancelForDeletedCreatedOrder(Order deletedOrder) {
+        if (deletedOrder == null || deletedOrder.getId() == null) {
+            return false;
+        }
+
+        List<NextOrderRequest> requests = requestRepository.findByCreatedOrder_Id(deletedOrder.getId());
+        if (requests.isEmpty()) {
+            return false;
+        }
+
+        for (NextOrderRequest request : requests) {
+            request.setCreatedOrder(null);
+            if (request.getStatus() == NextOrderRequestStatus.CREATED) {
+                request.setStatus(NextOrderRequestStatus.CANCELED);
+                request.setErrorMessage("Автосозданный следующий заказ " + deletedOrder.getId() + " удален");
+            }
+            requestRepository.save(request);
+            log.info(
+                    "Заявка {} на следующий заказ отменена из-за удаления автосозданного заказа {}",
+                    request.getId(),
+                    deletedOrder.getId()
+            );
+        }
+
+        return true;
+    }
+
+    @Transactional
     public void markAttemptStarted(Long requestId) {
         requestRepository.findById(requestId).ifPresent(request -> {
             request.setAttempts(request.getAttempts() + 1);

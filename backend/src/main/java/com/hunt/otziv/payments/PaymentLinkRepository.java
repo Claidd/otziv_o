@@ -24,6 +24,14 @@ public interface PaymentLinkRepository extends CrudRepository<PaymentLink, Long>
             LocalDateTime now
     );
 
+    Optional<PaymentLink> findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
+            Long orderId,
+            Collection<PaymentMethod> paymentMethods,
+            Collection<PaymentLinkStatus> statuses
+    );
+
+    List<PaymentLink> findByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
+
     @Query("""
         SELECT COALESCE(SUM(CASE
             WHEN link.confirmedAmountKopecks IS NOT NULL THEN link.confirmedAmountKopecks

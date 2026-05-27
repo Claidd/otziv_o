@@ -31,6 +31,10 @@ public class NextOrderAutomationService {
             log.info("Заявка {} уже закрыта созданным заказом", requestId);
             return;
         }
+        if (request.getStatus() == NextOrderRequestStatus.CANCELED) {
+            log.info("Заявка {} отменена, следующий заказ не создаем", requestId);
+            return;
+        }
 
         Order sourceOrder = request.getSourceOrder();
         if (sourceOrder == null) {

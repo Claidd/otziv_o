@@ -142,10 +142,26 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     <header>
                       <div>
                         <h2>{{ paymentTitle(link) }}</h2>
-                        <small>{{ paymentSubtitle(link) }}</small>
                       </div>
                       <span class="status-pill {{ statusClass(link.status) }}">{{ statusLabel(link.status) }}</span>
                     </header>
+
+                    @if (paymentAddress(link) || paymentCategory(link)) {
+                      <div class="payment-context-row">
+                        @if (paymentAddress(link)) {
+                          <span>
+                            <small>Адрес</small>
+                            <strong>{{ paymentAddress(link) }}</strong>
+                          </span>
+                        }
+                        @if (paymentCategory(link)) {
+                          <span>
+                            <small>Категория</small>
+                            <strong>{{ paymentCategory(link) }}</strong>
+                          </span>
+                        }
+                      </div>
+                    }
 
                     <div class="amount-row">
                       <span>
@@ -1199,6 +1215,28 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     .status-pill.failed { color: var(--otziv-danger); background: rgba(239, 52, 95, 0.12); }
     .status-pill.neutral { color: #87651d; background: rgba(218, 168, 36, 0.16); }
 
+    .payment-context-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.42rem;
+    }
+
+    .payment-context-row span {
+      display: flex;
+      min-width: 0;
+      min-height: 2.35rem;
+      flex-direction: column;
+      justify-content: center;
+      border: 1px solid rgba(116, 154, 207, 0.18);
+      border-radius: 0.75rem;
+      padding: 0.34rem 0.48rem;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .payment-context-row span:only-child {
+      grid-column: 1 / -1;
+    }
+
     .amount-row,
     .meta-grid {
       display: grid;
@@ -1232,10 +1270,23 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     .amount-row small,
-    .meta-grid small {
+    .meta-grid small,
+    .payment-context-row small {
       font-size: 0.56rem;
       font-weight: 900;
       line-height: 1.05;
+    }
+
+    .payment-context-row strong {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--otziv-dark);
+      font-size: 0.7rem;
+      font-weight: 900;
+      line-height: 1.08;
+      overflow-wrap: anywhere;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     .copy-line {
@@ -1826,25 +1877,34 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     :host-context(body.otziv-compact-phone) .amount-row,
-    :host-context(body.otziv-compact-phone) .meta-grid {
+    :host-context(body.otziv-compact-phone) .meta-grid,
+    :host-context(body.otziv-compact-phone) .payment-context-row {
       gap: 0.22rem;
     }
 
     :host-context(body.otziv-compact-phone) .amount-row span,
-    :host-context(body.otziv-compact-phone) .meta-grid span {
+    :host-context(body.otziv-compact-phone) .meta-grid span,
+    :host-context(body.otziv-compact-phone) .payment-context-row span {
       min-height: 1.42rem;
       border-radius: 0.58rem;
       padding: 0.16rem 0.34rem;
     }
 
+    :host-context(body.otziv-compact-phone) .payment-context-row span {
+      min-height: 2rem;
+      padding-block: 0.26rem;
+    }
+
     :host-context(body.otziv-compact-phone) .amount-row strong,
-    :host-context(body.otziv-compact-phone) .meta-grid strong {
+    :host-context(body.otziv-compact-phone) .meta-grid strong,
+    :host-context(body.otziv-compact-phone) .payment-context-row strong {
       font-size: 0.63rem;
       line-height: 1;
     }
 
     :host-context(body.otziv-compact-phone) .amount-row small,
-    :host-context(body.otziv-compact-phone) .meta-grid small {
+    :host-context(body.otziv-compact-phone) .meta-grid small,
+    :host-context(body.otziv-compact-phone) .payment-context-row small {
       font-size: 0.46rem;
       line-height: 1;
     }
@@ -1908,8 +1968,13 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     :host-context(body.otziv-short-phone) .amount-row span,
-    :host-context(body.otziv-short-phone) .meta-grid span {
+    :host-context(body.otziv-short-phone) .meta-grid span,
+    :host-context(body.otziv-short-phone) .payment-context-row span {
       min-height: 1.3rem;
+    }
+
+    :host-context(body.otziv-short-phone) .payment-context-row span {
+      min-height: 1.9rem;
     }
 
     :host-context(body.otziv-dark-theme) .metric-tile,
@@ -2753,6 +2818,14 @@ export class TbankPage implements OnInit {
 
   paymentSubtitle(link: AdminPaymentLinkResponse): string {
     return [link.filialTitle, link.description].filter(Boolean).join(' · ') || 'T-Bank';
+  }
+
+  paymentAddress(link: AdminPaymentLinkResponse): string {
+    return link.filialTitle?.trim() || '';
+  }
+
+  paymentCategory(link: AdminPaymentLinkResponse): string {
+    return link.description?.trim() || '';
   }
 
   paymentMethodLabel(link: AdminPaymentLinkResponse): string {

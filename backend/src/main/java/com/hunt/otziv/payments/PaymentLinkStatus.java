@@ -8,6 +8,7 @@ public enum PaymentLinkStatus {
     MANUAL_REPORTED,
     TEST_CONFIRMED,
     CONFIRMED,
+    AMOUNT_MISMATCH,
     REJECTED,
     CANCELED,
     REVERSED,

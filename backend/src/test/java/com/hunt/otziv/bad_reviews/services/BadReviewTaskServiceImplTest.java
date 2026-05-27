@@ -9,9 +9,12 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.client_messages.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -65,6 +68,9 @@ class BadReviewTaskServiceImplTest {
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
 
     @Mock
+    private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
+    @Mock
     private ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
 
     @InjectMocks
@@ -99,6 +105,34 @@ class BadReviewTaskServiceImplTest {
                         && "Аккаунт П.".equals(task.getBotFioSnapshot())
                         && "хороший опубликованный текст".equals(task.getTaskText())
                         && LocalDate.now().equals(task.getScheduledDate())
+        ));
+    }
+
+    @Test
+    void createTasksForUnpaidOrderUsesPerReviewPriceFromOrderDetailsTotal() {
+        Order order = order(15L);
+        Product product = new Product();
+        product.setPrice(null);
+        OrderDetails details = OrderDetails.builder()
+                .amount(4)
+                .price(BigDecimal.valueOf(1000))
+                .product(product)
+                .build();
+        Review review = Review.builder()
+                .id(90L)
+                .publish(true)
+                .text("опубликованный текст")
+                .orderDetails(details)
+                .build();
+
+        when(reviewRepository.getAllByOrderId(15L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(15L), eq(90L), any()))
+                .thenReturn(false);
+
+        assertEquals(1, service.createTasksForUnpaidOrder(order));
+
+        verify(badReviewTaskRepository).save(argThat(task ->
+                BigDecimal.valueOf(250).compareTo(task.getPrice()) == 0
         ));
     }
 
@@ -281,6 +315,42 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void completeTaskSchedulesBadReviewInvoiceRetryWhenClientMessageFails() {
+        Order order = order(17L);
+        order.getManager().setClientId("client-17");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-17");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(47L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(47L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendMessageToClientChat(
+                eq("Не оплачено"),
+                eq(order),
+                eq("client-17"),
+                eq("group-17"),
+                eq("Компания 17\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
+                eq("Выставлен счет")
+        )).thenReturn("Не оплачено");
+
+        service.completeTask(47L);
+
+        verify(paymentInvoiceRetryScheduler).scheduleBadReviewInvoiceRetry(order);
+    }
+
+    @Test
     void cancelDoneTaskRemovesTaskReminderAndOrderReadyReminderWhenNoDoneTasksRemain() {
         Order order = order(12L);
         BadReviewTask task = BadReviewTask.builder()
@@ -351,6 +421,50 @@ class BadReviewTaskServiceImplTest {
                 PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
                 13L,
                 13L
+        );
+    }
+
+    @Test
+    void cancelDoneTaskSendsUpdatedClientInvoiceWhenLiveEnabled() {
+        Order order = order(16L);
+        order.getManager().setClientId("client-16");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-16");
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(46L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(46L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(16L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendMessageToClientChat(
+                eq("Выставлен счет"),
+                eq(order),
+                eq("client-16"),
+                eq("group-16"),
+                eq("Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
+                eq("Выставлен счет")
+        )).thenReturn("Выставлен счет");
+
+        service.cancelTask(46L);
+
+        verify(orderStatusNotificationService).sendMessageToClientChat(
+                "Выставлен счет",
+                order,
+                "client-16",
+                "group-16",
+                "Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб.",
+                "Выставлен счет"
         );
     }
 

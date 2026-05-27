@@ -87,6 +87,11 @@
   --otziv-detail-card-width: min(15.4rem, 79vw);
   --otziv-card-padding: 0.62rem;
   --otziv-card-gap: 0.34rem;
+  --otziv-card-pill-height: 1.7rem;
+  --otziv-card-pill-font-size: 0.72rem;
+  --otziv-card-control-height: 1.6rem;
+  --otziv-card-control-font-size: 0.63rem;
+  --otziv-card-control-padding-x: 0.46rem;
   --otziv-status-tile-min: 6.35rem;
   --otziv-status-tile-height: 2.62rem;
   --otziv-search-control-height: 1.98rem;
@@ -130,6 +135,11 @@ body.otziv-compact-phone {
   --otziv-detail-card-width: min(14.9rem, 80vw);
   --otziv-card-padding: 0.42rem;
   --otziv-card-gap: 0.16rem;
+  --otziv-card-pill-height: 1.66rem;
+  --otziv-card-pill-font-size: 0.7rem;
+  --otziv-card-control-height: 1.56rem;
+  --otziv-card-control-font-size: 0.62rem;
+  --otziv-card-control-padding-x: 0.4rem;
   --otziv-status-tile-min: 5.55rem;
   --otziv-status-tile-height: 2.16rem;
   --otziv-search-control-height: 1.66rem;
@@ -153,6 +163,11 @@ body.otziv-short-phone {
   --otziv-detail-card-width: min(14.45rem, 82vw);
   --otziv-card-padding: 0.44rem;
   --otziv-card-gap: 0.18rem;
+  --otziv-card-pill-height: 1.64rem;
+  --otziv-card-pill-font-size: 0.69rem;
+  --otziv-card-control-height: 1.54rem;
+  --otziv-card-control-font-size: 0.61rem;
+  --otziv-card-control-padding-x: 0.38rem;
   --otziv-status-tile-min: 5.55rem;
   --otziv-status-tile-height: 2.26rem;
   --otziv-search-control-height: 1.74rem;
@@ -3483,12 +3498,12 @@ body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-pager-nav s
   --otziv-unified-card-radius: 0.9rem;
   --otziv-unified-title-size: 0.9rem;
   --otziv-unified-subtitle-size: 0.56rem;
-  --otziv-unified-control-height: 1.58rem;
+  --otziv-unified-control-height: 1.66rem;
   --otziv-unified-field-height: var(--otziv-unified-control-height);
   --otziv-unified-action-height: var(--otziv-unified-control-height);
-  --otziv-unified-control-font-size: 0.64rem;
+  --otziv-unified-control-font-size: 0.67rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.72rem;
+  --otziv-unified-phone-font-size: 0.75rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.32rem;
   --otziv-unified-note-min-height: 2.1rem;
@@ -3506,12 +3521,12 @@ body.otziv-short-phone {
   --otziv-unified-card-gap: 0.22rem;
   --otziv-unified-title-size: 0.86rem;
   --otziv-unified-subtitle-size: 0.52rem;
-  --otziv-unified-control-height: 1.5rem;
+  --otziv-unified-control-height: 1.56rem;
   --otziv-unified-field-height: var(--otziv-unified-control-height);
   --otziv-unified-action-height: var(--otziv-unified-control-height);
-  --otziv-unified-control-font-size: 0.6rem;
+  --otziv-unified-control-font-size: 0.63rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.68rem;
+  --otziv-unified-phone-font-size: 0.71rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.16rem;
   --otziv-unified-note-min-height: 1.96rem;
@@ -3520,6 +3535,24 @@ body.otziv-short-phone {
   --otziv-unified-pager-button-size: 1.94rem;
   --otziv-unified-pager-back-width: 2.54rem;
   --otziv-unified-pager-gap: 0.22rem;
+}
+
+body.otziv-roomy-phone {
+  --otziv-unified-list-gap: 0.5rem;
+  --otziv-unified-card-padding: 0.58rem;
+  --otziv-unified-card-gap: 0.44rem;
+  --otziv-unified-title-size: 0.98rem;
+  --otziv-unified-subtitle-size: 0.6rem;
+  --otziv-unified-control-height: 1.82rem;
+  --otziv-unified-field-height: var(--otziv-unified-control-height);
+  --otziv-unified-action-height: var(--otziv-unified-control-height);
+  --otziv-unified-control-font-size: 0.72rem;
+  --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-phone-font-size: 0.82rem;
+  --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-note-height: 2.9rem;
+  --otziv-unified-note-min-height: 2.7rem;
+  --otziv-unified-comment-height: 3.2rem;
 }
 
 app-leads .lead-list,
@@ -3861,7 +3894,7 @@ body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-pager-actio
   position: relative !important;
   z-index: 2 !important;
   flex: 0 0 auto !important;
-  gap: 0.2rem !important;
+  gap: var(--otziv-unified-pager-button-size) !important;
 }
 
 app-mobile-bottom-pager.mobile-page-bottom-pager .mobile-pager-actions button,
@@ -4594,7 +4627,13 @@ body app-tbank-page .payment-card :is(.amount-row, .meta-grid) {
   gap: var(--otziv-unified-card-gap, 0.28rem) !important;
 }
 
-body app-tbank-page .payment-card :is(.amount-row span, .meta-grid span) {
+body app-tbank-page .payment-card .payment-context-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: var(--otziv-unified-card-gap, 0.28rem) !important;
+}
+
+body app-tbank-page .payment-card :is(.amount-row span, .meta-grid span, .payment-context-row span) {
   min-height: calc(var(--otziv-card-control-height, 1.5rem) + 0.22rem) !important;
   height: auto !important;
   max-height: none !important;
@@ -4605,14 +4644,22 @@ body app-tbank-page .payment-card :is(.amount-row span, .meta-grid span) {
   font-family: var(--otziv-card-title-font) !important;
 }
 
-body app-tbank-page .payment-card :is(.amount-row small, .meta-grid small) {
+body app-tbank-page .payment-card :is(.amount-row small, .meta-grid small, .payment-context-row small) {
   font-size: 0.48rem !important;
   line-height: 1 !important;
 }
 
-body app-tbank-page .payment-card :is(.amount-row strong, .meta-grid strong) {
+body app-tbank-page .payment-card :is(.amount-row strong, .meta-grid strong, .payment-context-row strong) {
   font-size: var(--otziv-unified-phone-font-size, 0.68rem) !important;
   line-height: 1.02 !important;
+}
+
+body app-tbank-page .payment-card .payment-context-row strong {
+  display: -webkit-box !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
 }
 
 body app-tbank-page .payment-card .copy-line {
@@ -4666,6 +4713,354 @@ body app-tbank-page .payment-card .material-icons-sharp {
   -webkit-font-feature-settings: 'liga' !important;
   font-feature-settings: 'liga' !important;
   -webkit-font-smoothing: antialiased !important;
+}
+
+/* T-Bank cards use the same full-width card contract as order/review cards. */
+body app-tbank-page .payment-card {
+  justify-content: space-between !important;
+}
+
+body app-tbank-page .payment-card > :not(header),
+body app-tbank-page .payment-card :is(
+  .amount-row,
+  .meta-grid,
+  .payment-context-row,
+  .copy-line,
+  .manual-note,
+  .error-text,
+  footer
+) {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+}
+
+body app-tbank-page .payment-card :is(.amount-row, .meta-grid, .payment-context-row, footer) {
+  gap: var(--otziv-unified-card-gap, 0.28rem) !important;
+}
+
+body app-tbank-page .payment-card footer {
+  margin-top: 0 !important;
+}
+
+body app-tbank-page .payment-card :is(.amount-row span, .meta-grid span, .payment-context-row span, .copy-line, .manual-note, footer button) {
+  min-width: 0 !important;
+}
+
+body app-tbank-page .payment-card .copy-line {
+  display: inline-flex !important;
+  width: 100% !important;
+}
+
+body app-tbank-page .payment-card :is(.amount-row strong, .meta-grid strong, .payment-context-row strong, .copy-line, .manual-note strong, .manual-note small, footer button) {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body app-tbank-page .payment-card .payment-context-row strong {
+  text-overflow: clip !important;
+}
+
+/* Roomy phones: spend the extra viewport on larger, readable card controls. */
+body.otziv-roomy-phone {
+  --otziv-board-card-width: min(18.25rem, 82vw);
+  --otziv-detail-card-width: min(18.4rem, 84vw);
+  --otziv-card-padding: 0.76rem;
+  --otziv-card-gap: 0.58rem;
+  --otziv-note-alert-size: 1.22rem;
+  --otziv-unified-list-gap: 0.62rem;
+  --otziv-unified-card-padding: 0.76rem;
+  --otziv-unified-card-gap: 0.58rem;
+  --otziv-unified-title-size: 1.1rem;
+  --otziv-unified-subtitle-size: 0.68rem;
+  --otziv-unified-control-height: 2.18rem;
+  --otziv-unified-field-height: var(--otziv-unified-control-height);
+  --otziv-unified-action-height: var(--otziv-unified-control-height);
+  --otziv-unified-control-font-size: 0.9rem;
+  --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-phone-font-size: 1rem;
+  --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-note-height: 4rem;
+  --otziv-unified-note-min-height: 3.45rem;
+  --otziv-unified-comment-height: 4.35rem;
+  --otziv-review-text-height: clamp(8.8rem, 23vh, 10.4rem);
+  --otziv-review-text-height-open: clamp(9.8rem, 26vh, 11.8rem);
+  --otziv-review-answer-height: 3.4rem;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card,
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card,
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card,
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card,
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card {
+  justify-content: space-between !important;
+}
+
+body.otziv-roomy-phone app-mobile-review-card-shell .mobile-review-card-shell {
+  align-content: space-between !important;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card .order-card-foot,
+body.otziv-roomy-phone app-mobile-review-card-shell .mobile-review-card-shell footer,
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card .lead-card-foot,
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card .lead-card-foot,
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card .lead-card-foot,
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card .lead-card-foot {
+  margin-top: 0 !important;
+}
+
+body.otziv-roomy-phone app-mobile-note-editor .lead-card-comment,
+body.otziv-roomy-phone app-mobile-review-field-editor textarea,
+body.otziv-roomy-phone app-worker .worker-list .mobile-worker-review-card .review-notes-panel textarea {
+  padding: 0.5rem 0.58rem !important;
+  font-size: 0.88rem !important;
+  line-height: 1.32 !important;
+}
+
+body.otziv-roomy-phone app-mobile-review-field-editor.review-field--answer textarea {
+  font-size: 0.82rem !important;
+  line-height: 1.28 !important;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card :is(.meta-row, .phone-row, .card-actions, .order-card-foot),
+body.otziv-roomy-phone app-mobile-review-card-shell .mobile-review-card-shell :is(.review-actions),
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card :is(.lead-phone-row, .lead-meta-row, .lead-contact-row, .lead-card-actions, .lead-card-foot),
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card :is(.lead-phone-row, .lead-meta-row, .company-card-actions, .company-filial-count, .lead-card-foot),
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card :is(.lead-phone-row, .lead-meta-row, .lead-card-actions, .lead-card-foot),
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card :is(.lead-phone-row, .lead-meta-row, .lead-card-actions, .lead-card-foot) {
+  gap: var(--otziv-unified-card-gap) !important;
+  row-gap: calc(var(--otziv-unified-card-gap) + 0.08rem) !important;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card :is(.meta-row span, .meta-row button, .phone-row a, .phone-row button, .card-actions button, .card-actions a, .details-button, .order-city-row, .order-card-foot button),
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card :is(.lead-phone-open, .lead-phone-row > button:not(.lead-phone-open), .lead-meta-row span, .lead-contact-link, .lead-card-actions button, .lead-card-foot button),
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card :is(.lead-phone-row a, .lead-phone-row button, .lead-meta-row span, .lead-meta-row button, .company-next-order, .company-card-actions button, .company-filial-count span, .company-filial-count strong, .company-details-button, .lead-card-foot button),
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card :is(.lead-phone-row a, .lead-phone-row button, .lead-meta-row span, .lead-card-actions button, .lead-card-foot button),
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card :is(.lead-phone-row a, .lead-phone-row button, .lead-meta-row span, .lead-card-actions button, .lead-card-actions a, .order-details-button, .lead-card-foot button),
+body.otziv-roomy-phone app-worker .worker-list .mobile-worker-review-card :is(.bot-line, .order-city-row, .bad-task-note-row, .review-actions button, .review-actions a, .publish-button) {
+  min-height: var(--otziv-unified-control-height) !important;
+  height: var(--otziv-unified-control-height) !important;
+  max-height: var(--otziv-unified-control-height) !important;
+  padding-inline: 0.5rem !important;
+  font-size: var(--otziv-unified-control-font-size) !important;
+  line-height: 1.06 !important;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card .phone-row a,
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card .lead-phone-row :is(a, .lead-phone-open),
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card .lead-phone-row a,
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card .lead-phone-row a,
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card .lead-phone-row a {
+  font-size: var(--otziv-unified-phone-font-size) !important;
+}
+
+body.otziv-roomy-phone app-mobile-order-card .mobile-order-card .card-actions :is(button, a),
+body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card .lead-card-actions button,
+body.otziv-roomy-phone app-manager .manager-list .company-mobile-card .company-card-actions button,
+body.otziv-roomy-phone app-operator .operator-list .operator-lead-card .lead-card-actions button,
+body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card .lead-card-actions :is(button, a),
+body.otziv-roomy-phone app-worker .worker-list .mobile-worker-review-card .review-actions :is(button, a) {
+  font-size: 0.8rem !important;
+}
+
+body app-mobile-order-card .mobile-order-card .order-city-row .city-prefix,
+body app-worker .worker-list .mobile-worker-review-card .review-city-row .city-prefix {
+  flex: 0 0 auto !important;
+  color: var(--otziv-success) !important;
+  font-family: var(--otziv-font-family) !important;
+  font-size: 0.62em !important;
+  font-weight: 1000 !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+body app-mobile-order-card .mobile-order-card .order-city-row .material-icons-sharp,
+body app-worker .worker-list .mobile-worker-review-card .review-city-row .material-icons-sharp {
+  flex: 0 0 auto !important;
+  width: 0.92rem !important;
+  min-width: 0.92rem !important;
+  overflow: hidden !important;
+  font-family: 'Material Icons Sharp' !important;
+  font-size: 0.9rem !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  text-transform: none !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .mobile-review-card-shell > :not(header):not(footer),
+body app-worker .worker-list .mobile-worker-review-card .mobile-review-card-shell > footer,
+body app-worker .worker-list .mobile-worker-review-card app-mobile-review-field-editor,
+body app-worker .worker-list .mobile-worker-review-card :is(
+  .review-field,
+  .review-field textarea,
+  .review-city-row,
+  .bot-line,
+  .bad-task-note-row,
+  .review-notes-panel,
+  .review-notes-panel label,
+  .review-notes-panel textarea,
+  .review-notes-panel button,
+  .review-actions,
+  .review-actions button,
+  .review-actions a,
+  .publish-button
+) {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card,
+body app-worker .worker-list .mobile-worker-review-card .mobile-review-card-shell {
+  box-sizing: border-box !important;
+  width: var(--otziv-board-card-width, min(14.75rem, 78vw)) !important;
+  max-width: var(--otziv-board-card-width, min(14.75rem, 78vw)) !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .mobile-review-card-shell {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  justify-items: stretch !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .mobile-review-card-shell > * {
+  min-width: 0 !important;
+  grid-column: 1 / -1 !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .review-actions {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card :is(.review-city-row, .bot-line, .bad-task-note-row, .publish-button),
+body app-worker .worker-list .mobile-worker-review-card .review-actions :is(button, a) {
+  display: flex !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .review-actions :is(button, a),
+body app-worker .worker-list .mobile-worker-review-card .review-notes-panel button {
+  min-width: 0 !important;
+  justify-content: center !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-list {
+  grid-auto-columns: min(19.8rem, 86vw) !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card {
+  gap: 0.86rem !important;
+  padding: 0.9rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card header {
+  gap: 0.48rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card h2 {
+  font-size: 1.12rem !important;
+  line-height: 1.08 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card small {
+  font-size: 0.68rem !important;
+  line-height: 1.14 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .status-pill {
+  min-height: 2.05rem !important;
+  padding-inline: 0.66rem !important;
+  font-size: 0.68rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card :is(.amount-row, .meta-grid, .payment-context-row, footer) {
+  gap: 0.58rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card :is(.amount-row span, .meta-grid span, .payment-context-row span) {
+  min-height: 2.82rem !important;
+  border-radius: 0.9rem !important;
+  padding: 0.42rem 0.66rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card :is(.amount-row strong, .meta-grid strong, .payment-context-row strong) {
+  font-size: 0.98rem !important;
+  line-height: 1.1 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card :is(.amount-row small, .meta-grid small, .payment-context-row small) {
+  font-size: 0.62rem !important;
+  line-height: 1.08 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .copy-line {
+  min-height: 2.72rem !important;
+  height: 2.72rem !important;
+  max-height: 2.72rem !important;
+  gap: 0.42rem !important;
+  padding-inline: 0.76rem !important;
+  font-size: 0.84rem !important;
+  justify-content: center !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .manual-note {
+  min-height: 3.8rem !important;
+  gap: 0.22rem !important;
+  border-radius: 0.9rem !important;
+  padding: 0.66rem 0.74rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .manual-note strong {
+  font-size: 0.86rem !important;
+  line-height: 1.12 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .manual-note small {
+  font-size: 0.68rem !important;
+  line-height: 1.12 !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card footer button {
+  min-height: 2.56rem !important;
+  height: 2.56rem !important;
+  max-height: 2.56rem !important;
+  gap: 0.34rem !important;
+  padding-inline: 0.5rem !important;
+  font-size: 0.78rem !important;
+}
+
+body.otziv-roomy-phone app-tbank-page .payment-card .material-icons-sharp {
+  width: 1.18rem !important;
+  min-width: 1.18rem !important;
+  font-size: 1.14rem !important;
+}
+
+body.otziv-compact-phone app-tbank-page .payment-card footer,
+body.otziv-short-phone app-tbank-page .payment-card footer {
+  gap: 0.26rem !important;
+}
+
+body.otziv-compact-phone app-tbank-page .payment-card footer button,
+body.otziv-short-phone app-tbank-page .payment-card footer button {
+  min-height: 1.94rem !important;
+  height: 1.94rem !important;
+  max-height: 1.94rem !important;
+  border-radius: 0.72rem !important;
+  gap: 0.24rem !important;
+  padding-inline: 0.34rem !important;
+  font-size: 0.62rem !important;
+  line-height: 1 !important;
+}
+
+body.otziv-compact-phone app-tbank-page .payment-card footer .material-icons-sharp,
+body.otziv-short-phone app-tbank-page .payment-card footer .material-icons-sharp {
+  width: 0.88rem !important;
+  min-width: 0.88rem !important;
+  font-size: 0.86rem !important;
 }
 
 @media (max-width: 360px) {

@@ -20,6 +20,8 @@ public record PaymentProfileResponse(
         Long manualMonthlySoftLimitKopecks,
         Long manualMonthlyHardLimitKopecks,
         long manualMonthlyUsedKopecks,
+        long manualMonthlyConfirmedKopecks,
+        long manualMonthlyPendingAmountKopecks,
         long manualMonthlyPendingCount
 ) {
 }

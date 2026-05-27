@@ -18,11 +18,14 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,6 +75,34 @@ class NextOrderRequestServiceTest {
         assertEquals(NextOrderRequestStatus.PENDING, requestCaptor.getValue().getStatus());
         verify(eventPublisher).publishEvent(new NextOrderRequestedEvent(40L));
         verify(orderRepository).existsActiveOrderByCompanyIdAndFilialId(eq(10L), eq(20L), eq(30L), anySet());
+    }
+
+    @Test
+    void cancelForDeletedCreatedOrderClosesCreatedRequestAndClearsCreatedOrder() {
+        NextOrderRequestService service = service();
+        Company company = company(10L);
+        Filial filial = filial(20L);
+        Order sourceOrder = order(30L, company, filial);
+        Order createdOrder = order(40L, company, filial);
+        NextOrderRequest request = NextOrderRequest.builder()
+                .company(company)
+                .filial(filial)
+                .sourceOrder(sourceOrder)
+                .createdOrder(createdOrder)
+                .status(NextOrderRequestStatus.CREATED)
+                .build();
+        request.setId(50L);
+
+        when(requestRepository.findByCreatedOrder_Id(40L)).thenReturn(List.of(request));
+
+        boolean result = service.cancelForDeletedCreatedOrder(createdOrder);
+
+        assertTrue(result);
+        assertEquals(NextOrderRequestStatus.CANCELED, request.getStatus());
+        assertNull(request.getCreatedOrder());
+        assertEquals("Автосозданный следующий заказ 40 удален", request.getErrorMessage());
+        verify(requestRepository).save(request);
+        verifyNoInteractions(eventPublisher);
     }
 
     private NextOrderRequestService service() {

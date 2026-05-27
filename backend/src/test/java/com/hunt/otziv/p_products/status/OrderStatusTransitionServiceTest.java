@@ -4,7 +4,9 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
+import com.hunt.otziv.payments.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -42,6 +44,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -93,6 +96,12 @@ class OrderStatusTransitionServiceTest {
     @Mock
     private OrderCorrectionTelegramNotifier orderCorrectionTelegramNotifier;
 
+    @Mock
+    private ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
+
+    @Mock
+    private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
         OrderStatusTransitionService service = service();
@@ -103,8 +112,34 @@ class OrderStatusTransitionServiceTest {
 
         assertTrue(service.changeStatusForOrder(1L, "Оплачено"));
 
+        verify(manualPaymentAutoConfirmationService).ensureCanCloseOrderManually(order);
         verify(orderTransactionService).handlePaymentStatus(order);
+        verify(manualPaymentAutoConfirmationService).confirmForPaidOrder(order);
+        verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(order);
         verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void paymentStatusStopsWhenBankPaymentIsInProgress() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(90L, "Выставлен счет");
+        ResponseStatusException conflict = new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "У заказа есть T-Bank/СБП платеж в процессе. Проверьте его в журнале перед ручным закрытием."
+        );
+
+        when(orderRepository.findById(90L)).thenReturn(Optional.of(order));
+        doThrow(conflict).when(manualPaymentAutoConfirmationService).ensureCanCloseOrderManually(order);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(90L, "Оплачено")
+        );
+
+        assertSame(conflict, exception);
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(manualPaymentAutoConfirmationService, never()).confirmForPaidOrder(order);
+        verify(manualPaymentAutoConfirmationService, never()).retireOpenLinksForPaidOrder(order);
     }
 
     @Test
@@ -191,6 +226,24 @@ class OrderStatusTransitionServiceTest {
         assertSame(ban, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
         verify(badReviewTaskService).deleteOrderReadyReminder(order);
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void banStatusAllowsOrderWithoutBadTasks() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(34L, "Не оплачено");
+        OrderStatus ban = status("Бан");
+
+        when(orderRepository.findById(34L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(34L))
+                .thenReturn(BadReviewTaskSummary.empty());
+        when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
+
+        assertTrue(service.changeStatusForOrder(34L, "Бан"));
+
+        assertSame(ban, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
         verify(orderRepository).save(order);
     }
 
@@ -323,6 +376,7 @@ class OrderStatusTransitionServiceTest {
                 contains("Проверьте отзывы"),
                 eq("На проверке")
         );
+        verify(paymentInvoiceRetryScheduler).scheduleReviewCheckRetry(order);
         verify(orderRepository, never()).save(order);
     }
 
@@ -485,6 +539,7 @@ class OrderStatusTransitionServiceTest {
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
         verify(orderRepository, never()).save(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
     }
 
     @Test
@@ -508,6 +563,7 @@ class OrderStatusTransitionServiceTest {
 
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
+        verify(paymentInvoiceRetryScheduler).scheduleRetry(order);
         verify(mobilePushBusinessNotificationService).notifyManagerOrderPublished(order);
     }
 
@@ -774,7 +830,9 @@ class OrderStatusTransitionServiceTest {
                 orderPaymentMessageBuilder,
                 orderReviewCheckMessageBuilder,
                 mobilePushBusinessNotificationService,
-                orderCorrectionTelegramNotifier
+                orderCorrectionTelegramNotifier,
+                manualPaymentAutoConfirmationService,
+                paymentInvoiceRetryScheduler
         );
     }
 

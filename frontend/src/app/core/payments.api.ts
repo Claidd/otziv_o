@@ -131,6 +131,8 @@ export interface PaymentProfileResponse {
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
   manualMonthlyUsedKopecks: number;
+  manualMonthlyConfirmedKopecks: number;
+  manualMonthlyPendingAmountKopecks: number;
   manualMonthlyPendingCount: number;
 }
 
@@ -154,7 +156,7 @@ export interface TbankClientPaymentMode {
 
 export type TbankRuntimeMode = 'TEST' | 'LIVE';
 export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
-export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_ONLY' | 'BANK_ONLY';
+export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONLY' | 'SBP_ONLY' | 'BANK_ONLY';
 export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
 export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
 export type PaymentReceiptStatus = 'PENDING' | 'MARKED';

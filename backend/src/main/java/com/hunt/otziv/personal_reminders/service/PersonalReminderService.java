@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderRequest;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
@@ -16,6 +17,7 @@ import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ public class PersonalReminderService {
     private final ReviewRecoveryBatchRepository recoveryBatchRepository;
     private final BadReviewTaskRepository badReviewTaskRepository;
     private final UserService userService;
+    private final ObjectProvider<OrderPaymentMessageBuilder> orderPaymentMessageBuilderProvider;
 
     @Transactional(readOnly = true)
     public List<PersonalReminderResponse> list(Principal principal) {
@@ -425,6 +428,18 @@ public class PersonalReminderService {
     }
 
     private String paymentCopyText(Order order) {
+        try {
+            OrderPaymentMessageBuilder builder = orderPaymentMessageBuilderProvider.getIfAvailable();
+            if (builder != null) {
+                return builder.publishedOrderPaymentMessage(order);
+            }
+        } catch (RuntimeException ignored) {
+            // Личные напоминания не должны ломаться, если платежная ссылка временно не готова.
+        }
+        return legacyPaymentCopyText(order);
+    }
+
+    private String legacyPaymentCopyText(Order order) {
         String heading = orderHeading(order);
         String payText = order != null && order.getManager() != null
                 ? trimToEmpty(order.getManager().getPayText())

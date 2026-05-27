@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -152,9 +153,7 @@ public class WhatsAppGroupLinkSyncService {
         }
 
         for (WhatsAppGroupInfo group : groups) {
-            if (tryLinkGroup(group)) {
-                linked++;
-            }
+            linked += syncGroup(group);
         }
 
         if (linked > 0) {
@@ -198,42 +197,38 @@ public class WhatsAppGroupLinkSyncService {
         return value;
     }
 
-    private boolean tryLinkGroup(WhatsAppGroupInfo group) {
+    private int syncGroup(WhatsAppGroupInfo group) {
         if (group == null || !hasText(group.groupId())) {
-            return false;
+            return 0;
         }
 
         Optional<String> inviteCode = whatsAppInviteCode(group.inviteLink());
         if (inviteCode.isEmpty()) {
-            return false;
+            return 0;
         }
 
         String code = inviteCode.get();
-        List<Company> candidates = companyRepository.findTop3ByGroupIdIsNullAndUrlChatContainingIgnoreCase(code);
-        Company company = matchCompanyByInviteCode(code, candidates);
-        if (company == null) {
-            return false;
-        }
-
-        company.setGroupId(group.groupId());
-        companyRepository.save(company);
-        log.info("WhatsApp groupId={} linked by invite link to company id={} title='{}'",
-                group.groupId(), company.getId(), company.getTitle());
-        return true;
-    }
-
-    private Company matchCompanyByInviteCode(String code, List<Company> candidates) {
-        if (candidates.size() == 1 && code.equals(whatsAppInviteCode(candidates.getFirst().getUrlChat()).orElse(null))) {
-            return candidates.getFirst();
-        }
-
+        List<Company> candidates = companyRepository.findByUrlChatContainingIgnoreCase(code);
+        int updated = 0;
         for (Company candidate : candidates) {
-            if (code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))) {
-                return candidate;
+            if (!code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
+                    || Objects.equals(candidate.getGroupId(), group.groupId())) {
+                continue;
+            }
+
+            String previousGroupId = candidate.getGroupId();
+            candidate.setGroupId(group.groupId());
+            companyRepository.save(candidate);
+            updated++;
+            if (hasText(previousGroupId)) {
+                log.info("WhatsApp groupId for company id={} title='{}' refreshed by invite link: {} -> {}",
+                        candidate.getId(), candidate.getTitle(), previousGroupId, group.groupId());
+            } else {
+                log.info("WhatsApp groupId={} linked by invite link to company id={} title='{}'",
+                        group.groupId(), candidate.getId(), candidate.getTitle());
             }
         }
-
-        return null;
+        return updated;
     }
 
     private static Optional<String> whatsAppInviteCode(String value) {

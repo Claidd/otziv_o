@@ -53,7 +53,9 @@ export class PayPageComponent {
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');
-  readonly showBankPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'SBP_ONLY');
+  readonly showBankPayment = computed(() => !this.manualPayment()
+    && this.paymentPageMode() !== 'SBP_ONLY'
+    && this.paymentPageMode() !== 'SBP_PAY_ONLY');
   readonly isPaymentComplete = computed(() => this.isCompletedStatus(this.payment()?.status));
   readonly bankMethodChips = computed(() => {
     const payment = this.payment();
@@ -78,7 +80,15 @@ export class PayPageComponent {
   });
   readonly fastBankMethods = computed(() => this.bankMethodChips().filter((method) => method !== 'Карта'));
   readonly hasFastBankMethods = computed(() => this.fastBankMethods().length > 0);
-  readonly checkoutTitle = computed(() => this.showSbpPayment() ? 'СБП' : this.bankPaymentTitle());
+  readonly showFastBankMethods = computed(() => !this.manualPayment()
+    && this.paymentPageMode() !== 'SBP_ONLY'
+    && this.hasFastBankMethods());
+  readonly checkoutTitle = computed(() => {
+    if (this.showSbpPayment()) {
+      return this.paymentPageMode() === 'SBP_PAY_ONLY' && this.hasFastBankMethods() ? 'СБП + Pay' : 'СБП';
+    }
+    return this.bankPaymentTitle();
+  });
   readonly checkoutSubtitle = computed(() => this.showSbpPayment()
     ? 'Оплата через банковское приложение'
     : 'Оплата на защищенной странице банка'
@@ -107,15 +117,20 @@ export class PayPageComponent {
   });
   readonly paymentBadges = computed(() => {
     const payment = this.payment();
-    const badges = ['МИР', 'VISA', 'Mastercard'];
-    if (payment?.tpayEnabled) {
-      badges.push('T-Pay');
+    const badges: string[] = [];
+    if (this.showBankPayment()) {
+      badges.push('МИР', 'VISA', 'Mastercard');
     }
-    if (payment?.sberpayEnabled) {
-      badges.push('SberPay');
-    }
-    if (payment?.mirpayEnabled) {
-      badges.push('Mir Pay');
+    if (this.showBankPayment() || this.paymentPageMode() === 'SBP_PAY_ONLY') {
+      if (payment?.tpayEnabled) {
+        badges.push('T-Pay');
+      }
+      if (payment?.sberpayEnabled) {
+        badges.push('SberPay');
+      }
+      if (payment?.mirpayEnabled) {
+        badges.push('Mir Pay');
+      }
     }
     if (this.showSbpPayment()) {
       badges.push('СБП');

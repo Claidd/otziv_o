@@ -1,8 +1,13 @@
 package com.hunt.otziv.p_products.deletion;
 
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
+import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.r_review.model.Review;
@@ -22,10 +27,13 @@ import org.springframework.security.core.userdetails.User;
 import java.security.Principal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,6 +51,15 @@ class OrderDeletionServiceTest {
 
     @Mock
     private ReviewService reviewService;
+
+    @Mock
+    private NextOrderRequestService nextOrderRequestService;
+
+    @Mock
+    private CompanyService companyService;
+
+    @Mock
+    private CompanyStatusService companyStatusService;
 
     @Mock
     private EntityManager entityManager;
@@ -156,12 +173,60 @@ class OrderDeletionServiceTest {
         verifyNoInteractions(reviewService);
     }
 
+    @Test
+    void deletingLastNewOrderMovesCompanyToStop() {
+        OrderDeletionService service = service();
+        Company company = company(100L, "В работе");
+        CompanyStatus stop = companyStatus("На стопе");
+        Order order = order(15L, "Новый");
+        order.setCompany(company);
+
+        authenticateWithRole("ROLE_MANAGER");
+        when(orderRepository.findById(15L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(15L)).thenReturn(List.of());
+        when(orderRepository.existsActiveOrderByCompanyId(eq(100L), eq(Set.of("Оплачено", "Архив"))))
+                .thenReturn(false);
+        when(companyService.getCompaniesById(100L)).thenReturn(company);
+        when(companyStatusService.getStatusByTitle("На стопе")).thenReturn(stop);
+
+        boolean result = service.deleteOrder(15L, () -> "manager");
+
+        assertTrue(result);
+        verify(orderRepository).deleteById(15L);
+        verify(nextOrderRequestService).cancelForDeletedCreatedOrder(order);
+        verify(companyService).save(company);
+        assertSame(stop, company.getStatus());
+    }
+
+    @Test
+    void deletingNewOrderKeepsCompanyStatusWhenAnotherActiveOrderExists() {
+        OrderDeletionService service = service();
+        Company company = company(101L, "В работе");
+        Order order = order(16L, "Новый");
+        order.setCompany(company);
+
+        authenticateWithRole("ROLE_MANAGER");
+        when(orderRepository.findById(16L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(16L)).thenReturn(List.of());
+        when(orderRepository.existsActiveOrderByCompanyId(eq(101L), eq(Set.of("Оплачено", "Архив"))))
+                .thenReturn(true);
+
+        boolean result = service.deleteOrder(16L, () -> "manager");
+
+        assertTrue(result);
+        verify(companyService, never()).save(company);
+        verify(companyStatusService, never()).getStatusByTitle("На стопе");
+    }
+
     private OrderDeletionService service() {
         return new OrderDeletionService(
                 orderRepository,
                 orderDetailsService,
                 reviewService,
                 new OrderDeletionPolicy(),
+                nextOrderRequestService,
+                companyService,
+                companyStatusService,
                 entityManager
         );
     }
@@ -190,6 +255,19 @@ class OrderDeletionServiceTest {
         order.setId(id);
         order.setStatus(status);
         return order;
+    }
+
+    private Company company(Long id, String statusTitle) {
+        Company company = new Company();
+        company.setId(id);
+        company.setStatus(companyStatus(statusTitle));
+        return company;
+    }
+
+    private CompanyStatus companyStatus(String title) {
+        CompanyStatus status = new CompanyStatus();
+        status.setTitle(title);
+        return status;
     }
 
     private OrderDetails detail(List<Review> reviews) {

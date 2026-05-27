@@ -325,6 +325,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     errorProtectionEnabled: [true],
     reviewCheckIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
+    reviewCheckRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
+    paymentInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
+    badReviewInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     paymentOverdueDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
     archiveReorderMonths: [3, [Validators.required, Validators.min(1), Validators.max(36)]],
     errorProtectionThreshold: [20, [Validators.required, Validators.min(1), Validators.max(10000)]],
@@ -353,6 +356,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK', [Validators.required]],
     paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
+    paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
     archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
   });
 
@@ -1442,7 +1446,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   paymentInstructionSourceLabel(source?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null): string {
-    return source === 'TBANK_LINK' ? 'T-Bank ссылка' : 'текст менеджера';
+    return source === 'TBANK_LINK' ? 'T-Bank /pay ссылка' : 'текст менеджера';
   }
 
   categoryTitle(category?: DictionaryOption | null): string {
@@ -2147,6 +2151,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       errorProtectionEnabled: raw.errorProtectionEnabled,
       reviewCheckIntervalDays: Number(raw.reviewCheckIntervalDays ?? 2),
       paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
+      reviewCheckRetryDelayHours: Number(raw.reviewCheckRetryDelayHours ?? 2),
+      paymentInvoiceRetryDelayHours: Number(raw.paymentInvoiceRetryDelayHours ?? 2),
+      badReviewInvoiceRetryDelayHours: Number(raw.badReviewInvoiceRetryDelayHours ?? 2),
       paymentOverdueDays: Number(raw.paymentOverdueDays ?? 30),
       archiveReorderMonths: Number(raw.archiveReorderMonths ?? 3),
       errorProtectionThreshold: Number(raw.errorProtectionThreshold ?? 20),
@@ -2175,6 +2182,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       publicationProgressReportText: raw.publicationProgressReportText.trim(),
       paymentInstructionSource: raw.paymentInstructionSource,
       paymentReminderText: raw.paymentReminderText.trim(),
+      paymentLinkCopyText: raw.paymentLinkCopyText.trim(),
       archiveOfferText: raw.archiveOfferText.trim()
     };
 
@@ -2500,6 +2508,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       errorProtectionEnabled: settings?.errorProtectionEnabled ?? true,
       reviewCheckIntervalDays: settings?.reviewCheckIntervalDays ?? 2,
       paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
+      reviewCheckRetryDelayHours: settings?.reviewCheckRetryDelayHours ?? 2,
+      paymentInvoiceRetryDelayHours: settings?.paymentInvoiceRetryDelayHours ?? 2,
+      badReviewInvoiceRetryDelayHours: settings?.badReviewInvoiceRetryDelayHours ?? 2,
       paymentOverdueDays: settings?.paymentOverdueDays ?? 30,
       archiveReorderMonths: settings?.archiveReorderMonths ?? 3,
       errorProtectionThreshold: settings?.errorProtectionThreshold ?? 20,
@@ -2531,6 +2542,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         ?? '{companyAndFilial}. Опубликован новый отзыв {progress}.',
       paymentInstructionSource: settings?.paymentInstructionSource ?? 'MANAGER_TEXT',
       paymentReminderText: settings?.paymentReminderText ?? '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
+      paymentLinkCopyText: settings?.paymentLinkCopyText
+        ?? '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',
       archiveOfferText: settings?.archiveOfferText
         ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
     });

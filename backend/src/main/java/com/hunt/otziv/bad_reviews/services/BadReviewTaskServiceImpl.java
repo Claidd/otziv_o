@@ -11,6 +11,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.client_messages.ClientMessageScenario;
 import com.hunt.otziv.client_messages.ClientMessageTargetType;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.client_messages.ScheduledClientMessageAttempt;
 import com.hunt.otziv.client_messages.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.ScheduledMessageAttemptStatus;
@@ -68,6 +69,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final AppSettingService appSettingService;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final SecureRandom random = new SecureRandom();
 
@@ -149,6 +151,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
+        expireStalePaymentLinks(savedTask.getOrder());
         sendBadReviewInvoiceIfEnabled(savedTask, summary);
         createTaskCompletionReminder(savedTask, summary);
         createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
@@ -223,6 +226,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 );
                 recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
                         "client_chat_send_failed", reason, message, System.currentTimeMillis() - startedAt);
+                paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
             }
         } catch (Exception e) {
             String reason = readableException(e);
@@ -231,6 +235,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
                     "bad_review_invoice_exception", reason, message == null ? badReviewInvoicePreview(order, summary) : message,
                     System.currentTimeMillis() - startedAt);
+            paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
         }
     }
 
@@ -253,7 +258,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .stateId(null)
                 .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
                 .targetType(ClientMessageTargetType.ORDER)
-                .targetKey("bad-review-invoice:" + (taskId == null ? "unknown" : taskId))
+                .targetKey(badReviewInvoiceTargetKey(order, taskId))
                 .companyId(order == null || order.getCompany() == null ? null : order.getCompany().getId())
                 .orderId(orderId)
                 .archiveOrderId(null)
@@ -264,6 +269,20 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .messagePreview(limit(message, 500))
                 .durationMs(durationMs)
                 .build());
+    }
+
+    private String badReviewInvoiceTargetKey(Order order, Long taskId) {
+        if (order != null && order.getId() != null) {
+            return "bad-review-invoice:order:" + order.getId();
+        }
+        return "bad-review-invoice:" + (taskId == null ? "unknown" : taskId);
+    }
+
+    @Override
+    public String buildBadReviewInvoiceMessage(Order order) {
+        Long orderId = order == null ? null : order.getId();
+        BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
+        return badReviewInvoiceMessage(order, summary);
     }
 
     private String badReviewInvoiceMessage(Order order, BadReviewTaskSummary summary) {
@@ -287,6 +306,26 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
         ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
         return link.instructionText();
+    }
+
+    private void expireStalePaymentLinks(Order order) {
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return;
+        }
+        try {
+            PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
+            if (paymentLinkService == null) {
+                return;
+            }
+            int expired = paymentLinkService.expireStaleLinksForOrder(orderId);
+            if (expired > 0) {
+                log.info("Протухли устаревшие платежные ссылки после изменения плохих задач: orderId={}, count={}",
+                        orderId, expired);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Не удалось протухлить платежные ссылки после изменения плохих задач: orderId={}", orderId, e);
+        }
     }
 
     private boolean usesTbankPaymentInstructionSource() {
@@ -357,6 +396,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return task;
         }
 
+        boolean wasDone = task.getStatus() == BadReviewTaskStatus.DONE;
         task.setStatus(BadReviewTaskStatus.CANCELED);
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         Order order = savedTask.getOrder();
@@ -372,6 +412,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         Long orderId = order != null ? order.getId() : null;
         if (orderId != null) {
             BadReviewTaskSummary summary = getSummaryForOrder(orderId);
+            expireStalePaymentLinks(order);
+            if (wasDone) {
+                sendBadReviewInvoiceIfEnabled(savedTask, summary);
+            }
             if (summary.pending() == 0 && summary.done() > 0) {
                 createOrderReadyReminderIfNeeded(order, summary);
             } else {
@@ -613,19 +657,22 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return review.getPrice();
         }
 
-        OrderDetails details = review != null ? review.getOrderDetails() : null;
-        if (details != null && details.getPrice() != null) {
-            return details.getPrice();
-        }
-
         Product reviewProduct = review != null ? review.getProduct() : null;
         if (reviewProduct != null && reviewProduct.getPrice() != null) {
             return reviewProduct.getPrice();
         }
 
+        OrderDetails details = review != null ? review.getOrderDetails() : null;
         Product detailsProduct = details != null ? details.getProduct() : null;
         if (detailsProduct != null && detailsProduct.getPrice() != null) {
             return detailsProduct.getPrice();
+        }
+
+        if (details != null && details.getPrice() != null) {
+            int amount = details.getAmount();
+            return amount > 0
+                    ? details.getPrice().divide(BigDecimal.valueOf(amount), 2, RoundingMode.HALF_UP)
+                    : details.getPrice();
         }
 
         if (order != null && order.getAmount() > 0 && order.getSum() != null) {

@@ -391,7 +391,7 @@ small {
 
 .manual-task-card header,
 .manual-task-card footer,
-.manual-task-progress > div:first-child {
+.manual-task-progress-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -444,6 +444,36 @@ small {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #6d97d1, #45a982);
+}
+
+.manual-task-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.manual-task-breakdown span {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  border-radius: var(--otziv-small-radius);
+  padding: 0.45rem 0.55rem;
+  background: var(--otziv-field-background);
+}
+
+.manual-task-breakdown b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--otziv-dark);
+  font-size: 0.9rem;
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.manual-task-breakdown small {
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 850;
 }
 
 .manual-task-card footer {

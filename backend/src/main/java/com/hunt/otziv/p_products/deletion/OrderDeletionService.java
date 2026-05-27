@@ -1,7 +1,11 @@
 package com.hunt.otziv.p_products.deletion;
 
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.r_review.model.Review;
@@ -34,6 +38,15 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 @RequiredArgsConstructor
 public class OrderDeletionService {
 
+    private static final String STATUS_NEW = "Новый";
+    private static final String STATUS_PAYMENT = "Оплачено";
+    private static final String STATUS_ARCHIVE = "Архив";
+    private static final String STATUS_COMPANY_IN_STOP = "На стопе";
+    private static final String STATUS_COMPANY_BAN = "Бан";
+    private static final Set<String> NON_BLOCKING_AFTER_NEW_ORDER_DELETION_STATUSES = Set.of(
+            STATUS_PAYMENT,
+            STATUS_ARCHIVE
+    );
     private static final List<String> ROLE_PRIORITY = List.of(
             "ROLE_ADMIN",
             "ROLE_OWNER",
@@ -52,6 +65,9 @@ public class OrderDeletionService {
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
     private final OrderDeletionPolicy orderDeletionPolicy;
+    private final NextOrderRequestService nextOrderRequestService;
+    private final CompanyService companyService;
+    private final CompanyStatusService companyStatusService;
     private final EntityManager entityManager;
 
     @Transactional
@@ -69,6 +85,8 @@ public class OrderDeletionService {
 
         if (orderDeletionPolicy.canDelete(userRole, orderToDelete)) {
             try {
+                Long companyId = orderToDelete.getCompany() == null ? null : orderToDelete.getCompany().getId();
+                String deletedOrderStatus = safeStatusTitle(orderToDelete);
                 List<OrderDetails> orderDetails = orderDetailsService.findByOrderId(orderId);
                 log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
 
@@ -99,11 +117,15 @@ public class OrderDeletionService {
                 orderDetailsService.deleteAllByOrderId(orderId);
                 log.info("Успешно удалено {} деталей заказа", orderDetails.size());
 
+                nextOrderRequestService.cancelForDeletedCreatedOrder(orderToDelete);
+
                 clearPersistenceContextBeforeOrderDelete(orderId);
 
                 log.info("Удаление заказа ID: {}", orderId);
                 orderRepository.deleteById(orderId);
                 log.info("Заказ ID: {} успешно удален", orderId);
+
+                stopCompanyIfDeletedLastNewOrder(companyId, deletedOrderStatus, orderId);
 
                 log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов",
                         orderId, orderDetails.size(), totalDeletedReviews);
@@ -168,5 +190,44 @@ public class OrderDeletionService {
         entityManager.flush();
         entityManager.clear();
         log.debug("Persistence context очищен перед удалением заказа ID: {}", orderId);
+    }
+
+    private void stopCompanyIfDeletedLastNewOrder(Long companyId, String deletedOrderStatus, Long deletedOrderId) {
+        if (companyId == null || !STATUS_NEW.equals(deletedOrderStatus)) {
+            return;
+        }
+
+        boolean hasRemainingActiveOrders = orderRepository.existsActiveOrderByCompanyId(
+                companyId,
+                NON_BLOCKING_AFTER_NEW_ORDER_DELETION_STATUSES
+        );
+        if (hasRemainingActiveOrders) {
+            log.info(
+                    "Компания {} не переведена в '{}': после удаления заказа {} остались активные заказы",
+                    companyId,
+                    STATUS_COMPANY_IN_STOP,
+                    deletedOrderId
+            );
+            return;
+        }
+
+        Company company = companyService.getCompaniesById(companyId);
+        if (company == null) {
+            log.warn("Компания {} не найдена для пересчета статуса после удаления заказа {}", companyId, deletedOrderId);
+            return;
+        }
+        if (company.getStatus() != null && STATUS_COMPANY_BAN.equals(company.getStatus().getTitle())) {
+            log.info("Компания {} уже в '{}', после удаления заказа {} статус не меняем", companyId, STATUS_COMPANY_BAN, deletedOrderId);
+            return;
+        }
+
+        company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_STOP));
+        companyService.save(company);
+        log.info(
+                "Компания {} переведена в '{}' после удаления последнего нового заказа {}",
+                companyId,
+                STATUS_COMPANY_IN_STOP,
+                deletedOrderId
+        );
     }
 }

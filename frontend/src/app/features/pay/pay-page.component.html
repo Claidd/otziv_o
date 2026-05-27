@@ -204,7 +204,7 @@
               {{ primaryButtonText() }}
             </button>
 
-            @if (showBankPayment() && hasFastBankMethods()) {
+            @if (showFastBankMethods()) {
               <div class="fast-bank-methods" aria-label="Быстрые способы в форме банка">
                 @for (method of fastBankMethods(); track method) {
                   <button

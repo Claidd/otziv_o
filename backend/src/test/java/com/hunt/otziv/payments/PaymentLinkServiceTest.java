@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.ClientMessageSendResult;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
@@ -37,9 +38,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import org.mockito.ArgumentCaptor;
 
@@ -72,6 +75,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
+
+    @Mock
+    private AppSettingService appSettingService;
 
     @Test
     void createForOrderBuildsHiddenTokenizedLinkWithPayableAmount() {
@@ -232,6 +238,50 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void createForOrderUsesEditablePaymentLinkCopyTextTemplate() {
+        TbankPaymentProperties properties = properties();
+        PaymentLinkService service = service(properties);
+        PaymentProfile profile = profile(5L, "manual-template", "Ручной профиль", "manual-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        profile.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        profile.setManualPaymentUrl("https://pay.example/link");
+        profile.setManualRecipientName("Получатель П.");
+        profile.setManualMonthlyHardLimitKopecks(100000L);
+        when(paymentProfileService.selectForManager(any())).thenReturn(profile);
+        when(paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
+                eq(5L),
+                anyCollection(),
+                anyCollection(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(PaymentLinkStatus.class),
+                any()
+        )).thenReturn(0L);
+        when(appSettingService.getString(
+                eq(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT),
+                anyString()
+        )).thenReturn("{companyAndFilial}\n\nИтого {sum}\n\n{paymentInstruction}\n\nФинал: {paymentAfterword}");
+        Order order = order(24L, "ООО Шаблон", BigDecimal.valueOf(500));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForMutation(24L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(24L)).thenReturn(null);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ManagerPaymentLinkResponse response = service.createForOrder(24L);
+
+        assertEquals(
+                "ООО Шаблон\n\nИтого 500\n\nСсылка на оплату: https://pay.example/link\nПолучатель: Получатель П.\nКомментарий: Оплата заказа №24\n\nФинал: После оплаты отправьте чек менеджеру.",
+                response.copyText()
+        );
+    }
+
+    @Test
     void createForOrderFallsBackToTbankWhenManualMonthlyLimitIsExceeded() {
         TbankPaymentProperties properties = properties();
         PaymentLinkService service = service(properties);
@@ -322,6 +372,71 @@ class PaymentLinkServiceTest {
                 any(PaymentLinkStatus.class),
                 any()
         );
+    }
+
+    @Test
+    void createForOrderExpiresInitiatedLinkWhenPayableAmountChanged() {
+        PaymentLinkService service = service(properties());
+        Order order = order(18L, "ООО Доплата", BigDecimal.valueOf(1000));
+        PaymentLink existing = new PaymentLink();
+        existing.setId(18L);
+        existing.setOrder(order);
+        existing.setToken("old-token");
+        existing.setAmountKopecks(100000L);
+        existing.setReservedAmountKopecks(100000L);
+        existing.setDescription("Оплата услуг");
+        existing.setStatus(PaymentLinkStatus.INITIATED);
+        existing.setPaymentMethod(PaymentMethod.BANK_FORM);
+        existing.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(18L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.of(existing));
+        when(orderRepository.findByIdForMutation(18L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(18L))
+                .thenReturn(new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(250), BigDecimal.ZERO));
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ManagerPaymentLinkResponse response = service.createForOrder(18L);
+
+        assertEquals(PaymentLinkStatus.EXPIRED, existing.getStatus());
+        assertEquals(125000L, response.amountKopecks());
+        ArgumentCaptor<PaymentLink> captor = ArgumentCaptor.forClass(PaymentLink.class);
+        verify(paymentLinkRepository, times(2)).save(captor.capture());
+        assertSame(existing, captor.getAllValues().get(0));
+        assertEquals(125000L, captor.getAllValues().get(1).getAmountKopecks());
+    }
+
+    @Test
+    void createForOrderBlocksAuthorizedLinkWhenPayableAmountChanged() {
+        PaymentLinkService service = service(properties());
+        Order order = order(19L, "ООО Авторизация", BigDecimal.valueOf(1000));
+        PaymentLink existing = new PaymentLink();
+        existing.setId(19L);
+        existing.setOrder(order);
+        existing.setToken("authorized-token");
+        existing.setAmountKopecks(100000L);
+        existing.setReservedAmountKopecks(100000L);
+        existing.setDescription("Оплата услуг");
+        existing.setStatus(PaymentLinkStatus.AUTHORIZED);
+        existing.setPaymentMethod(PaymentMethod.BANK_FORM);
+        existing.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(19L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.of(existing));
+        when(orderRepository.findByIdForMutation(19L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(19L))
+                .thenReturn(new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(250), BigDecimal.ZERO));
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.createForOrder(19L));
+
+        assertEquals(PaymentLinkStatus.AUTHORIZED, existing.getStatus());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
     }
 
     @Test
@@ -902,6 +1017,82 @@ class PaymentLinkServiceTest {
         verify(paymentLinkRepository).save(link);
     }
 
+    @Test
+    void confirmedWebhookWithStaleAmountDoesNotMarkOrderPaid() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setTerminalKey("terminal");
+        properties.setPassword("password");
+        TbankTokenSigner signer = new TbankTokenSigner();
+        PaymentLinkService service = service(properties, signer);
+        Order order = order(60L, "ООО Старая сумма", BigDecimal.valueOf(10));
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("token");
+        link.setTbankOrderId("o60-test");
+        link.setAmountKopecks(1000L);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", "terminal");
+        payload.put("OrderId", "o60-test");
+        payload.put("Success", "true");
+        payload.put("Status", "CONFIRMED");
+        payload.put("PaymentId", "12360");
+        payload.put("ErrorCode", "0");
+        payload.put("Amount", "1000");
+        payload.put("Token", signer.sign(payload, "password"));
+
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder("o60-test")).thenReturn(Optional.of(link));
+        when(badReviewTaskService.getSummaryForOrder(60L))
+                .thenReturn(new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(5), BigDecimal.ZERO));
+
+        service.handleTbankWebhook(payload);
+
+        assertEquals(PaymentLinkStatus.AMOUNT_MISMATCH, link.getStatus());
+        assertEquals(1000L, link.getConfirmedAmountKopecks());
+        assertTrue(link.getLastError().contains("устаревшей сумме"));
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void confirmedWebhookForRetiredLinkDoesNotMarkOrderPaidAgain() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setTerminalKey("terminal");
+        properties.setPassword("password");
+        TbankTokenSigner signer = new TbankTokenSigner();
+        PaymentLinkService service = service(properties, signer);
+        Order order = order(61L, "ООО Закрытая ссылка", BigDecimal.valueOf(10));
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("token");
+        link.setTbankOrderId("o61-test");
+        link.setAmountKopecks(1000L);
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", "terminal");
+        payload.put("OrderId", "o61-test");
+        payload.put("Success", "true");
+        payload.put("Status", "CONFIRMED");
+        payload.put("PaymentId", "12361");
+        payload.put("ErrorCode", "0");
+        payload.put("Amount", "1000");
+        payload.put("Token", signer.sign(payload, "password"));
+
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder("o61-test")).thenReturn(Optional.of(link));
+
+        service.handleTbankWebhook(payload);
+
+        assertEquals(PaymentLinkStatus.AMOUNT_MISMATCH, link.getStatus());
+        assertEquals(1000L, link.getConfirmedAmountKopecks());
+        assertTrue(link.getLastError().contains("закрытой ссылке"));
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(paymentLinkRepository).save(link);
+    }
+
     private PaymentLinkService service(TbankPaymentProperties properties) {
         return service(properties, new TbankTokenSigner());
     }
@@ -918,7 +1109,8 @@ class PaymentLinkServiceTest {
                 tbankClient,
                 signer,
                 paymentSuccessClientNotifier,
-                manualPaymentTaskService
+                manualPaymentTaskService,
+                appSettingService
         );
     }
 
@@ -963,6 +1155,8 @@ class PaymentLinkServiceTest {
         org.mockito.Mockito.lenient().when(paymentProfileService.isTestTerminal("terminal")).thenReturn(true);
         org.mockito.Mockito.lenient().when(paymentSuccessClientNotifier.notifySuccess(any(PaymentLink.class)))
                 .thenReturn(ClientMessageSendResult.sent("test"));
+        org.mockito.Mockito.lenient().when(appSettingService.getString(anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
         return properties;
     }
 

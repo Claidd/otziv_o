@@ -28,6 +28,7 @@ import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
+import com.hunt.otziv.payments.TbankRuntimeSettingsService;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsRequest;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
@@ -90,6 +91,7 @@ public class ApiAdminDictionaryController {
     private final TelegramReportScheduleSettingsService telegramReportScheduleSettingsService;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
+    private final TbankRuntimeSettingsService tbankRuntimeSettingsService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -625,6 +627,9 @@ public class ApiAdminDictionaryController {
 
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS, request.reviewCheckRetryDelayHours(), 1, 168, "Повтор ссылки проверки после сбоя");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
@@ -654,6 +659,7 @@ public class ApiAdminDictionaryController {
         appSettingService.setString(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, requiredPaymentInstructionSource(request.paymentInstructionSource()));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT, requiredSettingText(request.paymentLinkCopyText(), "Укажите текст счета по платежной ссылке"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
 
         return clientMessageSettings();
@@ -955,6 +961,18 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
                 ),
                 appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_RETRY_DELAY_HOURS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_INVOICE_RETRY_DELAY_HOURS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS,
+                        ScheduledClientMessageService.DEFAULT_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS
+                ),
+                appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_DAYS
                 ),
@@ -1067,6 +1085,10 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_TEXT
                 ),
                 appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_LINK_COPY_TEXT
+                ),
+                appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT,
                         ScheduledClientMessageService.DEFAULT_ARCHIVE_OFFER_TEXT
                 )
@@ -1104,10 +1126,25 @@ public class ApiAdminDictionaryController {
         if (source.isBlank()) {
             return ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE;
         }
-        if ("MANAGER_TEXT".equals(source) || "TBANK_LINK".equals(source)) {
+        if ("MANAGER_TEXT".equals(source)) {
+            return source;
+        }
+        if ("TBANK_LINK".equals(source)) {
+            validateTbankLinksForClientMessages();
             return source;
         }
         throw badRequest("Источник оплаты должен быть MANAGER_TEXT или TBANK_LINK");
+    }
+
+    private void validateTbankLinksForClientMessages() {
+        if (tbankRuntimeSettingsService.runtimeMode().isTest()) {
+            throw badRequest("В тестовом режиме нельзя отправлять клиентам ссылки T-Bank");
+        }
+        if (!tbankRuntimeSettingsService.isTbankEnabled()
+                || !tbankRuntimeSettingsService.isPaymentLinksEnabled()
+                || !tbankRuntimeSettingsService.isManagerUiEnabled()) {
+            throw badRequest("Для отправки ссылок T-Bank включите API, создание ссылок и UI менеджера в разделе T-Bank");
+        }
     }
 
     private String requiredTitle(String value) {
@@ -1438,6 +1475,9 @@ public class ApiAdminDictionaryController {
             boolean errorProtectionEnabled,
             Integer reviewCheckIntervalDays,
             Integer paymentReminderIntervalDays,
+            Integer reviewCheckRetryDelayHours,
+            Integer paymentInvoiceRetryDelayHours,
+            Integer badReviewInvoiceRetryDelayHours,
             Integer paymentOverdueDays,
             Integer archiveReorderMonths,
             Integer errorProtectionThreshold,
@@ -1466,6 +1506,7 @@ public class ApiAdminDictionaryController {
             String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
+            String paymentLinkCopyText,
             String archiveOfferText
     ) {
     }
@@ -1483,6 +1524,9 @@ public class ApiAdminDictionaryController {
             boolean errorProtectionEnabled,
             int reviewCheckIntervalDays,
             int paymentReminderIntervalDays,
+            int reviewCheckRetryDelayHours,
+            int paymentInvoiceRetryDelayHours,
+            int badReviewInvoiceRetryDelayHours,
             int paymentOverdueDays,
             int archiveReorderMonths,
             int errorProtectionThreshold,
@@ -1511,6 +1555,7 @@ public class ApiAdminDictionaryController {
             String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
+            String paymentLinkCopyText,
             String archiveOfferText
     ) {
     }

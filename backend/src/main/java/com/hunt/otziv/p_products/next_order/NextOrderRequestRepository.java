@@ -15,6 +15,8 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
 
     Optional<NextOrderRequest> findBySourceOrderId(Long sourceOrderId);
 
+    List<NextOrderRequest> findByCreatedOrder_Id(Long createdOrderId);
+
     boolean existsByCompanyIdAndStatusIn(Long companyId, Collection<NextOrderRequestStatus> statuses);
 
     @Query("""
